@@ -32,17 +32,24 @@
 - **API boots** (`node dist/main.js`, no `DATABASE_URL`): `CoreModule dependencies initialized` (DI graph resolves), `OutboxRelay … idle (events use the in-memory store)`, `Nest application successfully started`. The boot-safe fallback is real.
 - `pg@8.22`, `dotenv@16.6` installed; esbuild build re-approved (`allowBuilds`/`onlyBuiltDependencies`).
 
-## ⏳ Pending live verification
+## ✅ Verified live — dedicated Supabase project
 
-End-to-end persistence (emit → row in `aura_events` → relay drains → subscriber logs) needs a real DB connection. **Blocked on `DATABASE_URL`** in `apps/api/.env.local` (shared Supabase, Session-pooler URI). The moment it's set: `pnpm db:migrate` then boot + `POST /api/events` to confirm the round-trip.
+aura-os was pointed at its **own** Supabase project (`jzhvmempkpgitmfunoyr`), **not** NEW-ERP's shared DB, via the session-mode pooler (port 5432). Round-trip proven:
+- `pnpm db:migrate` → applied `0001` (table `aura_events` created, recorded in `aura_migrations`).
+- Boot with `DATABASE_URL` set → `OutboxRelay: Relay started` (no longer idle).
+- `POST /api/events` → event `b8096ae0…` created; `GET /api/events` → **read back from Postgres**.
+- Relay log `Relayed 1 event(s)` + subscriber log `▶ kernel.smoke.tested`.
+- Direct DB check: row persisted, `processed_at = 2026-06-24T08:05:49Z`, `processing_error` none.
+
+Emit (08:05:47Z) → relay (08:05:49Z) confirms **persist-then-relay**, not inline publish. The kernel's durable event spine is real.
 
 ## Decisions
 
 - **`pg`-direct, not supabase-js/REST** — a transactional outbox requires the event insert to share the business transaction; PostgREST makes each call its own transaction, so REST can only ever be best-effort. Direct `pg` is the only correct substrate for the guarantee. This is the "build the kernel right once" call.
 - **Boot-safe by design** — no `DATABASE_URL` ⇒ in-memory store + idle relay, so dev/CI never needs a database.
-- **`aura_*` namespacing** retained — the DB is shared with NEW-ERP; moves to a dedicated schema when AURA OS gets its own Supabase project.
+- **Dedicated Supabase project** (`jzhvmempkpgitmfunoyr`) — aura-os no longer shares NEW-ERP's DB, so there's no collision risk. `aura_*` table prefix is kept for now; a clean dedicated schema (schema-per-module) is a low-priority follow-up.
 - **Relay holds the row lock across in-process `publish`** — fine for fast in-process handlers; a dead-letter cap (max attempts) is a follow-up once modules emit real events.
 
 ## Next
 
-Live-verify against Supabase once `DATABASE_URL` lands → then **AI Provider Layer → `core`** (port `ai-provider` in as kernel, per Architecture v2), then the **DMS / Workflow / Integration** skeletons to finish Phase 0b.
+Event spine done & live-verified → **AI Provider Layer → `core`** (port `ai-provider` in as kernel, per Architecture v2), then the **DMS / Workflow / Integration** skeletons to finish Phase 0b.

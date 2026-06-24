@@ -10,6 +10,12 @@ import { TenantContext } from './tenancy/tenant-context';
 import { AccessService } from './identity/access.service';
 import { OrgService } from './identity/org.service';
 import { AiService } from './ai/ai.service';
+import { DmsService } from './dms/dms.service';
+import { DOCUMENT_STORE } from './dms/document-store';
+import { InMemoryDocumentStore } from './dms/in-memory-document-store';
+import { PostgresDocumentStore } from './dms/postgres-document-store';
+import { DOCUMENT_STORAGE } from './dms/document-storage';
+import { LocalDocumentStorage } from './dms/local-document-storage';
 
 /**
  * The kernel as a Nest library. `apps/api` imports this; every business module
@@ -38,7 +44,15 @@ import { AiService } from './ai/ai.service';
       inject: [PG_POOL, EventBus],
       useFactory: (pool: Pool | null, bus: EventBus) => new OutboxRelay(pool, bus),
     },
+    { provide: DOCUMENT_STORAGE, useFactory: () => new LocalDocumentStorage() },
+    {
+      provide: DOCUMENT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDocumentStore(pool) : new InMemoryDocumentStore(),
+    },
+    DmsService,
   ],
-  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, EVENT_STORE],
+  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, EVENT_STORE],
 })
 export class CoreModule {}

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CoreModule } from '@aura/core';
 import { HealthController } from './health/health.controller';
 import { EventsController } from './events/events.controller';
+import { DocumentsController } from './documents/documents.controller';
 import { SampleEventSubscriber } from './events/sample-subscriber';
 
 /**
@@ -10,7 +11,7 @@ import { SampleEventSubscriber } from './events/sample-subscriber';
  */
 @Module({
   imports: [CoreModule],
-  controllers: [HealthController, EventsController],
+  controllers: [HealthController, EventsController, DocumentsController],
   providers: [SampleEventSubscriber],
 })
 export class AppModule {}

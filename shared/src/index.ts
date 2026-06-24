@@ -6,3 +6,4 @@ export * from './events/catalog';
 export * from './identity/org';
 export * from './identity/access';
 export * from './ai/ai-provider';
+export * from './dms/document';

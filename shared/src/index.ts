@@ -1,0 +1,5 @@
+// @aura/shared — framework-free kernel of types every layer reuses.
+export * from './domain/id';
+export * from './domain/money';
+export * from './events/event';
+export * from './events/catalog';

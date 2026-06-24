@@ -1,0 +1,14 @@
+# Workspace layout mirrors the clean-architecture blueprint:
+#   apps/*         deployables (api = NestJS host, web = Next.js shell)
+#   shared         framework-free types + value objects + event contracts
+#   core           the kernel (tenancy, events, outbox, workflow, audit) as a Nest library
+#   modules/*      business modules (one bounded context each) — added from T1
+#   intelligence   AI brain (read-only consumers) — added from T4
+#   infrastructure DB clients, Supabase, event-bus impls, config
+packages:
+  - "apps/*"
+  - "shared"
+  - "core"
+  - "modules/*"
+  - "intelligence"
+  - "infrastructure"

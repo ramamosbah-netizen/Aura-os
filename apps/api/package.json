@@ -12,6 +12,7 @@
   "dependencies": {
     "@aura/core": "workspace:*",
     "@aura/crm": "workspace:*",
+    "@aura/tendering": "workspace:*",
     "@aura/shared": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

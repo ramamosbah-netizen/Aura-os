@@ -5,6 +5,7 @@ import { EventsController } from './events/events.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { WorkflowController } from './workflow/workflow.controller';
 import { IntegrationController } from './integration/integration.controller';
+import { AiController } from './ai/ai.controller';
 import { SampleEventSubscriber } from './events/sample-subscriber';
 import { WorkflowSeeder } from './workflow/workflow.seeder';
 
@@ -14,7 +15,7 @@ import { WorkflowSeeder } from './workflow/workflow.seeder';
  */
 @Module({
   imports: [CoreModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController],
   providers: [SampleEventSubscriber, WorkflowSeeder],
 })
 export class AppModule {}

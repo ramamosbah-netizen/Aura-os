@@ -9,6 +9,7 @@ import { PG_POOL, createPgPool } from './events/pg-pool';
 import { TenantContext } from './tenancy/tenant-context';
 import { AccessService } from './identity/access.service';
 import { OrgService } from './identity/org.service';
+import { AiService } from './ai/ai.service';
 
 /**
  * The kernel as a Nest library. `apps/api` imports this; every business module
@@ -24,6 +25,7 @@ import { OrgService } from './identity/org.service';
     TenantContext,
     OrgService,
     AccessService,
+    AiService,
     { provide: PG_POOL, useFactory: createPgPool },
     {
       provide: EVENT_STORE,
@@ -37,6 +39,6 @@ import { OrgService } from './identity/org.service';
       useFactory: (pool: Pool | null, bus: EventBus) => new OutboxRelay(pool, bus),
     },
   ],
-  exports: [EventBus, TenantContext, OrgService, AccessService, EVENT_STORE],
+  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, EVENT_STORE],
 })
 export class CoreModule {}

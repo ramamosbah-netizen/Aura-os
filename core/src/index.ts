@@ -9,3 +9,6 @@ export * from './events/pg-pool';
 export * from './tenancy/tenant-context';
 export * from './identity/org.service';
 export * from './identity/access.service';
+export * from './ai/ai.service';
+export * from './ai/claude-provider';
+export * from './ai/local-provider';

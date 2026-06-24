@@ -77,6 +77,6 @@ import { WebhookDispatcher } from './integration/webhook-dispatcher';
     WebhookService,
     WebhookDispatcher,
   ],
-  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, WorkflowService, WebhookService, EVENT_STORE],
+  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, WorkflowService, WebhookService, PG_POOL, EVENT_STORE],
 })
 export class CoreModule {}

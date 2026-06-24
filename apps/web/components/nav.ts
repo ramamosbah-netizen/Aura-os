@@ -19,6 +19,10 @@ export const NAV: NavGroup[] = [
     items: [{ label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' }],
   },
   {
+    title: 'CRM',
+    items: [{ label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'Customers & prospects' }],
+  },
+  {
     title: 'Platform',
     items: [
       { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },

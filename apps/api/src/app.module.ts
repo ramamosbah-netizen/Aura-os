@@ -3,7 +3,9 @@ import { CoreModule } from '@aura/core';
 import { HealthController } from './health/health.controller';
 import { EventsController } from './events/events.controller';
 import { DocumentsController } from './documents/documents.controller';
+import { WorkflowController } from './workflow/workflow.controller';
 import { SampleEventSubscriber } from './events/sample-subscriber';
+import { WorkflowSeeder } from './workflow/workflow.seeder';
 
 /**
  * The API host. Phase 0 wires only the kernel (CoreModule) + a health check and
@@ -11,7 +13,7 @@ import { SampleEventSubscriber } from './events/sample-subscriber';
  */
 @Module({
   imports: [CoreModule],
-  controllers: [HealthController, EventsController, DocumentsController],
-  providers: [SampleEventSubscriber],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController],
+  providers: [SampleEventSubscriber, WorkflowSeeder],
 })
 export class AppModule {}

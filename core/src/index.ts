@@ -18,3 +18,7 @@ export * from './dms/document-storage';
 export * from './dms/in-memory-document-store';
 export * from './dms/postgres-document-store';
 export * from './dms/local-document-storage';
+export * from './workflow/workflow-store';
+export * from './workflow/in-memory-workflow-store';
+export * from './workflow/postgres-workflow-store';
+export * from './workflow/workflow.service';

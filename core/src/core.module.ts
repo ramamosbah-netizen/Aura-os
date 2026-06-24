@@ -16,6 +16,10 @@ import { InMemoryDocumentStore } from './dms/in-memory-document-store';
 import { PostgresDocumentStore } from './dms/postgres-document-store';
 import { DOCUMENT_STORAGE } from './dms/document-storage';
 import { LocalDocumentStorage } from './dms/local-document-storage';
+import { WORKFLOW_STORE } from './workflow/workflow-store';
+import { InMemoryWorkflowStore } from './workflow/in-memory-workflow-store';
+import { PostgresWorkflowStore } from './workflow/postgres-workflow-store';
+import { WorkflowService } from './workflow/workflow.service';
 
 /**
  * The kernel as a Nest library. `apps/api` imports this; every business module
@@ -52,7 +56,14 @@ import { LocalDocumentStorage } from './dms/local-document-storage';
         pool ? new PostgresDocumentStore(pool) : new InMemoryDocumentStore(),
     },
     DmsService,
+    {
+      provide: WORKFLOW_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresWorkflowStore(pool) : new InMemoryWorkflowStore(),
+    },
+    WorkflowService,
   ],
-  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, EVENT_STORE],
+  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, WorkflowService, EVENT_STORE],
 })
 export class CoreModule {}

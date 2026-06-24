@@ -4,3 +4,5 @@ export * from './events/event-bus';
 export * from './events/event-store';
 export * from './events/in-memory-event-store';
 export * from './tenancy/tenant-context';
+export * from './identity/org.service';
+export * from './identity/access.service';

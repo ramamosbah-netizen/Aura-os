@@ -3,3 +3,5 @@ export * from './domain/id';
 export * from './domain/money';
 export * from './events/event';
 export * from './events/catalog';
+export * from './identity/org';
+export * from './identity/access';

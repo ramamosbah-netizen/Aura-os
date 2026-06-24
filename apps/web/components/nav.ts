@@ -24,6 +24,7 @@ export const NAV: NavGroup[] = [
       { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'CRM — customers & prospects' },
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
+      { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Delivery & execution' },
     ],
   },
   {

@@ -31,17 +31,13 @@ export default async function WorkspacePage() {
   const recent = [...(events ?? [])].slice(0, 12);
 
   return (
-    <main style={s.shell}>
-      <header style={s.topbar}>
-        <div style={s.brand}>
-          <span style={s.diamond}>◆</span> AURA<span style={{ color: 'var(--muted)' }}>OS</span>
-        </div>
+    <div style={s.shell}>
+      <div style={s.titleRow}>
+        <h1 style={s.h1}>My Workspace</h1>
         <div style={s.pill(online)}>
           <span style={s.dot(online)} /> {online ? 'API online' : 'API offline'}
         </div>
-      </header>
-
-      <h1 style={s.h1}>My Workspace</h1>
+      </div>
       <p style={s.sub}>
         Your live view across the platform — fed by the event spine. Everything below is real data
         from the kernel.
@@ -108,7 +104,7 @@ export default async function WorkspacePage() {
       )}
 
       <footer style={s.footer}>AURA OS · Phase 0c — the experience shell (Workspace v1)</footer>
-    </main>
+    </div>
   );
 }
 
@@ -127,7 +123,14 @@ function Empty({ text }: { text: string }) {
 }
 
 const s = {
-  shell: { maxWidth: 980, margin: '0 auto', padding: '32px 24px 64px' } as CSSProperties,
+  shell: { maxWidth: 980, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  titleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 6,
+  } as CSSProperties,
   topbar: {
     display: 'flex',
     alignItems: 'center',

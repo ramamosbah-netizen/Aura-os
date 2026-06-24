@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import './globals.css';
+import AppShell from '../components/app-shell';
 import AiDock from '../components/ai-dock';
 
 export const metadata = {
@@ -11,7 +12,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        {children}
+        <AppShell>{children}</AppShell>
         <AiDock />
       </body>
     </html>

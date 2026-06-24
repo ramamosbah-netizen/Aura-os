@@ -12,5 +12,7 @@ packages:
   - "modules/*"
   - "intelligence"
   - "infrastructure"
+allowBuilds:
+  esbuild: true
 onlyBuiltDependencies:
   - esbuild

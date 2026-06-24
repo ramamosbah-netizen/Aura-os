@@ -10,7 +10,8 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @aura/api db:migrate"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

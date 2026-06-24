@@ -8,3 +8,5 @@ export * from './identity/access';
 export * from './ai/ai-provider';
 export * from './dms/document';
 export * from './workflow/workflow';
+export * from './integration/webhook';
+export * from './integration/csv';

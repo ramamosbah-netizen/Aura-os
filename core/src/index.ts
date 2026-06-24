@@ -22,3 +22,8 @@ export * from './workflow/workflow-store';
 export * from './workflow/in-memory-workflow-store';
 export * from './workflow/postgres-workflow-store';
 export * from './workflow/workflow.service';
+export * from './integration/webhook-store';
+export * from './integration/in-memory-webhook-store';
+export * from './integration/postgres-webhook-store';
+export * from './integration/webhook.service';
+export * from './integration/webhook-dispatcher';

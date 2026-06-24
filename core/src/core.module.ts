@@ -20,6 +20,11 @@ import { WORKFLOW_STORE } from './workflow/workflow-store';
 import { InMemoryWorkflowStore } from './workflow/in-memory-workflow-store';
 import { PostgresWorkflowStore } from './workflow/postgres-workflow-store';
 import { WorkflowService } from './workflow/workflow.service';
+import { WEBHOOK_STORE } from './integration/webhook-store';
+import { InMemoryWebhookStore } from './integration/in-memory-webhook-store';
+import { PostgresWebhookStore } from './integration/postgres-webhook-store';
+import { WebhookService } from './integration/webhook.service';
+import { WebhookDispatcher } from './integration/webhook-dispatcher';
 
 /**
  * The kernel as a Nest library. `apps/api` imports this; every business module
@@ -63,7 +68,15 @@ import { WorkflowService } from './workflow/workflow.service';
         pool ? new PostgresWorkflowStore(pool) : new InMemoryWorkflowStore(),
     },
     WorkflowService,
+    {
+      provide: WEBHOOK_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresWebhookStore(pool) : new InMemoryWebhookStore(),
+    },
+    WebhookService,
+    WebhookDispatcher,
   ],
-  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, WorkflowService, EVENT_STORE],
+  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, WorkflowService, WebhookService, EVENT_STORE],
 })
 export class CoreModule {}

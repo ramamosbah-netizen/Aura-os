@@ -26,6 +26,9 @@ importers:
       '@aura/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@aura/intelligence':
+        specifier: workspace:*
+        version: link:../../intelligence
       '@aura/projects':
         specifier: workspace:*
         version: link:../../modules/projects
@@ -128,6 +131,34 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+
+  intelligence:
+    dependencies:
+      '@aura/core':
+        specifier: workspace:*
+        version: link:../core
+      '@aura/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.1.27(reflect-metadata@0.2.2)(rxjs@7.8.2)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+      rxjs:
+        specifier: ^7.8.1
+        version: 7.8.2
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.6(@types/node@22.20.0)(terser@5.48.0)
 
   modules/contracts:
     dependencies:

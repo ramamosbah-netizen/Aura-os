@@ -28,6 +28,10 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    title: 'Intelligence',
+    items: [{ label: 'Insights', href: '/intelligence', glyph: '✶', desc: 'AI briefing & pipeline' }],
+  },
+  {
     title: 'Platform',
     items: [
       { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },

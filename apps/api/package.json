@@ -15,6 +15,7 @@
     "@aura/tendering": "workspace:*",
     "@aura/contracts": "workspace:*",
     "@aura/projects": "workspace:*",
+    "@aura/intelligence": "workspace:*",
     "@aura/shared": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

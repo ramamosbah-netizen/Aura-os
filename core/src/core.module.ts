@@ -8,6 +8,7 @@ import { OutboxRelay } from './events/outbox-relay';
 import { PG_POOL, createPgPool } from './events/pg-pool';
 import { TenantContext } from './tenancy/tenant-context';
 import { AccessService } from './identity/access.service';
+import { AuthService } from './identity/auth.service';
 import { OrgService } from './identity/org.service';
 import { AiService } from './ai/ai.service';
 import { DmsService } from './dms/dms.service';
@@ -40,6 +41,7 @@ import { WebhookDispatcher } from './integration/webhook-dispatcher';
     TenantContext,
     OrgService,
     AccessService,
+    AuthService,
     AiService,
     { provide: PG_POOL, useFactory: createPgPool },
     {
@@ -77,6 +79,6 @@ import { WebhookDispatcher } from './integration/webhook-dispatcher';
     WebhookService,
     WebhookDispatcher,
   ],
-  exports: [EventBus, TenantContext, OrgService, AccessService, AiService, DmsService, WorkflowService, WebhookService, PG_POOL, EVENT_STORE],
+  exports: [EventBus, TenantContext, OrgService, AccessService, AuthService, AiService, DmsService, WorkflowService, WebhookService, PG_POOL, EVENT_STORE],
 })
 export class CoreModule {}

@@ -102,3 +102,11 @@ export function evaluateAccess(
   }
   return { allowed: false, reason: `no grant satisfies "${target.permission}"` };
 }
+
+/** Thrown by `AccessService.assert` when no grant satisfies the target. Mapped to HTTP 403 at the API edge. */
+export class AccessDeniedError extends Error {
+  constructor(public readonly reason: string) {
+    super(`Access denied: ${reason}`);
+    this.name = 'AccessDeniedError';
+  }
+}

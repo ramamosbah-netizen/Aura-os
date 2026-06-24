@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable } from '@nestjs/common';
 import type { Id } from '@aura/shared';
 
@@ -7,20 +8,31 @@ export interface TenantInfo {
   actorId: Id | null;
 }
 
+const DEV_DEFAULT: TenantInfo = { tenantId: 'dev-tenant', companyId: null, actorId: null };
+
 /**
- * Holds the current tenant / company / actor for a request. Phase 0 is a simple
- * holder with a dev default; the production impl uses AsyncLocalStorage so each
- * request is truly isolated. Every event + query is stamped from here.
+ * Holds the current tenant / company / actor for a request, isolated per request via
+ * AsyncLocalStorage — so concurrent requests never see each other's identity. The auth
+ * middleware binds it with `run()`; outside any request (boot, seeders, relay timers)
+ * `get()` returns the dev default. Every event + query is stamped from here.
  */
 @Injectable()
 export class TenantContext {
-  private current: TenantInfo = { tenantId: 'dev-tenant', companyId: null, actorId: null };
+  private readonly als = new AsyncLocalStorage<TenantInfo>();
 
-  set(info: TenantInfo): void {
-    this.current = info;
+  /** Bind `info` for the duration of `fn` (one request) — async-isolated. */
+  run<T>(info: TenantInfo, fn: () => T): T {
+    return this.als.run(info, fn);
   }
 
+  /** Current request context, or the dev default outside any request scope. */
   get(): TenantInfo {
-    return this.current;
+    return this.als.getStore() ?? DEV_DEFAULT;
+  }
+
+  /** Mutate the bound context (no-op outside a run scope). */
+  set(info: Partial<TenantInfo>): void {
+    const store = this.als.getStore();
+    if (store) Object.assign(store, info);
   }
 }

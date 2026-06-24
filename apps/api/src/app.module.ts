@@ -16,8 +16,10 @@ import { TenderingController } from './tendering/tendering.controller';
 import { ContractsController } from './contracts/contracts.controller';
 import { ProjectsController } from './projects/projects.controller';
 import { IntelligenceController } from './intelligence/intelligence.controller';
+import { AuthController } from './auth/auth.controller';
 import { SampleEventSubscriber } from './events/sample-subscriber';
 import { WorkflowSeeder } from './workflow/workflow.seeder';
+import { AuthSeeder } from './auth/auth.seeder';
 
 /**
  * The API host. Phase 0 wires only the kernel (CoreModule) + a health check and
@@ -25,7 +27,7 @@ import { WorkflowSeeder } from './workflow/workflow.seeder';
  */
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, TenderingController, ContractsController, ProjectsController, IntelligenceController],
-  providers: [SampleEventSubscriber, WorkflowSeeder],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, TenderingController, ContractsController, ProjectsController, IntelligenceController, AuthController],
+  providers: [SampleEventSubscriber, WorkflowSeeder, AuthSeeder],
 })
 export class AppModule {}

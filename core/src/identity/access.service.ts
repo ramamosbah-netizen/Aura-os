@@ -5,6 +5,7 @@ import {
   type Grant,
   type Id,
   type Role,
+  AccessDeniedError,
   evaluateAccess,
 } from '@aura/shared';
 
@@ -36,7 +37,7 @@ export class AccessService {
   assert(userId: Id, target: AccessTarget): void {
     const decision = this.can(userId, target);
     if (!decision.allowed) {
-      throw new Error(`Access denied: ${decision.reason}`);
+      throw new AccessDeniedError(decision.reason);
     }
   }
 }

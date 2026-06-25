@@ -1,6 +1,6 @@
 import { Controller, Get, Post } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
-import { type Briefing, type Funnel, InsightService, PipelineProjection, winRate } from '@aura/intelligence';
+import { type Briefing, type Funnel, type ProjectLedger, InsightService, PipelineProjection, winRate } from '@aura/intelligence';
 
 /**
  * Intelligence API — read-only views of the deal-chain projection + an on-demand AI
@@ -19,6 +19,11 @@ export class IntelligenceController {
   pipeline(): { funnel: Funnel; winRate: number | null } {
     const funnel = this.projection.snapshot(this.tenant.get().tenantId);
     return { funnel, winRate: winRate(funnel) };
+  }
+
+  @Get('projects')
+  projects(): ProjectLedger[] {
+    return this.projection.ledgers(this.tenant.get().tenantId);
   }
 
   @Post('insights')

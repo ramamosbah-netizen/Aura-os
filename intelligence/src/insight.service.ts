@@ -31,7 +31,8 @@ export class InsightService {
 
   async generateBriefing(tenantId: Id, actorId: Id | null = null): Promise<Briefing> {
     const funnel = this.projection.snapshot(tenantId);
-    const result = await this.ai.complete(buildBriefingPrompt(funnel));
+    const ledgers = this.projection.ledgers(tenantId);
+    const result = await this.ai.complete(buildBriefingPrompt(funnel, ledgers));
     await this.events.append([
       makeEvent({
         type: INSIGHT_EVENT,
@@ -39,7 +40,7 @@ export class InsightService {
         actorId,
         aggregateType: 'intelligence.insight',
         aggregateId: 'pipeline-briefing',
-        payload: { provider: result.provider, model: result.model, funnel, text: result.text },
+        payload: { provider: result.provider, model: result.model, funnel, ledgers, text: result.text },
       }),
     ]);
     this.logger.log(`Insight generated for ${tenantId} via ${result.provider} (${result.model}).`);

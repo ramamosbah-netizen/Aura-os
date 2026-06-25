@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type { DomainEvent } from '@aura/shared';
 import { EVENT_STORE, EventBus, type EventStore } from '@aura/core';
 import { type Funnel, emptyFunnel, foldEvent, isDealChainEvent } from './pipeline';
+import { type ProjectLedger, foldProjectLedgers, isLedgerEvent } from './project-ledger';
 
 /**
  * Read-only deal-chain projection. Rebuilds an in-memory funnel from the event log on
@@ -13,6 +14,7 @@ import { type Funnel, emptyFunnel, foldEvent, isDealChainEvent } from './pipelin
 export class PipelineProjection implements OnModuleInit {
   private readonly logger = new Logger('Intelligence');
   private readonly byTenant = new Map<string, Funnel>();
+  private readonly ledgerEvents = new Map<string, DomainEvent[]>();
   private readonly seen = new Set<string>();
 
   constructor(
@@ -31,15 +33,26 @@ export class PipelineProjection implements OnModuleInit {
     );
   }
 
-  /** Idempotent fold of one event into its tenant's funnel. */
+  /** Idempotent fold of one event into its tenant's read-models (funnel + project ledger). */
   private apply(e: DomainEvent): void {
     if (this.seen.has(e.id)) return;
     this.seen.add(e.id);
-    if (!isDealChainEvent(e.type)) return;
-    this.byTenant.set(e.tenantId, foldEvent(this.byTenant.get(e.tenantId) ?? emptyFunnel(), e));
+    if (isDealChainEvent(e.type)) {
+      this.byTenant.set(e.tenantId, foldEvent(this.byTenant.get(e.tenantId) ?? emptyFunnel(), e));
+    }
+    if (isLedgerEvent(e.type)) {
+      const list = this.ledgerEvents.get(e.tenantId) ?? [];
+      list.push(e);
+      this.ledgerEvents.set(e.tenantId, list);
+    }
   }
 
   snapshot(tenantId: string): Funnel {
     return this.byTenant.get(tenantId) ?? emptyFunnel();
+  }
+
+  /** Per-project profitability (budget vs committed/invoiced), folded from kept ledger events. */
+  ledgers(tenantId: string): ProjectLedger[] {
+    return foldProjectLedgers(this.ledgerEvents.get(tenantId) ?? []);
   }
 }

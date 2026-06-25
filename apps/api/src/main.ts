@@ -30,9 +30,9 @@ async function bootstrap(): Promise<void> {
     new Logger('Bootstrap').error('AUTH_REQUIRED is set but AUTH_JWT_SECRET is missing — cannot enforce; running open.');
   }
   const PUBLIC_PATHS = ['/api/health', '/api/auth/login', '/api/auth/status'];
-  app.use((req: IncomingMessage, res: ServerResponse, next: () => void): void => {
+  app.use(async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
     const h = req.headers['authorization'];
-    const ctx = auth.contextFromHeader(Array.isArray(h) ? h[0] : h);
+    const ctx = await auth.contextFromHeader(Array.isArray(h) ? h[0] : h);
     if (enforce && !ctx) {
       const path = (req.url ?? '').split('?')[0];
       const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));

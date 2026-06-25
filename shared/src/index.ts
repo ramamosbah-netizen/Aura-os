@@ -6,6 +6,7 @@ export * from './events/catalog';
 export * from './identity/org';
 export * from './identity/access';
 export * from './identity/jwt';
+export * from './identity/jwks';
 export * from './ai/ai-provider';
 export * from './dms/document';
 export * from './workflow/workflow';

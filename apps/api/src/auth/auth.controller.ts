@@ -28,8 +28,8 @@ export class AuthController {
 
   @Post('login')
   login(@Body() dto: LoginDto): { token: string; user: { sub: string; tenantId: string } } {
-    if (!this.auth.enabled) {
-      throw new ForbiddenException('auth is off (set AUTH_JWT_SECRET)');
+    if (!this.auth.canMint) {
+      throw new ForbiddenException('login (dev token mint) requires AUTH_JWT_SECRET');
     }
     const username = (dto.username ?? '').trim() || 'u-admin';
     // Dev credential policy: require AUTH_DEV_PASSWORD when set, otherwise accept any.
@@ -50,7 +50,7 @@ export class AuthController {
     if (process.env.AUTH_ALLOW_DEV_TOKENS !== 'true') {
       throw new ForbiddenException('dev token minting is disabled');
     }
-    if (!this.auth.enabled) {
+    if (!this.auth.canMint) {
       throw new ForbiddenException('auth is off (set AUTH_JWT_SECRET)');
     }
     return {

@@ -17,6 +17,7 @@
     "@aura/projects": "workspace:*",
     "@aura/procurement": "workspace:*",
     "@aura/inventory": "workspace:*",
+    "@aura/finance": "workspace:*",
     "@aura/intelligence": "workspace:*",
     "@aura/shared": "workspace:*",
     "@nestjs/common": "^11.0.0",

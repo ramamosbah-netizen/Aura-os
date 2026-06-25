@@ -7,6 +7,7 @@ import { ProjectsModule } from '@aura/projects';
 import { IntelligenceModule } from '@aura/intelligence';
 import { ProcurementModule } from '@aura/procurement';
 import { InventoryModule } from '@aura/inventory';
+import { FinanceModule } from '@aura/finance';
 import { HealthController } from './health/health.controller';
 import { EventsController } from './events/events.controller';
 import { DocumentsController } from './documents/documents.controller';
@@ -20,6 +21,7 @@ import { ProjectsController } from './projects/projects.controller';
 import { IntelligenceController } from './intelligence/intelligence.controller';
 import { ProcurementController } from './procurement/procurement.controller';
 import { InventoryController } from './inventory/inventory.controller';
+import { FinanceController } from './finance/finance.controller';
 import { AuthController } from './auth/auth.controller';
 import { SampleEventSubscriber } from './events/sample-subscriber';
 import { WorkflowSeeder } from './workflow/workflow.seeder';
@@ -30,8 +32,8 @@ import { AuthSeeder } from './auth/auth.seeder';
  * an events demo. Business modules (modules/*) register here as they land.
  */
 @Module({
-  imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, TenderingController, ContractsController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, AuthController],
+  imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, TenderingController, ContractsController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, AuthController],
   providers: [SampleEventSubscriber, WorkflowSeeder, AuthSeeder],
 })
 export class AppModule {}

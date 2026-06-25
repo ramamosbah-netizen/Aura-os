@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import type { DomainEvent } from '@aura/shared';
-import type { EventFilter, EventStore } from './event-store';
+import type { DeadLetteredEvent, EventFilter, EventStore } from './event-store';
 
 /** Column list shared by the store's reads and the outbox relay. */
 export const EVENT_COLUMNS =
@@ -110,5 +110,35 @@ export class PostgresEventStore implements EventStore {
     );
     // Newest-N from the DB, returned oldest→newest to match the in-memory store.
     return rows.map(rowToEvent).reverse();
+  }
+
+  async listDeadLettered(limit = 50): Promise<DeadLetteredEvent[]> {
+    const { rows } = await this.pool.query<{
+      id: string;
+      type: string;
+      tenant_id: string;
+      aggregate_type: string;
+      aggregate_id: string;
+      attempts: number | string | null;
+      processing_error: string | null;
+      processed_at: Date | string;
+    }>(
+      `SELECT id, type, tenant_id, aggregate_type, aggregate_id, attempts, processing_error, processed_at
+         FROM public.aura_events
+        WHERE processing_error IS NOT NULL AND processed_at IS NOT NULL
+        ORDER BY processed_at DESC
+        LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      tenantId: r.tenant_id,
+      aggregateType: r.aggregate_type,
+      aggregateId: r.aggregate_id,
+      attempts: Number(r.attempts ?? 0),
+      error: r.processing_error,
+      deadLetteredAt: r.processed_at instanceof Date ? r.processed_at.toISOString() : String(r.processed_at),
+    }));
   }
 }

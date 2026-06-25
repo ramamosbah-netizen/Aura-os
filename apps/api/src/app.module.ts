@@ -24,6 +24,7 @@ import { InventoryController } from './inventory/inventory.controller';
 import { FinanceController } from './finance/finance.controller';
 import { AuthController } from './auth/auth.controller';
 import { SampleEventSubscriber } from './events/sample-subscriber';
+import { PoisonSubscriber } from './events/poison-subscriber';
 import { WorkflowSeeder } from './workflow/workflow.seeder';
 import { AuthSeeder } from './auth/auth.seeder';
 
@@ -34,6 +35,6 @@ import { AuthSeeder } from './auth/auth.seeder';
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule],
   controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, TenderingController, ContractsController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, AuthController],
-  providers: [SampleEventSubscriber, WorkflowSeeder, AuthSeeder],
+  providers: [SampleEventSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder],
 })
 export class AppModule {}

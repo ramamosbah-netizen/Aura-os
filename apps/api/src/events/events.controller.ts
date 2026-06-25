@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Post, Query } from '@nestjs/common';
 import { type DomainEvent, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { type DeadLetteredEvent, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 
 interface EmitDto {
   type: string;
@@ -40,5 +40,11 @@ export class EventsController {
   @Get()
   list(@Query('type') type?: string): Promise<DomainEvent[]> {
     return this.store.list({ type, limit: 100 });
+  }
+
+  /** Events the relay gave up on (dead-lettered after the retry cap) — ops visibility. */
+  @Get('dead-letters')
+  deadLetters(): Promise<DeadLetteredEvent[]> {
+    return this.store.listDeadLettered(50);
   }
 }

@@ -5,6 +5,7 @@ import { EVENT_COLUMNS, type EventRow, rowToEvent } from './postgres-event-store
 
 const POLL_MS = Number(process.env.OUTBOX_POLL_MS ?? 1000);
 const BATCH = Number(process.env.OUTBOX_BATCH ?? 100);
+const MAX_ATTEMPTS = Number(process.env.OUTBOX_MAX_ATTEMPTS ?? 5);
 
 /**
  * Transactional-outbox relay. Polls `aura_events` for rows with processed_at IS NULL,
@@ -13,8 +14,8 @@ const BATCH = Number(process.env.OUTBOX_BATCH ?? 100);
  * API instance is safe. Idle (no-op) when there's no DATABASE_URL, so the kernel still
  * boots on the in-memory store.
  *
- * NOTE: a handler failure records `processing_error` and leaves the row unprocessed to
- * retry next tick. A dead-letter cap (max attempts) is a follow-up once modules emit.
+ * A handler failure increments `attempts` and leaves the row unprocessed to retry next
+ * tick; after OUTBOX_MAX_ATTEMPTS it is dead-lettered (processed_at stamped, error kept).
  */
 @Injectable()
 export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
@@ -48,8 +49,8 @@ export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const { rows } = await client.query<EventRow>(
-        `SELECT ${EVENT_COLUMNS} FROM public.aura_events
+      const { rows } = await client.query<EventRow & { attempts: number }>(
+        `SELECT ${EVENT_COLUMNS}, attempts FROM public.aura_events
            WHERE processed_at IS NULL
            ORDER BY created_at
            LIMIT $1
@@ -65,11 +66,22 @@ export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
             [event.id],
           );
         } catch (err) {
-          this.logger.error(`Handler failed for ${event.type} (${event.id}): ${String(err)}`);
-          await client.query('UPDATE public.aura_events SET processing_error = $2 WHERE id = $1', [
-            event.id,
-            String(err),
-          ]);
+          const attempts = Number(row.attempts ?? 0) + 1;
+          if (attempts >= MAX_ATTEMPTS) {
+            // Dead-letter: stamp processed_at so it stops retrying, but keep the error.
+            await client.query(
+              'UPDATE public.aura_events SET attempts = $2, processed_at = now(), processing_error = $3 WHERE id = $1',
+              [event.id, attempts, `DEAD after ${attempts} attempts: ${String(err)}`],
+            );
+            this.logger.error(`Dead-lettered ${event.type} (${event.id}) after ${attempts} attempts: ${String(err)}`);
+          } else {
+            await client.query('UPDATE public.aura_events SET attempts = $2, processing_error = $3 WHERE id = $1', [
+              event.id,
+              attempts,
+              String(err),
+            ]);
+            this.logger.error(`Handler failed for ${event.type} (${event.id}) attempt ${attempts}: ${String(err)}`);
+          }
         }
       }
       await client.query('COMMIT');

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { DomainEvent } from '@aura/shared';
-import type { EventFilter, EventStore } from './event-store';
+import type { DeadLetteredEvent, EventFilter, EventStore } from './event-store';
 import { EventBus } from './event-bus';
 
 /**
@@ -26,5 +26,10 @@ export class InMemoryEventStore implements EventStore {
     if (filter.type) out = out.filter((e) => e.type === filter.type);
     if (filter.aggregateId) out = out.filter((e) => e.aggregateId === filter.aggregateId);
     return filter.limit ? out.slice(-filter.limit) : [...out];
+  }
+
+  // No outbox/relay in memory mode, so nothing is ever dead-lettered.
+  async listDeadLettered(): Promise<DeadLetteredEvent[]> {
+    return [];
   }
 }

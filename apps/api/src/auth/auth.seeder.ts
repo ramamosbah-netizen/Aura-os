@@ -16,7 +16,7 @@ export class AuthSeeder implements OnModuleInit {
     this.access.registerRole({
       id: 'dealChainAdmin',
       name: 'Deal Chain Admin',
-      permissions: ['crm.*', 'tendering.*', 'contracts.*', 'projects.*'],
+      permissions: ['crm.*', 'tendering.*', 'contracts.*', 'projects.*', 'procurement.*'],
     });
     this.access.grant({
       userId: 'u-admin',

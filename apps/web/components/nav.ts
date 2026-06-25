@@ -28,6 +28,10 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    title: 'Operate',
+    items: [{ label: 'Purchase orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' }],
+  },
+  {
     title: 'Intelligence',
     items: [{ label: 'Insights', href: '/intelligence', glyph: '✶', desc: 'AI briefing & pipeline' }],
   },

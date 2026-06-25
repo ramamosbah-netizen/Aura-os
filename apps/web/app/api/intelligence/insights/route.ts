@@ -1,11 +1,11 @@
-import { apiBase } from '../../../../lib/api';
+import { apiBase, authHeader } from '../../../../lib/api';
 
 // BFF: trigger an AI briefing on the Nest Intelligence API server-side.
 export async function POST(): Promise<Response> {
   try {
     const res = await fetch(`${apiBase()}/api/intelligence/insights`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(await authHeader()) },
       cache: 'no-store',
     });
     const data = await res.json().catch(() => ({}));

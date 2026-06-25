@@ -1,4 +1,4 @@
-import { apiBase } from '../../../lib/api';
+import { apiBase, authHeader } from '../../../lib/api';
 
 // Backend-for-frontend: the browser posts here (same origin); we forward to the
 // NestJS AI endpoint server-side. Keeps the API URL (and any future key) off the client.
@@ -11,7 +11,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const res = await fetch(`${apiBase()}/api/ai/complete`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ prompt, system: typeof body.system === 'string' ? body.system : undefined }),
       cache: 'no-store',
     });

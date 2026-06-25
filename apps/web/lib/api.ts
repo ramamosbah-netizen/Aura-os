@@ -1,7 +1,27 @@
-// Server-side access to the AURA API (the NestJS app in apps/api).
+// Server-side access to the AURA API (the NestJS app in apps/api). Runs only in Server
+// Components and route handlers — it reads the httpOnly session cookie to forward identity.
+import { cookies } from 'next/headers';
+import { SESSION_COOKIE, type SessionUser, decodeSessionUser } from './session';
 
 export function apiBase(): string {
   return process.env.AURA_API_URL ?? 'http://localhost:4000';
+}
+
+/** The current session token from the httpOnly cookie, or null. */
+export async function sessionToken(): Promise<string | null> {
+  const store = await cookies();
+  return store.get(SESSION_COOKIE)?.value ?? null;
+}
+
+/** Authorization header to forward to the API (empty when signed out). */
+export async function authHeader(): Promise<Record<string, string>> {
+  const token = await sessionToken();
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+/** The signed-in user (decoded for display only — the API verifies), or null. */
+export async function currentUser(): Promise<SessionUser | null> {
+  return decodeSessionUser(await sessionToken());
 }
 
 /**
@@ -11,7 +31,7 @@ export function apiBase(): string {
  */
 export async function getJson<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${apiBase()}${path}`, { cache: 'no-store' });
+    const res = await fetch(`${apiBase()}${path}`, { cache: 'no-store', headers: await authHeader() });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {

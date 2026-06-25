@@ -5,13 +5,20 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav';
 import CommandPalette from './command-palette';
+import type { SessionUser } from '../lib/session';
 
 /**
  * The persistent app frame: a left sidebar (brand + grouped nav) and a top bar with
  * the ⌘K command-palette trigger. Pages render in <main>. Client component so it can
  * own the palette state + keyboard shortcut; `children` stay server-rendered.
  */
-export default function AppShell({ children }: { children: ReactNode }) {
+export default function AppShell({
+  children,
+  user,
+}: {
+  children: ReactNode;
+  user?: SessionUser | null;
+}) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -26,6 +33,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // The login screen renders bare — no frame.
+  if (pathname === '/login') return <>{children}</>;
+
+  async function logout(): Promise<void> {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.assign('/login');
+  }
+
   return (
     <div style={s.root}>
       <aside style={s.sidebar}>
@@ -33,7 +48,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <span style={{ color: 'var(--accent)' }}>◆</span> AURA
           <span style={{ color: 'var(--muted)' }}>OS</span>
         </div>
-        <nav>
+        <nav style={s.nav}>
           {NAV.map((group) => (
             <div key={group.title} style={s.group}>
               <div style={s.groupTitle}>{group.title}</div>
@@ -53,6 +68,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </div>
           ))}
         </nav>
+        {user ? (
+          <div style={s.userBox}>
+            <div style={s.userInfo}>
+              <span style={s.userDot} />
+              <span style={s.userName}>{user.sub}</span>
+            </div>
+            <button type="button" style={s.signout} onClick={logout}>
+              Sign out
+            </button>
+          </div>
+        ) : null}
       </aside>
 
       <div style={s.col}>
@@ -77,6 +103,8 @@ const s = {
   sidebar: {
     width: SIDEBAR_W,
     flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
     borderRight: '1px solid var(--border)',
     background: 'rgba(20,25,37,0.6)',
     padding: '20px 14px',
@@ -140,4 +168,25 @@ const s = {
     padding: '1px 6px',
   } as CSSProperties,
   main: { flex: 1 } as CSSProperties,
+  nav: { flex: 1, overflowY: 'auto' } as CSSProperties,
+  userBox: { borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 8 } as CSSProperties,
+  userInfo: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px 8px' } as CSSProperties,
+  userDot: { width: 7, height: 7, borderRadius: 999, background: 'var(--good)', flexShrink: 0 } as CSSProperties,
+  userName: {
+    fontSize: 13,
+    color: 'var(--text)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  signout: {
+    width: '100%',
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    borderRadius: 9,
+    color: 'var(--muted)',
+    padding: '7px 10px',
+    fontSize: 13,
+    cursor: 'pointer',
+  } as CSSProperties,
 };

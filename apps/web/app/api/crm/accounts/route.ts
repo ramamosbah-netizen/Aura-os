@@ -1,4 +1,4 @@
-import { apiBase } from '../../../../lib/api';
+import { apiBase, authHeader } from '../../../../lib/api';
 
 // BFF: forward account creation to the Nest CRM API server-side.
 export async function POST(request: Request): Promise<Response> {
@@ -10,7 +10,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const res = await fetch(`${apiBase()}/api/crm/accounts`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ name }),
       cache: 'no-store',
     });

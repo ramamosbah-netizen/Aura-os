@@ -1,4 +1,4 @@
-import { apiBase } from '../../../../lib/api';
+import { apiBase, authHeader } from '../../../../lib/api';
 
 // BFF: forward contract creation to the Nest Contracts API server-side.
 export async function POST(request: Request): Promise<Response> {
@@ -17,7 +17,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const res = await fetch(`${apiBase()}/api/contracts/contracts`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({
         title,
         value: typeof body.value === 'number' ? body.value : 0,

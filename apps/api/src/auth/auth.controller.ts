@@ -1,10 +1,15 @@
-import { Body, Controller, ForbiddenException, Get, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from '@aura/core';
 
 interface DevTokenDto {
   sub?: string;
   tenantId?: string;
   companyId?: string | null;
+}
+
+interface LoginDto {
+  username?: string;
+  password?: string;
 }
 
 /**
@@ -19,6 +24,25 @@ export class AuthController {
   @Get('status')
   status(): { enabled: boolean } {
     return { enabled: this.auth.enabled };
+  }
+
+  @Post('login')
+  login(@Body() dto: LoginDto): { token: string; user: { sub: string; tenantId: string } } {
+    if (!this.auth.enabled) {
+      throw new ForbiddenException('auth is off (set AUTH_JWT_SECRET)');
+    }
+    const username = (dto.username ?? '').trim() || 'u-admin';
+    // Dev credential policy: require AUTH_DEV_PASSWORD when set, otherwise accept any.
+    // This is the stand-in for the hosted-IdP login that will issue the real token.
+    const expected = process.env.AUTH_DEV_PASSWORD?.trim();
+    if (expected && dto.password !== expected) {
+      throw new UnauthorizedException('invalid credentials');
+    }
+    const tenantId = 'dev-tenant';
+    return {
+      token: this.auth.mint({ sub: username, tenantId, companyId: null }),
+      user: { sub: username, tenantId },
+    };
   }
 
   @Post('dev-token')

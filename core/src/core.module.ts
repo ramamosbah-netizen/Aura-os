@@ -26,6 +26,7 @@ import { InMemoryWebhookStore } from './integration/in-memory-webhook-store';
 import { PostgresWebhookStore } from './integration/postgres-webhook-store';
 import { WebhookService } from './integration/webhook.service';
 import { WebhookDispatcher } from './integration/webhook-dispatcher';
+import { WebhookRetryWorker } from './integration/webhook-retry-worker';
 
 /**
  * The kernel as a Nest library. `apps/api` imports this; every business module
@@ -78,6 +79,7 @@ import { WebhookDispatcher } from './integration/webhook-dispatcher';
     },
     WebhookService,
     WebhookDispatcher,
+    WebhookRetryWorker,
   ],
   exports: [EventBus, TenantContext, OrgService, AccessService, AuthService, AiService, DmsService, WorkflowService, WebhookService, PG_POOL, EVENT_STORE],
 })

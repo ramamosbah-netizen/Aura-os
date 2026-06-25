@@ -10,6 +10,10 @@ export class InMemoryWebhookStore implements WebhookStore {
     this.subs.set(sub.id, sub);
   }
 
+  async getSubscription(id: Id): Promise<WebhookSubscription | null> {
+    return this.subs.get(id) ?? null;
+  }
+
   async listSubscriptions(tenantId?: Id): Promise<WebhookSubscription[]> {
     const all = [...this.subs.values()];
     return tenantId ? all.filter((s) => s.tenantId === tenantId) : all;
@@ -20,7 +24,21 @@ export class InMemoryWebhookStore implements WebhookStore {
   }
 
   async recordDelivery(delivery: WebhookDelivery): Promise<void> {
-    this.deliveries.push(delivery);
+    this.deliveries.push({ ...delivery });
+  }
+
+  async updateDelivery(delivery: WebhookDelivery): Promise<void> {
+    const i = this.deliveries.findIndex((d) => d.id === delivery.id);
+    if (i >= 0) this.deliveries[i] = { ...delivery };
+    else this.deliveries.push({ ...delivery });
+  }
+
+  async duePendingDeliveries(nowIso: string, limit: number): Promise<WebhookDelivery[]> {
+    return this.deliveries
+      .filter((d) => d.status === 'pending' && d.nextAttemptAt !== null && d.nextAttemptAt <= nowIso)
+      .sort((a, b) => ((a.nextAttemptAt ?? '') < (b.nextAttemptAt ?? '') ? -1 : 1))
+      .slice(0, limit)
+      .map((d) => ({ ...d }));
   }
 
   async listDeliveries(subscriptionId?: Id, limit = 50): Promise<WebhookDelivery[]> {

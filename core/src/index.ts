@@ -28,3 +28,5 @@ export * from './integration/in-memory-webhook-store';
 export * from './integration/postgres-webhook-store';
 export * from './integration/webhook.service';
 export * from './integration/webhook-dispatcher';
+export * from './integration/webhook-send';
+export * from './integration/webhook-retry-worker';

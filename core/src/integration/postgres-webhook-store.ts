@@ -21,6 +21,9 @@ interface DelRow {
   status: string;
   status_code: number | null;
   error: string | null;
+  attempts: number | string | null;
+  next_attempt_at: Date | string | null;
+  body: string | null;
   attempted_at: Date | string;
 }
 
@@ -48,12 +51,16 @@ function rowToDelivery(r: DelRow): WebhookDelivery {
     status: r.status as WebhookDelivery['status'],
     statusCode: r.status_code,
     error: r.error,
+    attempts: Number(r.attempts ?? 1),
+    nextAttemptAt: r.next_attempt_at ? iso(r.next_attempt_at) : null,
+    body: r.body ?? '',
     attemptedAt: iso(r.attempted_at),
   };
 }
 
 const SUB_COLS = 'id, tenant_id, event_types, url, secret, active, created_at';
-const DEL_COLS = 'id, subscription_id, event_id, event_type, url, status, status_code, error, attempted_at';
+const DEL_COLS =
+  'id, subscription_id, event_id, event_type, url, status, status_code, error, attempts, next_attempt_at, body, attempted_at';
 
 /** Durable webhook store on Postgres (`aura_webhook_subscriptions` + `aura_webhook_deliveries`). */
 export class PostgresWebhookStore implements WebhookStore {
@@ -85,11 +92,39 @@ export class PostgresWebhookStore implements WebhookStore {
     return res.rows.map(rowToSub);
   }
 
+  async getSubscription(id: Id): Promise<WebhookSubscription | null> {
+    const res = await this.pool.query<SubRow>(
+      `SELECT ${SUB_COLS} FROM public.aura_webhook_subscriptions WHERE id = $1`,
+      [id],
+    );
+    return res.rows.length ? rowToSub(res.rows[0]) : null;
+  }
+
   async recordDelivery(d: WebhookDelivery): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_webhook_deliveries (${DEL_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [d.id, d.subscriptionId, d.eventId, d.eventType, d.url, d.status, d.statusCode, d.error, d.attemptedAt],
+      `INSERT INTO public.aura_webhook_deliveries (${DEL_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [d.id, d.subscriptionId, d.eventId, d.eventType, d.url, d.status, d.statusCode, d.error, d.attempts, d.nextAttemptAt, d.body, d.attemptedAt],
     );
+  }
+
+  async updateDelivery(d: WebhookDelivery): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_webhook_deliveries
+         SET status = $2, status_code = $3, error = $4, attempts = $5, next_attempt_at = $6, attempted_at = $7
+       WHERE id = $1`,
+      [d.id, d.status, d.statusCode, d.error, d.attempts, d.nextAttemptAt, d.attemptedAt],
+    );
+  }
+
+  async duePendingDeliveries(nowIso: string, limit: number): Promise<WebhookDelivery[]> {
+    const res = await this.pool.query<DelRow>(
+      `SELECT ${DEL_COLS} FROM public.aura_webhook_deliveries
+         WHERE status = 'pending' AND next_attempt_at IS NOT NULL AND next_attempt_at <= $1
+         ORDER BY next_attempt_at
+         LIMIT $2`,
+      [nowIso, limit],
+    );
+    return res.rows.map(rowToDelivery);
   }
 
   async listDeliveries(subscriptionId?: Id, limit = 50): Promise<WebhookDelivery[]> {

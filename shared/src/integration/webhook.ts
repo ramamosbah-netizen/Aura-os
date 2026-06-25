@@ -61,3 +61,12 @@ export function subscriptionMatches(sub: WebhookSubscription, eventType: string)
 export function signPayload(secret: string, payload: string): string {
   return `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`;
 }
+
+/**
+ * Exponential backoff (ms) before retry `attempt` (1-based), capped. Attempt 1 waits
+ * `baseMs`, each further attempt doubles, never exceeding `capMs`. Pure + testable.
+ */
+export function webhookBackoffMs(attempt: number, baseMs = 2000, capMs = 300000): number {
+  const a = Math.max(1, Math.floor(attempt));
+  return Math.min(capMs, baseMs * 2 ** (a - 1));
+}

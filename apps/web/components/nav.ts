@@ -29,7 +29,10 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Operate',
-    items: [{ label: 'Purchase orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' }],
+    items: [
+      { label: 'Purchase orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' },
+      { label: 'Goods receipts', href: '/inventory/grns', glyph: '▢', desc: 'Inventory — received vs POs' },
+    ],
   },
   {
     title: 'Intelligence',

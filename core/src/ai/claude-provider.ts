@@ -4,6 +4,7 @@ import {
   type AiCompletionResult,
   type AiProvider,
   buildClaudeMessageParams,
+  lexicalEmbedding,
 } from '@aura/shared';
 
 /**
@@ -44,20 +45,12 @@ export class ClaudeProvider implements AiProvider {
     };
   }
 
+  /**
+   * Embeddings use the deterministic local LEXICAL embedding (Anthropic exposes no
+   * first-party embeddings endpoint via this SDK). Cosine reflects token overlap — good
+   * enough for lexical RAG; wire a dedicated embeddings provider for semantic depth.
+   */
   async embed(text: string): Promise<number[]> {
-    const embedding = new Array(1536).fill(0);
-    let seed = 0;
-    for (let i = 0; i < text.length; i++) {
-      seed = (seed + text.charCodeAt(i)) % 1000003;
-    }
-    for (let i = 0; i < 1536; i++) {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      embedding[i] = (seed / 4294967296) * 2 - 1;
-    }
-    let sumSq = 0;
-    for (let i = 0; i < 1536; i++) sumSq += embedding[i] * embedding[i];
-    const norm = Math.sqrt(sumSq) || 1;
-    for (let i = 0; i < 1536; i++) embedding[i] = Number((embedding[i] / norm).toFixed(6));
-    return embedding;
+    return lexicalEmbedding(text);
   }
 }

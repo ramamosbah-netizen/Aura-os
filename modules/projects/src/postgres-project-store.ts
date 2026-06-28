@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Project } from './domain/project';
 import type { ProjectFilter, ProjectStore } from './project-store';
 
@@ -47,7 +48,16 @@ export class PostgresProjectStore implements ProjectStore {
   constructor(private readonly pool: Pool) {}
 
   async create(p: Project): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, p);
+  }
+
+  async createWithClient(tx: TxHandle | null, p: Project): Promise<void> {
+    if (tx === null) return this.create(p);
+    await this.insert(tx as PoolClient, p);
+  }
+
+  private insert(executor: Pool | PoolClient, p: Project): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_projects_projects (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [p.id, p.tenantId, p.companyId, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
     );

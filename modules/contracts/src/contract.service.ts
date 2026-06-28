@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, makeContract } from './domain/contract';
 import { CONTRACT_STORE, type ContractFilter, type ContractStore } from './contract-store';
 
@@ -17,6 +17,7 @@ export class ContractService {
   constructor(
     @Inject(CONTRACT_STORE) private readonly store: ContractStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
   ) {}
 
@@ -29,28 +30,32 @@ export class ContractService {
     }
 
     const contract = makeContract(input);
-    await this.store.create(contract);
-    await this.events.append([
-      makeEvent({
-        type: CONTRACT_EVENT.created,
-        tenantId: contract.tenantId,
-        companyId: contract.companyId,
-        actorId: contract.createdBy,
-        aggregateType: 'contracts.contract',
-        aggregateId: contract.id,
-        payload: {
-          title: contract.title,
-          status: contract.status,
-          value: contract.value,
-          tender: contract.tenderId
-            ? { id: contract.tenderId, title: contract.tenderTitle }
-            : null,
-          account: contract.accountId
-            ? { id: contract.accountId, name: contract.accountName }
-            : null,
-        },
-      }),
-    ]);
+    const event = makeEvent({
+      type: CONTRACT_EVENT.created,
+      tenantId: contract.tenantId,
+      companyId: contract.companyId,
+      actorId: contract.createdBy,
+      aggregateType: 'contracts.contract',
+      aggregateId: contract.id,
+      payload: {
+        title: contract.title,
+        status: contract.status,
+        value: contract.value,
+        tender: contract.tenderId
+          ? { id: contract.tenderId, title: contract.tenderTitle }
+          : null,
+        account: contract.accountId
+          ? { id: contract.accountId, name: contract.accountName }
+          : null,
+      },
+    });
+
+    // Atomic outbox: the contract row and its event commit in ONE transaction (or both
+    // roll back). With no DB the handle is null and the stores fall back to sequential writes.
+    await this.tx.run(async (handle) => {
+      await this.store.createWithClient(handle, contract);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`Contract created: ${contract.title} (${contract.id}) value=${contract.value}`);
     return contract;
   }

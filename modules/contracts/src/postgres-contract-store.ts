@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Contract } from './domain/contract';
 import type { ContractFilter, ContractStore } from './contract-store';
 
@@ -47,7 +48,16 @@ export class PostgresContractStore implements ContractStore {
   constructor(private readonly pool: Pool) {}
 
   async create(c: Contract): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, c);
+  }
+
+  async createWithClient(tx: TxHandle | null, c: Contract): Promise<void> {
+    if (tx === null) return this.create(c);
+    await this.insert(tx as PoolClient, c);
+  }
+
+  private insert(executor: Pool | PoolClient, c: Contract): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_contracts_contracts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [c.id, c.tenantId, c.companyId, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.ownerId, c.createdBy, c.createdAt],
     );

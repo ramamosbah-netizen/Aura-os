@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, NumberingService, AuditService } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
@@ -20,6 +20,7 @@ export class TenderService {
     @Inject(TENDER_STORE) private readonly store: TenderStore,
     @Inject(BOQ_STORE) private readonly boqStore: BOQStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
@@ -44,7 +45,28 @@ export class TenderService {
       );
     }
 
-    await this.store.create(tender);
+    const event = makeEvent({
+      type: TENDER_EVENT.created,
+      tenantId: tender.tenantId,
+      companyId: tender.companyId,
+      actorId: tender.createdBy,
+      aggregateType: 'tendering.tender',
+      aggregateId: tender.id,
+      payload: {
+        title: tender.title,
+        status: tender.status,
+        value: tender.value,
+        account: tender.accountId
+          ? { id: tender.accountId, name: tender.accountName }
+          : null,
+      },
+    });
+
+    // Atomic outbox: the tender row and its event commit in ONE transaction (or both roll back).
+    await this.tx.run(async (handle) => {
+      await this.store.createWithClient(handle, tender);
+      await this.events.appendWithClient(handle, [event]);
+    });
 
     await this.audit.log(
       tender.tenantId,
@@ -56,25 +78,6 @@ export class TenderService {
       'create',
       { reference: tender.reference, value: tender.value },
     );
-
-    await this.events.append([
-      makeEvent({
-        type: TENDER_EVENT.created,
-        tenantId: tender.tenantId,
-        companyId: tender.companyId,
-        actorId: tender.createdBy,
-        aggregateType: 'tendering.tender',
-        aggregateId: tender.id,
-        payload: {
-          title: tender.title,
-          status: tender.status,
-          value: tender.value,
-          account: tender.accountId
-            ? { id: tender.accountId, name: tender.accountName }
-            : null,
-        },
-      }),
-    ]);
     this.logger.log(`Tender created: ${tender.title} (${tender.id}) value=${tender.value}`);
     return tender;
   }

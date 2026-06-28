@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Contract } from './domain/contract';
 import type { ContractFilter, ContractStore } from './contract-store';
 
@@ -8,6 +9,10 @@ export class InMemoryContractStore implements ContractStore {
 
   async create(contract: Contract): Promise<void> {
     this.contracts.set(contract.id, { ...contract });
+  }
+
+  async createWithClient(_tx: TxHandle | null, contract: Contract): Promise<void> {
+    return this.create(contract);
   }
 
   async update(contract: Contract): Promise<void> {

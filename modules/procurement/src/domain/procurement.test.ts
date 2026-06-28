@@ -5,7 +5,7 @@ import { InMemoryPurchaseRequestStore } from '../in-memory-purchase-request-stor
 import { InMemoryPurchaseOrderStore } from '../in-memory-purchase-order-store';
 import { PurchaseRequestService } from '../purchase-request.service';
 import { PurchaseOrderService } from '../purchase-order.service';
-import { AccessService, type EventStore, NumberingService, AuditService } from '@aura/core';
+import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner } from '@aura/core';
 
 const mockAccess = {
   assert: () => {},
@@ -13,7 +13,10 @@ const mockAccess = {
 
 const mockEvents = {
   append: async () => [],
+  appendWithClient: async () => [],
 } as unknown as EventStore;
+
+const mockTx = { run: (fn: (h: unknown) => unknown) => fn(null) } as unknown as TxRunner;
 
 const mockNumbering = {
   generateNextNumber: async () => 'PO-2026-000001',
@@ -40,7 +43,7 @@ describe('Procurement Full Cycle', () => {
       const prStore = new InMemoryPurchaseRequestStore();
       const poStore = new InMemoryPurchaseOrderStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockAccess, mockNumbering, mockAudit);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, mockAccess, mockNumbering, mockAudit);
       const prService = new PurchaseRequestService(prStore, mockEvents, mockAccess, poService);
 
 

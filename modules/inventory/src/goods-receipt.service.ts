@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { INVENTORY_EVENT, type GoodsReceipt, type NewGoodsReceipt, makeGoodsReceipt } from './domain/goods-receipt';
 import { GOODS_RECEIPT_STORE, type GoodsReceiptFilter, type GoodsReceiptStore } from './goods-receipt-store';
 
@@ -16,6 +16,7 @@ export class GoodsReceiptService {
   constructor(
     @Inject(GOODS_RECEIPT_STORE) private readonly store: GoodsReceiptStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
   ) {}
 
@@ -28,25 +29,28 @@ export class GoodsReceiptService {
     }
 
     const grn = makeGoodsReceipt(input);
-    await this.store.create(grn);
-    await this.events.append([
-      makeEvent({
-        type: INVENTORY_EVENT.grnCreated,
-        tenantId: grn.tenantId,
-        companyId: grn.companyId,
-        actorId: grn.createdBy,
-        aggregateType: 'inventory.grn',
-        aggregateId: grn.id,
-        payload: {
-          title: grn.title,
-          status: grn.status,
-          value: grn.value,
-          supplier: grn.supplierName,
-          po: grn.poId ? { id: grn.poId, title: grn.poTitle } : null,
-          project: grn.projectId ? { id: grn.projectId, name: grn.projectName } : null,
-        },
-      }),
-    ]);
+    const event = makeEvent({
+      type: INVENTORY_EVENT.grnCreated,
+      tenantId: grn.tenantId,
+      companyId: grn.companyId,
+      actorId: grn.createdBy,
+      aggregateType: 'inventory.grn',
+      aggregateId: grn.id,
+      payload: {
+        title: grn.title,
+        status: grn.status,
+        value: grn.value,
+        supplier: grn.supplierName,
+        po: grn.poId ? { id: grn.poId, title: grn.poTitle } : null,
+        project: grn.projectId ? { id: grn.projectId, name: grn.projectName } : null,
+      },
+    });
+
+    // Atomic outbox: the GRN row and its event commit in ONE transaction (or both roll back).
+    await this.tx.run(async (handle) => {
+      await this.store.createWithClient(handle, grn);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`GRN created: ${grn.title} (${grn.id}) value=${grn.value}`);
     return grn;
   }

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, NumberingService, AuditService } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeInvoice } from './domain/invoice';
 import { INVOICE_STORE, type InvoiceFilter, type InvoiceStore } from './invoice-store';
 import { PurchaseOrderService } from '@aura/procurement';
@@ -18,6 +18,7 @@ export class InvoiceService {
   constructor(
     @Inject(INVOICE_STORE) private readonly store: InvoiceStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
     private readonly purchaseOrders: PurchaseOrderService,
     private readonly goodsReceipts: GoodsReceiptService,
@@ -44,7 +45,28 @@ export class InvoiceService {
       );
     }
 
-    await this.store.create(invoice);
+    const event = makeEvent({
+      type: FINANCE_EVENT.invoiceCreated,
+      tenantId: invoice.tenantId,
+      companyId: invoice.companyId,
+      actorId: invoice.createdBy,
+      aggregateType: 'finance.invoice',
+      aggregateId: invoice.id,
+      payload: {
+        title: invoice.title,
+        status: invoice.status,
+        value: invoice.value,
+        supplier: invoice.supplierName,
+        po: invoice.poId ? { id: invoice.poId, title: invoice.poTitle } : null,
+        project: invoice.projectId ? { id: invoice.projectId, name: invoice.projectName } : null,
+      },
+    });
+
+    // Atomic outbox: the invoice row and its event commit in ONE transaction (or both roll back).
+    await this.tx.run(async (handle) => {
+      await this.store.createWithClient(handle, invoice);
+      await this.events.appendWithClient(handle, [event]);
+    });
 
     await this.audit.log(
       invoice.tenantId,
@@ -56,25 +78,6 @@ export class InvoiceService {
       'create',
       { reference: invoice.reference, value: invoice.value },
     );
-
-    await this.events.append([
-      makeEvent({
-        type: FINANCE_EVENT.invoiceCreated,
-        tenantId: invoice.tenantId,
-        companyId: invoice.companyId,
-        actorId: invoice.createdBy,
-        aggregateType: 'finance.invoice',
-        aggregateId: invoice.id,
-        payload: {
-          title: invoice.title,
-          status: invoice.status,
-          value: invoice.value,
-          supplier: invoice.supplierName,
-          po: invoice.poId ? { id: invoice.poId, title: invoice.poTitle } : null,
-          project: invoice.projectId ? { id: invoice.projectId, name: invoice.projectName } : null,
-        },
-      }),
-    ]);
     this.logger.log(`Invoice created: ${invoice.title} (${invoice.id}) value=${invoice.value}`);
     return invoice;
   }

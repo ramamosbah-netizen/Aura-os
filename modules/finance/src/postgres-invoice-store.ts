@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Invoice } from './domain/invoice';
 import type { InvoiceFilter, InvoiceStore } from './invoice-store';
 
@@ -51,7 +52,16 @@ export class PostgresInvoiceStore implements InvoiceStore {
   constructor(private readonly pool: Pool) {}
 
   async create(i: Invoice): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, i);
+  }
+
+  async createWithClient(tx: TxHandle | null, i: Invoice): Promise<void> {
+    if (tx === null) return this.create(i);
+    await this.insert(tx as PoolClient, i);
+  }
+
+  private insert(executor: Pool | PoolClient, i: Invoice): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_finance_invoices (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [i.id, i.tenantId, i.companyId, i.reference, i.title, i.poId, i.poTitle, i.supplierName, i.projectId, i.projectName, i.wbsNodeId, i.status, i.value, i.ownerId, i.createdBy, i.createdAt],
     );

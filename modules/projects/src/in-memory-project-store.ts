@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Project } from './domain/project';
 import type { ProjectFilter, ProjectStore } from './project-store';
 
@@ -8,6 +9,10 @@ export class InMemoryProjectStore implements ProjectStore {
 
   async create(project: Project): Promise<void> {
     this.projects.set(project.id, { ...project });
+  }
+
+  async createWithClient(_tx: TxHandle | null, project: Project): Promise<void> {
+    return this.create(project);
   }
 
   async get(id: Id): Promise<Project | null> {

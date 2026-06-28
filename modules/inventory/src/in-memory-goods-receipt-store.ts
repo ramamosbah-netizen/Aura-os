@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { GoodsReceipt } from './domain/goods-receipt';
 import type { GoodsReceiptFilter, GoodsReceiptStore } from './goods-receipt-store';
 
@@ -8,6 +9,10 @@ export class InMemoryGoodsReceiptStore implements GoodsReceiptStore {
 
   async create(grn: GoodsReceipt): Promise<void> {
     this.grns.set(grn.id, { ...grn });
+  }
+
+  async createWithClient(_tx: TxHandle | null, grn: GoodsReceipt): Promise<void> {
+    return this.create(grn);
   }
 
   async get(id: Id): Promise<GoodsReceipt | null> {

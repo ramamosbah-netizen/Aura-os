@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { PurchaseOrder } from './domain/purchase-order';
 import type { PurchaseOrderFilter, PurchaseOrderStore } from './purchase-order-store';
 
@@ -8,6 +9,10 @@ export class InMemoryPurchaseOrderStore implements PurchaseOrderStore {
 
   async create(po: PurchaseOrder): Promise<void> {
     this.pos.set(po.id, { ...po });
+  }
+
+  async createWithClient(_tx: TxHandle | null, po: PurchaseOrder): Promise<void> {
+    return this.create(po);
   }
 
   async update(po: PurchaseOrder): Promise<void> {

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROJECT_EVENT, type Project, type NewProject, makeProject } from './domain/project';
 import { PROJECT_STORE, type ProjectFilter, type ProjectStore } from './project-store';
 
@@ -17,6 +17,7 @@ export class ProjectService {
   constructor(
     @Inject(PROJECT_STORE) private readonly store: ProjectStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
   ) {}
 
@@ -29,28 +30,31 @@ export class ProjectService {
     }
 
     const project = makeProject(input);
-    await this.store.create(project);
-    await this.events.append([
-      makeEvent({
-        type: PROJECT_EVENT.created,
-        tenantId: project.tenantId,
-        companyId: project.companyId,
-        actorId: project.createdBy,
-        aggregateType: 'projects.project',
-        aggregateId: project.id,
-        payload: {
-          title: project.title,
-          status: project.status,
-          value: project.value,
-          contract: project.contractId
-            ? { id: project.contractId, title: project.contractTitle }
-            : null,
-          account: project.accountId
-            ? { id: project.accountId, name: project.accountName }
-            : null,
-        },
-      }),
-    ]);
+    const event = makeEvent({
+      type: PROJECT_EVENT.created,
+      tenantId: project.tenantId,
+      companyId: project.companyId,
+      actorId: project.createdBy,
+      aggregateType: 'projects.project',
+      aggregateId: project.id,
+      payload: {
+        title: project.title,
+        status: project.status,
+        value: project.value,
+        contract: project.contractId
+          ? { id: project.contractId, title: project.contractTitle }
+          : null,
+        account: project.accountId
+          ? { id: project.accountId, name: project.accountName }
+          : null,
+      },
+    });
+
+    // Atomic outbox: the project row and its event commit in ONE transaction (or both roll back).
+    await this.tx.run(async (handle) => {
+      await this.store.createWithClient(handle, project);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`Project created: ${project.title} (${project.id}) value=${project.value}`);
     return project;
   }

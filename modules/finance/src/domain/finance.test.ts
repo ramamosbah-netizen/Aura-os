@@ -11,7 +11,7 @@ import { AccountService } from '../account.service';
 import { JournalService } from '../journal.service';
 import { PaymentService } from '../payment.service';
 import { InvoiceService } from '../invoice.service';
-import { AccessService, type EventStore, NumberingService, AuditService } from '@aura/core';
+import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner } from '@aura/core';
 import { PurchaseOrderService, InMemoryPurchaseOrderStore } from '@aura/procurement';
 import { GoodsReceiptService, InMemoryGoodsReceiptStore } from '@aura/inventory';
 
@@ -22,7 +22,10 @@ const mockAccess = {
 
 const mockEvents = {
   append: async () => [],
+  appendWithClient: async () => [],
 } as unknown as EventStore;
+
+const mockTx = { run: (fn: (h: unknown) => unknown) => fn(null) } as unknown as TxRunner;
 
 const mockNumbering = {
   generateNextNumber: async (tenantId: string, companyId: string | null, module: string, entity: string, prefix: string) => `${prefix}-2026-000001`,
@@ -117,6 +120,7 @@ describe('Finance depth features', () => {
       const invoiceService = new InvoiceService(
         invoiceStore,
         mockEvents,
+        mockTx,
         mockAccess,
         mockPurchaseOrders,
         mockGoodsReceipts,
@@ -191,8 +195,8 @@ describe('Finance depth features', () => {
       const grnStore = new InMemoryGoodsReceiptStore();
       const invoiceStore = new InMemoryInvoiceStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockAccess, mockNumbering, mockAudit);
-      const grnService = new GoodsReceiptService(grnStore, mockEvents, mockAccess);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, mockAccess, mockNumbering, mockAudit);
+      const grnService = new GoodsReceiptService(grnStore, mockEvents, mockTx, mockAccess);
 
       const mockPurchaseOrders = poService;
       const mockGoodsReceipts = grnService;
@@ -200,6 +204,7 @@ describe('Finance depth features', () => {
       const invoiceService = new InvoiceService(
         invoiceStore,
         mockEvents,
+        mockTx,
         mockAccess,
         mockPurchaseOrders,
         mockGoodsReceipts,
@@ -253,12 +258,13 @@ describe('Finance depth features', () => {
       const grnStore = new InMemoryGoodsReceiptStore();
       const invoiceStore = new InMemoryInvoiceStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockAccess, mockNumbering, mockAudit);
-      const grnService = new GoodsReceiptService(grnStore, mockEvents, mockAccess);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, mockAccess, mockNumbering, mockAudit);
+      const grnService = new GoodsReceiptService(grnStore, mockEvents, mockTx, mockAccess);
 
       const invoiceService = new InvoiceService(
         invoiceStore,
         mockEvents,
+        mockTx,
         mockAccess,
         poService,
         grnService,

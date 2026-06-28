@@ -1,19 +1,25 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { type Id, makeEvent, newId } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
 import { type BOQ, type BOQItem, makeBOQ, makeBOQItem, type NewBOQItem } from './domain/boq';
 
+const CREATE_TENDER = 'tendering.tender.create';
+
 /**
- * Tendering service — the second deal-chain module, cloned from the CRM template.
- * Owns `aura_tendering_tenders`, goes through the kernel access seam, and emits
- * `tendering.tender.*` on the spine. It REFERENCES CRM accounts by id + snapshot
- * (never joins CRM's tables) — modules compose via events/API, not the database.
+ * Tendering service — the second deal-chain module. Owns `aura_tendering_tenders`, emits
+ * `tendering.tender.*` on the spine. It REFERENCES CRM accounts by id + snapshot (never joins
+ * CRM's tables) — modules compose via events/API, not the database.
+ *
+ * Create dispatches through the kernel `CommandBus` (validate → authz → idempotency → one tx
+ * → atomic row + outbox event), with the reference number generated inside the handler.
+ * `update`/`changeStatus`/BOQ-recalc keep their inline atomic TX_RUNNER writes — the
+ * tender.awarded event drives Contract auto-creation.
  */
 @Injectable()
-export class TenderService {
+export class TenderService implements OnModuleInit {
   private readonly logger = new Logger('Tendering');
 
   constructor(
@@ -21,53 +27,63 @@ export class TenderService {
     @Inject(BOQ_STORE) private readonly boqStore: BOQStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
-    private readonly access: AccessService,
+    private readonly commands: CommandBus,
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
   ) {}
 
-  async create(input: NewTender): Promise<Tender> {
-    if (input.createdBy) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'tendering.tender.create', orgPath };
-      this.access.assert(input.createdBy, target);
-    }
-
-    const tender = makeTender(input);
-    if (!tender.reference) {
-      tender.reference = await this.numbering.generateNextNumber(
-        tender.tenantId,
-        tender.companyId,
-        'tendering',
-        'tender',
-        'TND',
-      );
-    }
-
-    const event = makeEvent({
-      type: TENDER_EVENT.created,
-      tenantId: tender.tenantId,
-      companyId: tender.companyId,
-      actorId: tender.createdBy,
-      aggregateType: 'tendering.tender',
-      aggregateId: tender.id,
-      payload: {
-        title: tender.title,
-        status: tender.status,
-        value: tender.value,
-        account: tender.accountId
-          ? { id: tender.accountId, name: tender.accountName }
-          : null,
+  onModuleInit(): void {
+    this.commands.register<NewTender, Tender>({
+      name: CREATE_TENDER,
+      permission: 'tendering.tender.create',
+      validate: (input) => {
+        if (!input.title || !input.title.trim()) throw new Error('tender title is required');
+      },
+      handler: async (command, tx) => {
+        const tender = makeTender(command.payload);
+        if (!tender.reference) {
+          tender.reference = await this.numbering.generateNextNumber(
+            tender.tenantId,
+            tender.companyId,
+            'tendering',
+            'tender',
+            'TND',
+          );
+        }
+        const event = makeEvent({
+          type: TENDER_EVENT.created,
+          tenantId: tender.tenantId,
+          companyId: tender.companyId,
+          actorId: tender.createdBy,
+          aggregateType: 'tendering.tender',
+          aggregateId: tender.id,
+          payload: {
+            title: tender.title,
+            status: tender.status,
+            value: tender.value,
+            account: tender.accountId
+              ? { id: tender.accountId, name: tender.accountName }
+              : null,
+          },
+        });
+        await this.store.createWithClient(tx, tender);
+        await this.events.appendWithClient(tx, [event]);
+        this.logger.log(`Tender created: ${tender.title} (${tender.id}) value=${tender.value}`);
+        return tender;
       },
     });
+  }
 
-    // Atomic outbox: the tender row and its event commit in ONE transaction (or both roll back).
-    await this.tx.run(async (handle) => {
-      await this.store.createWithClient(handle, tender);
-      await this.events.appendWithClient(handle, [event]);
+  async create(input: NewTender, idempotencyKey?: string | null): Promise<Tender> {
+    const tender = await this.commands.execute<Tender>({
+      id: newId(),
+      name: CREATE_TENDER,
+      tenantId: input.tenantId,
+      companyId: input.companyId ?? null,
+      actorId: input.createdBy ?? null,
+      payload: input,
+      idempotencyKey: idempotencyKey ?? null,
     });
-
     await this.audit.log(
       tender.tenantId,
       tender.companyId,
@@ -78,7 +94,6 @@ export class TenderService {
       'create',
       { reference: tender.reference, value: tender.value },
     );
-    this.logger.log(`Tender created: ${tender.title} (${tender.id}) value=${tender.value}`);
     return tender;
   }
 

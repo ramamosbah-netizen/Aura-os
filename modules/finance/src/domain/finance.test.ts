@@ -11,9 +11,23 @@ import { AccountService } from '../account.service';
 import { JournalService } from '../journal.service';
 import { PaymentService } from '../payment.service';
 import { InvoiceService } from '../invoice.service';
-import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner } from '@aura/core';
+import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner, type CommandBus, type Command, type CommandDefinition } from '@aura/core';
 import { PurchaseOrderService, InMemoryPurchaseOrderStore } from '@aura/procurement';
 import { GoodsReceiptService, InMemoryGoodsReceiptStore } from '@aura/inventory';
+
+/** Minimal in-process CommandBus stand-in: runs validate + handler directly (no DB/authz). */
+function fakeBus(): CommandBus {
+  const handlers = new Map<string, CommandDefinition>();
+  return {
+    register: (def: CommandDefinition) => { handlers.set(def.name, def); },
+    execute: async (cmd: Command) => {
+      const def = handlers.get(cmd.name);
+      if (!def) throw new Error(`no handler for ${cmd.name}`);
+      if (def.validate) await def.validate(cmd.payload);
+      return def.handler(cmd, null);
+    },
+  } as unknown as CommandBus;
+}
 
 // Mock AccessService, EventStore, NumberingService, and AuditService
 const mockAccess = {
@@ -121,12 +135,13 @@ describe('Finance depth features', () => {
         invoiceStore,
         mockEvents,
         mockTx,
-        mockAccess,
+        fakeBus(),
         mockPurchaseOrders,
         mockGoodsReceipts,
         mockNumbering,
         mockAudit,
       );
+      invoiceService.onModuleInit();
       const accountService = new AccountService(accountStore, mockAccess);
       const journalService = new JournalService(journalStore, mockEvents, mockAccess);
       const paymentService = new PaymentService(
@@ -195,8 +210,10 @@ describe('Finance depth features', () => {
       const grnStore = new InMemoryGoodsReceiptStore();
       const invoiceStore = new InMemoryInvoiceStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, mockAccess, mockNumbering, mockAudit);
-      const grnService = new GoodsReceiptService(grnStore, mockEvents, mockTx, mockAccess);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+      poService.onModuleInit();
+      const grnService = new GoodsReceiptService(grnStore, mockEvents, fakeBus());
+      grnService.onModuleInit();
 
       const mockPurchaseOrders = poService;
       const mockGoodsReceipts = grnService;
@@ -205,12 +222,13 @@ describe('Finance depth features', () => {
         invoiceStore,
         mockEvents,
         mockTx,
-        mockAccess,
+        fakeBus(),
         mockPurchaseOrders,
         mockGoodsReceipts,
         mockNumbering,
         mockAudit,
       );
+      invoiceService.onModuleInit();
 
       // 1. Create and issue PO
       const po = await poService.create({
@@ -258,19 +276,22 @@ describe('Finance depth features', () => {
       const grnStore = new InMemoryGoodsReceiptStore();
       const invoiceStore = new InMemoryInvoiceStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, mockAccess, mockNumbering, mockAudit);
-      const grnService = new GoodsReceiptService(grnStore, mockEvents, mockTx, mockAccess);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+      poService.onModuleInit();
+      const grnService = new GoodsReceiptService(grnStore, mockEvents, fakeBus());
+      grnService.onModuleInit();
 
       const invoiceService = new InvoiceService(
         invoiceStore,
         mockEvents,
         mockTx,
-        mockAccess,
+        fakeBus(),
         poService,
         grnService,
         mockNumbering,
         mockAudit,
       );
+      invoiceService.onModuleInit();
 
       const po = await poService.create({
         tenantId: 't1',

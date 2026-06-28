@@ -5,7 +5,21 @@ import { InMemoryPurchaseRequestStore } from '../in-memory-purchase-request-stor
 import { InMemoryPurchaseOrderStore } from '../in-memory-purchase-order-store';
 import { PurchaseRequestService } from '../purchase-request.service';
 import { PurchaseOrderService } from '../purchase-order.service';
-import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner } from '@aura/core';
+import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner, type CommandBus, type Command, type CommandDefinition } from '@aura/core';
+
+/** Minimal in-process CommandBus stand-in: runs validate + handler directly (no DB/authz). */
+function fakeBus(): CommandBus {
+  const handlers = new Map<string, CommandDefinition>();
+  return {
+    register: (def: CommandDefinition) => { handlers.set(def.name, def); },
+    execute: async (cmd: Command) => {
+      const def = handlers.get(cmd.name);
+      if (!def) throw new Error(`no handler for ${cmd.name}`);
+      if (def.validate) await def.validate(cmd.payload);
+      return def.handler(cmd, null);
+    },
+  } as unknown as CommandBus;
+}
 
 const mockAccess = {
   assert: () => {},
@@ -43,7 +57,8 @@ describe('Procurement Full Cycle', () => {
       const prStore = new InMemoryPurchaseRequestStore();
       const poStore = new InMemoryPurchaseOrderStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, mockAccess, mockNumbering, mockAudit);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+      poService.onModuleInit();
       const prService = new PurchaseRequestService(prStore, mockEvents, mockAccess, poService);
 
 

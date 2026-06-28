@@ -1,68 +1,84 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { type Id, makeEvent, newId } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
 
+const CREATE_PO = 'procurement.po.create';
+
 /**
- * Procurement service — the operate-side spend module, same template as the deal chain.
- * Owns `aura_procurement_purchase_orders`, goes through the access seam, and emits
- * `procurement.po.*` on the spine. References a project by id + snapshot — no DB join.
+ * Procurement service — the operate-side spend module. Owns `aura_procurement_purchase_orders`,
+ * emits `procurement.po.*` on the spine. References a project by id + snapshot — no DB join.
+ *
+ * Create dispatches through the kernel `CommandBus` (validate → authz → idempotency → one tx
+ * → atomic row + outbox event); the reference number is generated inside the command handler.
+ * `changeStatus` keeps its inline atomic TX_RUNNER write (its po.issued event is consumed
+ * downstream by Inventory/Finance).
  */
 @Injectable()
-export class PurchaseOrderService {
+export class PurchaseOrderService implements OnModuleInit {
   private readonly logger = new Logger('Procurement');
 
   constructor(
     @Inject(PURCHASE_ORDER_STORE) private readonly store: PurchaseOrderStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
-    private readonly access: AccessService,
+    private readonly commands: CommandBus,
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
   ) {}
 
-  async create(input: NewPurchaseOrder): Promise<PurchaseOrder> {
-    if (input.createdBy) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'procurement.po.create', orgPath };
-      this.access.assert(input.createdBy, target);
-    }
-
-    const po = makePurchaseOrder(input);
-    if (!po.reference) {
-      po.reference = await this.numbering.generateNextNumber(
-        po.tenantId,
-        po.companyId,
-        'procurement',
-        'purchase-order',
-        'PO',
-      );
-    }
-
-    const event = makeEvent({
-      type: PROCUREMENT_EVENT.poCreated,
-      tenantId: po.tenantId,
-      companyId: po.companyId,
-      actorId: po.createdBy,
-      aggregateType: 'procurement.po',
-      aggregateId: po.id,
-      payload: {
-        title: po.title,
-        status: po.status,
-        value: po.value,
-        supplier: po.supplierName,
-        project: po.projectId ? { id: po.projectId, name: po.projectName } : null,
+  onModuleInit(): void {
+    this.commands.register<NewPurchaseOrder, PurchaseOrder>({
+      name: CREATE_PO,
+      permission: 'procurement.po.create',
+      validate: (input) => {
+        if (!input.title || !input.title.trim()) throw new Error('purchase order title is required');
+      },
+      handler: async (command, tx) => {
+        const po = makePurchaseOrder(command.payload);
+        if (!po.reference) {
+          po.reference = await this.numbering.generateNextNumber(
+            po.tenantId,
+            po.companyId,
+            'procurement',
+            'purchase-order',
+            'PO',
+          );
+        }
+        const event = makeEvent({
+          type: PROCUREMENT_EVENT.poCreated,
+          tenantId: po.tenantId,
+          companyId: po.companyId,
+          actorId: po.createdBy,
+          aggregateType: 'procurement.po',
+          aggregateId: po.id,
+          payload: {
+            title: po.title,
+            status: po.status,
+            value: po.value,
+            supplier: po.supplierName,
+            project: po.projectId ? { id: po.projectId, name: po.projectName } : null,
+          },
+        });
+        await this.store.createWithClient(tx, po);
+        await this.events.appendWithClient(tx, [event]);
+        this.logger.log(`PO created: ${po.title} (${po.id}) value=${po.value}`);
+        return po;
       },
     });
+  }
 
-    // Atomic outbox: the PO row and its event commit in ONE transaction (or both roll back).
-    await this.tx.run(async (handle) => {
-      await this.store.createWithClient(handle, po);
-      await this.events.appendWithClient(handle, [event]);
+  async create(input: NewPurchaseOrder, idempotencyKey?: string | null): Promise<PurchaseOrder> {
+    const po = await this.commands.execute<PurchaseOrder>({
+      id: newId(),
+      name: CREATE_PO,
+      tenantId: input.tenantId,
+      companyId: input.companyId ?? null,
+      actorId: input.createdBy ?? null,
+      payload: input,
+      idempotencyKey: idempotencyKey ?? null,
     });
-
     await this.audit.log(
       po.tenantId,
       po.companyId,
@@ -73,7 +89,6 @@ export class PurchaseOrderService {
       'create',
       { reference: po.reference, value: po.value, supplierName: po.supplierName },
     );
-    this.logger.log(`PO created: ${po.title} (${po.id}) value=${po.value}`);
     return po;
   }
 
@@ -105,7 +120,7 @@ export class PurchaseOrderService {
       },
     });
 
-    // Atomic: the status update and its (cross-module-triggering) event commit together.
+    // Atomic: the status update and its event commit together.
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);

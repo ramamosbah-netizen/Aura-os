@@ -3,7 +3,21 @@ import { makeBOQ, makeBOQItem } from './boq';
 import { TenderService } from '../tender.service';
 import { InMemoryTenderStore } from '../in-memory-tender-store';
 import { InMemoryBOQStore } from '../in-memory-boq-store';
-import { type EventStore, type AccessService, type NumberingService, type AuditService, type TxRunner } from '@aura/core';
+import { type EventStore, type NumberingService, type AuditService, type TxRunner, type CommandBus, type Command, type CommandDefinition } from '@aura/core';
+
+/** Minimal in-process CommandBus stand-in: runs validate + handler directly (no DB/authz). */
+function fakeBus(): CommandBus {
+  const handlers = new Map<string, CommandDefinition>();
+  return {
+    register: (def: CommandDefinition) => { handlers.set(def.name, def); },
+    execute: async (cmd: Command) => {
+      const def = handlers.get(cmd.name);
+      if (!def) throw new Error(`no handler for ${cmd.name}`);
+      if (def.validate) await def.validate(cmd.payload);
+      return def.handler(cmd, null);
+    },
+  } as unknown as CommandBus;
+}
 
 describe('tendering BOQ and BOQItem models', () => {
   it('creates a BOQ with uuid and date stamps', () => {
@@ -84,12 +98,12 @@ describe('TenderService BOQ Integration Workflows', () => {
     append: vi.fn().mockResolvedValue(undefined),
     appendWithClient: vi.fn().mockResolvedValue(undefined),
   } as unknown as EventStore;
-  const mockAccess = { assert: vi.fn() } as unknown as AccessService;
   const mockNumbering = { generateNextNumber: vi.fn().mockResolvedValue('TND-2026-001') } as unknown as NumberingService;
   const mockAudit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
   const mockTx = { run: (fn: (h: unknown) => unknown) => fn(null) } as unknown as TxRunner;
 
-  const service = new TenderService(tenderStore, boqStore, mockEvents, mockTx, mockAccess, mockNumbering, mockAudit);
+  const service = new TenderService(tenderStore, boqStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+  service.onModuleInit();
 
   it('performs closed-loop recalculation of tender value when BOQ items change', async () => {
     // 1. Create a tender

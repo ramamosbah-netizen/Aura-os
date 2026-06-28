@@ -15,6 +15,7 @@ export interface DomainEvent<TPayload = Record<string, unknown>> {
   aggregateType: string;
   aggregateId: Id;
   actorId: Id | null;
+  correlationId?: string | null;
   /** ISO-8601 UTC. */
   occurredAt: string;
   version: number;
@@ -29,6 +30,7 @@ export interface NewDomainEvent<TPayload = Record<string, unknown>> {
   aggregateType: string;
   aggregateId: Id;
   actorId?: Id | null;
+  correlationId?: string | null;
   version?: number;
   payload?: TPayload;
 }
@@ -43,6 +45,7 @@ export function makeEvent<T = Record<string, unknown>>(e: NewDomainEvent<T>): Do
     aggregateType: e.aggregateType,
     aggregateId: e.aggregateId,
     actorId: e.actorId ?? null,
+    correlationId: e.correlationId ?? null,
     occurredAt: new Date().toISOString(),
     version: e.version ?? 1,
     payload: (e.payload ?? {}) as T,

@@ -35,6 +35,7 @@ export interface AiCompletionResult {
 export interface AiProvider {
   readonly name: string;
   complete(req: AiCompletionRequest): Promise<AiCompletionResult>;
+  embed(text: string): Promise<number[]>;
 }
 
 /** Default to the latest, most capable Claude model. */

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { DomainEvent } from '@aura/shared';
-import { getJson } from '../../lib/api';
+import { getJson } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 

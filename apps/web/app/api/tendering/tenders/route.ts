@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '../../../../lib/api';
+import { apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward tender creation to the Nest Tendering API server-side.
 export async function POST(request: Request): Promise<Response> {

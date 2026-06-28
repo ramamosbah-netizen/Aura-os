@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '../../../lib/api';
+import { getJson } from '@/lib/api';
 import PoCreate from '../../../components/po-create';
+import PoList from '../../../components/po-list';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,14 +20,6 @@ interface ProjectLite {
   title: string;
 }
 
-function money(n: number): string {
-  return n ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
-}
-
-function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString();
-}
-
 export default async function PurchaseOrdersPage() {
   const [pos, projects] = await Promise.all([
     getJson<PurchaseOrder[]>('/api/procurement/purchase-orders'),
@@ -43,39 +36,11 @@ export default async function PurchaseOrdersPage() {
 
       <PoCreate projects={(projects ?? []).map((p) => ({ id: p.id, title: p.title }))} />
 
-      <section style={st.panel}>
-        {pos === null ? (
-          <p style={st.muted}>API offline.</p>
-        ) : pos.length === 0 ? (
-          <p style={st.muted}>No purchase orders yet — raise one above.</p>
-        ) : (
-          <table style={st.table}>
-            <thead>
-              <tr>
-                {['Title', 'Supplier', 'Project', 'Status', 'Value', 'Created'].map((h) => (
-                  <th key={h} style={st.th}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pos.map((po) => (
-                <tr key={po.id}>
-                  <td style={st.td}>{po.title}</td>
-                  <td style={st.tdMuted}>{po.supplierName ?? '—'}</td>
-                  <td style={st.tdMuted}>{po.projectName ?? '—'}</td>
-                  <td style={st.td}>
-                    <span style={st.tag}>{po.status}</span>
-                  </td>
-                  <td style={st.td}>{money(po.value)}</td>
-                  <td style={st.tdMuted}>{fmt(po.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+      {pos === null ? (
+        <section style={st.panel}><p style={st.muted}>API offline.</p></section>
+      ) : (
+        <PoList initialPos={pos} />
+      )}
     </div>
   );
 }

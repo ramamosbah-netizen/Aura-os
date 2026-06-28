@@ -1,12 +1,14 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '../../../lib/api';
+import { getJson } from '@/lib/api';
 import InvoiceCreate from '../../../components/invoice-create';
+import InvoicesList from '../../../components/invoices-list';
 
 export const dynamic = 'force-dynamic';
 
 interface Invoice {
   id: string;
   title: string;
+  poId: string | null;
   poTitle: string | null;
   supplierName: string | null;
   projectName: string | null;
@@ -18,27 +20,36 @@ interface Invoice {
 interface PoLite {
   id: string;
   title: string;
+  status: string;
   supplierName: string | null;
   projectId: string | null;
   projectName: string | null;
   value: number;
 }
 
-function money(n: number): string {
-  return n ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+interface GoodsReceipt {
+  id: string;
+  poId: string | null;
+  status: string;
+  value: number;
 }
 
-function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString();
+interface Account {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
 }
 
 export default async function InvoicesPage() {
   // Closing the operate loop: invoices from our own API, and the "against PO" options from
   // the Procurement API (status=received) — each PO carries supplier + project, so an
   // invoice inherits both (PO ← Project, no joins).
-  const [invoices, pos] = await Promise.all([
+  const [invoices, pos, grns, bankAccounts] = await Promise.all([
     getJson<Invoice[]>('/api/finance/invoices'),
-    getJson<PoLite[]>('/api/procurement/purchase-orders?status=received'),
+    getJson<PoLite[]>('/api/procurement/purchase-orders'),
+    getJson<GoodsReceipt[]>('/api/inventory/grns'),
+    getJson<Account[]>('/api/finance/accounts?type=asset'),
   ]);
 
   return (
@@ -51,7 +62,7 @@ export default async function InvoicesPage() {
       </p>
 
       <InvoiceCreate
-        pos={(pos ?? []).map((p) => ({
+        pos={(pos ?? []).filter((p) => p.status === 'received').map((p) => ({
           id: p.id,
           title: p.title,
           supplierName: p.supplierName,
@@ -61,38 +72,16 @@ export default async function InvoicesPage() {
         }))}
       />
 
-      <section style={st.panel}>
+      <section style={{ marginTop: 20 }}>
         {invoices === null ? (
           <p style={st.muted}>API offline.</p>
-        ) : invoices.length === 0 ? (
-          <p style={st.muted}>No invoices yet — raise one against a received PO above.</p>
         ) : (
-          <table style={st.table}>
-            <thead>
-              <tr>
-                {['Invoice', 'Against PO', 'Supplier', 'Project', 'Status', 'Value', 'Created'].map((h) => (
-                  <th key={h} style={st.th}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv.id}>
-                  <td style={st.td}>{inv.title}</td>
-                  <td style={st.tdMuted}>{inv.poTitle ?? '—'}</td>
-                  <td style={st.tdMuted}>{inv.supplierName ?? '—'}</td>
-                  <td style={st.tdMuted}>{inv.projectName ?? '—'}</td>
-                  <td style={st.td}>
-                    <span style={st.tag}>{inv.status}</span>
-                  </td>
-                  <td style={st.td}>{money(inv.value)}</td>
-                  <td style={st.tdMuted}>{fmt(inv.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <InvoicesList
+            invoices={invoices}
+            bankAccounts={bankAccounts ?? []}
+            pos={pos ?? []}
+            grns={grns ?? []}
+          />
         )}
       </section>
     </div>
@@ -111,27 +100,5 @@ const st = {
     borderRadius: 5,
     padding: '1px 5px',
   } as CSSProperties,
-  panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '8px 8px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
-  th: {
-    textAlign: 'left',
-    color: 'var(--muted)',
-    fontWeight: 500,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    padding: '10px 12px',
-    borderBottom: '1px solid var(--border)',
-  } as CSSProperties,
-  td: { padding: '11px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
-  tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
-  tag: {
-    fontSize: 12,
-    background: 'var(--panel-2)',
-    border: '1px solid var(--border)',
-    borderRadius: 6,
-    padding: '2px 8px',
-    textTransform: 'capitalize',
-  } as CSSProperties,
 };

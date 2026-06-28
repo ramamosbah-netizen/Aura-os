@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav';
 import CommandPalette from './command-palette';
-import type { SessionUser } from '../lib/session';
+import type { SessionUser } from '@/lib/session';
 
 /**
  * The persistent app frame: a left sidebar (brand + grouped nav) and a top bar with
@@ -21,6 +21,16 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
+  const [activeCompany, setActiveCompany] = useState('AURA Group HQ');
+
+  // Simulated authorized companies — in production, loaded from session/API
+  const companies = [
+    { id: 'company-hq', name: 'AURA Group HQ' },
+    { id: 'company-mep', name: 'AURA MEP LLC' },
+    { id: 'company-fm', name: 'AURA Facilities Management' },
+    { id: 'company-elv', name: 'AURA ELV Systems' },
+  ];
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -39,6 +49,22 @@ export default function AppShell({
   async function logout(): Promise<void> {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.assign('/login');
+  }
+
+  async function switchCompany(companyId: string, companyName: string) {
+    setActiveCompany(companyName);
+    setCompanyDropdownOpen(false);
+    try {
+      await fetch('/api/auth/switch-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId }),
+      });
+      // Refresh the current route to reload data with new company context
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to switch company:', err);
+    }
   }
 
   return (
@@ -87,6 +113,38 @@ export default function AppShell({
             <span style={{ color: 'var(--muted)' }}>Search or jump to…</span>
             <span style={s.kbdHint}>⌘K</span>
           </button>
+
+          {/* ── Company Context Switcher ── */}
+          <div style={s.companySwitcher}>
+            <button
+              type="button"
+              style={s.companyButton}
+              onClick={() => setCompanyDropdownOpen((o) => !o)}
+            >
+              <span style={s.companyDot} />
+              <span style={s.companyName}>{activeCompany}</span>
+              <span style={s.companyChevron}>{companyDropdownOpen ? '▴' : '▾'}</span>
+            </button>
+            {companyDropdownOpen && (
+              <div style={s.companyDropdown}>
+                {companies.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    style={{
+                      ...s.companyOption,
+                      ...(c.name === activeCompany ? s.companyOptionActive : {}),
+                    }}
+                    onClick={() => switchCompany(c.id, c.name)}
+                  >
+                    <span style={s.companyDotSmall} />
+                    {c.name}
+                    {c.name === activeCompany && <span style={{ marginLeft: 'auto', color: 'var(--good)' }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </header>
         <main style={s.main}>{children}</main>
       </div>
@@ -188,5 +246,79 @@ const s = {
     padding: '7px 10px',
     fontSize: 13,
     cursor: 'pointer',
+  } as CSSProperties,
+
+  // ── Company Context Switcher ──────────────────────────────────────────────
+  companySwitcher: {
+    position: 'relative',
+    marginLeft: 'auto',
+  } as CSSProperties,
+  companyButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    background: 'var(--panel)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: '6px 14px',
+    cursor: 'pointer',
+    color: 'var(--text)',
+    fontSize: 13,
+    fontFamily: 'inherit',
+    transition: 'border-color 0.15s',
+  } as CSSProperties,
+  companyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    background: 'var(--accent)',
+    flexShrink: 0,
+  } as CSSProperties,
+  companyName: {
+    maxWidth: 180,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  companyChevron: {
+    fontSize: 10,
+    color: 'var(--muted)',
+  } as CSSProperties,
+  companyDropdown: {
+    position: 'absolute',
+    top: 42,
+    right: 0,
+    width: 260,
+    background: 'var(--panel)',
+    border: '1px solid var(--border)',
+    borderRadius: 12,
+    padding: 6,
+    zIndex: 100,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+  } as CSSProperties,
+  companyOption: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 8,
+    padding: '10px 12px',
+    cursor: 'pointer',
+    color: 'var(--text)',
+    fontSize: 13,
+    fontFamily: 'inherit',
+    transition: 'background 0.12s',
+  } as CSSProperties,
+  companyOptionActive: {
+    background: 'var(--panel-2)',
+  } as CSSProperties,
+  companyDotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    background: 'var(--muted)',
+    flexShrink: 0,
   } as CSSProperties,
 };

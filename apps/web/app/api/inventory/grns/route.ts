@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '../../../../lib/api';
+import { apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward GRN creation to the Nest Inventory API server-side (with identity).
 export async function POST(request: Request): Promise<Response> {

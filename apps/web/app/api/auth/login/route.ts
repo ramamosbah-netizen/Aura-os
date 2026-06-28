@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
-import { apiBase } from '../../../../lib/api';
-import { SESSION_COOKIE } from '../../../../lib/session';
+import { apiBase } from '@/lib/api';
+import { SESSION_COOKIE } from '@/lib/session';
 
 // Login BFF: forward credentials to the API, then store the returned token in an
 // httpOnly cookie. The token never touches client JS.

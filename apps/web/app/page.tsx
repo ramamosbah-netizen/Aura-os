@@ -1,34 +1,106 @@
 import type { CSSProperties } from 'react';
 import type { DomainEvent, Document } from '@aura/shared';
-import { apiBase, getJson } from '../lib/api';
+import { apiBase, getJson } from '@/lib/api';
+import RoleDashboardShell from '../components/role-dashboard-shell';
 
-// The Workspace is live — always render per request against the API.
 export const dynamic = 'force-dynamic';
 
-function timeAgo(iso: string): string {
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return `${Math.floor(s)}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+interface PurchaseRequest {
+  id: string;
+  title: string;
+  reference: string | null;
+  projectName: string | null;
+  status: 'draft' | 'approved' | 'rejected';
+  value: number;
+}
+
+interface Invoice {
+  id: string;
+  title: string;
+  poTitle: string | null;
+  projectName: string | null;
+  status: string;
+  value: number;
+}
+
+interface Subcontract {
+  id: string;
+  title: string;
+  subcontractorName: string;
+  projectName: string | null;
+  status: string;
+  value: number;
+}
+
+interface Claim {
+  id: string;
+  subcontractId: string;
+  workCompletedValue: number;
+  certifiedValue: number | null;
+  status: string;
+  createdAt: string;
+}
+
+interface BankAccount {
+  id: string;
+  code: string;
+  name: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  code: string;
+}
+
+interface Pipeline {
+  funnel: {
+    accounts: number;
+    tenders: number;
+    contracts: number;
+    projects: number;
+    tenderValue: number;
+    contractValue: number;
+    projectValue: number;
+  };
+  winRate: number | null;
+}
+
+interface ProjectLedger {
+  projectId: string;
+  projectName: string | null;
+  budget: number;
+  committed: number;
+  invoiced: number;
+  variance: number;
 }
 
 export default async function WorkspacePage() {
-  const [events, documents] = await Promise.all([
+  const [
+    events,
+    documents,
+    purchaseRequests,
+    invoices,
+    subcontracts,
+    claims,
+    bankAccounts,
+    projects,
+    pipelineData,
+    ledgers,
+  ] = await Promise.all([
     getJson<DomainEvent[]>('/api/events'),
     getJson<Document[]>('/api/documents'),
+    getJson<PurchaseRequest[]>('/api/procurement/purchase-requests'),
+    getJson<Invoice[]>('/api/finance/invoices'),
+    getJson<Subcontract[]>('/api/subcontracts/subcontracts'),
+    getJson<Claim[]>('/api/subcontracts/claims'),
+    getJson<BankAccount[]>('/api/finance/accounts?type=asset'),
+    getJson<Project[]>('/api/projects/projects'),
+    getJson<Pipeline>('/api/intelligence/pipeline'),
+    getJson<ProjectLedger[]>('/api/intelligence/projects'),
   ]);
-  const online = events !== null || documents !== null;
 
-  // Group the recent event stream by module/area (the part before the first dot).
-  const byArea = new Map<string, number>();
-  for (const e of events ?? []) {
-    const area = e.type.split('.')[0];
-    byArea.set(area, (byArea.get(area) ?? 0) + 1);
-  }
-  const areas = [...byArea.entries()].sort((a, b) => b[1] - a[1]);
-  const maxArea = areas.length ? areas[0][1] : 1;
-  const recent = [...(events ?? [])].slice(0, 12);
+  const online = events !== null || documents !== null;
 
   return (
     <div style={s.shell}>
@@ -54,53 +126,19 @@ export default async function WorkspacePage() {
           </p>
         </section>
       ) : (
-        <>
-          <section style={s.cards}>
-            <Stat label="Recent events" value={events?.length ?? 0} hint="on the spine" />
-            <Stat label="Documents" value={documents?.length ?? 0} hint="in the DMS" />
-            <Stat label="Active areas" value={areas.length} hint="modules emitting" />
-          </section>
-
-          <section style={s.grid}>
-            <div style={s.panel}>
-              <h2 style={s.panelTitle}>Activity by area</h2>
-              {areas.length === 0 ? (
-                <Empty text="No events yet — emit one via the API to see it here." />
-              ) : (
-                <ul style={s.list}>
-                  {areas.map(([area, n]) => (
-                    <li key={area} style={s.areaRow}>
-                      <span style={s.areaName}>{area}</span>
-                      <span style={s.barTrack}>
-                        <span style={{ ...s.barFill, width: `${(n / maxArea) * 100}%` }} />
-                      </span>
-                      <span style={s.areaCount}>{n}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div style={s.panel}>
-              <h2 style={s.panelTitle}>Recent activity</h2>
-              {recent.length === 0 ? (
-                <Empty text="Nothing yet." />
-              ) : (
-                <ul style={s.list}>
-                  {recent.map((e) => (
-                    <li key={e.id} style={s.eventRow}>
-                      <code style={s.eventType}>{e.type}</code>
-                      <span style={s.eventTarget}>
-                        {e.aggregateType}:{e.aggregateId}
-                      </span>
-                      <span style={s.eventTime}>{timeAgo(e.occurredAt)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </section>
-        </>
+        <RoleDashboardShell
+          events={events}
+          documents={documents}
+          purchaseRequests={purchaseRequests ?? []}
+          invoices={invoices ?? []}
+          subcontracts={subcontracts ?? []}
+          claims={claims ?? []}
+          bankAccounts={bankAccounts ?? []}
+          projects={projects ?? []}
+          funnel={pipelineData?.funnel ?? null}
+          winRate={pipelineData?.winRate ?? null}
+          ledgers={ledgers ?? []}
+        />
       )}
 
       <footer style={s.footer}>AURA OS · Phase 0c — the experience shell (Workspace v1)</footer>
@@ -131,14 +169,6 @@ const s = {
     gap: 16,
     marginBottom: 6,
   } as CSSProperties,
-  topbar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 36,
-  } as CSSProperties,
-  brand: { fontWeight: 700, fontSize: 18, letterSpacing: 0.5 } as CSSProperties,
-  diamond: { color: 'var(--accent)', marginRight: 6 } as CSSProperties,
   pill: (ok: boolean): CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'center',

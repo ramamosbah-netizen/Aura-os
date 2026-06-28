@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Project,
@@ -83,7 +83,7 @@ export class ProjectsController {
   // ── PROJECTS ─────────────────────────────────────────────────────────────
 
   @Post('projects')
-  createProject(@Body() dto: CreateProjectDto): Promise<Project> {
+  createProject(@Body() dto: CreateProjectDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Project> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.projects.create({
@@ -99,7 +99,7 @@ export class ProjectsController {
       value: dto.value,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
   }
 
   @Get('projects')

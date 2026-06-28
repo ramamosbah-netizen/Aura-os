@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Invoice,
@@ -85,7 +85,7 @@ export class FinanceController {
   // ── INVOICES ─────────────────────────────────────────────────────────────
 
   @Post('invoices')
-  createInvoice(@Body() dto: CreateInvoiceDto): Promise<Invoice> {
+  createInvoice(@Body() dto: CreateInvoiceDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Invoice> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.invoices.create({
@@ -102,7 +102,7 @@ export class FinanceController {
       value: dto.value,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
   }
 
   @Get('invoices')

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type PurchaseOrder,
@@ -40,7 +40,7 @@ export class ProcurementController {
   // ── PURCHASE ORDERS ──────────────────────────────────────────────────────
 
   @Post('purchase-orders')
-  createPo(@Body() dto: CreatePurchaseOrderDto): Promise<PurchaseOrder> {
+  createPo(@Body() dto: CreatePurchaseOrderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<PurchaseOrder> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.pos.create({
@@ -55,7 +55,7 @@ export class ProcurementController {
       value: dto.value,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
   }
 
   @Get('purchase-orders')

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Put, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Put, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext } from '@aura/core';
 import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem } from '@aura/tendering';
@@ -22,7 +22,7 @@ export class TenderingController {
   ) {}
 
   @Post()
-  create(@Body() dto: CreateTenderDto): Promise<Tender> {
+  create(@Body() dto: CreateTenderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Tender> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.tenders.create({
@@ -36,7 +36,7 @@ export class TenderingController {
       value: dto.value,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
   }
 
   /**

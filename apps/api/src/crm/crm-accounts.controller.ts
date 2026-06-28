@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { type Account, type AccountStatus, AccountService } from '@aura/crm';
 
@@ -21,7 +21,7 @@ export class CrmAccountsController {
   ) {}
 
   @Post()
-  create(@Body() dto: CreateAccountDto): Promise<Account> {
+  create(@Body() dto: CreateAccountDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Account> {
     if (!dto?.name?.trim()) throw new BadRequestException('name is required');
     const ctx = this.tenant.get();
     return this.accounts.create({
@@ -33,7 +33,7 @@ export class CrmAccountsController {
       website: dto.website,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
   }
 
   @Get()

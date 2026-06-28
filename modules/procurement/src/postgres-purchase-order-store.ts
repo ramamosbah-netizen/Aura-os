@@ -62,7 +62,16 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
   }
 
   async update(p: PurchaseOrder): Promise<void> {
-    await this.pool.query(
+    await this.upd(this.pool, p);
+  }
+
+  async updateWithClient(tx: TxHandle | null, p: PurchaseOrder): Promise<void> {
+    if (tx === null) return this.update(p);
+    await this.upd(tx as PoolClient, p);
+  }
+
+  private upd(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
+    return executor.query(
       `UPDATE public.aura_procurement_purchase_orders SET reference=$2, title=$3, supplier_name=$4, status=$5, value=$6, owner_id=$7 WHERE id=$1`,
       [p.id, p.reference, p.title, p.supplierName, p.status, p.value, p.ownerId],
     );

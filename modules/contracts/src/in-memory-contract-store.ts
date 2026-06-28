@@ -19,6 +19,10 @@ export class InMemoryContractStore implements ContractStore {
     this.contracts.set(contract.id, { ...contract });
   }
 
+  async updateWithClient(_tx: TxHandle | null, contract: Contract): Promise<void> {
+    return this.update(contract);
+  }
+
   async get(id: Id): Promise<Contract | null> {
     const c = this.contracts.get(id);
     return c ? { ...c } : null;

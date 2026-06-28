@@ -124,7 +124,6 @@ export class InvoiceService {
     }
 
     const updated: Invoice = { ...existing, status };
-    await this.store.update(updated);
 
     let eventType: string = FINANCE_EVENT.invoiceUpdated;
     if (status === 'approved') {
@@ -133,25 +132,29 @@ export class InvoiceService {
       eventType = FINANCE_EVENT.invoicePaid;
     }
 
-    await this.events.append([
-      makeEvent({
-        type: eventType,
-        tenantId: updated.tenantId,
-        companyId: updated.companyId,
-        actorId: null,
-        aggregateType: 'finance.invoice',
-        aggregateId: updated.id,
-        payload: {
-          title: updated.title,
-          status: updated.status,
-          value: updated.value,
-          supplier: updated.supplierName,
-          po: updated.poId ? { id: updated.poId, title: updated.poTitle } : null,
-          project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
-          wbsNodeId: updated.wbsNodeId,
-        },
-      }),
-    ]);
+    const event = makeEvent({
+      type: eventType,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'finance.invoice',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title,
+        status: updated.status,
+        value: updated.value,
+        supplier: updated.supplierName,
+        po: updated.poId ? { id: updated.poId, title: updated.poTitle } : null,
+        project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
+        wbsNodeId: updated.wbsNodeId,
+      },
+    });
+
+    // Atomic: the status update and its (cross-module-triggering) event commit together.
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`Invoice ${updated.title} (${updated.id}) status changed to ${status}`);
     return updated;
   }

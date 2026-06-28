@@ -60,7 +60,16 @@ export class PostgresTenderStore implements TenderStore {
   }
 
   async update(t: Tender): Promise<void> {
-    await this.pool.query(
+    await this.upd(this.pool, t);
+  }
+
+  async updateWithClient(tx: TxHandle | null, t: Tender): Promise<void> {
+    if (tx === null) return this.update(t);
+    await this.upd(tx as PoolClient, t);
+  }
+
+  private upd(executor: Pool | PoolClient, t: Tender): Promise<unknown> {
+    return executor.query(
       `UPDATE public.aura_tendering_tenders SET title=$2, reference=$3, account_id=$4, account_name=$5, status=$6, value=$7, owner_id=$8 WHERE id=$1`,
       [t.id, t.title, t.reference, t.accountId, t.accountName, t.status, t.value, t.ownerId],
     );

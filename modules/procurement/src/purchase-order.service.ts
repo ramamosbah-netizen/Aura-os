@@ -81,7 +81,6 @@ export class PurchaseOrderService {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`PO ${id} not found`);
     const updated: PurchaseOrder = { ...existing, status };
-    await this.store.update(updated);
 
     let eventType: string = PROCUREMENT_EVENT.poUpdated;
     if (status === 'issued') {
@@ -90,23 +89,27 @@ export class PurchaseOrderService {
       eventType = PROCUREMENT_EVENT.poClosed;
     }
 
-    await this.events.append([
-      makeEvent({
-        type: eventType,
-        tenantId: updated.tenantId,
-        companyId: updated.companyId,
-        actorId: null,
-        aggregateType: 'procurement.po',
-        aggregateId: updated.id,
-        payload: {
-          title: updated.title,
-          status: updated.status,
-          value: updated.value,
-          supplier: updated.supplierName,
-          project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
-        },
-      }),
-    ]);
+    const event = makeEvent({
+      type: eventType,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'procurement.po',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title,
+        status: updated.status,
+        value: updated.value,
+        supplier: updated.supplierName,
+        project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
+      },
+    });
+
+    // Atomic: the status update and its (cross-module-triggering) event commit together.
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`PO ${updated.title} (${updated.id}) status changed to ${status}`);
     return updated;
   }

@@ -18,6 +18,8 @@ export interface InvoiceStore {
   /** Insert on a caller-owned transaction (atomic with its event); null tx falls back to create. */
   createWithClient(tx: TxHandle | null, invoice: Invoice): Promise<void>;
   update(invoice: Invoice): Promise<void>;
+  /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
+  updateWithClient(tx: TxHandle | null, invoice: Invoice): Promise<void>;
   get(id: Id): Promise<Invoice | null>;
   list(filter?: InvoiceFilter): Promise<Invoice[]>;
 }

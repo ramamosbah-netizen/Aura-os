@@ -19,6 +19,10 @@ export class InMemoryPurchaseOrderStore implements PurchaseOrderStore {
     this.pos.set(po.id, { ...po });
   }
 
+  async updateWithClient(_tx: TxHandle | null, po: PurchaseOrder): Promise<void> {
+    return this.update(po);
+  }
+
   async get(id: Id): Promise<PurchaseOrder | null> {
     const po = this.pos.get(id);
     return po ? { ...po } : null;

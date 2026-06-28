@@ -68,7 +68,16 @@ export class PostgresInvoiceStore implements InvoiceStore {
   }
 
   async update(i: Invoice): Promise<void> {
-    await this.pool.query(
+    await this.upd(this.pool, i);
+  }
+
+  async updateWithClient(tx: TxHandle | null, i: Invoice): Promise<void> {
+    if (tx === null) return this.update(i);
+    await this.upd(tx as PoolClient, i);
+  }
+
+  private upd(executor: Pool | PoolClient, i: Invoice): Promise<unknown> {
+    return executor.query(
       `UPDATE public.aura_finance_invoices SET title=$2, reference=$3, status=$4, value=$5, owner_id=$6, wbs_node_id=$7 WHERE id=$1`,
       [i.id, i.title, i.reference, i.status, i.value, i.ownerId, i.wbsNodeId],
     );

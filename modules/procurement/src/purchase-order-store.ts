@@ -17,6 +17,8 @@ export interface PurchaseOrderStore {
   /** Insert on a caller-owned transaction (atomic with its event); null tx falls back to create. */
   createWithClient(tx: TxHandle | null, po: PurchaseOrder): Promise<void>;
   update(po: PurchaseOrder): Promise<void>;
+  /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
+  updateWithClient(tx: TxHandle | null, po: PurchaseOrder): Promise<void>;
   get(id: Id): Promise<PurchaseOrder | null>;
   list(filter?: PurchaseOrderFilter): Promise<PurchaseOrder[]>;
 }

@@ -18,6 +18,8 @@ export interface ContractStore {
   /** Insert on a caller-owned transaction (atomic with its event); null tx falls back to create. */
   createWithClient(tx: TxHandle | null, contract: Contract): Promise<void>;
   update(contract: Contract): Promise<void>;
+  /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
+  updateWithClient(tx: TxHandle | null, contract: Contract): Promise<void>;
   get(id: Id): Promise<Contract | null>;
   list(filter?: ContractFilter): Promise<Contract[]>;
 }

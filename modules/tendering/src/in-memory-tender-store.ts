@@ -19,6 +19,10 @@ export class InMemoryTenderStore implements TenderStore {
     this.tenders.set(tender.id, { ...tender });
   }
 
+  async updateWithClient(_tx: TxHandle | null, tender: Tender): Promise<void> {
+    return this.update(tender);
+  }
+
   async get(id: Id): Promise<Tender | null> {
     const t = this.tenders.get(id);
     return t ? { ...t } : null;

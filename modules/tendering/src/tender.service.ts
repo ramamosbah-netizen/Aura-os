@@ -87,18 +87,19 @@ export class TenderService {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`tender ${id} not found`);
     const updated: Tender = { ...existing, ...patch };
-    await this.store.update(updated);
-    await this.events.append([
-      makeEvent({
-        type: TENDER_EVENT.updated,
-        tenantId: updated.tenantId,
-        companyId: updated.companyId,
-        actorId: null,
-        aggregateType: 'tendering.tender',
-        aggregateId: updated.id,
-        payload: { title: updated.title, value: updated.value },
-      }),
-    ]);
+    const event = makeEvent({
+      type: TENDER_EVENT.updated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'tendering.tender',
+      aggregateId: updated.id,
+      payload: { title: updated.title, value: updated.value },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`Tender updated: ${updated.title} (${updated.id})`);
     return updated;
   }
@@ -111,31 +112,34 @@ export class TenderService {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`tender ${id} not found`);
     const updated: Tender = { ...existing, status };
-    await this.store.update(updated);
 
     const eventType = status === 'won' ? TENDER_EVENT.awarded
       : status === 'lost' ? TENDER_EVENT.lost
       : status === 'submitted' ? TENDER_EVENT.submitted
       : TENDER_EVENT.updated;
 
-    await this.events.append([
-      makeEvent({
-        type: eventType,
-        tenantId: updated.tenantId,
-        companyId: updated.companyId,
-        actorId: null,
-        aggregateType: 'tendering.tender',
-        aggregateId: updated.id,
-        payload: {
-          title: updated.title,
-          status: updated.status,
-          value: updated.value,
-          account: updated.accountId
-            ? { id: updated.accountId, name: updated.accountName }
-            : null,
-        },
-      }),
-    ]);
+    const event = makeEvent({
+      type: eventType,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'tendering.tender',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title,
+        status: updated.status,
+        value: updated.value,
+        account: updated.accountId
+          ? { id: updated.accountId, name: updated.accountName }
+          : null,
+      },
+    });
+
+    // Atomic: the status update and its (cross-module-triggering) event commit together.
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`Tender ${updated.title} → ${status}`);
     return updated;
   }
@@ -243,19 +247,19 @@ export class TenderService {
     const existingTender = await this.store.get(boq.tenderId);
     if (existingTender) {
       existingTender.value = totalEstimate;
-      await this.store.update(existingTender);
-      
-      await this.events.append([
-        makeEvent({
-          type: TENDER_EVENT.updated,
-          tenantId: existingTender.tenantId,
-          companyId: existingTender.companyId,
-          actorId: null,
-          aggregateType: 'tendering.tender',
-          aggregateId: existingTender.id,
-          payload: { title: existingTender.title, value: existingTender.value },
-        }),
-      ]);
+      const event = makeEvent({
+        type: TENDER_EVENT.updated,
+        tenantId: existingTender.tenantId,
+        companyId: existingTender.companyId,
+        actorId: null,
+        aggregateType: 'tendering.tender',
+        aggregateId: existingTender.id,
+        payload: { title: existingTender.title, value: existingTender.value },
+      });
+      await this.tx.run(async (handle) => {
+        await this.store.updateWithClient(handle, existingTender);
+        await this.events.appendWithClient(handle, [event]);
+      });
       this.logger.log(`Tender ${existingTender.title} value recalculated from BOQ: value=${existingTender.value}`);
     }
   }

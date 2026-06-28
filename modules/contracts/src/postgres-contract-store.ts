@@ -64,7 +64,16 @@ export class PostgresContractStore implements ContractStore {
   }
 
   async update(c: Contract): Promise<void> {
-    await this.pool.query(
+    await this.upd(this.pool, c);
+  }
+
+  async updateWithClient(tx: TxHandle | null, c: Contract): Promise<void> {
+    if (tx === null) return this.update(c);
+    await this.upd(tx as PoolClient, c);
+  }
+
+  private upd(executor: Pool | PoolClient, c: Contract): Promise<unknown> {
+    return executor.query(
       `UPDATE public.aura_contracts_contracts SET title=$2, reference=$3, tender_id=$4, tender_title=$5, account_id=$6, account_name=$7, status=$8, value=$9, owner_id=$10 WHERE id=$1`,
       [c.id, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.ownerId],
     );

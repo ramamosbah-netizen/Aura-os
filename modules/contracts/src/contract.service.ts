@@ -68,33 +68,36 @@ export class ContractService {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`contract ${id} not found`);
     const updated: Contract = { ...existing, status };
-    await this.store.update(updated);
 
     const eventType = status === 'active' ? CONTRACT_EVENT.signed
       : status === 'completed' ? CONTRACT_EVENT.completed
       : CONTRACT_EVENT.updated;
 
-    await this.events.append([
-      makeEvent({
-        type: eventType,
-        tenantId: updated.tenantId,
-        companyId: updated.companyId,
-        actorId: null,
-        aggregateType: 'contracts.contract',
-        aggregateId: updated.id,
-        payload: {
-          title: updated.title,
-          status: updated.status,
-          value: updated.value,
-          tender: updated.tenderId
-            ? { id: updated.tenderId, title: updated.tenderTitle }
-            : null,
-          account: updated.accountId
-            ? { id: updated.accountId, name: updated.accountName }
-            : null,
-        },
-      }),
-    ]);
+    const event = makeEvent({
+      type: eventType,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'contracts.contract',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title,
+        status: updated.status,
+        value: updated.value,
+        tender: updated.tenderId
+          ? { id: updated.tenderId, title: updated.tenderTitle }
+          : null,
+        account: updated.accountId
+          ? { id: updated.accountId, name: updated.accountName }
+          : null,
+      },
+    });
+
+    // Atomic: the status update and its (cross-module-triggering) event commit together.
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
     this.logger.log(`Contract ${updated.title} → ${status}`);
     return updated;
   }

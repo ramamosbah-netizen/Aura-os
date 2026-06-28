@@ -64,4 +64,10 @@ export function makeProject(input: NewProject): Project {
 /** Projects events on the spine. */
 export const PROJECT_EVENT = {
   created: 'projects.project.created',
+  updated: 'projects.project.updated',
+  started: 'projects.project.started',
+  completed: 'projects.project.completed',
+  costCommitted: 'projects.cost.committed',
+  costActual: 'projects.cost.actual',
+  budgetOverrun: 'projects.budget.overrun',
 } as const;

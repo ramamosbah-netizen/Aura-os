@@ -14,6 +14,7 @@ interface Row {
   supplier_name: string | null;
   project_id: string | null;
   project_name: string | null;
+  wbs_node_id: string | null;
   status: string;
   value: string | number;
   owner_id: string | null;
@@ -22,7 +23,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, wbs_node_id, status, value, owner_id, created_by, created_at';
 
 function rowToInvoice(r: Row): Invoice {
   return {
@@ -36,6 +37,7 @@ function rowToInvoice(r: Row): Invoice {
     supplierName: r.supplier_name,
     projectId: r.project_id,
     projectName: r.project_name,
+    wbsNodeId: r.wbs_node_id,
     status: r.status as Invoice['status'],
     value: Number(r.value),
     ownerId: r.owner_id,
@@ -50,8 +52,15 @@ export class PostgresInvoiceStore implements InvoiceStore {
 
   async create(i: Invoice): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_finance_invoices (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [i.id, i.tenantId, i.companyId, i.reference, i.title, i.poId, i.poTitle, i.supplierName, i.projectId, i.projectName, i.status, i.value, i.ownerId, i.createdBy, i.createdAt],
+      `INSERT INTO public.aura_finance_invoices (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [i.id, i.tenantId, i.companyId, i.reference, i.title, i.poId, i.poTitle, i.supplierName, i.projectId, i.projectName, i.wbsNodeId, i.status, i.value, i.ownerId, i.createdBy, i.createdAt],
+    );
+  }
+
+  async update(i: Invoice): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_finance_invoices SET title=$2, reference=$3, status=$4, value=$5, owner_id=$6, wbs_node_id=$7 WHERE id=$1`,
+      [i.id, i.title, i.reference, i.status, i.value, i.ownerId, i.wbsNodeId],
     );
   }
 

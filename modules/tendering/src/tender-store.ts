@@ -13,6 +13,8 @@ export interface TenderFilter {
 
 export interface TenderStore {
   create(tender: Tender): Promise<void>;
+  update(tender: Tender): Promise<void>;
   get(id: Id): Promise<Tender | null>;
   list(filter?: TenderFilter): Promise<Tender[]>;
 }
+

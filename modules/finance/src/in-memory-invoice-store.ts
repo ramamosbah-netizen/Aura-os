@@ -10,6 +10,10 @@ export class InMemoryInvoiceStore implements InvoiceStore {
     this.invoices.set(invoice.id, { ...invoice });
   }
 
+  async update(invoice: Invoice): Promise<void> {
+    this.invoices.set(invoice.id, { ...invoice });
+  }
+
   async get(id: Id): Promise<Invoice | null> {
     const inv = this.invoices.get(id);
     return inv ? { ...inv } : null;

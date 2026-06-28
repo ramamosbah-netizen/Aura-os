@@ -1,8 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
-import { TENDER_EVENT, type Tender, type NewTender, makeTender } from './domain/tender';
+import { AccessService, EVENT_STORE, type EventStore, NumberingService, AuditService } from '@aura/core';
+import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
+import { BOQ_STORE, type BOQStore } from './boq-store';
+import { type BOQ, type BOQItem, makeBOQ, makeBOQItem, type NewBOQItem } from './domain/boq';
 
 /**
  * Tendering service — the second deal-chain module, cloned from the CRM template.
@@ -16,8 +18,11 @@ export class TenderService {
 
   constructor(
     @Inject(TENDER_STORE) private readonly store: TenderStore,
+    @Inject(BOQ_STORE) private readonly boqStore: BOQStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    private readonly numbering: NumberingService,
+    private readonly audit: AuditService,
   ) {}
 
   async create(input: NewTender): Promise<Tender> {
@@ -29,7 +34,29 @@ export class TenderService {
     }
 
     const tender = makeTender(input);
+    if (!tender.reference) {
+      tender.reference = await this.numbering.generateNextNumber(
+        tender.tenantId,
+        tender.companyId,
+        'tendering',
+        'tender',
+        'TND',
+      );
+    }
+
     await this.store.create(tender);
+
+    await this.audit.log(
+      tender.tenantId,
+      tender.companyId,
+      tender.createdBy,
+      'tendering',
+      'tender',
+      tender.id,
+      'create',
+      { reference: tender.reference, value: tender.value },
+    );
+
     await this.events.append([
       makeEvent({
         type: TENDER_EVENT.created,
@@ -52,11 +79,181 @@ export class TenderService {
     return tender;
   }
 
+  /** Update mutable fields on a tender (title, value, etc). */
+  async update(id: Id, patch: Partial<Pick<Tender, 'title' | 'reference' | 'value' | 'accountId' | 'accountName' | 'ownerId'>>): Promise<Tender> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`tender ${id} not found`);
+    const updated: Tender = { ...existing, ...patch };
+    await this.store.update(updated);
+    await this.events.append([
+      makeEvent({
+        type: TENDER_EVENT.updated,
+        tenantId: updated.tenantId,
+        companyId: updated.companyId,
+        actorId: null,
+        aggregateType: 'tendering.tender',
+        aggregateId: updated.id,
+        payload: { title: updated.title, value: updated.value },
+      }),
+    ]);
+    this.logger.log(`Tender updated: ${updated.title} (${updated.id})`);
+    return updated;
+  }
+
+  /**
+   * Transition a tender's status. Emits specific events like `tender.awarded`
+   * that trigger cross-module automation (e.g. auto-create a Contract).
+   */
+  async changeStatus(id: Id, status: TenderStatus): Promise<Tender> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`tender ${id} not found`);
+    const updated: Tender = { ...existing, status };
+    await this.store.update(updated);
+
+    const eventType = status === 'won' ? TENDER_EVENT.awarded
+      : status === 'lost' ? TENDER_EVENT.lost
+      : status === 'submitted' ? TENDER_EVENT.submitted
+      : TENDER_EVENT.updated;
+
+    await this.events.append([
+      makeEvent({
+        type: eventType,
+        tenantId: updated.tenantId,
+        companyId: updated.companyId,
+        actorId: null,
+        aggregateType: 'tendering.tender',
+        aggregateId: updated.id,
+        payload: {
+          title: updated.title,
+          status: updated.status,
+          value: updated.value,
+          account: updated.accountId
+            ? { id: updated.accountId, name: updated.accountName }
+            : null,
+        },
+      }),
+    ]);
+    this.logger.log(`Tender ${updated.title} → ${status}`);
+    return updated;
+  }
+
   get(id: Id): Promise<Tender | null> {
     return this.store.get(id);
   }
 
   list(filter?: TenderFilter): Promise<Tender[]> {
     return this.store.list(filter);
+  }
+
+  // ── BOQ & Cost Estimating ─────────────────────────────────────
+
+  async getOrCreateBOQ(tenantId: string, companyId: string | null, tenderId: Id): Promise<{ boq: BOQ; items: BOQItem[] }> {
+    let boq = await this.boqStore.getBOQByTender(tenantId, tenderId);
+    if (!boq) {
+      boq = makeBOQ({ tenantId, companyId, tenderId });
+      await this.boqStore.saveBOQ(boq);
+    }
+    const items = await this.boqStore.getBOQItems(tenantId, boq.id);
+    return { boq, items };
+  }
+
+  async addBOQItem(
+    tenantId: string,
+    companyId: string | null,
+    boqId: Id,
+    input: Omit<NewBOQItem, 'tenantId' | 'companyId' | 'boqId'>,
+  ): Promise<BOQItem> {
+    const item = makeBOQItem({
+      tenantId,
+      companyId,
+      boqId,
+      ...input,
+    });
+    await this.boqStore.saveBOQItem(item);
+    await this.recalculateTenderValue(tenantId, boqId);
+    return item;
+  }
+
+  async updateBOQItem(
+    tenantId: string,
+    id: Id,
+    patch: Partial<Pick<BOQItem, 'itemCode' | 'description' | 'unit' | 'quantity' | 'rate' | 'ifcGuid'>>,
+  ): Promise<BOQItem> {
+    const existing = await this.boqStore.getBOQItem(tenantId, id);
+    if (!existing) throw new Error(`BOQ item ${id} not found`);
+
+    const quantity = patch.quantity !== undefined ? Number(patch.quantity) : existing.quantity;
+    const rate = patch.rate !== undefined ? Number(patch.rate) : existing.rate;
+
+    const updated: BOQItem = {
+      ...existing,
+      itemCode: patch.itemCode !== undefined ? patch.itemCode.trim() : existing.itemCode,
+      description: patch.description !== undefined ? patch.description.trim() : existing.description,
+      unit: patch.unit !== undefined ? patch.unit.trim() : existing.unit,
+      quantity,
+      rate,
+      totalAmount: quantity * rate,
+      ifcGuid: patch.ifcGuid !== undefined ? patch.ifcGuid : existing.ifcGuid,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.boqStore.saveBOQItem(updated);
+    await this.recalculateTenderValue(tenantId, existing.boqId);
+    return updated;
+  }
+
+  async deleteBOQItem(tenantId: string, id: Id): Promise<void> {
+    const existing = await this.boqStore.getBOQItem(tenantId, id);
+    if (!existing) return;
+    await this.boqStore.deleteBOQItem(tenantId, id);
+    await this.recalculateTenderValue(tenantId, existing.boqId);
+  }
+
+  async importBOQItems(
+    tenantId: string,
+    companyId: string | null,
+    boqId: Id,
+    itemsInput: Array<Omit<NewBOQItem, 'tenantId' | 'companyId' | 'boqId'>>,
+  ): Promise<BOQItem[]> {
+    const createdItems: BOQItem[] = [];
+    for (const itemInput of itemsInput) {
+      const item = makeBOQItem({
+        tenantId,
+        companyId,
+        boqId,
+        ...itemInput,
+      });
+      await this.boqStore.saveBOQItem(item);
+      createdItems.push(item);
+    }
+    await this.recalculateTenderValue(tenantId, boqId);
+    return createdItems;
+  }
+
+  private async recalculateTenderValue(tenantId: string, boqId: Id): Promise<void> {
+    const boq = await this.boqStore.findBOQ(tenantId, boqId);
+    if (!boq) return;
+
+    const items = await this.boqStore.getBOQItems(tenantId, boqId);
+    const totalEstimate = items.reduce((sum, item) => sum + item.totalAmount, 0);
+
+    const existingTender = await this.store.get(boq.tenderId);
+    if (existingTender) {
+      existingTender.value = totalEstimate;
+      await this.store.update(existingTender);
+      
+      await this.events.append([
+        makeEvent({
+          type: TENDER_EVENT.updated,
+          tenantId: existingTender.tenantId,
+          companyId: existingTender.companyId,
+          actorId: null,
+          aggregateType: 'tendering.tender',
+          aggregateId: existingTender.id,
+          payload: { title: existingTender.title, value: existingTender.value },
+        }),
+      ]);
+      this.logger.log(`Tender ${existingTender.title} value recalculated from BOQ: value=${existingTender.value}`);
+    }
   }
 }

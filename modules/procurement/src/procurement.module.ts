@@ -6,6 +6,11 @@ import { InMemoryPurchaseOrderStore } from './in-memory-purchase-order-store';
 import { PostgresPurchaseOrderStore } from './postgres-purchase-order-store';
 import { PurchaseOrderService } from './purchase-order.service';
 
+import { PURCHASE_REQUEST_STORE } from './purchase-request-store';
+import { InMemoryPurchaseRequestStore } from './in-memory-purchase-request-store';
+import { PostgresPurchaseRequestStore } from './postgres-purchase-request-store';
+import { PurchaseRequestService } from './purchase-request.service';
+
 /** The Procurement business module — same shape as the deal-chain modules. */
 @Module({
   imports: [CoreModule],
@@ -16,8 +21,15 @@ import { PurchaseOrderService } from './purchase-order.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresPurchaseOrderStore(pool) : new InMemoryPurchaseOrderStore(),
     },
+    {
+      provide: PURCHASE_REQUEST_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPurchaseRequestStore(pool) : new InMemoryPurchaseRequestStore(),
+    },
     PurchaseOrderService,
+    PurchaseRequestService,
   ],
-  exports: [PurchaseOrderService],
+  exports: [PurchaseOrderService, PurchaseRequestService],
 })
 export class ProcurementModule {}

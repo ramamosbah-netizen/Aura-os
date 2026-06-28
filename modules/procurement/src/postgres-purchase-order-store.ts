@@ -51,6 +51,13 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
     );
   }
 
+  async update(p: PurchaseOrder): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_procurement_purchase_orders SET reference=$2, title=$3, supplier_name=$4, status=$5, value=$6, owner_id=$7 WHERE id=$1`,
+      [p.id, p.reference, p.title, p.supplierName, p.status, p.value, p.ownerId],
+    );
+  }
+
   async get(id: Id): Promise<PurchaseOrder | null> {
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_procurement_purchase_orders WHERE id = $1`,

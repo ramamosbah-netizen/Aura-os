@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_EVENT, type Account, type NewAccount, makeAccount } from './domain/account';
 import { CRM_ACCOUNT_STORE, type AccountFilter, type AccountStore } from './account-store';
 
@@ -17,6 +17,7 @@ export class AccountService {
   constructor(
     @Inject(CRM_ACCOUNT_STORE) private readonly store: AccountStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
   ) {}
 
@@ -31,18 +32,24 @@ export class AccountService {
     }
 
     const account = makeAccount(input);
-    await this.store.create(account);
-    await this.events.append([
-      makeEvent({
-        type: CRM_EVENT.accountCreated,
-        tenantId: account.tenantId,
-        companyId: account.companyId,
-        actorId: account.createdBy,
-        aggregateType: 'crm.account',
-        aggregateId: account.id,
-        payload: { name: account.name, status: account.status },
-      }),
-    ]);
+    const event = makeEvent({
+      type: CRM_EVENT.accountCreated,
+      tenantId: account.tenantId,
+      companyId: account.companyId,
+      actorId: account.createdBy,
+      aggregateType: 'crm.account',
+      aggregateId: account.id,
+      payload: { name: account.name, status: account.status },
+    });
+
+    // Atomic outbox: the account row and its event commit in ONE transaction (or both
+    // roll back) — no lost or phantom events. With no DB the handle is null and the
+    // stores fall back to sequential writes (dev).
+    await this.tx.run(async (handle) => {
+      await this.store.createWithClient(handle, account);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
     this.logger.log(`Account created: ${account.name} (${account.id})`);
     return account;
   }

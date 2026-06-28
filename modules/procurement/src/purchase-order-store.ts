@@ -13,6 +13,7 @@ export interface PurchaseOrderFilter {
 
 export interface PurchaseOrderStore {
   create(po: PurchaseOrder): Promise<void>;
+  update(po: PurchaseOrder): Promise<void>;
   get(id: Id): Promise<PurchaseOrder | null>;
   list(filter?: PurchaseOrderFilter): Promise<PurchaseOrder[]>;
 }

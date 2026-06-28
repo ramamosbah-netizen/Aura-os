@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Account } from './domain/account';
 import type { AccountFilter, AccountStore } from './account-store';
 
@@ -8,6 +9,10 @@ export class InMemoryAccountStore implements AccountStore {
 
   async create(account: Account): Promise<void> {
     this.accounts.set(account.id, { ...account });
+  }
+
+  async createWithClient(_tx: TxHandle | null, account: Account): Promise<void> {
+    return this.create(account);
   }
 
   async get(id: Id): Promise<Account | null> {

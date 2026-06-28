@@ -64,4 +64,7 @@ export function makeContract(input: NewContract): Contract {
 /** Contracts events on the spine. */
 export const CONTRACT_EVENT = {
   created: 'contracts.contract.created',
+  updated: 'contracts.contract.updated',
+  signed: 'contracts.contract.signed',
+  completed: 'contracts.contract.completed',
 } as const;

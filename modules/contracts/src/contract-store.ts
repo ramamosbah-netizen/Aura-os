@@ -14,6 +14,7 @@ export interface ContractFilter {
 
 export interface ContractStore {
   create(contract: Contract): Promise<void>;
+  update(contract: Contract): Promise<void>;
   get(id: Id): Promise<Contract | null>;
   list(filter?: ContractFilter): Promise<Contract[]>;
 }

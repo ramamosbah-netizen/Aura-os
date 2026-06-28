@@ -14,6 +14,7 @@ export interface InvoiceFilter {
 
 export interface InvoiceStore {
   create(invoice: Invoice): Promise<void>;
+  update(invoice: Invoice): Promise<void>;
   get(id: Id): Promise<Invoice | null>;
   list(filter?: InvoiceFilter): Promise<Invoice[]>;
 }

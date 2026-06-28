@@ -1,4 +1,5 @@
 import type { DomainEvent } from '@aura/shared';
+import type { TxHandle } from './tx';
 
 export interface EventFilter {
   tenantId?: string;
@@ -26,6 +27,8 @@ export interface DeadLetteredEvent {
  */
 export interface EventStore {
   append(events: DomainEvent[]): Promise<void>;
+  /** Append on a caller-owned transaction (atomic outbox); `null` tx falls back to `append`. */
+  appendWithClient(tx: TxHandle | null, events: DomainEvent[]): Promise<void>;
   list(filter?: EventFilter): Promise<DomainEvent[]>;
   /** Events the relay dead-lettered after exhausting retries (empty without an outbox). */
   listDeadLettered(limit?: number): Promise<DeadLetteredEvent[]>;

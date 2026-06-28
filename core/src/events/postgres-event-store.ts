@@ -1,10 +1,13 @@
 import type { Pool, PoolClient } from 'pg';
 import type { DomainEvent } from '@aura/shared';
 import type { DeadLetteredEvent, EventFilter, EventStore } from './event-store';
+import type { TxHandle } from './tx';
+
+import { TenantContext } from '../tenancy/tenant-context';
 
 /** Column list shared by the store's reads and the outbox relay. */
 export const EVENT_COLUMNS =
-  'id, type, tenant_id, company_id, aggregate_type, aggregate_id, actor_id, occurred_at, version, payload';
+  'id, type, tenant_id, company_id, aggregate_type, aggregate_id, actor_id, occurred_at, version, payload, correlation_id';
 
 /** Raw `aura_events` row (snake_case, pg-native types). */
 export interface EventRow {
@@ -18,6 +21,7 @@ export interface EventRow {
   occurred_at: Date | string;
   version: number;
   payload: Record<string, unknown> | null;
+  correlation_id: string | null;
 }
 
 /** Map a DB row back to the canonical DomainEvent. */
@@ -30,6 +34,7 @@ export function rowToEvent(r: EventRow): DomainEvent {
     aggregateType: r.aggregate_type,
     aggregateId: r.aggregate_id,
     actorId: r.actor_id,
+    correlationId: r.correlation_id,
     occurredAt: r.occurred_at instanceof Date ? r.occurred_at.toISOString() : String(r.occurred_at),
     version: r.version,
     payload: r.payload ?? {},
@@ -44,7 +49,10 @@ export function rowToEvent(r: EventRow): DomainEvent {
  * which is the whole reason this needs a direct pg connection (not REST).
  */
 export class PostgresEventStore implements EventStore {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly tenant: TenantContext,
+  ) {}
 
   async append(events: DomainEvent[]): Promise<void> {
     if (events.length === 0) return;
@@ -62,11 +70,14 @@ export class PostgresEventStore implements EventStore {
   }
 
   /** Insert events on a caller-supplied transaction — the atomic-outbox entry point. */
-  async appendWithClient(client: PoolClient, events: DomainEvent[]): Promise<void> {
+  async appendWithClient(tx: TxHandle | null, events: DomainEvent[]): Promise<void> {
     if (events.length === 0) return;
+    if (tx === null) return this.append(events);
+    const client = tx as PoolClient;
+    const activeCorrelationId = this.tenant.get().correlationId;
     const params: unknown[] = [];
     const tuples = events.map((e, i) => {
-      const b = i * 10;
+      const b = i * 11;
       params.push(
         e.id,
         e.type,
@@ -78,8 +89,9 @@ export class PostgresEventStore implements EventStore {
         e.occurredAt,
         e.version,
         JSON.stringify(e.payload ?? {}),
+        e.correlationId || activeCorrelationId || null,
       );
-      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10})`;
+      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11})`;
     });
     await client.query(
       `INSERT INTO public.aura_events (${EVENT_COLUMNS}) VALUES ${tuples.join(',')} ON CONFLICT (id) DO NOTHING`,

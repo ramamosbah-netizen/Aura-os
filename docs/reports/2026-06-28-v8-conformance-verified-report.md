@@ -91,3 +91,13 @@ The roadmap's checkboxes are **mostly honest, and in places too modest.**
 A genuinely strong, architecturally disciplined system — 17-module event-sourced ERP, typechecks and tests clean across 40 packages, consistent module template that has scaled without rotting. The five-layer architecture is real and faithful to the V8 shape.
 
 What remains is **enforcement, not invention**: make the constitution's strongest laws binding across all modules (not just CRM), wire a real embedding model, clean the artifact leakage, and — most urgently — **commit the work.**
+
+---
+
+## Addendum (2026-06-29) — Law #2 atomic-write gap closed
+
+The V8 expansion was committed in 9 layered commits on branch `feat/v8-enterprise-expansion` (build hygiene + shared/core/modules/intelligence/api/web/infrastructure/docs); 32 orphaned compiled artifacts were removed from `src/` and a `.gitignore` safety net added.
+
+The **atomic-write half of Constitution Law #2 is now closed.** The six services that still did non-atomic create-then-append — `contracts`, `tendering`, `projects`, `finance/invoice`, `procurement/PO`, `inventory/GRN` — were converted to the CRM template: aggregate row + domain event commit in ONE transaction via `TX_RUNNER` + `store.createWithClient` + `events.appendWithClient` (null tx falls back to sequential writes for no-DB dev). Investigation showed the T2/T3 modules (assets, doccontrol, engineering, fleet, hr, hse, quality, site) **already** used this pattern, so **single-tx create is now uniform across all 17 business modules.** Verified `pnpm typecheck` 42/42 and `pnpm test` 40/40 after the change (committed `8f97caf`).
+
+**Still open on Law #2:** writes are not yet routed through `CommandBus` (the command pipeline remains reference-only), and status-transition writes (`changeStatus`/`update` + event) are still non-atomic — only the create path was made transactional, matching the established template. These are the remaining follow-ups.

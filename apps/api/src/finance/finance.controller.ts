@@ -27,6 +27,9 @@ import {
   type CustomerInvoice,
   type NewCustomerInvoiceLine,
   CustomerInvoiceService,
+  type BankGuarantee,
+  type GuaranteeType,
+  BankGuaranteeService,
 } from '@aura/finance';
 
 interface CreateInvoiceDto {
@@ -90,6 +93,7 @@ export class FinanceController {
     private readonly tax: TaxService,
     private readonly pettyCash: PettyCashService,
     private readonly customerInvoices: CustomerInvoiceService,
+    private readonly bankGuarantees: BankGuaranteeService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -502,6 +506,68 @@ export class FinanceController {
   async cancelCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
     try {
       return await this.customerInvoices.cancel(id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── BANK GUARANTEES / BONDS ──────────────────────────────────────────────
+
+  @Post('bank-guarantees')
+  async createBankGuarantee(
+    @Body() dto: { reference: string; type: GuaranteeType; beneficiary: string; bankName: string; projectId?: string; projectName?: string; amount: number; currency?: string; issueDate: string; expiryDate: string; notes?: string },
+  ): Promise<BankGuarantee> {
+    if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
+    if (!dto?.beneficiary?.trim()) throw new BadRequestException('beneficiary is required');
+    if (!dto?.bankName?.trim()) throw new BadRequestException('bankName is required');
+    if (!dto?.issueDate || !dto?.expiryDate) throw new BadRequestException('issueDate and expiryDate are required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.bankGuarantees.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        reference: dto.reference,
+        type: dto.type,
+        beneficiary: dto.beneficiary,
+        bankName: dto.bankName,
+        projectId: dto.projectId ?? null,
+        projectName: dto.projectName ?? null,
+        amount: Number(dto.amount),
+        currency: dto.currency,
+        issueDate: dto.issueDate,
+        expiryDate: dto.expiryDate,
+        notes: dto.notes,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // literal route before :id
+  @Get('bank-guarantees/expiring')
+  expiringBankGuarantees(@Query('withinDays') withinDays?: string): Promise<BankGuarantee[]> {
+    const days = withinDays ? Number(withinDays) : 30;
+    return this.bankGuarantees.expiringSoon(this.tenant.get().tenantId, Number.isFinite(days) ? days : 30);
+  }
+
+  @Get('bank-guarantees')
+  listBankGuarantees(@Query('status') status?: BankGuarantee['status'], @Query('projectId') projectId?: string): Promise<BankGuarantee[]> {
+    return this.bankGuarantees.list({ tenantId: this.tenant.get().tenantId, status, projectId, limit: 200 });
+  }
+
+  @Get('bank-guarantees/:id')
+  async getBankGuarantee(@Param('id') id: string): Promise<BankGuarantee> {
+    const found = await this.bankGuarantees.get(id);
+    if (!found) throw new NotFoundException(`bank guarantee ${id} not found`);
+    return found;
+  }
+
+  @Patch('bank-guarantees/:id/status')
+  async changeBankGuaranteeStatus(@Param('id') id: string, @Body() dto: { action: 'release' | 'claim' | 'expire' }): Promise<BankGuarantee> {
+    if (!['release', 'claim', 'expire'].includes(dto?.action)) throw new BadRequestException("action must be 'release', 'claim', or 'expire'");
+    try {
+      return await this.bankGuarantees.changeStatus(id, dto.action);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

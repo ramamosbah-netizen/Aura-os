@@ -48,5 +48,11 @@ export * from './in-memory-customer-invoice-store';
 export * from './postgres-customer-invoice-store';
 export * from './customer-invoice.service';
 
+export * from './domain/bank-guarantee';
+export * from './bank-guarantee-store';
+export * from './in-memory-bank-guarantee-store';
+export * from './postgres-bank-guarantee-store';
+export * from './bank-guarantee.service';
+
 export * from './finance.module';
 export * from './projections/profit-loss.projection';

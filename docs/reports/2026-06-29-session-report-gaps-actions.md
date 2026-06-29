@@ -219,7 +219,14 @@ A fresh top-to-bottom pass after merging `origin/main` (PR #3). Each item below 
 **Evidence:** `grep -rl CommandBus modules/*/src/*.service.ts` → 8 files.
 **Fix (P1):** roll the proven command-handler template across the remaining modules; or formally accept the inline path as equivalent and document it. `Idempotency-Key` is honored-not-required at the HTTP boundary.
 
-### 7.4 🟠 MEDIUM — no integration / e2e test layer
+### 7.4 ✅ RESOLVED (first slice) — regression-guard test layer *(added 2026-06-29)*
+**Shipped:** `apps/api/src/tenant-scoping.test.ts` — a dep-free guard that constructs each of the 7 spine controllers with a **recording fake service** + a **tenant stub**, invokes the list handler, and asserts the controller forwarded `tenantId` into the store filter. **Proven to catch the bug:** reintroducing the §7.1 omission on one controller fails the test; the fix passes it. 7 tests, all green; api suite now 3 files / 14 tests.
+*Why not full HTTP e2e: vitest's esbuild transform doesn't emit the `emitDecoratorMetadata` Nest's HTTP DI needs (and the full `AppModule` trips a vitest-only circular import in `AuditController`); a true supertest/Playwright layer needs `@swc/core` + `unplugin-swc` (a network install) — tracked as the remaining slice below.*
+
+**Remaining (unchanged):** full black-box HTTP e2e (supertest) for the spine flows (create→approve→pay, RFQ→award, invoice→receipt) + a thin Playwright smoke for key pages, once the SWC transform is added.
+
+---
+**(original finding)** 🟠 MEDIUM — no integration / e2e test layer
 **Finding:** Tests are **unit-only** (domain state machines + store logic). There are **no** `*.e2e.ts` / `*.spec.ts` and no supertest/Playwright harness; every cross-layer check this session was manual `curl` against a throwaway `:4100`.
 **Evidence:** `find … -name '*.e2e*.ts'` and `'*.spec.ts'` → 0 results.
 **Fix (P1):** add a NestJS supertest harness hitting the in-memory-store boot (no DB) for the spine flows (create→approve→pay, RFQ→award, invoice→receipt), and a thin Playwright smoke for 3–4 key pages. This is what would have caught §7.1 automatically.
@@ -247,7 +254,7 @@ A fresh top-to-bottom pass after merging `origin/main` (PR #3). Each item below 
 | 7.7 | Rotate live secrets | 🔴 Critical | S | Keys only |
 | 7.2 | RLS service-role bypass (DB-enforced isolation) | 🔴 High | L | Yes |
 | 7.3 | CommandBus on 8/18 modules | 🟠 Medium | M | No |
-| 7.4 | No integration/e2e tests | 🟠 Medium | M | No |
+| 7.4 | 🟢 No integration/e2e tests — **regression guard added (tenant-scoping); full HTTP e2e pending SWC** | 🟠 Medium | M | No |
 | 7.6 | Law #3 read-model audit | 🟡 Low | M | No |
 | 7.5 | 0059 migration collision | 🟡 Low | S | No |
 | 7.7 | Observability + edge apps | 🟡 Low | L | — |

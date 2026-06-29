@@ -40,6 +40,10 @@ export class AiService implements AiProvider {
     return this.provider.complete(req);
   }
 
+  embed(text: string): Promise<number[]> {
+    return this.provider.embed(text);
+  }
+
   /** Which concrete provider is active: `claude` | `local`. */
   get activeProvider(): string {
     return this.provider.name;

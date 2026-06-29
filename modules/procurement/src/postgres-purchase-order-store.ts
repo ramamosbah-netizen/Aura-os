@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { PurchaseOrder } from './domain/purchase-order';
 import type { PurchaseOrderFilter, PurchaseOrderStore } from './purchase-order-store';
 
@@ -45,9 +46,34 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
   constructor(private readonly pool: Pool) {}
 
   async create(p: PurchaseOrder): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, p);
+  }
+
+  async createWithClient(tx: TxHandle | null, p: PurchaseOrder): Promise<void> {
+    if (tx === null) return this.create(p);
+    await this.insert(tx as PoolClient, p);
+  }
+
+  private insert(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierName, p.projectId, p.projectName, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
+    );
+  }
+
+  async update(p: PurchaseOrder): Promise<void> {
+    await this.upd(this.pool, p);
+  }
+
+  async updateWithClient(tx: TxHandle | null, p: PurchaseOrder): Promise<void> {
+    if (tx === null) return this.update(p);
+    await this.upd(tx as PoolClient, p);
+  }
+
+  private upd(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
+    return executor.query(
+      `UPDATE public.aura_procurement_purchase_orders SET reference=$2, title=$3, supplier_name=$4, status=$5, value=$6, owner_id=$7 WHERE id=$1`,
+      [p.id, p.reference, p.title, p.supplierName, p.status, p.value, p.ownerId],
     );
   }
 

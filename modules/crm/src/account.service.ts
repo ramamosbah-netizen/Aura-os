@@ -1,50 +1,75 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { type Id, makeEvent, newId } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore } from '@aura/core';
 import { CRM_EVENT, type Account, type NewAccount, makeAccount } from './domain/account';
 import { CRM_ACCOUNT_STORE, type AccountFilter, type AccountStore } from './account-store';
 
+const CREATE_ACCOUNT = 'crm.account.create';
+
 /**
  * CRM Account service — the first business module, and the template for the rest.
- * It OWNS its data (`aura_crm_accounts`), goes through the kernel access platform,
- * and emits `crm.account.*` on the event spine. No cross-module DB access — other
- * modules learn about accounts via events / the API, never by joining this table.
+ * It OWNS its data (`aura_crm_accounts`) and emits `crm.account.*` on the event spine.
+ * No cross-module DB access — other modules learn about accounts via events / the API.
+ *
+ * This is also the **reference integration of the kernel command pipeline** (Constitution
+ * Law #2): the create path dispatches through the `CommandBus`, which runs validation →
+ * RBAC/ABAC authorization → idempotency → a single transaction (atomic row + outbox event)
+ * → optional advisory lock. The other modules currently call the access seam + TX_RUNNER
+ * inline (equivalent atomic write); routing them through the bus is the rollout from here.
  */
 @Injectable()
-export class AccountService {
+export class AccountService implements OnModuleInit {
   private readonly logger = new Logger('CRM');
 
   constructor(
     @Inject(CRM_ACCOUNT_STORE) private readonly store: AccountStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
-    private readonly access: AccessService,
+    private readonly commands: CommandBus,
   ) {}
 
-  async create(input: NewAccount): Promise<Account> {
-    // Access seam: every module write goes through can()/assert(). Enforced once an
-    // actor is present; dev (no auth yet) has actorId null, so it passes through.
-    if (input.createdBy) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
-      this.access.assert(input.createdBy, target);
-    }
+  /** Register the create-account command on the kernel pipeline (once, at module init). */
+  onModuleInit(): void {
+    this.commands.register<NewAccount, Account>({
+      name: CREATE_ACCOUNT,
+      permission: 'crm.account.create',
+      validate: (input) => {
+        if (!input.name || !input.name.trim()) throw new Error('account name is required');
+      },
+      handler: async (command, tx) => {
+        const account = makeAccount(command.payload);
+        const event = makeEvent({
+          type: CRM_EVENT.accountCreated,
+          tenantId: account.tenantId,
+          companyId: account.companyId,
+          actorId: account.createdBy,
+          aggregateType: 'crm.account',
+          aggregateId: account.id,
+          payload: { name: account.name, status: account.status },
+        });
+        // Atomic outbox on the bus-provided transaction: the account row and its event
+        // commit together (or both roll back). Null tx (no-DB dev) falls back to sequential.
+        await this.store.createWithClient(tx, account);
+        await this.events.appendWithClient(tx, [event]);
+        this.logger.log(`Account created: ${account.name} (${account.id})`);
+        return account;
+      },
+    });
+  }
 
-    const account = makeAccount(input);
-    await this.store.create(account);
-    await this.events.append([
-      makeEvent({
-        type: CRM_EVENT.accountCreated,
-        tenantId: account.tenantId,
-        companyId: account.companyId,
-        actorId: account.createdBy,
-        aggregateType: 'crm.account',
-        aggregateId: account.id,
-        payload: { name: account.name, status: account.status },
-      }),
-    ]);
-    this.logger.log(`Account created: ${account.name} (${account.id})`);
-    return account;
+  /**
+   * Create an account by dispatching through the kernel command pipeline. An optional
+   * idempotency key makes the create safely retryable (same key returns the cached result).
+   */
+  create(input: NewAccount, idempotencyKey?: string | null): Promise<Account> {
+    return this.commands.execute<Account>({
+      id: newId(),
+      name: CREATE_ACCOUNT,
+      tenantId: input.tenantId,
+      companyId: input.companyId ?? null,
+      actorId: input.createdBy ?? null,
+      payload: input,
+      idempotencyKey: idempotencyKey ?? null,
+    });
   }
 
   get(id: Id): Promise<Account | null> {

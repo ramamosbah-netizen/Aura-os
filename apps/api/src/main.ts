@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from 'dotenv';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import crypto from 'node:crypto';
 import { AuthService, TenantContext } from '@aura/core';
 import { AppModule } from './app.module';
 import { AccessDeniedFilter } from './auth/access-denied.filter';
@@ -25,14 +26,23 @@ async function bootstrap(): Promise<void> {
   // a small public allowlist — the lockdown.
   const auth = app.get(AuthService);
   const tenant = app.get(TenantContext);
-  const enforce = process.env.AUTH_REQUIRED === 'true' && auth.enabled;
-  if (process.env.AUTH_REQUIRED === 'true' && !auth.enabled) {
+  const enforce = process.env.AUTH_REQUIRED === 'true';
+  if (enforce && !process.env.AUTH_JWT_SECRET) {
     new Logger('Bootstrap').error('AUTH_REQUIRED is set but AUTH_JWT_SECRET is missing — cannot enforce; running open.');
   }
   const PUBLIC_PATHS = ['/api/health', '/api/auth/login', '/api/auth/status'];
   app.use(async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
     const h = req.headers['authorization'];
     const ctx = await auth.contextFromHeader(Array.isArray(h) ? h[0] : h);
+
+    // Tracing: correlation ID propagation
+    const rawCorrId = req.headers['x-correlation-id'] || req.headers['x-request-id'];
+    const correlationId = Array.isArray(rawCorrId)
+      ? rawCorrId[0]
+      : rawCorrId || crypto.randomUUID();
+
+    res.setHeader('x-correlation-id', correlationId);
+
     if (enforce && !ctx) {
       const path = (req.url ?? '').split('?')[0];
       const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
@@ -43,7 +53,12 @@ async function bootstrap(): Promise<void> {
         return;
       }
     }
-    tenant.run(ctx ?? { tenantId: 'dev-tenant', companyId: null, actorId: null }, () => next());
+
+    const tenantInfo = ctx
+      ? { ...ctx, correlationId }
+      : { tenantId: 'dev-tenant', companyId: null, actorId: null, correlationId };
+
+    tenant.run(tenantInfo, () => next());
   });
 
   const port = Number(process.env.PORT ?? 4000);

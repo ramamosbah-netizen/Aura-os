@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { type GoodsReceipt, type GoodsReceiptStatus, GoodsReceiptService } from '@aura/inventory';
 
@@ -23,7 +23,7 @@ export class InventoryController {
   ) {}
 
   @Post()
-  create(@Body() dto: CreateGoodsReceiptDto): Promise<GoodsReceipt> {
+  create(@Body() dto: CreateGoodsReceiptDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<GoodsReceipt> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.grns.create({
@@ -40,7 +40,7 @@ export class InventoryController {
       value: dto.value,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
   }
 
   @Get()

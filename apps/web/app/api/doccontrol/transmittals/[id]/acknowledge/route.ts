@@ -1,0 +1,19 @@
+import { apiBase, authHeader } from '@/lib/api';
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const { id } = await params;
+  try {
+    const res = await fetch(`${apiBase()}/api/doccontrol/transmittals/${id}/acknowledge`, {
+      method: 'PUT',
+      headers: { ...(await authHeader()) },
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    return Response.json(data, { status: res.status });
+  } catch {
+    return Response.json({ error: 'DocControl API unreachable' }, { status: 502 });
+  }
+}

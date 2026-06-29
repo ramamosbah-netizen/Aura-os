@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { type Contract, type ContractStatus, ContractService } from '@aura/contracts';
 
@@ -22,7 +22,7 @@ export class ContractsController {
   ) {}
 
   @Post()
-  create(@Body() dto: CreateContractDto): Promise<Contract> {
+  create(@Body() dto: CreateContractDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Contract> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.contracts.create({
@@ -38,7 +38,23 @@ export class ContractsController {
       value: dto.value,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
+  }
+
+  /**
+   * PATCH /api/contracts/contracts/:id/status
+   * Transition a contract's status. Setting to 'active' means "signed" →
+   * triggers auto-creation of a Project via the cross-module subscriber.
+   */
+  @Patch(':id/status')
+  async changeStatus(
+    @Param('id') id: string,
+    @Body() dto: { status: ContractStatus },
+  ): Promise<Contract> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    const found = await this.contracts.get(id);
+    if (!found) throw new NotFoundException(`contract ${id} not found`);
+    return this.contracts.changeStatus(id, dto.status);
   }
 
   @Get()

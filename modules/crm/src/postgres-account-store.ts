@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Account } from './domain/account';
 import type { AccountFilter, AccountStore } from './account-store';
 
@@ -38,7 +39,16 @@ export class PostgresAccountStore implements AccountStore {
   constructor(private readonly pool: Pool) {}
 
   async create(a: Account): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, a);
+  }
+
+  async createWithClient(tx: TxHandle | null, a: Account): Promise<void> {
+    if (tx === null) return this.create(a);
+    await this.insert(tx as PoolClient, a);
+  }
+
+  private insert(executor: Pool | PoolClient, a: Account): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_crm_accounts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [a.id, a.tenantId, a.companyId, a.name, a.status, a.industry, a.website, a.ownerId, a.createdBy, a.createdAt],
     );

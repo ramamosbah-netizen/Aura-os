@@ -1,0 +1,66 @@
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { TenantContext } from '@aura/core';
+import { type Lead, type LeadStatus, type LeadSource } from '@aura/shared';
+import { LeadService } from '@aura/crm';
+
+interface CreateLeadDto {
+  name: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  status?: LeadStatus;
+  source?: LeadSource;
+}
+
+interface UpdateLeadDto {
+  name?: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  status?: LeadStatus;
+  source?: LeadSource;
+}
+
+@Controller('crm/leads')
+export class CrmLeadsController {
+  constructor(
+    private readonly leads: LeadService,
+    private readonly tenant: TenantContext,
+  ) {}
+
+  @Post()
+  create(@Body() dto: CreateLeadDto): Promise<Lead> {
+    if (!dto?.name?.trim()) throw new BadRequestException('name is required');
+    const ctx = this.tenant.get();
+    return this.leads.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      name: dto.name,
+      companyName: dto.companyName,
+      email: dto.email,
+      phone: dto.phone,
+      status: dto.status,
+      source: dto.source,
+      actorId: ctx.actorId,
+    });
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateLeadDto): Promise<Lead> {
+    const ctx = this.tenant.get();
+    return this.leads.update(id, dto, ctx.actorId);
+  }
+
+  @Get()
+  list(@Query('status') status?: LeadStatus): Promise<Lead[]> {
+    const ctx = this.tenant.get();
+    return this.leads.list({ tenantId: ctx.tenantId, status, limit: 100 });
+  }
+
+  @Get(':id')
+  async get(@Param('id') id: string): Promise<Lead> {
+    const found = await this.leads.get(id);
+    if (!found) throw new NotFoundException(`Lead ${id} not found`);
+    return found;
+  }
+}

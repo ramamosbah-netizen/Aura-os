@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '../../../lib/api';
+import { getJson } from '@/lib/api';
 import GrnCreate from '../../../components/grn-create';
 
 export const dynamic = 'force-dynamic';

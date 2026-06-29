@@ -22,6 +22,7 @@ export interface Invoice {
   supplierName: string | null;
   projectId: Id | null;
   projectName: string | null;
+  wbsNodeId: Id | null;
   status: InvoiceStatus;
   /** Invoice amount. */
   value: number;
@@ -40,6 +41,7 @@ export interface NewInvoice {
   supplierName?: string | null;
   projectId?: Id | null;
   projectName?: string | null;
+  wbsNodeId?: Id | null;
   status?: InvoiceStatus;
   value?: number;
   ownerId?: Id | null;
@@ -58,6 +60,7 @@ export function makeInvoice(input: NewInvoice): Invoice {
     supplierName: input.supplierName?.trim() || null,
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,
+    wbsNodeId: input.wbsNodeId ?? null,
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     ownerId: input.ownerId ?? null,
@@ -69,4 +72,9 @@ export function makeInvoice(input: NewInvoice): Invoice {
 /** Finance events on the spine. */
 export const FINANCE_EVENT = {
   invoiceCreated: 'finance.invoice.created',
+  invoiceUpdated: 'finance.invoice.updated',
+  invoiceApproved: 'finance.invoice.approved',
+  invoicePaid: 'finance.invoice.paid',
+  paymentRecorded: 'finance.payment.recorded',
+  journalPosted: 'finance.journal.posted',
 } as const;

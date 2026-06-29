@@ -48,4 +48,6 @@ export function makeAccount(input: NewAccount): Account {
 /** CRM events on the spine. */
 export const CRM_EVENT = {
   accountCreated: 'crm.account.created',
+  accountUpdated: 'crm.account.updated',
+  accountStatusChanged: 'crm.account.status_changed',
 } as const;

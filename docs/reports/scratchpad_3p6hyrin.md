@@ -1,0 +1,12 @@
+# Task Checklist
+- [/] Navigate to http://localhost:3000/projects/projects (Hit cached/unresolved build error)
+- [ ] Log in with admin/admin123 if required
+- [ ] Check if projects are listed
+  - [ ] If no projects, attempt to create a project using Active Contract options
+- [ ] Click on a project to view project detail tabs
+  - [ ] Verify "WBS & Earned Value (EVM)" tab (take screenshot)
+  - [ ] Verify "Cost Breakdown Structure (CBS)" tab (take screenshot)
+  - [ ] Verify "Delay & EOT claims" tab (take screenshot)
+- [ ] Navigate to http://localhost:3000/finance/tax
+  - [ ] Verify Tax & VAT filings dashboard (take screenshot)
+- [ ] Summarize actions and findings

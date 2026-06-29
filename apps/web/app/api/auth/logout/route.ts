@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { SESSION_COOKIE } from '../../../../lib/session';
+import { SESSION_COOKIE } from '@/lib/session';
 
 // Clear the session cookie.
 export async function POST(): Promise<Response> {

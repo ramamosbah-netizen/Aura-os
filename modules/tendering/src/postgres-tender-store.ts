@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 import type { TenderFilter, TenderStore } from './tender-store';
 
@@ -43,9 +44,34 @@ export class PostgresTenderStore implements TenderStore {
   constructor(private readonly pool: Pool) {}
 
   async create(t: Tender): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, t);
+  }
+
+  async createWithClient(tx: TxHandle | null, t: Tender): Promise<void> {
+    if (tx === null) return this.create(t);
+    await this.insert(tx as PoolClient, t);
+  }
+
+  private insert(executor: Pool | PoolClient, t: Tender): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_tendering_tenders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [t.id, t.tenantId, t.companyId, t.title, t.reference, t.accountId, t.accountName, t.status, t.value, t.ownerId, t.createdBy, t.createdAt],
+    );
+  }
+
+  async update(t: Tender): Promise<void> {
+    await this.upd(this.pool, t);
+  }
+
+  async updateWithClient(tx: TxHandle | null, t: Tender): Promise<void> {
+    if (tx === null) return this.update(t);
+    await this.upd(tx as PoolClient, t);
+  }
+
+  private upd(executor: Pool | PoolClient, t: Tender): Promise<unknown> {
+    return executor.query(
+      `UPDATE public.aura_tendering_tenders SET title=$2, reference=$3, account_id=$4, account_name=$5, status=$6, value=$7, owner_id=$8 WHERE id=$1`,
+      [t.id, t.title, t.reference, t.accountId, t.accountName, t.status, t.value, t.ownerId],
     );
   }
 

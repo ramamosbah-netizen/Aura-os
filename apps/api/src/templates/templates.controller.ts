@@ -1,0 +1,68 @@
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { TenantContext } from '@aura/core';
+import { TemplatesService, DocumentTemplate } from './templates.service';
+
+interface CreateTemplateDto {
+  name: string;
+  category: string;
+  elements?: any[];
+}
+
+interface UpdateTemplateDto {
+  name?: string;
+  category?: string;
+  elements?: any[];
+  status?: string;
+}
+
+@Controller('templates')
+export class TemplatesController {
+  constructor(
+    private readonly service: TemplatesService,
+    private readonly tenant: TenantContext
+  ) {}
+
+  @Post()
+  async create(@Body() dto: CreateTemplateDto): Promise<DocumentTemplate> {
+    if (!dto?.name?.trim()) throw new BadRequestException('name is required');
+    if (!dto?.category?.trim()) throw new BadRequestException('category is required');
+
+    const ctx = this.tenant.get();
+    return this.service.create({
+      tenantId: ctx.tenantId,
+      name: dto.name,
+      category: dto.category,
+      elements: dto.elements,
+    });
+  }
+
+  @Get()
+  async list(@Query('category') category?: string): Promise<DocumentTemplate[]> {
+    const ctx = this.tenant.get();
+    return this.service.list(ctx.tenantId, category);
+  }
+
+  @Get(':id')
+  async get(@Param('id') id: string): Promise<DocumentTemplate> {
+    const ctx = this.tenant.get();
+    const template = await this.service.get(id, ctx.tenantId);
+    if (!template) throw new NotFoundException(`Template with ID ${id} not found`);
+    return template;
+  }
+
+  @Put(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTemplateDto
+  ): Promise<DocumentTemplate> {
+    const ctx = this.tenant.get();
+    return this.service.update(id, ctx.tenantId, dto);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string): Promise<{ success: boolean }> {
+    const ctx = this.tenant.get();
+    await this.service.delete(id, ctx.tenantId);
+    return { success: true };
+  }
+}

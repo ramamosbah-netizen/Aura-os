@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '../../../../lib/api';
+import { apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward contract creation to the Nest Contracts API server-side.
 export async function POST(request: Request): Promise<Response> {

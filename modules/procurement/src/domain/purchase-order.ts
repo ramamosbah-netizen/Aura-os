@@ -60,4 +60,8 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
 /** Procurement events on the spine. */
 export const PROCUREMENT_EVENT = {
   poCreated: 'procurement.po.created',
+  poUpdated: 'procurement.po.updated',
+  poApproved: 'procurement.po.approved',
+  poIssued: 'procurement.po.issued',
+  poClosed: 'procurement.po.closed',
 } as const;

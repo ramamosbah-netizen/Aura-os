@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { GoodsReceipt } from './domain/goods-receipt';
 
 /** DI token for the goods-receipt store. */
@@ -14,6 +15,8 @@ export interface GoodsReceiptFilter {
 
 export interface GoodsReceiptStore {
   create(grn: GoodsReceipt): Promise<void>;
+  /** Insert on a caller-owned transaction (atomic with its event); null tx falls back to create. */
+  createWithClient(tx: TxHandle | null, grn: GoodsReceipt): Promise<void>;
   get(id: Id): Promise<GoodsReceipt | null>;
   list(filter?: GoodsReceiptFilter): Promise<GoodsReceipt[]>;
 }

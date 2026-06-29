@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Invoice } from './domain/invoice';
 import type { InvoiceFilter, InvoiceStore } from './invoice-store';
 
@@ -8,6 +9,18 @@ export class InMemoryInvoiceStore implements InvoiceStore {
 
   async create(invoice: Invoice): Promise<void> {
     this.invoices.set(invoice.id, { ...invoice });
+  }
+
+  async createWithClient(_tx: TxHandle | null, invoice: Invoice): Promise<void> {
+    return this.create(invoice);
+  }
+
+  async update(invoice: Invoice): Promise<void> {
+    this.invoices.set(invoice.id, { ...invoice });
+  }
+
+  async updateWithClient(_tx: TxHandle | null, invoice: Invoice): Promise<void> {
+    return this.update(invoice);
   }
 
   async get(id: Id): Promise<Invoice | null> {

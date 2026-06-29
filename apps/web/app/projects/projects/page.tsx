@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '../../../lib/api';
+import { getJson } from '@/lib/api';
 import ProjectCreate from '../../../components/project-create';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,39 @@ function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export default async function ProjectsPage() {
+import ProjectDetail from '../../../components/project-detail';
+
+interface WbsNode {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  code: string;
+  title: string;
+  plannedValue: number;
+  earnedValue: number;
+  actualCost: number;
+  progress: number;
+  status: 'pending' | 'in_progress' | 'completed';
+  createdAt: string;
+}
+
+interface EvmMetrics {
+  plannedValue: number;
+  earnedValue: number;
+  actualCost: number;
+  costVariance: number;
+  scheduleVariance: number;
+  cpi: number;
+  spi: number;
+}
+
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ projectId?: string }>;
+}) {
+  const { projectId } = await searchParams;
+
   // The end of the deal chain: projects from our own API, and the "from contract" options
   // from the Contracts API (status=active) — each active contract carries its account
   // snapshot, so a project inherits the account transitively (Project ← Contract ← … ← CRM).
@@ -38,6 +70,22 @@ export default async function ProjectsPage() {
     getJson<Project[]>('/api/projects/projects'),
     getJson<ActiveContract[]>('/api/contracts/contracts?status=active'),
   ]);
+
+  let selectedProject: Project | null = null;
+  let wbsNodes: WbsNode[] = [];
+  let evmMetrics: EvmMetrics | null = null;
+
+  if (projectId && projects) {
+    selectedProject = projects.find((p) => p.id === projectId) ?? null;
+    if (selectedProject) {
+      const [nodes, evm] = await Promise.all([
+        getJson<WbsNode[]>(`/api/projects/wbs?projectId=${projectId}`),
+        getJson<EvmMetrics>(`/api/projects/projects/${projectId}/evm`),
+      ]);
+      wbsNodes = nodes ?? [];
+      evmMetrics = evm;
+    }
+  }
 
   return (
     <div style={st.page}>
@@ -76,8 +124,12 @@ export default async function ProjectsPage() {
             </thead>
             <tbody>
               {projects.map((p) => (
-                <tr key={p.id}>
-                  <td style={st.td}>{p.title}</td>
+                <tr key={p.id} style={projectId === p.id ? { background: 'rgba(255,255,255,0.03)' } : undefined}>
+                  <td style={st.td}>
+                    <a href={`/projects/projects?projectId=${p.id}`} style={st.link}>
+                      {p.title}
+                    </a>
+                  </td>
                   <td style={st.tdMuted}>{p.contractTitle ?? '—'}</td>
                   <td style={st.tdMuted}>{p.accountName ?? '—'}</td>
                   <td style={st.td}>
@@ -91,6 +143,15 @@ export default async function ProjectsPage() {
           </table>
         )}
       </section>
+
+      {selectedProject && evmMetrics && (
+        <ProjectDetail
+          projectId={selectedProject.id}
+          projectTitle={selectedProject.title}
+          nodes={wbsNodes}
+          evm={evmMetrics}
+        />
+      )}
     </div>
   );
 }
@@ -129,5 +190,10 @@ const st = {
     borderRadius: 6,
     padding: '2px 8px',
     textTransform: 'capitalize',
+  } as CSSProperties,
+  link: {
+    color: 'var(--accent)',
+    textDecoration: 'none',
+    fontWeight: 600,
   } as CSSProperties,
 };

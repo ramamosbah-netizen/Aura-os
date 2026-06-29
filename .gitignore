@@ -11,3 +11,8 @@ coverage/
 .DS_Store
 *.tsbuildinfo
 .aura-storage/
+# Safety net: compiled output must live in dist/, never emitted into src/
+**/src/**/*.js
+**/src/**/*.js.map
+**/src/**/*.d.ts
+**/src/**/*.d.ts.map

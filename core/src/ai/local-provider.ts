@@ -3,6 +3,7 @@ import {
   type AiCompletionResult,
   type AiProvider,
   localFallbackText,
+  lexicalEmbedding,
 } from '@aura/shared';
 
 /**
@@ -20,5 +21,9 @@ export class LocalProvider implements AiProvider {
       provider: this.name,
       stopReason: 'end_turn',
     };
+  }
+
+  async embed(text: string): Promise<number[]> {
+    return lexicalEmbedding(text);
   }
 }

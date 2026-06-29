@@ -1,0 +1,234 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+
+import { type HseIncident, makeHseIncident } from './domain/hse-incident';
+import { type PermitToWork, makePermitToWork } from './domain/permit-to-work';
+import { type CapaAction, makeCapaAction } from './domain/capa-action';
+
+export const INCIDENT_STORE = Symbol('INCIDENT_STORE');
+export const PTW_STORE = Symbol('PTW_STORE');
+export const CAPA_STORE = Symbol('CAPA_STORE');
+
+import {
+  type HseIncidentStore,
+  type PermitToWorkStore,
+  type CapaActionStore,
+} from './store.interface';
+
+export const HSE_EVENT = {
+  incidentReported: 'hse.incident.reported',
+  ptwIssued: 'hse.ptw.issued',
+  capaRaised: 'hse.capa.raised',
+};
+
+@Injectable()
+export class HseService {
+  private readonly logger = new Logger('HseControl');
+
+  constructor(
+    @Inject(INCIDENT_STORE) private readonly incidentStore: HseIncidentStore,
+    @Inject(PTW_STORE) private readonly ptwStore: PermitToWorkStore,
+    @Inject(CAPA_STORE) private readonly capaStore: CapaActionStore,
+    @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
+    private readonly access: AccessService,
+  ) {}
+
+  // ── Incidents ──────────────────────────────────────────────────────────────
+
+  async reportIncident(input: {
+    tenantId: string;
+    companyId?: string;
+    projectId: string;
+    projectName?: string;
+    date: string;
+    severity: HseIncident['severity'];
+    description: string;
+    locationDetail: string;
+    createdBy?: string;
+  }): Promise<HseIncident> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'hse.incident.create', orgPath });
+    }
+
+    const incident = makeHseIncident(input);
+    const event = makeEvent({
+      type: HSE_EVENT.incidentReported,
+      tenantId: incident.tenantId,
+      companyId: incident.companyId,
+      actorId: input.createdBy || null,
+      aggregateType: 'hse.incident',
+      aggregateId: incident.id,
+      payload: { severity: incident.severity, date: incident.date, projectId: incident.projectId },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.incidentStore.save(incident, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Incident reported: ${incident.severity} on ${incident.date} at ${incident.locationDetail}`);
+    return incident;
+  }
+
+  async closeIncident(tenantId: Id, actorId: Id | null, id: Id): Promise<HseIncident> {
+    const incident = await this.incidentStore.findById(id, tenantId);
+    if (!incident) throw new Error(`Incident with ID ${id} not found`);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (incident.companyId) orgPath.push({ level: 'company', id: incident.companyId });
+      this.access.assert(actorId, { permission: 'hse.incident.close', orgPath });
+    }
+
+    incident.status = 'closed';
+    incident.updatedAt = new Date().toISOString();
+
+    await this.tx.run(async (handle) => {
+      await this.incidentStore.save(incident, handle);
+    });
+
+    this.logger.log(`Incident closed: ${incident.id}`);
+    return incident;
+  }
+
+  listIncidents(tenantId: Id): Promise<HseIncident[]> {
+    return this.incidentStore.findAll(tenantId);
+  }
+
+  // ── Permit To Work (PTW) ───────────────────────────────────────────────────
+
+  async requestPermit(input: {
+    tenantId: string;
+    companyId?: string;
+    projectId: string;
+    projectName?: string;
+    permitType: PermitToWork['permitType'];
+    validFrom: string;
+    validTo: string;
+    description: string;
+    createdBy?: string;
+  }): Promise<PermitToWork> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'hse.ptw.request', orgPath });
+    }
+
+    const permit = makePermitToWork(input);
+
+    await this.tx.run(async (handle) => {
+      await this.ptwStore.save(permit, handle);
+    });
+
+    this.logger.log(`Permit requested: ${permit.permitType} for project ${permit.projectId}`);
+    return permit;
+  }
+
+  async approvePermit(tenantId: Id, actorId: Id | null, id: Id): Promise<PermitToWork> {
+    const permit = await this.ptwStore.findById(id, tenantId);
+    if (!permit) throw new Error(`Permit with ID ${id} not found`);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (permit.companyId) orgPath.push({ level: 'company', id: permit.companyId });
+      this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath });
+    }
+
+    permit.status = 'approved';
+    permit.approvedBy = actorId;
+    permit.approvedAt = new Date().toISOString();
+    permit.updatedAt = new Date().toISOString();
+
+    const event = makeEvent({
+      type: HSE_EVENT.ptwIssued,
+      tenantId: permit.tenantId,
+      companyId: permit.companyId,
+      actorId,
+      aggregateType: 'hse.ptw',
+      aggregateId: permit.id,
+      payload: { permitType: permit.permitType, validFrom: permit.validFrom, validTo: permit.validTo, projectId: permit.projectId },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.ptwStore.save(permit, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Permit approved & issued: ${permit.permitType} (${permit.id})`);
+    return permit;
+  }
+
+  listPermits(tenantId: Id): Promise<PermitToWork[]> {
+    return this.ptwStore.findAll(tenantId);
+  }
+
+  // ── Corrective & Preventive Action (CAPA) ──────────────────────────────────
+
+  async raiseCapa(input: {
+    tenantId: string;
+    companyId?: string;
+    projectId: string;
+    projectName?: string;
+    sourceType: CapaAction['sourceType'];
+    sourceId?: string;
+    actionRequired: string;
+    assignedTo?: string;
+    dueDate: string;
+    createdBy?: string;
+  }): Promise<CapaAction> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'hse.capa.raise', orgPath });
+    }
+
+    const capa = makeCapaAction(input);
+    const event = makeEvent({
+      type: HSE_EVENT.capaRaised,
+      tenantId: capa.tenantId,
+      companyId: capa.companyId,
+      actorId: input.createdBy || null,
+      aggregateType: 'hse.capa',
+      aggregateId: capa.id,
+      payload: { sourceType: capa.sourceType, sourceId: capa.sourceId, dueDate: capa.dueDate, projectId: capa.projectId },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.capaStore.save(capa, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`CAPA raised: due on ${capa.dueDate} for project ${capa.projectId}`);
+    return capa;
+  }
+
+  async completeCapa(tenantId: Id, actorId: Id | null, id: Id): Promise<CapaAction> {
+    const capa = await this.capaStore.findById(id, tenantId);
+    if (!capa) throw new Error(`CAPA with ID ${id} not found`);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (capa.companyId) orgPath.push({ level: 'company', id: capa.companyId });
+      this.access.assert(actorId, { permission: 'hse.capa.complete', orgPath });
+    }
+
+    capa.status = 'completed';
+    capa.completedAt = new Date().toISOString();
+    capa.updatedAt = new Date().toISOString();
+
+    await this.tx.run(async (handle) => {
+      await this.capaStore.save(capa, handle);
+    });
+
+    this.logger.log(`CAPA completed: ${capa.id}`);
+    return capa;
+  }
+
+  listCapas(tenantId: Id): Promise<CapaAction[]> {
+    return this.capaStore.findAll(tenantId);
+  }
+}

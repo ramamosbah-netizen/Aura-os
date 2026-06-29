@@ -4,6 +4,7 @@ import {
   type AiCompletionResult,
   type AiProvider,
   buildClaudeMessageParams,
+  lexicalEmbedding,
 } from '@aura/shared';
 
 /**
@@ -42,5 +43,14 @@ export class ClaudeProvider implements AiProvider {
         outputTokens: resp.usage.output_tokens,
       },
     };
+  }
+
+  /**
+   * Embeddings use the deterministic local LEXICAL embedding (Anthropic exposes no
+   * first-party embeddings endpoint via this SDK). Cosine reflects token overlap — good
+   * enough for lexical RAG; wire a dedicated embeddings provider for semantic depth.
+   */
+  async embed(text: string): Promise<number[]> {
+    return lexicalEmbedding(text);
   }
 }

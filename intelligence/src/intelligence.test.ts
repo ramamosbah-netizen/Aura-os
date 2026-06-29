@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { type DomainEvent, makeEvent } from '@aura/shared';
 import { buildBriefingPrompt } from './briefing';
 import { emptyFunnel, foldPipeline, winRate } from './pipeline';
+import { computeDecay, sourceWeight } from './pricing.service';
+import { resolveMode } from './autonomy.service';
 
 function ev(type: string, value?: number): DomainEvent {
   return makeEvent({
@@ -68,3 +70,39 @@ describe('intelligence briefing prompt', () => {
     expect(buildBriefingPrompt(f).messages[0].content).toContain('100%');
   });
 });
+
+describe('IEC pricing engine formulas', () => {
+  it('calculates trust decay based on age in days', () => {
+    // 0 days age should have no decay (trust = 1.0)
+    expect(computeDecay(0)).toBeCloseTo(1.0);
+    // 180 days age should decay to approximately 50%
+    expect(computeDecay(180)).toBeCloseTo(0.5, 1);
+    // very old should decay to near-zero
+    expect(computeDecay(1000)).toBeLessThan(0.05);
+  });
+
+  it('resolves correct trust weight per source type', () => {
+    expect(sourceWeight('po')).toBe(1.0);
+    expect(sourceWeight('subcontract')).toBe(0.9);
+    expect(sourceWeight('quote')).toBe(0.6);
+    expect(sourceWeight('invalid_type')).toBe(0.5);
+  });
+});
+
+describe('AURA autonomy engine modes', () => {
+  it('resolves to operate mode under safety thresholds', () => {
+    // Under limit (<= 10000 AND <= 5% variance) -> operate
+    expect(resolveMode(5000, 3)).toBe('operate');
+    expect(resolveMode(10000, 5)).toBe('operate');
+    expect(resolveMode(10000, -5)).toBe('operate');
+  });
+
+  it('forces assist mode when exceeding safety thresholds', () => {
+    // Exceeds value limit -> assist
+    expect(resolveMode(10001, 2)).toBe('assist');
+    // Exceeds variance limit -> assist
+    expect(resolveMode(2000, 6)).toBe('assist');
+    expect(resolveMode(2000, -6)).toBe('assist');
+  });
+});
+

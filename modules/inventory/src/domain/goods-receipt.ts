@@ -69,4 +69,8 @@ export function makeGoodsReceipt(input: NewGoodsReceipt): GoodsReceipt {
 /** Inventory events on the spine. */
 export const INVENTORY_EVENT = {
   grnCreated: 'inventory.grn.created',
+  grnUpdated: 'inventory.grn.updated',
+  grnInspected: 'inventory.grn.inspected',
+  grnAccepted: 'inventory.grn.accepted',
+  stockLow: 'inventory.stock.low',
 } as const;

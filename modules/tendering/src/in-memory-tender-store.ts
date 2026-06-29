@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 import type { TenderFilter, TenderStore } from './tender-store';
 
@@ -8,6 +9,18 @@ export class InMemoryTenderStore implements TenderStore {
 
   async create(tender: Tender): Promise<void> {
     this.tenders.set(tender.id, { ...tender });
+  }
+
+  async createWithClient(_tx: TxHandle | null, tender: Tender): Promise<void> {
+    return this.create(tender);
+  }
+
+  async update(tender: Tender): Promise<void> {
+    this.tenders.set(tender.id, { ...tender });
+  }
+
+  async updateWithClient(_tx: TxHandle | null, tender: Tender): Promise<void> {
+    return this.update(tender);
   }
 
   async get(id: Id): Promise<Tender | null> {

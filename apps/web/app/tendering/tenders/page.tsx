@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '../../../lib/api';
+import { getJson } from '@/lib/api';
 import TenderCreate from '../../../components/tender-create';
 
 export const dynamic = 'force-dynamic';
@@ -61,7 +61,11 @@ export default async function TendersPage() {
             <tbody>
               {tenders.map((t) => (
                 <tr key={t.id}>
-                  <td style={st.td}>{t.title}</td>
+                  <td style={st.td}>
+                    <a href={`/tendering/tenders/${t.id}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
+                      {t.title}
+                    </a>
+                  </td>
                   <td style={st.tdMuted}>{t.accountName ?? '—'}</td>
                   <td style={st.td}>
                     <span style={st.tag}>{t.status}</span>

@@ -35,6 +35,7 @@ export interface AiCompletionResult {
 export interface AiProvider {
   readonly name: string;
   complete(req: AiCompletionRequest): Promise<AiCompletionResult>;
+  embed(text: string): Promise<number[]>;
 }
 
 /** Default to the latest, most capable Claude model. */
@@ -82,6 +83,44 @@ export function buildClaudeMessageParams(
 export function localFallbackText(messages: AiMessage[]): string {
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
   return `[local-ai] no model configured — echoing your input: ${lastUser?.content ?? '(none)'}`;
+}
+
+/** Embedding vector dimension — matches the `vector(1536)` column (migration 0019). */
+export const DEFAULT_EMBEDDING_DIMS = 1536;
+
+/**
+ * Deterministic, offline LEXICAL embedding via the feature-hashing "trick": each token is
+ * hashed into one of `dims` buckets (with a sign hash to limit collisions), accumulating a
+ * term-frequency count; the vector is then L2-normalized so cosine similarity (a dot product
+ * of unit vectors) reflects **shared-token overlap**. This is NOT a neural/semantic embedding —
+ * it has no synonymy or paraphrase awareness — but it gives genuinely useful lexical retrieval
+ * with no network call and is fully deterministic for tests/CI. Wire a dedicated embeddings
+ * provider (e.g. Voyage / OpenAI text-embedding) for true semantic depth.
+ */
+export function lexicalEmbedding(text: string, dims: number = DEFAULT_EMBEDDING_DIMS): number[] {
+  const vec = new Array<number>(dims).fill(0);
+  const tokens = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  for (const tok of tokens) {
+    const h = fnv1a32(tok);
+    const bucket = h % dims;
+    const sign = ((h >>> 16) & 1) === 0 ? 1 : -1; // independent bit → sign hash
+    vec[bucket] += sign;
+  }
+  let sumSq = 0;
+  for (let i = 0; i < dims; i++) sumSq += vec[i] * vec[i];
+  const norm = Math.sqrt(sumSq) || 1;
+  for (let i = 0; i < dims; i++) vec[i] = Number((vec[i] / norm).toFixed(6));
+  return vec;
+}
+
+/** FNV-1a 32-bit hash → unsigned 32-bit int. */
+function fnv1a32(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 /** Pick the active provider from whether a real key is present. */

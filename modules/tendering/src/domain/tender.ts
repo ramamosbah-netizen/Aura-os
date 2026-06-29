@@ -56,4 +56,8 @@ export function makeTender(input: NewTender): Tender {
 /** Tendering events on the spine. */
 export const TENDER_EVENT = {
   created: 'tendering.tender.created',
+  updated: 'tendering.tender.updated',
+  submitted: 'tendering.tender.submitted',
+  awarded: 'tendering.tender.awarded',
+  lost: 'tendering.tender.lost',
 } as const;

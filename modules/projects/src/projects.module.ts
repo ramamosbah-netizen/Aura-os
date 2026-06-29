@@ -6,6 +6,21 @@ import { InMemoryProjectStore } from './in-memory-project-store';
 import { PostgresProjectStore } from './postgres-project-store';
 import { ProjectService } from './project.service';
 
+import { WBS_STORE } from './wbs-store';
+import { InMemoryWbsStore } from './in-memory-wbs-store';
+import { PostgresWbsStore } from './postgres-wbs-store';
+import { WbsService } from './wbs.service';
+
+import { CBS_STORE } from './cbs-store';
+import { InMemoryCbsStore } from './in-memory-cbs-store';
+import { PostgresCbsStore } from './postgres-cbs-store';
+import { CbsService } from './cbs.service';
+
+import { DELAY_STORE, EOT_STORE } from './delay-eot-store';
+import { InMemoryDelayStore, InMemoryEotStore } from './in-memory-delay-eot-store';
+import { PostgresDelayStore, PostgresEotStore } from './postgres-delay-eot-store';
+import { DelayEotService } from './delay-eot.service';
+
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
   imports: [CoreModule],
@@ -16,8 +31,35 @@ import { ProjectService } from './project.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresProjectStore(pool) : new InMemoryProjectStore(),
     },
+    {
+      provide: WBS_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresWbsStore(pool) : new InMemoryWbsStore(),
+    },
+    {
+      provide: CBS_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCbsStore(pool) : new InMemoryCbsStore(),
+    },
+    {
+      provide: DELAY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDelayStore(pool) : new InMemoryDelayStore(),
+    },
+    {
+      provide: EOT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresEotStore(pool) : new InMemoryEotStore(),
+    },
     ProjectService,
+    WbsService,
+    CbsService,
+    DelayEotService,
   ],
-  exports: [ProjectService],
+  exports: [ProjectService, WbsService, CbsService, DelayEotService],
 })
 export class ProjectsModule {}

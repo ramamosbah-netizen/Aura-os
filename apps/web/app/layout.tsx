@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import AppShell from '../components/app-shell';
 import AiDock from '../components/ai-dock';
-import { currentUser } from '../lib/api';
+import { currentUser } from '@/lib/api';
 
 export const metadata = {
   title: 'AURA OS — Workspace',

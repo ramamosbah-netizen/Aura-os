@@ -6,6 +6,16 @@ import { InMemoryAccountStore } from './in-memory-account-store';
 import { PostgresAccountStore } from './postgres-account-store';
 import { AccountService } from './account.service';
 
+import { CRM_LEAD_STORE } from './lead-store';
+import { InMemoryLeadStore } from './in-memory-lead-store';
+import { PostgresLeadStore } from './postgres-lead-store';
+import { LeadService } from './lead.service';
+
+import { CRM_OPPORTUNITY_STORE } from './opportunity-store';
+import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
+import { PostgresOpportunityStore } from './postgres-opportunity-store';
+import { OpportunityService } from './opportunity.service';
+
 /**
  * The CRM business module. Imports the kernel (CoreModule) for the event store,
  * access platform, and shared pg pool; picks a Postgres or in-memory account store
@@ -21,8 +31,22 @@ import { AccountService } from './account.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresAccountStore(pool) : new InMemoryAccountStore(),
     },
+    {
+      provide: CRM_LEAD_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresLeadStore(pool) : new InMemoryLeadStore(),
+    },
+    {
+      provide: CRM_OPPORTUNITY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresOpportunityStore(pool) : new InMemoryOpportunityStore(),
+    },
     AccountService,
+    LeadService,
+    OpportunityService,
   ],
-  exports: [AccountService],
+  exports: [AccountService, LeadService, OpportunityService],
 })
 export class CrmModule {}

@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { GoodsReceipt } from './domain/goods-receipt';
 import type { GoodsReceiptFilter, GoodsReceiptStore } from './goods-receipt-store';
 
@@ -49,7 +50,16 @@ export class PostgresGoodsReceiptStore implements GoodsReceiptStore {
   constructor(private readonly pool: Pool) {}
 
   async create(g: GoodsReceipt): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, g);
+  }
+
+  async createWithClient(tx: TxHandle | null, g: GoodsReceipt): Promise<void> {
+    if (tx === null) return this.create(g);
+    await this.insert(tx as PoolClient, g);
+  }
+
+  private insert(executor: Pool | PoolClient, g: GoodsReceipt): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_inventory_grns (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [g.id, g.tenantId, g.companyId, g.reference, g.title, g.poId, g.poTitle, g.supplierName, g.projectId, g.projectName, g.status, g.value, g.ownerId, g.createdBy, g.createdAt],
     );

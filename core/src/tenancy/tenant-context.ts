@@ -6,9 +6,10 @@ export interface TenantInfo {
   tenantId: Id;
   companyId: Id | null;
   actorId: Id | null;
+  correlationId?: string | null;
 }
 
-const DEV_DEFAULT: TenantInfo = { tenantId: 'dev-tenant', companyId: null, actorId: null };
+const DEV_DEFAULT: TenantInfo = { tenantId: 'dev-tenant', companyId: null, actorId: null, correlationId: null };
 
 /**
  * Holds the current tenant / company / actor for a request, isolated per request via

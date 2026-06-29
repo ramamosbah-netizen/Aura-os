@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '../../../../lib/api';
+import { apiBase, authHeader } from '@/lib/api';
 
 // BFF: trigger an AI briefing on the Nest Intelligence API server-side.
 export async function POST(): Promise<Response> {

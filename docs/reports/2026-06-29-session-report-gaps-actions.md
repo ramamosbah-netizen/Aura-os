@@ -76,10 +76,13 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 - **Embeddings: neural now config-ready** (commit `bee1450`). `AiService.embed()` uses a real OpenAI-compatible embeddings API when `EMBEDDINGS_API_KEY` is set (OpenAI or Voyage via `EMBEDDINGS_BASE_URL`), with the lexical embedding as offline fallback. Remaining: it's a config flip + key away — *not yet exercised against a live embeddings API* (no key here; the request/parse/fallback path is unit-tested with a mocked `fetch`).
 - Missing: 7-criteria bid scoring, client profitability / LTV, document intelligence / OCR, BIM viewer, knowledge graph, multi-agent DAG orchestration, universal `*` event observer, role-specific agent logic (CEO/CFO/PM exist as UI, not agents).
 
-### 3.3 Experience (L5) — *in progress (all 3 tracks underway per user)*
-- ✅ **Global search** — DONE (`3ab8d24`): ⌘K palette now searches records across the spine (CRM/tenders/contracts/projects/POs/invoices) via a host-side aggregator + `/api/v1/search`; live-verified. *(Also wired `apps/api`'s missing vitest runner — api tests now execute.)*
-- Remaining L5: **universal inbox/notifications**, **company switcher** (BFF route exists; full context-rehydration unverified), theme/density switcher.
-- **0 of 4 edge apps**: Customer Portal, Supplier Portal, Mobile Workforce PWA, BI dashboards.
+### 3.3 Experience (L5) — *essentially complete*
+- ✅ **Global search** (`3ab8d24`): ⌘K palette searches records across the spine via a host-side aggregator + `/api/v1/search`; live-verified. *(Also wired `apps/api`'s missing vitest runner.)*
+- ✅ **Dark/light theme switcher** (`484d6e6`): top-bar toggle, `[data-theme]` CSS-var palette, persisted.
+- ✅ **Universal inbox** — already present as the **Work Center** (`work-center.tsx`): aggregates actionable items (PRs/invoices/subcontracts/claims to approve/pay/certify) with inline actions.
+- ✅ **Company switcher** — UI present in the shell top bar (dropdown + `switch-company`); *follow-up:* companies are hardcoded ("simulated") — load the real authorized-company list from the org API.
+- Minor remaining: density toggle, a dedicated notifications center (distinct from the approvals queue).
+- **0 of 4 edge apps**: Customer Portal, Supplier Portal, Mobile Workforce PWA, BI dashboards *(track 3)*.
 
 ### 3.4 Module depth (largest scope item)
 Per-module page coverage is roughly **~40%** of the blueprint. Notable missing depth: Finance VAT/bank-rec UI/treasury/IFRS-15; Projects EVM/delay-analysis/EOT UI; Procurement RFQ/bid-comparison/3-way-match UI; Inventory multi-warehouse/transfers; HR visa/labour-camp/EOSB; Fleet GPS/Salik/fines.

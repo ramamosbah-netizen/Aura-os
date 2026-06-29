@@ -4,4 +4,5 @@ export * from './store.interface';
 export * from './domain/employee';
 export * from './domain/leave';
 export * from './domain/payroll-run';
+export * from './domain/eosb';
 export { HR_EVENT } from './hr.service';

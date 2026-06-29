@@ -4,7 +4,10 @@ import {
   type Employee,
   type Leave,
   type PayrollRun,
+  type EosbResult,
+  type TerminationType,
   HrService,
+  calculateEosb,
 } from '@aura/hr';
 
 interface CreateEmployeeDto {
@@ -162,5 +165,24 @@ export class HrController {
   listPayrollRuns(): Promise<PayrollRun[]> {
     const ctx = this.tenant.get();
     return this.hrService.listPayrollRuns(ctx.tenantId);
+  }
+
+  // ── End-of-Service Benefit (gratuity) — stateless UAE calculator ──────────
+  @Post('eosb')
+  calcEosb(
+    @Body() dto: { basicSalary: number; joinedDate: string; lastWorkingDay: string; terminationType: TerminationType },
+  ): EosbResult {
+    if (!(Number(dto?.basicSalary) > 0)) throw new BadRequestException('basicSalary must be positive');
+    if (!dto?.joinedDate || !dto?.lastWorkingDay) throw new BadRequestException('joinedDate and lastWorkingDay are required');
+    try {
+      return calculateEosb({
+        basicSalary: Number(dto.basicSalary),
+        joinedDate: dto.joinedDate,
+        lastWorkingDay: dto.lastWorkingDay,
+        terminationType: dto.terminationType === 'resignation' ? 'resignation' : 'termination',
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

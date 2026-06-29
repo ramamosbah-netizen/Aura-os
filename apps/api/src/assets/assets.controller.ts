@@ -1,9 +1,11 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Asset,
   type AssetMaintenance,
   type AssetInspection,
+  type DepreciationSchedule,
+  type DepreciationMethod,
   AssetsService,
 } from '@aura/assets';
 
@@ -81,6 +83,29 @@ export class AssetsController {
   listAssets(): Promise<Asset[]> {
     const ctx = this.tenant.get();
     return this.assetsService.listAssets(ctx.tenantId);
+  }
+
+  @Get(':id/depreciation')
+  async depreciation(
+    @Param('id') id: string,
+    @Query('usefulLifeMonths') usefulLifeMonths?: string,
+    @Query('salvageValue') salvageValue?: string,
+    @Query('method') method?: DepreciationMethod,
+    @Query('asOf') asOf?: string,
+  ): Promise<DepreciationSchedule> {
+    const life = Number(usefulLifeMonths);
+    if (!(life > 0)) throw new BadRequestException('usefulLifeMonths must be a positive integer');
+    const ctx = this.tenant.get();
+    try {
+      return await this.assetsService.depreciation(ctx.tenantId, id, {
+        usefulLifeMonths: life,
+        salvageValue: salvageValue !== undefined ? Number(salvageValue) : undefined,
+        method: method === 'declining_balance' ? 'declining_balance' : 'straight_line',
+        asOf,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   // ── Maintenance ────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import { type PayrollRun, makePayrollRun } from './domain/payroll-run';
 import { type TimesheetEntry, makeTimesheetEntry, submitTimesheet, approveTimesheet, rejectTimesheet } from './domain/timesheet';
 import { type ExpenseClaim, makeExpenseClaim, submitClaim, approveClaim, rejectClaim, reimburseClaim } from './domain/expense-claim';
 import { type StaffAdvance, makeStaffAdvance, approveAdvance, rejectAdvance, disburseAdvance, recordRepayment } from './domain/staff-advance';
+import { type DocumentExpiryReport, buildDocumentExpiryReport } from './domain/document-expiry';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
@@ -500,5 +501,13 @@ export class HrService {
 
   listStaffAdvances(tenantId: string): Promise<StaffAdvance[]> {
     return this.staffAdvanceStore.findByTenant(tenantId);
+  }
+
+  // ── Staff Document Expiry (compliance watch-list) ─────────────────────────
+
+  /** Visa / work-permit documents expired or expiring within `withinDays`, soonest first. */
+  async documentExpiry(tenantId: string, withinDays = 90, asOf?: string): Promise<DocumentExpiryReport> {
+    const employees = await this.employeeStore.findByTenant(tenantId);
+    return buildDocumentExpiryReport(employees, asOf ?? new Date().toISOString().slice(0, 10), withinDays);
   }
 }

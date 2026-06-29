@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Employee,
@@ -7,6 +7,7 @@ import {
   type TimesheetEntry,
   type ExpenseClaim,
   type StaffAdvance,
+  type DocumentExpiryReport,
   type EosbResult,
   type TerminationType,
   HrService,
@@ -92,6 +93,12 @@ export class HrController {
   listEmployees(): Promise<Employee[]> {
     const ctx = this.tenant.get();
     return this.hrService.listEmployees(ctx.tenantId);
+  }
+
+  @Get('document-expiry')
+  documentExpiry(@Query('withinDays') withinDays?: string, @Query('asOf') asOf?: string): Promise<DocumentExpiryReport> {
+    const days = withinDays ? Number(withinDays) : 90;
+    return this.hrService.documentExpiry(this.tenant.get().tenantId, Number.isFinite(days) ? days : 90, asOf);
   }
 
   // ── Leaves ─────────────────────────────────────────────────────────────────

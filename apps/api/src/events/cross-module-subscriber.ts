@@ -5,6 +5,7 @@ import { ProjectService, WbsService, CbsService } from '@aura/projects';
 import { PurchaseOrderService } from '@aura/procurement';
 import { TenderService } from '@aura/tendering';
 import { AccountService } from '@aura/crm';
+import { CustomerInvoiceService } from '@aura/finance';
 import type { DomainEvent } from '@aura/shared';
 
 /**
@@ -20,6 +21,7 @@ import type { DomainEvent } from '@aura/shared';
  *   │ (stage = 'won')              │     │ (auto-draft tender)     │     │ (auto-draft contract)    │     │ (auto-create project)│
  *   └──────────────────────────────┘     └─────────────────────────┘     └──────────────────────────┘     └──────────────────────┘
  *
+ *   contracts.ipc.certified ──► (auto-draft client AR invoice for the net certified)
  *   procurement.po.created  ──► (log committed cost against project)
  *   inventory.grn.created   ──► (auto-transition PO to 'received' & suggest AP invoice)
  *   finance.invoice.paid    ──► (log actual cost against project)
@@ -38,6 +40,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly pos: PurchaseOrderService,
     private readonly tenders: TenderService,
     private readonly accounts: AccountService,
+    private readonly customerInvoices: CustomerInvoiceService,
   ) {}
 
   onModuleInit(): void {
@@ -108,6 +111,42 @@ export class CrossModuleSubscriber implements OnModuleInit {
         );
       } catch (err) {
         this.logger.error(`Failed to auto-create project from contract.signed: ${err}`);
+      }
+    });
+
+    // ── Contracting money-flow: IPC certified → auto-draft client AR invoice ──
+    // Closes the loop the IPC vertical opened: a certified interim payment certificate is the
+    // signal to bill the client. We raise a DRAFT customer (AR) invoice for the net certified
+    // this period (+ 5% VAT), carrying the account + contract snapshots — finance reviews & issues.
+    this.bus.subscribe('contracts.ipc.certified', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const account = p.account as { id: string; name: string | null } | null;
+        const net = Number(p.netThisCertificate) || 0;
+        if (!account || net <= 0) return; // nothing billable (no client snapshot or zero/negative net)
+        const reference = (p.reference as string) ?? `IPC-${p.sequence ?? ''}`;
+        const contractId = (p.contractId as string) ?? e.aggregateId;
+        const invoice = await this.customerInvoices.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          invoiceNumber: `AR-${reference}-${contractId.slice(0, 8)}`,
+          customerName: account.name?.trim() || 'Client',
+          contractRef: contractId,
+          issueDate: new Date().toISOString().slice(0, 10),
+          lines: [
+            {
+              description: `Interim Payment Certificate ${reference} — work certified to date`,
+              quantity: 1,
+              unitPrice: net,
+              vatRate: 5,
+            },
+          ],
+        });
+        this.logger.log(
+          `⚡ ipc.certified → auto-drafted AR invoice "${invoice.invoiceNumber}" for ${invoice.customerName} (net ${net}, total ${invoice.total})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-draft AR invoice from ipc.certified: ${err}`);
       }
     });
 

@@ -26,6 +26,7 @@ import {
   PettyCashService,
   type CustomerInvoice,
   type NewCustomerInvoiceLine,
+  type ArAgingReport,
   CustomerInvoiceService,
   type BankGuarantee,
   type GuaranteeType,
@@ -474,6 +475,12 @@ export class FinanceController {
   @Get('customer-invoices')
   listCustomerInvoices(@Query('status') status?: CustomerInvoice['status'], @Query('projectId') projectId?: string): Promise<CustomerInvoice[]> {
     return this.customerInvoices.list({ tenantId: this.tenant.get().tenantId, status, projectId, limit: 100 });
+  }
+
+  // literal route before :id
+  @Get('customer-invoices/aging')
+  arAging(@Query('asOf') asOf?: string): Promise<ArAgingReport> {
+    return this.customerInvoices.aging(this.tenant.get().tenantId, asOf);
   }
 
   @Get('customer-invoices/:id')

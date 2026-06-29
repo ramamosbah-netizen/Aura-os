@@ -10,6 +10,7 @@ import {
   recordReceipt,
   cancelInvoice,
 } from './domain/customer-invoice';
+import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { CUSTOMER_INVOICE_STORE, type CustomerInvoiceFilter, type CustomerInvoiceStore } from './customer-invoice-store';
 
 /**
@@ -90,5 +91,11 @@ export class CustomerInvoiceService {
 
   list(filter?: CustomerInvoiceFilter): Promise<CustomerInvoice[]> {
     return this.store.list(filter);
+  }
+
+  /** AR aging — outstanding receivables bucketed by overdue age, as of `asOf` (default today). */
+  async aging(tenantId: string, asOf?: string): Promise<ArAgingReport> {
+    const all = await this.store.list({ tenantId, limit: 1000 });
+    return buildArAging(all, asOf ?? new Date().toISOString().slice(0, 10));
   }
 }

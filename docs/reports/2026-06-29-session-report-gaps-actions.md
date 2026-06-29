@@ -130,7 +130,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet 14 tests incl. 10 traffic-fine tests; HR **27 tests** incl. 9 expense-claim tests; finance now **54 tests** incl. 13 petty-cash + 11 customer-invoice + 12 bank-guarantee tests; apps/api test runner wired this session), Supabase migrations **51 → 61** applied & verified live.
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet 14 tests incl. 10 traffic-fine tests; HR **27 tests** incl. 9 expense-claim tests; finance now **59 tests** incl. 13 petty-cash + 11 customer-invoice + 12 bank-guarantee + 5 AR-aging tests; apps/api test runner wired this session), Supabase migrations **51 → 61** applied & verified live.
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |
@@ -159,7 +159,8 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **HR Expense Claims** | `543878d` | `0058` | `POST/GET /hr/expense-claims`, `POST /expense-claims/:id/{submit,approve,reject,reimburse}` | draft → submitted → approved → reimbursed; `expenseDate=2026-06-20` preserved (no drift); reject-after-reimburse → 400; reimburse-before-approve → 400; bad category → 400 |
 | **Finance Petty Cash** | `b21d600` | `0059` | `POST/GET /finance/petty-cash`, `GET /petty-cash/:id`, `POST /petty-cash/:id/transactions` | float 5000 → expense 1200 = 3800 → topup 2000 = 5800; over-expense → 400; bad category → 400; both txn dates preserved (no drift, `::text` cast applied upfront) |
 | **Finance Customer Invoices (AR)** | `3714f9f` | `0060` | `POST/GET /finance/customer-invoices`, `GET /:id`, `POST /:id/{issue,receipts,cancel}` | net 12000 / VAT 600 / total 12600; draft → issued → partially_paid (6000) → paid (12600); overpay → 400; empty-lines → 400; JSONB line items + issue date survive round-trip |
-| **Finance Bank Guarantees** | (this round) | `0061` | `POST/GET /finance/bank-guarantees`, `GET /expiring`, `GET /:id`, `PATCH /:id/status` | create active (AED, expiry preserved) → release; double-transition → 400; expiry-before-issue → 400; bad type → 400; 15-day instrument appears on `expiring?withinDays=30` watch-list |
+| **Finance Bank Guarantees** | `fe8607f` | `0061` | `POST/GET /finance/bank-guarantees`, `GET /expiring`, `GET /:id`, `PATCH /:id/status` | create active (AED, expiry preserved) → release; double-transition → 400; expiry-before-issue → 400; bad type → 400; 15-day instrument appears on `expiring?withinDays=30` watch-list |
+| **Finance AR Aging** | (this round) | — (read-only) | `GET /finance/customer-invoices/aging?asOf=` | builds on customer invoices; Acme due 2026-06-01 → 31–60 bucket (1000), Beta not-due → current (500), draft excluded; grandTotal 1500; current/1-30/31-60/61-90/90+ buckets by due-date (issue-date fallback) |
 
 ### D. Bugs found
 - 🐞→✅ **Subcontracts `:id`-route 500 — confirmed already fixed.** Re-analysed this round: commit `0ad55a9` (`fix(api): route-order + UUID guard for :id endpoints`) reordered the literal `claims` routes before `:id` and added `ParseUuidOr404Pipe`; the same pipe guard is now applied across 11 controllers, so a non-UUID path segment yields 404 (not a 500). No further action needed.

@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { projectId } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/projects/delays/analysis/${projectId}`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/delays/analysis/${projectId}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

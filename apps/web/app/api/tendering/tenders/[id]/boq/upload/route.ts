@@ -8,7 +8,7 @@ export async function POST(
   try {
     const formData = await request.formData();
     
-    const res = await fetch(`${apiBase()}/api/tendering/tenders/${id}/boq/upload`, {
+    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/boq/upload`, {
       method: 'POST',
       headers: {
         ...(await authHeader()),

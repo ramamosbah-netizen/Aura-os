@@ -3,7 +3,7 @@ import { apiBase, authHeader } from '@/lib/api';
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/crm/leads`, {
+    const res = await fetch(`${apiBase()}/api/v1/crm/leads`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),
@@ -18,7 +18,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/crm/leads`, {
+    const res = await fetch(`${apiBase()}/api/v1/crm/leads`, {
       method: 'GET',
       headers: { ...(await authHeader()) },
       cache: 'no-store',

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (status) query.append('status', status);
 
   try {
-    const res = await fetch(`${apiBase()}/api/subcontracts/claims?${query.toString()}`, {
+    const res = await fetch(`${apiBase()}/api/v1/subcontracts/claims?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -38,7 +38,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!subcontractId) return Response.json({ error: 'subcontractId required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/subcontracts/claims`, {
+    const res = await fetch(`${apiBase()}/api/v1/subcontracts/claims`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ subcontractId, workCompletedValue, isRetentionRelease, retentionReleased }),

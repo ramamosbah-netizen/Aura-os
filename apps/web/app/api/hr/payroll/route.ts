@@ -22,7 +22,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/hr/payroll`, {
+    const res = await fetch(`${apiBase()}/api/v1/hr/payroll`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),
@@ -37,7 +37,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/hr/payroll`, {
+    const res = await fetch(`${apiBase()}/api/v1/hr/payroll`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

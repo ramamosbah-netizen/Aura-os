@@ -13,7 +13,7 @@ export async function POST(
   if (!paymentId) return Response.json({ error: 'paymentId required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/bank-transactions/${id}/reconcile`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/bank-transactions/${id}/reconcile`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ paymentId }),

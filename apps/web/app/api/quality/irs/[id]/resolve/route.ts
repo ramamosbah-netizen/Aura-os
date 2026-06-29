@@ -15,7 +15,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/quality/irs/${id}/resolve`, {
+    const res = await fetch(`${apiBase()}/api/v1/quality/irs/${id}/resolve`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

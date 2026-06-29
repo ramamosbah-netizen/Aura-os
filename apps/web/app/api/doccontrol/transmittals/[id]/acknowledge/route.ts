@@ -6,7 +6,7 @@ export async function PUT(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/doccontrol/transmittals/${id}/acknowledge`, {
+    const res = await fetch(`${apiBase()}/api/v1/doccontrol/transmittals/${id}/acknowledge`, {
       method: 'PUT',
       headers: { ...(await authHeader()) },
       cache: 'no-store',

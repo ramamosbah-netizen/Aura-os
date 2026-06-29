@@ -12,7 +12,7 @@ import type { Pool } from 'pg';
  *
  * Blueprint Reference: Phase 8 — Week 1-2, Task K2 (Audit Trail Browser)
  */
-@Controller('v1/audit')
+@Controller('audit')
 export class AuditController {
   private readonly logger = new Logger('AuditController');
 

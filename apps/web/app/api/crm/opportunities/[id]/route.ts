@@ -7,7 +7,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/crm/opportunities/${id}`, {
+    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

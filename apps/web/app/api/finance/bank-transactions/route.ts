@@ -12,7 +12,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const query = `?bankAccountId=${bankAccountId}` + (status ? `&status=${status}` : '');
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/bank-transactions${query}`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/bank-transactions${query}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -36,7 +36,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!transactions) return Response.json({ error: 'transactions list required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/bank-transactions/import`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/bank-transactions/import`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ bankAccountId, transactions }),

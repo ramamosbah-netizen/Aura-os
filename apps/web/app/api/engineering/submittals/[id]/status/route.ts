@@ -12,7 +12,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/engineering/submittals/${id}/status`, {
+    const res = await fetch(`${apiBase()}/api/v1/engineering/submittals/${id}/status`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -6,7 +6,7 @@ export async function POST(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/crm/opportunities/${id}/forecast`, {
+    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}/forecast`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       cache: 'no-store',

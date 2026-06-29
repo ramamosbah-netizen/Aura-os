@@ -9,7 +9,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (projectId) query.append('projectId', projectId);
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/eot-claims?${query.toString()}`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/eot-claims?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -39,7 +39,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!submittedDays) return Response.json({ error: 'submittedDays required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/eot-claims`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/eot-claims`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

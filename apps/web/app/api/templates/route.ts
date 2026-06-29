@@ -9,7 +9,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (category) query.append('category', category);
 
   try {
-    const res = await fetch(`${apiBase()}/api/templates?${query.toString()}`, {
+    const res = await fetch(`${apiBase()}/api/v1/templates?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -34,7 +34,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!category) return Response.json({ error: 'category required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/templates`, {
+    const res = await fetch(`${apiBase()}/api/v1/templates`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

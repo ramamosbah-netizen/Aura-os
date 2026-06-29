@@ -7,7 +7,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const query = type ? `?type=${type}` : '';
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/accounts${query}`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/accounts${query}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -35,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!type) return Response.json({ error: 'type required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/accounts`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/accounts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

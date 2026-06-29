@@ -6,7 +6,7 @@ export async function DELETE(
 ): Promise<Response> {
   const { id } = await props.params;
   try {
-    const res = await fetch(`${apiBase()}/api/hr/employees/${id}`, {
+    const res = await fetch(`${apiBase()}/api/v1/hr/employees/${id}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

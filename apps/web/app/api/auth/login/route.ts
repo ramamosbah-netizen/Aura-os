@@ -7,7 +7,7 @@ import { SESSION_COOKIE } from '@/lib/session';
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as { username?: unknown; password?: unknown };
   try {
-    const res = await fetch(`${apiBase()}/api/auth/login`, {
+    const res = await fetch(`${apiBase()}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

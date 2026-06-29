@@ -12,7 +12,7 @@ import { TenantContext } from '@aura/core';
  *
  * Blueprint Reference: Phase 8 — Week 3-4, Task M1 (AMC Service Backend Integration)
  */
-@Controller('v1/amc')
+@Controller('amc')
 export class AmcController {
   private readonly logger = new Logger('AmcController');
 

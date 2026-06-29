@@ -7,7 +7,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/bank-transactions/${id}/unreconcile`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/bank-transactions/${id}/unreconcile`, {
       method: 'POST',
       headers: { ...(await authHeader()) },
       cache: 'no-store',

@@ -9,7 +9,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!bankAccountId) return Response.json({ error: 'bankAccountId required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/bank-transactions/auto-match`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/bank-transactions/auto-match`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ bankAccountId }),

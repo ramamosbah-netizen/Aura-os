@@ -15,7 +15,8 @@ config({ path: join(__dirname, '..', '.env.local') });
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
+  // All routes are versioned under /api/v1 (Constitution Law #6 — consistent version prefix).
+  app.setGlobalPrefix('api/v1');
   app.enableCors();
   app.enableShutdownHooks(); // so OutboxRelay.onModuleDestroy clears its timer
   app.useGlobalFilters(new AccessDeniedFilter());
@@ -30,7 +31,7 @@ async function bootstrap(): Promise<void> {
   if (enforce && !process.env.AUTH_JWT_SECRET) {
     new Logger('Bootstrap').error('AUTH_REQUIRED is set but AUTH_JWT_SECRET is missing — cannot enforce; running open.');
   }
-  const PUBLIC_PATHS = ['/api/health', '/api/auth/login', '/api/auth/status'];
+  const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status'];
   app.use(async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
     const h = req.headers['authorization'];
     const ctx = await auth.contextFromHeader(Array.isArray(h) ? h[0] : h);
@@ -63,7 +64,7 @@ async function bootstrap(): Promise<void> {
 
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port);
-  new Logger('Bootstrap').log(`AURA OS API listening on http://localhost:${port}/api`);
+  new Logger('Bootstrap').log(`AURA OS API listening on http://localhost:${port}/api/v1`);
 }
 
 void bootstrap();

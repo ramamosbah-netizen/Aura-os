@@ -8,7 +8,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'name required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/crm/accounts`, {
+    const res = await fetch(`${apiBase()}/api/v1/crm/accounts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ name }),

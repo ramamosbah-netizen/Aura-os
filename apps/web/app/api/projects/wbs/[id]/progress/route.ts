@@ -15,7 +15,7 @@ export async function PATCH(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/wbs/${id}/progress`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/wbs/${id}/progress`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

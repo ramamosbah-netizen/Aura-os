@@ -20,7 +20,7 @@ import {
  *
  * Blueprint Reference: Phase 8 — Week 1-2, Task K1 (Builder API Missing Layer)
  */
-@Controller('v1/builder')
+@Controller('builder')
 export class BuilderController {
   private readonly logger = new Logger('BuilderController');
 

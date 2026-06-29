@@ -14,7 +14,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/engineering/drawings`, {
+    const res = await fetch(`${apiBase()}/api/v1/engineering/drawings`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

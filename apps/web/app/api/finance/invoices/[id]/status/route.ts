@@ -12,7 +12,7 @@ export async function PATCH(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/invoices/${id}/status`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/invoices/${id}/status`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

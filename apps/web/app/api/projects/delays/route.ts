@@ -11,7 +11,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (causeCategory) query.append('causeCategory', causeCategory);
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/delays?${query.toString()}`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/delays?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -44,7 +44,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!startDate) return Response.json({ error: 'startDate required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/delays`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/delays`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

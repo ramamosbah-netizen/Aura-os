@@ -6,7 +6,7 @@ export async function PATCH(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/subcontracts/claims/${id}/certify`, {
+    const res = await fetch(`${apiBase()}/api/v1/subcontracts/claims/${id}/certify`, {
       method: 'PATCH',
       headers: await authHeader(),
       cache: 'no-store',

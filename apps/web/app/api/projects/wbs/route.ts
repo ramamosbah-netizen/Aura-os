@@ -11,7 +11,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (parentId) query.append('parentId', parentId);
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/wbs?${query.toString()}`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/wbs?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!title) return Response.json({ error: 'title required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/wbs`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/wbs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

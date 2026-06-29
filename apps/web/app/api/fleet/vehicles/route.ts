@@ -16,7 +16,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/fleet/vehicles`, {
+    const res = await fetch(`${apiBase()}/api/v1/fleet/vehicles`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),
@@ -31,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/fleet/vehicles`, {
+    const res = await fetch(`${apiBase()}/api/v1/fleet/vehicles`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

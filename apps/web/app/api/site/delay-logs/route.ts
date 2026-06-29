@@ -15,7 +15,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/site/delay-logs`, {
+    const res = await fetch(`${apiBase()}/api/v1/site/delay-logs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),
@@ -30,7 +30,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/site/delay-logs`, {
+    const res = await fetch(`${apiBase()}/api/v1/site/delay-logs`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

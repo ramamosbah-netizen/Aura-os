@@ -9,7 +9,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (isActive) query.append('isActive', isActive);
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/tax-codes?${query.toString()}`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/tax-codes?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -35,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
   if (isNaN(rate)) return Response.json({ error: 'rate required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/tax-codes`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/tax-codes`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

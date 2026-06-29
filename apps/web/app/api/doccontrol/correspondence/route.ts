@@ -16,7 +16,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/doccontrol/correspondence`, {
+    const res = await fetch(`${apiBase()}/api/v1/doccontrol/correspondence`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

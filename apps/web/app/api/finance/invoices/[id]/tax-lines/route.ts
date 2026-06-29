@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/finance/invoices/${id}/tax-lines`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/invoices/${id}/tax-lines`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -36,7 +36,7 @@ export async function POST(
   if (isNaN(taxableAmount)) return Response.json({ error: 'taxableAmount required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/finance/invoices/${id}/tax-lines`, {
+    const res = await fetch(`${apiBase()}/api/v1/finance/invoices/${id}/tax-lines`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

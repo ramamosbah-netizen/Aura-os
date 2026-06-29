@@ -12,7 +12,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/intelligence/chat`, {
+    const res = await fetch(`${apiBase()}/api/v1/intelligence/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

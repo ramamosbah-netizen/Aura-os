@@ -7,7 +7,7 @@ export async function PUT(
   const { id } = await params;
 
   try {
-    const res = await fetch(`${apiBase()}/api/engineering/drawings/${id}/approve`, {
+    const res = await fetch(`${apiBase()}/api/v1/engineering/drawings/${id}/approve`, {
       method: 'PUT',
       headers: await authHeader(),
       cache: 'no-store',

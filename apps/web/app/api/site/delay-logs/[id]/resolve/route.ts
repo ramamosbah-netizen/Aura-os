@@ -6,7 +6,7 @@ export async function PUT(
 ): Promise<Response> {
   const { id } = await props.params;
   try {
-    const res = await fetch(`${apiBase()}/api/site/delay-logs/${id}/resolve`, {
+    const res = await fetch(`${apiBase()}/api/v1/site/delay-logs/${id}/resolve`, {
       method: 'PUT',
       headers: await authHeader(),
       cache: 'no-store',

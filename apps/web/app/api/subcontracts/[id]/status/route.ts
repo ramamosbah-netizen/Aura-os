@@ -11,7 +11,7 @@ export async function PATCH(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/subcontracts/${id}/status`, {
+    const res = await fetch(`${apiBase()}/api/v1/subcontracts/${id}/status`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ status: body.status }),

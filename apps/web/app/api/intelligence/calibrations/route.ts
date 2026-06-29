@@ -3,7 +3,7 @@ import { apiBase, authHeader } from '@/lib/api';
 // BFF: list calibrated rates or trigger a new calibration run.
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/intelligence/calibrations`, {
+    const res = await fetch(`${apiBase()}/api/v1/intelligence/calibrations`, {
       headers: { ...(await authHeader()) },
       cache: 'no-store',
     });
@@ -16,7 +16,7 @@ export async function GET(): Promise<Response> {
 
 export async function POST(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/intelligence/calibrations/trigger`, {
+    const res = await fetch(`${apiBase()}/api/v1/intelligence/calibrations/trigger`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       cache: 'no-store',

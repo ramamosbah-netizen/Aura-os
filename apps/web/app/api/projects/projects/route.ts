@@ -14,7 +14,7 @@ export async function GET(request: Request): Promise<Response> {
   if (contractId) queryParams.set('contractId', contractId);
 
   try {
-    const res = await fetch(`${apiBase()}/api/projects/projects?${queryParams.toString()}`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/projects?${queryParams.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -39,7 +39,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'title required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/projects/projects`, {
+    const res = await fetch(`${apiBase()}/api/v1/projects/projects`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

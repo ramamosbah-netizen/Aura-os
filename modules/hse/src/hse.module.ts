@@ -6,6 +6,7 @@ import {
   INCIDENT_STORE,
   PTW_STORE,
   CAPA_STORE,
+  TOOLBOX_STORE,
   HseService,
 } from './hse.service';
 
@@ -13,12 +14,14 @@ import {
   InMemoryHseIncidentStore,
   InMemoryPermitToWorkStore,
   InMemoryCapaActionStore,
+  InMemoryToolboxTalkStore,
 } from './in-memory-hse-store';
 
 import {
   PostgresHseIncidentStore,
   PostgresPermitToWorkStore,
   PostgresCapaActionStore,
+  PostgresToolboxTalkStore,
 } from './postgres-hse-store';
 
 @Module({
@@ -41,6 +44,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresCapaActionStore(pool) : new InMemoryCapaActionStore(),
+    },
+    {
+      provide: TOOLBOX_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresToolboxTalkStore(pool) : new InMemoryToolboxTalkStore(),
     },
     HseService,
   ],

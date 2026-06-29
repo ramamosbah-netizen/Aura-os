@@ -3,7 +3,8 @@ import type { TxHandle } from '@aura/core';
 import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
-import type { HseIncidentStore, PermitToWorkStore, CapaActionStore } from './store.interface';
+import type { ToolboxTalk } from './domain/toolbox-talk';
+import type { HseIncidentStore, PermitToWorkStore, CapaActionStore, ToolboxTalkStore } from './store.interface';
 
 export class PostgresHseIncidentStore implements HseIncidentStore {
   constructor(private readonly pool: Pool) {}
@@ -234,6 +235,55 @@ export class PostgresCapaActionStore implements CapaActionStore {
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
+    };
+  }
+}
+
+const TOOLBOX_COLS =
+  'id, tenant_id, company_id, project_id, project_name, topic, conducted_by, talk_date::text AS talk_date, attendee_count, notes, created_by, created_at';
+
+export class PostgresToolboxTalkStore implements ToolboxTalkStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(talk: ToolboxTalk, tx?: TxHandle): Promise<void> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_hse_toolbox_talks (
+        id, tenant_id, company_id, project_id, project_name, topic, conducted_by, talk_date, attendee_count, notes, created_by, created_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [talk.id, talk.tenantId, talk.companyId, talk.projectId, talk.projectName, talk.topic, talk.conductedBy, talk.talkDate, talk.attendeeCount, talk.notes, talk.createdBy, talk.createdAt],
+    );
+  }
+
+  async findById(id: string, tenantId: string): Promise<ToolboxTalk | null> {
+    const res = await this.pool.query(`select ${TOOLBOX_COLS} from public.aura_hse_toolbox_talks where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rowCount === 0 ? null : this.mapTalk(res.rows[0]);
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<ToolboxTalk[]> {
+    const res = await this.pool.query(`select ${TOOLBOX_COLS} from public.aura_hse_toolbox_talks where project_id = $1 and tenant_id = $2 order by talk_date desc, created_at desc`, [projectId, tenantId]);
+    return res.rows.map(this.mapTalk);
+  }
+
+  async findAll(tenantId: string): Promise<ToolboxTalk[]> {
+    const res = await this.pool.query(`select ${TOOLBOX_COLS} from public.aura_hse_toolbox_talks where tenant_id = $1 order by talk_date desc, created_at desc`, [tenantId]);
+    return res.rows.map(this.mapTalk);
+  }
+
+  private mapTalk(row: any): ToolboxTalk {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      topic: row.topic,
+      conductedBy: row.conducted_by,
+      talkDate: String(row.talk_date),
+      attendeeCount: Number(row.attendee_count),
+      notes: row.notes || '',
+      createdBy: row.created_by,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     };
   }
 }

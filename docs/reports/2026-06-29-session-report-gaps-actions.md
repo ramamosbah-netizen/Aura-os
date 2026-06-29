@@ -84,8 +84,11 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 - Minor remaining: density toggle, a dedicated notifications center (distinct from the approvals queue).
 - **0 of 4 edge apps**: Customer Portal, Supplier Portal, Mobile Workforce PWA, BI dashboards *(track 3)*.
 
-### 3.4 Module depth (largest scope item)
-Per-module page coverage is roughly **~40%** of the blueprint. Notable missing depth: Finance VAT/bank-rec UI/treasury/IFRS-15; Projects EVM/delay-analysis/EOT UI; Procurement RFQ/bid-comparison/3-way-match UI; Inventory multi-warehouse/transfers; HR visa/labour-camp/EOSB; Fleet GPS/Salik/fines.
+### 3.4 Module depth (largest scope item) — *track started*
+- ✅ **Procurement RFQ** (`04c1387`): the missing PR→PO sourcing step — full vertical (domain/store/service + migration `0053` + API + 5 BFF routes + `/procurement/rfqs` page with side-by-side bid comparison + award). Live-verified end-to-end (create → quotes → recommended=cheapest → award).
+- ✅ Found **3-way match UI already exists** in `invoices-list.tsx` (client-side PO/GRN comparison) — gap report was pessimistic here.
+- ⚠️ **Versioning regression fixed** (`8dfeede`): the `/api/v1` change had missed ~71 `getJson<T>('/api/…')` Server-Component calls — now normalized centrally in `getJson`.
+- Remaining depth (still pessimistically ~40-50%): Finance VAT/bank-rec UI/treasury/IFRS-15; Projects EVM/delay-analysis/EOT UI; Inventory multi-warehouse/transfers; HR visa/labour-camp/EOSB; Fleet GPS/Salik/fines. *(Several may already exist in the rich client components — verify before building.)*
 
 ### 3.5 Operational / platform
 - **Not pushed** — all commits are local on `main`.

@@ -1,8 +1,9 @@
 # AURA OS — Session Report, Gaps & Required Actions
 
 > **Date:** 2026-06-29
-> **Branch:** `main` (feature branch `feat/v8-enterprise-expansion` merged via `eff429b`)
-> **Verified state:** `pnpm typecheck` 42/42 · `pnpm test` 41/41 · Supabase DB 56/56 migrations
+> **Branch:** `claude/epic-meitner-83558a` (PR [#3](https://github.com/ramamosbah-netizen/Aura-os/pull/3) → `main`, **mergeable: CLEAN** after resolving the merge conflicts in §6/§merge-note)
+> **Verified state:** `pnpm typecheck` **42/42** · `pnpm test` **41/41** tasks · Supabase DB **64 migration files / indices 0001–0063** (0059 duplicated — see §7.5) applied & verified live
+> **Latest:** 13 genuinely-missing module-depth verticals added this session (see §3.4 + the build-session appendix); evidence-based gap analysis in **§7**.
 > **Note:** This is the single consolidated report. Prior per-phase reports were removed from `docs/reports/`; they remain in git history if needed.
 
 ---
@@ -49,11 +50,12 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 | Dimension | State |
 |---|---|
 | Build / typecheck | ✅ 42/42 tasks |
-| Tests | ✅ 40/40 packages |
-| Database (Supabase) | ✅ 52/52 migrations applied (verified live) |
-| Business modules | 17 |
-| Architecture (5-layer) | Intact; module template held across all modules |
-| Git | All work on local `main`; **not pushed** |
+| Tests | ✅ 41/41 tasks (unit only — see §7.4) |
+| Database (Supabase) | ✅ migrations through index `0063` applied & verified live (0059 duplicated — §7.5) |
+| Business modules | 18 |
+| Architecture (5-layer) | Intact; module template held across all modules + 13 new verticals this session |
+| Git | Branch `claude/epic-meitner-83558a` pushed; PR #3 → `main` **CLEAN/mergeable** |
+| Known critical defect | 🔴 cross-tenant read leak on 7 spine list endpoints — **§7.1** |
 
 ---
 
@@ -106,8 +108,9 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 ## 4. Needs action (prioritized)
 
 ### P0 — finalize this session's work
-1. **Push `main` to remote** (`git push origin main`) — currently local only.
-2. **Rotate the live secrets** before anything goes public (service-role key, DB password, `AUTH_JWT_SECRET`).
+1. ~~Push to remote~~ — **DONE**; branch pushed, PR #3 open & mergeable.
+2. **🔴 Fix the cross-tenant read leak (§7.1)** — thread `tenantId` into the 7 spine list endpoints; make `tenantId` required in the `*Filter` types. Highest-severity defect, no running stack needed.
+3. **Rotate the live secrets** before anything goes public (service-role key, DB password, `AUTH_JWT_SECRET`).
 
 ### P1 — verifiable now (no running stack needed)
 3. **Audit Law #3** — trace each dashboard/analytics endpoint; confirm it reads a projection, not a transactional table. Fix any that don't.
@@ -124,7 +127,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 ---
 
 ## 5. One-paragraph summary
-The system is **architecturally sound and most correctness laws are now satisfied**: atomic writes are uniform, the command pipeline is real and idempotent across the core spine, payments are retry-safe, the CDM is complete, and the database is fully migrated and verified live. The remaining runtime-dependent item is essentially **(a)** the RLS-vs-service-role enforcement model (the larger one — also needs tenant context on every read) — API versioning is done and runtime-verified, and neural embeddings are now config-ready (a key away), (b) **breadth** — pipeline rollout to non-spine modules plus ~60% of blueprint pages and the 4 edge apps, and (c) **operational hygiene** — push and secret rotation. The single most important caveat to remember: **RLS is not currently DB-enforcing tenant isolation for the app itself** (service-role bypass); isolation is app-level today.
+The system is **architecturally sound and most correctness laws are satisfied**: atomic writes are uniform, the command pipeline is real and idempotent across the core spine, payments are retry-safe, the CDM is complete, the DB is migrated and verified live, and this session added **13 genuinely-missing module-depth verticals** (Procurement supplier master + RFQ; Inventory stock + transfers; HR EOSB, timesheets, expense claims, staff advances; Fleet traffic fines; Finance VAT returns, petty cash, customer invoices, bank guarantees, AR/AP aging; Assets depreciation) — all live-verified, all merged cleanly with `main` in PR #3. **The one finding that must be fixed before launch is a 🔴 cross-tenant read leak (§7.1):** 7 older spine list endpoints omit `tenantId`, and on the service-role connection (RLS bypassed) that returns all tenants' rows — a small, stack-free fix. After that, the priority ladder (§7) is: stand up an e2e harness, then design true DB-enforced RLS, then breadth (non-spine command-bus rollout, edge apps, Intelligence L3/L4). Operational hygiene (secret rotation, observability) remains open.
 
 ---
 

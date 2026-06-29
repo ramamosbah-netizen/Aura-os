@@ -53,6 +53,8 @@ import { BuilderController } from './builder/builder.controller';
 import { AuditController } from './audit/audit.controller';
 import { AmcModule } from '@aura/amc';
 import { AmcController } from './amc/amc.controller';
+import { SearchController } from './search/search.controller';
+import { SearchService } from './search/search.service';
 
 /**
  * The API host. Phase 0 wires only the kernel (CoreModule) + a health check and
@@ -60,7 +62,7 @@ import { AmcController } from './amc/amc.controller';
  */
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, TenderingController, ContractsController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController],
-  providers: [SampleEventSubscriber, CrossModuleSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, TenderingController, ContractsController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController],
+  providers: [SampleEventSubscriber, CrossModuleSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, SearchService],
 })
 export class AppModule {}

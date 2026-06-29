@@ -73,7 +73,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 > **Most important architectural caveat:** "✅ RLS" should be read as *"isolation policies present for client/PostgREST access,"* **not** *"DB-enforced multi-tenancy for the app."* The app's own queries are not subject to RLS (service-role bypass). Closing this = a least-privilege app role + `FORCE ROW LEVEL SECURITY`, verifiable only against a live DB.
 
 ### 3.2 Intelligence (L3) / Optimization (L4)
-- **Embeddings are lexical, not neural** — no synonym/paraphrase retrieval until a real provider (Voyage / OpenAI `text-embedding`) is wired (needs an external API key).
+- **Embeddings: neural now config-ready** (commit `bee1450`). `AiService.embed()` uses a real OpenAI-compatible embeddings API when `EMBEDDINGS_API_KEY` is set (OpenAI or Voyage via `EMBEDDINGS_BASE_URL`), with the lexical embedding as offline fallback. Remaining: it's a config flip + key away — *not yet exercised against a live embeddings API* (no key here; the request/parse/fallback path is unit-tested with a mocked `fetch`).
 - Missing: 7-criteria bid scoring, client profitability / LTV, document intelligence / OCR, BIM viewer, knowledge graph, multi-agent DAG orchestration, universal `*` event observer, role-specific agent logic (CEO/CFO/PM exist as UI, not agents).
 
 ### 3.3 Experience (L5)
@@ -102,8 +102,8 @@ Per-module page coverage is roughly **~40%** of the blueprint. Notable missing d
 
 ### P2 — needs a running stack / external service to do safely
 5. ~~Law #6 API versioning~~ — **DONE 2026-06-29** (all routes at `/api/v1`, runtime-verified).
-6. **RLS enforcement model** — decide service-role bypass vs least-privilege app role + `FORCE ROW LEVEL SECURITY`; verify tenant isolation against the live DB.
-7. **Neural embeddings** — wire a real embeddings provider behind the existing `embed()` seam (keep lexical as offline fallback).
+6. **RLS enforcement model** — decide service-role bypass vs least-privilege app role + `FORCE ROW LEVEL SECURITY`; verify tenant isolation against the live DB. *(The larger of the two — also requires threading tenant context through every read query, not just tx writes.)*
+7. ~~Neural embeddings — wire a real provider behind the `embed()` seam~~ — **DONE 2026-06-29** (`bee1450`): config-ready via `EMBEDDINGS_API_KEY`, lexical fallback. Only the live-API call remains unexercised (needs a key).
 
 ### P3 — product breadth (largest effort)
 8. Module-depth pages (~60% remaining), the 4 edge apps, L4 optimization engines, observability + event-streaming graduation (Phase 12).
@@ -111,4 +111,4 @@ Per-module page coverage is roughly **~40%** of the blueprint. Notable missing d
 ---
 
 ## 5. One-paragraph summary
-The system is **architecturally sound and most correctness laws are now satisfied**: atomic writes are uniform, the command pipeline is real and idempotent across the core spine, payments are retry-safe, the CDM is complete, and the database is fully migrated and verified live. The remaining gaps are (a) a couple of **runtime-blocked** items needing a full stack (RLS-vs-service-role enforcement, neural embeddings) — API versioning is now done and runtime-verified, (b) **breadth** — pipeline rollout to non-spine modules plus ~60% of blueprint pages and the 4 edge apps, and (c) **operational hygiene** — push and secret rotation. The single most important caveat to remember: **RLS is not currently DB-enforcing tenant isolation for the app itself** (service-role bypass); isolation is app-level today.
+The system is **architecturally sound and most correctness laws are now satisfied**: atomic writes are uniform, the command pipeline is real and idempotent across the core spine, payments are retry-safe, the CDM is complete, and the database is fully migrated and verified live. The remaining runtime-dependent item is essentially **(a)** the RLS-vs-service-role enforcement model (the larger one — also needs tenant context on every read) — API versioning is done and runtime-verified, and neural embeddings are now config-ready (a key away), (b) **breadth** — pipeline rollout to non-spine modules plus ~60% of blueprint pages and the 4 edge apps, and (c) **operational hygiene** — push and secret rotation. The single most important caveat to remember: **RLS is not currently DB-enforcing tenant isolation for the app itself** (service-role bypass); isolation is app-level today.

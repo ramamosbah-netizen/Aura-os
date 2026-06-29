@@ -7,6 +7,21 @@ import type { TimesheetEntry } from './domain/timesheet';
 import type { ExpenseClaim } from './domain/expense-claim';
 import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore } from './store.interface';
 
+/**
+ * Format a `date` column as YYYY-MM-DD using LOCAL parts. node-pg parses `date` to a Date at
+ * local midnight; `toISOString()` would shift it a day in a UTC+ timezone (the date-drift bug).
+ */
+function dateOnly(v: Date | string | null): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, '0');
+    const d = String(v.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(v).slice(0, 10);
+}
+
 export class PostgresEmployeeStore implements EmployeeStore {
   constructor(private readonly pool: Pool) {}
 
@@ -88,9 +103,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
       role: row.role,
       department: row.department,
       status: row.status,
-      joinedDate: row.joined_date instanceof Date ? row.joined_date.toISOString().split('T')[0] : String(row.joined_date),
-      visaExpiry: row.visa_expiry instanceof Date ? row.visa_expiry.toISOString().split('T')[0] : row.visa_expiry ? String(row.visa_expiry) : null,
-      permitExpiry: row.permit_expiry instanceof Date ? row.permit_expiry.toISOString().split('T')[0] : row.permit_expiry ? String(row.permit_expiry) : null,
+      joinedDate: dateOnly(row.joined_date) ?? '',
+      visaExpiry: dateOnly(row.visa_expiry),
+      permitExpiry: dateOnly(row.permit_expiry),
       laborCamp: row.labor_camp,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
@@ -168,8 +183,8 @@ export class PostgresLeaveStore implements LeaveStore {
       companyId: row.company_id,
       employeeId: row.employee_id,
       leaveType: row.leave_type,
-      startDate: row.start_date instanceof Date ? row.start_date.toISOString().split('T')[0] : String(row.start_date),
-      endDate: row.end_date instanceof Date ? row.end_date.toISOString().split('T')[0] : String(row.end_date),
+      startDate: dateOnly(row.start_date) ?? '',
+      endDate: dateOnly(row.end_date) ?? '',
       status: row.status,
       reason: row.reason,
       createdAt: row.created_at.toISOString(),
@@ -255,8 +270,8 @@ export class PostgresPayrollRunStore implements PayrollRunStore {
       allowances: Number(row.allowances),
       deductions: Number(row.deductions),
       netSalary: Number(row.net_salary),
-      periodStart: row.period_start instanceof Date ? row.period_start.toISOString().split('T')[0] : String(row.period_start),
-      periodEnd: row.period_end instanceof Date ? row.period_end.toISOString().split('T')[0] : String(row.period_end),
+      periodStart: dateOnly(row.period_start) ?? '',
+      periodEnd: dateOnly(row.period_end) ?? '',
       status: row.status,
       processedAt: row.processed_at ? row.processed_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
@@ -312,7 +327,7 @@ export class PostgresTimesheetStore implements TimesheetStore {
       employeeId: row.employee_id,
       projectId: row.project_id,
       wbsNodeId: row.wbs_node_id,
-      date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
+      date: dateOnly(row.date) ?? '',
       hours: Number(row.hours),
       overtime: Number(row.overtime),
       description: row.description || '',

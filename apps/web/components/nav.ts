@@ -48,6 +48,7 @@ export const NAV: NavGroup[] = [
       { label: 'Fleet & Logistics', href: '/fleet/control', glyph: '🚚', desc: 'Vehicles, equipment fleet, fuel logs, & maintenance' },
       { label: 'Traffic Fines', href: '/fleet/fines', glyph: '🚦', desc: 'UAE fines — black points, driver liability, settlement' },
       { label: 'Assets & Equipment', href: '/assets/control', glyph: '🔧', desc: 'Asset register, calibration, inspections, & warranties' },
+      { label: 'Depreciation', href: '/assets/depreciation', glyph: '◷', desc: 'Asset straight-line depreciation schedule' },
       { label: 'AMC & Services', href: '/amc', glyph: '⚙', desc: 'Service contracts, support tickets, & SLA timers' },
       { label: 'Invoices', href: '/finance/invoices', glyph: '◰', desc: 'Finance — supplier invoices' },
       { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },

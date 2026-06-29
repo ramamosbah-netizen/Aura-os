@@ -1,9 +1,10 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
   type Asset,
   type AssetMaintenance,
   type AssetInspection,
+  type DepreciationSchedule,
   AssetsService,
 } from '@aura/assets';
 
@@ -81,6 +82,25 @@ export class AssetsController {
   listAssets(): Promise<Asset[]> {
     const ctx = this.tenant.get();
     return this.assetsService.listAssets(ctx.tenantId);
+  }
+
+  @Get(':id/depreciation')
+  async depreciation(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Query('usefulLife') usefulLife?: string,
+    @Query('salvage') salvage?: string,
+  ): Promise<{ asset: Pick<Asset, 'id' | 'name' | 'purchaseCost' | 'purchaseDate'>; schedule: DepreciationSchedule }> {
+    const life = Number(usefulLife);
+    if (!(life >= 1)) throw new BadRequestException('usefulLife (years, >= 1) is required');
+    const ctx = this.tenant.get();
+    let result;
+    try {
+      result = await this.assetsService.getDepreciationSchedule(ctx.tenantId, id, life, Number(salvage ?? 0));
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+    if (!result) throw new NotFoundException(`asset ${id} not found`);
+    return result;
   }
 
   // ── Maintenance ────────────────────────────────────────────────────────────

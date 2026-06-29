@@ -1,4 +1,5 @@
 export * from './domain/asset';
+export * from './domain/depreciation';
 export * from './domain/asset-maintenance';
 export * from './domain/asset-inspection';
 export * from './store.interface';

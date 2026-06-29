@@ -3,6 +3,7 @@ import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Asset, makeAsset } from './domain/asset';
+import { type DepreciationSchedule, calculateDepreciation } from './domain/depreciation';
 import { type AssetMaintenance, makeAssetMaintenance } from './domain/asset-maintenance';
 import { type AssetInspection, makeAssetInspection } from './domain/asset-inspection';
 import { type AssetStore, type AssetMaintenanceStore, type AssetInspectionStore } from './store.interface';
@@ -95,6 +96,24 @@ export class AssetsService {
 
   getAsset(tenantId: string, id: string): Promise<Asset | null> {
     return this.assetStore.findById(tenantId, id);
+  }
+
+  /** Straight-line depreciation schedule for an asset (uses its purchase cost/date). */
+  async getDepreciationSchedule(
+    tenantId: string,
+    id: string,
+    usefulLifeYears: number,
+    salvageValue: number,
+  ): Promise<{ asset: Pick<Asset, 'id' | 'name' | 'purchaseCost' | 'purchaseDate'>; schedule: DepreciationSchedule } | null> {
+    const asset = await this.assetStore.findById(tenantId, id);
+    if (!asset) return null;
+    const schedule = calculateDepreciation({
+      purchaseCost: asset.purchaseCost,
+      purchaseDate: asset.purchaseDate,
+      usefulLifeYears,
+      salvageValue,
+    });
+    return { asset: { id: asset.id, name: asset.name, purchaseCost: asset.purchaseCost, purchaseDate: asset.purchaseDate }, schedule };
   }
 
   listAssets(tenantId: string): Promise<Asset[]> {

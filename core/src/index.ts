@@ -14,6 +14,7 @@ export * from './identity/auth.service';
 export * from './ai/ai.service';
 export * from './ai/claude-provider';
 export * from './ai/local-provider';
+export * from './ai/embedder';
 export * from './dms/dms.service';
 export * from './dms/document-store';
 export * from './dms/document-storage';

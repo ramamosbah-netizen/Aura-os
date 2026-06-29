@@ -5,9 +5,11 @@ import {
   type AiProvider,
   DEFAULT_AI_MODEL,
   selectAiProviderName,
+  lexicalEmbedding,
 } from '@aura/shared';
 import { ClaudeProvider } from './claude-provider';
 import { LocalProvider } from './local-provider';
+import { type Embedder, selectEmbedder } from './embedder';
 
 /**
  * The kernel AI seam. Every layer injects this and calls `complete()`; none talks to
@@ -23,6 +25,7 @@ export class AiService implements AiProvider {
   readonly name = 'ai';
   private readonly logger = new Logger('AiService');
   private readonly provider: AiProvider;
+  private readonly embedder: Embedder;
 
   constructor() {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -34,18 +37,39 @@ export class AiService implements AiProvider {
       this.provider = new LocalProvider();
       this.logger.warn('No ANTHROPIC_API_KEY — AI provider in LOCAL fallback mode (no model calls).');
     }
+
+    this.embedder = selectEmbedder(process.env);
+    this.logger.log(
+      this.embedder.name === 'remote'
+        ? 'Embeddings: remote neural provider (EMBEDDINGS_API_KEY set).'
+        : 'Embeddings: local lexical (set EMBEDDINGS_API_KEY for neural embeddings).',
+    );
   }
 
   complete(req: AiCompletionRequest): Promise<AiCompletionResult> {
     return this.provider.complete(req);
   }
 
-  embed(text: string): Promise<number[]> {
-    return this.provider.embed(text);
+  /** Embed via the configured provider; fall back to the lexical embedding on remote failure. */
+  async embed(text: string): Promise<number[]> {
+    try {
+      return await this.embedder.embed(text);
+    } catch (err) {
+      if (this.embedder.name === 'lexical') throw err;
+      this.logger.warn(
+        `Embeddings provider '${this.embedder.name}' failed (${(err as Error).message}); falling back to lexical.`,
+      );
+      return lexicalEmbedding(text);
+    }
   }
 
-  /** Which concrete provider is active: `claude` | `local`. */
+  /** Which concrete chat provider is active: `claude` | `local`. */
   get activeProvider(): string {
     return this.provider.name;
+  }
+
+  /** Which embeddings provider is active: `remote` | `lexical`. */
+  get embeddingsProvider(): string {
+    return this.embedder.name;
   }
 }

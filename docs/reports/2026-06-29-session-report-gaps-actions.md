@@ -88,6 +88,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 - ✅ **Procurement RFQ** (`04c1387`): the missing PR→PO sourcing step — full vertical (domain/store/service + migration `0053` + API + 5 BFF routes + `/procurement/rfqs` page with side-by-side bid comparison + award). Live-verified end-to-end (create → quotes → recommended=cheapest → award).
 - ✅ **Inventory Stock** (`f872236`): inventory was GRN-only — added the on-hand side (stock items + receipt/issue movements + live on-hand, can't go negative). Full vertical (domain/store/service + migration `0054` + API + 3 BFF routes + `/inventory/stock` page). Live-verified (100 → issue 30 → 70 → receive 50 → 120; over-issue rejected).
 - ✅ **HR EOSB/gratuity** (`2f813fb`): UAE end-of-service calculator — pure unit-tested calc (21/30-day bands, resignation reductions, 24-month cap, <1yr ineligible) + stateless `/hr/eosb` endpoint + `/hr/eosb` calculator page. Live-verified (2yr term 30k → 41,970; resign → 13,990; <1yr → 0).
+- ✅ **Finance VAT return** (`8fb8bef`): the tax engine existed but had no *period* return — added period output/input/net filing on the pre-existing `aura_finance_tax_returns` table (0048; `net_tax_payable` generated). preview → generate draft → file. Live-verified (generate→file→list; bad period → 400).
 - 🐞 **Pre-existing bug found** (flagged for separate fix): `GET /subcontracts/subcontracts` and `/subcontracts/claims` hit a `:id` route → uuid cast error → 500. Not from this session's work; subcontracts route ordering / non-uuid id guard needed (likely a class of bug across modules' `:id` GETs).
 - ✅ Found **3-way match UI already exists** in `invoices-list.tsx` (client-side PO/GRN comparison) — gap report was pessimistic here.
 - ⚠️ **Versioning regression fixed** (`8dfeede`): the `/api/v1` change had missed ~71 `getJson<T>('/api/…')` Server-Component calls — now normalized centrally in `getJson`.
@@ -122,3 +123,42 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 
 ## 5. One-paragraph summary
 The system is **architecturally sound and most correctness laws are now satisfied**: atomic writes are uniform, the command pipeline is real and idempotent across the core spine, payments are retry-safe, the CDM is complete, and the database is fully migrated and verified live. The remaining runtime-dependent item is essentially **(a)** the RLS-vs-service-role enforcement model (the larger one — also needs tenant context on every read) — API versioning is done and runtime-verified, and neural embeddings are now config-ready (a key away), (b) **breadth** — pipeline rollout to non-spine modules plus ~60% of blueprint pages and the 4 edge apps, and (c) **operational hygiene** — push and secret rotation. The single most important caveat to remember: **RLS is not currently DB-enforcing tenant isolation for the app itself** (service-role bypass); isolation is app-level today.
+
+---
+
+## Appendix — 2026-06-29 build session (detailed log)
+
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~48+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** (apps/api test runner wired this session), Supabase migrations **51 → 55** applied & verified live.
+
+### A. Conformance pass (Constitution + V8)
+| Item | Commit(s) | Outcome |
+|---|---|---|
+| `/api/v1` versioning (Law #6) | `b7d5df4`, `8dfeede` | All routes under `/api/v1`; 149 BFF + 71 `getJson` calls re-prefixed; **runtime-verified** (curl + web E2E) |
+| Neural embeddings seam | `bee1450` | Real OpenAI-compatible embedder behind `EMBEDDINGS_API_KEY`, lexical fallback; unit-tested |
+| Part IV CDM | `f1279fe` | Location/Account/CostCenter/Project added |
+| Law #7 RLS re-audit + bank-tx policy | `e764386` | Verified live (78/83 tables); the 5 uncovered are correct deny-all kernel tables |
+| DB migrated to current | (runner) | 52 → 55 applied; live `pg_policies` verified |
+
+### B. L5 experience (essentially complete)
+- **Global search** (`3ab8d24`) — ⌘K record search across the spine via host-side aggregator + `/api/v1/search`. *Also wired the missing `apps/api` vitest runner.*
+- **Dark/light theme switcher** (`484d6e6`) — `[data-theme]` CSS-var palette, persisted.
+- Confirmed already-present: **Work Center** = universal inbox; **company switcher** in shell.
+
+### C. Module-depth verticals (each: domain → store → service → API → BFF → page → nav → tests; live-verified)
+| Vertical | Commit | Migration | Key endpoints | E2E check |
+|---|---|---|---|---|
+| **Procurement RFQ** | `04c1387` | `0053` | `POST/GET /procurement/rfqs`, `/quotes`, `/award` | create→2 quotes→recommend cheapest→award (winner awarded, rest rejected) |
+| **Inventory Stock** | `f872236` | `0054` | `/inventory/stock` (+`/movements`) | 100 → issue 30 → 70 → receive 50 → 120; over-issue rejected |
+| **HR EOSB/gratuity** | `2f813fb` | — (stateless) | `POST /hr/eosb` | 2yr term 30k → 41,970; resign → 13,990; <1yr → 0; bad → 400 |
+| **Finance VAT return** | `8fb8bef` | — (table from `0048`) | `/finance/vat-returns` (preview/generate/status) | generate draft → file → list; bad period → 400 |
+
+### D. Bugs found
+- 🐞 **Pre-existing (flagged as a separate task):** `GET /subcontracts/subcontracts` and `/subcontracts/claims` parse the path segment as a UUID → 500. Likely a class of `:id`-route shadowing across modules.
+- Self-caught during build: a generated-column INSERT (VAT returns) and an un-`await`ed controller try/catch (400 vs 500) — both fixed before commit.
+
+### E. Method note
+The original gap list **over-counted** missing features — universal inbox, company switcher, and 3-way-match UI all already existed. Adopted **verify-before-build** (grep for zero references) — RFQ, Stock, EOSB, VAT-return were each confirmed genuinely absent first.
+
+### F. Operational
+- Dev stack (`pnpm dev`, web :3000 + api :4000) was disrupted twice (editing module source mid-watch; an over-broad `taskkill`) — **restored both times** (currently both 200). Switched to single-PID `taskkill` via `netstat`.
+- **Still pending:** rotate live Supabase secrets; RLS enforcement model (deferred to end per user); pipeline rollout to non-spine modules; remaining module-depth pages + the 4 edge apps.

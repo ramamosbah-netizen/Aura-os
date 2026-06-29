@@ -185,3 +185,65 @@ The original gap list **over-counted** missing features — universal inbox, com
 ### F. Operational
 - Dev stack (`pnpm dev`, web :3000 + api :4000) was disrupted twice (editing module source mid-watch; an over-broad `taskkill`) — **restored both times** (currently both 200). Switched to single-PID `taskkill` via `netstat`.
 - **Still pending:** rotate live Supabase secrets; RLS enforcement model (deferred to end per user); pipeline rollout to non-spine modules; remaining module-depth pages + the 4 edge apps.
+
+---
+
+## 7. Gap Analysis — 2026-06-29 (post-merge, evidence-based)
+
+A fresh top-to-bottom pass after merging `origin/main` (PR #3). Each item below is backed by a concrete grep/inspection, with severity and the exact fix. Ordered by severity.
+
+### 7.1 🔴 CRITICAL — cross-tenant read leak on list endpoints
+**Finding:** Several core list endpoints call the store **without `tenantId`**, and the Postgres stores only add the `tenant_id` WHERE clause *when the filter is present*. With the app on the Supabase **service role (RLS bypassed)**, these queries return **every tenant's rows**.
+
+**Evidence:**
+- Controllers omitting tenant: `crm-accounts` (`list({ status, limit })`), `contracts`, `tendering`, `projects`, `procurement` POs, `inventory` GRNs, `finance` invoices — all call `.list({ … })` with no `tenantId`.
+- Store confirms conditional filter, e.g. `postgres-invoice-store.ts`: `add('tenant_id', filter.tenantId)` → clause skipped when undefined → `WHERE` omits tenant.
+- Contrast: the verticals added this session (suppliers, customer-invoices, petty-cash, staff-advances, bank-guarantees, stock, transfers, fines, aging) **do** pass `tenantId` — so the leak is confined to the older spine controllers.
+
+**Fix (P0, no running stack needed):** thread `this.tenant.get().tenantId` into every `*.list()` controller call (7 controllers). Optionally make `tenantId` **required** in each `*Filter` type so the compiler enforces it. Add a unit test per store asserting an empty/with-tenant filter scopes rows.
+
+### 7.2 🔴 HIGH — RLS not DB-enforcing tenant isolation for the app (pre-existing)
+**Finding:** Policies exist and are verified live, but the app connects via the service role, which **bypasses RLS**. Isolation today is purely app-level (`TenantContext` + query filters) — which §7.1 shows is itself incomplete.
+**Evidence:** no `FORCE ROW LEVEL SECURITY` and no least-privilege app role anywhere in `infrastructure/migrations` (grep: 0 hits). 
+**Fix (P2, needs live DB):** introduce a least-privilege app DB role, `FORCE ROW LEVEL SECURITY` on `aura_*` business tables, set tenant GUC per request (`SET LOCAL app.tenant_id`), and rewrite policies to read it. Must land **after** §7.1 (app-level filters are the stopgap). Verify cross-tenant denial against the live DB.
+
+### 7.3 🟠 MEDIUM — command pipeline only on 8 of 18 module services
+**Finding:** `CommandBus` is dispatched by **8** services (crm, tendering, contracts, projects, procurement-PO, inventory-GRN, finance-invoice, finance-payment). The other ~10 modules (engineering, doccontrol, site, hse, quality, hr, fleet, assets, amc, subcontracts + the newer verticals) use the equivalent inline `access + TX_RUNNER` path — atomic, but not through the bus (so no uniform idempotency/validation interception).
+**Evidence:** `grep -rl CommandBus modules/*/src/*.service.ts` → 8 files.
+**Fix (P1):** roll the proven command-handler template across the remaining modules; or formally accept the inline path as equivalent and document it. `Idempotency-Key` is honored-not-required at the HTTP boundary.
+
+### 7.4 🟠 MEDIUM — no integration / e2e test layer
+**Finding:** Tests are **unit-only** (domain state machines + store logic). There are **no** `*.e2e.ts` / `*.spec.ts` and no supertest/Playwright harness; every cross-layer check this session was manual `curl` against a throwaway `:4100`.
+**Evidence:** `find … -name '*.e2e*.ts'` and `'*.spec.ts'` → 0 results.
+**Fix (P1):** add a NestJS supertest harness hitting the in-memory-store boot (no DB) for the spine flows (create→approve→pay, RFQ→award, invoice→receipt), and a thin Playwright smoke for 3–4 key pages. This is what would have caught §7.1 automatically.
+
+### 7.5 🟡 LOW — migration `0059` number collision
+**Finding:** `0059_projects_variations.sql` (from `main`) and `0059_finance_petty_cash.sql` (this branch) share the index. Both already applied live; the filename-ordered runner tolerates it, but the sequence is no longer strictly monotonic.
+**Fix (P2):** renumber the later-authored file (petty cash → `0064`) and confirm the runner's applied-ledger treats it as already-run (it created the same objects with `IF NOT EXISTS`, so re-applying is a no-op). Low risk, do before more migrations pile on.
+
+### 7.6 🟡 LOW — read-model segregation (Law #3) unaudited
+**Finding:** Projections exist, but the AR/AP aging and other analytics reads added this session aggregate over **transactional** tables (`aura_finance_customer_invoices`, `aura_finance_invoices`) directly, not a read model. Acceptable at current scale; unaudited as a law.
+**Fix (P1):** trace each dashboard/analytics endpoint; document which hit a projection vs a live table; promote the heavy ones to projections if volume warrants.
+
+### 7.7 🟡 LOW — operational hygiene
+- **Secrets unrotated** — `.env.local` Supabase service-role key + DB password still live (deferred by user). **P0 before any public exposure.**
+- **No observability** — no OpenTelemetry/Prometheus; event stream still Postgres `SKIP LOCKED` (Phase 12 untouched).
+- **0 of 4 edge apps** — `apps/` contains only `api` + `web`; Customer Portal, Supplier Portal, Mobile Workforce PWA, BI dashboards not started. *(The supplier master added this session is the natural backend for a Supplier Portal.)*
+
+### 7.8 ⚪ PRODUCT BREADTH — Intelligence (L3/L4) still thin
+7-criteria bid scoring, client profitability/LTV, document OCR, BIM viewer, knowledge graph, multi-agent DAG orchestration, and role-specific agents (CEO/CFO/PM are UI, not agents) remain unbuilt. Neural embeddings are config-ready (`EMBEDDINGS_API_KEY`) but unexercised against a live provider.
+
+### Priority summary
+| # | Gap | Severity | Effort | Needs live stack? |
+|---|---|---|---|---|
+| 7.1 | tenantId missing on 7 list endpoints (cross-tenant leak) | 🔴 Critical | S | No |
+| 7.7 | Rotate live secrets | 🔴 Critical | S | Keys only |
+| 7.2 | RLS service-role bypass (DB-enforced isolation) | 🔴 High | L | Yes |
+| 7.3 | CommandBus on 8/18 modules | 🟠 Medium | M | No |
+| 7.4 | No integration/e2e tests | 🟠 Medium | M | No |
+| 7.6 | Law #3 read-model audit | 🟡 Low | M | No |
+| 7.5 | 0059 migration collision | 🟡 Low | S | No |
+| 7.7 | Observability + edge apps | 🟡 Low | L | — |
+| 7.8 | Intelligence L3/L4 breadth | ⚪ Product | XL | Provider key |
+
+**Recommended next action:** fix §7.1 first — it's small, needs no running stack, and is the highest-severity correctness/security defect. Then §7.4 (e2e harness) so regressions like §7.1 are caught automatically. §7.2 (true RLS) is the big architectural one and should be scheduled deliberately with the live DB.

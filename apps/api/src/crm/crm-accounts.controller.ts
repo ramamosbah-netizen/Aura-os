@@ -38,7 +38,7 @@ export class CrmAccountsController {
 
   @Get()
   list(@Query('status') status?: string): Promise<Account[]> {
-    return this.accounts.list({ status, limit: 100 });
+    return this.accounts.list({ tenantId: this.tenant.get().tenantId, status, limit: 100 });
   }
 
   @Get(':id')

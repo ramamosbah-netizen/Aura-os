@@ -49,7 +49,7 @@ export class InventoryController {
     @Query('poId') poId?: string,
     @Query('projectId') projectId?: string,
   ): Promise<GoodsReceipt[]> {
-    return this.grns.list({ status, poId, projectId, limit: 100 });
+    return this.grns.list({ tenantId: this.tenant.get().tenantId, status, poId, projectId, limit: 100 });
   }
 
   @Get(':id')

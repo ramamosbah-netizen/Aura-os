@@ -63,7 +63,7 @@ export class ContractsController {
     @Query('accountId') accountId?: string,
     @Query('tenderId') tenderId?: string,
   ): Promise<Contract[]> {
-    return this.contracts.list({ status, accountId, tenderId, limit: 100 });
+    return this.contracts.list({ tenantId: this.tenant.get().tenantId, status, accountId, tenderId, limit: 100 });
   }
 
   @Get(':id')

@@ -55,7 +55,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 | Business modules | 18 |
 | Architecture (5-layer) | Intact; module template held across all modules + 13 new verticals this session |
 | Git | Branch `claude/epic-meitner-83558a` pushed; PR #3 → `main` **CLEAN/mergeable** |
-| Known critical defect | 🔴 cross-tenant read leak on 7 spine list endpoints — **§7.1** |
+| Known critical defect | ✅ cross-tenant read leak on 7 spine list endpoints — **FIXED & live-verified (§7.1)** |
 
 ---
 
@@ -109,7 +109,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 
 ### P0 — finalize this session's work
 1. ~~Push to remote~~ — **DONE**; branch pushed, PR #3 open & mergeable.
-2. **🔴 Fix the cross-tenant read leak (§7.1)** — thread `tenantId` into the 7 spine list endpoints; make `tenantId` required in the `*Filter` types. Highest-severity defect, no running stack needed.
+2. ~~Fix the cross-tenant read leak (§7.1)~~ — **DONE 2026-06-29**: `tenantId` threaded into all 7 spine list endpoints; live-verified two-tenant (foreign row excluded). **Next-highest now: e2e harness (§7.4)** so this class of regression is caught automatically.
 3. **Rotate the live secrets** before anything goes public (service-role key, DB password, `AUTH_JWT_SECRET`).
 
 ### P1 — verifiable now (no running stack needed)
@@ -195,7 +195,11 @@ The original gap list **over-counted** missing features — universal inbox, com
 
 A fresh top-to-bottom pass after merging `origin/main` (PR #3). Each item below is backed by a concrete grep/inspection, with severity and the exact fix. Ordered by severity.
 
-### 7.1 🔴 CRITICAL — cross-tenant read leak on list endpoints
+### 7.1 ✅ RESOLVED — cross-tenant read leak on list endpoints *(fixed 2026-06-29)*
+**Fix shipped:** threaded `this.tenant.get().tenantId` into all 7 leaking spine list endpoints — `crm-accounts`, `contracts`, `tendering`, `projects` (listProjects), `procurement` (POs), `inventory` (GRNs), `finance` (invoices). Typecheck 42/42. **Live-verified two-tenant:** inserted a `tenant_id='OTHER-TENANT-XYZ'` invoice directly in Supabase → the `dev-tenant` `GET /finance/invoices` returned **0 foreign rows** (pre-fix it would have leaked); test row then deleted. *Kernel endpoints `documents` (deny-all RLS table) and `events` (global stream) are out of this business-spine scope — assess separately. Deliberately kept `tenantId` optional in `*Filter` types (internal cross-key lookups like `goodsReceipts.list({ poId })`, `wbs.list({ parentId })` legitimately omit it); the guarantee is enforced at the HTTP entrypoints.* Original finding retained below for context.
+
+---
+**(original finding)** 🔴 CRITICAL — cross-tenant read leak on list endpoints
 **Finding:** Several core list endpoints call the store **without `tenantId`**, and the Postgres stores only add the `tenant_id` WHERE clause *when the filter is present*. With the app on the Supabase **service role (RLS bypassed)**, these queries return **every tenant's rows**.
 
 **Evidence:**
@@ -239,7 +243,7 @@ A fresh top-to-bottom pass after merging `origin/main` (PR #3). Each item below 
 ### Priority summary
 | # | Gap | Severity | Effort | Needs live stack? |
 |---|---|---|---|---|
-| 7.1 | tenantId missing on 7 list endpoints (cross-tenant leak) | 🔴 Critical | S | No |
+| 7.1 | ✅ tenantId missing on 7 list endpoints (cross-tenant leak) — **FIXED & live-verified** | 🔴 Critical | S | No |
 | 7.7 | Rotate live secrets | 🔴 Critical | S | Keys only |
 | 7.2 | RLS service-role bypass (DB-enforced isolation) | 🔴 High | L | Yes |
 | 7.3 | CommandBus on 8/18 modules | 🟠 Medium | M | No |

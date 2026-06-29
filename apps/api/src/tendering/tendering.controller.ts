@@ -57,7 +57,7 @@ export class TenderingController {
 
   @Get()
   list(@Query('status') status?: string, @Query('accountId') accountId?: string): Promise<Tender[]> {
-    return this.tenders.list({ status, accountId, limit: 100 });
+    return this.tenders.list({ tenantId: this.tenant.get().tenantId, status, accountId, limit: 100 });
   }
 
   @Get(':id')

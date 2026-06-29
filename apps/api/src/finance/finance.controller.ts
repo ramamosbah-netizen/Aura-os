@@ -128,7 +128,7 @@ export class FinanceController {
     @Query('poId') poId?: string,
     @Query('projectId') projectId?: string,
   ): Promise<Invoice[]> {
-    return this.invoices.list({ status, poId, projectId, limit: 100 });
+    return this.invoices.list({ tenantId: this.tenant.get().tenantId, status, poId, projectId, limit: 100 });
   }
 
   // literal route before :id

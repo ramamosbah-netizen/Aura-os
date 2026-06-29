@@ -83,7 +83,7 @@ export class ProcurementController {
 
   @Get('purchase-orders')
   listPos(@Query('status') status?: string, @Query('projectId') projectId?: string): Promise<PurchaseOrder[]> {
-    return this.pos.list({ status, projectId, limit: 100 });
+    return this.pos.list({ tenantId: this.tenant.get().tenantId, status, projectId, limit: 100 });
   }
 
   @Get('purchase-orders/:id')

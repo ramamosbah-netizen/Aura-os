@@ -5,6 +5,7 @@ import {
   type Leave,
   type PayrollRun,
   type TimesheetEntry,
+  type ExpenseClaim,
   type EosbResult,
   type TerminationType,
   HrService,
@@ -228,6 +229,64 @@ export class HrController {
   async rejectTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
     try {
       return await this.hrService.rejectTimesheetEntry(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Expense Claims ───────────────────────────────────────────────────────
+
+  @Post('expense-claims')
+  async createExpenseClaim(@Body() dto: { employeeId: string; projectId?: string; category: ExpenseClaim['category']; amount: number; expenseDate: string; description?: string }): Promise<ExpenseClaim> {
+    if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
+    if (!dto?.expenseDate) throw new BadRequestException('expenseDate is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.hrService.createExpenseClaim({ tenantId: ctx.tenantId, ...dto, amount: Number(dto.amount) });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('expense-claims')
+  listExpenseClaims(): Promise<ExpenseClaim[]> {
+    return this.hrService.listExpenseClaims(this.tenant.get().tenantId);
+  }
+
+  @Post('expense-claims/:id/submit')
+  async submitExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
+    try {
+      return await this.hrService.submitExpenseClaim(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('expense-claims/:id/approve')
+  async approveExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
+    const ctx = this.tenant.get();
+    // approved_by is a uuid column; fall back to the nil-uuid system actor when unauthenticated (dev)
+    const approverId = ctx.actorId ?? '00000000-0000-0000-0000-000000000000';
+    try {
+      return await this.hrService.approveExpenseClaim(ctx.tenantId, id, approverId);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('expense-claims/:id/reject')
+  async rejectExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
+    try {
+      return await this.hrService.rejectExpenseClaim(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('expense-claims/:id/reimburse')
+  async reimburseExpenseClaim(@Param('id') id: string, @Body() dto: { reimbursedDate?: string }): Promise<ExpenseClaim> {
+    try {
+      return await this.hrService.reimburseExpenseClaim(this.tenant.get().tenantId, id, dto?.reimbursedDate);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

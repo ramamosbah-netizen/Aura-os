@@ -4,6 +4,7 @@ import {
   type Vehicle,
   type FuelLog,
   type MaintenanceRecord,
+  type TrafficFine,
   FleetService,
 } from '@aura/fleet';
 
@@ -143,5 +144,64 @@ export class FleetController {
   listMaintenance(): Promise<MaintenanceRecord[]> {
     const ctx = this.tenant.get();
     return this.fleetService.listMaintenance(ctx.tenantId);
+  }
+
+  // ── Traffic Fines ─────────────────────────────────────────────────────────
+
+  @Post('fines')
+  async recordFine(@Body() dto: { vehicleId: string; fineNumber: string; violation: string; location?: string; amount: number; blackPoints?: number; fineDate: string }): Promise<TrafficFine> {
+    if (!dto?.vehicleId) throw new BadRequestException('vehicleId is required');
+    if (!dto?.fineNumber?.trim()) throw new BadRequestException('fineNumber is required');
+    if (!dto?.violation?.trim()) throw new BadRequestException('violation is required');
+    if (!dto?.fineDate?.trim()) throw new BadRequestException('fineDate is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.fleetService.recordFine(ctx.actorId, {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        vehicleId: dto.vehicleId,
+        fineNumber: dto.fineNumber,
+        violation: dto.violation,
+        location: dto.location,
+        amount: Number(dto.amount),
+        blackPoints: dto.blackPoints !== undefined ? Number(dto.blackPoints) : undefined,
+        fineDate: dto.fineDate,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('fines')
+  listFines(): Promise<TrafficFine[]> {
+    return this.fleetService.listFines(this.tenant.get().tenantId);
+  }
+
+  @Put('fines/:id/assign')
+  async assignFine(@Param('id') id: string, @Body() dto: { driverEmployeeId: string }): Promise<TrafficFine> {
+    if (!dto?.driverEmployeeId) throw new BadRequestException('driverEmployeeId is required');
+    try {
+      return await this.fleetService.assignFineToDriver(this.tenant.get().tenantId, id, dto.driverEmployeeId);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('fines/:id/dispute')
+  async disputeFine(@Param('id') id: string): Promise<TrafficFine> {
+    try {
+      return await this.fleetService.disputeFine(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('fines/:id/pay')
+  async payFine(@Param('id') id: string, @Body() dto: { paidDate?: string }): Promise<TrafficFine> {
+    try {
+      return await this.fleetService.payFine(this.tenant.get().tenantId, id, dto?.paidDate);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

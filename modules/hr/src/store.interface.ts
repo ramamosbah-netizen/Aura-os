@@ -3,6 +3,7 @@ import { Employee } from './domain/employee';
 import { Leave } from './domain/leave';
 import { PayrollRun } from './domain/payroll-run';
 import { TimesheetEntry } from './domain/timesheet';
+import { ExpenseClaim } from './domain/expense-claim';
 
 export interface EmployeeStore {
   save(employee: Employee, tx?: TxHandle): Promise<Employee>;
@@ -33,4 +34,11 @@ export interface TimesheetStore {
   findByTenant(tenantId: string): Promise<TimesheetEntry[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]>;
   findByDateRange(tenantId: string, employeeId: string, from: string, to: string): Promise<TimesheetEntry[]>;
+}
+
+export interface ExpenseClaimStore {
+  save(claim: ExpenseClaim, tx?: TxHandle): Promise<ExpenseClaim>;
+  findById(tenantId: string, id: string): Promise<ExpenseClaim | null>;
+  findByTenant(tenantId: string): Promise<ExpenseClaim[]>;
+  findByEmployee(tenantId: string, employeeId: string): Promise<ExpenseClaim[]>;
 }

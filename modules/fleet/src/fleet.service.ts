@@ -5,17 +5,22 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner }
 import { type Vehicle, makeVehicle } from './domain/vehicle';
 import { type FuelLog, makeFuelLog } from './domain/fuel-log';
 import { type MaintenanceRecord, makeMaintenanceRecord } from './domain/maintenance';
-import { type VehicleStore, type FuelLogStore, type MaintenanceStore } from './store.interface';
+import { type TrafficFine, makeTrafficFine, assignFine, disputeFine, payFine } from './domain/traffic-fine';
+import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore } from './store.interface';
 
 export const VEHICLE_STORE = Symbol('VEHICLE_STORE');
 export const FUEL_LOG_STORE = Symbol('FUEL_LOG_STORE');
 export const MAINTENANCE_STORE = Symbol('MAINTENANCE_STORE');
+export const TRAFFIC_FINE_STORE = Symbol('TRAFFIC_FINE_STORE');
 
 export const FLEET_EVENT = {
   vehicleCreated: 'fleet.vehicle.created',
   fuelLogged: 'fleet.fuel.logged',
   maintenanceScheduled: 'fleet.maintenance.scheduled',
   maintenanceCompleted: 'fleet.maintenance.completed',
+  fineRecorded: 'fleet.fine.recorded',
+  fineAssigned: 'fleet.fine.assigned',
+  finePaid: 'fleet.fine.paid',
 };
 
 @Injectable()
@@ -26,6 +31,7 @@ export class FleetService {
     @Inject(VEHICLE_STORE) private readonly vehicleStore: VehicleStore,
     @Inject(FUEL_LOG_STORE) private readonly fuelLogStore: FuelLogStore,
     @Inject(MAINTENANCE_STORE) private readonly maintenanceStore: MaintenanceStore,
+    @Inject(TRAFFIC_FINE_STORE) private readonly trafficFineStore: TrafficFineStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -222,5 +228,93 @@ export class FleetService {
 
   listMaintenance(tenantId: string): Promise<MaintenanceRecord[]> {
     return this.maintenanceStore.findByTenant(tenantId);
+  }
+
+  // ── Traffic Fines ─────────────────────────────────────────────────────────
+
+  async recordFine(
+    actorId: string | null,
+    input: {
+      tenantId: string;
+      companyId?: string | null;
+      vehicleId: string;
+      fineNumber: string;
+      violation: string;
+      location?: string;
+      amount: number;
+      blackPoints?: number;
+      fineDate: string;
+    },
+  ): Promise<TrafficFine> {
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(actorId, { permission: 'fleet.fine.create', orgPath });
+    }
+
+    const fine = makeTrafficFine(input);
+    const event = makeEvent({
+      type: FLEET_EVENT.fineRecorded,
+      tenantId: fine.tenantId,
+      companyId: fine.companyId,
+      actorId,
+      aggregateType: 'fleet.traffic_fine',
+      aggregateId: fine.id,
+      payload: { vehicleId: fine.vehicleId, fineNumber: fine.fineNumber, amount: fine.amount, blackPoints: fine.blackPoints },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.trafficFineStore.save(fine, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Traffic fine ${fine.fineNumber} recorded for vehicle ${fine.vehicleId}: ${fine.amount} AED, ${fine.blackPoints} pts`);
+    return fine;
+  }
+
+  async assignFineToDriver(tenantId: string, id: string, driverEmployeeId: string): Promise<TrafficFine> {
+    const fine = await this.trafficFineStore.findById(tenantId, id);
+    if (!fine) throw new Error(`traffic fine ${id} not found`);
+    const updated = assignFine(fine, driverEmployeeId);
+    const event = makeEvent({
+      type: FLEET_EVENT.fineAssigned,
+      tenantId, companyId: fine.companyId, actorId: null,
+      aggregateType: 'fleet.traffic_fine', aggregateId: id,
+      payload: { driverEmployeeId, amount: fine.amount },
+    });
+    await this.tx.run(async (handle) => {
+      await this.trafficFineStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  async disputeFine(tenantId: string, id: string): Promise<TrafficFine> {
+    const fine = await this.trafficFineStore.findById(tenantId, id);
+    if (!fine) throw new Error(`traffic fine ${id} not found`);
+    const updated = disputeFine(fine);
+    await this.trafficFineStore.save(updated);
+    return updated;
+  }
+
+  async payFine(tenantId: string, id: string, paidDate?: string): Promise<TrafficFine> {
+    const fine = await this.trafficFineStore.findById(tenantId, id);
+    if (!fine) throw new Error(`traffic fine ${id} not found`);
+    const updated = payFine(fine, paidDate);
+    const event = makeEvent({
+      type: FLEET_EVENT.finePaid,
+      tenantId, companyId: fine.companyId, actorId: null,
+      aggregateType: 'fleet.traffic_fine', aggregateId: id,
+      payload: { amount: fine.amount, paidDate: updated.paidDate },
+    });
+    await this.tx.run(async (handle) => {
+      await this.trafficFineStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  listFines(tenantId: string): Promise<TrafficFine[]> {
+    return this.trafficFineStore.findByTenant(tenantId);
   }
 }

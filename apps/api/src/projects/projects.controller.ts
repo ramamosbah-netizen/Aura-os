@@ -16,6 +16,10 @@ import {
   type EotClaim,
   type DelayAnalysisSummary,
   DelayEotService,
+  type VariationOrder,
+  type VariationType,
+  type VariationStatus,
+  VariationService,
 } from '@aura/projects';
 
 interface CreateProjectDto {
@@ -77,6 +81,7 @@ export class ProjectsController {
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
     private readonly delayEot: DelayEotService,
+    private readonly variations: VariationService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -293,6 +298,55 @@ export class ProjectsController {
   @Post('eot-claims/:id/submit')
   submitEotClaim(@Param('id') id: string): Promise<EotClaim> {
     return this.delayEot.submitEotClaim(id);
+  }
+
+  // ── VARIATION ORDERS (change orders) ─────────────────────────────────────
+
+  @Post('variations')
+  createVariation(@Body() dto: { projectId: string; projectTitle?: string; title: string; description?: string; type: VariationType; amount: number; reference?: string }): Promise<VariationOrder> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    if (dto?.type !== 'addition' && dto?.type !== 'omission') throw new BadRequestException("type must be 'addition' or 'omission'");
+    if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
+    const ctx = this.tenant.get();
+    try {
+      return this.variations.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        projectId: dto.projectId,
+        projectTitle: dto.projectTitle ?? null,
+        title: dto.title,
+        description: dto.description ?? null,
+        type: dto.type,
+        amount: dto.amount,
+        reference: dto.reference ?? null,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('variations')
+  listVariations(@Query('projectId') projectId?: string, @Query('status') status?: string): Promise<VariationOrder[]> {
+    const ctx = this.tenant.get();
+    return this.variations.list({ tenantId: ctx.tenantId, projectId, status, limit: 200 });
+  }
+
+  @Get('variations/summary/:projectId')
+  variationSummary(@Param('projectId') projectId: string) {
+    const ctx = this.tenant.get();
+    return this.variations.getProjectSummary(ctx.tenantId, projectId);
+  }
+
+  @Patch('variations/:id/status')
+  async changeVariationStatus(@Param('id') id: string, @Body() dto: { status: VariationStatus }): Promise<VariationOrder> {
+    const valid: VariationStatus[] = ['draft', 'submitted', 'approved', 'rejected'];
+    if (!dto?.status || !valid.includes(dto.status)) throw new BadRequestException('valid status is required');
+    const found = await this.variations.get(id);
+    if (!found) throw new NotFoundException(`variation ${id} not found`);
+    const ctx = this.tenant.get();
+    return this.variations.changeStatus(id, dto.status, ctx.actorId ?? undefined);
   }
 
   @Post('eot-claims/:id/decide')

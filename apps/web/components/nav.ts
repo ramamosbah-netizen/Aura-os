@@ -26,6 +26,7 @@ export const NAV: NavGroup[] = [
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
       { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Delivery & execution' },
+      { label: 'Variations', href: '/projects/variations', glyph: '◷', desc: 'Change orders & revised contract value' },
     ],
   },
   {

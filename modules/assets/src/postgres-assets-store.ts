@@ -5,6 +5,21 @@ import type { AssetMaintenance } from './domain/asset-maintenance';
 import type { AssetInspection } from './domain/asset-inspection';
 import type { AssetStore, AssetMaintenanceStore, AssetInspectionStore } from './store.interface';
 
+/**
+ * Format a `date` column as YYYY-MM-DD using LOCAL parts. node-pg parses `date` to a Date at
+ * local midnight; `toISOString()` would shift it a day in a UTC+ timezone (the date-drift bug).
+ */
+function dateOnly(v: Date | string | null): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, '0');
+    const d = String(v.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(v).slice(0, 10);
+}
+
 export class PostgresAssetStore implements AssetStore {
   constructor(private readonly pool: Pool) {}
 
@@ -77,12 +92,12 @@ export class PostgresAssetStore implements AssetStore {
       name: row.name,
       serialNumber: row.serial_number,
       category: row.category,
-      purchaseDate: row.purchase_date instanceof Date ? row.purchase_date.toISOString().split('T')[0] : String(row.purchase_date),
+      purchaseDate: dateOnly(row.purchase_date) ?? '',
       purchaseCost: Number(row.purchase_cost),
       status: row.status,
-      warrantyExpiry: row.warranty_expiry instanceof Date ? row.warranty_expiry.toISOString().split('T')[0] : row.warranty_expiry ? String(row.warranty_expiry) : null,
-      nextCalibrationDate: row.next_calibration_date instanceof Date ? row.next_calibration_date.toISOString().split('T')[0] : row.next_calibration_date ? String(row.next_calibration_date) : null,
-      nextInspectionDate: row.next_inspection_date instanceof Date ? row.next_inspection_date.toISOString().split('T')[0] : row.next_inspection_date ? String(row.next_inspection_date) : null,
+      warrantyExpiry: dateOnly(row.warranty_expiry),
+      nextCalibrationDate: dateOnly(row.next_calibration_date),
+      nextInspectionDate: dateOnly(row.next_inspection_date),
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

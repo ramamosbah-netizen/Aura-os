@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { type Id, makeEvent, newId } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore } from '@aura/core';
 import { FINANCE_EVENT } from './domain/invoice';
 import { type Payment, type NewPayment, makePayment } from './domain/payment';
 import { PAYMENT_STORE, type PaymentFilter, type PaymentStore } from './payment-store';
@@ -8,26 +8,54 @@ import { InvoiceService } from './invoice.service';
 import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
 
+const RECORD_PAYMENT = 'finance.payment.record';
+
+/**
+ * Finance payment service. Recording a payment is a multi-step write (payment row → mark
+ * invoice paid → post the double-entry journal → emit), so it runs through the kernel
+ * `CommandBus` — crucially for **idempotency**: a retried request carrying the same
+ * `Idempotency-Key` returns the cached payment instead of creating a SECOND payment and a
+ * SECOND ledger journal (the classic double-payment-on-retry bug).
+ */
 @Injectable()
-export class PaymentService {
+export class PaymentService implements OnModuleInit {
   private readonly logger = new Logger('FinancePayment');
 
   constructor(
     @Inject(PAYMENT_STORE) private readonly store: PaymentStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
-    private readonly access: AccessService,
+    private readonly commands: CommandBus,
     private readonly invoices: InvoiceService,
     private readonly journals: JournalService,
     private readonly accounts: AccountService,
   ) {}
 
-  async record(input: NewPayment, actorId?: Id): Promise<Payment> {
-    if (actorId) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      const target: AccessTarget = { permission: 'finance.payment.create', orgPath };
-      this.access.assert(actorId, target);
-    }
+  onModuleInit(): void {
+    this.commands.register<NewPayment, Payment>({
+      name: RECORD_PAYMENT,
+      permission: 'finance.payment.create',
+      validate: (input) => {
+        if (!input.invoiceId) throw new Error('invoiceId is required');
+        if (!(input.amount > 0)) throw new Error('payment amount must be positive');
+      },
+      handler: (command) => this.doRecord(command.payload, command.actorId ?? undefined),
+    });
+  }
 
+  /** Record a payment. Pass an idempotencyKey to make the (non-trivial) write safely retryable. */
+  record(input: NewPayment, actorId?: Id, idempotencyKey?: string | null): Promise<Payment> {
+    return this.commands.execute<Payment>({
+      id: newId(),
+      name: RECORD_PAYMENT,
+      tenantId: input.tenantId,
+      companyId: null,
+      actorId: actorId ?? null,
+      payload: input,
+      idempotencyKey: idempotencyKey ?? null,
+    });
+  }
+
+  private async doRecord(input: NewPayment, actorId?: Id): Promise<Payment> {
     // 1. Verify invoice exists
     const invoice = await this.invoices.get(input.invoiceId);
     if (!invoice) throw new Error(`Invoice ${input.invoiceId} not found`);

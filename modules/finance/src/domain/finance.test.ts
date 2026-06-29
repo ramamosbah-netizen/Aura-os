@@ -147,11 +147,12 @@ describe('Finance depth features', () => {
       const paymentService = new PaymentService(
         paymentStore,
         mockEvents,
-        mockAccess,
+        fakeBus(),
         invoiceService,
         journalService,
         accountService,
       );
+      paymentService.onModuleInit();
 
       // Create test invoice
       const invoice = await invoiceService.create({

@@ -208,7 +208,10 @@ export class FinanceController {
   // ── PAYMENTS ─────────────────────────────────────────────────────────────
 
   @Post('payments')
-  recordPayment(@Body() dto: CreatePaymentDto): Promise<Payment> {
+  recordPayment(
+    @Body() dto: CreatePaymentDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ): Promise<Payment> {
     if (!dto?.invoiceId) throw new BadRequestException('invoiceId is required');
     if (!dto?.bankAccountId) throw new BadRequestException('bankAccountId is required');
     if (!dto?.amount || dto.amount <= 0) throw new BadRequestException('amount must be positive');
@@ -223,6 +226,7 @@ export class FinanceController {
         createdBy: ctx.actorId,
       },
       ctx.actorId ?? undefined,
+      idempotencyKey,
     );
   }
 

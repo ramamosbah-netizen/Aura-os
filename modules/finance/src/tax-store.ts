@@ -1,8 +1,9 @@
 import type { Id } from '@aura/shared';
-import type { TaxCode, TaxLine } from './domain/tax';
+import type { TaxCode, TaxLine, TaxReturn } from './domain/tax';
 
 export const TAX_CODE_STORE = Symbol('TAX_CODE_STORE');
 export const TAX_LINE_STORE = Symbol('TAX_LINE_STORE');
+export const TAX_RETURN_STORE = Symbol('TAX_RETURN_STORE');
 
 export interface TaxCodeFilter {
   tenantId?: Id;
@@ -28,4 +29,11 @@ export interface TaxLineStore {
   create(line: TaxLine): Promise<void>;
   list(filter?: TaxLineFilter): Promise<TaxLine[]>;
   deleteByInvoice(invoiceId: Id): Promise<void>;
+}
+
+export interface TaxReturnStore {
+  create(ret: TaxReturn): Promise<void>;
+  update(ret: TaxReturn): Promise<void>;
+  get(id: Id): Promise<TaxReturn | null>;
+  list(tenantId: Id): Promise<TaxReturn[]>;
 }

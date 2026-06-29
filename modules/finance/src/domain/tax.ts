@@ -142,3 +142,40 @@ export function calculateTaxSummary(lines: TaxLine[], codes: TaxCode[]): TaxSumm
     byTaxCode: byCode,
   };
 }
+
+/** A VAT return restricted to a filing period — tax lines whose date falls in [start, end]. */
+export function calculateTaxReturn(lines: TaxLine[], codes: TaxCode[], periodStart: string, periodEnd: string): TaxSummary {
+  const inPeriod = lines.filter((l) => {
+    const d = (l.createdAt ?? '').slice(0, 10);
+    return d >= periodStart && d <= periodEnd;
+  });
+  return calculateTaxSummary(inPeriod, codes);
+}
+
+export interface NewTaxReturn {
+  tenantId: Id;
+  periodStart: string;
+  periodEnd: string;
+  totalOutputTax: number;
+  totalInputTax: number;
+}
+
+export function makeTaxReturn(input: NewTaxReturn): TaxReturn {
+  if (!input.periodStart || !input.periodEnd) throw new Error('periodStart and periodEnd are required');
+  if (input.periodEnd < input.periodStart) throw new Error('periodEnd must be on or after periodStart');
+  const output = Number(input.totalOutputTax) || 0;
+  const inputTax = Number(input.totalInputTax) || 0;
+  return {
+    id: newId(),
+    tenantId: input.tenantId,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    totalOutputTax: Number(output.toFixed(2)),
+    totalInputTax: Number(inputTax.toFixed(2)),
+    netTaxPayable: Number((output - inputTax).toFixed(2)),
+    status: 'draft',
+    filedAt: null,
+    filedBy: null,
+    createdAt: new Date().toISOString(),
+  };
+}

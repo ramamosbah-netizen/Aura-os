@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { Id } from '@aura/shared';
-import type { TaxCode, TaxLine, TaxType } from './domain/tax';
-import type { TaxCodeFilter, TaxCodeStore, TaxLineFilter, TaxLineStore } from './tax-store';
+import type { TaxCode, TaxLine, TaxType, TaxReturn, TaxReturnStatus } from './domain/tax';
+import type { TaxCodeFilter, TaxCodeStore, TaxLineFilter, TaxLineStore, TaxReturnStore } from './tax-store';
 
 // ── Tax Code PG Store ──────────────────────────────────────────────────────
 
@@ -117,5 +117,74 @@ export class PostgresTaxLineStore implements TaxLineStore {
 
   async deleteByInvoice(invoiceId: Id): Promise<void> {
     await this.pool.query('DELETE FROM public.aura_finance_tax_lines WHERE invoice_id = $1', [invoiceId]);
+  }
+}
+
+// ── Tax Return PG Store ────────────────────────────────────────────────────
+interface TaxReturnRow {
+  id: string;
+  tenant_id: string;
+  period_start: string;
+  period_end: string;
+  total_output_tax: string | number;
+  total_input_tax: string | number;
+  net_tax_payable: string | number;
+  status: string;
+  filed_at: Date | string | null;
+  filed_by: string | null;
+  created_at: Date | string;
+}
+
+const isoOrNull = (v: Date | string | null): string | null => (v == null ? null : v instanceof Date ? v.toISOString() : String(v));
+// period_start/end are `date` columns — pg returns a Date; format as YYYY-MM-DD.
+const dateStr = (v: Date | string): string => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+
+function rowToTaxReturn(r: TaxReturnRow): TaxReturn {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    periodStart: dateStr(r.period_start),
+    periodEnd: dateStr(r.period_end),
+    totalOutputTax: Number(r.total_output_tax),
+    totalInputTax: Number(r.total_input_tax),
+    netTaxPayable: Number(r.net_tax_payable),
+    status: r.status as TaxReturnStatus,
+    filedAt: isoOrNull(r.filed_at),
+    filedBy: r.filed_by,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+  };
+}
+
+export class PostgresTaxReturnStore implements TaxReturnStore {
+  constructor(private readonly pool: Pool) {}
+
+  async create(t: TaxReturn): Promise<void> {
+    // net_tax_payable is a GENERATED column (0048) — do not insert it.
+    await this.pool.query(
+      `INSERT INTO public.aura_finance_tax_returns
+         (id, tenant_id, period_start, period_end, total_output_tax, total_input_tax, status, filed_at, filed_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [t.id, t.tenantId, t.periodStart, t.periodEnd, t.totalOutputTax, t.totalInputTax, t.status, t.filedAt, t.filedBy, t.createdAt],
+    );
+  }
+
+  async update(t: TaxReturn): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_finance_tax_returns SET status=$2, filed_at=$3, filed_by=$4 WHERE id=$1`,
+      [t.id, t.status, t.filedAt, t.filedBy],
+    );
+  }
+
+  async get(id: Id): Promise<TaxReturn | null> {
+    const r = await this.pool.query<TaxReturnRow>('SELECT * FROM public.aura_finance_tax_returns WHERE id = $1', [id]);
+    return r.rows.length ? rowToTaxReturn(r.rows[0]) : null;
+  }
+
+  async list(tenantId: Id): Promise<TaxReturn[]> {
+    const r = await this.pool.query<TaxReturnRow>(
+      'SELECT * FROM public.aura_finance_tax_returns WHERE tenant_id = $1 ORDER BY period_start DESC',
+      [tenantId],
+    );
+    return r.rows.map(rowToTaxReturn);
   }
 }

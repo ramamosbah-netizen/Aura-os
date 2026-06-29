@@ -1,6 +1,6 @@
 import type { Id } from '@aura/shared';
-import type { TaxCode, TaxLine } from './domain/tax';
-import type { TaxCodeFilter, TaxCodeStore, TaxLineFilter, TaxLineStore } from './tax-store';
+import type { TaxCode, TaxLine, TaxReturn } from './domain/tax';
+import type { TaxCodeFilter, TaxCodeStore, TaxLineFilter, TaxLineStore, TaxReturnStore } from './tax-store';
 
 export class InMemoryTaxCodeStore implements TaxCodeStore {
   private readonly rows = new Map<string, TaxCode>();
@@ -42,5 +42,19 @@ export class InMemoryTaxLineStore implements TaxLineStore {
     for (const [k, v] of this.rows) {
       if (v.invoiceId === invoiceId) this.rows.delete(k);
     }
+  }
+}
+
+export class InMemoryTaxReturnStore implements TaxReturnStore {
+  private readonly rows = new Map<string, TaxReturn>();
+
+  async create(ret: TaxReturn): Promise<void> { this.rows.set(ret.id, { ...ret }); }
+  async update(ret: TaxReturn): Promise<void> { this.rows.set(ret.id, { ...ret }); }
+  async get(id: Id): Promise<TaxReturn | null> { return this.rows.get(id) ?? null; }
+
+  async list(tenantId: Id): Promise<TaxReturn[]> {
+    return Array.from(this.rows.values())
+      .filter((r) => r.tenantId === tenantId)
+      .sort((a, b) => (a.periodStart < b.periodStart ? 1 : -1));
   }
 }

@@ -26,9 +26,9 @@ import { InMemoryBankTransactionStore } from './in-memory-bank-transaction-store
 import { PostgresBankTransactionStore } from './postgres-bank-transaction-store';
 import { BankReconciliationService } from './bank-reconciliation.service';
 
-import { TAX_CODE_STORE, TAX_LINE_STORE } from './tax-store';
-import { InMemoryTaxCodeStore, InMemoryTaxLineStore } from './in-memory-tax-store';
-import { PostgresTaxCodeStore, PostgresTaxLineStore } from './postgres-tax-store';
+import { TAX_CODE_STORE, TAX_LINE_STORE, TAX_RETURN_STORE } from './tax-store';
+import { InMemoryTaxCodeStore, InMemoryTaxLineStore, InMemoryTaxReturnStore } from './in-memory-tax-store';
+import { PostgresTaxCodeStore, PostgresTaxLineStore, PostgresTaxReturnStore } from './postgres-tax-store';
 import { TaxService } from './tax.service';
 
 import { ProcurementModule } from '@aura/procurement';
@@ -74,6 +74,12 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresTaxCodeStore(pool) : new InMemoryTaxCodeStore(),
+    },
+    {
+      provide: TAX_RETURN_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTaxReturnStore(pool) : new InMemoryTaxReturnStore(),
     },
     {
       provide: TAX_LINE_STORE,

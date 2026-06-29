@@ -18,6 +18,7 @@ import {
   type TaxLine,
   TaxService,
   type TaxSummary,
+  type TaxReturn,
 } from '@aura/finance';
 
 interface CreateInvoiceDto {
@@ -340,5 +341,42 @@ export class FinanceController {
   getTaxSummary(): Promise<TaxSummary> {
     const ctx = this.tenant.get();
     return this.tax.getTaxSummary(ctx.tenantId);
+  }
+
+  // ── VAT RETURNS (period filings) ─────────────────────────────────────────
+
+  @Get('vat-returns/preview')
+  previewVatReturn(@Query('from') from?: string, @Query('to') to?: string): Promise<TaxSummary> {
+    if (!from || !to) throw new BadRequestException('from and to (YYYY-MM-DD) are required');
+    const ctx = this.tenant.get();
+    return this.tax.previewReturn(ctx.tenantId, from, to);
+  }
+
+  @Get('vat-returns')
+  listVatReturns(): Promise<TaxReturn[]> {
+    const ctx = this.tenant.get();
+    return this.tax.listReturns(ctx.tenantId);
+  }
+
+  @Post('vat-returns')
+  async generateVatReturn(@Body() dto: { periodStart: string; periodEnd: string }): Promise<TaxReturn> {
+    if (!dto?.periodStart || !dto?.periodEnd) throw new BadRequestException('periodStart and periodEnd are required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.tax.generateReturn(ctx.tenantId, dto.periodStart, dto.periodEnd);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Patch('vat-returns/:id/status')
+  async setVatReturnStatus(@Param('id') id: string, @Body() dto: { status: 'filed' | 'paid' }): Promise<TaxReturn> {
+    if (dto?.status !== 'filed' && dto?.status !== 'paid') throw new BadRequestException("status must be 'filed' or 'paid'");
+    const ctx = this.tenant.get();
+    try {
+      return await this.tax.setReturnStatus(id, dto.status, ctx.actorId);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

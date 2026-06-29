@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type StockItem, type StockMovement, type StockDirection, StockService } from '@aura/inventory';
 
 interface CreateStockItemDto {
@@ -48,7 +48,7 @@ export class StockController {
   }
 
   @Get(':id')
-  async getItem(@Param('id') id: string): Promise<{ item: StockItem; movements: StockMovement[] }> {
+  async getItem(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ item: StockItem; movements: StockMovement[] }> {
     const found = await this.stock.getItemWithMovements(id);
     if (!found) throw new NotFoundException(`stock item ${id} not found`);
     return found;
@@ -56,7 +56,7 @@ export class StockController {
 
   @Post(':id/movements')
   async recordMovement(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: MovementDto,
   ): Promise<{ item: StockItem; movement: StockMovement }> {
     if (dto?.direction !== 'in' && dto?.direction !== 'out') throw new BadRequestException("direction must be 'in' or 'out'");

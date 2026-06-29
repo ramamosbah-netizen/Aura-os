@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
   type Subcontract,
   type SubcontractStatus,
@@ -66,24 +66,7 @@ export class SubcontractsController {
     });
   }
 
-  @Get(':id')
-  async getSubcontract(@Param('id') id: string): Promise<Subcontract> {
-    const found = await this.subcontracts.getSubcontract(id);
-    if (!found) throw new NotFoundException(`Subcontract ${id} not found`);
-    return found;
-  }
-
-  @Patch(':id/status')
-  changeStatus(
-    @Param('id') id: string,
-    @Body() dto: { status: SubcontractStatus },
-  ): Promise<Subcontract> {
-    if (!dto?.status) throw new BadRequestException('status is required');
-    const ctx = this.tenant.get();
-    return this.subcontracts.changeSubcontractStatus(id, dto.status, ctx.actorId ?? undefined);
-  }
-
-  // ── CLAIMS ───────────────────────────────────────────────────────────────
+  // ── CLAIMS (literal routes before :id to avoid route-order capture) ─────
 
   @Post('claims')
   createClaim(@Body() dto: CreateClaimDto): Promise<Claim> {
@@ -117,22 +100,41 @@ export class SubcontractsController {
   }
 
   @Get('claims/:id')
-  async getClaim(@Param('id') id: string): Promise<Claim> {
+  async getClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const found = await this.subcontracts.getClaim(id);
     if (!found) throw new NotFoundException(`Claim ${id} not found`);
     return found;
   }
 
   @Patch('claims/:id/certify')
-  certifyClaim(@Param('id') id: string): Promise<Claim> {
+  certifyClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const ctx = this.tenant.get();
     if (!ctx.actorId) throw new BadRequestException('Authentication required');
     return this.subcontracts.certifyClaim(id, ctx.actorId);
   }
 
   @Patch('claims/:id/pay')
-  payClaim(@Param('id') id: string): Promise<Claim> {
+  payClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const ctx = this.tenant.get();
     return this.subcontracts.payClaim(id, ctx.actorId ?? undefined);
+  }
+
+  // ── SUBCONTRACT by ID (after literal routes) ───────────────────────────
+
+  @Get(':id')
+  async getSubcontract(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Subcontract> {
+    const found = await this.subcontracts.getSubcontract(id);
+    if (!found) throw new NotFoundException(`Subcontract ${id} not found`);
+    return found;
+  }
+
+  @Patch(':id/status')
+  changeStatus(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: { status: SubcontractStatus },
+  ): Promise<Subcontract> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    const ctx = this.tenant.get();
+    return this.subcontracts.changeSubcontractStatus(id, dto.status, ctx.actorId ?? undefined);
   }
 }

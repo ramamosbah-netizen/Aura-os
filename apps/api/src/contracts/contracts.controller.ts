@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type Contract, type ContractStatus, ContractService } from '@aura/contracts';
 
 interface CreateContractDto {
@@ -48,7 +48,7 @@ export class ContractsController {
    */
   @Patch(':id/status')
   async changeStatus(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { status: ContractStatus },
   ): Promise<Contract> {
     if (!dto?.status) throw new BadRequestException('status is required');
@@ -67,7 +67,7 @@ export class ContractsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<Contract> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Contract> {
     const found = await this.contracts.get(id);
     if (!found) throw new NotFoundException(`contract ${id} not found`);
     return found;

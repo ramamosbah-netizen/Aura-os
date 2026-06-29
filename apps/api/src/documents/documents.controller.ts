@@ -1,6 +1,6 @@
 import { Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import type { Document, DocumentVersion } from '@aura/shared';
-import { DmsService, type DocumentWithVersions, TenantContext } from '@aura/core';
+import { DmsService, type DocumentWithVersions, ParseUuidOr404Pipe, TenantContext } from '@aura/core';
 
 interface CreateDocumentDto {
   kind: string;
@@ -54,7 +54,7 @@ export class DocumentsController {
   }
 
   @Post(':id/versions')
-  addVersion(@Param('id') id: string, @Body() dto: AddVersionDto): Promise<DocumentVersion> {
+  addVersion(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AddVersionDto): Promise<DocumentVersion> {
     return this.dms.addVersion(
       id,
       {
@@ -72,7 +72,7 @@ export class DocumentsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<DocumentWithVersions> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<DocumentWithVersions> {
     const found = await this.dms.get(id);
     if (!found) throw new NotFoundException(`document ${id} not found`);
     return found;

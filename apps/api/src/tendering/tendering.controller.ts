@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Put, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem } from '@aura/tendering';
 import * as xlsx from 'xlsx';
 
@@ -46,7 +46,7 @@ export class TenderingController {
    */
   @Patch(':id/status')
   async changeStatus(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { status: TenderStatus },
   ): Promise<Tender> {
     if (!dto?.status) throw new BadRequestException('status is required');
@@ -61,7 +61,7 @@ export class TenderingController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<Tender> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Tender> {
     const found = await this.tenders.get(id);
     if (!found) throw new NotFoundException(`tender ${id} not found`);
     return found;
@@ -70,7 +70,7 @@ export class TenderingController {
   // ── BOQ & Cost Estimating ─────────────────────────────────────
 
   @Get(':id/boq')
-  async getBOQ(@Param('id') id: string): Promise<{ boq: BOQ; items: BOQItem[] }> {
+  async getBOQ(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ boq: BOQ; items: BOQItem[] }> {
     const tender = await this.tenders.get(id);
     if (!tender) throw new NotFoundException(`tender ${id} not found`);
     const ctx = this.tenant.get();
@@ -79,7 +79,7 @@ export class TenderingController {
 
   @Post(':id/boq/items')
   async addBOQItem(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { boqId: string; itemCode: string; description: string; unit: string; quantity: number; rate: number; ifcGuid?: string },
   ): Promise<BOQItem> {
     if (!dto.boqId) throw new BadRequestException('boqId is required');
@@ -102,7 +102,7 @@ export class TenderingController {
 
   @Put(':id/boq/items/:itemId')
   async updateBOQItem(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('itemId') itemId: string,
     @Body() dto: { itemCode?: string; description?: string; unit?: string; quantity?: number; rate?: number; ifcGuid?: string | null },
   ): Promise<BOQItem> {
@@ -112,7 +112,7 @@ export class TenderingController {
 
   @Delete(':id/boq/items/:itemId')
   async deleteBOQItem(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('itemId') itemId: string,
   ): Promise<void> {
     const ctx = this.tenant.get();
@@ -121,7 +121,7 @@ export class TenderingController {
 
   @Post(':id/boq/import')
   async importBOQ(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { boqId: string; items: Array<{ itemCode: string; description: string; unit: string; quantity: number; rate: number; ifcGuid?: string }> },
   ): Promise<BOQItem[]> {
     if (!dto.boqId) throw new BadRequestException('boqId is required');
@@ -134,7 +134,7 @@ export class TenderingController {
   @Post(':id/boq/upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadBOQ(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Body('boqId') boqId: string,
     @UploadedFile() file: any,
   ): Promise<BOQItem[]> {

@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type Lead, type LeadStatus, type LeadSource } from '@aura/shared';
 import { LeadService } from '@aura/crm';
 
@@ -46,7 +46,7 @@ export class CrmLeadsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateLeadDto): Promise<Lead> {
+  update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateLeadDto): Promise<Lead> {
     const ctx = this.tenant.get();
     return this.leads.update(id, dto, ctx.actorId);
   }
@@ -58,7 +58,7 @@ export class CrmLeadsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<Lead> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Lead> {
     const found = await this.leads.get(id);
     if (!found) throw new NotFoundException(`Lead ${id} not found`);
     return found;

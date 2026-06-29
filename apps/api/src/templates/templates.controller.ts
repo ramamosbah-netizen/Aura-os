@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { TemplatesService, DocumentTemplate } from './templates.service';
 
 interface CreateTemplateDto {
@@ -43,7 +43,7 @@ export class TemplatesController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<DocumentTemplate> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<DocumentTemplate> {
     const ctx = this.tenant.get();
     const template = await this.service.get(id, ctx.tenantId);
     if (!template) throw new NotFoundException(`Template with ID ${id} not found`);
@@ -52,7 +52,7 @@ export class TemplatesController {
 
   @Put(':id')
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: UpdateTemplateDto
   ): Promise<DocumentTemplate> {
     const ctx = this.tenant.get();
@@ -60,7 +60,7 @@ export class TemplatesController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string): Promise<{ success: boolean }> {
+  async delete(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ success: boolean }> {
     const ctx = this.tenant.get();
     await this.service.delete(id, ctx.tenantId);
     return { success: true };

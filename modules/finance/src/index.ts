@@ -1,5 +1,6 @@
 // @aura/finance — the Finance business module (operate-side AP invoices vs POs).
 export * from './domain/invoice';
+export * from './domain/ap-aging';
 export * from './domain/account';
 export * from './domain/journal';
 export * from './domain/payment';

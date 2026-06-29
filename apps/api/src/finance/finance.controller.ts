@@ -27,6 +27,7 @@ import {
   type CustomerInvoice,
   type NewCustomerInvoiceLine,
   type ArAgingReport,
+  type ApAgingReport,
   CustomerInvoiceService,
   type BankGuarantee,
   type GuaranteeType,
@@ -128,6 +129,12 @@ export class FinanceController {
     @Query('projectId') projectId?: string,
   ): Promise<Invoice[]> {
     return this.invoices.list({ status, poId, projectId, limit: 100 });
+  }
+
+  // literal route before :id
+  @Get('invoices/aging')
+  apAging(@Query('asOf') asOf?: string): Promise<ApAgingReport> {
+    return this.invoices.aging(this.tenant.get().tenantId, asOf);
   }
 
   @Get('invoices/:id')

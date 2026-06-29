@@ -3,7 +3,8 @@ import type { TxHandle } from '@aura/core';
 import type { Vehicle } from './domain/vehicle';
 import type { FuelLog } from './domain/fuel-log';
 import type { MaintenanceRecord } from './domain/maintenance';
-import type { VehicleStore, FuelLogStore, MaintenanceStore } from './store.interface';
+import type { TrafficFine } from './domain/traffic-fine';
+import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore } from './store.interface';
 
 export class PostgresVehicleStore implements VehicleStore {
   constructor(private readonly pool: Pool) {}
@@ -240,6 +241,66 @@ export class PostgresMaintenanceStore implements MaintenanceStore {
       status: row.status,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
+    };
+  }
+}
+
+export class PostgresTrafficFineStore implements TrafficFineStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(fine: TrafficFine, tx?: TxHandle): Promise<TrafficFine> {
+    const conn = (tx as PoolClient) || this.pool;
+    const res = await conn.query(
+      `insert into public.aura_fleet_traffic_fines (
+        id, tenant_id, company_id, vehicle_id, driver_employee_id, fine_number, violation, location, amount, black_points, fine_date, status, paid_date, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      on conflict (id) do update set
+        driver_employee_id = excluded.driver_employee_id,
+        status = excluded.status,
+        paid_date = excluded.paid_date,
+        updated_at = excluded.updated_at
+      returning *`,
+      [
+        fine.id, fine.tenantId, fine.companyId, fine.vehicleId, fine.driverEmployeeId, fine.fineNumber,
+        fine.violation, fine.location, fine.amount, fine.blackPoints, fine.fineDate, fine.status,
+        fine.paidDate, fine.createdAt, fine.updatedAt,
+      ],
+    );
+    return this.mapFine(res.rows[0]);
+  }
+
+  async findById(tenantId: string, id: string): Promise<TrafficFine | null> {
+    const res = await this.pool.query(`select * from public.aura_fleet_traffic_fines where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rows.length ? this.mapFine(res.rows[0]) : null;
+  }
+
+  async findByTenant(tenantId: string): Promise<TrafficFine[]> {
+    const res = await this.pool.query(`select * from public.aura_fleet_traffic_fines where tenant_id = $1 order by created_at desc`, [tenantId]);
+    return res.rows.map(this.mapFine);
+  }
+
+  async findByVehicle(tenantId: string, vehicleId: string): Promise<TrafficFine[]> {
+    const res = await this.pool.query(`select * from public.aura_fleet_traffic_fines where tenant_id = $1 and vehicle_id = $2 order by created_at desc`, [tenantId, vehicleId]);
+    return res.rows.map(this.mapFine);
+  }
+
+  private mapFine(row: any): TrafficFine {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      vehicleId: row.vehicle_id,
+      driverEmployeeId: row.driver_employee_id,
+      fineNumber: row.fine_number,
+      violation: row.violation,
+      location: row.location || '',
+      amount: Number(row.amount),
+      blackPoints: Number(row.black_points),
+      fineDate: row.fine_date instanceof Date ? row.fine_date.toISOString().split('T')[0] : String(row.fine_date),
+      status: row.status,
+      paidDate: row.paid_date ? (row.paid_date instanceof Date ? row.paid_date.toISOString().split('T')[0] : String(row.paid_date)) : null,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
     };
   }
 }

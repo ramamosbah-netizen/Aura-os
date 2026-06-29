@@ -7,12 +7,14 @@ import { type Leave, makeLeave } from './domain/leave';
 import { type PayrollRun, makePayrollRun } from './domain/payroll-run';
 import { type TimesheetEntry, makeTimesheetEntry, submitTimesheet, approveTimesheet, rejectTimesheet } from './domain/timesheet';
 import { type ExpenseClaim, makeExpenseClaim, submitClaim, approveClaim, rejectClaim, reimburseClaim } from './domain/expense-claim';
+import { type StaffAdvance, makeStaffAdvance, approveAdvance, rejectAdvance, disburseAdvance, recordRepayment } from './domain/staff-advance';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
 export const PAYROLL_RUN_STORE = Symbol('PAYROLL_RUN_STORE');
 export const TIMESHEET_STORE = Symbol('TIMESHEET_STORE');
 export const EXPENSE_CLAIM_STORE = Symbol('EXPENSE_CLAIM_STORE');
+export const STAFF_ADVANCE_STORE = Symbol('STAFF_ADVANCE_STORE');
 
 import {
   type EmployeeStore,
@@ -20,6 +22,7 @@ import {
   type PayrollRunStore,
   type TimesheetStore,
   type ExpenseClaimStore,
+  type StaffAdvanceStore,
 } from './store.interface';
 
 export const HR_EVENT = {
@@ -32,6 +35,10 @@ export const HR_EVENT = {
   expenseSubmitted: 'hr.expense.submitted',
   expenseApproved: 'hr.expense.approved',
   expenseReimbursed: 'hr.expense.reimbursed',
+  advanceRequested: 'hr.staff_advance.requested',
+  advanceApproved: 'hr.staff_advance.approved',
+  advanceDisbursed: 'hr.staff_advance.disbursed',
+  advanceRepaid: 'hr.staff_advance.repaid',
 };
 
 @Injectable()
@@ -44,6 +51,7 @@ export class HrService {
     @Inject(PAYROLL_RUN_STORE) private readonly payrollRunStore: PayrollRunStore,
     @Inject(TIMESHEET_STORE) private readonly timesheetStore: TimesheetStore,
     @Inject(EXPENSE_CLAIM_STORE) private readonly expenseClaimStore: ExpenseClaimStore,
+    @Inject(STAFF_ADVANCE_STORE) private readonly staffAdvanceStore: StaffAdvanceStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -415,5 +423,82 @@ export class HrService {
 
   listExpenseClaims(tenantId: string): Promise<ExpenseClaim[]> {
     return this.expenseClaimStore.findByTenant(tenantId);
+  }
+
+  // ── Staff Advances / Loans ────────────────────────────────────────────────
+
+  async createStaffAdvance(input: { tenantId: string; employeeId: string; amount: number; reason?: string; installments?: number; requestDate: string }): Promise<StaffAdvance> {
+    const advance = makeStaffAdvance(input);
+    await this.staffAdvanceStore.save(advance);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.advanceRequested,
+        tenantId: advance.tenantId, companyId: null, actorId: advance.employeeId,
+        aggregateType: 'hr.staff_advance', aggregateId: advance.id,
+        payload: { employeeId: advance.employeeId, amount: advance.amount, installments: advance.installments },
+      }),
+    ]);
+    this.logger.log(`Staff advance ${advance.id} requested for ${advance.employeeId}: ${advance.amount} over ${advance.installments} installments`);
+    return advance;
+  }
+
+  async approveStaffAdvance(tenantId: string, id: string, approverId: string): Promise<StaffAdvance> {
+    const advance = await this.staffAdvanceStore.findById(tenantId, id);
+    if (!advance) throw new Error(`staff advance ${id} not found`);
+    const updated = approveAdvance(advance, approverId);
+    await this.staffAdvanceStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.advanceApproved,
+        tenantId, companyId: null, actorId: approverId,
+        aggregateType: 'hr.staff_advance', aggregateId: id,
+        payload: { employeeId: advance.employeeId, amount: advance.amount, approvedBy: approverId },
+      }),
+    ]);
+    return updated;
+  }
+
+  async rejectStaffAdvance(tenantId: string, id: string): Promise<StaffAdvance> {
+    const advance = await this.staffAdvanceStore.findById(tenantId, id);
+    if (!advance) throw new Error(`staff advance ${id} not found`);
+    const updated = rejectAdvance(advance);
+    await this.staffAdvanceStore.save(updated);
+    return updated;
+  }
+
+  async disburseStaffAdvance(tenantId: string, id: string, disbursedDate?: string): Promise<StaffAdvance> {
+    const advance = await this.staffAdvanceStore.findById(tenantId, id);
+    if (!advance) throw new Error(`staff advance ${id} not found`);
+    const updated = disburseAdvance(advance, disbursedDate);
+    await this.staffAdvanceStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.advanceDisbursed,
+        tenantId, companyId: null, actorId: null,
+        aggregateType: 'hr.staff_advance', aggregateId: id,
+        payload: { employeeId: advance.employeeId, amount: advance.amount, disbursedDate: updated.disbursedDate },
+      }),
+    ]);
+    return updated;
+  }
+
+  async repayStaffAdvance(tenantId: string, id: string, amount: number): Promise<StaffAdvance> {
+    const advance = await this.staffAdvanceStore.findById(tenantId, id);
+    if (!advance) throw new Error(`staff advance ${id} not found`);
+    const updated = recordRepayment(advance, amount);
+    await this.staffAdvanceStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.advanceRepaid,
+        tenantId, companyId: null, actorId: null,
+        aggregateType: 'hr.staff_advance', aggregateId: id,
+        payload: { employeeId: advance.employeeId, amount: Number(amount), amountRepaid: updated.amountRepaid, status: updated.status },
+      }),
+    ]);
+    return updated;
+  }
+
+  listStaffAdvances(tenantId: string): Promise<StaffAdvance[]> {
+    return this.staffAdvanceStore.findByTenant(tenantId);
   }
 }

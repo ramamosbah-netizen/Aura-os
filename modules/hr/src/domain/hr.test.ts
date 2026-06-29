@@ -8,6 +8,7 @@ import {
   InMemoryPayrollRunStore,
   InMemoryTimesheetStore,
   InMemoryExpenseClaimStore,
+  InMemoryStaffAdvanceStore,
 } from '../in-memory-hr-store';
 import { HrService } from '../hr.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -46,7 +47,7 @@ describe('HR & Payroll Bounded Context', () => {
       const leaveStore = new InMemoryLeaveStore();
       const payrollRunStore = new InMemoryPayrollRunStore();
 
-      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), mockEvents, mockTx, mockAccess);
 
       const emp = await service.createEmployee(null, {
         tenantId: 't1',
@@ -77,7 +78,7 @@ describe('HR & Payroll Bounded Context', () => {
       const leaveStore = new InMemoryLeaveStore();
       const payrollRunStore = new InMemoryPayrollRunStore();
 
-      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), mockEvents, mockTx, mockAccess);
 
       const leave = await service.requestLeave(null, {
         tenantId: 't1',
@@ -102,7 +103,7 @@ describe('HR & Payroll Bounded Context', () => {
       const leaveStore = new InMemoryLeaveStore();
       const payrollRunStore = new InMemoryPayrollRunStore();
 
-      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), mockEvents, mockTx, mockAccess);
 
       const run = await service.runPayroll(null, {
         tenantId: 't1',

@@ -1,34 +1,57 @@
 import { describe, it, expect } from 'vitest';
-import { calculateDepreciation } from './depreciation';
+import { computeDepreciation, monthsBetween } from './depreciation';
 
-describe('straight-line depreciation', () => {
-  it('depreciates cost down to salvage over the useful life', () => {
-    const r = calculateDepreciation({ purchaseCost: 100000, purchaseDate: '2026-01-01', usefulLifeYears: 5, salvageValue: 10000 });
-    expect(r.annualDepreciation).toBe(18000); // (100000 - 10000) / 5
-    expect(r.schedule).toHaveLength(5);
-    expect(r.schedule[0]).toMatchObject({ year: 2026, openingValue: 100000, depreciation: 18000, closingValue: 82000 });
-    expect(r.schedule[4].closingValue).toBe(10000); // ends exactly at salvage
-    expect(r.schedule[4].accumulated).toBe(90000);
+describe('monthsBetween', () => {
+  it('counts whole months and clamps at 0', () => {
+    expect(monthsBetween('2026-01-01', '2026-07-01')).toBe(6);
+    expect(monthsBetween('2025-06-01', '2026-06-01')).toBe(12);
+    expect(monthsBetween('2026-07-01', '2026-01-01')).toBe(0);
+  });
+});
+
+describe('straight-line', () => {
+  it('depreciates evenly to the salvage floor', () => {
+    const s = computeDepreciation({ cost: 12000, salvageValue: 2000, usefulLifeMonths: 10, method: 'straight_line', purchaseDate: '2026-01-01', asOf: '2026-04-01' });
+    expect(s.depreciableBase).toBe(10000);
+    expect(s.periods[0].depreciation).toBe(1000);
+    expect(s.periods).toHaveLength(10);
+    // fully depreciated at end → book value == salvage
+    expect(s.periods[9].bookValue).toBe(2000);
+    expect(s.periods[9].accumulated).toBe(10000);
   });
 
-  it('handles zero salvage', () => {
-    const r = calculateDepreciation({ purchaseCost: 12000, purchaseDate: '2024-06-01', usefulLifeYears: 3 });
-    expect(r.annualDepreciation).toBe(4000);
-    expect(r.schedule[2].closingValue).toBe(0);
-    expect(r.schedule[0].year).toBe(2024);
+  it('computes net book value as of a date (3 months in)', () => {
+    const s = computeDepreciation({ cost: 12000, salvageValue: 2000, usefulLifeMonths: 10, purchaseDate: '2026-01-01', asOf: '2026-04-01' });
+    expect(s.monthsElapsed).toBe(3);
+    expect(s.accumulatedToDate).toBe(3000);
+    expect(s.netBookValue).toBe(9000);
   });
 
-  it('absorbs rounding in the final year so closing == salvage', () => {
-    const r = calculateDepreciation({ purchaseCost: 10000, purchaseDate: '2026-01-01', usefulLifeYears: 3, salvageValue: 1000 });
-    // annual = 3000; 3 yrs of 3000 = 9000; closing lands exactly on 1000
-    expect(r.schedule[2].closingValue).toBe(1000);
-    const totalDep = r.schedule.reduce((s, x) => s + x.depreciation, 0);
-    expect(Number(totalDep.toFixed(2))).toBe(9000);
+  it('returns cost as NBV before any time elapses', () => {
+    const s = computeDepreciation({ cost: 5000, usefulLifeMonths: 12, purchaseDate: '2026-06-01', asOf: '2026-06-01' });
+    expect(s.monthsElapsed).toBe(0);
+    expect(s.netBookValue).toBe(5000);
+    expect(s.accumulatedToDate).toBe(0);
   });
+});
 
-  it('rejects bad inputs', () => {
-    expect(() => calculateDepreciation({ purchaseCost: 0, purchaseDate: '2026-01-01', usefulLifeYears: 5 })).toThrow('purchaseCost');
-    expect(() => calculateDepreciation({ purchaseCost: 1000, purchaseDate: '2026-01-01', usefulLifeYears: 0 })).toThrow('usefulLifeYears');
-    expect(() => calculateDepreciation({ purchaseCost: 1000, purchaseDate: '2026-01-01', usefulLifeYears: 5, salvageValue: 1000 })).toThrow('less than');
+describe('declining-balance', () => {
+  it('never depreciates below salvage and ends at the floor', () => {
+    const s = computeDepreciation({ cost: 10000, salvageValue: 1000, usefulLifeMonths: 12, method: 'declining_balance', purchaseDate: '2026-01-01', asOf: '2027-01-01' });
+    const last = s.periods[s.periods.length - 1];
+    expect(last.bookValue).toBeGreaterThanOrEqual(1000 - 0.01);
+    expect(s.periods.every((p) => p.bookValue >= 1000 - 0.01)).toBe(true);
+  });
+});
+
+describe('validation', () => {
+  it('rejects non-positive cost', () => {
+    expect(() => computeDepreciation({ cost: 0, usefulLifeMonths: 12, purchaseDate: '2026-01-01', asOf: '2026-02-01' })).toThrow('cost must be positive');
+  });
+  it('rejects salvage >= cost', () => {
+    expect(() => computeDepreciation({ cost: 1000, salvageValue: 1000, usefulLifeMonths: 12, purchaseDate: '2026-01-01', asOf: '2026-02-01' })).toThrow('salvage value must be less than cost');
+  });
+  it('rejects out-of-range life', () => {
+    expect(() => computeDepreciation({ cost: 1000, usefulLifeMonths: 0, purchaseDate: '2026-01-01', asOf: '2026-02-01' })).toThrow('useful life must be 1–600 months');
   });
 });

@@ -7,4 +7,5 @@ export * from './domain/payroll-run';
 export * from './domain/eosb';
 export * from './domain/timesheet';
 export * from './domain/expense-claim';
-export { HR_EVENT, TIMESHEET_STORE, EXPENSE_CLAIM_STORE } from './hr.service';
+export * from './domain/staff-advance';
+export { HR_EVENT, TIMESHEET_STORE, EXPENSE_CLAIM_STORE, STAFF_ADVANCE_STORE } from './hr.service';

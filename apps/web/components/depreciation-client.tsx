@@ -5,145 +5,115 @@ import { type CSSProperties, useState } from 'react';
 interface Asset {
   id: string;
   name: string;
-  purchaseCost: number;
+  serialNumber: string;
+  category: string;
   purchaseDate: string;
+  purchaseCost: number;
 }
 
-interface Row {
-  year: number;
-  openingValue: number;
-  depreciation: number;
-  accumulated: number;
-  closingValue: number;
-}
-
+interface Period { period: number; depreciation: number; accumulated: number; bookValue: number }
 interface Schedule {
-  asset: { id: string; name: string; purchaseCost: number; purchaseDate: string };
-  schedule: {
-    annualDepreciation: number;
-    salvageValue: number;
-    usefulLifeYears: number;
-    schedule: Row[];
-  };
+  method: string;
+  cost: number;
+  salvageValue: number;
+  usefulLifeMonths: number;
+  depreciableBase: number;
+  periods: Period[];
+  monthsElapsed: number;
+  accumulatedToDate: number;
+  netBookValue: number;
 }
 
-function money(n: number): string {
-  return new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', maximumFractionDigits: 0 }).format(n);
-}
+const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function DepreciationClient({ assets }: { assets: Asset[] }) {
   const [assetId, setAssetId] = useState('');
-  const [life, setLife] = useState('5');
-  const [salvage, setSalvage] = useState('0');
-  const [result, setResult] = useState<Schedule | null>(null);
-  const [err, setErr] = useState('');
+  const [usefulLifeMonths, setLife] = useState('60');
+  const [salvageValue, setSalvage] = useState('0');
+  const [method, setMethod] = useState('straight_line');
+  const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const [error, setError] = useState('');
 
-  const selected = assets.find((a) => a.id === assetId);
+  const asset = assets.find((a) => a.id === assetId);
 
-  async function compute(): Promise<void> {
-    setErr('');
-    setResult(null);
-    if (!assetId) {
-      setErr('Pick an asset.');
-      return;
+  const compute = async () => {
+    setError(''); setSchedule(null);
+    if (!assetId) return setError('Select an asset');
+    if (!(Number(usefulLifeMonths) > 0)) return setError('Useful life must be positive');
+    const qs = new URLSearchParams({ usefulLifeMonths, salvageValue: salvageValue || '0', method });
+    try {
+      const res = await fetch(`/api/assets/${assetId}/depreciation?${qs}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed');
+      setSchedule(data);
+    } catch (e) {
+      setError((e as Error).message);
     }
-    if (!(Number(life) >= 1)) {
-      setErr('Useful life must be at least 1 year.');
-      return;
-    }
-    const res = await fetch(`/api/assets/${assetId}/depreciation?usefulLife=${Number(life)}&salvage=${Number(salvage) || 0}`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setErr(data.message ?? data.error ?? 'Calculation failed');
-      return;
-    }
-    setResult(data);
-  }
+  };
 
   return (
-    <div>
-      <div style={s.card}>
-        <div style={s.row}>
-          <label style={s.field}>
-            <span style={s.label}>Asset</span>
-            <select style={s.input} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
-              <option value="">— select —</option>
-              {assets.map((a) => <option key={a.id} value={a.id}>{a.name} ({money(a.purchaseCost)})</option>)}
-            </select>
-          </label>
-          <label style={s.fieldSm}><span style={s.label}>Useful life (yrs)</span><input style={s.input} type="number" value={life} onChange={(e) => setLife(e.target.value)} /></label>
-          <label style={s.fieldSm}><span style={s.label}>Salvage value</span><input style={s.input} type="number" value={salvage} onChange={(e) => setSalvage(e.target.value)} /></label>
-          <button type="button" style={s.primary} onClick={compute}>Schedule</button>
-        </div>
-        {selected && <p style={s.muted}>Purchase: {money(selected.purchaseCost)} on {selected.purchaseDate}</p>}
-        {err && <p style={s.err}>{err}</p>}
+    <>
+      <div style={st.form}>
+        <label style={st.label}>Asset
+          <select style={st.input} value={assetId} onChange={(e) => setAssetId(e.target.value)}>
+            <option value="">— select —</option>
+            {assets.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.serialNumber}) — {fmt(a.purchaseCost)}</option>)}
+          </select>
+        </label>
+        <label style={st.label}>Useful life (months)<input style={st.input} type="number" min="1" value={usefulLifeMonths} onChange={(e) => setLife(e.target.value)} /></label>
+        <label style={st.label}>Salvage value<input style={st.input} type="number" min="0" value={salvageValue} onChange={(e) => setSalvage(e.target.value)} /></label>
+        <label style={st.label}>Method
+          <select style={st.input} value={method} onChange={(e) => setMethod(e.target.value)}>
+            <option value="straight_line">straight-line</option>
+            <option value="declining_balance">declining-balance</option>
+          </select>
+        </label>
+        <button style={st.btn} onClick={compute}>Compute</button>
+        {error && <p style={st.err}>{error}</p>}
       </div>
 
-      {result && (
-        <div style={s.result}>
-          <div style={s.statsBar}>
-            <Stat label="Annual depreciation" value={money(result.schedule.annualDepreciation)} />
-            <Stat label="Salvage value" value={money(result.schedule.salvageValue)} />
-            <Stat label="Useful life" value={`${result.schedule.usefulLifeYears} yrs`} />
+      {asset && <p style={st.note}>Asset cost <b>{fmt(asset.purchaseCost)}</b> · purchased <b>{asset.purchaseDate}</b></p>}
+
+      {schedule && (
+        <>
+          <div style={st.cards}>
+            <div style={st.card}><div style={st.cardLabel}>Months elapsed</div><div style={st.cardVal}>{schedule.monthsElapsed}</div></div>
+            <div style={st.card}><div style={st.cardLabel}>Accumulated dep.</div><div style={st.cardVal}>{fmt(schedule.accumulatedToDate)}</div></div>
+            <div style={st.card}><div style={st.cardLabel}>Net book value</div><div style={{ ...st.cardVal, color: 'var(--accent, #2563eb)' }}>{fmt(schedule.netBookValue)}</div></div>
           </div>
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <th style={s.th}>Year</th>
-                <th style={s.thR}>Opening NBV</th>
-                <th style={s.thR}>Depreciation</th>
-                <th style={s.thR}>Accumulated</th>
-                <th style={s.thR}>Closing NBV</th>
-              </tr>
-            </thead>
+          <table style={st.table}>
+            <thead><tr><th style={st.th}>Month</th><th style={st.thR}>Depreciation</th><th style={st.thR}>Accumulated</th><th style={st.thR}>Book value</th></tr></thead>
             <tbody>
-              {result.schedule.schedule.map((r) => (
-                <tr key={r.year} style={s.trow}>
-                  <td style={s.td}>{r.year}</td>
-                  <td style={s.tdR}>{money(r.openingValue)}</td>
-                  <td style={s.tdR}>{money(r.depreciation)}</td>
-                  <td style={s.tdRm}>{money(r.accumulated)}</td>
-                  <td style={s.tdRb}>{money(r.closingValue)}</td>
+              {schedule.periods.map((p) => (
+                <tr key={p.period} style={p.period === schedule.monthsElapsed ? { background: 'var(--surface-2, #f1f5f9)' } : undefined}>
+                  <td style={st.td}>{p.period}</td>
+                  <td style={st.tdR}>{fmt(p.depreciation)}</td>
+                  <td style={st.tdR}>{fmt(p.accumulated)}</td>
+                  <td style={st.tdR}>{fmt(p.bookValue)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </>
       )}
-    </div>
+    </>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={s.stat}>
-      <span style={s.statLabel}>{label}</span>
-      <span style={s.statValue}>{value}</span>
-    </div>
-  );
-}
-
-const s = {
-  card: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 18 } as CSSProperties,
-  row: { display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' } as CSSProperties,
-  field: { display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 200 } as CSSProperties,
-  fieldSm: { display: 'flex', flexDirection: 'column', gap: 5, width: 130 } as CSSProperties,
-  label: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  input: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 14 } as CSSProperties,
-  primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', padding: '9px 16px', fontSize: 14, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
-  muted: { color: 'var(--muted)', fontSize: 13, margin: '10px 2px 0' } as CSSProperties,
-  err: { color: 'var(--bad)', fontSize: 13, margin: '8px 2px 0' } as CSSProperties,
-  result: { marginTop: 18 } as CSSProperties,
-  statsBar: { display: 'flex', gap: 28, marginBottom: 14, flexWrap: 'wrap' } as CSSProperties,
-  stat: { display: 'flex', flexDirection: 'column', gap: 3 } as CSSProperties,
-  statLabel: { fontSize: 11.5, color: 'var(--muted)' } as CSSProperties,
-  statValue: { fontSize: 18, fontWeight: 600 } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
-  th: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
-  thR: { textAlign: 'right', color: 'var(--muted)', fontWeight: 500, padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
-  trow: { borderBottom: '1px solid var(--border)' } as CSSProperties,
-  td: { padding: '9px 10px' } as CSSProperties,
-  tdR: { padding: '9px 10px', textAlign: 'right' } as CSSProperties,
-  tdRm: { padding: '9px 10px', textAlign: 'right', color: 'var(--muted)' } as CSSProperties,
-  tdRb: { padding: '9px 10px', textAlign: 'right', fontWeight: 600 } as CSSProperties,
+const st = {
+  form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
+  label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
+  input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 150 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
+  note: { fontSize: 14, color: 'var(--muted)', margin: '0 0 14px' } as CSSProperties,
+  cards: { display: 'flex', gap: 14, marginBottom: 18 } as CSSProperties,
+  card: { padding: '12px 18px', borderRadius: 8, border: '1px solid var(--border, #e5e7eb)', minWidth: 150 } as CSSProperties,
+  cardLabel: { fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: 0.5 } as CSSProperties,
+  cardVal: { fontSize: 22, fontWeight: 700, marginTop: 4 } as CSSProperties,
+  table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
+  th: { textAlign: 'left' as const, padding: '7px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
+  thR: { textAlign: 'right' as const, padding: '7px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
+  td: { padding: '6px 12px', borderBottom: '1px solid var(--border, #e5e7eb)' } as CSSProperties,
+  tdR: { textAlign: 'right' as const, padding: '6px 12px', borderBottom: '1px solid var(--border, #e5e7eb)' } as CSSProperties,
 };

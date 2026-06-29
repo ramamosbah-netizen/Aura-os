@@ -4,6 +4,7 @@ import { Leave } from './domain/leave';
 import { PayrollRun } from './domain/payroll-run';
 import { TimesheetEntry } from './domain/timesheet';
 import { ExpenseClaim } from './domain/expense-claim';
+import { StaffAdvance } from './domain/staff-advance';
 
 export interface EmployeeStore {
   save(employee: Employee, tx?: TxHandle): Promise<Employee>;
@@ -41,4 +42,11 @@ export interface ExpenseClaimStore {
   findById(tenantId: string, id: string): Promise<ExpenseClaim | null>;
   findByTenant(tenantId: string): Promise<ExpenseClaim[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<ExpenseClaim[]>;
+}
+
+export interface StaffAdvanceStore {
+  save(advance: StaffAdvance, tx?: TxHandle): Promise<StaffAdvance>;
+  findById(tenantId: string, id: string): Promise<StaffAdvance | null>;
+  findByTenant(tenantId: string): Promise<StaffAdvance[]>;
+  findByEmployee(tenantId: string, employeeId: string): Promise<StaffAdvance[]>;
 }

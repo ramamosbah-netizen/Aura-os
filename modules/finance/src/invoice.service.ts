@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeInvoice } from './domain/invoice';
+import { type ApAgingReport, buildApAging } from './domain/ap-aging';
 import { INVOICE_STORE, type InvoiceFilter, type InvoiceStore } from './invoice-store';
 import { PurchaseOrderService } from '@aura/procurement';
 import { GoodsReceiptService, type GoodsReceipt } from '@aura/inventory';
@@ -181,5 +182,11 @@ export class InvoiceService implements OnModuleInit {
 
   list(filter?: InvoiceFilter): Promise<Invoice[]> {
     return this.store.list(filter);
+  }
+
+  /** AP aging — approved-but-unpaid supplier liability bucketed by invoice-date age. */
+  async aging(tenantId: string, asOf?: string): Promise<ApAgingReport> {
+    const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
+    return buildApAging(all, asOf ?? new Date().toISOString().slice(0, 10));
   }
 }

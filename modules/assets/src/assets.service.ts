@@ -3,7 +3,7 @@ import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Asset, makeAsset } from './domain/asset';
-import { type DepreciationSchedule, calculateDepreciation } from './domain/depreciation';
+import { type DepreciationSchedule, type DepreciationMethod, computeDepreciation } from './domain/depreciation';
 import { type AssetMaintenance, makeAssetMaintenance } from './domain/asset-maintenance';
 import { type AssetInspection, makeAssetInspection } from './domain/asset-inspection';
 import { type AssetStore, type AssetMaintenanceStore, type AssetInspectionStore } from './store.interface';
@@ -98,26 +98,26 @@ export class AssetsService {
     return this.assetStore.findById(tenantId, id);
   }
 
-  /** Straight-line depreciation schedule for an asset (uses its purchase cost/date). */
-  async getDepreciationSchedule(
-    tenantId: string,
-    id: string,
-    usefulLifeYears: number,
-    salvageValue: number,
-  ): Promise<{ asset: Pick<Asset, 'id' | 'name' | 'purchaseCost' | 'purchaseDate'>; schedule: DepreciationSchedule } | null> {
-    const asset = await this.assetStore.findById(tenantId, id);
-    if (!asset) return null;
-    const schedule = calculateDepreciation({
-      purchaseCost: asset.purchaseCost,
-      purchaseDate: asset.purchaseDate,
-      usefulLifeYears,
-      salvageValue,
-    });
-    return { asset: { id: asset.id, name: asset.name, purchaseCost: asset.purchaseCost, purchaseDate: asset.purchaseDate }, schedule };
-  }
-
   listAssets(tenantId: string): Promise<Asset[]> {
     return this.assetStore.findByTenant(tenantId);
+  }
+
+  /** Depreciation schedule + net book value for an asset (uses its cost + purchase date). */
+  async depreciation(
+    tenantId: string,
+    id: string,
+    params: { usefulLifeMonths: number; salvageValue?: number; method?: DepreciationMethod; asOf?: string },
+  ): Promise<DepreciationSchedule> {
+    const asset = await this.assetStore.findById(tenantId, id);
+    if (!asset) throw new Error(`asset ${id} not found`);
+    return computeDepreciation({
+      cost: asset.purchaseCost,
+      salvageValue: params.salvageValue,
+      usefulLifeMonths: params.usefulLifeMonths,
+      method: params.method,
+      purchaseDate: asset.purchaseDate,
+      asOf: params.asOf ?? new Date().toISOString().slice(0, 10),
+    });
   }
 
   // ── Maintenance ────────────────────────────────────────────────────────────

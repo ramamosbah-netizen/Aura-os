@@ -6,6 +6,17 @@ import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
 import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore } from './store.interface';
 
+// pg returns `date` columns as a JS Date constructed in the server's local TZ.
+// Extract the calendar date via LOCAL components so we get the date that was actually stored.
+function dateOnly(v: Date | string | null | undefined): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v.slice(0, 10);
+  const y = v.getFullYear();
+  const m = String(v.getMonth() + 1).padStart(2, '0');
+  const d = String(v.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export class PostgresVehicleStore implements VehicleStore {
   constructor(private readonly pool: Pool) {}
 
@@ -296,9 +307,9 @@ export class PostgresTrafficFineStore implements TrafficFineStore {
       location: row.location || '',
       amount: Number(row.amount),
       blackPoints: Number(row.black_points),
-      fineDate: row.fine_date instanceof Date ? row.fine_date.toISOString().split('T')[0] : String(row.fine_date),
+      fineDate: dateOnly(row.fine_date),
       status: row.status,
-      paidDate: row.paid_date ? (row.paid_date instanceof Date ? row.paid_date.toISOString().split('T')[0] : String(row.paid_date)) : null,
+      paidDate: row.paid_date ? dateOnly(row.paid_date) : null,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
     };

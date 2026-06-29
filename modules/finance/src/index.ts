@@ -36,5 +36,11 @@ export * from './in-memory-tax-store';
 export * from './postgres-tax-store';
 export * from './tax.service';
 
+export * from './domain/petty-cash';
+export * from './petty-cash-store';
+export * from './in-memory-petty-cash-store';
+export * from './postgres-petty-cash-store';
+export * from './petty-cash.service';
+
 export * from './finance.module';
 export * from './projections/profit-loss.projection';

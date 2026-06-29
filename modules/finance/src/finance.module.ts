@@ -31,6 +31,11 @@ import { InMemoryTaxCodeStore, InMemoryTaxLineStore, InMemoryTaxReturnStore } fr
 import { PostgresTaxCodeStore, PostgresTaxLineStore, PostgresTaxReturnStore } from './postgres-tax-store';
 import { TaxService } from './tax.service';
 
+import { PETTY_CASH_STORE } from './petty-cash-store';
+import { InMemoryPettyCashStore } from './in-memory-petty-cash-store';
+import { PostgresPettyCashStore } from './postgres-petty-cash-store';
+import { PettyCashService } from './petty-cash.service';
+
 import { ProcurementModule } from '@aura/procurement';
 import { InventoryModule } from '@aura/inventory';
 import { ProfitLossProjection } from './projections/profit-loss.projection';
@@ -87,14 +92,21 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresTaxLineStore(pool) : new InMemoryTaxLineStore(),
     },
+    {
+      provide: PETTY_CASH_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPettyCashStore(pool) : new InMemoryPettyCashStore(),
+    },
     InvoiceService,
     AccountService,
     JournalService,
     PaymentService,
     BankReconciliationService,
     TaxService,
+    PettyCashService,
   ],
-  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService],
+  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService],
 })
 export class FinanceModule implements OnModuleInit {
   constructor(private readonly projectionEngine: ProjectionEngine) {}

@@ -19,6 +19,11 @@ import {
   TaxService,
   type TaxSummary,
   type TaxReturn,
+  type PettyCashFund,
+  type PettyCashTransaction,
+  type PettyCashTxType,
+  type PettyCashCategory,
+  PettyCashService,
 } from '@aura/finance';
 
 interface CreateInvoiceDto {
@@ -80,6 +85,7 @@ export class FinanceController {
     private readonly payments: PaymentService,
     private readonly reconciliation: BankReconciliationService,
     private readonly tax: TaxService,
+    private readonly pettyCash: PettyCashService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -375,6 +381,53 @@ export class FinanceController {
     const ctx = this.tenant.get();
     try {
       return await this.tax.setReturnStatus(id, dto.status, ctx.actorId);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── PETTY CASH (imprest floats) ──────────────────────────────────────────
+
+  @Post('petty-cash')
+  createPettyCashFund(@Body() dto: { name: string; custodianEmployeeId?: string; openingFloat?: number }): Promise<PettyCashFund> {
+    if (!dto?.name?.trim()) throw new BadRequestException('name is required');
+    const ctx = this.tenant.get();
+    try {
+      return this.pettyCash.createFund({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        name: dto.name,
+        custodianEmployeeId: dto.custodianEmployeeId ?? null,
+        openingFloat: dto.openingFloat !== undefined ? Number(dto.openingFloat) : undefined,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('petty-cash')
+  listPettyCashFunds(): Promise<PettyCashFund[]> {
+    return this.pettyCash.listFunds({ tenantId: this.tenant.get().tenantId, limit: 200 });
+  }
+
+  @Get('petty-cash/:id')
+  async getPettyCashFund(@Param('id') id: string): Promise<{ fund: PettyCashFund; transactions: PettyCashTransaction[] }> {
+    const found = await this.pettyCash.getFundWithTransactions(id);
+    if (!found) throw new NotFoundException(`petty cash fund ${id} not found`);
+    return found;
+  }
+
+  @Post('petty-cash/:id/transactions')
+  async recordPettyCashTx(
+    @Param('id') id: string,
+    @Body() dto: { type: PettyCashTxType; amount: number; transactionDate: string; category?: PettyCashCategory; description?: string },
+  ): Promise<{ fund: PettyCashFund; transaction: PettyCashTransaction }> {
+    if (dto?.type !== 'topup' && dto?.type !== 'expense') throw new BadRequestException("type must be 'topup' or 'expense'");
+    if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
+    if (!dto?.transactionDate) throw new BadRequestException('transactionDate is required');
+    try {
+      return await this.pettyCash.recordTransaction(id, dto.type, Number(dto.amount), dto.transactionDate, dto.category, dto.description);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

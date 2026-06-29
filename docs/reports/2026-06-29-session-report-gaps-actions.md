@@ -130,7 +130,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet 14 tests incl. 10 traffic-fine state-machine tests; HR now **27 tests** incl. 9 new expense-claim state-machine tests; apps/api test runner wired this session), Supabase migrations **51 → 58** applied & verified live.
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet 14 tests incl. 10 traffic-fine state-machine tests; HR **27 tests** incl. 9 expense-claim tests; finance now **31 tests** incl. 13 new petty-cash tests; apps/api test runner wired this session), Supabase migrations **51 → 59** applied & verified live.
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |
@@ -156,10 +156,11 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **Inventory Transfers** | `68e3338` | `0055` | `/inventory/transfers` (POST/GET) | WH-A 500→450, WH-B 100→150; over-transfer → 400 |
 | **HR Timesheets** | `0f9f6ce` | `0056` | `/hr/timesheets` (CRUD + submit/approve/reject) | create→draft, submit→submitted, bad hours→400 |
 | **Fleet Traffic Fines (UAE)** | `a26c784` + `f9a9964` | `0057` | `POST/GET /fleet/fines`, `PUT /fines/:id/{assign,dispute,pay}` | record (DXB-12345 / 600 AED / 4 pts) → assign (UUID driver) → pay; bad amount → 400; dispute-after-paid → 400; **date stable across all updates** (post-fix) |
-| **HR Expense Claims** | (this round) | `0058` | `POST/GET /hr/expense-claims`, `POST /expense-claims/:id/{submit,approve,reject,reimburse}` | draft → submitted → approved → reimbursed; `expenseDate=2026-06-20` preserved (no drift); reject-after-reimburse → 400; reimburse-before-approve → 400; bad category → 400 |
+| **HR Expense Claims** | `543878d` | `0058` | `POST/GET /hr/expense-claims`, `POST /expense-claims/:id/{submit,approve,reject,reimburse}` | draft → submitted → approved → reimbursed; `expenseDate=2026-06-20` preserved (no drift); reject-after-reimburse → 400; reimburse-before-approve → 400; bad category → 400 |
+| **Finance Petty Cash** | (this round) | `0059` | `POST/GET /finance/petty-cash`, `GET /petty-cash/:id`, `POST /petty-cash/:id/transactions` | float 5000 → expense 1200 = 3800 → topup 2000 = 5800; over-expense → 400; bad category → 400; both txn dates preserved (no drift, `::text` cast applied upfront) |
 
 ### D. Bugs found
-- 🐞 **Pre-existing (flagged as a separate task):** `GET /subcontracts/subcontracts` and `/subcontracts/claims` parse the path segment as a UUID → 500. Likely a class of `:id`-route shadowing across modules.
+- 🐞→✅ **Subcontracts `:id`-route 500 — confirmed already fixed.** Re-analysed this round: commit `0ad55a9` (`fix(api): route-order + UUID guard for :id endpoints`) reordered the literal `claims` routes before `:id` and added `ParseUuidOr404Pipe`; the same pipe guard is now applied across 11 controllers, so a non-UUID path segment yields 404 (not a 500). No further action needed.
 - Self-caught during build: a generated-column INSERT (VAT returns) and an un-`await`ed controller try/catch (400 vs 500) — both fixed before commit.
 - 🐞→✅ **Traffic-fine date drift (caught + fixed mid-session, commit `f9a9964`):** PG `date` columns come back as a JS `Date` in the server's local TZ (Asia/Dubai = UTC+4); the original mapper used `toISOString().split('T')[0]` which converted to UTC and shifted the day on every update. Replaced with a `dateOnly()` helper using local `getFullYear/Month/Date` components; smoke-test now confirms `fineDate=2026-06-22` survives create → assign → pay. **Lesson:** `dist/` from a workspace dep is stale after editing source — `pnpm --filter <consumer> build` does *not* rebuild deps; needed `pnpm --filter @aura/fleet build` to make the fix actually run.
 

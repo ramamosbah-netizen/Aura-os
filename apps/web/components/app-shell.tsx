@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav';
 import CommandPalette from './command-palette';
+import ThemeToggle from './theme-toggle';
 import type { SessionUser } from '@/lib/session';
 
 /**
@@ -145,6 +146,8 @@ export default function AppShell({
               </div>
             )}
           </div>
+
+          <ThemeToggle />
         </header>
         <main style={s.main}>{children}</main>
       </div>
@@ -164,7 +167,7 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     borderRight: '1px solid var(--border)',
-    background: 'rgba(20,25,37,0.6)',
+    background: 'var(--sidebar-bg)',
     padding: '20px 14px',
     position: 'sticky',
     top: 0,
@@ -188,7 +191,7 @@ const s = {
     color: 'var(--text)',
     fontSize: 14,
   } as CSSProperties,
-  linkActive: { background: 'var(--panel-2)', color: '#fff' } as CSSProperties,
+  linkActive: { background: 'var(--panel-2)', color: 'var(--text)' } as CSSProperties,
   linkGlyph: { width: 18, textAlign: 'center', color: 'var(--accent)' } as CSSProperties,
   col: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' } as CSSProperties,
   topbar: {
@@ -199,7 +202,7 @@ const s = {
     borderBottom: '1px solid var(--border)',
     position: 'sticky',
     top: 0,
-    background: 'rgba(11,14,20,0.7)',
+    background: 'var(--topbar-bg)',
     backdropFilter: 'blur(6px)',
     zIndex: 10,
   } as CSSProperties,

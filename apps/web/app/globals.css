@@ -8,6 +8,25 @@
   --accent: #5b8cff;
   --good: #3ecf8e;
   --bad: #ff6b6b;
+  /* translucent shell surfaces (kept as vars so they flip with the theme) */
+  --sidebar-bg: rgba(20, 25, 37, 0.6);
+  --topbar-bg: rgba(11, 14, 20, 0.7);
+  --bg-glow: #16203a;
+}
+
+:root[data-theme='light'] {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-2: #eef1f7;
+  --border: #d7dce6;
+  --text: #1a2030;
+  --muted: #5a6478;
+  --accent: #2f6bff;
+  --good: #1f9d63;
+  --bad: #d83a3a;
+  --sidebar-bg: rgba(255, 255, 255, 0.72);
+  --topbar-bg: rgba(245, 247, 251, 0.72);
+  --bg-glow: #dfe7fb;
 }
 
 * {
@@ -21,7 +40,7 @@ body {
 }
 
 body {
-  background: radial-gradient(1200px 600px at 70% -10%, #16203a 0%, var(--bg) 55%);
+  background: radial-gradient(1200px 600px at 70% -10%, var(--bg-glow) 0%, var(--bg) 55%);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;

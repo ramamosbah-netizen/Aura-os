@@ -2,7 +2,7 @@
 
 > **Date:** 2026-06-29
 > **Branch:** `main` (feature branch `feat/v8-enterprise-expansion` merged via `eff429b`)
-> **Verified state:** `pnpm typecheck` 42/42 · `pnpm test` 40/40 · Supabase DB 52/52 migrations
+> **Verified state:** `pnpm typecheck` 42/42 · `pnpm test` 41/41 · Supabase DB 55/55 migrations
 > **Note:** This is the single consolidated report. Prior per-phase reports were removed from `docs/reports/`; they remain in git history if needed.
 
 ---
@@ -91,6 +91,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 - ✅ **Finance VAT return** (`8fb8bef`): the tax engine existed but had no *period* return — added period output/input/net filing on the pre-existing `aura_finance_tax_returns` table (0048; `net_tax_payable` generated). preview → generate draft → file. Live-verified (generate→file→list; bad period → 400).
 - 🐞 **Pre-existing bug found** (flagged for separate fix): `GET /subcontracts/subcontracts` and `/subcontracts/claims` hit a `:id` route → uuid cast error → 500. Not from this session's work; subcontracts route ordering / non-uuid id guard needed (likely a class of bug across modules' `:id` GETs).
 - ✅ Found **3-way match UI already exists** in `invoices-list.tsx` (client-side PO/GRN comparison) — gap report was pessimistic here.
+- ✅ **Inventory Stock Transfers** (`68e3338`): warehouse-to-warehouse transfers — domain (makeStockTransfer + same-item/positive-qty validation) + store (port/in-mem/postgres) + TransferService (atomic issue-from-source + receipt-to-dest via StockService) + migration `0055` + API controller + BFF route + `/inventory/transfers` page (source/dest picker + qty + history) + nav. Live-verified (WH-A 500→450, WH-B 100→150; over-transfer rejected 400). Note: live DB `tenant_id` column needs `ALTER … TYPE text` (was uuid; migration file corrected).
 - ⚠️ **Versioning regression fixed** (`8dfeede`): the `/api/v1` change had missed ~71 `getJson<T>('/api/…')` Server-Component calls — now normalized centrally in `getJson`.
 - Remaining depth (still pessimistically ~40-50%): Finance VAT/bank-rec UI/treasury/IFRS-15; Projects EVM/delay-analysis/EOT UI; Inventory multi-warehouse/transfers; HR visa/labour-camp/EOSB; Fleet GPS/Salik/fines. *(Several may already exist in the rich client components — verify before building.)*
 
@@ -128,7 +129,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~48+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** (apps/api test runner wired this session), Supabase migrations **51 → 55** applied & verified live.
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~51+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** (apps/api test runner wired this session), Supabase migrations **51 → 55** applied & verified live.
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |
@@ -151,6 +152,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **Inventory Stock** | `f872236` | `0054` | `/inventory/stock` (+`/movements`) | 100 → issue 30 → 70 → receive 50 → 120; over-issue rejected |
 | **HR EOSB/gratuity** | `2f813fb` | — (stateless) | `POST /hr/eosb` | 2yr term 30k → 41,970; resign → 13,990; <1yr → 0; bad → 400 |
 | **Finance VAT return** | `8fb8bef` | — (table from `0048`) | `/finance/vat-returns` (preview/generate/status) | generate draft → file → list; bad period → 400 |
+| **Inventory Transfers** | `68e3338` | `0055` | `/inventory/transfers` (POST/GET) | WH-A 500→450, WH-B 100→150; over-transfer → 400 |
 
 ### D. Bugs found
 - 🐞 **Pre-existing (flagged as a separate task):** `GET /subcontracts/subcontracts` and `/subcontracts/claims` parse the path segment as a UUID → 500. Likely a class of `:id`-route shadowing across modules.

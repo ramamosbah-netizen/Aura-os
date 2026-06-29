@@ -21,6 +21,11 @@ import { InMemoryDelayStore, InMemoryEotStore } from './in-memory-delay-eot-stor
 import { PostgresDelayStore, PostgresEotStore } from './postgres-delay-eot-store';
 import { DelayEotService } from './delay-eot.service';
 
+import { VARIATION_STORE } from './variation-store';
+import { InMemoryVariationStore } from './in-memory-variation-store';
+import { PostgresVariationStore } from './postgres-variation-store';
+import { VariationService } from './variation.service';
+
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
   imports: [CoreModule],
@@ -55,11 +60,18 @@ import { DelayEotService } from './delay-eot.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresEotStore(pool) : new InMemoryEotStore(),
     },
+    {
+      provide: VARIATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresVariationStore(pool) : new InMemoryVariationStore(),
+    },
     ProjectService,
     WbsService,
     CbsService,
     DelayEotService,
+    VariationService,
   ],
-  exports: [ProjectService, WbsService, CbsService, DelayEotService],
+  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService],
 })
 export class ProjectsModule {}

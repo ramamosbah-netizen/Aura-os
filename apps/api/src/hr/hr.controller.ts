@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Employee,
+  type ExpiryReport,
   type Leave,
   type PayrollRun,
   type TimesheetEntry,
@@ -92,6 +93,21 @@ export class HrController {
   listEmployees(): Promise<Employee[]> {
     const ctx = this.tenant.get();
     return this.hrService.listEmployees(ctx.tenantId);
+  }
+
+  /** Statutory document-expiry watch-list (residence visa + labour permit), bucketed by urgency. */
+  @Get('employees/document-expiry')
+  documentExpiry(
+    @Query('asOf') asOf?: string,
+    @Query('criticalDays') criticalDays?: string,
+    @Query('warningDays') warningDays?: string,
+  ): Promise<ExpiryReport> {
+    const ctx = this.tenant.get();
+    return this.hrService.getDocumentExpiry(ctx.tenantId, {
+      asOf: asOf || undefined,
+      criticalDays: criticalDays ? Number(criticalDays) : undefined,
+      warningDays: warningDays ? Number(warningDays) : undefined,
+    });
   }
 
   // ── Leaves ─────────────────────────────────────────────────────────────────

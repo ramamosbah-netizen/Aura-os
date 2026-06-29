@@ -3,6 +3,7 @@ import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Employee, makeEmployee } from './domain/employee';
+import { type ExpiryOptions, type ExpiryReport, documentExpiryReport } from './domain/document-expiry';
 import { type Leave, makeLeave } from './domain/leave';
 import { type PayrollRun, makePayrollRun } from './domain/payroll-run';
 import { type TimesheetEntry, makeTimesheetEntry, submitTimesheet, approveTimesheet, rejectTimesheet } from './domain/timesheet';
@@ -126,6 +127,12 @@ export class HrService {
 
   listEmployees(tenantId: string): Promise<Employee[]> {
     return this.employeeStore.findByTenant(tenantId);
+  }
+
+  /** Read-model: statutory document (visa / labour permit) expiry, bucketed by urgency. */
+  async getDocumentExpiry(tenantId: string, options?: ExpiryOptions): Promise<ExpiryReport> {
+    const employees = await this.employeeStore.findByTenant(tenantId);
+    return documentExpiryReport(employees, options);
   }
 
   // ── Leaves ─────────────────────────────────────────────────────────────────

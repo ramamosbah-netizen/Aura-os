@@ -76,8 +76,9 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 - **Embeddings: neural now config-ready** (commit `bee1450`). `AiService.embed()` uses a real OpenAI-compatible embeddings API when `EMBEDDINGS_API_KEY` is set (OpenAI or Voyage via `EMBEDDINGS_BASE_URL`), with the lexical embedding as offline fallback. Remaining: it's a config flip + key away — *not yet exercised against a live embeddings API* (no key here; the request/parse/fallback path is unit-tested with a mocked `fetch`).
 - Missing: 7-criteria bid scoring, client profitability / LTV, document intelligence / OCR, BIM viewer, knowledge graph, multi-agent DAG orchestration, universal `*` event observer, role-specific agent logic (CEO/CFO/PM exist as UI, not agents).
 
-### 3.3 Experience (L5)
-- Company switcher (BFF route exists; full context-rehydration unverified), **global search**, **universal inbox/notifications**, theme/density switcher — missing or partial.
+### 3.3 Experience (L5) — *in progress (all 3 tracks underway per user)*
+- ✅ **Global search** — DONE (`3ab8d24`): ⌘K palette now searches records across the spine (CRM/tenders/contracts/projects/POs/invoices) via a host-side aggregator + `/api/v1/search`; live-verified. *(Also wired `apps/api`'s missing vitest runner — api tests now execute.)*
+- Remaining L5: **universal inbox/notifications**, **company switcher** (BFF route exists; full context-rehydration unverified), theme/density switcher.
 - **0 of 4 edge apps**: Customer Portal, Supplier Portal, Mobile Workforce PWA, BI dashboards.
 
 ### 3.4 Module depth (largest scope item)

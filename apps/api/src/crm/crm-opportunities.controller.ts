@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type Opportunity, type OpportunityStage } from '@aura/shared';
 import { OpportunityService } from '@aura/crm';
 
@@ -45,13 +45,13 @@ export class CrmOpportunitiesController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateOpportunityDto): Promise<Opportunity> {
+  update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateOpportunityDto): Promise<Opportunity> {
     const ctx = this.tenant.get();
     return this.opportunities.update(id, dto, ctx.actorId);
   }
 
   @Post(':id/forecast')
-  forecast(@Param('id') id: string): Promise<{ winProbability: number; reason: string }> {
+  forecast(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ winProbability: number; reason: string }> {
     return this.opportunities.forecastWinProbability(id);
   }
 
@@ -62,7 +62,7 @@ export class CrmOpportunitiesController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<Opportunity> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Opportunity> {
     const found = await this.opportunities.get(id);
     if (!found) throw new NotFoundException(`Opportunity ${id} not found`);
     return found;

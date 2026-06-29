@@ -61,6 +61,7 @@ export * from './workflow/saga-store';
 export * from './workflow/in-memory-saga-store';
 export * from './workflow/postgres-saga-store';
 export * from './workflow/saga-orchestrator.service';
+export * from './http/uuid.pipe';
 
 
 

@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type GoodsReceipt, type GoodsReceiptStatus, GoodsReceiptService } from '@aura/inventory';
 
 interface CreateGoodsReceiptDto {
@@ -53,7 +53,7 @@ export class InventoryController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<GoodsReceipt> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<GoodsReceipt> {
     const found = await this.grns.get(id);
     if (!found) throw new NotFoundException(`goods receipt ${id} not found`);
     return found;

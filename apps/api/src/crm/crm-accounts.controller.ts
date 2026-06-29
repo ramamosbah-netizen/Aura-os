@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type Account, type AccountStatus, AccountService } from '@aura/crm';
 
 interface CreateAccountDto {
@@ -42,7 +42,7 @@ export class CrmAccountsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string): Promise<Account> {
+  async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Account> {
     const found = await this.accounts.get(id);
     if (!found) throw new NotFoundException(`account ${id} not found`);
     return found;

@@ -56,6 +56,7 @@ import { AmcController } from './amc/amc.controller';
 import { SearchController } from './search/search.controller';
 import { SearchService } from './search/search.service';
 import { StockController } from './inventory/stock.controller';
+import { TransferController } from './inventory/transfer.controller';
 
 /**
  * The API host. Phase 0 wires only the kernel (CoreModule) + a health check and
@@ -63,7 +64,7 @@ import { StockController } from './inventory/stock.controller';
  */
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, TenderingController, ContractsController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, StockController],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, TenderingController, ContractsController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, StockController, TransferController],
   providers: [SampleEventSubscriber, CrossModuleSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, SearchService],
 })
 export class AppModule {}

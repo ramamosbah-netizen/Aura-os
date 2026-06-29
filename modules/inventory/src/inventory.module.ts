@@ -11,6 +11,11 @@ import { InMemoryStockStore } from './in-memory-stock-store';
 import { PostgresStockStore } from './postgres-stock-store';
 import { StockService } from './stock.service';
 
+import { TRANSFER_STORE } from './transfer-store';
+import { InMemoryTransferStore } from './in-memory-transfer-store';
+import { PostgresTransferStore } from './postgres-transfer-store';
+import { TransferService } from './transfer.service';
+
 /** The Inventory business module — same shape as Procurement / the deal-chain modules. */
 @Module({
   imports: [CoreModule],
@@ -27,9 +32,16 @@ import { StockService } from './stock.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresStockStore(pool) : new InMemoryStockStore(),
     },
+    {
+      provide: TRANSFER_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTransferStore(pool) : new InMemoryTransferStore(),
+    },
     GoodsReceiptService,
     StockService,
+    TransferService,
   ],
-  exports: [GoodsReceiptService, StockService],
+  exports: [GoodsReceiptService, StockService, TransferService],
 })
 export class InventoryModule {}

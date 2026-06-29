@@ -35,7 +35,8 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 
 ### 1.6 Law #6 — consistent API versioning
 - Backend was half-versioned (3 controllers `/api/v1/`, ~25 unversioned). Now uniform under **`/api/v1`** (`setGlobalPrefix('api/v1')` + stripped the redundant `v1/` from amc/audit/builder). Re-prefixed all **149** web→Nest calls (the single `${apiBase()}/api/` pattern; collapsed the 7 pre-versioned to avoid `/v1/v1`).
-- **Runtime-verified**: booted the API against live Supabase and curled — `/api/v1/health|crm/accounts|amc/contracts` → 200; old `/api/*` and doubled `/api/v1/v1/*` → 404.
+- **Runtime-verified (API)**: booted the API against live Supabase and curled — `/api/v1/health|crm/accounts|amc/contracts` → 200; old `/api/*` and doubled `/api/v1/v1/*` → 404.
+- **Verified end-to-end (web)**: against the running web (:3000) → API (:4000) → Supabase, the web BFF route `/api/projects/projects` returned **200 with live DB rows** (proving the BFF now calls `/api/v1` — a stale `/api` call would 404 against the v1-only API), `/api/amc/contracts` → 200, and Server-Component pages (`/crm/accounts`, `/finance/invoices`) rendered 200.
 
 ### 1.7 Housekeeping
 - Merged the feature branch to `main` (`--no-ff`, `eff429b`).

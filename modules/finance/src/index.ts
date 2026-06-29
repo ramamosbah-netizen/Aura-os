@@ -42,5 +42,11 @@ export * from './in-memory-petty-cash-store';
 export * from './postgres-petty-cash-store';
 export * from './petty-cash.service';
 
+export * from './domain/customer-invoice';
+export * from './customer-invoice-store';
+export * from './in-memory-customer-invoice-store';
+export * from './postgres-customer-invoice-store';
+export * from './customer-invoice.service';
+
 export * from './finance.module';
 export * from './projections/profit-loss.projection';

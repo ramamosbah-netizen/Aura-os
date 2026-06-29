@@ -36,6 +36,11 @@ import { InMemoryPettyCashStore } from './in-memory-petty-cash-store';
 import { PostgresPettyCashStore } from './postgres-petty-cash-store';
 import { PettyCashService } from './petty-cash.service';
 
+import { CUSTOMER_INVOICE_STORE } from './customer-invoice-store';
+import { InMemoryCustomerInvoiceStore } from './in-memory-customer-invoice-store';
+import { PostgresCustomerInvoiceStore } from './postgres-customer-invoice-store';
+import { CustomerInvoiceService } from './customer-invoice.service';
+
 import { ProcurementModule } from '@aura/procurement';
 import { InventoryModule } from '@aura/inventory';
 import { ProfitLossProjection } from './projections/profit-loss.projection';
@@ -98,6 +103,12 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresPettyCashStore(pool) : new InMemoryPettyCashStore(),
     },
+    {
+      provide: CUSTOMER_INVOICE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCustomerInvoiceStore(pool) : new InMemoryCustomerInvoiceStore(),
+    },
     InvoiceService,
     AccountService,
     JournalService,
@@ -105,8 +116,9 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
     BankReconciliationService,
     TaxService,
     PettyCashService,
+    CustomerInvoiceService,
   ],
-  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService],
+  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService],
 })
 export class FinanceModule implements OnModuleInit {
   constructor(private readonly projectionEngine: ProjectionEngine) {}

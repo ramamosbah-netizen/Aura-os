@@ -24,6 +24,9 @@ import {
   type PettyCashTxType,
   type PettyCashCategory,
   PettyCashService,
+  type CustomerInvoice,
+  type NewCustomerInvoiceLine,
+  CustomerInvoiceService,
 } from '@aura/finance';
 
 interface CreateInvoiceDto {
@@ -86,6 +89,7 @@ export class FinanceController {
     private readonly reconciliation: BankReconciliationService,
     private readonly tax: TaxService,
     private readonly pettyCash: PettyCashService,
+    private readonly customerInvoices: CustomerInvoiceService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -428,6 +432,76 @@ export class FinanceController {
     if (!dto?.transactionDate) throw new BadRequestException('transactionDate is required');
     try {
       return await this.pettyCash.recordTransaction(id, dto.type, Number(dto.amount), dto.transactionDate, dto.category, dto.description);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── CUSTOMER INVOICES (AR / sales) ───────────────────────────────────────
+
+  @Post('customer-invoices')
+  async createCustomerInvoice(
+    @Body() dto: { invoiceNumber: string; customerName: string; projectId?: string; projectName?: string; contractRef?: string; issueDate: string; dueDate?: string; lines: NewCustomerInvoiceLine[] },
+  ): Promise<CustomerInvoice> {
+    if (!dto?.invoiceNumber?.trim()) throw new BadRequestException('invoiceNumber is required');
+    if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
+    if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
+    if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.customerInvoices.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        invoiceNumber: dto.invoiceNumber,
+        customerName: dto.customerName,
+        projectId: dto.projectId ?? null,
+        projectName: dto.projectName ?? null,
+        contractRef: dto.contractRef ?? null,
+        issueDate: dto.issueDate,
+        dueDate: dto.dueDate ?? null,
+        lines: dto.lines,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('customer-invoices')
+  listCustomerInvoices(@Query('status') status?: CustomerInvoice['status'], @Query('projectId') projectId?: string): Promise<CustomerInvoice[]> {
+    return this.customerInvoices.list({ tenantId: this.tenant.get().tenantId, status, projectId, limit: 100 });
+  }
+
+  @Get('customer-invoices/:id')
+  async getCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
+    const found = await this.customerInvoices.get(id);
+    if (!found) throw new NotFoundException(`customer invoice ${id} not found`);
+    return found;
+  }
+
+  @Post('customer-invoices/:id/issue')
+  async issueCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
+    try {
+      return await this.customerInvoices.issue(id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('customer-invoices/:id/receipts')
+  async recordReceipt(@Param('id') id: string, @Body() dto: { amount: number }): Promise<CustomerInvoice> {
+    if (!(Number(dto?.amount) > 0)) throw new BadRequestException('amount must be positive');
+    try {
+      return await this.customerInvoices.recordReceipt(id, Number(dto.amount));
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('customer-invoices/:id/cancel')
+  async cancelCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
+    try {
+      return await this.customerInvoices.cancel(id);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

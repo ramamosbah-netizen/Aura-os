@@ -30,8 +30,11 @@ export async function currentUser(): Promise<SessionUser | null> {
  * the Workspace live (uncached, per-request).
  */
 export async function getJson<T>(path: string): Promise<T | null> {
+  // getJson always targets the versioned Nest API. Callers pass `/api/...`; normalize to
+  // `/api/v1/...` here so every Server-Component fetch is versioned without touching call sites.
+  const p = path.startsWith('/api/') && !path.startsWith('/api/v1/') ? path.replace('/api/', '/api/v1/') : path;
   try {
-    const res = await fetch(`${apiBase()}${path}`, { cache: 'no-store', headers: await authHeader() });
+    const res = await fetch(`${apiBase()}${p}`, { cache: 'no-store', headers: await authHeader() });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {

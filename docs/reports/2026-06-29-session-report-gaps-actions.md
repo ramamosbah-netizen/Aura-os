@@ -86,6 +86,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 
 ### 3.4 Module depth (largest scope item) — *track started*
 - ✅ **Procurement RFQ** (`04c1387`): the missing PR→PO sourcing step — full vertical (domain/store/service + migration `0053` + API + 5 BFF routes + `/procurement/rfqs` page with side-by-side bid comparison + award). Live-verified end-to-end (create → quotes → recommended=cheapest → award).
+- ✅ **Inventory Stock** (`f872236`): inventory was GRN-only — added the on-hand side (stock items + receipt/issue movements + live on-hand, can't go negative). Full vertical (domain/store/service + migration `0054` + API + 3 BFF routes + `/inventory/stock` page). Live-verified (100 → issue 30 → 70 → receive 50 → 120; over-issue rejected).
 - ✅ Found **3-way match UI already exists** in `invoices-list.tsx` (client-side PO/GRN comparison) — gap report was pessimistic here.
 - ⚠️ **Versioning regression fixed** (`8dfeede`): the `/api/v1` change had missed ~71 `getJson<T>('/api/…')` Server-Component calls — now normalized centrally in `getJson`.
 - Remaining depth (still pessimistically ~40-50%): Finance VAT/bank-rec UI/treasury/IFRS-15; Projects EVM/delay-analysis/EOT UI; Inventory multi-warehouse/transfers; HR visa/labour-camp/EOSB; Fleet GPS/Salik/fines. *(Several may already exist in the rich client components — verify before building.)*

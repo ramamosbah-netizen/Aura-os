@@ -158,6 +158,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **Fleet Traffic Fines (UAE)** | `a26c784` + `f9a9964` | `0057` | `POST/GET /fleet/fines`, `PUT /fines/:id/{assign,dispute,pay}` | record (DXB-12345 / 600 AED / 4 pts) → assign (UUID driver) → pay; bad amount → 400; dispute-after-paid → 400; **date stable across all updates** (post-fix) |
 | **HR Expense Claims** | (this round) | `0058` | `POST/GET /hr/expense-claims`, `POST /expense-claims/:id/{submit,approve,reject,reimburse}` | draft → submitted → approved → reimbursed; `expenseDate=2026-06-20` preserved (no drift); reject-after-reimburse → 400; reimburse-before-approve → 400; bad category → 400 |
 | **Asset Depreciation** | `dfc7bdb` | — (stateless calc) | `GET /assets/:id/depreciation?usefulLife=&salvage=` | 500k / life 5 / salvage 50k → annual 90k, schedule 500k→50k over 2026–2030; bad salvage → 400; non-uuid → 404 |
+| **Project Variation Orders** | `73bd992` | `0059` | `POST/GET /projects/variations`, `/variations/:id/status`, `/variations/summary/:projectId` | project 1,000,000 → +80k addition → approve → revised 1,080,000; bad type → 400 |
 
 ### D. Bugs found
 - 🐞 **Pre-existing (flagged as a separate task):** `GET /subcontracts/subcontracts` and `/subcontracts/claims` parse the path segment as a UUID → 500. Likely a class of `:id`-route shadowing across modules.

@@ -32,6 +32,7 @@ export const NAV: NavGroup[] = [
     title: 'Operate',
     items: [
       { label: 'Purchase requests', href: '/procurement/purchase-requests', glyph: '▤', desc: 'Procurement request & approval' },
+      { label: 'RFQs', href: '/procurement/rfqs', glyph: '◷', desc: 'Vendor quotations & bid comparison' },
       { label: 'Purchase orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' },
       { label: 'Goods receipts', href: '/inventory/grns', glyph: '▢', desc: 'Inventory — received vs POs' },
       { label: 'Engineering', href: '/engineering', glyph: '⚙', desc: 'Shop drawings, RFIs, & submittals' },

@@ -6,17 +6,20 @@ import { type Employee, makeEmployee } from './domain/employee';
 import { type Leave, makeLeave } from './domain/leave';
 import { type PayrollRun, makePayrollRun } from './domain/payroll-run';
 import { type TimesheetEntry, makeTimesheetEntry, submitTimesheet, approveTimesheet, rejectTimesheet } from './domain/timesheet';
+import { type ExpenseClaim, makeExpenseClaim, submitClaim, approveClaim, rejectClaim, reimburseClaim } from './domain/expense-claim';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
 export const PAYROLL_RUN_STORE = Symbol('PAYROLL_RUN_STORE');
 export const TIMESHEET_STORE = Symbol('TIMESHEET_STORE');
+export const EXPENSE_CLAIM_STORE = Symbol('EXPENSE_CLAIM_STORE');
 
 import {
   type EmployeeStore,
   type LeaveStore,
   type PayrollRunStore,
   type TimesheetStore,
+  type ExpenseClaimStore,
 } from './store.interface';
 
 export const HR_EVENT = {
@@ -26,6 +29,9 @@ export const HR_EVENT = {
   payrollRun: 'hr.payroll.run',
   timesheetSubmitted: 'hr.timesheet.submitted',
   timesheetApproved: 'hr.timesheet.approved',
+  expenseSubmitted: 'hr.expense.submitted',
+  expenseApproved: 'hr.expense.approved',
+  expenseReimbursed: 'hr.expense.reimbursed',
 };
 
 @Injectable()
@@ -37,6 +43,7 @@ export class HrService {
     @Inject(LEAVE_STORE) private readonly leaveStore: LeaveStore,
     @Inject(PAYROLL_RUN_STORE) private readonly payrollRunStore: PayrollRunStore,
     @Inject(TIMESHEET_STORE) private readonly timesheetStore: TimesheetStore,
+    @Inject(EXPENSE_CLAIM_STORE) private readonly expenseClaimStore: ExpenseClaimStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -331,5 +338,82 @@ export class HrService {
 
   listTimesheetsByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]> {
     return this.timesheetStore.findByEmployee(tenantId, employeeId);
+  }
+
+  // ── Expense Claims ───────────────────────────────────────────────────────
+
+  async createExpenseClaim(input: {
+    tenantId: string;
+    employeeId: string;
+    projectId?: string | null;
+    category: ExpenseClaim['category'];
+    amount: number;
+    expenseDate: string;
+    description?: string;
+  }): Promise<ExpenseClaim> {
+    const claim = makeExpenseClaim(input);
+    await this.expenseClaimStore.save(claim);
+    this.logger.log(`Expense claim ${claim.id} created for ${claim.employeeId}: ${claim.amount} AED (${claim.category})`);
+    return claim;
+  }
+
+  async submitExpenseClaim(tenantId: string, id: string): Promise<ExpenseClaim> {
+    const claim = await this.expenseClaimStore.findById(tenantId, id);
+    if (!claim) throw new Error(`expense claim ${id} not found`);
+    const updated = submitClaim(claim);
+    await this.expenseClaimStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.expenseSubmitted,
+        tenantId, companyId: null, actorId: claim.employeeId,
+        aggregateType: 'hr.expense_claim', aggregateId: id,
+        payload: { employeeId: claim.employeeId, amount: claim.amount, category: claim.category },
+      }),
+    ]);
+    return updated;
+  }
+
+  async approveExpenseClaim(tenantId: string, id: string, approverId: string): Promise<ExpenseClaim> {
+    const claim = await this.expenseClaimStore.findById(tenantId, id);
+    if (!claim) throw new Error(`expense claim ${id} not found`);
+    const updated = approveClaim(claim, approverId);
+    await this.expenseClaimStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.expenseApproved,
+        tenantId, companyId: null, actorId: approverId,
+        aggregateType: 'hr.expense_claim', aggregateId: id,
+        payload: { employeeId: claim.employeeId, amount: claim.amount, approvedBy: approverId },
+      }),
+    ]);
+    return updated;
+  }
+
+  async rejectExpenseClaim(tenantId: string, id: string): Promise<ExpenseClaim> {
+    const claim = await this.expenseClaimStore.findById(tenantId, id);
+    if (!claim) throw new Error(`expense claim ${id} not found`);
+    const updated = rejectClaim(claim);
+    await this.expenseClaimStore.save(updated);
+    return updated;
+  }
+
+  async reimburseExpenseClaim(tenantId: string, id: string, reimbursedDate?: string): Promise<ExpenseClaim> {
+    const claim = await this.expenseClaimStore.findById(tenantId, id);
+    if (!claim) throw new Error(`expense claim ${id} not found`);
+    const updated = reimburseClaim(claim, reimbursedDate);
+    await this.expenseClaimStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.expenseReimbursed,
+        tenantId, companyId: null, actorId: null,
+        aggregateType: 'hr.expense_claim', aggregateId: id,
+        payload: { employeeId: claim.employeeId, amount: claim.amount, reimbursedDate: updated.reimbursedDate },
+      }),
+    ]);
+    return updated;
+  }
+
+  listExpenseClaims(tenantId: string): Promise<ExpenseClaim[]> {
+    return this.expenseClaimStore.findByTenant(tenantId);
   }
 }

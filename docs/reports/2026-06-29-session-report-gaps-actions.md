@@ -130,7 +130,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet now 14 tests incl. 10 new traffic-fine state-machine tests; apps/api test runner wired this session), Supabase migrations **51 → 57** applied & verified live.
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet 14 tests incl. 10 traffic-fine state-machine tests; HR now **27 tests** incl. 9 new expense-claim state-machine tests; apps/api test runner wired this session), Supabase migrations **51 → 58** applied & verified live.
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |
@@ -156,14 +156,18 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **Inventory Transfers** | `68e3338` | `0055` | `/inventory/transfers` (POST/GET) | WH-A 500→450, WH-B 100→150; over-transfer → 400 |
 | **HR Timesheets** | `0f9f6ce` | `0056` | `/hr/timesheets` (CRUD + submit/approve/reject) | create→draft, submit→submitted, bad hours→400 |
 | **Fleet Traffic Fines (UAE)** | `a26c784` + `f9a9964` | `0057` | `POST/GET /fleet/fines`, `PUT /fines/:id/{assign,dispute,pay}` | record (DXB-12345 / 600 AED / 4 pts) → assign (UUID driver) → pay; bad amount → 400; dispute-after-paid → 400; **date stable across all updates** (post-fix) |
+| **HR Expense Claims** | (this round) | `0058` | `POST/GET /hr/expense-claims`, `POST /expense-claims/:id/{submit,approve,reject,reimburse}` | draft → submitted → approved → reimbursed; `expenseDate=2026-06-20` preserved (no drift); reject-after-reimburse → 400; reimburse-before-approve → 400; bad category → 400 |
 
 ### D. Bugs found
 - 🐞 **Pre-existing (flagged as a separate task):** `GET /subcontracts/subcontracts` and `/subcontracts/claims` parse the path segment as a UUID → 500. Likely a class of `:id`-route shadowing across modules.
 - Self-caught during build: a generated-column INSERT (VAT returns) and an un-`await`ed controller try/catch (400 vs 500) — both fixed before commit.
 - 🐞→✅ **Traffic-fine date drift (caught + fixed mid-session, commit `f9a9964`):** PG `date` columns come back as a JS `Date` in the server's local TZ (Asia/Dubai = UTC+4); the original mapper used `toISOString().split('T')[0]` which converted to UTC and shifted the day on every update. Replaced with a `dateOnly()` helper using local `getFullYear/Month/Date` components; smoke-test now confirms `fineDate=2026-06-22` survives create → assign → pay. **Lesson:** `dist/` from a workspace dep is stale after editing source — `pnpm --filter <consumer> build` does *not* rebuild deps; needed `pnpm --filter @aura/fleet build` to make the fix actually run.
 
+- ✅ **Date-drift lesson applied proactively (expense claims):** rather than map PG `date` columns via the drift-prone `toISOString().split('T')[0]`, the expense-claim Postgres store selects `expense_date::text` / `reimbursed_date::text` so PG returns the calendar string directly — verified `expenseDate` survived create → submit → approve → reimburse unchanged. *(The HR timesheet mapper still uses the old `toISOString().split` pattern for its `date` column — same latent drift; flagged for a focused fix.)*
+- ⚠️ **uuid-column fallback (expense approve):** `approved_by` is `uuid`; the timesheet pattern's `ctx.actorId ?? 'system'` fallback would throw `invalid input syntax for type uuid` when unauthenticated. Fixed in the expense endpoint to fall back to the nil-uuid `00000000-…-0` system actor; caught via :4100 smoke-test before commit.
+
 ### E. Method note
-The original gap list **over-counted** missing features — universal inbox, company switcher, and 3-way-match UI all already existed. Adopted **verify-before-build** (grep for zero references) — RFQ, Stock, EOSB, VAT-return were each confirmed genuinely absent first.
+The original gap list **over-counted** missing features — universal inbox, company switcher, and 3-way-match UI all already existed. Adopted **verify-before-build** (grep for zero references) — RFQ, Stock, EOSB, VAT-return, and Expense Claims (`grep` for `expense_claim|reimburse|petty_cash` → 0 files) were each confirmed genuinely absent first.
 
 ### F. Operational
 - Dev stack (`pnpm dev`, web :3000 + api :4000) was disrupted twice (editing module source mid-watch; an over-broad `taskkill`) — **restored both times** (currently both 200). Switched to single-PID `taskkill` via `netstat`.

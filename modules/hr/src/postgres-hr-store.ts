@@ -4,7 +4,8 @@ import type { Employee } from './domain/employee';
 import type { Leave } from './domain/leave';
 import type { PayrollRun } from './domain/payroll-run';
 import type { TimesheetEntry } from './domain/timesheet';
-import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore } from './store.interface';
+import type { ExpenseClaim } from './domain/expense-claim';
+import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore } from './store.interface';
 
 export class PostgresEmployeeStore implements EmployeeStore {
   constructor(private readonly pool: Pool) {}
@@ -318,6 +319,58 @@ export class PostgresTimesheetStore implements TimesheetStore {
       status: row.status,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       approvedBy: row.approved_by,
+    };
+  }
+}
+
+const EXPENSE_COLS =
+  'id, tenant_id, employee_id, project_id, category, amount, expense_date::text AS expense_date, description, status, approved_by, reimbursed_date::text AS reimbursed_date, created_at';
+
+export class PostgresExpenseClaimStore implements ExpenseClaimStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(claim: ExpenseClaim, tx?: TxHandle): Promise<ExpenseClaim> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_hr_expense_claims (
+        id, tenant_id, employee_id, project_id, category, amount, expense_date, description, status, approved_by, reimbursed_date, created_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      on conflict (id) do update set
+        status = excluded.status, approved_by = excluded.approved_by, reimbursed_date = excluded.reimbursed_date`,
+      [claim.id, claim.tenantId, claim.employeeId, claim.projectId, claim.category, claim.amount, claim.expenseDate, claim.description, claim.status, claim.approvedBy, claim.reimbursedDate, claim.createdAt],
+    );
+    return claim;
+  }
+
+  async findById(tenantId: string, id: string): Promise<ExpenseClaim | null> {
+    const res = await this.pool.query(`select ${EXPENSE_COLS} from public.aura_hr_expense_claims where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rows.length ? this.mapClaim(res.rows[0]) : null;
+  }
+
+  async findByTenant(tenantId: string): Promise<ExpenseClaim[]> {
+    const res = await this.pool.query(`select ${EXPENSE_COLS} from public.aura_hr_expense_claims where tenant_id = $1 order by created_at desc limit 200`, [tenantId]);
+    return res.rows.map((r) => this.mapClaim(r));
+  }
+
+  async findByEmployee(tenantId: string, employeeId: string): Promise<ExpenseClaim[]> {
+    const res = await this.pool.query(`select ${EXPENSE_COLS} from public.aura_hr_expense_claims where tenant_id = $1 and employee_id = $2 order by created_at desc`, [tenantId, employeeId]);
+    return res.rows.map((r) => this.mapClaim(r));
+  }
+
+  private mapClaim(row: any): ExpenseClaim {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      employeeId: row.employee_id,
+      projectId: row.project_id,
+      category: row.category,
+      amount: Number(row.amount),
+      expenseDate: String(row.expense_date),
+      description: row.description || '',
+      status: row.status,
+      approvedBy: row.approved_by,
+      reimbursedDate: row.reimbursed_date ? String(row.reimbursed_date) : null,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     };
   }
 }

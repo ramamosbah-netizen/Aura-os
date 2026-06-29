@@ -3,7 +3,8 @@ import type { TxHandle } from '@aura/core';
 import type { Employee } from './domain/employee';
 import type { Leave } from './domain/leave';
 import type { PayrollRun } from './domain/payroll-run';
-import type { EmployeeStore, LeaveStore, PayrollRunStore } from './store.interface';
+import type { TimesheetEntry } from './domain/timesheet';
+import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore } from './store.interface';
 
 export class PostgresEmployeeStore implements EmployeeStore {
   constructor(private readonly pool: Pool) {}
@@ -259,6 +260,64 @@ export class PostgresPayrollRunStore implements PayrollRunStore {
       processedAt: row.processed_at ? row.processed_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
+    };
+  }
+}
+
+export class PostgresTimesheetStore implements TimesheetStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(entry: TimesheetEntry, tx?: TxHandle): Promise<TimesheetEntry> {
+    const conn = (tx as PoolClient) || this.pool;
+    const res = await conn.query(
+      `insert into public.aura_hr_timesheets (
+        id, tenant_id, employee_id, project_id, wbs_node_id, date, hours, overtime, description, status, created_at, approved_by
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      on conflict (id) do update set
+        status = excluded.status, approved_by = excluded.approved_by
+      returning *`,
+      [entry.id, entry.tenantId, entry.employeeId, entry.projectId, entry.wbsNodeId, entry.date, entry.hours, entry.overtime, entry.description, entry.status, entry.createdAt, entry.approvedBy],
+    );
+    return this.mapTs(res.rows[0]);
+  }
+
+  async findById(tenantId: string, id: string): Promise<TimesheetEntry | null> {
+    const res = await this.pool.query(`select * from public.aura_hr_timesheets where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rows.length ? this.mapTs(res.rows[0]) : null;
+  }
+
+  async findByTenant(tenantId: string): Promise<TimesheetEntry[]> {
+    const res = await this.pool.query(`select * from public.aura_hr_timesheets where tenant_id = $1 order by date desc limit 200`, [tenantId]);
+    return res.rows.map(this.mapTs);
+  }
+
+  async findByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]> {
+    const res = await this.pool.query(`select * from public.aura_hr_timesheets where tenant_id = $1 and employee_id = $2 order by date desc`, [tenantId, employeeId]);
+    return res.rows.map(this.mapTs);
+  }
+
+  async findByDateRange(tenantId: string, employeeId: string, from: string, to: string): Promise<TimesheetEntry[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_hr_timesheets where tenant_id = $1 and employee_id = $2 and date >= $3 and date <= $4 order by date asc`,
+      [tenantId, employeeId, from, to],
+    );
+    return res.rows.map(this.mapTs);
+  }
+
+  private mapTs(row: any): TimesheetEntry {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      employeeId: row.employee_id,
+      projectId: row.project_id,
+      wbsNodeId: row.wbs_node_id,
+      date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
+      hours: Number(row.hours),
+      overtime: Number(row.overtime),
+      description: row.description || '',
+      status: row.status,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      approvedBy: row.approved_by,
     };
   }
 }

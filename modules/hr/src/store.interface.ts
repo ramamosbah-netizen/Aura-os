@@ -2,6 +2,7 @@ import type { TxHandle } from '@aura/core';
 import { Employee } from './domain/employee';
 import { Leave } from './domain/leave';
 import { PayrollRun } from './domain/payroll-run';
+import { TimesheetEntry } from './domain/timesheet';
 
 export interface EmployeeStore {
   save(employee: Employee, tx?: TxHandle): Promise<Employee>;
@@ -24,4 +25,12 @@ export interface PayrollRunStore {
   findByTenant(tenantId: string): Promise<PayrollRun[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<PayrollRun[]>;
   delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
+}
+
+export interface TimesheetStore {
+  save(entry: TimesheetEntry, tx?: TxHandle): Promise<TimesheetEntry>;
+  findById(tenantId: string, id: string): Promise<TimesheetEntry | null>;
+  findByTenant(tenantId: string): Promise<TimesheetEntry[]>;
+  findByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]>;
+  findByDateRange(tenantId: string, employeeId: string, from: string, to: string): Promise<TimesheetEntry[]>;
 }

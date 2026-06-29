@@ -4,6 +4,7 @@ import {
   type Employee,
   type Leave,
   type PayrollRun,
+  type TimesheetEntry,
   type EosbResult,
   type TerminationType,
   HrService,
@@ -181,6 +182,52 @@ export class HrController {
         lastWorkingDay: dto.lastWorkingDay,
         terminationType: dto.terminationType === 'resignation' ? 'resignation' : 'termination',
       });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Timesheets ─────────────────────────────────────────────────────────────
+
+  @Post('timesheets')
+  async createTimesheet(@Body() dto: { employeeId: string; projectId?: string; wbsNodeId?: string; date: string; hours: number; overtime?: number; description?: string }): Promise<TimesheetEntry> {
+    if (!dto?.employeeId || !dto?.date) throw new BadRequestException('employeeId and date required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.hrService.createTimesheetEntry({ tenantId: ctx.tenantId, ...dto });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('timesheets')
+  listTimesheets(): Promise<TimesheetEntry[]> {
+    return this.hrService.listTimesheets(this.tenant.get().tenantId);
+  }
+
+  @Post('timesheets/:id/submit')
+  async submitTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
+    try {
+      return await this.hrService.submitTimesheetEntry(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('timesheets/:id/approve')
+  async approveTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
+    const ctx = this.tenant.get();
+    try {
+      return await this.hrService.approveTimesheetEntry(ctx.tenantId, id, ctx.actorId ?? 'system');
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('timesheets/:id/reject')
+  async rejectTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
+    try {
+      return await this.hrService.rejectTimesheetEntry(this.tenant.get().tenantId, id);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

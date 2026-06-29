@@ -5,15 +5,18 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner }
 import { type Employee, makeEmployee } from './domain/employee';
 import { type Leave, makeLeave } from './domain/leave';
 import { type PayrollRun, makePayrollRun } from './domain/payroll-run';
+import { type TimesheetEntry, makeTimesheetEntry, submitTimesheet, approveTimesheet, rejectTimesheet } from './domain/timesheet';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
 export const PAYROLL_RUN_STORE = Symbol('PAYROLL_RUN_STORE');
+export const TIMESHEET_STORE = Symbol('TIMESHEET_STORE');
 
 import {
   type EmployeeStore,
   type LeaveStore,
   type PayrollRunStore,
+  type TimesheetStore,
 } from './store.interface';
 
 export const HR_EVENT = {
@@ -21,6 +24,8 @@ export const HR_EVENT = {
   leaveRequested: 'hr.leave.requested',
   leaveApproved: 'hr.leave.approved',
   payrollRun: 'hr.payroll.run',
+  timesheetSubmitted: 'hr.timesheet.submitted',
+  timesheetApproved: 'hr.timesheet.approved',
 };
 
 @Injectable()
@@ -31,6 +36,7 @@ export class HrService {
     @Inject(EMPLOYEE_STORE) private readonly employeeStore: EmployeeStore,
     @Inject(LEAVE_STORE) private readonly leaveStore: LeaveStore,
     @Inject(PAYROLL_RUN_STORE) private readonly payrollRunStore: PayrollRunStore,
+    @Inject(TIMESHEET_STORE) private readonly timesheetStore: TimesheetStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -253,5 +259,77 @@ export class HrService {
 
   listPayrollRuns(tenantId: string): Promise<PayrollRun[]> {
     return this.payrollRunStore.findByTenant(tenantId);
+  }
+
+  // ── Timesheets ─────────────────────────────────────────────────────────────
+
+  async createTimesheetEntry(input: {
+    tenantId: string;
+    employeeId: string;
+    projectId?: string | null;
+    wbsNodeId?: string | null;
+    date: string;
+    hours: number;
+    overtime?: number;
+    description?: string;
+  }): Promise<TimesheetEntry> {
+    const entry = makeTimesheetEntry(input);
+    await this.timesheetStore.save(entry);
+    this.logger.log(`Timesheet entry ${entry.id} created for ${entry.employeeId} on ${entry.date}`);
+    return entry;
+  }
+
+  async submitTimesheetEntry(tenantId: string, id: string): Promise<TimesheetEntry> {
+    const entry = await this.timesheetStore.findById(tenantId, id);
+    if (!entry) throw new Error(`timesheet entry ${id} not found`);
+    const updated = submitTimesheet(entry);
+    await this.timesheetStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.timesheetSubmitted,
+        tenantId,
+        companyId: null,
+        actorId: entry.employeeId,
+        aggregateType: 'hr.timesheet',
+        aggregateId: id,
+        payload: { employeeId: entry.employeeId, date: entry.date, hours: entry.hours },
+      }),
+    ]);
+    return updated;
+  }
+
+  async approveTimesheetEntry(tenantId: string, id: string, approverId: string): Promise<TimesheetEntry> {
+    const entry = await this.timesheetStore.findById(tenantId, id);
+    if (!entry) throw new Error(`timesheet entry ${id} not found`);
+    const updated = approveTimesheet(entry, approverId);
+    await this.timesheetStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.timesheetApproved,
+        tenantId,
+        companyId: null,
+        actorId: approverId,
+        aggregateType: 'hr.timesheet',
+        aggregateId: id,
+        payload: { employeeId: entry.employeeId, date: entry.date, hours: entry.hours, approvedBy: approverId },
+      }),
+    ]);
+    return updated;
+  }
+
+  async rejectTimesheetEntry(tenantId: string, id: string): Promise<TimesheetEntry> {
+    const entry = await this.timesheetStore.findById(tenantId, id);
+    if (!entry) throw new Error(`timesheet entry ${id} not found`);
+    const updated = rejectTimesheet(entry);
+    await this.timesheetStore.save(updated);
+    return updated;
+  }
+
+  listTimesheets(tenantId: string): Promise<TimesheetEntry[]> {
+    return this.timesheetStore.findByTenant(tenantId);
+  }
+
+  listTimesheetsByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]> {
+    return this.timesheetStore.findByEmployee(tenantId, employeeId);
   }
 }

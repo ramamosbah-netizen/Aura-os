@@ -5,4 +5,5 @@ export * from './domain/employee';
 export * from './domain/leave';
 export * from './domain/payroll-run';
 export * from './domain/eosb';
-export { HR_EVENT } from './hr.service';
+export * from './domain/timesheet';
+export { HR_EVENT, TIMESHEET_STORE } from './hr.service';

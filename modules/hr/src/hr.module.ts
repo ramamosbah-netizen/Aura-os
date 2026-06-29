@@ -6,6 +6,7 @@ import {
   EMPLOYEE_STORE,
   LEAVE_STORE,
   PAYROLL_RUN_STORE,
+  TIMESHEET_STORE,
   HrService,
 } from './hr.service';
 
@@ -13,12 +14,14 @@ import {
   InMemoryEmployeeStore,
   InMemoryLeaveStore,
   InMemoryPayrollRunStore,
+  InMemoryTimesheetStore,
 } from './in-memory-hr-store';
 
 import {
   PostgresEmployeeStore,
   PostgresLeaveStore,
   PostgresPayrollRunStore,
+  PostgresTimesheetStore,
 } from './postgres-hr-store';
 
 @Module({
@@ -41,6 +44,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresPayrollRunStore(pool) : new InMemoryPayrollRunStore(),
+    },
+    {
+      provide: TIMESHEET_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTimesheetStore(pool) : new InMemoryTimesheetStore(),
     },
     HrService,
   ],

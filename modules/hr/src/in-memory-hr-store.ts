@@ -2,7 +2,8 @@ import { TxHandle } from '@aura/core';
 import { Employee } from './domain/employee';
 import { Leave } from './domain/leave';
 import { PayrollRun } from './domain/payroll-run';
-import { EmployeeStore, LeaveStore, PayrollRunStore } from './store.interface';
+import { TimesheetEntry } from './domain/timesheet';
+import { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore } from './store.interface';
 
 export class InMemoryEmployeeStore implements EmployeeStore {
   private items = new Map<string, Employee>();
@@ -97,5 +98,39 @@ export class InMemoryPayrollRunStore implements PayrollRunStore {
     const item = this.items.get(id);
     if (!item || item.tenantId !== tenantId) return false;
     return this.items.delete(id);
+  }
+}
+
+export class InMemoryTimesheetStore implements TimesheetStore {
+  private items = new Map<string, TimesheetEntry>();
+
+  async save(entry: TimesheetEntry, tx?: TxHandle): Promise<TimesheetEntry> {
+    const copy = { ...entry };
+    this.items.set(copy.id, copy);
+    return copy;
+  }
+
+  async findById(tenantId: string, id: string): Promise<TimesheetEntry | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return item;
+  }
+
+  async findByTenant(tenantId: string): Promise<TimesheetEntry[]> {
+    return [...this.items.values()]
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  async findByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]> {
+    return [...this.items.values()]
+      .filter((i) => i.tenantId === tenantId && i.employeeId === employeeId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  async findByDateRange(tenantId: string, employeeId: string, from: string, to: string): Promise<TimesheetEntry[]> {
+    return [...this.items.values()]
+      .filter((i) => i.tenantId === tenantId && i.employeeId === employeeId && i.date >= from && i.date <= to)
+      .sort((a, b) => a.date.localeCompare(b.date));
   }
 }

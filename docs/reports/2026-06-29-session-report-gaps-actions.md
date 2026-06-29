@@ -33,9 +33,13 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 - **Ran all migrations against Supabase** (idempotent runner): DB was already at 0014–0051; only `0052` was new → applied. **DB now 52/52.**
 - **Live verification** (`pg_policies`): 83 RLS-enabled `aura_*` tables, 78 with a policy; the 5 without are all kernel-infra (`events`, `webhook_subscriptions`, `webhook_deliveries`, `documents`, `document_versions`) — correctly **deny-all to client roles**.
 
-### 1.6 Housekeeping
+### 1.6 Law #6 — consistent API versioning
+- Backend was half-versioned (3 controllers `/api/v1/`, ~25 unversioned). Now uniform under **`/api/v1`** (`setGlobalPrefix('api/v1')` + stripped the redundant `v1/` from amc/audit/builder). Re-prefixed all **149** web→Nest calls (the single `${apiBase()}/api/` pattern; collapsed the 7 pre-versioned to avoid `/v1/v1`).
+- **Runtime-verified**: booted the API against live Supabase and curled — `/api/v1/health|crm/accounts|amc/contracts` → 200; old `/api/*` and doubled `/api/v1/v1/*` → 404.
+
+### 1.7 Housekeeping
 - Merged the feature branch to `main` (`--no-ff`, `eff429b`).
-- Cleaned junk scratch files from the repo; working tree fully clean.
+- Cleaned junk scratch files + consolidated 101 reports into this single document; working tree fully clean.
 
 ---
 
@@ -62,7 +66,7 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 | 3 Read-model segregation | 🟡 | Projections exist, but not every dashboard/analytics read is proven to hit a projection vs a transactional table — **unaudited**. |
 | 4 Interface decoupling | ✅ | — |
 | 5 Immutable ledger | ✅ | — |
-| 6 API versioning | 🔴 | Inconsistent: 3 controllers `/api/v1/...`, ~25 unversioned. **Runtime-blocked** — fixing means re-prefixing every web→Nest call, verifiable only by launching the full Nest+Next stack (a missed URL = silent 404). |
+| 6 API versioning | ✅ | **Resolved 2026-06-29.** All routes consistently under `/api/v1` (`setGlobalPrefix('api/v1')` + stripped the 3 redundant `v1/` controllers); all 149 web→Nest calls re-prefixed uniformly (single `${apiBase()}/api/` pattern). **Runtime-verified** by booting the API + curl: `/api/v1/*` → 200, old `/api/*` and doubled `/api/v1/v1/*` → 404. |
 | 7 Tenant isolation (RLS) | 🟡 | Policy gaps closed and verified live. **But the real gap:** the app connects via the Supabase **service role, which bypasses RLS** — so tenant isolation for the app's own queries relies on app-level `TenantContext` + query filters, *not* on RLS. RLS today is defense-in-depth vs direct client access only. |
 
 > **Most important architectural caveat:** "✅ RLS" should be read as *"isolation policies present for client/PostgREST access,"* **not** *"DB-enforced multi-tenancy for the app."* The app's own queries are not subject to RLS (service-role bypass). Closing this = a least-privilege app role + `FORCE ROW LEVEL SECURITY`, verifiable only against a live DB.
@@ -96,7 +100,7 @@ Per-module page coverage is roughly **~40%** of the blueprint. Notable missing d
 4. **Roll the CommandBus to the non-spine modules** (engineering, doccontrol, site, hse, quality, hr, fleet, assets, amc, subcontracts, + finance journals/tax, procurement PR, projects wbs/cbs) — same proven template.
 
 ### P2 — needs a running stack / external service to do safely
-5. **Law #6 API versioning** — switch global prefix to `api/v1`, strip the 3 redundant `v1/` controllers, re-prefix every web→Nest call; verify by launching Nest+Next+Supabase (silent-404 risk otherwise).
+5. ~~Law #6 API versioning~~ — **DONE 2026-06-29** (all routes at `/api/v1`, runtime-verified).
 6. **RLS enforcement model** — decide service-role bypass vs least-privilege app role + `FORCE ROW LEVEL SECURITY`; verify tenant isolation against the live DB.
 7. **Neural embeddings** — wire a real embeddings provider behind the existing `embed()` seam (keep lexical as offline fallback).
 
@@ -106,4 +110,4 @@ Per-module page coverage is roughly **~40%** of the blueprint. Notable missing d
 ---
 
 ## 5. One-paragraph summary
-The system is **architecturally sound and most correctness laws are now satisfied**: atomic writes are uniform, the command pipeline is real and idempotent across the core spine, payments are retry-safe, the CDM is complete, and the database is fully migrated and verified live. The remaining gaps are (a) a few **runtime-blocked** items needing a full stack (API versioning, RLS-vs-service-role enforcement, neural embeddings), (b) **breadth** — pipeline rollout to non-spine modules plus ~60% of blueprint pages and the 4 edge apps, and (c) **operational hygiene** — push and secret rotation. The single most important caveat to remember: **RLS is not currently DB-enforcing tenant isolation for the app itself** (service-role bypass); isolation is app-level today.
+The system is **architecturally sound and most correctness laws are now satisfied**: atomic writes are uniform, the command pipeline is real and idempotent across the core spine, payments are retry-safe, the CDM is complete, and the database is fully migrated and verified live. The remaining gaps are (a) a couple of **runtime-blocked** items needing a full stack (RLS-vs-service-role enforcement, neural embeddings) — API versioning is now done and runtime-verified, (b) **breadth** — pipeline rollout to non-spine modules plus ~60% of blueprint pages and the 4 edge apps, and (c) **operational hygiene** — push and secret rotation. The single most important caveat to remember: **RLS is not currently DB-enforcing tenant isolation for the app itself** (service-role bypass); isolation is app-level today.

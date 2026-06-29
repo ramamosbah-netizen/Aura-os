@@ -10,6 +10,9 @@ import {
   type Rfq,
   type RfqQuote,
   RfqService,
+  type Supplier,
+  type SupplierCategory,
+  SupplierService,
 } from '@aura/procurement';
 
 interface CreatePurchaseOrderDto {
@@ -53,6 +56,7 @@ export class ProcurementController {
     private readonly pos: PurchaseOrderService,
     private readonly prs: PurchaseRequestService,
     private readonly rfqs: RfqService,
+    private readonly suppliers: SupplierService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -207,5 +211,55 @@ export class ProcurementController {
     if (!dto?.quoteId) throw new BadRequestException('quoteId is required');
     const ctx = this.tenant.get();
     return this.rfqs.award(id, dto.quoteId, ctx.actorId ?? undefined);
+  }
+
+  // ── SUPPLIER MASTER ──────────────────────────────────────────────────────
+
+  @Post('suppliers')
+  async createSupplier(
+    @Body() dto: { code: string; name: string; category?: SupplierCategory; tradeLicense?: string; trn?: string; contactName?: string; email?: string; phone?: string },
+  ): Promise<Supplier> {
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    if (!dto?.name?.trim()) throw new BadRequestException('name is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.suppliers.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        code: dto.code,
+        name: dto.name,
+        category: dto.category,
+        tradeLicense: dto.tradeLicense ?? null,
+        trn: dto.trn ?? null,
+        contactName: dto.contactName ?? null,
+        email: dto.email ?? null,
+        phone: dto.phone ?? null,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('suppliers')
+  listSuppliers(@Query('status') status?: Supplier['status'], @Query('category') category?: SupplierCategory): Promise<Supplier[]> {
+    return this.suppliers.list({ tenantId: this.tenant.get().tenantId, status, category, limit: 200 });
+  }
+
+  @Get('suppliers/:id')
+  async getSupplier(@Param('id') id: string): Promise<Supplier> {
+    const found = await this.suppliers.get(id);
+    if (!found) throw new NotFoundException(`supplier ${id} not found`);
+    return found;
+  }
+
+  @Patch('suppliers/:id/status')
+  async changeSupplierStatus(@Param('id') id: string, @Body() dto: { action: 'approve' | 'suspend' }): Promise<Supplier> {
+    if (dto?.action !== 'approve' && dto?.action !== 'suspend') throw new BadRequestException("action must be 'approve' or 'suspend'");
+    try {
+      return await this.suppliers.changeStatus(id, dto.action);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

@@ -16,6 +16,11 @@ import { InMemoryRfqStore } from './in-memory-rfq-store';
 import { PostgresRfqStore } from './postgres-rfq-store';
 import { RfqService } from './rfq.service';
 
+import { SUPPLIER_STORE } from './supplier-store';
+import { InMemorySupplierStore } from './in-memory-supplier-store';
+import { PostgresSupplierStore } from './postgres-supplier-store';
+import { SupplierService } from './supplier.service';
+
 /** The Procurement business module — same shape as the deal-chain modules. */
 @Module({
   imports: [CoreModule],
@@ -38,10 +43,17 @@ import { RfqService } from './rfq.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresRfqStore(pool) : new InMemoryRfqStore(),
     },
+    {
+      provide: SUPPLIER_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSupplierStore(pool) : new InMemorySupplierStore(),
+    },
     PurchaseOrderService,
     PurchaseRequestService,
     RfqService,
+    SupplierService,
   ],
-  exports: [PurchaseOrderService, PurchaseRequestService, RfqService],
+  exports: [PurchaseOrderService, PurchaseRequestService, RfqService, SupplierService],
 })
 export class ProcurementModule {}

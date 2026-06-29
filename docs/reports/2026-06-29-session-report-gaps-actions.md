@@ -130,7 +130,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~53+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** (apps/api test runner wired this session), Supabase migrations **51 → 56** applied & verified live.
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet now 14 tests incl. 10 new traffic-fine state-machine tests; apps/api test runner wired this session), Supabase migrations **51 → 57** applied & verified live.
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |
@@ -155,10 +155,12 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **Finance VAT return** | `8fb8bef` | — (table from `0048`) | `/finance/vat-returns` (preview/generate/status) | generate draft → file → list; bad period → 400 |
 | **Inventory Transfers** | `68e3338` | `0055` | `/inventory/transfers` (POST/GET) | WH-A 500→450, WH-B 100→150; over-transfer → 400 |
 | **HR Timesheets** | `0f9f6ce` | `0056` | `/hr/timesheets` (CRUD + submit/approve/reject) | create→draft, submit→submitted, bad hours→400 |
+| **Fleet Traffic Fines (UAE)** | `a26c784` + `f9a9964` | `0057` | `POST/GET /fleet/fines`, `PUT /fines/:id/{assign,dispute,pay}` | record (DXB-12345 / 600 AED / 4 pts) → assign (UUID driver) → pay; bad amount → 400; dispute-after-paid → 400; **date stable across all updates** (post-fix) |
 
 ### D. Bugs found
 - 🐞 **Pre-existing (flagged as a separate task):** `GET /subcontracts/subcontracts` and `/subcontracts/claims` parse the path segment as a UUID → 500. Likely a class of `:id`-route shadowing across modules.
 - Self-caught during build: a generated-column INSERT (VAT returns) and an un-`await`ed controller try/catch (400 vs 500) — both fixed before commit.
+- 🐞→✅ **Traffic-fine date drift (caught + fixed mid-session, commit `f9a9964`):** PG `date` columns come back as a JS `Date` in the server's local TZ (Asia/Dubai = UTC+4); the original mapper used `toISOString().split('T')[0]` which converted to UTC and shifted the day on every update. Replaced with a `dateOnly()` helper using local `getFullYear/Month/Date` components; smoke-test now confirms `fineDate=2026-06-22` survives create → assign → pay. **Lesson:** `dist/` from a workspace dep is stale after editing source — `pnpm --filter <consumer> build` does *not* rebuild deps; needed `pnpm --filter @aura/fleet build` to make the fix actually run.
 
 ### E. Method note
 The original gap list **over-counted** missing features — universal inbox, company switcher, and 3-way-match UI all already existed. Adopted **verify-before-build** (grep for zero references) — RFQ, Stock, EOSB, VAT-return were each confirmed genuinely absent first.

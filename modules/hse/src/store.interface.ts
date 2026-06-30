@@ -2,6 +2,7 @@ import type { TxHandle } from '@aura/core';
 import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
+import type { ToolboxTalk } from './domain/toolbox-talk';
 
 export interface HseIncidentStore {
   save(incident: HseIncident, tx?: TxHandle): Promise<void>;
@@ -22,4 +23,11 @@ export interface CapaActionStore {
   findById(id: string, tenantId: string): Promise<CapaAction | null>;
   findByProject(projectId: string, tenantId: string): Promise<CapaAction[]>;
   findAll(tenantId: string): Promise<CapaAction[]>;
+}
+
+export interface ToolboxTalkStore {
+  save(talk: ToolboxTalk, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<ToolboxTalk | null>;
+  findByProject(projectId: string, tenantId: string): Promise<ToolboxTalk[]>;
+  findAll(tenantId: string): Promise<ToolboxTalk[]>;
 }

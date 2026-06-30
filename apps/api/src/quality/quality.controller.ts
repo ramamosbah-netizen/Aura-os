@@ -4,6 +4,9 @@ import {
   type Ncr,
   type InspectionRequest,
   type Snag,
+  type Itp,
+  type NewItpPoint,
+  type PointResult,
   QualityService,
 } from '@aura/quality';
 
@@ -214,5 +217,64 @@ export class QualityController {
   listSnags(): Promise<Snag[]> {
     const ctx = this.tenant.get();
     return this.qualityService.listSnags(ctx.tenantId);
+  }
+
+  // ── Inspection & Test Plans (ITP) ──────────────────────────────────────────
+
+  @Post('itps')
+  async createItp(@Body() dto: { projectId: string; projectName?: string; reference: string; title: string; discipline?: string; points: NewItpPoint[] }): Promise<Itp> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    if (!Array.isArray(dto?.points) || dto.points.length === 0) throw new BadRequestException('at least one inspection point is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.qualityService.createItp({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        projectId: dto.projectId,
+        projectName: dto.projectName,
+        reference: dto.reference,
+        title: dto.title,
+        discipline: dto.discipline,
+        points: dto.points,
+        createdBy: ctx.actorId || null,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('itps')
+  listItps(): Promise<Itp[]> {
+    return this.qualityService.listItps(this.tenant.get().tenantId);
+  }
+
+  @Put('itps/:id/activate')
+  async activateItp(@Param('id') id: string): Promise<Itp> {
+    try {
+      return await this.qualityService.activateItp(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('itps/:id/points/:index')
+  async recordItpPoint(@Param('id') id: string, @Param('index') index: string, @Body() dto: { result: PointResult }): Promise<Itp> {
+    if (dto?.result !== 'passed' && dto?.result !== 'failed') throw new BadRequestException("result must be 'passed' or 'failed'");
+    try {
+      return await this.qualityService.recordItpPoint(this.tenant.get().tenantId, id, Number(index), dto.result);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('itps/:id/close')
+  async closeItp(@Param('id') id: string): Promise<Itp> {
+    try {
+      return await this.qualityService.closeItp(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

@@ -2,12 +2,12 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Q
 import { TenantContext } from '@aura/core';
 import {
   type Employee,
-  type ExpiryReport,
   type Leave,
   type PayrollRun,
   type TimesheetEntry,
   type ExpenseClaim,
   type StaffAdvance,
+  type DocumentExpiryReport,
   type EosbResult,
   type TerminationType,
   HrService,
@@ -95,19 +95,10 @@ export class HrController {
     return this.hrService.listEmployees(ctx.tenantId);
   }
 
-  /** Statutory document-expiry watch-list (residence visa + labour permit), bucketed by urgency. */
-  @Get('employees/document-expiry')
-  documentExpiry(
-    @Query('asOf') asOf?: string,
-    @Query('criticalDays') criticalDays?: string,
-    @Query('warningDays') warningDays?: string,
-  ): Promise<ExpiryReport> {
-    const ctx = this.tenant.get();
-    return this.hrService.getDocumentExpiry(ctx.tenantId, {
-      asOf: asOf || undefined,
-      criticalDays: criticalDays ? Number(criticalDays) : undefined,
-      warningDays: warningDays ? Number(warningDays) : undefined,
-    });
+  @Get('document-expiry')
+  documentExpiry(@Query('withinDays') withinDays?: string, @Query('asOf') asOf?: string): Promise<DocumentExpiryReport> {
+    const days = withinDays ? Number(withinDays) : 90;
+    return this.hrService.documentExpiry(this.tenant.get().tenantId, Number.isFinite(days) ? days : 90, asOf);
   }
 
   // ── Leaves ─────────────────────────────────────────────────────────────────

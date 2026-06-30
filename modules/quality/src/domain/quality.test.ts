@@ -6,6 +6,7 @@ import {
   InMemoryNcrStore,
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
+  InMemoryItpStore,
 } from '../in-memory-quality-store';
 import { QualityService } from '../quality.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -41,7 +42,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), mockEvents, mockTx, mockAccess);
 
       const ncr = await service.raiseNcr({
         tenantId: 't1',
@@ -65,7 +66,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), mockEvents, mockTx, mockAccess);
 
       const ir = await service.requestInspection({
         tenantId: 't1',
@@ -90,7 +91,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), mockEvents, mockTx, mockAccess);
 
       const snag = await service.logSnag({
         tenantId: 't1',

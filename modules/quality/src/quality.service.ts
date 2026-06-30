@@ -5,21 +5,26 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner }
 import { type Ncr, makeNcr } from './domain/ncr';
 import { type InspectionRequest, makeInspectionRequest } from './domain/inspection-request';
 import { type Snag, makeSnag } from './domain/snag';
+import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp } from './domain/itp';
 
 export const NCR_STORE = Symbol('NCR_STORE');
 export const INSPECTION_REQUEST_STORE = Symbol('INSPECTION_REQUEST_STORE');
 export const SNAG_STORE = Symbol('SNAG_STORE');
+export const ITP_STORE = Symbol('ITP_STORE');
 
 import {
   type NcrStore,
   type InspectionRequestStore,
   type SnagStore,
+  type ItpStore,
 } from './store.interface';
 
 export const QUALITY_EVENT = {
   ncrRaised: 'quality.ncr.raised',
   irApproved: 'quality.ir.approved',
   snagClosed: 'quality.snag.closed',
+  itpCreated: 'quality.itp.created',
+  itpClosed: 'quality.itp.closed',
 };
 
 @Injectable()
@@ -30,6 +35,7 @@ export class QualityService {
     @Inject(NCR_STORE) private readonly ncrStore: NcrStore,
     @Inject(INSPECTION_REQUEST_STORE) private readonly irStore: InspectionRequestStore,
     @Inject(SNAG_STORE) private readonly snagStore: SnagStore,
+    @Inject(ITP_STORE) private readonly itpStore: ItpStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -238,5 +244,75 @@ export class QualityService {
 
   listSnags(tenantId: Id): Promise<Snag[]> {
     return this.snagStore.findAll(tenantId);
+  }
+
+  // ── Inspection & Test Plans (ITP) ──────────────────────────────────────────
+
+  async createItp(input: {
+    tenantId: string;
+    companyId?: string | null;
+    projectId: string;
+    projectName?: string | null;
+    reference: string;
+    title: string;
+    discipline?: string;
+    points: Array<{ activity: string; pointType: 'hold' | 'witness' | 'review' | 'surveillance'; acceptanceCriteria?: string }>;
+    createdBy?: string | null;
+  }): Promise<Itp> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'quality.itp.create', orgPath });
+    }
+    const itp = makeItp(input);
+    const event = makeEvent({
+      type: QUALITY_EVENT.itpCreated,
+      tenantId: itp.tenantId, companyId: itp.companyId, actorId: itp.createdBy,
+      aggregateType: 'quality.itp', aggregateId: itp.id,
+      payload: { reference: itp.reference, projectId: itp.projectId, points: itp.points.length },
+    });
+    await this.tx.run(async (handle) => {
+      await this.itpStore.save(itp, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`ITP created: ${itp.reference} (${itp.points.length} points)`);
+    return itp;
+  }
+
+  async activateItp(tenantId: Id, id: Id): Promise<Itp> {
+    const itp = await this.itpStore.findById(id, tenantId);
+    if (!itp) throw new Error(`ITP ${id} not found`);
+    const updated = activateItp(itp);
+    await this.tx.run(async (handle) => { await this.itpStore.save(updated, handle); });
+    return updated;
+  }
+
+  async recordItpPoint(tenantId: Id, id: Id, pointIndex: number, result: PointResult): Promise<Itp> {
+    const itp = await this.itpStore.findById(id, tenantId);
+    if (!itp) throw new Error(`ITP ${id} not found`);
+    const updated = recordPointResult(itp, pointIndex, result);
+    await this.tx.run(async (handle) => { await this.itpStore.save(updated, handle); });
+    return updated;
+  }
+
+  async closeItp(tenantId: Id, id: Id): Promise<Itp> {
+    const itp = await this.itpStore.findById(id, tenantId);
+    if (!itp) throw new Error(`ITP ${id} not found`);
+    const updated = closeItp(itp);
+    const event = makeEvent({
+      type: QUALITY_EVENT.itpClosed,
+      tenantId, companyId: itp.companyId, actorId: null,
+      aggregateType: 'quality.itp', aggregateId: id,
+      payload: { reference: itp.reference },
+    });
+    await this.tx.run(async (handle) => {
+      await this.itpStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  listItps(tenantId: Id): Promise<Itp[]> {
+    return this.itpStore.findAll(tenantId);
   }
 }

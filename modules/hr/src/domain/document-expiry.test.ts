@@ -1,71 +1,67 @@
 import { describe, it, expect } from 'vitest';
-import { documentExpiryReport } from './document-expiry';
+import { buildDocumentExpiryReport, daysUntil } from './document-expiry';
 import type { Employee } from './employee';
 
-const emp = (over: Partial<Employee>): Employee => ({
-  id: over.id ?? 'e1',
-  tenantId: 't1',
-  companyId: null,
-  firstName: over.firstName ?? 'Test',
-  lastName: over.lastName ?? 'Worker',
-  email: null,
-  phone: null,
-  role: over.role ?? 'Labourer',
-  department: over.department ?? 'Site',
-  status: over.status ?? 'active',
-  joinedDate: '2024-01-01',
-  visaExpiry: over.visaExpiry ?? null,
-  permitExpiry: over.permitExpiry ?? null,
-  laborCamp: null,
-  createdAt: '2024-01-01T00:00:00Z',
-  updatedAt: '2024-01-01T00:00:00Z',
+function emp(over: Partial<Employee>): Employee {
+  return {
+    id: Math.random().toString(36).slice(2),
+    tenantId: 't1', companyId: null,
+    firstName: 'Test', lastName: 'User', email: null, phone: null,
+    role: 'Worker', department: 'Site', status: 'active',
+    joinedDate: '2024-01-01', visaExpiry: null, permitExpiry: null, laborCamp: null,
+    createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
+    ...over,
+  };
+}
+
+describe('daysUntil', () => {
+  it('is positive before, negative after expiry', () => {
+    expect(daysUntil('2026-07-10', '2026-06-10')).toBe(30);
+    expect(daysUntil('2026-06-01', '2026-06-10')).toBe(-9);
+  });
 });
 
-describe('employee document-expiry report', () => {
-  const asOf = '2026-06-29';
-
-  it('buckets by days to expiry (expired / critical / warning / ok)', () => {
-    const r = documentExpiryReport(
+describe('buildDocumentExpiryReport', () => {
+  it('flags expired and expiring docs, omits far-off ones', () => {
+    const r = buildDocumentExpiryReport(
       [
-        emp({ id: 'a', visaExpiry: '2026-06-01' }), // expired (-28)
-        emp({ id: 'b', visaExpiry: '2026-07-15' }), // critical (16)
-        emp({ id: 'c', visaExpiry: '2026-08-30' }), // warning (62)
-        emp({ id: 'd', visaExpiry: '2027-06-29' }), // ok (365)
+        emp({ id: 'e1', firstName: 'Ali', lastName: 'H', visaExpiry: '2026-05-01' }),  // expired (asOf 2026-06-10)
+        emp({ id: 'e2', firstName: 'Sara', lastName: 'K', permitExpiry: '2026-07-01' }), // 21 days → expiring
+        emp({ id: 'e3', firstName: 'Far', lastName: 'O', visaExpiry: '2027-01-01' }),  // far off → omitted
       ],
-      { asOf },
+      '2026-06-10',
+      90,
     );
-    expect(r.counts).toEqual({ expired: 1, critical: 1, warning: 1, ok: 1, total: 4 });
-    expect(r.items[0].employeeId).toBe('a'); // most urgent first
-    expect(r.items[0].bucket).toBe('expired');
-    expect(r.items[0].daysToExpiry).toBe(-28);
-  });
-
-  it('emits one item per present document (visa + permit)', () => {
-    const r = documentExpiryReport([emp({ id: 'a', visaExpiry: '2026-07-10', permitExpiry: '2026-07-05' })], { asOf });
+    expect(r.expiredCount).toBe(1);
+    expect(r.expiringCount).toBe(1);
     expect(r.items).toHaveLength(2);
-    expect(r.items.map((i) => i.documentType)).toEqual(['Labour Permit', 'Residence Visa']); // permit sooner → first
+    // sorted soonest/most-overdue first → the expired visa leads
+    expect(r.items[0].employeeId).toBe('e1');
+    expect(r.items[0].status).toBe('expired');
+    expect(r.items[1].documentType).toBe('work_permit');
+    expect(r.items[1].status).toBe('expiring');
   });
 
-  it('excludes terminated employees and documents with no expiry', () => {
-    const r = documentExpiryReport(
-      [
-        emp({ id: 'a', status: 'terminated', visaExpiry: '2026-07-01' }),
-        emp({ id: 'b', visaExpiry: null, permitExpiry: null }),
-        emp({ id: 'c', visaExpiry: '2026-07-01' }),
-      ],
-      { asOf },
-    );
-    expect(r.counts.total).toBe(1);
-    expect(r.items[0].employeeId).toBe('c');
+  it('reports both documents for one employee when both lapse', () => {
+    const r = buildDocumentExpiryReport([emp({ id: 'e1', visaExpiry: '2026-06-05', permitExpiry: '2026-06-20' })], '2026-06-10', 90);
+    expect(r.items).toHaveLength(2);
+    expect(r.items.map((i) => i.documentType).sort()).toEqual(['visa', 'work_permit']);
   });
 
-  it('honours custom critical/warning horizons', () => {
-    const r = documentExpiryReport([emp({ id: 'a', visaExpiry: '2026-07-15' })], { asOf, criticalDays: 7, warningDays: 60 });
-    expect(r.items[0].bucket).toBe('warning'); // 16 days > critical 7, ≤ warning 60
+  it('excludes non-active employees', () => {
+    const r = buildDocumentExpiryReport([emp({ status: 'terminated', visaExpiry: '2026-05-01' })], '2026-06-10', 90);
+    expect(r.items).toHaveLength(0);
   });
 
-  it('uses calendar-day math with no timezone drift', () => {
-    const r = documentExpiryReport([emp({ id: 'a', visaExpiry: '2026-06-30' })], { asOf: '2026-06-29' });
-    expect(r.items[0].daysToExpiry).toBe(1);
+  it('ignores null / malformed dates', () => {
+    const r = buildDocumentExpiryReport([emp({ visaExpiry: null, permitExpiry: 'soon' })], '2026-06-10', 90);
+    expect(r.items).toHaveLength(0);
+  });
+
+  it('respects a custom window', () => {
+    const within = buildDocumentExpiryReport([emp({ visaExpiry: '2026-08-01' })], '2026-06-10', 90); // 52 days
+    expect(within.items).toHaveLength(1);
+    const tight = buildDocumentExpiryReport([emp({ visaExpiry: '2026-08-01' })], '2026-06-10', 30);
+    expect(tight.items).toHaveLength(0);
   });
 });

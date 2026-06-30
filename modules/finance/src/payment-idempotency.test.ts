@@ -18,6 +18,7 @@ import { AccountService } from './account.service';
 import { InMemoryInvoiceStore } from './in-memory-invoice-store';
 import { InMemoryPaymentStore } from './in-memory-payment-store';
 import { InMemoryJournalStore } from './in-memory-journal-store';
+import { InMemoryPeriodCloseStore } from './in-memory-period-close-store';
 import { InMemoryAccountStore } from './in-memory-account-store';
 
 /**
@@ -45,7 +46,7 @@ describe('Payment recording idempotency', () => {
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);
-    const journals = new JournalService(new InMemoryJournalStore(), events, access);
+    const journals = new JournalService(new InMemoryJournalStore(), events, new InMemoryPeriodCloseStore(), access);
     const payments = new PaymentService(new InMemoryPaymentStore(), events, bus, invoices, journals, accounts);
     payments.onModuleInit();
 
@@ -78,7 +79,7 @@ describe('Payment recording idempotency', () => {
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);
-    const journals = new JournalService(new InMemoryJournalStore(), events, access);
+    const journals = new JournalService(new InMemoryJournalStore(), events, new InMemoryPeriodCloseStore(), access);
     const payments = new PaymentService(new InMemoryPaymentStore(), events, bus, invoices, journals, accounts);
     payments.onModuleInit();
 

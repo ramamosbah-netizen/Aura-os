@@ -51,15 +51,21 @@ export class CrossModuleSubscriber implements OnModuleInit {
       try {
         const p = e.payload as Record<string, unknown>;
         if (p.stage !== 'won') return; // Only react on won stage
-        const tender = await this.tenders.create({
-          tenantId: e.tenantId,
-          companyId: e.companyId,
-          title: `Tender: ${p.title ?? 'Opportunity'}`,
-          accountId: (p.accountId as string) ?? null,
-          accountName: (p.accountName as string) ?? null,
-          value: (p.value as number) ?? 0,
-          status: 'draft',
-        });
+        const tender = await this.tenders.create(
+          {
+            tenantId: e.tenantId,
+            companyId: e.companyId,
+            title: `Tender: ${p.title ?? 'Opportunity'}`,
+            accountId: (p.accountId as string) ?? null,
+            accountName: (p.accountName as string) ?? null,
+            value: (p.value as number) ?? 0,
+            status: 'draft',
+          },
+          // Idempotency: the outbox is at-least-once, so a re-delivered (or re-won)
+          // opportunity event must not spawn a second tender. Keyed by the source
+          // opportunity id, a retry returns the same tender from the command cache.
+          `tender-from-opportunity:${e.aggregateId}`,
+        );
         this.logger.log(
           `⚡ opportunity.won → auto-created Tender "${tender.title}" (${tender.id})`,
         );
@@ -73,17 +79,22 @@ export class CrossModuleSubscriber implements OnModuleInit {
       try {
         const p = e.payload as Record<string, unknown>;
         const account = p.account as { id: string; name: string } | null;
-        const contract = await this.contracts.create({
-          tenantId: e.tenantId,
-          companyId: e.companyId,
-          title: `Contract for ${p.title ?? 'Tender'}`,
-          tenderId: e.aggregateId,
-          tenderTitle: (p.title as string) ?? null,
-          accountId: account?.id ?? null,
-          accountName: account?.name ?? null,
-          value: (p.value as number) ?? 0,
-          status: 'draft',
-        });
+        const contract = await this.contracts.create(
+          {
+            tenantId: e.tenantId,
+            companyId: e.companyId,
+            title: `Contract for ${p.title ?? 'Tender'}`,
+            tenderId: e.aggregateId,
+            tenderTitle: (p.title as string) ?? null,
+            accountId: account?.id ?? null,
+            accountName: account?.name ?? null,
+            value: (p.value as number) ?? 0,
+            status: 'draft',
+          },
+          // Idempotency: re-awarding the same tender (or an outbox retry) must not
+          // create a duplicate contract — keyed by the source tender id.
+          `contract-from-tender:${e.aggregateId}`,
+        );
         this.logger.log(
           `⚡ tender.awarded → auto-created Contract "${contract.title}" (${contract.id})`,
         );
@@ -97,20 +108,53 @@ export class CrossModuleSubscriber implements OnModuleInit {
       try {
         const p = e.payload as Record<string, unknown>;
         const account = p.account as { id: string; name: string } | null;
-        const project = await this.projects.create({
-          tenantId: e.tenantId,
-          companyId: e.companyId,
-          title: `Project: ${p.title ?? 'Contract'}`,
-          contractId: e.aggregateId,
-          contractTitle: (p.title as string) ?? null,
-          accountId: account?.id ?? null,
-          accountName: account?.name ?? null,
-          value: (p.value as number) ?? 0,
-          status: 'planned',
-        });
+        const tender = p.tender as { id: string; title: string | null } | null;
+        const project = await this.projects.create(
+          {
+            tenantId: e.tenantId,
+            companyId: e.companyId,
+            title: `Project: ${p.title ?? 'Contract'}`,
+            contractId: e.aggregateId,
+            contractTitle: (p.title as string) ?? null,
+            accountId: account?.id ?? null,
+            accountName: account?.name ?? null,
+            value: (p.value as number) ?? 0,
+            status: 'planned',
+          },
+          // Idempotency: re-signing the same contract (or an outbox retry) must not
+          // create a duplicate project — keyed by the source contract id.
+          `project-from-contract:${e.aggregateId}`,
+        );
         this.logger.log(
           `⚡ contract.signed → auto-created Project "${project.title}" (${project.id})`,
         );
+
+        // Seed the breakdown so the auto-created project isn't an empty shell: a root
+        // WBS node + CBS nodes mirroring the source tender's BOQ. Guarded on "no WBS yet"
+        // so an outbox retry (project create is idempotent above) doesn't double-seed.
+        try {
+          const existingWbs = await this.wbs.list({ projectId: project.id });
+          if (existingWbs.length === 0) {
+            await this.wbs.create({
+              tenantId: e.tenantId,
+              projectId: project.id,
+              code: '1',
+              title: project.title,
+              plannedValue: project.value,
+            });
+            if (tender?.id) {
+              const { items } = await this.tenders.getOrCreateBOQ(e.tenantId, e.companyId, tender.id);
+              if (items.length > 0) {
+                await this.cbs.syncFromBoq(project.id, e.tenantId, items);
+                this.logger.log(
+                  `⚡ contract.signed → seeded root WBS + ${items.length} CBS node(s) on Project ${project.id} from tender ${tender.id} BOQ`,
+                );
+              }
+            }
+          }
+        } catch (seedErr) {
+          this.logger.error(`Failed to seed WBS/CBS for auto-created project ${project.id}: ${seedErr}`);
+        }
       } catch (err) {
         this.logger.error(`Failed to auto-create project from contract.signed: ${err}`);
       }
@@ -128,10 +172,18 @@ export class CrossModuleSubscriber implements OnModuleInit {
         if (!account || net <= 0) return; // nothing billable (no client snapshot or zero/negative net)
         const reference = (p.reference as string) ?? `IPC-${p.sequence ?? ''}`;
         const contractId = (p.contractId as string) ?? e.aggregateId;
+        const invoiceNumber = `AR-${reference}-${contractId.slice(0, 8)}`;
+        // Idempotency: customer-invoice create has no command-bus cache, so guard on the
+        // deterministic invoice number — an outbox retry of the same IPC won't double-bill.
+        const existingAr = await this.customerInvoices.list({ tenantId: e.tenantId });
+        if (existingAr.some((inv) => inv.invoiceNumber === invoiceNumber)) {
+          this.logger.log(`↩ ipc.certified → AR invoice ${invoiceNumber} already exists, skipping`);
+          return;
+        }
         const invoice = await this.customerInvoices.create({
           tenantId: e.tenantId,
           companyId: e.companyId,
-          invoiceNumber: `AR-${reference}-${contractId.slice(0, 8)}`,
+          invoiceNumber,
           customerName: account.name?.trim() || 'Client',
           contractRef: contractId,
           issueDate: new Date().toISOString().slice(0, 10),
@@ -165,15 +217,20 @@ export class CrossModuleSubscriber implements OnModuleInit {
         const reference = (p.reference as string) ?? 'BC';
         const subcontractor = (p.subcontractor as string)?.trim() || 'Subcontractor';
         const subcontractId = (p.subcontractId as string) ?? e.aggregateId;
-        const invoice = await this.supplierInvoices.create({
-          tenantId: e.tenantId,
-          companyId: e.companyId,
-          reference: `DN-${reference}-${subcontractId.slice(0, 8)}`,
-          title: `Back-charge recovery ${reference} — ${subcontractor}`,
-          supplierName: subcontractor,
-          value: -amount, // negative supplier invoice = debit note reducing the subcontractor payable
-          status: 'draft',
-        });
+        const invoice = await this.supplierInvoices.create(
+          {
+            tenantId: e.tenantId,
+            companyId: e.companyId,
+            reference: `DN-${reference}-${subcontractId.slice(0, 8)}`,
+            title: `Back-charge recovery ${reference} — ${subcontractor}`,
+            supplierName: subcontractor,
+            value: -amount, // negative supplier invoice = debit note reducing the subcontractor payable
+            status: 'draft',
+          },
+          // Idempotency: an outbox retry of the same back-charge must not raise a second
+          // debit note — keyed by the source subcontract back-charge aggregate id.
+          `apdn-from-backcharge:${e.aggregateId}`,
+        );
         this.logger.log(
           `⚡ backcharge.recovered → auto-drafted AP debit note "${invoice.reference}" vs ${subcontractor} (−${amount})`,
         );

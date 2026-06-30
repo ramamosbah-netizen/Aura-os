@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AmcStore, AMC_STORE } from './store.interface';
 import { ServiceContract, ContractStatus } from './domain/service-contract';
@@ -5,8 +6,10 @@ import { WorkOrder, WorkOrderPriority, WorkOrderType, GeoCoordinate } from './do
 import { SupportTicket, TicketPriority } from './domain/support-ticket';
 import { PpmSchedule, PpmFrequency } from './domain/ppm-schedule';
 
-let idCounter = 1;
-const genId = () => `amc-${(idCounter++).toString().padStart(5, '0')}`;
+// Real UUIDs so AMC rows are compatible with the uuid primary keys + FKs in the
+// Postgres schema. The old `amc-00001` counter could never persist (type mismatch
+// against the uuid columns) — the root cause of AMC being in-memory only.
+const genId = (): string => randomUUID();
 
 @Injectable()
 export class AmcService {

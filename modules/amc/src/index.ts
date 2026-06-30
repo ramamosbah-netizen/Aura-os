@@ -4,5 +4,6 @@ export * from './domain/support-ticket';
 export * from './domain/ppm-schedule';
 export * from './store.interface';
 export * from './in-memory-amc-store';
+export * from './postgres-amc-store';
 export * from './amc.service';
 export * from './amc.module';

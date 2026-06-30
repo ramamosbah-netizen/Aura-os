@@ -62,5 +62,14 @@ export * from './in-memory-post-dated-cheque-store';
 export * from './postgres-post-dated-cheque-store';
 export * from './post-dated-cheque.service';
 
+export * from './domain/statements';
+export * from './statements.service';
+
+export * from './domain/period-close';
+export * from './period-close-store';
+export * from './in-memory-period-close-store';
+export * from './postgres-period-close-store';
+export * from './period-close.service';
+
 export * from './finance.module';
 export * from './projections/profit-loss.projection';

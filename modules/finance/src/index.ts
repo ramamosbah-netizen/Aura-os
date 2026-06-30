@@ -71,5 +71,11 @@ export * from './in-memory-period-close-store';
 export * from './postgres-period-close-store';
 export * from './period-close.service';
 
+export * from './domain/budget';
+export * from './budget-store';
+export * from './in-memory-budget-store';
+export * from './postgres-budget-store';
+export * from './budget.service';
+
 export * from './finance.module';
 export * from './projections/profit-loss.projection';

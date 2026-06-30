@@ -56,6 +56,11 @@ import { InMemoryPeriodCloseStore } from './in-memory-period-close-store';
 import { PostgresPeriodCloseStore } from './postgres-period-close-store';
 import { PeriodCloseService } from './period-close.service';
 
+import { BUDGET_STORE } from './budget-store';
+import { InMemoryBudgetStore } from './in-memory-budget-store';
+import { PostgresBudgetStore } from './postgres-budget-store';
+import { BudgetService } from './budget.service';
+
 import { StatementsService } from './statements.service';
 
 import { ProcurementModule } from '@aura/procurement';
@@ -144,6 +149,12 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresPeriodCloseStore(pool) : new InMemoryPeriodCloseStore(),
     },
+    {
+      provide: BUDGET_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresBudgetStore(pool) : new InMemoryBudgetStore(),
+    },
     InvoiceService,
     AccountService,
     JournalService,
@@ -156,8 +167,9 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
     PostDatedChequeService,
     StatementsService,
     PeriodCloseService,
+    BudgetService,
   ],
-  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService, PostDatedChequeService, StatementsService, PeriodCloseService],
+  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService, PostDatedChequeService, StatementsService, PeriodCloseService, BudgetService],
 })
 export class FinanceModule implements OnModuleInit {
   constructor(private readonly projectionEngine: ProjectionEngine) {}

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CircuitBreaker } from './reliability/circuit-breaker';
 import { RateLimiter } from './reliability/rate-limiter';
 import { NotificationService } from './notifications/notification.service';
+import { InMemoryNotificationStore } from './notifications/notification-store';
 import { FeatureFlagService } from './config/feature-flag.service';
 import { BackgroundJobService } from './jobs/background-job.service';
 
@@ -49,7 +50,7 @@ describe('Platform Services - Phase 3', () => {
 
   describe('NotificationService', () => {
     it('should route notifications across multiple channels successfully', async () => {
-      const svc = new NotificationService();
+      const svc = new NotificationService(new InMemoryNotificationStore());
       const results = await svc.send({
         tenantId: 't1',
         userId: 'u-admin',

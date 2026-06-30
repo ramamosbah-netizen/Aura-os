@@ -53,6 +53,8 @@ import { AssetsController } from './assets/assets.controller';
 import { AuthController } from './auth/auth.controller';
 import { SampleEventSubscriber } from './events/sample-subscriber';
 import { CrossModuleSubscriber } from './events/cross-module-subscriber';
+import { NotificationsSubscriber } from './events/notifications-subscriber';
+import { NotificationsController } from './notifications/notifications.controller';
 import { PoisonSubscriber } from './events/poison-subscriber';
 import { WorkflowSeeder } from './workflow/workflow.seeder';
 import { AuthSeeder } from './auth/auth.seeder';
@@ -71,7 +73,7 @@ import { TransferController } from './inventory/transfer.controller';
  */
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, ContractsController, PaymentCertificatesController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, StockController, TransferController],
-  providers: [SampleEventSubscriber, CrossModuleSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, SearchService],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, ContractsController, PaymentCertificatesController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, StockController, TransferController, NotificationsController],
+  providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, SearchService],
 })
 export class AppModule {}

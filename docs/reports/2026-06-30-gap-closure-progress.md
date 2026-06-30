@@ -82,6 +82,11 @@ Inventory valuation landed independently on `main` via **PR #12** ("module-depth
 - **Proof:** domain test + live: 300k PO → issue blocked (400); approve@L1 rejected (need L2); approve@L2 → approved; issue → 200.
 - Web approve/submit buttons pending (API-complete).
 
+### B11. Notifications center (persisted + event-wired)  ·  `feat(core)`
+- `notification-store.ts` (Notification + port + in-memory/postgres) + migration `0078`; `NotificationService` gained `record/list/markRead/unreadCount` (channel dispatch stays log-stub — real email/SMS is external).
+- `notifications-subscriber.ts` raises notifications from `po.approved` / `ipc.certified` / `period.closed` / `tender.awarded`. `GET /notifications` (+`unread-count`), `PATCH /notifications/:id/read`; `/notifications` web center + nav.
+- **Proof:** service test + live: approve a 300k PO → "PO approved" notification persisted, unread count 1.
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -96,7 +101,7 @@ Ranked by value, unchanged from the audits minus what's now done:
 
 1. **Pagination rollout** — apply the B8 `listPaged` contract to the remaining ~30 list endpoints. *(next)*
 2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
-3. Group consolidation; notifications delivery; FIFO valuation layers; procurement approval web UI.
+3. Group consolidation (blocked — GL has no per-company dimension); FIFO valuation layers; procurement approval web UI; real notification channel delivery (email/SMS).
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.
 

@@ -16,7 +16,10 @@ export interface NavGroup {
 export const NAV: NavGroup[] = [
   {
     title: 'Workspace',
-    items: [{ label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' }],
+    items: [
+      { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' },
+      { label: 'Notifications', href: '/notifications', glyph: '🔔', desc: 'In-app notification center (event-driven)' },
+    ],
   },
   {
     title: 'Deal chain',

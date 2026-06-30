@@ -8,6 +8,8 @@ interface OppRow {
   tenant_id: string;
   company_id: string | null;
   lead_id: string | null;
+  account_id: string | null;
+  account_name: string | null;
   title: string;
   value: string;
   stage: string;
@@ -17,7 +19,7 @@ interface OppRow {
   updated_at: Date;
 }
 
-const COLS = 'id, tenant_id, company_id, lead_id, title, value, stage, win_probability, close_date, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, close_date, created_at, updated_at';
 
 function rowToOpportunity(r: OppRow): Opportunity {
   return {
@@ -25,6 +27,8 @@ function rowToOpportunity(r: OppRow): Opportunity {
     tenantId: r.tenant_id,
     companyId: r.company_id,
     leadId: r.lead_id,
+    accountId: r.account_id,
+    accountName: r.account_name,
     title: r.title,
     value: Number(r.value),
     stage: r.stage as OpportunityStage,
@@ -50,20 +54,23 @@ export class PostgresOpportunityStore implements OpportunityStore {
   async update(o: Opportunity): Promise<void> {
     await this.pool.query(
       `UPDATE public.aura_crm_opportunities
-          SET title = $2, value = $3, stage = $4, win_probability = $5, close_date = $6, updated_at = now()
+          SET title = $2, value = $3, stage = $4, win_probability = $5, close_date = $6,
+              account_id = $7, account_name = $8, updated_at = now()
         WHERE id = $1`,
-      [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate],
+      [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate, o.accountId, o.accountName],
     );
   }
 
   private insert(executor: Pool | PoolClient, o: Opportunity): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         o.id,
         o.tenantId,
         o.companyId,
         o.leadId,
+        o.accountId,
+        o.accountName,
         o.title,
         o.value,
         o.stage,

@@ -32,7 +32,13 @@ export class OpportunityService {
       actorId: input.actorId ?? null,
       aggregateType: 'crm.opportunity',
       aggregateId: opportunity.id,
-      payload: { title: opportunity.title, value: opportunity.value, stage: opportunity.stage },
+      payload: {
+        title: opportunity.title,
+        value: opportunity.value,
+        stage: opportunity.stage,
+        accountId: opportunity.accountId,
+        accountName: opportunity.accountName,
+      },
     });
 
     await this.tx.run(async (handle) => {
@@ -46,7 +52,7 @@ export class OpportunityService {
 
   async update(
     id: Id,
-    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate'>>,
+    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName'>>,
     actorId?: Id | null,
   ): Promise<Opportunity> {
     const existing = await this.store.get(id);
@@ -75,7 +81,18 @@ export class OpportunityService {
       actorId: actorId ?? null,
       aggregateType: 'crm.opportunity',
       aggregateId: updated.id,
-      payload: { stage: updated.stage, value: updated.value, oldStage: existing.stage, changes: updates },
+      // Carry the opportunity title + value + client account so the deal-chain reactor
+      // names the auto-created tender after the opportunity and carries the client
+      // snapshot down the chain (tender → contract → project).
+      payload: {
+        title: updated.title,
+        stage: updated.stage,
+        value: updated.value,
+        accountId: updated.accountId,
+        accountName: updated.accountName,
+        oldStage: existing.stage,
+        changes: updates,
+      },
     });
 
     await this.tx.run(async (handle) => {

@@ -8,9 +8,11 @@ interface Lead {
   phone: string | null; status: string; source: string | null; createdAt: string;
 }
 interface Opportunity {
-  id: string; leadId: string | null; title: string; value: number;
+  id: string; leadId: string | null; accountId: string | null; accountName: string | null;
+  title: string; value: number;
   stage: string; winProbability: number; closeDate: string | null; createdAt: string;
 }
+interface Account { id: string; name: string; }
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'nurturing', 'disqualified'] as const;
 const OPP_STAGES = ['qualification', 'proposal', 'negotiation', 'won', 'lost'] as const;
@@ -19,8 +21,8 @@ const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as con
 function money(n: number) { return n ? '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'; }
 function fmt(iso: string) { return new Date(iso).toLocaleDateString(); }
 
-export default function CrmPipelineClient({ initialLeads, initialOpportunities }: {
-  initialLeads: Lead[]; initialOpportunities: Opportunity[];
+export default function CrmPipelineClient({ initialLeads, initialOpportunities, initialAccounts }: {
+  initialLeads: Lead[]; initialOpportunities: Opportunity[]; initialAccounts: Account[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<'leads' | 'pipeline'>('leads');
@@ -37,6 +39,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities }
   const [showOppForm, setShowOppForm] = useState(false);
   const [oTitle, setOTitle] = useState(''); const [oValue, setOValue] = useState('');
   const [oStage, setOStage] = useState('qualification'); const [oLeadId, setOLeadId] = useState('');
+  const [oAccountId, setOAccountId] = useState('');
 
   // Forecast
   const [forecast, setForecast] = useState<{ id: string; prob: number; reason: string } | null>(null);
@@ -56,10 +59,14 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities }
     if (!oTitle.trim()) { setErr('Opportunity title required'); return; }
     setBusy(true); setErr(null);
     try {
+      const account = initialAccounts.find(a => a.id === oAccountId);
       const res = await fetch('/api/crm/opportunities', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: oTitle, value: Number(oValue) || 0, stage: oStage, leadId: oLeadId || undefined }) });
+        body: JSON.stringify({
+          title: oTitle, value: Number(oValue) || 0, stage: oStage, leadId: oLeadId || undefined,
+          accountId: oAccountId || undefined, accountName: account?.name || undefined,
+        }) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error ?? 'Error'); }
-      else { setShowOppForm(false); setOTitle(''); setOValue(''); router.refresh(); }
+      else { setShowOppForm(false); setOTitle(''); setOValue(''); setOAccountId(''); router.refresh(); }
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   }
 
@@ -134,6 +141,10 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities }
             <select style={s.select} value={oStage} onChange={e => setOStage(e.target.value)}>
               {OPP_STAGES.filter(st => st !== 'won' && st !== 'lost').map(st => <option key={st} value={st}>{st}</option>)}
             </select>
+            <select style={s.select} value={oAccountId} onChange={e => setOAccountId(e.target.value)}>
+              <option value="">No linked account</option>
+              {initialAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
             <select style={s.select} value={oLeadId} onChange={e => setOLeadId(e.target.value)}>
               <option value="">No linked lead</option>
               {initialLeads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -171,11 +182,12 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities }
         <div style={s.panel}>
           {initialOpportunities.length === 0 ? <p style={s.muted}>No opportunities yet.</p> : (
             <table style={s.table}><thead><tr>
-              {['Title', 'Value', 'Stage', 'Win %', 'Close Date', 'Actions'].map(h => <th key={h} style={s.th}>{h}</th>)}
+              {['Title', 'Account', 'Value', 'Stage', 'Win %', 'Close Date', 'Actions'].map(h => <th key={h} style={s.th}>{h}</th>)}
             </tr></thead><tbody>
               {initialOpportunities.map(o => (
                 <tr key={o.id} style={o.stage === 'won' ? { background: 'rgba(40,167,69,0.04)' } : o.stage === 'lost' ? { background: 'rgba(220,53,69,0.04)' } : undefined}>
                   <td style={s.td}><strong>{o.title}</strong></td>
+                  <td style={s.tdM}>{o.accountName ?? '—'}</td>
                   <td style={s.td}>{money(o.value)}</td>
                   <td style={s.td}>
                     <select style={{ ...s.select, ...stageColor(o.stage) }} value={o.stage} onChange={e => changeStage(o.id, e.target.value)} disabled={busy}>

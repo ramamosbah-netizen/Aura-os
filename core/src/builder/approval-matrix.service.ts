@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Pool } from 'pg';
+import { PG_POOL } from '../events/pg-pool';
 
 // ── Rules DSL Types ───────────────────────────────────────────────────────────
 
@@ -41,6 +43,8 @@ export class ApprovalMatrixService {
   private readonly logger = new Logger('ApprovalMatrixService');
   private readonly configs = new Map<string, ApprovalMatrixConfig>();
 
+  constructor(@Inject(PG_POOL) private readonly pool: Pool | null = null) {}
+
   private configKey(tenantId: string, entityType: string) {
     return `${tenantId}::${entityType}`;
   }
@@ -48,7 +52,30 @@ export class ApprovalMatrixService {
   async configure(config: ApprovalMatrixConfig): Promise<void> {
     const sorted = [...config.rules].sort((a, b) => a.order - b.order);
     this.configs.set(this.configKey(config.tenantId, config.entityType), { ...config, rules: sorted });
+    if (this.pool) {
+      await this.pool.query(
+        `insert into public.aura_approval_matrices (tenant_id, entity_type, rules, updated_at)
+         values ($1, $2, $3::jsonb, now())
+         on conflict (tenant_id, entity_type) do update set rules = excluded.rules, updated_at = now()`,
+        [config.tenantId, config.entityType, JSON.stringify(sorted)],
+      );
+    }
     this.logger.log(`[ApprovalMatrix] Configured ${sorted.length} rules for "${config.entityType}" (tenant: ${config.tenantId})`);
+  }
+
+  private async load(tenantId: string, entityType: string): Promise<ApprovalMatrixConfig | null> {
+    const cached = this.configs.get(this.configKey(tenantId, entityType));
+    if (cached) return cached;
+    if (!this.pool) return null;
+    const { rows } = await this.pool.query<{ rules: ApprovalRule[] }>(
+      `select rules from public.aura_approval_matrices where tenant_id = $1 and entity_type = $2`,
+      [tenantId, entityType],
+    );
+    if (!rows.length) return null;
+    const rules = (typeof rows[0].rules === 'string' ? JSON.parse(rows[0].rules as unknown as string) : rows[0].rules) as ApprovalRule[];
+    const config: ApprovalMatrixConfig = { tenantId, entityType, rules: [...rules].sort((a, b) => a.order - b.order) };
+    this.configs.set(this.configKey(tenantId, entityType), config);
+    return config;
   }
 
   /**
@@ -56,7 +83,7 @@ export class ApprovalMatrixService {
    * Returns the first matching rule's decision (rules are ordered by priority).
    */
   async resolve(tenantId: string, entityType: string, payload: Record<string, any>): Promise<ApprovalDecision | null> {
-    const config = this.configs.get(this.configKey(tenantId, entityType));
+    const config = await this.load(tenantId, entityType);
     if (!config) {
       this.logger.warn(`[ApprovalMatrix] No matrix configured for "${entityType}"`);
       return null;

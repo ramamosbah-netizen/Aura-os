@@ -60,7 +60,7 @@ describe('Procurement Full Cycle', () => {
 
       const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore());
       poService.onModuleInit();
-      const prService = new PurchaseRequestService(prStore, mockEvents, mockAccess, poService);
+      const prService = new PurchaseRequestService(prStore, mockEvents, mockAccess, poService, { resolve: async () => null } as any);
 
 
       const pr = await prService.create({

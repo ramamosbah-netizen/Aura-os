@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ApprovalMatrixService, type ApprovalRule } from '@aura/core';
 import {
   type PurchaseOrder,
   type PurchaseOrderStatus,
@@ -58,8 +58,19 @@ export class ProcurementController {
     private readonly prs: PurchaseRequestService,
     private readonly rfqs: RfqService,
     private readonly suppliers: SupplierService,
+    private readonly approvalMatrix: ApprovalMatrixService,
     private readonly tenant: TenantContext,
   ) {}
+
+  // ── APPROVAL MATRIX ──────────────────────────────────────────────────────
+
+  @Post('approval-matrix')
+  async configureApprovalMatrix(@Body() dto: { entityType?: string; rules: ApprovalRule[] }): Promise<{ ok: true }> {
+    if (!Array.isArray(dto?.rules)) throw new BadRequestException('rules array is required');
+    const ctx = this.tenant.get();
+    await this.approvalMatrix.configure({ tenantId: ctx.tenantId, entityType: dto.entityType?.trim() || 'purchase-request', rules: dto.rules });
+    return { ok: true };
+  }
 
   // ── PURCHASE ORDERS ──────────────────────────────────────────────────────
 
@@ -152,7 +163,11 @@ export class ProcurementController {
     const found = await this.prs.get(id);
     if (!found) throw new NotFoundException(`purchase request ${id} not found`);
     const ctx = this.tenant.get();
-    return this.prs.changeStatus(id, dto.status, ctx.actorId ?? undefined);
+    try {
+      return await this.prs.changeStatus(id, dto.status, ctx.actorId ?? undefined);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   // ── RFQ (Request for Quotation) ──────────────────────────────────────────

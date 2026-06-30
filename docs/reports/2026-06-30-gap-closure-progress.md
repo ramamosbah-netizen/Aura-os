@@ -5,11 +5,12 @@
 > restates the remaining backlog. Everything below was source-verified against the live tree
 > and exercised end-to-end (build/typecheck/test green + live HTTP), not chat-only.
 >
-> Shipped in **[PR #10](https://github.com/ramamosbah-netizen/Aura-os/pull/10)** (3 commits).
 > Whole-workspace gates after each gap: **build 22/22 · typecheck 42/42 · tests 41/41**.
 > Migrations now **77** (latest `0076`). Security/RLS hardening remains intentionally deferred.
 >
-> **Note:** §B1–B4 shipped in PR #10; **§B5 (budgeting)** and **§B6 (revenue recognition)** landed after, on the same branch (PR #10).
+> **Shipping status:**
+> - **[PR #10](https://github.com/ramamosbah-netizen/Aura-os/pull/10) — MERGED** (3 commits): §B1 deal-chain hardening + opportunity→account · §B2 AMC persistence · §B3 financial statements · §B4 period close.
+> - **[PR #11](https://github.com/ramamosbah-netizen/Aura-os/pull/11) — OPEN** (2 commits): §B5 budgeting · §B6 revenue recognition (+ this report).
 
 ---
 
@@ -61,6 +62,20 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 - `apps/api/src/finance/revenue-recognition.controller.ts` injects `ProjectService` + `CbsService` (Projects) and `CustomerInvoiceService` (Finance). Cost + EAC from the CBS, contract value from the project, billing = net (ex-VAT) of non-cancelled AR matched by `projectId` **or** `contractRef` (catches IPC-generated invoices). `GET /finance/revenue-recognition` (all) + `/:projectId`; read-only web page.
 - **Proof:** `revenue-recognition.test.ts` (4 tests). Verified live: project value 1M, CBS actual 400k / forecast 800k (50%), AR net 300k → recognised **500k**, gross profit **100k**, **under-billing 200k** (contract asset).
 
+### B7. Multi-currency / FX (rate registry + conversion)  ·  `feat(finance)`
+- Built on `core` `ExchangeRateService` (read-only before; `aura_exchange_rates` table from migration `0031`). Added `setRate` (upsert + inverse) + `listRates`.
+- `apps/api/.../fx.controller.ts` → `GET/POST /finance/fx/rates` + `GET /finance/fx/convert`; `/finance/fx` web page (set rate, convert, list).
+- **Proof:** service tests + live: 100 USD→AED default peg **367.25**; after setting 3.70 → **370**.
+- **Not done (full multi-currency):** the GL/journals/invoices carry no currency dimension, so per-transaction FX + period-end revaluation needs a currency column across all money fields (large cross-cutting change) — deferred.
+
+### B8. Pagination contract (started — reference impl)  ·  `feat(shared/finance)`
+- `shared/src/pagination.ts` — `Page<T>` envelope (`items/total/limit/offset/hasMore`) + `parsePageParams` (clamp ≤500, default 50) + `paginate`/`makePage`.
+- Reference implementation on customer-invoices: `listPaged` (in-memory slice; postgres `LIMIT/OFFSET` + `COUNT(*) OVER()`) → `GET /finance/customer-invoices/paged?limit&offset`. Tests in `shared/src/pagination.test.ts`. Verified live (3 rows, limit 2: page 1 `hasMore:true`, offset 2 `hasMore:false`).
+- **Rollout pending:** only customer-invoices migrated; the other ~30 list endpoints still use `limit`-only — apply the same `listPaged` pattern store-by-store.
+
+### B9. Inventory valuation (moving-average cost)  ·  *superseded by PR #12*
+Inventory valuation landed independently on `main` via **PR #12** ("module-depth verticals — inventory accounting"): WAC (`computeWac`), `summariseValuation`/`ValuationSummary`, plus reorder-level policy + low-stock reorder report (migrations `0073`/`0074`). My parallel cost-to-cost + COGS implementation was therefore **dropped during the PR #13 merge** (resolved to main's superset); only the `/inventory/valuation` web page was kept, reconciled to main's `ValuationSummary` shape. Net: the gap is closed — by main, not this branch.
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -73,9 +88,9 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 
 Ranked by value, unchanged from the audits minus what's now done:
 
-1. **Multi-currency** + FX revaluation. *(next)*
-2. **Pagination contract** — cursor + total-count across all list endpoints (cross-cutting).
-3. Inventory valuation (FIFO/WAC) + COGS; procurement approval matrix; group consolidation; notifications delivery.
+1. **Pagination rollout** — apply the B8 `listPaged` contract to the remaining ~30 list endpoints. *(next)*
+2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
+3. Procurement approval matrix; group consolidation; notifications delivery; FIFO valuation layers (B9 delivered WAC).
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.
 
@@ -86,4 +101,4 @@ Ranked by value, unchanged from the audits minus what's now done:
 - Every gap: workspace **build 22/22 · typecheck 42/42 · tests 41/41**, plus a dedicated test file, plus a **live HTTP** check against the booted in-memory API.
 - **Caveat (honest):** migrations `0073`/`0074`/`0075` were **not** run against a live Postgres this session (no `DATABASE_URL`). The Postgres adapters are proven by mock-pool/unit tests + the established DI-swap pattern; the in-memory path is exercised end-to-end. They apply on the next `pnpm db:migrate`.
 
-*End of report. Source-verified against the working tree; shipped in PR #10. No audit files were modified — corrections are recorded here per the dated-report convention.*
+*End of report. Source-verified against the working tree; shipped across PR #10 (merged) and PR #11 (open). No audit files were modified — corrections are recorded here per the dated-report convention.*

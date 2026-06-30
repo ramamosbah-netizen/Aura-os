@@ -2,12 +2,14 @@ import type { Id } from '@aura/shared';
 import type { Subcontract } from './domain/subcontract';
 import type { Claim } from './domain/claim';
 import type { SubcontractVariation } from './domain/variation';
-import type { SubcontractFilter, ClaimFilter, VariationFilter, SubcontractStore } from './subcontract-store';
+import type { BackCharge } from './domain/back-charge';
+import type { SubcontractFilter, ClaimFilter, VariationFilter, BackChargeFilter, SubcontractStore } from './subcontract-store';
 
 export class InMemorySubcontractStore implements SubcontractStore {
   private readonly subcontracts = new Map<string, Subcontract>();
   private readonly claims = new Map<string, Claim>();
   private readonly variations = new Map<string, SubcontractVariation>();
+  private readonly backCharges = new Map<string, BackCharge>();
 
   async createSubcontract(s: Subcontract): Promise<void> {
     this.subcontracts.set(s.id, { ...s });
@@ -70,5 +72,26 @@ export class InMemorySubcontractStore implements SubcontractStore {
     if (filter.subcontractId) out = out.filter((v) => v.subcontractId === filter.subcontractId);
     if (filter.status) out = out.filter((v) => v.status === filter.status);
     return out.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+  }
+
+  async createBackCharge(b: BackCharge): Promise<void> {
+    this.backCharges.set(b.id, { ...b });
+  }
+
+  async updateBackCharge(b: BackCharge): Promise<void> {
+    this.backCharges.set(b.id, { ...b });
+  }
+
+  async getBackCharge(id: Id): Promise<BackCharge | null> {
+    const b = this.backCharges.get(id);
+    return b ? { ...b } : null;
+  }
+
+  async listBackCharges(filter: BackChargeFilter = {}): Promise<BackCharge[]> {
+    let out = [...this.backCharges.values()];
+    if (filter.tenantId) out = out.filter((b) => b.tenantId === filter.tenantId);
+    if (filter.subcontractId) out = out.filter((b) => b.subcontractId === filter.subcontractId);
+    if (filter.status) out = out.filter((b) => b.status === filter.status);
+    return out;
   }
 }

@@ -2,6 +2,7 @@ import type { Id } from '@aura/shared';
 import type { Subcontract, SubcontractStatus } from './domain/subcontract';
 import type { Claim, ClaimStatus } from './domain/claim';
 import type { SubcontractVariation, VariationStatus } from './domain/variation';
+import type { BackCharge, BackChargeStatus } from './domain/back-charge';
 
 export const SUBCONTRACT_STORE = Symbol('SUBCONTRACT_STORE');
 
@@ -23,6 +24,12 @@ export interface VariationFilter {
   status?: VariationStatus;
 }
 
+export interface BackChargeFilter {
+  tenantId?: string;
+  subcontractId?: string;
+  status?: BackChargeStatus;
+}
+
 export interface SubcontractStore {
   createSubcontract(s: Subcontract): Promise<void>;
   updateSubcontract(s: Subcontract): Promise<void>;
@@ -38,4 +45,9 @@ export interface SubcontractStore {
   updateVariation(v: SubcontractVariation): Promise<void>;
   getVariation(id: Id): Promise<SubcontractVariation | null>;
   listVariations(filter?: VariationFilter): Promise<SubcontractVariation[]>;
+
+  createBackCharge(b: BackCharge): Promise<void>;
+  updateBackCharge(b: BackCharge): Promise<void>;
+  getBackCharge(id: Id): Promise<BackCharge | null>;
+  listBackCharges(filter?: BackChargeFilter): Promise<BackCharge[]>;
 }

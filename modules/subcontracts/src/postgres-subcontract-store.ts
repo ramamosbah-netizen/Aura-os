@@ -3,7 +3,8 @@ import type { Id } from '@aura/shared';
 import type { Subcontract } from './domain/subcontract';
 import type { Claim } from './domain/claim';
 import type { SubcontractVariation } from './domain/variation';
-import type { SubcontractFilter, ClaimFilter, VariationFilter, SubcontractStore } from './subcontract-store';
+import type { BackCharge, BackChargeCategory, BackChargeStatus } from './domain/back-charge';
+import type { SubcontractFilter, ClaimFilter, VariationFilter, BackChargeFilter, SubcontractStore } from './subcontract-store';
 
 interface SubcontractRow {
   id: string;
@@ -36,8 +37,30 @@ interface ClaimRow {
   created_at: Date | string;
 }
 
+interface BackChargeRow {
+  id: string;
+  tenant_id: string;
+  subcontract_id: string;
+  subcontractor_name: string | null;
+  reference: string;
+  category: string;
+  description: string;
+  gross_amount: string | number;
+  markup_percent: string | number;
+  markup_amount: string | number;
+  recoverable_amount: string | number;
+  recovered_amount: string | number;
+  outstanding_amount: string | number;
+  status: string;
+  raised_at: Date | string;
+  agreed_at: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
 const SUB_COLS = 'id, tenant_id, project_id, project_name, title, subcontractor_name, status, value, retention_percentage, created_at';
 const CLAIM_COLS = 'id, tenant_id, subcontract_id, claim_number, status, work_completed_value, previously_certified_value, this_period_gross_value, retention_withheld, net_certified_value, is_retention_release, retention_released, certified_at, certified_by, created_at';
+const BC_COLS = 'id, tenant_id, subcontract_id, subcontractor_name, reference, category, description, gross_amount, markup_percent, markup_amount, recoverable_amount, recovered_amount, outstanding_amount, status, raised_at, agreed_at, created_at, updated_at';
 const VAR_COLS = 'id, tenant_id, subcontract_id, reference, type, amount, description, status, approved_by, created_at';
 
 interface VariationRow {
@@ -100,6 +123,33 @@ function rowToClaim(r: ClaimRow): Claim {
     certifiedAt: r.certified_at instanceof Date ? r.certified_at.toISOString() : r.certified_at ? String(r.certified_at) : null,
     certifiedBy: r.certified_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+  };
+}
+
+function toIso(v: Date | string): string {
+  return v instanceof Date ? v.toISOString() : String(v);
+}
+
+function rowToBackCharge(r: BackChargeRow): BackCharge {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    subcontractId: r.subcontract_id,
+    subcontractorName: r.subcontractor_name,
+    reference: r.reference,
+    category: r.category as BackChargeCategory,
+    description: r.description,
+    grossAmount: Number(r.gross_amount),
+    markupPercent: Number(r.markup_percent),
+    markupAmount: Number(r.markup_amount),
+    recoverableAmount: Number(r.recoverable_amount),
+    recoveredAmount: Number(r.recovered_amount),
+    outstandingAmount: Number(r.outstanding_amount),
+    status: r.status as BackChargeStatus,
+    raisedAt: toIso(r.raised_at),
+    agreedAt: r.agreed_at ? toIso(r.agreed_at) : null,
+    createdAt: toIso(r.created_at),
+    updatedAt: toIso(r.updated_at),
   };
 }
 
@@ -262,11 +312,74 @@ export class PostgresSubcontractStore implements SubcontractStore {
     add('tenant_id', filter.tenantId);
     add('subcontract_id', filter.subcontractId);
     add('status', filter.status);
+
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const res = await this.pool.query<VariationRow>(
       `SELECT ${VAR_COLS} FROM public.aura_subcontracts_variations ${whereSql} ORDER BY created_at DESC`,
       params,
     );
     return res.rows.map(rowToVariation);
+  }
+
+  async createBackCharge(b: BackCharge): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO public.aura_subcontracts_back_charges (${BC_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      [
+        b.id,
+        b.tenantId,
+        b.subcontractId,
+        b.subcontractorName,
+        b.reference,
+        b.category,
+        b.description,
+        b.grossAmount,
+        b.markupPercent,
+        b.markupAmount,
+        b.recoverableAmount,
+        b.recoveredAmount,
+        b.outstandingAmount,
+        b.status,
+        b.raisedAt,
+        b.agreedAt,
+        b.createdAt,
+        b.updatedAt,
+      ],
+    );
+  }
+
+  async updateBackCharge(b: BackCharge): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_subcontracts_back_charges SET status=$2, recovered_amount=$3, outstanding_amount=$4, agreed_at=$5, updated_at=$6 WHERE id=$1`,
+      [b.id, b.status, b.recoveredAmount, b.outstandingAmount, b.agreedAt, b.updatedAt],
+    );
+  }
+
+  async getBackCharge(id: Id): Promise<BackCharge | null> {
+    const res = await this.pool.query<BackChargeRow>(
+      `SELECT ${BC_COLS} FROM public.aura_subcontracts_back_charges WHERE id = $1`,
+      [id],
+    );
+    return res.rows.length ? rowToBackCharge(res.rows[0]) : null;
+  }
+
+  async listBackCharges(filter: BackChargeFilter = {}): Promise<BackCharge[]> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) {
+        params.push(val);
+        where.push(`${col} = $${params.length}`);
+      }
+    };
+    add('tenant_id', filter.tenantId);
+    add('subcontract_id', filter.subcontractId);
+    add('status', filter.status);
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const res = await this.pool.query<BackChargeRow>(
+      `SELECT ${BC_COLS} FROM public.aura_subcontracts_back_charges ${whereSql} ORDER BY created_at DESC`,
+      params,
+    );
+    return res.rows.map(rowToBackCharge);
   }
 }

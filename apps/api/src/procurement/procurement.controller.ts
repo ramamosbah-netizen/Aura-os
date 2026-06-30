@@ -101,7 +101,30 @@ export class ProcurementController {
     if (!dto?.status) throw new BadRequestException('status is required');
     const found = await this.pos.get(id);
     if (!found) throw new NotFoundException(`purchase order ${id} not found`);
-    return this.pos.changeStatus(id, dto.status);
+    try {
+      return await this.pos.changeStatus(id, dto.status);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message); // e.g. approval gate
+    }
+  }
+
+  @Post('purchase-orders/:id/submit')
+  async submitPo(@Param('id') id: string): Promise<PurchaseOrder> {
+    try {
+      return await this.pos.submitForApproval(id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('purchase-orders/:id/approve')
+  async approvePo(@Param('id') id: string, @Body() dto: { approverLevel?: number }): Promise<PurchaseOrder> {
+    if (!(Number(dto?.approverLevel) >= 1)) throw new BadRequestException('approverLevel (>=1) is required');
+    try {
+      return await this.pos.approve(id, Number(dto.approverLevel));
+    } catch (e) {
+      throw new BadRequestException((e as Error).message); // under-level approval
+    }
   }
 
   // ── PURCHASE REQUESTS ────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import { type Id, newId } from '@aura/shared';
 // id + name snapshot (no cross-module join); the supplier is a name for now (no
 // Suppliers module yet).
 
-export type PurchaseOrderStatus = 'draft' | 'issued' | 'received' | 'closed';
+export type PurchaseOrderStatus = 'draft' | 'pending_approval' | 'approved' | 'issued' | 'received' | 'closed';
 
 export interface PurchaseOrder {
   id: Id;

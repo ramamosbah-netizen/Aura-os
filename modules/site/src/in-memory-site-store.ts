@@ -1,7 +1,8 @@
 import type { DailyReport } from './domain/daily-report';
 import type { DelayLog } from './domain/delay-log';
 import type { MaterialConsumption } from './domain/material-consumption';
-import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore } from './store.interface';
+import type { SiteInstruction } from './domain/site-instruction';
+import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore } from './store.interface';
 
 export class InMemoryDailyReportStore implements DailyReportStore {
   private readonly items = new Map<string, DailyReport>();
@@ -75,6 +76,32 @@ export class InMemoryMaterialConsumptionStore implements MaterialConsumptionStor
   }
 
   async findAll(tenantId: string): Promise<MaterialConsumption[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
+
+export class InMemorySiteInstructionStore implements SiteInstructionStore {
+  private readonly items = new Map<string, SiteInstruction>();
+
+  async save(instruction: SiteInstruction): Promise<void> {
+    this.items.set(instruction.id, { ...instruction });
+  }
+
+  async findById(id: string, tenantId: string): Promise<SiteInstruction | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return { ...item };
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<SiteInstruction[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.projectId === projectId && i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findAll(tenantId: string): Promise<SiteInstruction[]> {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

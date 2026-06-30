@@ -6,6 +6,7 @@ import {
   InMemoryDailyReportStore,
   InMemoryDelayLogStore,
   InMemoryMaterialConsumptionStore,
+  InMemorySiteInstructionStore,
 } from '../in-memory-site-store';
 import { SiteService } from '../site.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -49,6 +50,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         dailyReportStore,
         delayLogStore,
         materialStore,
+        new InMemorySiteInstructionStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -79,6 +81,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         dailyReportStore,
         delayLogStore,
         materialStore,
+        new InMemorySiteInstructionStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -113,6 +116,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         dailyReportStore,
         delayLogStore,
         materialStore,
+        new InMemorySiteInstructionStore(),
         mockEvents,
         mockTx,
         mockAccess,

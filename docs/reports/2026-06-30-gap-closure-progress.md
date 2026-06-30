@@ -5,11 +5,12 @@
 > restates the remaining backlog. Everything below was source-verified against the live tree
 > and exercised end-to-end (build/typecheck/test green + live HTTP), not chat-only.
 >
-> Shipped in **[PR #10](https://github.com/ramamosbah-netizen/Aura-os/pull/10)** (3 commits).
 > Whole-workspace gates after each gap: **build 22/22 · typecheck 42/42 · tests 41/41**.
 > Migrations now **77** (latest `0076`). Security/RLS hardening remains intentionally deferred.
 >
-> **Note:** §B1–B4 shipped in PR #10; **§B5 (budgeting)** and **§B6 (revenue recognition)** landed after, on the same branch (PR #10).
+> **Shipping status:**
+> - **[PR #10](https://github.com/ramamosbah-netizen/Aura-os/pull/10) — MERGED** (3 commits): §B1 deal-chain hardening + opportunity→account · §B2 AMC persistence · §B3 financial statements · §B4 period close.
+> - **[PR #11](https://github.com/ramamosbah-netizen/Aura-os/pull/11) — OPEN** (2 commits): §B5 budgeting · §B6 revenue recognition (+ this report).
 
 ---
 
@@ -86,4 +87,4 @@ Ranked by value, unchanged from the audits minus what's now done:
 - Every gap: workspace **build 22/22 · typecheck 42/42 · tests 41/41**, plus a dedicated test file, plus a **live HTTP** check against the booted in-memory API.
 - **Caveat (honest):** migrations `0073`/`0074`/`0075` were **not** run against a live Postgres this session (no `DATABASE_URL`). The Postgres adapters are proven by mock-pool/unit tests + the established DI-swap pattern; the in-memory path is exercised end-to-end. They apply on the next `pnpm db:migrate`.
 
-*End of report. Source-verified against the working tree; shipped in PR #10. No audit files were modified — corrections are recorded here per the dated-report convention.*
+*End of report. Source-verified against the working tree; shipped across PR #10 (merged) and PR #11 (open). No audit files were modified — corrections are recorded here per the dated-report convention.*

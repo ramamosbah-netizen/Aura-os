@@ -80,7 +80,7 @@ Inventory valuation landed independently on `main` via **PR #12** ("module-depth
 - `domain/approval-matrix.ts` — tiered thresholds (≤5k auto, ≤50k Manager, ≤500k Director, else Board) + pure `requiredApproval(value)`.
 - PO statuses `pending_approval`/`approved`; `submitForApproval` + `approve(id, level)` (rejects under-level) + a **gate** in `changeStatus('issued')` (must be approved unless auto). `POST /procurement/purchase-orders/:id/{submit,approve}`. No migration.
 - **Proof:** domain test + live: 300k PO → issue blocked (400); approve@L1 rejected (need L2); approve@L2 → approved; issue → 200.
-- Web approve/submit buttons pending (API-complete).
+- Web: the PO list now drives the flow — draft → **Submit for approval** → **Approve** → **Issue PO** (status-coloured), via new submit/approve BFF routes.
 
 ### B11. Notifications center (persisted + event-wired)  ·  `feat(core)`
 - `notification-store.ts` (Notification + port + in-memory/postgres) + migration `0078`; `NotificationService` gained `record/list/markRead/unreadCount` (channel dispatch stays log-stub — real email/SMS is external).
@@ -101,7 +101,7 @@ Ranked by value, unchanged from the audits minus what's now done:
 
 1. **Pagination rollout** — apply the B8 `listPaged` contract to the remaining ~30 list endpoints. *(next)*
 2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
-3. Group consolidation (blocked — GL has no per-company dimension); FIFO valuation layers; procurement approval web UI; real notification channel delivery (email/SMS).
+3. Group consolidation (blocked — GL has no per-company dimension); FIFO valuation layers; real notification channel delivery (email/SMS).
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.
 

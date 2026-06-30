@@ -68,6 +68,11 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 - **Proof:** service tests + live: 100 USD→AED default peg **367.25**; after setting 3.70 → **370**.
 - **Not done (full multi-currency):** the GL/journals/invoices carry no currency dimension, so per-transaction FX + period-end revaluation needs a currency column across all money fields (large cross-cutting change) — deferred.
 
+### B8. Pagination contract (started — reference impl)  ·  `feat(shared/finance)`
+- `shared/src/pagination.ts` — `Page<T>` envelope (`items/total/limit/offset/hasMore`) + `parsePageParams` (clamp ≤500, default 50) + `paginate`/`makePage`.
+- Reference implementation on customer-invoices: `listPaged` (in-memory slice; postgres `LIMIT/OFFSET` + `COUNT(*) OVER()`) → `GET /finance/customer-invoices/paged?limit&offset`. Tests in `shared/src/pagination.test.ts`. Verified live (3 rows, limit 2: page 1 `hasMore:true`, offset 2 `hasMore:false`).
+- **Rollout pending:** only customer-invoices migrated; the other ~30 list endpoints still use `limit`-only — apply the same `listPaged` pattern store-by-store.
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -80,7 +85,7 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 
 Ranked by value, unchanged from the audits minus what's now done:
 
-1. **Pagination contract** — cursor + total-count across all list endpoints (cross-cutting). *(next)*
+1. **Pagination rollout** — apply the B8 `listPaged` contract to the remaining ~30 list endpoints. *(next)*
 2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
 3. Inventory valuation (FIFO/WAC) + COGS; procurement approval matrix; group consolidation; notifications delivery.
 

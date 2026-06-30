@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import { type Id, type Page, type PageParams, makePage } from '@aura/shared';
 import type { CustomerInvoice, CustomerInvoiceLine } from './domain/customer-invoice';
 import type { CustomerInvoiceFilter, CustomerInvoiceStore } from './customer-invoice-store';
 
@@ -95,5 +95,27 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
       params,
     );
     return res.rows.map(rowTo);
+  }
+
+  async listPaged(filter: CustomerInvoiceFilter, page: PageParams): Promise<Page<CustomerInvoice>> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
+    };
+    add('tenant_id', filter.tenantId);
+    add('status', filter.status);
+    add('project_id', filter.projectId);
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    params.push(page.limit);
+    params.push(page.offset);
+    const res = await this.pool.query<Row & { total_count: string }>(
+      `SELECT ${COLS}, COUNT(*) OVER() AS total_count
+       FROM public.aura_finance_customer_invoices ${whereSql}
+       ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
+    const total = res.rows.length ? Number(res.rows[0].total_count) : 0;
+    return makePage(res.rows.map(rowTo), total, page);
   }
 }

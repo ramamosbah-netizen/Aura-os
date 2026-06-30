@@ -5,6 +5,7 @@ import { makePayment } from './payment';
 import { makeInvoice } from './invoice';
 import { InMemoryAccountStore } from '../in-memory-account-store';
 import { InMemoryJournalStore } from '../in-memory-journal-store';
+import { InMemoryPeriodCloseStore } from '../in-memory-period-close-store';
 import { InMemoryPaymentStore } from '../in-memory-payment-store';
 import { InMemoryInvoiceStore } from '../in-memory-invoice-store';
 import { AccountService } from '../account.service';
@@ -143,7 +144,7 @@ describe('Finance depth features', () => {
       );
       invoiceService.onModuleInit();
       const accountService = new AccountService(accountStore, mockAccess);
-      const journalService = new JournalService(journalStore, mockEvents, mockAccess);
+      const journalService = new JournalService(journalStore, mockEvents, new InMemoryPeriodCloseStore(), mockAccess);
       const paymentService = new PaymentService(
         paymentStore,
         mockEvents,

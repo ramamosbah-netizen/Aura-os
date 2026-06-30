@@ -71,6 +71,7 @@ interface CreateJournalDto {
   description: string;
   reference?: string | null;
   postedAt?: string | null;
+  companyId?: string | null;
   lines: CreateJournalLineDto[];
 }
 
@@ -209,6 +210,7 @@ export class FinanceController {
       return await this.journals.post(
         {
           tenantId: ctx.tenantId,
+          companyId: dto.companyId ?? ctx.companyId,
           description: dto.description,
           reference: dto.reference,
           postedAt: dto.postedAt,

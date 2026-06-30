@@ -6,6 +6,7 @@ import type { JournalFilter, JournalStore } from './journal-store';
 interface JournalRow {
   id: string;
   tenant_id: string;
+  company_id: string | null;
   reference: string | null;
   description: string;
   created_by: string | null;
@@ -22,7 +23,7 @@ interface LineRow {
   credit: string | number;
 }
 
-const JOURNAL_COLS = 'id, tenant_id, reference, description, created_by, posted_at';
+const JOURNAL_COLS = 'id, tenant_id, company_id, reference, description, created_by, posted_at';
 const LINE_COLS = 'id, journal_id, account_id, account_code, account_name, debit, credit';
 
 export class PostgresJournalStore implements JournalStore {
@@ -33,8 +34,8 @@ export class PostgresJournalStore implements JournalStore {
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO public.aura_finance_journals (${JOURNAL_COLS}) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [j.id, j.tenantId, j.reference, j.description, j.createdBy, j.postedAt],
+        `INSERT INTO public.aura_finance_journals (${JOURNAL_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [j.id, j.tenantId, j.companyId, j.reference, j.description, j.createdBy, j.postedAt],
       );
       for (const l of j.lines) {
         await client.query(
@@ -76,6 +77,7 @@ export class PostgresJournalStore implements JournalStore {
     return {
       id: jr.id,
       tenantId: jr.tenant_id,
+      companyId: jr.company_id,
       reference: jr.reference,
       description: jr.description,
       createdBy: jr.created_by,
@@ -119,6 +121,7 @@ export class PostgresJournalStore implements JournalStore {
       journals.push({
         id: jr.id,
         tenantId: jr.tenant_id,
+        companyId: jr.company_id,
         reference: jr.reference,
         description: jr.description,
         createdBy: jr.created_by,

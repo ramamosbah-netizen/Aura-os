@@ -12,6 +12,8 @@ export interface JournalLine {
 export interface Journal {
   id: Id;
   tenantId: Id;
+  /** Owning company within the tenant — the dimension that enables group consolidation. */
+  companyId: Id | null;
   reference: string | null;
   description: string;
   postedAt: string;
@@ -29,6 +31,7 @@ export interface NewJournalLine {
 
 export interface NewJournal {
   tenantId: Id;
+  companyId?: Id | null;
   reference?: string | null;
   description: string;
   createdBy?: Id | null;
@@ -59,6 +62,7 @@ export function makeJournal(input: NewJournal): Journal {
   return {
     id: newId(),
     tenantId: eClean(input.tenantId),
+    companyId: input.companyId ?? null,
     reference: input.reference?.trim() || null,
     description: input.description.trim(),
     postedAt: input.postedAt || new Date().toISOString(),

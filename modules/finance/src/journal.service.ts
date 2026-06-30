@@ -39,7 +39,7 @@ export class JournalService {
       makeEvent({
         type: FINANCE_EVENT.journalPosted,
         tenantId: journal.tenantId,
-        companyId: null,
+        companyId: journal.companyId,
         actorId: actorId ?? null,
         aggregateType: 'finance.journal',
         aggregateId: journal.id,

@@ -87,6 +87,12 @@ Inventory valuation landed independently on `main` via **PR #12** ("module-depth
 - `notifications-subscriber.ts` raises notifications from `po.approved` / `ipc.certified` / `period.closed` / `tender.awarded`. `GET /notifications` (+`unread-count`), `PATCH /notifications/:id/read`; `/notifications` web center + nav.
 - **Proof:** service test + live: approve a 300k PO → "PO approved" notification persisted, unread count 1.
 
+### B12. Group consolidation  ·  `feat(finance)`  ·  (was "blocked" — now unblocked)
+- Added a **company dimension** to the GL: `Journal.companyId` (nullable) + postgres persistence (migration `0079`) + controller passes `companyId` (defaults to the request company).
+- `StatementsService.consolidated(tenantId, asOf)` → per-company income statement + balance sheet (journals filtered by `companyId`) + a consolidated (group) column. `GET /finance/statements/consolidated`; `/finance/consolidation` web page (per-company + Group columns).
+- **Proof:** domain test + live: co-a 150k + co-b 80k → **group 230k**.
+- No intercompany elimination yet (simple summation).
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -101,7 +107,7 @@ Ranked by value, unchanged from the audits minus what's now done:
 
 1. **Pagination rollout** — apply the B8 `listPaged` contract to the remaining ~30 list endpoints. *(next)*
 2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
-3. Group consolidation (blocked — GL has no per-company dimension); FIFO valuation layers; real notification channel delivery (email/SMS).
+3. Intercompany elimination (B12 does simple summation); FIFO valuation layers; real notification channel delivery (email/SMS).
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.
 

@@ -2,8 +2,8 @@
 
 > **Date:** 2026-06-29
 > **Branch:** `main` (PR #3 merged; subsequent module-depth verticals pushed directly to `main`)
-> **Verified state:** `pnpm typecheck` **42/42** · `pnpm test` **41/41** tasks · Supabase DB migrations through index **`0066`** applied & verified live (0059 duplicated — §7.5)
-> **Latest:** 18 genuinely-missing module-depth verticals this session across Procurement, Inventory, HR, Fleet, Finance, Assets, HSE, CRM & Site (see §3.4 + the build-session appendix); the §7.1 cross-tenant leak fixed + guarded; evidence-based gap analysis in **§7**.
+> **Verified state:** `pnpm typecheck` **42/42** · `pnpm test` **41/41** tasks · Supabase DB migrations through index **`0067`** applied & verified live (0059 duplicated — §7.5)
+> **Latest:** 19 genuinely-missing module-depth verticals this session across Procurement, Inventory, HR, Fleet, Finance, Assets, HSE, CRM & Site (see §3.4 + the build-session appendix); the §7.1 cross-tenant leak fixed + guarded; evidence-based gap analysis in **§7**.
 > **Note:** This is the single consolidated report. Prior per-phase reports were removed from `docs/reports/`; they remain in git history if needed.
 
 ---
@@ -134,7 +134,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); branch `claude/epic-meitner-83558a` pushed (PR #3 → `main`, mergeable). ~75+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks. Per-module test growth this session: **fleet 14** (10 traffic-fine); **HR 43** (9 expense-claim + 10 staff-advance + 6 document-expiry); **finance 63** (13 petty-cash + 11 customer-invoice + 12 bank-guarantee + 5 AR-aging + 4 AP-aging); **procurement 18** (9 supplier-master); **assets 12** (10 depreciation); **HSE 9** (5 toolbox-talk); **CRM 16** (11 quotation); **site 12** (8 site-instruction); **apps/api 14** (7 tenant-scoping §7.1 guard, + the vitest runner wired this session). Supabase migrations **51 → 66** applied & verified live (0059 duplicated — §7.5).
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); branch `claude/epic-meitner-83558a` pushed (PR #3 → `main`, mergeable). ~75+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks. Per-module test growth this session: **fleet 14** (10 traffic-fine); **HR 43** (9 expense-claim + 10 staff-advance + 6 document-expiry); **finance 63** (13 petty-cash + 11 customer-invoice + 12 bank-guarantee + 5 AR-aging + 4 AP-aging); **procurement 18** (9 supplier-master); **assets 12** (10 depreciation); **HSE 9** (5 toolbox-talk); **CRM 16** (11 quotation); **site 12** (8 site-instruction); **doccontrol 11** (8 submittal); **apps/api 14** (7 tenant-scoping §7.1 guard, + the vitest runner wired this session). Supabase migrations **51 → 67** applied & verified live (0059 duplicated — §7.5).
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |
@@ -173,7 +173,8 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **HR Document Expiry** | `164a7db` | — (stateless calc) | `GET /hr/document-expiry?withinDays=&asOf=` | visa/work-permit compliance watch-list over existing employee fields; active-only; expired + expiring-within-window, soonest/most-overdue first; far-off & terminated excluded. Live-verified (expired visa −179d leads, permit +16d expiring, far-off omitted; counts 1/1) |
 | **HSE Toolbox Talks** | `409f69b` | `0064` | `POST/GET /hse/toolbox-talks` | daily safety-briefing log (topic/conductor/project/date/attendees/notes); date preserved (`::text`); attendees<1 → 400; missing topic → 400. *(Caught + fixed an un-awaited-promise 500→400 in the controller before commit.)* |
 | **CRM Quotations** | `5a521b8` | `0065` | `POST/GET /crm/quotations`, `GET /:id`, `PATCH /:id/status` | pre-sales quote (deal-chain step before contract/invoice); net 11500 / VAT 575 / total 12075; draft → sent → accepted; expire-after-accept → 400; empty-lines → 400; JSONB lines + dates round-trip |
-| **Site Instructions** | (this round) | `0066` | `POST/GET /site/instructions`, `PUT /:id/{acknowledge,close}` | formal SI register with cost/time-implication flags; open → acknowledged → closed; close-twice → 400; missing reference → 400; date preserved (`::text`) |
+| **Site Instructions** | `eeb874d` | `0066` | `POST/GET /site/instructions`, `PUT /:id/{acknowledge,close}` | formal SI register with cost/time-implication flags; open → acknowledged → closed; close-twice → 400; missing reference → 400; date preserved (`::text`) |
+| **DocControl Submittals** | (this round) | `0067` | `POST/GET /doccontrol/submittals`, `PUT /:id/{submit,return}` | document review register with Code A/B/C/D cycle; draft → submitted → returned (Code C); return-twice → 400; bad code → 400; missing title → 400; revise() bumps revision on C/D |
 
 > **† Migration `0059` collision:** `main`'s Project Variation Orders and this branch's Finance Petty Cash independently both authored a `0059_*.sql` (different filenames: `0059_projects_variations*` vs `0059_finance_petty_cash.sql`). Both were already applied to the live DB; the filename-ordered runner tolerates the duplicate index. Flagged for a follow-up renumber of the later file to keep the sequence strictly monotonic.
 

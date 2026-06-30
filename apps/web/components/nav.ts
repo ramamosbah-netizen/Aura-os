@@ -81,6 +81,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },
       { label: 'Document Control', href: '/documents/control', glyph: '⧇', desc: 'Transmittals & correspondence' },
+      { label: 'Submittals', href: '/doccontrol/submittals', glyph: '⊟', desc: 'Document submittal register (Code A/B/C/D review)' },
       { label: 'Templates', href: '/admin/templates', glyph: '⧇', desc: 'DMS — visual print templates' },
       { label: 'Audit Trail', href: '/admin/audit', glyph: '🔍', desc: 'Immutable audit log browser' },
       { label: 'Events', href: '/events', glyph: '⚡', desc: 'The event stream' },

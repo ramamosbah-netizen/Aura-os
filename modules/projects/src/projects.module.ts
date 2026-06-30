@@ -31,6 +31,11 @@ import { InMemoryCloseoutStore } from './in-memory-closeout-store';
 import { PostgresCloseoutStore } from './postgres-closeout-store';
 import { CloseoutService } from './closeout.service';
 
+import { CASHFLOW_FORECAST_STORE } from './cashflow-forecast-store';
+import { InMemoryCashflowForecastStore } from './in-memory-cashflow-forecast-store';
+import { PostgresCashflowForecastStore } from './postgres-cashflow-forecast-store';
+import { CashflowForecastService } from './cashflow-forecast.service';
+
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
   imports: [CoreModule],
@@ -77,13 +82,20 @@ import { CloseoutService } from './closeout.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresCloseoutStore(pool) : new InMemoryCloseoutStore(),
     },
+    {
+      provide: CASHFLOW_FORECAST_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCashflowForecastStore(pool) : new InMemoryCashflowForecastStore(),
+    },
     ProjectService,
     WbsService,
     CbsService,
     DelayEotService,
     VariationService,
     CloseoutService,
+    CashflowForecastService,
   ],
-  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService, CloseoutService],
+  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService, CloseoutService, CashflowForecastService],
 })
 export class ProjectsModule {}

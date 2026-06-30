@@ -1,8 +1,9 @@
 # AURA OS — Session Report, Gaps & Required Actions
 
 > **Date:** 2026-06-29
-> **Branch:** `main` (feature branch `feat/v8-enterprise-expansion` merged via `eff429b`)
-> **Verified state:** `pnpm typecheck` 42/42 · `pnpm test` 41/41 · Supabase DB 56/56 migrations
+> **Branch:** `main` (PR #3 merged; subsequent module-depth verticals pushed directly to `main`)
+> **Verified state:** `pnpm typecheck` **42/42** · `pnpm test` **41/41** tasks · Supabase DB migrations through index **`0066`** applied & verified live (0059 duplicated — §7.5)
+> **Latest:** 18 genuinely-missing module-depth verticals this session across Procurement, Inventory, HR, Fleet, Finance, Assets, HSE, CRM & Site (see §3.4 + the build-session appendix); the §7.1 cross-tenant leak fixed + guarded; evidence-based gap analysis in **§7**.
 > **Note:** This is the single consolidated report. Prior per-phase reports were removed from `docs/reports/`; they remain in git history if needed.
 
 ---
@@ -51,11 +52,12 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 | Dimension | State |
 |---|---|
 | Build / typecheck | ✅ 42/42 tasks |
-| Tests | ✅ 40/40 packages |
-| Database (Supabase) | ✅ 52/52 migrations applied (verified live) |
-| Business modules | 17 |
-| Architecture (5-layer) | Intact; module template held across all modules |
-| Git | All work on local `main`; **not pushed** |
+| Tests | ✅ 41/41 tasks (unit only — see §7.4) |
+| Database (Supabase) | ✅ migrations through index `0066` applied & verified live (0059 duplicated — §7.5) |
+| Business modules | 18 |
+| Architecture (5-layer) | Intact; module template held across all modules + 18 new verticals this session |
+| Git | Pushed to `main` (PR #3 merged) |
+| Known critical defect | ✅ cross-tenant read leak on 7 spine list endpoints — FIXED & live-verified (§7.1) |
 
 ---
 

@@ -38,6 +38,8 @@ import { InventoryController } from './inventory/inventory.controller';
 import { FinanceController } from './finance/finance.controller';
 import { StatementsController } from './finance/statements.controller';
 import { PeriodCloseController } from './finance/period-close.controller';
+import { BudgetController } from './finance/budget.controller';
+import { RevenueRecognitionController } from './finance/revenue-recognition.controller';
 import { SubcontractsController } from './subcontracts/subcontracts.controller';
 import { EngineeringController } from './engineering/engineering.controller';
 import { DocControlController } from './doccontrol/doccontrol.controller';
@@ -68,7 +70,7 @@ import { TransferController } from './inventory/transfer.controller';
  */
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, ContractsController, PaymentCertificatesController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, StatementsController, PeriodCloseController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, StockController, TransferController],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, ContractsController, PaymentCertificatesController, ProjectsController, IntelligenceController, ProcurementController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, StockController, TransferController],
   providers: [SampleEventSubscriber, CrossModuleSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, SearchService],
 })
 export class AppModule {}

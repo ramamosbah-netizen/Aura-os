@@ -132,6 +132,25 @@ function netIncome(accounts: Account[], journals: Journal[], from?: string | nul
   return income;
 }
 
+/**
+ * Signed GL balance per account over [from, to] (debit-normal for asset/expense,
+ * credit-normal otherwise). Shared by the statements and budget-vs-actual folds.
+ */
+export function accountBalances(
+  accounts: Account[],
+  journals: Journal[],
+  from?: string | null,
+  to?: string | null,
+): Map<string, number> {
+  const agg = aggregate(journals, from, to);
+  const out = new Map<string, number>();
+  for (const a of accounts) {
+    const t = agg.get(a.id);
+    if (t) out.set(a.id, signedBalance(a.type, t));
+  }
+  return out;
+}
+
 /** A cash & cash-equivalent account: an asset whose name marks it as cash/bank/petty cash. */
 export function isCashAccount(a: Account): boolean {
   return a.type === 'asset' && /\b(cash|bank|petty)\b/i.test(a.name);

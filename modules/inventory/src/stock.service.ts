@@ -9,7 +9,7 @@ import {
   type NewStockItem,
   makeStockItem,
   makeStockMovement,
-  applyMovement,
+  valueMovement,
 } from './domain/stock';
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
 
@@ -55,13 +55,16 @@ export class StockService {
   }
 
   /** Record a stock movement (in/out), updating the item's on-hand. Issues can't go negative. */
-  async recordMovement(stockItemId: Id, direction: StockDirection, quantity: number, reason?: string): Promise<{ item: StockItem; movement: StockMovement }> {
+  async recordMovement(stockItemId: Id, direction: StockDirection, quantity: number, reason?: string, unitCost?: number): Promise<{ item: StockItem; movement: StockMovement }> {
     const item = await this.store.getItem(stockItemId);
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
 
-    const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
-    const movement = makeStockMovement({ stockItemId, tenantId: item.tenantId, direction, quantity, reason }, balanceAfter);
-    const updated: StockItem = { ...item, quantityOnHand: balanceAfter };
+    const val = valueMovement(item.quantityOnHand, item.avgCost, direction, quantity, unitCost);
+    const movement = makeStockMovement(
+      { stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost: val.unitCost, cogs: val.cogs },
+      val.balanceAfter,
+    );
+    const updated: StockItem = { ...item, quantityOnHand: val.balanceAfter, avgCost: val.avgCost };
 
     await this.store.updateItem(updated);
     await this.store.addMovement(movement);
@@ -73,11 +76,27 @@ export class StockService {
         actorId: null,
         aggregateType: 'inventory.stock',
         aggregateId: item.id,
-        payload: { code: item.code, direction, quantity: movement.quantity, balanceAfter },
+        payload: {
+          code: item.code, direction, quantity: movement.quantity, balanceAfter: val.balanceAfter,
+          unitCost: movement.unitCost, cogs: movement.cogs, avgCost: updated.avgCost,
+          stockValue: Math.round(val.balanceAfter * updated.avgCost * 100) / 100,
+        },
       }),
     ]);
-    this.logger.log(`Stock ${direction} ${movement.quantity} ${item.unit} of ${item.code} → on-hand ${balanceAfter}`);
+    this.logger.log(`Stock ${direction} ${movement.quantity} ${item.unit} of ${item.code} → on-hand ${val.balanceAfter} @avg ${updated.avgCost}${movement.cogs ? ` COGS ${movement.cogs}` : ''}`);
     return { item: updated, movement };
+  }
+
+  /** Inventory valuation = on-hand × moving-average cost, per item + total. */
+  async valuation(filter?: StockFilter): Promise<{ items: Array<StockItem & { stockValue: number }>; totalValue: number }> {
+    const items = await this.store.listItems(filter);
+    let totalValue = 0;
+    const valued = items.map((i) => {
+      const stockValue = Math.round(i.quantityOnHand * i.avgCost * 100) / 100;
+      totalValue += stockValue;
+      return { ...i, stockValue };
+    });
+    return { items: valued, totalValue: Math.round(totalValue * 100) / 100 };
   }
 
   getItem(id: Id): Promise<StockItem | null> {

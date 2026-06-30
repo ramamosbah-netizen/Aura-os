@@ -8,12 +8,14 @@ interface CreateStockItemDto {
   unit?: string;
   warehouse?: string;
   openingQty?: number;
+  openingCost?: number;
 }
 
 interface MovementDto {
   direction: StockDirection;
   quantity: number;
   reason?: string;
+  unitCost?: number;
 }
 
 /** Inventory stock API — items + on-hand movements. */
@@ -37,6 +39,7 @@ export class StockController {
       unit: dto.unit,
       warehouse: dto.warehouse,
       openingQty: dto.openingQty,
+      openingCost: dto.openingCost,
       createdBy: ctx.actorId,
     });
   }
@@ -45,6 +48,13 @@ export class StockController {
   listItems(@Query('warehouse') warehouse?: string): Promise<StockItem[]> {
     const ctx = this.tenant.get();
     return this.stock.listItems({ tenantId: ctx.tenantId, warehouse, limit: 200 });
+  }
+
+  // literal route before :id
+  @Get('valuation')
+  valuation(@Query('warehouse') warehouse?: string) {
+    const ctx = this.tenant.get();
+    return this.stock.valuation({ tenantId: ctx.tenantId, warehouse, limit: 1000 });
   }
 
   @Get(':id')
@@ -62,7 +72,7 @@ export class StockController {
     if (dto?.direction !== 'in' && dto?.direction !== 'out') throw new BadRequestException("direction must be 'in' or 'out'");
     if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
     try {
-      return await this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason);
+      return await this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost);
     } catch (e) {
       // surface domain rejections (e.g. insufficient stock) as a 400 with the real reason
       throw new BadRequestException((e as Error).message);

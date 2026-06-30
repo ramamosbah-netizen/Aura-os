@@ -73,6 +73,12 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 - Reference implementation on customer-invoices: `listPaged` (in-memory slice; postgres `LIMIT/OFFSET` + `COUNT(*) OVER()`) → `GET /finance/customer-invoices/paged?limit&offset`. Tests in `shared/src/pagination.test.ts`. Verified live (3 rows, limit 2: page 1 `hasMore:true`, offset 2 `hasMore:false`).
 - **Rollout pending:** only customer-invoices migrated; the other ~30 list endpoints still use `limit`-only — apply the same `listPaged` pattern store-by-store.
 
+### B9. Inventory valuation (moving-average cost + COGS)  ·  `feat(inventory)`
+- `domain/stock.ts` — StockItem `avgCost`; movements carry `unitCost` + `cogs`; pure `valueMovement` (in: recompute weighted-average; out: COGS = qty × avg, avg unchanged). Migration `0077`.
+- `StockService.recordMovement(…, unitCost?)` + `valuation()` (Σ on-hand × avg). `GET /inventory/stock/valuation`; `/inventory/valuation` web page.
+- **Proof:** domain test + live: open 100@10 + recv 100@14 → avg **12**; issue 50 → COGS **600**; valuation **1,800**.
+- FIFO not implemented (WAC chosen — no cost-layer state required).
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -87,7 +93,7 @@ Ranked by value, unchanged from the audits minus what's now done:
 
 1. **Pagination rollout** — apply the B8 `listPaged` contract to the remaining ~30 list endpoints. *(next)*
 2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
-3. Inventory valuation (FIFO/WAC) + COGS; procurement approval matrix; group consolidation; notifications delivery.
+3. Procurement approval matrix; group consolidation; notifications delivery; FIFO valuation layers (B9 delivered WAC).
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.
 

@@ -5,21 +5,26 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner }
 import { type DailyReport, makeDailyReport } from './domain/daily-report';
 import { type DelayLog, makeDelayLog } from './domain/delay-log';
 import { type MaterialConsumption, makeMaterialConsumption } from './domain/material-consumption';
+import { type SiteInstruction, makeSiteInstruction, acknowledgeInstruction, closeInstruction } from './domain/site-instruction';
 
 export const DAILY_REPORT_STORE = Symbol('DAILY_REPORT_STORE');
 export const DELAY_LOG_STORE = Symbol('DELAY_LOG_STORE');
 export const MATERIAL_CONSUMPTION_STORE = Symbol('MATERIAL_CONSUMPTION_STORE');
+export const SITE_INSTRUCTION_STORE = Symbol('SITE_INSTRUCTION_STORE');
 
 import {
   type DailyReportStore,
   type DelayLogStore,
   type MaterialConsumptionStore,
+  type SiteInstructionStore,
 } from './store.interface';
 
 export const SITE_EVENT = {
   dailyReportSubmitted: 'site.daily_report.submitted',
   materialConsumed: 'site.material.consumed',
   delayLogged: 'site.delay.logged',
+  instructionIssued: 'site.instruction.issued',
+  instructionClosed: 'site.instruction.closed',
 };
 
 @Injectable()
@@ -30,6 +35,7 @@ export class SiteService {
     @Inject(DAILY_REPORT_STORE) private readonly dailyReportStore: DailyReportStore,
     @Inject(DELAY_LOG_STORE) private readonly delayLogStore: DelayLogStore,
     @Inject(MATERIAL_CONSUMPTION_STORE) private readonly materialConsumptionStore: MaterialConsumptionStore,
+    @Inject(SITE_INSTRUCTION_STORE) private readonly siteInstructionStore: SiteInstructionStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -163,6 +169,78 @@ export class SiteService {
 
   listDelayLogs(tenantId: Id): Promise<DelayLog[]> {
     return this.delayLogStore.findAll(tenantId);
+  }
+
+  // ── Site Instructions ──────────────────────────────────────────────────────
+
+  async issueSiteInstruction(input: {
+    tenantId: string;
+    companyId?: string | null;
+    projectId: string;
+    projectName?: string | null;
+    reference: string;
+    issuedBy: string;
+    date: string;
+    instruction: string;
+    costImplication?: boolean;
+    timeImplication?: boolean;
+    createdBy?: string | null;
+  }): Promise<SiteInstruction> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'site.instruction.issue', orgPath });
+    }
+
+    const si = makeSiteInstruction(input);
+    const event = makeEvent({
+      type: SITE_EVENT.instructionIssued,
+      tenantId: si.tenantId,
+      companyId: si.companyId,
+      actorId: si.createdBy,
+      aggregateType: 'site.instruction',
+      aggregateId: si.id,
+      payload: { reference: si.reference, projectId: si.projectId, costImplication: si.costImplication, timeImplication: si.timeImplication },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.siteInstructionStore.save(si, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Site instruction issued: ${si.reference} on project ${si.projectId}`);
+    return si;
+  }
+
+  async acknowledgeSiteInstruction(tenantId: Id, id: Id): Promise<SiteInstruction> {
+    const si = await this.siteInstructionStore.findById(id, tenantId);
+    if (!si) throw new Error(`site instruction ${id} not found`);
+    const updated = acknowledgeInstruction(si);
+    await this.tx.run(async (handle) => {
+      await this.siteInstructionStore.save(updated, handle);
+    });
+    return updated;
+  }
+
+  async closeSiteInstruction(tenantId: Id, id: Id): Promise<SiteInstruction> {
+    const si = await this.siteInstructionStore.findById(id, tenantId);
+    if (!si) throw new Error(`site instruction ${id} not found`);
+    const updated = closeInstruction(si);
+    const event = makeEvent({
+      type: SITE_EVENT.instructionClosed,
+      tenantId, companyId: si.companyId, actorId: null,
+      aggregateType: 'site.instruction', aggregateId: id,
+      payload: { reference: si.reference },
+    });
+    await this.tx.run(async (handle) => {
+      await this.siteInstructionStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  listSiteInstructions(tenantId: Id): Promise<SiteInstruction[]> {
+    return this.siteInstructionStore.findAll(tenantId);
   }
 
   // ── Material Consumption ───────────────────────────────────────────────────

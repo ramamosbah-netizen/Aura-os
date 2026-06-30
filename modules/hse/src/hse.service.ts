@@ -5,21 +5,25 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner }
 import { type HseIncident, makeHseIncident } from './domain/hse-incident';
 import { type PermitToWork, makePermitToWork } from './domain/permit-to-work';
 import { type CapaAction, makeCapaAction } from './domain/capa-action';
+import { type ToolboxTalk, makeToolboxTalk } from './domain/toolbox-talk';
 
 export const INCIDENT_STORE = Symbol('INCIDENT_STORE');
 export const PTW_STORE = Symbol('PTW_STORE');
 export const CAPA_STORE = Symbol('CAPA_STORE');
+export const TOOLBOX_STORE = Symbol('TOOLBOX_STORE');
 
 import {
   type HseIncidentStore,
   type PermitToWorkStore,
   type CapaActionStore,
+  type ToolboxTalkStore,
 } from './store.interface';
 
 export const HSE_EVENT = {
   incidentReported: 'hse.incident.reported',
   ptwIssued: 'hse.ptw.issued',
   capaRaised: 'hse.capa.raised',
+  toolboxTalkRecorded: 'hse.toolbox_talk.recorded',
 };
 
 @Injectable()
@@ -30,6 +34,7 @@ export class HseService {
     @Inject(INCIDENT_STORE) private readonly incidentStore: HseIncidentStore,
     @Inject(PTW_STORE) private readonly ptwStore: PermitToWorkStore,
     @Inject(CAPA_STORE) private readonly capaStore: CapaActionStore,
+    @Inject(TOOLBOX_STORE) private readonly toolboxStore: ToolboxTalkStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -164,6 +169,50 @@ export class HseService {
 
   listPermits(tenantId: Id): Promise<PermitToWork[]> {
     return this.ptwStore.findAll(tenantId);
+  }
+
+  // ── Toolbox Talks (daily safety briefings) ─────────────────────────────────
+
+  async recordToolboxTalk(input: {
+    tenantId: string;
+    companyId?: string | null;
+    projectId: string;
+    projectName?: string | null;
+    topic: string;
+    conductedBy: string;
+    talkDate: string;
+    attendeeCount: number;
+    notes?: string;
+    createdBy?: string | null;
+  }): Promise<ToolboxTalk> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'hse.toolbox.record', orgPath });
+    }
+
+    const talk = makeToolboxTalk(input);
+    const event = makeEvent({
+      type: HSE_EVENT.toolboxTalkRecorded,
+      tenantId: talk.tenantId,
+      companyId: talk.companyId,
+      actorId: talk.createdBy,
+      aggregateType: 'hse.toolbox_talk',
+      aggregateId: talk.id,
+      payload: { projectId: talk.projectId, topic: talk.topic, talkDate: talk.talkDate, attendeeCount: talk.attendeeCount },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.toolboxStore.save(talk, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Toolbox talk recorded: "${talk.topic}" on ${talk.talkDate} (${talk.attendeeCount} attendees)`);
+    return talk;
+  }
+
+  listToolboxTalks(tenantId: Id): Promise<ToolboxTalk[]> {
+    return this.toolboxStore.findAll(tenantId);
   }
 
   // ── Corrective & Preventive Action (CAPA) ──────────────────────────────────

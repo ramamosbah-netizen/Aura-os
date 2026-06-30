@@ -1,6 +1,7 @@
 export * from './domain/daily-report';
 export * from './domain/delay-log';
 export * from './domain/material-consumption';
+export * from './domain/site-instruction';
 export * from './site.service';
 export * from './site.module';
 export * from './store.interface';

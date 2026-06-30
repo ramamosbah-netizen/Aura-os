@@ -6,6 +6,7 @@ import {
   NCR_STORE,
   INSPECTION_REQUEST_STORE,
   SNAG_STORE,
+  ITP_STORE,
   QualityService,
 } from './quality.service';
 
@@ -13,12 +14,14 @@ import {
   InMemoryNcrStore,
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
+  InMemoryItpStore,
 } from './in-memory-quality-store';
 
 import {
   PostgresNcrStore,
   PostgresInspectionRequestStore,
   PostgresSnagStore,
+  PostgresItpStore,
 } from './postgres-quality-store';
 
 @Module({
@@ -41,6 +44,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresSnagStore(pool) : new InMemorySnagStore(),
+    },
+    {
+      provide: ITP_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresItpStore(pool) : new InMemoryItpStore(),
     },
     QualityService,
   ],

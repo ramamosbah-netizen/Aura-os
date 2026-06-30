@@ -1,106 +1,71 @@
 import type { Employee } from './employee';
 
-// Employee document-expiry — a read-model over the workforce's statutory documents (UAE
-// residence visa + labour permit). Framework-free + pure: buckets each document by days to
-// expiry so HR can act before a worker falls out of compliance (MoHRE / ICP renewals).
+/**
+ * Staff document expiry — a pure, stateless compliance watch-list (no new table) computed over
+ * the employee record's `visaExpiry` / `permitExpiry`. UAE labour compliance hinges on these not
+ * lapsing; this surfaces documents already expired or expiring within a window, soonest first, so
+ * PRO/HR can renew in time. Mirrors the bank-guarantee expiry watch-list.
+ */
+export type DocumentType = 'visa' | 'work_permit';
+export type ExpiryStatus = 'expired' | 'expiring' | 'valid';
 
-export type ExpiryBucket = 'expired' | 'critical' | 'warning' | 'ok';
-export type ExpiryDocumentType = 'Residence Visa' | 'Labour Permit';
-
-export interface ExpiryItem {
+export interface ExpiringDocument {
   employeeId: string;
   employeeName: string;
-  role: string;
-  department: string;
-  documentType: ExpiryDocumentType;
+  documentType: DocumentType;
   expiryDate: string; // YYYY-MM-DD
-  daysToExpiry: number; // negative once expired
-  bucket: ExpiryBucket;
+  daysToExpiry: number; // negative once past expiry
+  status: ExpiryStatus;
 }
 
-export interface ExpiryCounts {
-  expired: number;
-  critical: number;
-  warning: number;
-  ok: number;
-  total: number;
+export interface DocumentExpiryReport {
+  asOf: string;
+  withinDays: number;
+  items: ExpiringDocument[];
+  expiredCount: number;
+  expiringCount: number;
 }
 
-export interface ExpiryReport {
-  asOf: string; // YYYY-MM-DD
-  criticalDays: number;
-  warningDays: number;
-  items: ExpiryItem[];
-  counts: ExpiryCounts;
+/** Whole days from `asOf` to `expiry` (both YYYY-MM-DD); negative once past expiry. */
+export function daysUntil(expiry: string, asOf: string): number {
+  return Math.round((Date.parse(`${expiry}T00:00:00Z`) - Date.parse(`${asOf}T00:00:00Z`)) / 86_400_000);
 }
 
-export interface ExpiryOptions {
-  /** Reference date (YYYY-MM-DD); defaults to today (UTC calendar day). */
-  asOf?: string;
-  /** ≤ this many days (and not yet expired) ⇒ 'critical'. Default 30. */
-  criticalDays?: number;
-  /** ≤ this many days ⇒ 'warning' (above critical). Default 90. */
-  warningDays?: number;
-}
-
-/** Parse a YYYY-MM-DD calendar date to a UTC-midnight epoch (drift-free, TZ-independent). */
-function calendarUtc(date: string): number {
-  const [y, m, d] = date.slice(0, 10).split('-').map(Number);
-  return Date.UTC(y, (m || 1) - 1, d || 1);
-}
-
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-const DAY_MS = 86_400_000;
-
-function bucketFor(daysToExpiry: number, criticalDays: number, warningDays: number): ExpiryBucket {
-  if (daysToExpiry < 0) return 'expired';
-  if (daysToExpiry <= criticalDays) return 'critical';
-  if (daysToExpiry <= warningDays) return 'warning';
-  return 'ok';
+function classify(days: number, withinDays: number): ExpiryStatus {
+  if (days < 0) return 'expired';
+  if (days <= withinDays) return 'expiring';
+  return 'valid';
 }
 
 /**
- * Build the document-expiry report for a set of employees. Terminated employees are excluded
- * (their documents are no longer the company's compliance concern); each present visa/permit
- * expiry becomes one item, sorted most-urgent-first.
+ * Build the watch-list as of `asOf` (YYYY-MM-DD), including only documents that are expired or
+ * expiring within `withinDays` (active employees only; valid-and-far-off documents are omitted).
  */
-export function documentExpiryReport(employees: Employee[], options: ExpiryOptions = {}): ExpiryReport {
-  const asOf = options.asOf?.slice(0, 10) || todayUtc();
-  const criticalDays = options.criticalDays ?? 30;
-  const warningDays = options.warningDays ?? 90;
-  const asOfUtc = calendarUtc(asOf);
+export function buildDocumentExpiryReport(employees: Employee[], asOf: string, withinDays = 90): DocumentExpiryReport {
+  const items: ExpiringDocument[] = [];
 
-  const items: ExpiryItem[] = [];
   for (const e of employees) {
-    if (e.status === 'terminated') continue;
+    if (e.status !== 'active') continue;
     const name = `${e.firstName} ${e.lastName}`.trim();
-    const docs: Array<{ type: ExpiryDocumentType; date: string | null }> = [
-      { type: 'Residence Visa', date: e.visaExpiry },
-      { type: 'Labour Permit', date: e.permitExpiry },
+    const checks: Array<[DocumentType, string | null]> = [
+      ['visa', e.visaExpiry],
+      ['work_permit', e.permitExpiry],
     ];
-    for (const doc of docs) {
-      if (!doc.date) continue;
-      const daysToExpiry = Math.floor((calendarUtc(doc.date) - asOfUtc) / DAY_MS);
-      items.push({
-        employeeId: e.id,
-        employeeName: name,
-        role: e.role,
-        department: e.department,
-        documentType: doc.type,
-        expiryDate: doc.date.slice(0, 10),
-        daysToExpiry,
-        bucket: bucketFor(daysToExpiry, criticalDays, warningDays),
-      });
+    for (const [documentType, expiryDate] of checks) {
+      if (!expiryDate || !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)) continue;
+      const daysToExpiry = daysUntil(expiryDate, asOf);
+      const status = classify(daysToExpiry, withinDays);
+      if (status === 'valid') continue;
+      items.push({ employeeId: e.id, employeeName: name, documentType, expiryDate, daysToExpiry, status });
     }
   }
 
-  items.sort((a, b) => a.daysToExpiry - b.daysToExpiry);
-
-  const counts: ExpiryCounts = { expired: 0, critical: 0, warning: 0, ok: 0, total: items.length };
-  for (const it of items) counts[it.bucket] += 1;
-
-  return { asOf, criticalDays, warningDays, items, counts };
+  items.sort((a, b) => a.daysToExpiry - b.daysToExpiry); // most overdue / soonest first
+  return {
+    asOf,
+    withinDays,
+    items,
+    expiredCount: items.filter((i) => i.status === 'expired').length,
+    expiringCount: items.filter((i) => i.status === 'expiring').length,
+  };
 }

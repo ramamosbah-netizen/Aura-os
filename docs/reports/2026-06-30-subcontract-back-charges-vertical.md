@@ -3,7 +3,7 @@
 **Date:** 2026-06-30
 **Branch:** `claude/condescending-hopper-bb5e87`
 **Module:** `@aura/subcontracts`
-**Migration:** `0065_subcontract_back_charges.sql`
+**Migration:** `0071_subcontract_back_charges.sql` (renumbered from 0065 on merge with `main`, which took 0065 for crm_quotations)
 
 ## What & why
 
@@ -41,8 +41,8 @@ post the deduction to finance AP, exactly as `contracts.ipc.certified` drives AR
 - domain `back-charge.ts` + **14 unit tests**
 - store: extended `SubcontractStore` port + in-memory + postgres impls (snapshots
   the subcontractor name — no join)
-- migration `0065` — `aura_subcontracts_back_charges`, RLS-locked with
-  `tenant_isolation_policy` (clones the 0064 IPC convention)
+- migration `0071` — `aura_subcontracts_back_charges`, RLS-locked with
+  `tenant_isolation_policy` (clones the IPC migration convention)
 - service: `createBackCharge` (auto-refs BC-001, BC-002, …), `changeBackChargeStatus`,
   `recoverBackCharge`; emits on the spine
 - API: `POST/GET /api/v1/subcontracts/back-charges`, `/back-charges/summary`,
@@ -65,7 +65,7 @@ post the deduction to finance AP, exactly as `contracts.ipc.certified` drives AR
   - spine: 2 `raised`, 3 `statusChanged`, 2 `recovered` events emitted.
 
 > Live Supabase migration not run this session — the DB password is chat-pasted,
-> not stored in the worktree. Migration `0065` follows the exact `0064` shape that
+> not stored in the worktree. Migration `0071` follows the exact IPC-migration shape that
 > was applied live, and the full path is proven end-to-end against the in-memory
 > store. Apply with `pnpm db:migrate` when credentials are available.
 

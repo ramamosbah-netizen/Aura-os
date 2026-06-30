@@ -8,9 +8,14 @@ import { TRANSMITTAL_STORE, type TransmittalStore } from './store.interface';
 import { type Correspondence, makeCorrespondence } from './domain/correspondence';
 import { CORRESPONDENCE_STORE, type CorrespondenceStore } from './store.interface';
 
+import { type Submittal, type ReviewCode, makeSubmittal, submitForReview, returnWithCode } from './domain/submittal';
+import { SUBMITTAL_STORE, type SubmittalStore } from './store.interface';
+
 export const DOCCONTROL_EVENT = {
   transmittalSent: 'doccontrol.transmittal.sent',
   correspondenceLogged: 'doccontrol.correspondence.logged',
+  submittalSubmitted: 'doccontrol.submittal.submitted',
+  submittalReturned: 'doccontrol.submittal.returned',
 };
 
 @Injectable()
@@ -20,6 +25,7 @@ export class DocControlService {
   constructor(
     @Inject(TRANSMITTAL_STORE) private readonly transmittalStore: TransmittalStore,
     @Inject(CORRESPONDENCE_STORE) private readonly correspondenceStore: CorrespondenceStore,
+    @Inject(SUBMITTAL_STORE) private readonly submittalStore: SubmittalStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -153,5 +159,69 @@ export class DocControlService {
 
   listCorrespondence(tenantId: Id): Promise<Correspondence[]> {
     return this.correspondenceStore.findAll(tenantId);
+  }
+
+  // ── Submittals (document review register) ──────────────────────────────────
+
+  async createSubmittal(input: {
+    tenantId: string;
+    companyId?: string | null;
+    projectId: string;
+    projectName?: string | null;
+    reference: string;
+    title: string;
+    discipline?: Submittal['discipline'];
+    revision?: number;
+    createdBy?: string | null;
+  }): Promise<Submittal> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'doccontrol.submittal.create', orgPath });
+    }
+    const submittal = makeSubmittal(input);
+    await this.tx.run(async (handle) => {
+      await this.submittalStore.save(submittal, handle);
+    });
+    this.logger.log(`Submittal created: ${submittal.reference} rev ${submittal.revision}`);
+    return submittal;
+  }
+
+  async submitSubmittal(tenantId: Id, id: Id): Promise<Submittal> {
+    const found = await this.submittalStore.findById(id, tenantId);
+    if (!found) throw new Error(`submittal ${id} not found`);
+    const updated = submitForReview(found);
+    const event = makeEvent({
+      type: DOCCONTROL_EVENT.submittalSubmitted,
+      tenantId, companyId: found.companyId, actorId: null,
+      aggregateType: 'doccontrol.submittal', aggregateId: id,
+      payload: { reference: found.reference, revision: found.revision, projectId: found.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.submittalStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  async returnSubmittal(tenantId: Id, id: Id, reviewCode: ReviewCode, reviewComments?: string): Promise<Submittal> {
+    const found = await this.submittalStore.findById(id, tenantId);
+    if (!found) throw new Error(`submittal ${id} not found`);
+    const updated = returnWithCode(found, reviewCode, reviewComments);
+    const event = makeEvent({
+      type: DOCCONTROL_EVENT.submittalReturned,
+      tenantId, companyId: found.companyId, actorId: null,
+      aggregateType: 'doccontrol.submittal', aggregateId: id,
+      payload: { reference: found.reference, reviewCode, revision: found.revision },
+    });
+    await this.tx.run(async (handle) => {
+      await this.submittalStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  listSubmittals(tenantId: Id): Promise<Submittal[]> {
+    return this.submittalStore.findAll(tenantId);
   }
 }

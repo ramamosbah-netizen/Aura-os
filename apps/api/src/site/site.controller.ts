@@ -4,6 +4,7 @@ import {
   type DailyReport,
   type DelayLog,
   type MaterialConsumption,
+  type SiteInstruction,
   SiteService,
 } from '@aura/site';
 
@@ -148,5 +149,57 @@ export class SiteController {
   listMaterialConsumption(): Promise<MaterialConsumption[]> {
     const ctx = this.tenant.get();
     return this.siteService.listMaterialConsumption(ctx.tenantId);
+  }
+
+  // ── Site Instructions ──────────────────────────────────────────────────────
+
+  @Post('instructions')
+  async issueInstruction(@Body() dto: { projectId: string; projectName?: string; reference: string; issuedBy: string; date: string; instruction: string; costImplication?: boolean; timeImplication?: boolean }): Promise<SiteInstruction> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
+    if (!dto?.issuedBy?.trim()) throw new BadRequestException('issuedBy is required');
+    if (!dto?.instruction?.trim()) throw new BadRequestException('instruction is required');
+    if (!dto?.date?.trim()) throw new BadRequestException('date is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.siteService.issueSiteInstruction({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        projectId: dto.projectId,
+        projectName: dto.projectName,
+        reference: dto.reference,
+        issuedBy: dto.issuedBy,
+        date: dto.date,
+        instruction: dto.instruction,
+        costImplication: dto.costImplication,
+        timeImplication: dto.timeImplication,
+        createdBy: ctx.actorId || null,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('instructions')
+  listInstructions(): Promise<SiteInstruction[]> {
+    return this.siteService.listSiteInstructions(this.tenant.get().tenantId);
+  }
+
+  @Put('instructions/:id/acknowledge')
+  async acknowledgeInstruction(@Param('id') id: string): Promise<SiteInstruction> {
+    try {
+      return await this.siteService.acknowledgeSiteInstruction(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('instructions/:id/close')
+  async closeInstruction(@Param('id') id: string): Promise<SiteInstruction> {
+    try {
+      return await this.siteService.closeSiteInstruction(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

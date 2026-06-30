@@ -1,7 +1,8 @@
 import type { Ncr } from './domain/ncr';
 import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
-import type { NcrStore, InspectionRequestStore, SnagStore } from './store.interface';
+import type { Itp } from './domain/itp';
+import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore } from './store.interface';
 
 export class InMemoryNcrStore implements NcrStore {
   private readonly items = new Map<string, Ncr>();
@@ -75,6 +76,32 @@ export class InMemorySnagStore implements SnagStore {
   }
 
   async findAll(tenantId: string): Promise<Snag[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
+
+export class InMemoryItpStore implements ItpStore {
+  private items = new Map<string, Itp>();
+
+  async save(itp: Itp): Promise<void> {
+    this.items.set(itp.id, { ...itp, points: itp.points.map((p) => ({ ...p })) });
+  }
+
+  async findById(id: string, tenantId: string): Promise<Itp | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return { ...item, points: item.points.map((p) => ({ ...p })) };
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<Itp[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.projectId === projectId && i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findAll(tenantId: string): Promise<Itp[]> {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

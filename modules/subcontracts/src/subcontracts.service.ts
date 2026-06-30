@@ -3,8 +3,9 @@ import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shar
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import { type Subcontract, type SubcontractStatus, makeSubcontract, SUBCONTRACT_EVENT } from './domain/subcontract';
 import { type Claim, type ClaimStatus, makeClaim, CLAIM_EVENT } from './domain/claim';
+import { type SubcontractVariation, type VariationType, makeSubcontractVariation, approveVariation, rejectVariation, signedAmount, VARIATION_EVENT } from './domain/variation';
 import { type BackCharge, type BackChargeStatus, type BackChargeCategory, makeBackCharge, applyRecovery, BACK_CHARGE_EVENT } from './domain/back-charge';
-import { SUBCONTRACT_STORE, type SubcontractFilter, type ClaimFilter, type BackChargeFilter, type SubcontractStore } from './subcontract-store';
+import { SUBCONTRACT_STORE, type SubcontractFilter, type ClaimFilter, type VariationFilter, type BackChargeFilter, type SubcontractStore } from './subcontract-store';
 
 @Injectable()
 export class SubcontractsService {
@@ -225,6 +226,76 @@ export class SubcontractsService {
 
   async listClaims(filter?: ClaimFilter): Promise<Claim[]> {
     return this.store.listClaims(filter);
+  }
+
+  // ── VARIATIONS ───────────────────────────────────────────────────────────
+
+  async createVariation(input: {
+    tenantId: Id;
+    subcontractId: Id;
+    reference: string;
+    type: VariationType;
+    amount: number;
+    description?: string;
+    createdBy?: Id | null;
+  }): Promise<SubcontractVariation> {
+    const subcontract = await this.store.getSubcontract(input.subcontractId);
+    if (!subcontract) throw new Error(`Subcontract ${input.subcontractId} not found`);
+
+    const variation = makeSubcontractVariation(input);
+    await this.store.createVariation(variation);
+    await this.events.append([
+      makeEvent({
+        type: VARIATION_EVENT.created,
+        tenantId: variation.tenantId, companyId: null, actorId: input.createdBy ?? null,
+        aggregateType: 'subcontracts.variation', aggregateId: variation.id,
+        payload: { subcontractId: variation.subcontractId, type: variation.type, amount: variation.amount },
+      }),
+    ]);
+    this.logger.log(`Subcontract variation ${variation.reference} created (${variation.type} ${variation.amount})`);
+    return variation;
+  }
+
+  /** Approve a variation and apply its signed amount to the subcontract value. */
+  async approveVariation(id: Id, actorId?: Id | null): Promise<SubcontractVariation> {
+    const existing = await this.store.getVariation(id);
+    if (!existing) throw new Error(`Variation ${id} not found`);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      this.access.assert(actorId, { permission: 'projects.project.update', orgPath });
+    }
+
+    // approvedBy records the actor (nil-uuid when unauthenticated in dev)
+    const updated = approveVariation(existing, actorId ?? '00000000-0000-0000-0000-000000000000');
+    const subcontract = await this.store.getSubcontract(existing.subcontractId);
+    if (!subcontract) throw new Error(`Subcontract ${existing.subcontractId} not found`);
+    const revised: Subcontract = { ...subcontract, value: subcontract.value + signedAmount(updated) };
+
+    await this.store.updateVariation(updated);
+    await this.store.updateSubcontract(revised);
+    await this.events.append([
+      makeEvent({
+        type: VARIATION_EVENT.approved,
+        tenantId: updated.tenantId, companyId: null, actorId: actorId ?? null,
+        aggregateType: 'subcontracts.variation', aggregateId: updated.id,
+        payload: { subcontractId: updated.subcontractId, signedAmount: signedAmount(updated), revisedValue: revised.value },
+      }),
+    ]);
+    this.logger.log(`Variation ${updated.reference} approved → subcontract value ${subcontract.value} → ${revised.value}`);
+    return updated;
+  }
+
+  async rejectVariation(id: Id, actorId?: Id): Promise<SubcontractVariation> {
+    const existing = await this.store.getVariation(id);
+    if (!existing) throw new Error(`Variation ${id} not found`);
+    const updated = rejectVariation(existing);
+    await this.store.updateVariation(updated);
+    return updated;
+  }
+
+  async listVariations(filter?: VariationFilter): Promise<SubcontractVariation[]> {
+    return this.store.listVariations(filter);
   }
 
   // ── BACK-CHARGES (contra-charges) ────────────────────────────────────────

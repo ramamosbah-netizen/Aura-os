@@ -6,6 +6,7 @@ import {
   InMemoryHseIncidentStore,
   InMemoryPermitToWorkStore,
   InMemoryCapaActionStore,
+  InMemoryToolboxTalkStore,
 } from '../in-memory-hse-store';
 import { HseService } from '../hse.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -42,7 +43,7 @@ describe('HSE Module Bounded Context', () => {
       const ptwStore = new InMemoryPermitToWorkStore();
       const capaStore = new InMemoryCapaActionStore();
 
-      const service = new HseService(incidentStore, ptwStore, capaStore, mockEvents, mockTx, mockAccess);
+      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), mockEvents, mockTx, mockAccess);
 
       const inc = await service.reportIncident({
         tenantId: 't1',
@@ -66,7 +67,7 @@ describe('HSE Module Bounded Context', () => {
       const ptwStore = new InMemoryPermitToWorkStore();
       const capaStore = new InMemoryCapaActionStore();
 
-      const service = new HseService(incidentStore, ptwStore, capaStore, mockEvents, mockTx, mockAccess);
+      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), mockEvents, mockTx, mockAccess);
 
       const permit = await service.requestPermit({
         tenantId: 't1',
@@ -91,7 +92,7 @@ describe('HSE Module Bounded Context', () => {
       const ptwStore = new InMemoryPermitToWorkStore();
       const capaStore = new InMemoryCapaActionStore();
 
-      const service = new HseService(incidentStore, ptwStore, capaStore, mockEvents, mockTx, mockAccess);
+      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), mockEvents, mockTx, mockAccess);
 
       const capa = await service.raiseCapa({
         tenantId: 't1',

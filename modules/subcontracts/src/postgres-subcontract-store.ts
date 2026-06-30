@@ -2,8 +2,9 @@ import type { Pool } from 'pg';
 import type { Id } from '@aura/shared';
 import type { Subcontract } from './domain/subcontract';
 import type { Claim } from './domain/claim';
+import type { SubcontractVariation } from './domain/variation';
 import type { BackCharge, BackChargeCategory, BackChargeStatus } from './domain/back-charge';
-import type { SubcontractFilter, ClaimFilter, BackChargeFilter, SubcontractStore } from './subcontract-store';
+import type { SubcontractFilter, ClaimFilter, VariationFilter, BackChargeFilter, SubcontractStore } from './subcontract-store';
 
 interface SubcontractRow {
   id: string;
@@ -60,6 +61,35 @@ interface BackChargeRow {
 const SUB_COLS = 'id, tenant_id, project_id, project_name, title, subcontractor_name, status, value, retention_percentage, created_at';
 const CLAIM_COLS = 'id, tenant_id, subcontract_id, claim_number, status, work_completed_value, previously_certified_value, this_period_gross_value, retention_withheld, net_certified_value, is_retention_release, retention_released, certified_at, certified_by, created_at';
 const BC_COLS = 'id, tenant_id, subcontract_id, subcontractor_name, reference, category, description, gross_amount, markup_percent, markup_amount, recoverable_amount, recovered_amount, outstanding_amount, status, raised_at, agreed_at, created_at, updated_at';
+const VAR_COLS = 'id, tenant_id, subcontract_id, reference, type, amount, description, status, approved_by, created_at';
+
+interface VariationRow {
+  id: string;
+  tenant_id: string;
+  subcontract_id: string;
+  reference: string;
+  type: string;
+  amount: string | number;
+  description: string;
+  status: string;
+  approved_by: string | null;
+  created_at: Date | string;
+}
+
+function rowToVariation(r: VariationRow): SubcontractVariation {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    subcontractId: r.subcontract_id,
+    reference: r.reference,
+    type: r.type as SubcontractVariation['type'],
+    amount: Number(r.amount),
+    description: r.description || '',
+    status: r.status as SubcontractVariation['status'],
+    approvedBy: r.approved_by,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+  };
+}
 
 function rowToSubcontract(r: SubcontractRow): Subcontract {
   return {
@@ -249,6 +279,46 @@ export class PostgresSubcontractStore implements SubcontractStore {
       params,
     );
     return res.rows.map(rowToClaim);
+  }
+
+  async createVariation(v: SubcontractVariation): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO public.aura_subcontracts_variations (${VAR_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [v.id, v.tenantId, v.subcontractId, v.reference, v.type, v.amount, v.description, v.status, v.approvedBy, v.createdAt],
+    );
+  }
+
+  async updateVariation(v: SubcontractVariation): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_subcontracts_variations SET status=$2, approved_by=$3 WHERE id=$1`,
+      [v.id, v.status, v.approvedBy],
+    );
+  }
+
+  async getVariation(id: Id): Promise<SubcontractVariation | null> {
+    const res = await this.pool.query<VariationRow>(`SELECT ${VAR_COLS} FROM public.aura_subcontracts_variations WHERE id = $1`, [id]);
+    return res.rows.length ? rowToVariation(res.rows[0]) : null;
+  }
+
+  async listVariations(filter: VariationFilter = {}): Promise<SubcontractVariation[]> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) {
+        params.push(val);
+        where.push(`${col} = $${params.length}`);
+      }
+    };
+    add('tenant_id', filter.tenantId);
+    add('subcontract_id', filter.subcontractId);
+    add('status', filter.status);
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const res = await this.pool.query<VariationRow>(
+      `SELECT ${VAR_COLS} FROM public.aura_subcontracts_variations ${whereSql} ORDER BY created_at DESC`,
+      params,
+    );
+    return res.rows.map(rowToVariation);
   }
 
   async createBackCharge(b: BackCharge): Promise<void> {

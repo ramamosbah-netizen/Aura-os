@@ -3,6 +3,7 @@ import { makeTransmittal } from './transmittal';
 import { makeCorrespondence } from './correspondence';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
+import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { DocControlService } from '../doccontrol.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -39,6 +40,7 @@ describe('Document Control Module Bounded Context', () => {
       const service = new DocControlService(
         transmittalStore,
         correspondenceStore,
+        new InMemorySubmittalStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -66,6 +68,7 @@ describe('Document Control Module Bounded Context', () => {
       const service = new DocControlService(
         transmittalStore,
         correspondenceStore,
+        new InMemorySubmittalStore(),
         mockEvents,
         mockTx,
         mockAccess

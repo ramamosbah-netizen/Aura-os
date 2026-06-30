@@ -1,6 +1,7 @@
 export * from './domain/ncr';
 export * from './domain/inspection-request';
 export * from './domain/snag';
+export * from './domain/itp';
 export * from './quality.service';
 export * from './quality.module';
 export * from './store.interface';

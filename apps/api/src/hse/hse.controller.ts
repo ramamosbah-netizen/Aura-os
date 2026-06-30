@@ -4,6 +4,7 @@ import {
   type HseIncident,
   type PermitToWork,
   type CapaAction,
+  type ToolboxTalk,
   HseService,
 } from '@aura/hse';
 
@@ -163,5 +164,38 @@ export class HseController {
   listCapas(): Promise<CapaAction[]> {
     const ctx = this.tenant.get();
     return this.hseService.listCapas(ctx.tenantId);
+  }
+
+  // ── Toolbox Talks ──────────────────────────────────────────────────────────
+
+  @Post('toolbox-talks')
+  async recordToolboxTalk(@Body() dto: { projectId: string; projectName?: string; topic: string; conductedBy: string; talkDate: string; attendeeCount: number; notes?: string }): Promise<ToolboxTalk> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.topic?.trim()) throw new BadRequestException('topic is required');
+    if (!dto?.conductedBy?.trim()) throw new BadRequestException('conductedBy is required');
+    if (!dto?.talkDate?.trim()) throw new BadRequestException('talkDate is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.hseService.recordToolboxTalk({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        projectId: dto.projectId,
+        projectName: dto.projectName,
+        topic: dto.topic,
+        conductedBy: dto.conductedBy,
+        talkDate: dto.talkDate,
+        attendeeCount: Number(dto.attendeeCount),
+        notes: dto.notes,
+        createdBy: ctx.actorId || null,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('toolbox-talks')
+  listToolboxTalks(): Promise<ToolboxTalk[]> {
+    const ctx = this.tenant.get();
+    return this.hseService.listToolboxTalks(ctx.tenantId);
   }
 }

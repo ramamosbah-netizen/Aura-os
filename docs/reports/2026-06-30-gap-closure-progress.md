@@ -62,6 +62,12 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 - `apps/api/src/finance/revenue-recognition.controller.ts` injects `ProjectService` + `CbsService` (Projects) and `CustomerInvoiceService` (Finance). Cost + EAC from the CBS, contract value from the project, billing = net (ex-VAT) of non-cancelled AR matched by `projectId` **or** `contractRef` (catches IPC-generated invoices). `GET /finance/revenue-recognition` (all) + `/:projectId`; read-only web page.
 - **Proof:** `revenue-recognition.test.ts` (4 tests). Verified live: project value 1M, CBS actual 400k / forecast 800k (50%), AR net 300k → recognised **500k**, gross profit **100k**, **under-billing 200k** (contract asset).
 
+### B7. Multi-currency / FX (rate registry + conversion)  ·  `feat(finance)`
+- Built on `core` `ExchangeRateService` (read-only before; `aura_exchange_rates` table from migration `0031`). Added `setRate` (upsert + inverse) + `listRates`.
+- `apps/api/.../fx.controller.ts` → `GET/POST /finance/fx/rates` + `GET /finance/fx/convert`; `/finance/fx` web page (set rate, convert, list).
+- **Proof:** service tests + live: 100 USD→AED default peg **367.25**; after setting 3.70 → **370**.
+- **Not done (full multi-currency):** the GL/journals/invoices carry no currency dimension, so per-transaction FX + period-end revaluation needs a currency column across all money fields (large cross-cutting change) — deferred.
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -74,8 +80,8 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 
 Ranked by value, unchanged from the audits minus what's now done:
 
-1. **Multi-currency** + FX revaluation. *(next)*
-2. **Pagination contract** — cursor + total-count across all list endpoints (cross-cutting).
+1. **Pagination contract** — cursor + total-count across all list endpoints (cross-cutting). *(next)*
+2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
 3. Inventory valuation (FIFO/WAC) + COGS; procurement approval matrix; group consolidation; notifications delivery.
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.

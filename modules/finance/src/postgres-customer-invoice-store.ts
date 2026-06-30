@@ -18,6 +18,9 @@ interface Row {
   subtotal: string | number;
   vat_total: string | number;
   total: string | number;
+  currency: string | null;
+  exchange_rate: string | number | null;
+  base_total: string | number | null;
   amount_paid: string | number;
   status: string;
   created_by: string | null;
@@ -26,7 +29,7 @@ interface Row {
 
 const COLS =
   'id, tenant_id, company_id, invoice_number, customer_name, project_id, project_name, contract_ref, ' +
-  'issue_date::text AS issue_date, due_date::text AS due_date, lines, subtotal, vat_total, total, amount_paid, status, created_by, created_at';
+  'issue_date::text AS issue_date, due_date::text AS due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total, amount_paid, status, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 function rowTo(r: Row): CustomerInvoice {
@@ -46,6 +49,9 @@ function rowTo(r: Row): CustomerInvoice {
     subtotal: Number(r.subtotal),
     vatTotal: Number(r.vat_total),
     total: Number(r.total),
+    currency: r.currency ?? 'AED',
+    exchangeRate: r.exchange_rate == null ? 1 : Number(r.exchange_rate),
+    baseTotal: r.base_total == null ? Number(r.total) : Number(r.base_total),
     amountPaid: Number(r.amount_paid),
     status: r.status as CustomerInvoice['status'],
     createdBy: r.created_by,
@@ -60,13 +66,13 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
     await this.pool.query(
       `INSERT INTO public.aura_finance_customer_invoices
         (id, tenant_id, company_id, invoice_number, customer_name, project_id, project_name, contract_ref,
-         issue_date, due_date, lines, subtotal, vat_total, total, amount_paid, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+         issue_date, due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total, amount_paid, status, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        ON CONFLICT (id) DO UPDATE SET
          amount_paid = EXCLUDED.amount_paid, status = EXCLUDED.status`,
       [
         inv.id, inv.tenantId, inv.companyId, inv.invoiceNumber, inv.customerName, inv.projectId, inv.projectName, inv.contractRef,
-        inv.issueDate, inv.dueDate, JSON.stringify(inv.lines), inv.subtotal, inv.vatTotal, inv.total, inv.amountPaid, inv.status, inv.createdBy, inv.createdAt,
+        inv.issueDate, inv.dueDate, JSON.stringify(inv.lines), inv.subtotal, inv.vatTotal, inv.total, inv.currency, inv.exchangeRate, inv.baseTotal, inv.amountPaid, inv.status, inv.createdBy, inv.createdAt,
       ],
     );
   }

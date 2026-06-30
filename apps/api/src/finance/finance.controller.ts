@@ -495,7 +495,7 @@ export class FinanceController {
 
   @Post('customer-invoices')
   async createCustomerInvoice(
-    @Body() dto: { invoiceNumber: string; customerName: string; projectId?: string; projectName?: string; contractRef?: string; issueDate: string; dueDate?: string; lines: NewCustomerInvoiceLine[] },
+    @Body() dto: { invoiceNumber: string; customerName: string; projectId?: string; projectName?: string; contractRef?: string; issueDate: string; dueDate?: string; lines: NewCustomerInvoiceLine[]; currency?: string; exchangeRate?: number },
   ): Promise<CustomerInvoice> {
     if (!dto?.invoiceNumber?.trim()) throw new BadRequestException('invoiceNumber is required');
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
@@ -514,6 +514,8 @@ export class FinanceController {
         issueDate: dto.issueDate,
         dueDate: dto.dueDate ?? null,
         lines: dto.lines,
+        currency: dto.currency,
+        exchangeRate: dto.exchangeRate,
         createdBy: ctx.actorId,
       });
     } catch (e) {

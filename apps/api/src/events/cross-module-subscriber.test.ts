@@ -74,7 +74,7 @@ function buildHarness() {
   const projects = new ProjectService(new InMemoryProjectStore(), events, commands);
   const wbs = new WbsService(new InMemoryWbsStore(), events, access);
   const cbs = new CbsService(new InMemoryCbsStore(), events);
-  const customerInvoices = new CustomerInvoiceService(new InMemoryCustomerInvoiceStore(), events);
+  const customerInvoices = new CustomerInvoiceService(new InMemoryCustomerInvoiceStore(), events, { getRate: async () => 1 } as any);
 
   // Register command handlers (Nest would call these via OnModuleInit).
   tenders.onModuleInit();

@@ -6,6 +6,11 @@ import { InMemoryContractStore } from './in-memory-contract-store';
 import { PostgresContractStore } from './postgres-contract-store';
 import { ContractService } from './contract.service';
 
+import { PAYMENT_CERTIFICATE_STORE } from './payment-certificate-store';
+import { InMemoryPaymentCertificateStore } from './in-memory-payment-certificate-store';
+import { PostgresPaymentCertificateStore } from './postgres-payment-certificate-store';
+import { PaymentCertificateService } from './payment-certificate.service';
+
 /** The Contracts business module — same shape as CRM/Tendering (the module template). */
 @Module({
   imports: [CoreModule],
@@ -17,7 +22,14 @@ import { ContractService } from './contract.service';
         pool ? new PostgresContractStore(pool) : new InMemoryContractStore(),
     },
     ContractService,
+    {
+      provide: PAYMENT_CERTIFICATE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPaymentCertificateStore(pool) : new InMemoryPaymentCertificateStore(),
+    },
+    PaymentCertificateService,
   ],
-  exports: [ContractService],
+  exports: [ContractService, PaymentCertificateService],
 })
 export class ContractsModule {}

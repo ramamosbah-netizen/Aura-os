@@ -18,6 +18,7 @@ import {
 interface CreatePurchaseOrderDto {
   title: string;
   reference?: string;
+  supplierId?: string | null;
   supplierName?: string | null;
   projectId?: string | null;
   projectName?: string | null;
@@ -63,22 +64,27 @@ export class ProcurementController {
   // ── PURCHASE ORDERS ──────────────────────────────────────────────────────
 
   @Post('purchase-orders')
-  createPo(@Body() dto: CreatePurchaseOrderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<PurchaseOrder> {
+  async createPo(@Body() dto: CreatePurchaseOrderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<PurchaseOrder> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
-    return this.pos.create({
-      tenantId: ctx.tenantId,
-      companyId: ctx.companyId,
-      title: dto.title,
-      reference: dto.reference,
-      supplierName: dto.supplierName ?? null,
-      projectId: dto.projectId ?? null,
-      projectName: dto.projectName ?? null,
-      status: dto.status,
-      value: dto.value,
-      ownerId: ctx.actorId,
-      createdBy: ctx.actorId,
-    }, idempotencyKey);
+    try {
+      return await this.pos.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        title: dto.title,
+        reference: dto.reference,
+        supplierId: dto.supplierId ?? null,
+        supplierName: dto.supplierName ?? null,
+        projectId: dto.projectId ?? null,
+        projectName: dto.projectName ?? null,
+        status: dto.status,
+        value: dto.value,
+        ownerId: ctx.actorId,
+        createdBy: ctx.actorId,
+      }, idempotencyKey);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   @Get('purchase-orders')

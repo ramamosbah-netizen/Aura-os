@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, Logger } from '@nestjs/common';
-import { AmcService, SupportTicket } from '@aura/amc';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Logger } from '@nestjs/common';
+import { AmcService, SupportTicket, type PpmFrequency } from '@aura/amc';
 import { TenantContext } from '@aura/core';
 
 /**
@@ -150,5 +150,38 @@ export class AmcController {
   @Post('work-orders/:id/complete')
   async completeWorkOrder(@Param('id') id: string) {
     return this.service.completeWorkOrder(id);
+  }
+
+  // ─── PPM Schedules (preventive maintenance) ───────────────────────────────
+
+  @Post('ppm-schedules')
+  async createPpm(@Body() body: { contractId: string; assetId?: string; taskDescription: string; frequency: PpmFrequency; startDate?: string }) {
+    try {
+      return await this.service.createPpmSchedule({
+        tenantId: this.tenantId(),
+        contractId: body.contractId,
+        assetId: body.assetId,
+        taskDescription: body.taskDescription,
+        frequency: body.frequency,
+        startDate: body.startDate ? new Date(body.startDate) : new Date(),
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('ppm-schedules')
+  async listPpms(@Query('tenantId') tenantId?: string, @Query('contractId') contractId?: string) {
+    return this.service.listPpmSchedules(tenantId || this.tenantId(), contractId);
+  }
+
+  @Post('ppm-schedules/:id/deactivate')
+  async deactivatePpm(@Param('id') id: string) {
+    return this.service.deactivatePpmSchedule(id);
+  }
+
+  @Post('ppm-schedules/generate-due')
+  async generateDue(@Body() body: { asOf?: string }) {
+    return this.service.generateDueVisits(this.tenantId(), body?.asOf ? new Date(body.asOf) : new Date());
   }
 }

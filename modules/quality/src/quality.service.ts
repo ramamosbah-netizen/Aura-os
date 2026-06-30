@@ -6,17 +6,28 @@ import { type Ncr, makeNcr } from './domain/ncr';
 import { type InspectionRequest, makeInspectionRequest } from './domain/inspection-request';
 import { type Snag, makeSnag } from './domain/snag';
 import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp } from './domain/itp';
+import {
+  type MaterialApproval,
+  type NewMaterialApproval,
+  type MarDecision,
+  makeMaterialApproval,
+  submitMaterialApproval,
+  reviewMaterialApproval,
+  reviseMaterialApproval,
+} from './domain/material-approval';
 
 export const NCR_STORE = Symbol('NCR_STORE');
 export const INSPECTION_REQUEST_STORE = Symbol('INSPECTION_REQUEST_STORE');
 export const SNAG_STORE = Symbol('SNAG_STORE');
 export const ITP_STORE = Symbol('ITP_STORE');
+export const MATERIAL_APPROVAL_STORE = Symbol('MATERIAL_APPROVAL_STORE');
 
 import {
   type NcrStore,
   type InspectionRequestStore,
   type SnagStore,
   type ItpStore,
+  type MaterialApprovalStore,
 } from './store.interface';
 
 export const QUALITY_EVENT = {
@@ -25,6 +36,10 @@ export const QUALITY_EVENT = {
   snagClosed: 'quality.snag.closed',
   itpCreated: 'quality.itp.created',
   itpClosed: 'quality.itp.closed',
+  marCreated: 'quality.material_approval.created',
+  marSubmitted: 'quality.material_approval.submitted',
+  marReviewed: 'quality.material_approval.reviewed',
+  marRevised: 'quality.material_approval.revised',
 };
 
 @Injectable()
@@ -36,6 +51,7 @@ export class QualityService {
     @Inject(INSPECTION_REQUEST_STORE) private readonly irStore: InspectionRequestStore,
     @Inject(SNAG_STORE) private readonly snagStore: SnagStore,
     @Inject(ITP_STORE) private readonly itpStore: ItpStore,
+    @Inject(MATERIAL_APPROVAL_STORE) private readonly marStore: MaterialApprovalStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -314,5 +330,75 @@ export class QualityService {
 
   listItps(tenantId: Id): Promise<Itp[]> {
     return this.itpStore.findAll(tenantId);
+  }
+
+  // ── Material Approval Requests (MAR) ───────────────────────────────────────
+
+  async createMaterialApproval(input: NewMaterialApproval): Promise<MaterialApproval> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'quality.mar.create', orgPath });
+    }
+    const mar = makeMaterialApproval(input);
+    const event = makeEvent({
+      type: QUALITY_EVENT.marCreated,
+      tenantId: mar.tenantId, companyId: mar.companyId, actorId: mar.createdBy,
+      aggregateType: 'quality.material_approval', aggregateId: mar.id,
+      payload: { reference: mar.reference, projectId: mar.projectId, material: mar.materialName },
+    });
+    await this.tx.run(async (handle) => {
+      await this.marStore.save(mar, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`MAR created: ${mar.reference} — ${mar.materialName}`);
+    return mar;
+  }
+
+  async submitMaterialApproval(tenantId: Id, id: Id): Promise<MaterialApproval> {
+    const mar = await this.marStore.findById(id, tenantId);
+    if (!mar) throw new Error(`MAR ${id} not found`);
+    const updated = submitMaterialApproval(mar);
+    const event = makeEvent({
+      type: QUALITY_EVENT.marSubmitted,
+      tenantId, companyId: mar.companyId, actorId: null,
+      aggregateType: 'quality.material_approval', aggregateId: id,
+      payload: { reference: mar.reference, revision: updated.revision },
+    });
+    await this.tx.run(async (handle) => {
+      await this.marStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  async reviewMaterialApproval(tenantId: Id, id: Id, decision: MarDecision, reviewedBy: Id | null, comments?: string): Promise<MaterialApproval> {
+    const mar = await this.marStore.findById(id, tenantId);
+    if (!mar) throw new Error(`MAR ${id} not found`);
+    const updated = reviewMaterialApproval(mar, decision, reviewedBy, comments);
+    const event = makeEvent({
+      type: QUALITY_EVENT.marReviewed,
+      tenantId, companyId: mar.companyId, actorId: reviewedBy,
+      aggregateType: 'quality.material_approval', aggregateId: id,
+      payload: { reference: mar.reference, decision, material: mar.materialName },
+    });
+    await this.tx.run(async (handle) => {
+      await this.marStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`MAR ${mar.reference} reviewed: ${decision}`);
+    return updated;
+  }
+
+  async reviseMaterialApproval(tenantId: Id, id: Id): Promise<MaterialApproval> {
+    const mar = await this.marStore.findById(id, tenantId);
+    if (!mar) throw new Error(`MAR ${id} not found`);
+    const updated = reviseMaterialApproval(mar);
+    await this.tx.run(async (handle) => { await this.marStore.save(updated, handle); });
+    return updated;
+  }
+
+  listMaterialApprovals(tenantId: Id): Promise<MaterialApproval[]> {
+    return this.marStore.findAll(tenantId);
   }
 }

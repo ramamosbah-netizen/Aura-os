@@ -3,7 +3,8 @@ import type { Vehicle } from './domain/vehicle';
 import type { FuelLog } from './domain/fuel-log';
 import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
-import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore } from './store.interface';
+import type { SalikCharge } from './domain/salik-charge';
+import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore } from './store.interface';
 
 export class InMemoryVehicleStore implements VehicleStore {
   private items = new Map<string, Vehicle>();
@@ -123,6 +124,34 @@ export class InMemoryTrafficFineStore implements TrafficFineStore {
   }
 
   async findByVehicle(tenantId: string, vehicleId: string): Promise<TrafficFine[]> {
+    return Array.from(this.items.values())
+      .filter((item) => item.tenantId === tenantId && item.vehicleId === vehicleId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
+
+export class InMemorySalikChargeStore implements SalikChargeStore {
+  private items = new Map<string, SalikCharge>();
+
+  async save(charge: SalikCharge, tx?: TxHandle): Promise<SalikCharge> {
+    const copy = { ...charge, updatedAt: new Date().toISOString() };
+    this.items.set(copy.id, copy);
+    return copy;
+  }
+
+  async findById(tenantId: string, id: string): Promise<SalikCharge | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return item;
+  }
+
+  async findByTenant(tenantId: string): Promise<SalikCharge[]> {
+    return Array.from(this.items.values())
+      .filter((item) => item.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findByVehicle(tenantId: string, vehicleId: string): Promise<SalikCharge[]> {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId && item.vehicleId === vehicleId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

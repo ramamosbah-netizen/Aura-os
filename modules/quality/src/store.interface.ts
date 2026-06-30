@@ -3,6 +3,7 @@ import type { Ncr } from './domain/ncr';
 import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
+import type { MaterialApproval } from './domain/material-approval';
 
 export interface NcrStore {
   save(ncr: Ncr, tx?: TxHandle): Promise<void>;
@@ -30,4 +31,11 @@ export interface ItpStore {
   findById(id: string, tenantId: string): Promise<Itp | null>;
   findByProject(projectId: string, tenantId: string): Promise<Itp[]>;
   findAll(tenantId: string): Promise<Itp[]>;
+}
+
+export interface MaterialApprovalStore {
+  save(mar: MaterialApproval, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<MaterialApproval | null>;
+  findByProject(projectId: string, tenantId: string): Promise<MaterialApproval[]>;
+  findAll(tenantId: string): Promise<MaterialApproval[]>;
 }

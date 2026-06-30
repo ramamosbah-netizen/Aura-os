@@ -35,6 +35,10 @@ export class AccountService {
     return this.store.get(id);
   }
 
+  getByCode(tenantId: Id, code: string): Promise<Account | null> {
+    return this.store.getByCode(tenantId, code);
+  }
+
   list(filter?: AccountFilter): Promise<Account[]> {
     return this.store.list(filter);
   }

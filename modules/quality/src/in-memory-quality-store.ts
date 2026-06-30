@@ -2,7 +2,8 @@ import type { Ncr } from './domain/ncr';
 import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
-import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore } from './store.interface';
+import type { MaterialApproval } from './domain/material-approval';
+import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore } from './store.interface';
 
 export class InMemoryNcrStore implements NcrStore {
   private readonly items = new Map<string, Ncr>();
@@ -102,6 +103,32 @@ export class InMemoryItpStore implements ItpStore {
   }
 
   async findAll(tenantId: string): Promise<Itp[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
+
+export class InMemoryMaterialApprovalStore implements MaterialApprovalStore {
+  private items = new Map<string, MaterialApproval>();
+
+  async save(mar: MaterialApproval): Promise<void> {
+    this.items.set(mar.id, { ...mar });
+  }
+
+  async findById(id: string, tenantId: string): Promise<MaterialApproval | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return { ...item };
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<MaterialApproval[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.projectId === projectId && i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findAll(tenantId: string): Promise<MaterialApproval[]> {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

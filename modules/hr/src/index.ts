@@ -9,4 +9,5 @@ export * from './domain/timesheet';
 export * from './domain/expense-claim';
 export * from './domain/staff-advance';
 export * from './domain/document-expiry';
-export { HR_EVENT, TIMESHEET_STORE, EXPENSE_CLAIM_STORE, STAFF_ADVANCE_STORE } from './hr.service';
+export * from './domain/attendance';
+export { HR_EVENT, TIMESHEET_STORE, EXPENSE_CLAIM_STORE, STAFF_ADVANCE_STORE, ATTENDANCE_STORE } from './hr.service';

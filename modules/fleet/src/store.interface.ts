@@ -3,6 +3,7 @@ import type { Vehicle } from './domain/vehicle';
 import type { FuelLog } from './domain/fuel-log';
 import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
+import type { SalikCharge } from './domain/salik-charge';
 
 export interface VehicleStore {
   save(vehicle: Vehicle, tx?: TxHandle): Promise<Vehicle>;
@@ -32,4 +33,11 @@ export interface TrafficFineStore {
   findById(tenantId: string, id: string): Promise<TrafficFine | null>;
   findByTenant(tenantId: string): Promise<TrafficFine[]>;
   findByVehicle(tenantId: string, vehicleId: string): Promise<TrafficFine[]>;
+}
+
+export interface SalikChargeStore {
+  save(charge: SalikCharge, tx?: TxHandle): Promise<SalikCharge>;
+  findById(tenantId: string, id: string): Promise<SalikCharge | null>;
+  findByTenant(tenantId: string): Promise<SalikCharge[]>;
+  findByVehicle(tenantId: string, vehicleId: string): Promise<SalikCharge[]>;
 }

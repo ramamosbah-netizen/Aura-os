@@ -4,7 +4,8 @@ import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import { type Subcontract, type SubcontractStatus, makeSubcontract, SUBCONTRACT_EVENT } from './domain/subcontract';
 import { type Claim, type ClaimStatus, makeClaim, CLAIM_EVENT } from './domain/claim';
 import { type SubcontractVariation, type VariationType, makeSubcontractVariation, approveVariation, rejectVariation, signedAmount, VARIATION_EVENT } from './domain/variation';
-import { SUBCONTRACT_STORE, type SubcontractFilter, type ClaimFilter, type VariationFilter, type SubcontractStore } from './subcontract-store';
+import { type BackCharge, type BackChargeStatus, type BackChargeCategory, makeBackCharge, applyRecovery, BACK_CHARGE_EVENT } from './domain/back-charge';
+import { SUBCONTRACT_STORE, type SubcontractFilter, type ClaimFilter, type VariationFilter, type BackChargeFilter, type SubcontractStore } from './subcontract-store';
 
 @Injectable()
 export class SubcontractsService {
@@ -295,5 +296,148 @@ export class SubcontractsService {
 
   async listVariations(filter?: VariationFilter): Promise<SubcontractVariation[]> {
     return this.store.listVariations(filter);
+  }
+
+  // ── BACK-CHARGES (contra-charges) ────────────────────────────────────────
+
+  async createBackCharge(input: {
+    tenantId: Id;
+    subcontractId: Id;
+    category?: BackChargeCategory;
+    description: string;
+    grossAmount: number;
+    markupPercent?: number;
+    createdBy?: Id | null;
+  }): Promise<BackCharge> {
+    const subcontract = await this.store.getSubcontract(input.subcontractId);
+    if (!subcontract) throw new Error(`Subcontract ${input.subcontractId} not found`);
+
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      this.access.assert(input.createdBy, target);
+    }
+
+    // Sequential reference per subcontract: BC-001, BC-002, …
+    const existing = await this.store.listBackCharges({ subcontractId: input.subcontractId });
+    const reference = `BC-${String(existing.length + 1).padStart(3, '0')}`;
+
+    const backCharge = makeBackCharge({
+      tenantId: input.tenantId,
+      subcontractId: input.subcontractId,
+      subcontractorName: subcontract.subcontractorName,
+      reference,
+      category: input.category,
+      description: input.description,
+      grossAmount: input.grossAmount,
+      markupPercent: input.markupPercent,
+    });
+
+    await this.store.createBackCharge(backCharge);
+    this.logger.log(`Back-charge ${backCharge.reference} raised vs ${backCharge.subcontractorName}: gross=$${backCharge.grossAmount}, recoverable=$${backCharge.recoverableAmount}`);
+
+    await this.events.append([
+      makeEvent({
+        type: BACK_CHARGE_EVENT.raised,
+        tenantId: backCharge.tenantId,
+        companyId: null,
+        actorId: input.createdBy ?? null,
+        aggregateType: 'subcontracts.backcharge',
+        aggregateId: backCharge.id,
+        payload: {
+          reference: backCharge.reference,
+          subcontractId: backCharge.subcontractId,
+          subcontractor: backCharge.subcontractorName,
+          category: backCharge.category,
+          recoverableAmount: backCharge.recoverableAmount,
+        },
+      }),
+    ]);
+
+    return backCharge;
+  }
+
+  async changeBackChargeStatus(id: Id, status: BackChargeStatus, actorId?: Id): Promise<BackCharge> {
+    const existing = await this.store.getBackCharge(id);
+    if (!existing) throw new Error(`Back-charge ${id} not found`);
+
+    if (existing.status === 'recovered') {
+      throw new Error('A fully recovered back-charge cannot change status');
+    }
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      this.access.assert(actorId, target);
+    }
+
+    const updated: BackCharge = {
+      ...existing,
+      status,
+      agreedAt: status === 'agreed' && !existing.agreedAt ? new Date().toISOString() : existing.agreedAt,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.store.updateBackCharge(updated);
+    this.logger.log(`Back-charge ${updated.reference} status changed to ${status}`);
+
+    await this.events.append([
+      makeEvent({
+        type: BACK_CHARGE_EVENT.statusChanged,
+        tenantId: updated.tenantId,
+        companyId: null,
+        actorId: actorId ?? null,
+        aggregateType: 'subcontracts.backcharge',
+        aggregateId: updated.id,
+        payload: { reference: updated.reference, status },
+      }),
+    ]);
+
+    return updated;
+  }
+
+  async recoverBackCharge(id: Id, amount: number, actorId?: Id): Promise<BackCharge> {
+    const existing = await this.store.getBackCharge(id);
+    if (!existing) throw new Error(`Back-charge ${id} not found`);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      const target: AccessTarget = { permission: 'finance.invoice.approve', orgPath };
+      this.access.assert(actorId, target);
+    }
+
+    const updated = applyRecovery(existing, amount); // throws if not agreed / over-recovered
+    await this.store.updateBackCharge(updated);
+    this.logger.log(`Back-charge ${updated.reference} recovered +$${amount} (outstanding $${updated.outstandingAmount})`);
+
+    await this.events.append([
+      makeEvent({
+        type: BACK_CHARGE_EVENT.recovered,
+        tenantId: updated.tenantId,
+        companyId: null,
+        actorId: actorId ?? null,
+        aggregateType: 'subcontracts.backcharge',
+        aggregateId: updated.id,
+        payload: {
+          reference: updated.reference,
+          subcontractId: updated.subcontractId,
+          subcontractor: updated.subcontractorName,
+          amount: Number(amount),
+          recoveredAmount: updated.recoveredAmount,
+          outstandingAmount: updated.outstandingAmount,
+          status: updated.status,
+        },
+      }),
+    ]);
+
+    return updated;
+  }
+
+  async getBackCharge(id: Id): Promise<BackCharge | null> {
+    return this.store.getBackCharge(id);
+  }
+
+  async listBackCharges(filter?: BackChargeFilter): Promise<BackCharge[]> {
+    return this.store.listBackCharges(filter);
   }
 }

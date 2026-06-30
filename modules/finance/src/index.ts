@@ -56,5 +56,11 @@ export * from './in-memory-bank-guarantee-store';
 export * from './postgres-bank-guarantee-store';
 export * from './bank-guarantee.service';
 
+export * from './domain/post-dated-cheque';
+export * from './post-dated-cheque-store';
+export * from './in-memory-post-dated-cheque-store';
+export * from './postgres-post-dated-cheque-store';
+export * from './post-dated-cheque.service';
+
 export * from './finance.module';
 export * from './projections/profit-loss.projection';

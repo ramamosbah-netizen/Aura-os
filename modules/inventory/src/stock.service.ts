@@ -7,9 +7,14 @@ import {
   type StockMovement,
   type StockDirection,
   type NewStockItem,
+  type ValuationSummary,
+  type ReorderReport,
   makeStockItem,
   makeStockMovement,
   applyMovement,
+  computeWac,
+  summariseValuation,
+  summariseReorder,
 } from './domain/stock';
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
 
@@ -55,13 +60,14 @@ export class StockService {
   }
 
   /** Record a stock movement (in/out), updating the item's on-hand. Issues can't go negative. */
-  async recordMovement(stockItemId: Id, direction: StockDirection, quantity: number, reason?: string): Promise<{ item: StockItem; movement: StockMovement }> {
+  async recordMovement(stockItemId: Id, direction: StockDirection, quantity: number, reason?: string, unitCost?: number): Promise<{ item: StockItem; movement: StockMovement }> {
     const item = await this.store.getItem(stockItemId);
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
 
     const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
-    const movement = makeStockMovement({ stockItemId, tenantId: item.tenantId, direction, quantity, reason }, balanceAfter);
-    const updated: StockItem = { ...item, quantityOnHand: balanceAfter };
+    const newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));
+    const movement = makeStockMovement({ stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost }, balanceAfter, newAvgCost);
+    const updated: StockItem = { ...item, quantityOnHand: balanceAfter, avgCost: newAvgCost };
 
     await this.store.updateItem(updated);
     await this.store.addMovement(movement);
@@ -73,7 +79,19 @@ export class StockService {
         actorId: null,
         aggregateType: 'inventory.stock',
         aggregateId: item.id,
-        payload: { code: item.code, direction, quantity: movement.quantity, balanceAfter },
+        payload: {
+          code: item.code,
+          name: item.name,
+          unit: item.unit,
+          direction,
+          quantity: movement.quantity,
+          balanceAfter,
+          unitCost: movement.unitCost,
+          avgCost: newAvgCost,
+          valueAfter: movement.valueAfter,
+          reorderLevel: item.reorderLevel,
+          reorderQty: item.reorderQty,
+        },
       }),
     ]);
     this.logger.log(`Stock ${direction} ${movement.quantity} ${item.unit} of ${item.code} → on-hand ${balanceAfter}`);
@@ -92,5 +110,38 @@ export class StockService {
 
   listItems(filter?: StockFilter): Promise<StockItem[]> {
     return this.store.listItems(filter);
+  }
+
+  /** Inventory valuation report: each item's on-hand × WAC, plus the grand total. */
+  async valuation(filter?: StockFilter): Promise<ValuationSummary> {
+    return summariseValuation(await this.store.listItems(filter));
+  }
+
+  /** Set/clear an item's replenishment policy (reorder level + suggested order qty). */
+  async setReorderPolicy(stockItemId: Id, reorderLevel: number, reorderQty: number): Promise<StockItem> {
+    const item = await this.store.getItem(stockItemId);
+    if (!item) throw new Error(`stock item ${stockItemId} not found`);
+    const level = Math.max(0, Number(reorderLevel) || 0);
+    const qty = Math.max(0, Number(reorderQty) || 0);
+    const updated: StockItem = { ...item, reorderLevel: level, reorderQty: qty };
+    await this.store.updateItem(updated);
+    await this.events.append([
+      makeEvent({
+        type: STOCK_EVENT.reorderPolicySet,
+        tenantId: item.tenantId,
+        companyId: item.companyId,
+        actorId: null,
+        aggregateType: 'inventory.stock',
+        aggregateId: item.id,
+        payload: { code: item.code, reorderLevel: level, reorderQty: qty },
+      }),
+    ]);
+    this.logger.log(`Reorder policy set for ${item.code}: level ${level}, qty ${qty}`);
+    return updated;
+  }
+
+  /** Replenishment watch-list: items at/below their reorder level with a suggested order qty. */
+  async reorderReport(filter?: StockFilter): Promise<ReorderReport> {
+    return summariseReorder(await this.store.listItems(filter));
   }
 }

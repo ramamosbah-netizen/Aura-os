@@ -2,8 +2,8 @@
 
 > **Date:** 2026-06-29
 > **Branch:** `main` (PR #3 merged; subsequent module-depth verticals pushed directly to `main`)
-> **Verified state:** `pnpm typecheck` **42/42** · `pnpm test` **41/41** tasks · Supabase DB migrations through index **`0068`** applied & verified live (0059 duplicated — §7.5)
-> **Latest:** 20 genuinely-missing module-depth verticals this session across Procurement, Inventory, HR, Fleet, Finance, Assets, HSE, CRM & Site (see §3.4 + the build-session appendix); the §7.1 cross-tenant leak fixed + guarded; evidence-based gap analysis in **§7**.
+> **Verified state:** `pnpm typecheck` **42/42** · `pnpm test` **41/41** tasks · Supabase DB migrations through index **`0069`** applied & verified live (0059 duplicated — §7.5)
+> **Latest:** 21 genuinely-missing module-depth verticals this session across Procurement, Inventory, HR, Fleet, Finance, Assets, HSE, CRM & Site (see §3.4 + the build-session appendix); the §7.1 cross-tenant leak fixed + guarded; evidence-based gap analysis in **§7**.
 > **Note:** This is the single consolidated report. Prior per-phase reports were removed from `docs/reports/`; they remain in git history if needed.
 
 ---
@@ -53,9 +53,9 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 |---|---|
 | Build / typecheck | ✅ 42/42 tasks |
 | Tests | ✅ 41/41 tasks (unit only — see §7.4) |
-| Database (Supabase) | ✅ migrations through index `0068` applied & verified live (0059 duplicated — §7.5) |
+| Database (Supabase) | ✅ migrations through index `0069` applied & verified live (0059 duplicated — §7.5) |
 | Business modules | 18 |
-| Architecture (5-layer) | Intact; module template held across all modules + 20 new verticals this session |
+| Architecture (5-layer) | Intact; module template held across all modules + 21 new verticals this session |
 | Git | Pushed to `main` (PR #3 merged) |
 | Known critical defect | ✅ cross-tenant read leak on 7 spine list endpoints — FIXED & live-verified (§7.1) |
 
@@ -134,7 +134,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); branch `claude/epic-meitner-83558a` pushed (PR #3 → `main`, mergeable). ~75+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks. Per-module test growth this session: **fleet 14** (10 traffic-fine); **HR 43** (9 expense-claim + 10 staff-advance + 6 document-expiry); **finance 63** (13 petty-cash + 11 customer-invoice + 12 bank-guarantee + 5 AR-aging + 4 AP-aging); **procurement 18** (9 supplier-master); **assets 12** (10 depreciation); **HSE 9** (5 toolbox-talk); **CRM 16** (11 quotation); **site 12** (8 site-instruction); **doccontrol 11** (8 submittal); **quality 12** (8 ITP); **apps/api 14** (7 tenant-scoping §7.1 guard, + the vitest runner wired this session). Supabase migrations **51 → 68** applied & verified live (0059 duplicated — §7.5).
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); branch `claude/epic-meitner-83558a` pushed (PR #3 → `main`, mergeable). ~75+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks. Per-module test growth this session: **fleet 14** (10 traffic-fine); **HR 43** (9 expense-claim + 10 staff-advance + 6 document-expiry); **finance 63** (13 petty-cash + 11 customer-invoice + 12 bank-guarantee + 5 AR-aging + 4 AP-aging); **procurement 18** (9 supplier-master); **assets 12** (10 depreciation); **HSE 9** (5 toolbox-talk); **CRM 16** (11 quotation); **site 12** (8 site-instruction); **doccontrol 11** (8 submittal); **quality 12** (8 ITP); **subcontracts 10** (7 variation); **apps/api 14** (7 tenant-scoping §7.1 guard, + the vitest runner wired this session). Supabase migrations **51 → 69** applied & verified live (0059 duplicated — §7.5).
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |
@@ -175,7 +175,8 @@ The system is **architecturally sound and most correctness laws are now satisfie
 | **CRM Quotations** | `5a521b8` | `0065` | `POST/GET /crm/quotations`, `GET /:id`, `PATCH /:id/status` | pre-sales quote (deal-chain step before contract/invoice); net 11500 / VAT 575 / total 12075; draft → sent → accepted; expire-after-accept → 400; empty-lines → 400; JSONB lines + dates round-trip |
 | **Site Instructions** | `eeb874d` | `0066` | `POST/GET /site/instructions`, `PUT /:id/{acknowledge,close}` | formal SI register with cost/time-implication flags; open → acknowledged → closed; close-twice → 400; missing reference → 400; date preserved (`::text`) |
 | **DocControl Submittals** | `eadb227` | `0067` | `POST/GET /doccontrol/submittals`, `PUT /:id/{submit,return}` | document review register with Code A/B/C/D cycle; draft → submitted → returned (Code C); return-twice → 400; bad code → 400; missing title → 400; revise() bumps revision on C/D |
-| **Quality ITPs** | (this round) | `0068` | `POST/GET /quality/itps`, `PUT /:id/{activate,close}`, `PUT /:id/points/:index` | inspection & test plans (JSONB points: hold/witness/review/surveillance); draft → active → close; close-with-pending → 400; per-point pass/fail sign-off; no-points → 400 |
+| **Quality ITPs** | `1f7f80e` | `0068` | `POST/GET /quality/itps`, `PUT /:id/{activate,close}`, `PUT /:id/points/:index` | inspection & test plans (JSONB points: hold/witness/review/surveillance); draft → active → close; close-with-pending → 400; per-point pass/fail sign-off; no-points → 400 |
+| **Subcontract Variations** | (this round) | `0069` | `POST/GET /subcontracts/variations`, `PATCH /variations/:id/{approve,reject}` | additions/omissions adjusting the sub value; pending → approved applies signed amount (1,000,000 → +80k = 1,080,000 → −30k = 1,050,000); approve-twice → 400; bad type → 400; literal route precedes `:id`. *(Caught: stale workspace-dep dist + an unconditional access.assert on the nil-actor — both fixed before commit.)* |
 
 > **† Migration `0059` collision:** `main`'s Project Variation Orders and this branch's Finance Petty Cash independently both authored a `0059_*.sql` (different filenames: `0059_projects_variations*` vs `0059_finance_petty_cash.sql`). Both were already applied to the live DB; the filename-ordered runner tolerates the duplicate index. Flagged for a follow-up renumber of the later file to keep the sequence strictly monotonic.
 

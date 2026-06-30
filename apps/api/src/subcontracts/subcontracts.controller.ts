@@ -5,6 +5,8 @@ import {
   type SubcontractStatus,
   type Claim,
   type ClaimStatus,
+  type SubcontractVariation,
+  type VariationType,
   SubcontractsService,
 } from '@aura/subcontracts';
 
@@ -117,6 +119,53 @@ export class SubcontractsController {
   payClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const ctx = this.tenant.get();
     return this.subcontracts.payClaim(id, ctx.actorId ?? undefined);
+  }
+
+  // ── VARIATIONS (literal routes before :id) ─────────────────────────────
+
+  @Post('variations')
+  async createVariation(@Body() dto: { subcontractId: string; reference: string; type: VariationType; amount: number; description?: string }): Promise<SubcontractVariation> {
+    if (!dto?.subcontractId) throw new BadRequestException('subcontractId is required');
+    if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
+    if (dto?.type !== 'addition' && dto?.type !== 'omission') throw new BadRequestException("type must be 'addition' or 'omission'");
+    if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
+    const ctx = this.tenant.get();
+    try {
+      return await this.subcontracts.createVariation({
+        tenantId: ctx.tenantId,
+        subcontractId: dto.subcontractId,
+        reference: dto.reference,
+        type: dto.type,
+        amount: Number(dto.amount),
+        description: dto.description,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('variations')
+  listVariations(@Query('subcontractId') subcontractId?: string, @Query('status') status?: SubcontractVariation['status']): Promise<SubcontractVariation[]> {
+    return this.subcontracts.listVariations({ tenantId: this.tenant.get().tenantId, subcontractId, status });
+  }
+
+  @Patch('variations/:id/approve')
+  async approveVariation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<SubcontractVariation> {
+    try {
+      return await this.subcontracts.approveVariation(id, this.tenant.get().actorId ?? undefined);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Patch('variations/:id/reject')
+  async rejectVariation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<SubcontractVariation> {
+    try {
+      return await this.subcontracts.rejectVariation(id, this.tenant.get().actorId ?? undefined);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   // ── SUBCONTRACT by ID (after literal routes) ───────────────────────────

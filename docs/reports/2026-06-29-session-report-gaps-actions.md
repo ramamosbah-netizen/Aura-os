@@ -7,7 +7,9 @@
 
 ---
 
-## 1. What was done this session
+## 1. What was done — initial V8-conformance phase
+
+> *This section records the first phase (V8 architecture conformance). The later, larger **module-depth track** (16 verticals) and the **§7 gap analysis + §7.1 fix** are covered in §3.4, §7, and the build-session appendix — see those for current state.*
 
 The starting point was a large **uncommitted** V8 expansion (working tree only). This session committed it safely and then did a verified pass against the *V8 Enterprise Architecture Standard*, closing or advancing most findings. 30 commits, all green.
 
@@ -130,7 +132,7 @@ The system is **architecturally sound and most correctness laws are now satisfie
 
 ## Appendix — 2026-06-29 build session (detailed log)
 
-> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); `main` pushed. ~55+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks (fleet 14 tests incl. 10 traffic-fine tests; HR now **37 tests** incl. 9 expense-claim + 10 staff-advance tests; finance now **63 tests** incl. 13 petty-cash + 11 customer-invoice + 12 bank-guarantee + 5 AR-aging + 4 AP-aging tests; procurement now **18 tests** incl. 9 supplier-master tests; assets now **12 tests** incl. 10 depreciation tests; apps/api test runner wired this session), Supabase migrations **51 → 63** applied & verified live.
+> GitHub remote `origin` configured (`ramamosbah-netizen/Aura-os`); branch `claude/epic-meitner-83558a` pushed (PR #3 → `main`, mergeable). ~75+ commits since baseline `cd08948`. Throughout: `pnpm typecheck` **42/42**, `pnpm test` **41/41** tasks. Per-module test growth this session: **fleet 14** (10 traffic-fine); **HR 43** (9 expense-claim + 10 staff-advance + 6 document-expiry); **finance 63** (13 petty-cash + 11 customer-invoice + 12 bank-guarantee + 5 AR-aging + 4 AP-aging); **procurement 18** (9 supplier-master); **assets 12** (10 depreciation); **HSE 9** (5 toolbox-talk); **apps/api 14** (7 tenant-scoping §7.1 guard, + the vitest runner wired this session). Supabase migrations **51 → 64** applied & verified live (0059 duplicated — §7.5).
 
 ### A. Conformance pass (Constitution + V8)
 | Item | Commit(s) | Outcome |

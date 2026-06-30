@@ -71,6 +71,8 @@ export * from './in-memory-period-close-store';
 export * from './postgres-period-close-store';
 export * from './period-close.service';
 
+export * from './domain/revenue-recognition';
+
 export * from './domain/budget';
 export * from './budget-store';
 export * from './in-memory-budget-store';

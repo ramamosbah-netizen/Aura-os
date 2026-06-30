@@ -9,7 +9,7 @@
 > Whole-workspace gates after each gap: **build 22/22 · typecheck 42/42 · tests 41/41**.
 > Migrations now **77** (latest `0076`). Security/RLS hardening remains intentionally deferred.
 >
-> **Note:** §B1–B4 shipped in PR #10; **§B5 (budgeting)** + this report landed after, on the same branch.
+> **Note:** §B1–B4 shipped in PR #10; **§B5 (budgeting)** and **§B6 (revenue recognition)** landed after, on the same branch (PR #10).
 
 ---
 
@@ -55,6 +55,12 @@ GL-grounded — reuses the statements fold so actuals always reconcile to the bo
 - `BudgetController` → `/finance/budgets` (GET/POST/DELETE) + `/:id/vs-actual`; `/finance/budgets` web page (create form with dynamic account/amount lines + inline budget-vs-actual table).
 - **Proof:** `budget.test.ts` (2 tests). Verified live: a 20,000 Q1 rent budget vs two posted rent journals (16,000) → variance **4,000 (20% under)**.
 
+### B6. Revenue recognition (IFRS-15 cost-to-cost)  ·  `feat(finance)`  ·  (first cross-module feature)
+Composed at the **app layer** so no module depends on another (the same pattern as the cross-module reactor):
+- `domain/revenue-recognition.ts` — pure `recognizeRevenue()`: % complete = cost incurred ÷ EAC (capped at 100%); recognised revenue = contract value × %; over-billing (billed > recognised → contract **liability**) / under-billing (recognised > billed → contract **asset**).
+- `apps/api/src/finance/revenue-recognition.controller.ts` injects `ProjectService` + `CbsService` (Projects) and `CustomerInvoiceService` (Finance). Cost + EAC from the CBS, contract value from the project, billing = net (ex-VAT) of non-cancelled AR matched by `projectId` **or** `contractRef` (catches IPC-generated invoices). `GET /finance/revenue-recognition` (all) + `/:projectId`; read-only web page.
+- **Proof:** `revenue-recognition.test.ts` (4 tests). Verified live: project value 1M, CBS actual 400k / forecast 800k (50%), AR net 300k → recognised **500k**, gross profit **100k**, **under-billing 200k** (contract asset).
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -67,10 +73,9 @@ GL-grounded — reuses the statements fold so actuals always reconcile to the bo
 
 Ranked by value, unchanged from the audits minus what's now done:
 
-1. **Revenue recognition** — IFRS-15 / %-complete ↔ EVM. *(next)*
-2. **Multi-currency** + FX revaluation.
-3. **Pagination contract** — cursor + total-count across all list endpoints (cross-cutting).
-4. Inventory valuation (FIFO/WAC) + COGS; procurement approval matrix; group consolidation; notifications delivery.
+1. **Multi-currency** + FX revaluation. *(next)*
+2. **Pagination contract** — cursor + total-count across all list endpoints (cross-cutting).
+3. Inventory valuation (FIFO/WAC) + COGS; procurement approval matrix; group consolidation; notifications delivery.
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.
 

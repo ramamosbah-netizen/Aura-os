@@ -5,6 +5,10 @@ import {
   type SubcontractStatus,
   type Claim,
   type ClaimStatus,
+  type BackCharge,
+  type BackChargeStatus,
+  type BackChargeCategory,
+  summariseBackCharges,
   SubcontractsService,
 } from '@aura/subcontracts';
 
@@ -22,6 +26,14 @@ interface CreateClaimDto {
   workCompletedValue?: number;
   isRetentionRelease?: boolean;
   retentionReleased?: number;
+}
+
+interface CreateBackChargeDto {
+  subcontractId: string;
+  category?: BackChargeCategory;
+  description: string;
+  grossAmount: number;
+  markupPercent?: number;
 }
 
 @Controller('subcontracts')
@@ -117,6 +129,73 @@ export class SubcontractsController {
   payClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const ctx = this.tenant.get();
     return this.subcontracts.payClaim(id, ctx.actorId ?? undefined);
+  }
+
+  // ── BACK-CHARGES (literal routes before :id to avoid route-order capture) ─
+
+  @Post('back-charges')
+  createBackCharge(@Body() dto: CreateBackChargeDto): Promise<BackCharge> {
+    if (!dto?.subcontractId) throw new BadRequestException('subcontractId is required');
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    if (!(Number(dto?.grossAmount) > 0)) throw new BadRequestException('grossAmount must be positive');
+
+    const ctx = this.tenant.get();
+    return this.subcontracts.createBackCharge({
+      tenantId: ctx.tenantId,
+      subcontractId: dto.subcontractId,
+      category: dto.category,
+      description: dto.description,
+      grossAmount: Number(dto.grossAmount),
+      markupPercent: dto.markupPercent,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Get('back-charges')
+  listBackCharges(
+    @Query('subcontractId') subcontractId?: string,
+    @Query('status') status?: BackChargeStatus,
+  ): Promise<BackCharge[]> {
+    const ctx = this.tenant.get();
+    return this.subcontracts.listBackCharges({
+      tenantId: ctx.tenantId,
+      subcontractId,
+      status,
+    });
+  }
+
+  @Get('back-charges/summary')
+  async backChargeSummary(@Query('subcontractId') subcontractId?: string): Promise<ReturnType<typeof summariseBackCharges>> {
+    const ctx = this.tenant.get();
+    const list = await this.subcontracts.listBackCharges({ tenantId: ctx.tenantId, subcontractId });
+    return summariseBackCharges(list);
+  }
+
+  @Get('back-charges/:id')
+  async getBackCharge(@Param('id', ParseUuidOr404Pipe) id: string): Promise<BackCharge> {
+    const found = await this.subcontracts.getBackCharge(id);
+    if (!found) throw new NotFoundException(`Back-charge ${id} not found`);
+    return found;
+  }
+
+  @Patch('back-charges/:id/status')
+  changeBackChargeStatus(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: { status: BackChargeStatus },
+  ): Promise<BackCharge> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    const ctx = this.tenant.get();
+    return this.subcontracts.changeBackChargeStatus(id, dto.status, ctx.actorId ?? undefined);
+  }
+
+  @Patch('back-charges/:id/recover')
+  recoverBackCharge(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: { amount: number },
+  ): Promise<BackCharge> {
+    if (!(Number(dto?.amount) > 0)) throw new BadRequestException('amount must be positive');
+    const ctx = this.tenant.get();
+    return this.subcontracts.recoverBackCharge(id, Number(dto.amount), ctx.actorId ?? undefined);
   }
 
   // ── SUBCONTRACT by ID (after literal routes) ───────────────────────────

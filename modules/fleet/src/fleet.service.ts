@@ -6,12 +6,14 @@ import { type Vehicle, makeVehicle } from './domain/vehicle';
 import { type FuelLog, makeFuelLog } from './domain/fuel-log';
 import { type MaintenanceRecord, makeMaintenanceRecord } from './domain/maintenance';
 import { type TrafficFine, makeTrafficFine, assignFine, disputeFine, payFine } from './domain/traffic-fine';
-import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore } from './store.interface';
+import { type SalikCharge, type NewSalikCharge, type SalikSummary, makeSalikCharge, allocateSalik, disputeSalik, summariseSalik } from './domain/salik-charge';
+import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore, type SalikChargeStore } from './store.interface';
 
 export const VEHICLE_STORE = Symbol('VEHICLE_STORE');
 export const FUEL_LOG_STORE = Symbol('FUEL_LOG_STORE');
 export const MAINTENANCE_STORE = Symbol('MAINTENANCE_STORE');
 export const TRAFFIC_FINE_STORE = Symbol('TRAFFIC_FINE_STORE');
+export const SALIK_CHARGE_STORE = Symbol('SALIK_CHARGE_STORE');
 
 export const FLEET_EVENT = {
   vehicleCreated: 'fleet.vehicle.created',
@@ -21,6 +23,9 @@ export const FLEET_EVENT = {
   fineRecorded: 'fleet.fine.recorded',
   fineAssigned: 'fleet.fine.assigned',
   finePaid: 'fleet.fine.paid',
+  salikRecorded: 'fleet.salik.recorded',
+  salikAllocated: 'fleet.salik.allocated',
+  salikDisputed: 'fleet.salik.disputed',
 };
 
 @Injectable()
@@ -32,6 +37,7 @@ export class FleetService {
     @Inject(FUEL_LOG_STORE) private readonly fuelLogStore: FuelLogStore,
     @Inject(MAINTENANCE_STORE) private readonly maintenanceStore: MaintenanceStore,
     @Inject(TRAFFIC_FINE_STORE) private readonly trafficFineStore: TrafficFineStore,
+    @Inject(SALIK_CHARGE_STORE) private readonly salikStore: SalikChargeStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -316,5 +322,56 @@ export class FleetService {
 
   listFines(tenantId: string): Promise<TrafficFine[]> {
     return this.trafficFineStore.findByTenant(tenantId);
+  }
+
+  // ── Salik (toll charges) ──────────────────────────────────────────────────
+
+  async recordSalik(input: NewSalikCharge): Promise<SalikCharge> {
+    const charge = makeSalikCharge(input);
+    const event = makeEvent({
+      type: FLEET_EVENT.salikRecorded,
+      tenantId: charge.tenantId, companyId: charge.companyId, actorId: null,
+      aggregateType: 'fleet.salik', aggregateId: charge.id,
+      payload: { vehicleId: charge.vehicleId, gate: charge.gate, amount: charge.amount, chargeDate: charge.chargeDate },
+    });
+    await this.tx.run(async (handle) => {
+      await this.salikStore.save(charge, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Salik recorded: ${charge.gate} ${charge.amount} AED (vehicle ${charge.vehicleId})`);
+    return charge;
+  }
+
+  async allocateSalik(tenantId: string, id: string, allocatedTo: string): Promise<SalikCharge> {
+    const charge = await this.salikStore.findById(tenantId, id);
+    if (!charge) throw new Error(`salik charge ${id} not found`);
+    const updated = allocateSalik(charge, allocatedTo);
+    const event = makeEvent({
+      type: FLEET_EVENT.salikAllocated,
+      tenantId, companyId: charge.companyId, actorId: null,
+      aggregateType: 'fleet.salik', aggregateId: id,
+      payload: { allocatedTo: updated.allocatedTo, amount: charge.amount },
+    });
+    await this.tx.run(async (handle) => {
+      await this.salikStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  async disputeSalik(tenantId: string, id: string): Promise<SalikCharge> {
+    const charge = await this.salikStore.findById(tenantId, id);
+    if (!charge) throw new Error(`salik charge ${id} not found`);
+    const updated = disputeSalik(charge);
+    await this.salikStore.save(updated);
+    return updated;
+  }
+
+  listSalik(tenantId: string): Promise<SalikCharge[]> {
+    return this.salikStore.findByTenant(tenantId);
+  }
+
+  async salikSummary(tenantId: string): Promise<SalikSummary> {
+    return summariseSalik(await this.salikStore.findByTenant(tenantId));
   }
 }

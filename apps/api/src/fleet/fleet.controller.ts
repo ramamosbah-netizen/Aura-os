@@ -5,6 +5,8 @@ import {
   type FuelLog,
   type MaintenanceRecord,
   type TrafficFine,
+  type SalikCharge,
+  type SalikSummary,
   FleetService,
 } from '@aura/fleet';
 
@@ -200,6 +202,60 @@ export class FleetController {
   async payFine(@Param('id') id: string, @Body() dto: { paidDate?: string }): Promise<TrafficFine> {
     try {
       return await this.fleetService.payFine(this.tenant.get().tenantId, id, dto?.paidDate);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Salik (toll charges) ──────────────────────────────────────────────────
+
+  @Post('salik')
+  async recordSalik(@Body() dto: { vehicleId: string; plateNumber?: string; gate: string; chargeDate: string; chargeTime?: string; amount?: number; notes?: string }): Promise<SalikCharge> {
+    if (!dto?.vehicleId) throw new BadRequestException('vehicleId is required');
+    if (!dto?.gate?.trim()) throw new BadRequestException('gate is required');
+    if (!dto?.chargeDate?.trim()) throw new BadRequestException('chargeDate is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.fleetService.recordSalik({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        vehicleId: dto.vehicleId,
+        plateNumber: dto.plateNumber,
+        gate: dto.gate,
+        chargeDate: dto.chargeDate,
+        chargeTime: dto.chargeTime,
+        amount: dto.amount !== undefined ? Number(dto.amount) : undefined,
+        notes: dto.notes,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('salik')
+  listSalik(): Promise<SalikCharge[]> {
+    return this.fleetService.listSalik(this.tenant.get().tenantId);
+  }
+
+  @Get('salik/summary')
+  salikSummary(): Promise<SalikSummary> {
+    return this.fleetService.salikSummary(this.tenant.get().tenantId);
+  }
+
+  @Put('salik/:id/allocate')
+  async allocateSalik(@Param('id') id: string, @Body() dto: { allocatedTo: string }): Promise<SalikCharge> {
+    if (!dto?.allocatedTo?.trim()) throw new BadRequestException('allocatedTo is required');
+    try {
+      return await this.fleetService.allocateSalik(this.tenant.get().tenantId, id, dto.allocatedTo);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('salik/:id/dispute')
+  async disputeSalik(@Param('id') id: string): Promise<SalikCharge> {
+    try {
+      return await this.fleetService.disputeSalik(this.tenant.get().tenantId, id);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

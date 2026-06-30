@@ -7,6 +7,7 @@ import {
   FUEL_LOG_STORE,
   MAINTENANCE_STORE,
   TRAFFIC_FINE_STORE,
+  SALIK_CHARGE_STORE,
   FleetService,
 } from './fleet.service';
 
@@ -15,6 +16,7 @@ import {
   InMemoryFuelLogStore,
   InMemoryMaintenanceStore,
   InMemoryTrafficFineStore,
+  InMemorySalikChargeStore,
 } from './in-memory-fleet-store';
 
 import {
@@ -22,6 +24,7 @@ import {
   PostgresFuelLogStore,
   PostgresMaintenanceStore,
   PostgresTrafficFineStore,
+  PostgresSalikChargeStore,
 } from './postgres-fleet-store';
 
 @Module({
@@ -50,6 +53,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresTrafficFineStore(pool) : new InMemoryTrafficFineStore(),
+    },
+    {
+      provide: SALIK_CHARGE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSalikChargeStore(pool) : new InMemorySalikChargeStore(),
     },
     FleetService,
   ],

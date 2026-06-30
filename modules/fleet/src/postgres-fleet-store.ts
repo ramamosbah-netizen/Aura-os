@@ -4,7 +4,8 @@ import type { Vehicle } from './domain/vehicle';
 import type { FuelLog } from './domain/fuel-log';
 import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
-import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore } from './store.interface';
+import type { SalikCharge } from './domain/salik-charge';
+import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore } from './store.interface';
 
 // pg returns `date` columns as a JS Date constructed in the server's local TZ.
 // Extract the calendar date via LOCAL components so we get the date that was actually stored.
@@ -310,6 +311,64 @@ export class PostgresTrafficFineStore implements TrafficFineStore {
       fineDate: dateOnly(row.fine_date),
       status: row.status,
       paidDate: row.paid_date ? dateOnly(row.paid_date) : null,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    };
+  }
+}
+
+export class PostgresSalikChargeStore implements SalikChargeStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(charge: SalikCharge, tx?: TxHandle): Promise<SalikCharge> {
+    const conn = (tx as PoolClient) || this.pool;
+    const res = await conn.query(
+      `insert into public.aura_fleet_salik_charges (
+        id, tenant_id, company_id, vehicle_id, plate_number, gate, charge_date, charge_time, amount, status, allocated_to, notes, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      on conflict (id) do update set
+        status = excluded.status,
+        allocated_to = excluded.allocated_to,
+        updated_at = excluded.updated_at
+      returning *`,
+      [
+        charge.id, charge.tenantId, charge.companyId, charge.vehicleId, charge.plateNumber, charge.gate,
+        charge.chargeDate, charge.chargeTime, charge.amount, charge.status, charge.allocatedTo, charge.notes,
+        charge.createdAt, charge.updatedAt,
+      ],
+    );
+    return this.mapSalik(res.rows[0]);
+  }
+
+  async findById(tenantId: string, id: string): Promise<SalikCharge | null> {
+    const res = await this.pool.query(`select * from public.aura_fleet_salik_charges where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rows.length ? this.mapSalik(res.rows[0]) : null;
+  }
+
+  async findByTenant(tenantId: string): Promise<SalikCharge[]> {
+    const res = await this.pool.query(`select * from public.aura_fleet_salik_charges where tenant_id = $1 order by created_at desc`, [tenantId]);
+    return res.rows.map(this.mapSalik);
+  }
+
+  async findByVehicle(tenantId: string, vehicleId: string): Promise<SalikCharge[]> {
+    const res = await this.pool.query(`select * from public.aura_fleet_salik_charges where tenant_id = $1 and vehicle_id = $2 order by created_at desc`, [tenantId, vehicleId]);
+    return res.rows.map(this.mapSalik);
+  }
+
+  private mapSalik(row: any): SalikCharge {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      vehicleId: row.vehicle_id,
+      plateNumber: row.plate_number || '',
+      gate: row.gate,
+      chargeDate: dateOnly(row.charge_date),
+      chargeTime: row.charge_time || '',
+      amount: Number(row.amount),
+      status: row.status,
+      allocatedTo: row.allocated_to || '',
+      notes: row.notes || '',
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
     };

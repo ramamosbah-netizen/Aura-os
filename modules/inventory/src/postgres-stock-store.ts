@@ -12,6 +12,9 @@ interface ItemRow {
   unit: string;
   warehouse: string;
   quantity_on_hand: string | number;
+  avg_cost: string | number | null;
+  reorder_level: string | number | null;
+  reorder_qty: string | number | null;
   created_by: string | null;
   created_at: Date | string;
 }
@@ -24,11 +27,13 @@ interface MoveRow {
   quantity: string | number;
   reason: string;
   balance_after: string | number;
+  unit_cost: string | number | null;
+  value_after: string | number | null;
   created_at: Date | string;
 }
 
-const ITEM_COLS = 'id, tenant_id, company_id, code, name, unit, warehouse, quantity_on_hand, created_by, created_at';
-const MOVE_COLS = 'id, tenant_id, stock_item_id, direction, quantity, reason, balance_after, created_at';
+const ITEM_COLS = 'id, tenant_id, company_id, code, name, unit, warehouse, quantity_on_hand, avg_cost, reorder_level, reorder_qty, created_by, created_at';
+const MOVE_COLS = 'id, tenant_id, stock_item_id, direction, quantity, reason, balance_after, unit_cost, value_after, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 function rowToItem(r: ItemRow): StockItem {
@@ -41,6 +46,9 @@ function rowToItem(r: ItemRow): StockItem {
     unit: r.unit,
     warehouse: r.warehouse,
     quantityOnHand: Number(r.quantity_on_hand),
+    avgCost: Number(r.avg_cost ?? 0),
+    reorderLevel: Number(r.reorder_level ?? 0),
+    reorderQty: Number(r.reorder_qty ?? 0),
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
   };
@@ -55,6 +63,8 @@ function rowToMove(r: MoveRow): StockMovement {
     quantity: Number(r.quantity),
     reason: r.reason,
     balanceAfter: Number(r.balance_after),
+    unitCost: Number(r.unit_cost ?? 0),
+    valueAfter: Number(r.value_after ?? 0),
     createdAt: iso(r.created_at),
   };
 }
@@ -65,19 +75,16 @@ export class PostgresStockStore implements StockStore {
 
   async createItem(i: StockItem): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_inventory_stock_items (${ITEM_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [i.id, i.tenantId, i.companyId, i.code, i.name, i.unit, i.warehouse, i.quantityOnHand, i.createdBy, i.createdAt],
+      `INSERT INTO public.aura_inventory_stock_items (${ITEM_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [i.id, i.tenantId, i.companyId, i.code, i.name, i.unit, i.warehouse, i.quantityOnHand, i.avgCost, i.reorderLevel, i.reorderQty, i.createdBy, i.createdAt],
     );
   }
 
   async updateItem(i: StockItem): Promise<void> {
-    await this.pool.query(`UPDATE public.aura_inventory_stock_items SET quantity_on_hand=$2, name=$3, unit=$4, warehouse=$5 WHERE id=$1`, [
-      i.id,
-      i.quantityOnHand,
-      i.name,
-      i.unit,
-      i.warehouse,
-    ]);
+    await this.pool.query(
+      `UPDATE public.aura_inventory_stock_items SET quantity_on_hand=$2, name=$3, unit=$4, warehouse=$5, avg_cost=$6, reorder_level=$7, reorder_qty=$8 WHERE id=$1`,
+      [i.id, i.quantityOnHand, i.name, i.unit, i.warehouse, i.avgCost, i.reorderLevel, i.reorderQty],
+    );
   }
 
   async getItem(id: Id): Promise<StockItem | null> {
@@ -115,8 +122,8 @@ export class PostgresStockStore implements StockStore {
 
   async addMovement(m: StockMovement): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_inventory_stock_movements (${MOVE_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [m.id, m.tenantId, m.stockItemId, m.direction, m.quantity, m.reason, m.balanceAfter, m.createdAt],
+      `INSERT INTO public.aura_inventory_stock_movements (${MOVE_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [m.id, m.tenantId, m.stockItemId, m.direction, m.quantity, m.reason, m.balanceAfter, m.unitCost, m.valueAfter, m.createdAt],
     );
   }
 

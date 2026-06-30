@@ -9,6 +9,7 @@ import {
   TIMESHEET_STORE,
   EXPENSE_CLAIM_STORE,
   STAFF_ADVANCE_STORE,
+  ATTENDANCE_STORE,
   HrService,
 } from './hr.service';
 
@@ -19,6 +20,7 @@ import {
   InMemoryTimesheetStore,
   InMemoryExpenseClaimStore,
   InMemoryStaffAdvanceStore,
+  InMemoryAttendanceStore,
 } from './in-memory-hr-store';
 
 import {
@@ -28,6 +30,7 @@ import {
   PostgresTimesheetStore,
   PostgresExpenseClaimStore,
   PostgresStaffAdvanceStore,
+  PostgresAttendanceStore,
 } from './postgres-hr-store';
 
 @Module({
@@ -68,6 +71,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresStaffAdvanceStore(pool) : new InMemoryStaffAdvanceStore(),
+    },
+    {
+      provide: ATTENDANCE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresAttendanceStore(pool) : new InMemoryAttendanceStore(),
     },
     HrService,
   ],

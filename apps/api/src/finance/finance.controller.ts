@@ -37,6 +37,9 @@ import {
   type ChequeAction,
   type ChequeSummary,
   PostDatedChequeService,
+  type CostCenter,
+  type CostCenterReport,
+  CostCenterService,
 } from '@aura/finance';
 
 interface CreateInvoiceDto {
@@ -64,6 +67,7 @@ interface CreateJournalLineDto {
   accountName: string;
   debit: number;
   credit: number;
+  costCenterId?: string | null;
 }
 
 interface CreateJournalDto {
@@ -103,6 +107,7 @@ export class FinanceController {
     private readonly customerInvoices: CustomerInvoiceService,
     private readonly bankGuarantees: BankGuaranteeService,
     private readonly postDatedCheques: PostDatedChequeService,
+    private readonly costCenters: CostCenterService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -218,6 +223,7 @@ export class FinanceController {
             accountName: l.accountName,
             debit: l.debit ?? 0,
             credit: l.credit ?? 0,
+            costCenterId: l.costCenterId ?? null,
           })),
         },
         ctx.actorId ?? undefined,
@@ -232,6 +238,29 @@ export class FinanceController {
   listJourels(@Query('reference') reference?: string): Promise<Journal[]> {
     const ctx = this.tenant.get();
     return this.journals.list({ tenantId: ctx.tenantId, reference, limit: 100 });
+  }
+
+  // ── Cost centres ───────────────────────────────────────────────────────────
+
+  @Post('cost-centers')
+  async createCostCenter(@Body() dto: { code: string; name: string }): Promise<CostCenter> {
+    if (!dto?.code?.trim() || !dto?.name?.trim()) throw new BadRequestException('code and name are required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.costCenters.create({ tenantId: ctx.tenantId, companyId: ctx.companyId, code: dto.code, name: dto.name, createdBy: ctx.actorId });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('cost-centers')
+  listCostCenters(): Promise<CostCenter[]> {
+    return this.costCenters.list(this.tenant.get().tenantId);
+  }
+
+  @Get('cost-centers/report')
+  costCenterReport(): Promise<CostCenterReport> {
+    return this.costCenters.report(this.tenant.get().tenantId);
   }
 
   @Get('journals/:id')

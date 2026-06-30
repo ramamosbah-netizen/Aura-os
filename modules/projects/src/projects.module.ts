@@ -26,6 +26,11 @@ import { InMemoryVariationStore } from './in-memory-variation-store';
 import { PostgresVariationStore } from './postgres-variation-store';
 import { VariationService } from './variation.service';
 
+import { CLOSEOUT_STORE } from './closeout-store';
+import { InMemoryCloseoutStore } from './in-memory-closeout-store';
+import { PostgresCloseoutStore } from './postgres-closeout-store';
+import { CloseoutService } from './closeout.service';
+
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
   imports: [CoreModule],
@@ -66,12 +71,19 @@ import { VariationService } from './variation.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresVariationStore(pool) : new InMemoryVariationStore(),
     },
+    {
+      provide: CLOSEOUT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCloseoutStore(pool) : new InMemoryCloseoutStore(),
+    },
     ProjectService,
     WbsService,
     CbsService,
     DelayEotService,
     VariationService,
+    CloseoutService,
   ],
-  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService],
+  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService, CloseoutService],
 })
 export class ProjectsModule {}

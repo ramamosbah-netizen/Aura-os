@@ -79,6 +79,12 @@ export * from './in-memory-cost-center-store';
 export * from './postgres-cost-center-store';
 export * from './cost-center.service';
 
+export * from './domain/profit-center';
+export * from './profit-center-store';
+export * from './in-memory-profit-center-store';
+export * from './postgres-profit-center-store';
+export * from './profit-center.service';
+
 export * from './domain/budget';
 export * from './budget-store';
 export * from './in-memory-budget-store';

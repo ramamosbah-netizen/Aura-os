@@ -9,6 +9,8 @@ export interface JournalLine {
   credit: number;
   /** Optional cost-centre tag for management (cost-centre) reporting. */
   costCenterId: Id | null;
+  /** Optional profit-centre tag for contribution reporting. */
+  profitCenterId: Id | null;
 }
 
 export interface Journal {
@@ -28,6 +30,7 @@ export interface NewJournalLine {
   debit: number;
   credit: number;
   costCenterId?: Id | null;
+  profitCenterId?: Id | null;
 }
 
 export interface NewJournal {
@@ -58,6 +61,7 @@ export function makeJournal(input: NewJournal): Journal {
     debit: l.debit,
     credit: l.credit,
     costCenterId: l.costCenterId ?? null,
+    profitCenterId: l.profitCenterId ?? null,
   }));
 
   return {

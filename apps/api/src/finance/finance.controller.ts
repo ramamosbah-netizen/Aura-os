@@ -40,6 +40,9 @@ import {
   type CostCenter,
   type CostCenterReport,
   CostCenterService,
+  type ProfitCenter,
+  type ProfitCenterReport,
+  ProfitCenterService,
 } from '@aura/finance';
 
 interface CreateInvoiceDto {
@@ -68,6 +71,7 @@ interface CreateJournalLineDto {
   debit: number;
   credit: number;
   costCenterId?: string | null;
+  profitCenterId?: string | null;
 }
 
 interface CreateJournalDto {
@@ -108,6 +112,7 @@ export class FinanceController {
     private readonly bankGuarantees: BankGuaranteeService,
     private readonly postDatedCheques: PostDatedChequeService,
     private readonly costCenters: CostCenterService,
+    private readonly profitCenters: ProfitCenterService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -224,6 +229,7 @@ export class FinanceController {
             debit: l.debit ?? 0,
             credit: l.credit ?? 0,
             costCenterId: l.costCenterId ?? null,
+            profitCenterId: l.profitCenterId ?? null,
           })),
         },
         ctx.actorId ?? undefined,
@@ -261,6 +267,29 @@ export class FinanceController {
   @Get('cost-centers/report')
   costCenterReport(): Promise<CostCenterReport> {
     return this.costCenters.report(this.tenant.get().tenantId);
+  }
+
+  // ── Profit centres ─────────────────────────────────────────────────────────
+
+  @Post('profit-centers')
+  async createProfitCenter(@Body() dto: { code: string; name: string }): Promise<ProfitCenter> {
+    if (!dto?.code?.trim() || !dto?.name?.trim()) throw new BadRequestException('code and name are required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.profitCenters.create({ tenantId: ctx.tenantId, companyId: ctx.companyId, code: dto.code, name: dto.name, createdBy: ctx.actorId });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('profit-centers')
+  listProfitCenters(): Promise<ProfitCenter[]> {
+    return this.profitCenters.list(this.tenant.get().tenantId);
+  }
+
+  @Get('profit-centers/report')
+  profitCenterReport(): Promise<ProfitCenterReport> {
+    return this.profitCenters.report(this.tenant.get().tenantId);
   }
 
   @Get('journals/:id')

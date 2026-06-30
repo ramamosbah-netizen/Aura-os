@@ -68,6 +68,11 @@ import { InMemoryCostCenterStore } from './in-memory-cost-center-store';
 import { PostgresCostCenterStore } from './postgres-cost-center-store';
 import { CostCenterService } from './cost-center.service';
 
+import { PROFIT_CENTER_STORE } from './profit-center-store';
+import { InMemoryProfitCenterStore } from './in-memory-profit-center-store';
+import { PostgresProfitCenterStore } from './postgres-profit-center-store';
+import { ProfitCenterService } from './profit-center.service';
+
 import { ProcurementModule } from '@aura/procurement';
 import { InventoryModule } from '@aura/inventory';
 import { ProfitLossProjection } from './projections/profit-loss.projection';
@@ -180,8 +185,15 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
         pool ? new PostgresCostCenterStore(pool) : new InMemoryCostCenterStore(),
     },
     CostCenterService,
+    {
+      provide: PROFIT_CENTER_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresProfitCenterStore(pool) : new InMemoryProfitCenterStore(),
+    },
+    ProfitCenterService,
   ],
-  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService, PostDatedChequeService, StatementsService, PeriodCloseService, BudgetService, CostCenterService],
+  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService, PostDatedChequeService, StatementsService, PeriodCloseService, BudgetService, CostCenterService, ProfitCenterService],
 })
 export class FinanceModule implements OnModuleInit {
   constructor(private readonly projectionEngine: ProjectionEngine) {}

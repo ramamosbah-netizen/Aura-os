@@ -53,9 +53,9 @@ The starting point was a large **uncommitted** V8 expansion (working tree only).
 |---|---|
 | Build / typecheck | ✅ 42/42 tasks |
 | Tests | ✅ 41/41 tasks (unit only — see §7.4) |
-| Database (Supabase) | ✅ migrations through index `0066` applied & verified live (0059 duplicated — §7.5) |
+| Database (Supabase) | ✅ migrations through index `0067` applied & verified live (0059 duplicated — §7.5) |
 | Business modules | 18 |
-| Architecture (5-layer) | Intact; module template held across all modules + 18 new verticals this session |
+| Architecture (5-layer) | Intact; module template held across all modules + 19 new verticals this session |
 | Git | Pushed to `main` (PR #3 merged) |
 | Known critical defect | ✅ cross-tenant read leak on 7 spine list endpoints — FIXED & live-verified (§7.1) |
 

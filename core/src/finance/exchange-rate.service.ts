@@ -20,6 +20,35 @@ export class ExchangeRateService {
     this.inMemoryRates.set(`${to}:${from}`, 1 / rate);
   }
 
+  /** Upsert an effective rate for a tenant (persisted when a pool is configured; the
+   *  inverse is also registered in-memory so conversions work without a DB). */
+  async setRate(tenantId: string, from: Currency, to: Currency, rate: number, effectiveDate: Date = new Date()): Promise<void> {
+    if (!(rate > 0)) throw new Error('rate must be a positive number');
+    this.registerInMemoryRate(from, to, rate);
+    if (this.pool) {
+      await this.pool.query(
+        `INSERT INTO public.aura_exchange_rates (tenant_id, from_currency, to_currency, rate, effective_date)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (tenant_id, from_currency, to_currency, effective_date)
+         DO UPDATE SET rate = EXCLUDED.rate`,
+        [tenantId, from, to, rate, effectiveDate.toISOString().split('T')[0]],
+      );
+    }
+    this.logger.log(`Rate set ${from}→${to} = ${rate} (${effectiveDate.toISOString().split('T')[0]})`);
+  }
+
+  /** All stored rates for a tenant, most recent first. */
+  async listRates(tenantId: string): Promise<Array<{ fromCurrency: Currency; toCurrency: Currency; rate: number; effectiveDate: string }>> {
+    if (!this.pool) return [];
+    const res = await this.pool.query(
+      `SELECT from_currency, to_currency, rate::float AS rate, effective_date::text AS effective_date
+       FROM public.aura_exchange_rates WHERE tenant_id = $1
+       ORDER BY effective_date DESC, from_currency, to_currency`,
+      [tenantId],
+    );
+    return res.rows.map((r: any) => ({ fromCurrency: r.from_currency, toCurrency: r.to_currency, rate: r.rate, effectiveDate: r.effective_date }));
+  }
+
   /**
    * Fetches exchange rate for conversions.
    */

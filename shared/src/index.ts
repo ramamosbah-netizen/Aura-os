@@ -16,3 +16,4 @@ export * from './workflow/saga';
 export * from './integration/webhook';
 export * from './integration/csv';
 export * from './domain/crm';
+export * from './pagination';

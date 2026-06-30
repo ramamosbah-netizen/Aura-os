@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Invoice,
   type InvoiceStatus,
@@ -501,6 +502,20 @@ export class FinanceController {
   @Get('customer-invoices/aging')
   arAging(@Query('asOf') asOf?: string): Promise<ArAgingReport> {
     return this.customerInvoices.aging(this.tenant.get().tenantId, asOf);
+  }
+
+  // Paginated list (the pagination contract): ?limit&offset → { items, total, limit, offset, hasMore }
+  @Get('customer-invoices/paged')
+  pagedCustomerInvoices(
+    @Query('status') status?: CustomerInvoice['status'],
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.customerInvoices.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, projectId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('customer-invoices/:id')

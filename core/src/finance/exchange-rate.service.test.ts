@@ -57,4 +57,15 @@ describe('ExchangeRateService', () => {
     expect(converted.major).toBe(36.5);
     expect(converted.currency).toBe('AED');
   });
+
+  it('setRate registers the pair (and inverse) in-memory without a pool', async () => {
+    const service = new ExchangeRateService(null);
+    await service.setRate('t1', 'EUR', 'USD', 1.1);
+    expect(await service.getRate('t1', 'EUR', 'USD')).toBe(1.1);
+    expect(await service.getRate('t1', 'USD', 'EUR')).toBeCloseTo(1 / 1.1, 6);
+  });
+
+  it('setRate rejects a non-positive rate', async () => {
+    await expect(new ExchangeRateService(null).setRate('t1', 'USD', 'AED', 0)).rejects.toThrow();
+  });
 });

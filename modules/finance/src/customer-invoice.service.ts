@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   CUSTOMER_INVOICE_EVENT,
@@ -91,6 +91,10 @@ export class CustomerInvoiceService {
 
   list(filter?: CustomerInvoiceFilter): Promise<CustomerInvoice[]> {
     return this.store.list(filter);
+  }
+
+  listPaged(filter: CustomerInvoiceFilter, page: PageParams) {
+    return this.store.listPaged(filter, page);
   }
 
   /** AR aging — outstanding receivables bucketed by overdue age, as of `asOf` (default today). */

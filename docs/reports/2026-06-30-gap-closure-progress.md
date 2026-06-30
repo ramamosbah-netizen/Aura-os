@@ -8,6 +8,8 @@
 > Whole-workspace gates after each gap: **build 22/22 · typecheck 42/42 · tests 41/41**.
 > Migrations now **77** (latest `0076`). Security/RLS hardening remains intentionally deferred.
 >
+> **Depth analysis / re-scored current state:** see **`2026-06-30-depth-analysis-current-state.md`**.
+>
 > **Shipping status:**
 > - **[PR #10](https://github.com/ramamosbah-netizen/Aura-os/pull/10) — MERGED** (3 commits): §B1 deal-chain hardening + opportunity→account · §B2 AMC persistence · §B3 financial statements · §B4 period close.
 > - **[PR #11](https://github.com/ramamosbah-netizen/Aura-os/pull/11) — OPEN** (2 commits): §B5 budgeting · §B6 revenue recognition (+ this report).

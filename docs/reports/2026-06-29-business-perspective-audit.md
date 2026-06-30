@@ -1,5 +1,7 @@
 # AURA OS — Audit Part 3 · CUSTOMER / BUSINESS PERSPECTIVE
 
+> ⚠️ **PARTIALLY SUPERSEDED (2026-06-30).** Lifecycle automation ~25%→~70% (deal chain + operate loop now event-driven); weighted business coverage ~48%→~60% (finance ~47%→~80%); period-close/statements now present. See **`2026-06-30-depth-analysis-current-state.md`**. Preserved unedited below.
+
 > Third companion report. Pass 1 = inside-out engineering audit; Pass 2 = measured blueprint/depth addendum; **this pass = outside-in, the way a construction-company owner evaluates it.** Answers: (A) can I run a whole project Lead→Warranty? (B) capacity/scale, (C) real performance + how to measure it, (D) risk register, (E) AI reality check, (F) UX click-analysis, (G) **business coverage = planned vs delivered per module, precisely.**
 > Source-verified where measurable; capacity/performance are **modeled and labelled as such** (no running deployment to load-test). No files modified.
 

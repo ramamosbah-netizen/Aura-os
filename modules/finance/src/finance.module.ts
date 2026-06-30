@@ -46,6 +46,11 @@ import { InMemoryBankGuaranteeStore } from './in-memory-bank-guarantee-store';
 import { PostgresBankGuaranteeStore } from './postgres-bank-guarantee-store';
 import { BankGuaranteeService } from './bank-guarantee.service';
 
+import { POST_DATED_CHEQUE_STORE } from './post-dated-cheque-store';
+import { InMemoryPostDatedChequeStore } from './in-memory-post-dated-cheque-store';
+import { PostgresPostDatedChequeStore } from './postgres-post-dated-cheque-store';
+import { PostDatedChequeService } from './post-dated-cheque.service';
+
 import { ProcurementModule } from '@aura/procurement';
 import { InventoryModule } from '@aura/inventory';
 import { ProfitLossProjection } from './projections/profit-loss.projection';
@@ -120,6 +125,12 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresBankGuaranteeStore(pool) : new InMemoryBankGuaranteeStore(),
     },
+    {
+      provide: POST_DATED_CHEQUE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPostDatedChequeStore(pool) : new InMemoryPostDatedChequeStore(),
+    },
     InvoiceService,
     AccountService,
     JournalService,
@@ -129,8 +140,9 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
     PettyCashService,
     CustomerInvoiceService,
     BankGuaranteeService,
+    PostDatedChequeService,
   ],
-  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService],
+  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService, PostDatedChequeService],
 })
 export class FinanceModule implements OnModuleInit {
   constructor(private readonly projectionEngine: ProjectionEngine) {}

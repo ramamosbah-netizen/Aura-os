@@ -148,8 +148,8 @@ export class AmcController {
   }
 
   @Post('work-orders/:id/complete')
-  async completeWorkOrder(@Param('id') id: string) {
-    return this.service.completeWorkOrder(id);
+  async completeWorkOrder(@Param('id') id: string, @Body('cost') cost?: number) {
+    return this.service.completeWorkOrder(id, cost !== undefined ? Number(cost) : undefined);
   }
 
   // ─── PPM Schedules (preventive maintenance) ───────────────────────────────

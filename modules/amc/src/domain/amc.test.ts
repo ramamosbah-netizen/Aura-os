@@ -6,7 +6,7 @@ describe('AMC Module — Phase 5', () => {
   let service: AmcService;
 
   beforeEach(() => {
-    service = new AmcService(new InMemoryAmcStore());
+    service = new AmcService(new InMemoryAmcStore(), { append: async () => [] } as any);
   });
 
   describe('Service Contracts', () => {
@@ -67,7 +67,7 @@ describe('AMC Module — Phase 5', () => {
       });
       // Verify status on original
       const store = new InMemoryAmcStore();
-      const svc2 = new AmcService(store);
+      const svc2 = new AmcService(store, { append: async () => [] } as any);
       const o2 = await svc2.createWorkOrder({
         tenantId: 'tenant-uae', orderNumber: 'WO-2026-002',
         description: 'Fire alarm panel inspection', type: 'inspection',
@@ -81,7 +81,7 @@ describe('AMC Module — Phase 5', () => {
     });
 
     it('should return GIS-filtered dispatch board results', async () => {
-      const s = new AmcService(new InMemoryAmcStore());
+      const s = new AmcService(new InMemoryAmcStore(), { append: async () => [] } as any);
       await s.createWorkOrder({
         tenantId: 't1', orderNumber: 'WO-GIS-1',
         description: 'Task in Dubai', location: { lat: 25.2, lng: 55.3 },

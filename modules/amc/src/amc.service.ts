@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { makeEvent } from '@aura/shared';
+import { EVENT_STORE, type EventStore } from '@aura/core';
 import { AmcStore, AMC_STORE } from './store.interface';
 import { ServiceContract, ContractStatus } from './domain/service-contract';
 import { WorkOrder, WorkOrderPriority, WorkOrderType, GeoCoordinate } from './domain/work-order';
@@ -15,7 +17,10 @@ const genId = (): string => randomUUID();
 export class AmcService {
   private readonly logger = new Logger('AmcService');
 
-  constructor(@Inject(AMC_STORE) private readonly store: AmcStore) {}
+  constructor(
+    @Inject(AMC_STORE) private readonly store: AmcStore,
+    @Inject(EVENT_STORE) private readonly events: EventStore,
+  ) {}
 
   // ── Service Contracts ────────────────────────────────────────
 
@@ -97,12 +102,31 @@ export class AmcService {
     return order;
   }
 
-  async completeWorkOrder(id: string): Promise<WorkOrder> {
+  async completeWorkOrder(id: string, cost?: number): Promise<WorkOrder> {
     const order = await this.store.findWorkOrder(id);
     if (!order) throw new Error(`Work order ${id} not found`);
-    order.complete();
+    order.complete(cost);
     await this.store.saveWorkOrder(order);
-    this.logger.log(`[AMC] Work order ${order.orderNumber} completed`);
+
+    // Emit on the spine so the AMC → AR reactor can bill a completed, costed visit.
+    const contract = order.contractId ? await this.store.findContract(order.contractId) : null;
+    await this.events.append([
+      makeEvent({
+        type: 'amc.workorder.completed',
+        tenantId: order.tenantId,
+        companyId: order.companyId ?? null,
+        actorId: null,
+        aggregateType: 'amc.work_order',
+        aggregateId: order.id,
+        payload: {
+          orderNumber: order.orderNumber,
+          contractId: order.contractId ?? null,
+          clientName: contract?.clientName ?? null,
+          cost: order.cost ?? 0,
+        },
+      }),
+    ]);
+    this.logger.log(`[AMC] Work order ${order.orderNumber} completed (cost ${order.cost ?? 0})`);
     return order;
   }
 

@@ -32,7 +32,7 @@ interface WorkOrderRow {
   order_number: string; asset_id: string | null; description: string; priority: string;
   type: string; status: string; assigned_to: string | null; scheduled_date: string | null;
   completed_date: string | null; location_lat: string | null; location_lng: string | null;
-  location_label: string | null; created_at: Date; updated_at: Date;
+  location_label: string | null; cost: string | null; created_at: Date; updated_at: Date;
 }
 interface TicketRow {
   id: string; tenant_id: string; company_id: string | null; contract_id: string | null;
@@ -53,7 +53,7 @@ const CONTRACT_COLS = `id, tenant_id, company_id, contract_number, client_name, 
   created_at, updated_at`;
 const WORK_ORDER_COLS = `id, tenant_id, company_id, contract_id, order_number, asset_id, description,
   priority, type, status, assigned_to, scheduled_date::text, completed_date::text,
-  location_lat, location_lng, location_label, created_at, updated_at`;
+  location_lat, location_lng, location_label, cost, created_at, updated_at`;
 const TICKET_COLS = `id, tenant_id, company_id, contract_id, ticket_number, title, description, category,
   priority, status, reported_by, assigned_to, sla_response_hours, sla_resolution_hours,
   sla_due_at, resolved_at, created_at, updated_at`;
@@ -102,6 +102,7 @@ function rowToWorkOrder(r: WorkOrderRow): WorkOrder {
     status: r.status as WorkOrder['status'],
     assignedTo: r.assigned_to ?? undefined,
     completedDate: toDateObj(r.completed_date),
+    cost: r.cost == null ? undefined : Number(r.cost),
     createdAt: new Date(r.created_at),
     updatedAt: new Date(r.updated_at),
   });
@@ -196,16 +197,16 @@ export class PostgresAmcStore implements AmcStore {
       `INSERT INTO public.aura_amc_work_orders
          (id, tenant_id, company_id, contract_id, order_number, asset_id, description, priority, type,
           status, assigned_to, scheduled_date, completed_date, location_lat, location_lng, location_label,
-          created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          cost, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, assigned_to = EXCLUDED.assigned_to,
-         completed_date = EXCLUDED.completed_date, updated_at = EXCLUDED.updated_at`,
+         completed_date = EXCLUDED.completed_date, cost = EXCLUDED.cost, updated_at = EXCLUDED.updated_at`,
       [
         o.id, o.tenantId, o.companyId ?? null, o.contractId ?? null, o.orderNumber, o.assetId ?? null,
         o.description, o.priority, o.type, o.status, o.assignedTo ?? null, toDate(o.scheduledDate),
         toDate(o.completedDate), o.location?.lat ?? null, o.location?.lng ?? null, o.location?.label ?? null,
-        o.createdAt, o.updatedAt,
+        o.cost ?? null, o.createdAt, o.updatedAt,
       ],
     );
   }

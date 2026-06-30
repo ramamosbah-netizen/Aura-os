@@ -27,6 +27,7 @@ import type { DomainEvent } from '@aura/shared';
  *   inventory.grn.created   ──► (auto-transition PO to 'received' & suggest AP invoice)
  *   inventory.stock.movement_recorded ──► (low-stock crossing reorder level → auto-draft a replenishment PR)
  *   inventory.stock.movement_recorded ──► (perpetual-inventory GL: receipt Dr Inventory/Cr GRNI; issue Dr COGS/Cr Inventory)
+ *   amc.workorder.completed ──► (auto-draft a client AR invoice for the billable service visit)
  *   finance.invoice.paid    ──► (log actual cost against project)
  */
 @Injectable()
@@ -364,6 +365,37 @@ export class CrossModuleSubscriber implements OnModuleInit {
         this.logger.log(`⚡ stock.${direction} → posted GL ${ref} for ${code} (${amount})`);
       } catch (err) {
         this.logger.error(`Failed to post inventory GL from stock.movement_recorded: ${err}`);
+      }
+    });
+
+    // ── Service: AMC work-order completed → auto-draft client AR invoice ──
+    // Closes the AMC money-loop (mirror of ipc.certified → AR): a completed, costed service
+    // visit is the signal to bill the client. Raises a DRAFT customer (AR) invoice for the
+    // work-order cost (+5% VAT), carrying the contract client snapshot. Skips zero-cost visits.
+    this.bus.subscribe('amc.workorder.completed', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const cost = Number(p.cost) || 0;
+        if (cost <= 0) return; // nothing billable
+        const orderNumber = (p.orderNumber as string) ?? 'WO';
+        const clientName = (p.clientName as string)?.trim() || 'Client';
+        const contractId = (p.contractId as string) ?? null;
+        const invoice = await this.customerInvoices.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          invoiceNumber: `AR-AMC-${orderNumber}-${e.aggregateId.slice(0, 8)}`,
+          customerName: clientName,
+          contractRef: contractId,
+          issueDate: new Date().toISOString().slice(0, 10),
+          lines: [
+            { description: `AMC service visit ${orderNumber}`, quantity: 1, unitPrice: cost, vatRate: 5 },
+          ],
+        });
+        this.logger.log(
+          `⚡ amc.workorder.completed → auto-drafted AR invoice "${invoice.invoiceNumber}" for ${clientName} (cost ${cost}, total ${invoice.total})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-draft AR invoice from amc.workorder.completed: ${err}`);
       }
     });
 

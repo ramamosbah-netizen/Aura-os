@@ -20,10 +20,12 @@ interface LineRow {
   account_name: string;
   debit: string | number;
   credit: string | number;
+  cost_center_id: string | null;
+  profit_center_id: string | null;
 }
 
 const JOURNAL_COLS = 'id, tenant_id, reference, description, created_by, posted_at';
-const LINE_COLS = 'id, journal_id, account_id, account_code, account_name, debit, credit';
+const LINE_COLS = 'id, journal_id, account_id, account_code, account_name, debit, credit, cost_center_id, profit_center_id';
 
 export class PostgresJournalStore implements JournalStore {
   constructor(private readonly pool: Pool) {}
@@ -38,8 +40,8 @@ export class PostgresJournalStore implements JournalStore {
       );
       for (const l of j.lines) {
         await client.query(
-          `INSERT INTO public.aura_finance_journal_lines (${LINE_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [l.id, j.id, l.accountId, l.accountCode, l.accountName, l.debit, l.credit],
+          `INSERT INTO public.aura_finance_journal_lines (${LINE_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [l.id, j.id, l.accountId, l.accountCode, l.accountName, l.debit, l.credit, l.costCenterId, l.profitCenterId],
         );
       }
       await client.query('COMMIT');
@@ -71,6 +73,8 @@ export class PostgresJournalStore implements JournalStore {
       accountName: r.account_name,
       debit: Number(r.debit),
       credit: Number(r.credit),
+      costCenterId: r.cost_center_id ?? null,
+        profitCenterId: r.profit_center_id ?? null,
     }));
 
     return {
@@ -115,6 +119,8 @@ export class PostgresJournalStore implements JournalStore {
         accountName: r.account_name,
         debit: Number(r.debit),
         credit: Number(r.credit),
+        costCenterId: r.cost_center_id ?? null,
+        profitCenterId: r.profit_center_id ?? null,
       }));
       journals.push({
         id: jr.id,

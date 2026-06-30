@@ -3,6 +3,7 @@ import { makePurchaseRequest } from './purchase-request';
 import { makePurchaseOrder } from './purchase-order';
 import { InMemoryPurchaseRequestStore } from '../in-memory-purchase-request-store';
 import { InMemoryPurchaseOrderStore } from '../in-memory-purchase-order-store';
+import { InMemorySupplierStore } from '../in-memory-supplier-store';
 import { PurchaseRequestService } from '../purchase-request.service';
 import { PurchaseOrderService } from '../purchase-order.service';
 import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner, type CommandBus, type Command, type CommandDefinition } from '@aura/core';
@@ -57,9 +58,9 @@ describe('Procurement Full Cycle', () => {
       const prStore = new InMemoryPurchaseRequestStore();
       const poStore = new InMemoryPurchaseOrderStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore());
       poService.onModuleInit();
-      const prService = new PurchaseRequestService(prStore, mockEvents, mockAccess, poService);
+      const prService = new PurchaseRequestService(prStore, mockEvents, mockAccess, poService, { resolve: async () => null } as any);
 
 
       const pr = await prService.create({

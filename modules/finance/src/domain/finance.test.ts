@@ -13,7 +13,7 @@ import { JournalService } from '../journal.service';
 import { PaymentService } from '../payment.service';
 import { InvoiceService } from '../invoice.service';
 import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner, type CommandBus, type Command, type CommandDefinition } from '@aura/core';
-import { PurchaseOrderService, InMemoryPurchaseOrderStore } from '@aura/procurement';
+import { PurchaseOrderService, InMemoryPurchaseOrderStore, InMemorySupplierStore } from '@aura/procurement';
 import { GoodsReceiptService, InMemoryGoodsReceiptStore } from '@aura/inventory';
 
 /** Minimal in-process CommandBus stand-in: runs validate + handler directly (no DB/authz). */
@@ -212,7 +212,7 @@ describe('Finance depth features', () => {
       const grnStore = new InMemoryGoodsReceiptStore();
       const invoiceStore = new InMemoryInvoiceStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore());
       poService.onModuleInit();
       const grnService = new GoodsReceiptService(grnStore, mockEvents, fakeBus());
       grnService.onModuleInit();
@@ -278,7 +278,7 @@ describe('Finance depth features', () => {
       const grnStore = new InMemoryGoodsReceiptStore();
       const invoiceStore = new InMemoryInvoiceStore();
 
-      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore());
       poService.onModuleInit();
       const grnService = new GoodsReceiptService(grnStore, mockEvents, fakeBus());
       grnService.onModuleInit();

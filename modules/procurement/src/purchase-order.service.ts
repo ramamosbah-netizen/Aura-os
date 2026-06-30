@@ -3,6 +3,8 @@ import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
+import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
+import { isApproved } from './domain/supplier';
 
 const CREATE_PO = 'procurement.po.create';
 
@@ -26,6 +28,7 @@ export class PurchaseOrderService implements OnModuleInit {
     private readonly commands: CommandBus,
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
+    @Inject(SUPPLIER_STORE) private readonly suppliers: SupplierStore,
   ) {}
 
   onModuleInit(): void {
@@ -70,6 +73,14 @@ export class PurchaseOrderService implements OnModuleInit {
   }
 
   async create(input: NewPurchaseOrder, idempotencyKey?: string | null): Promise<PurchaseOrder> {
+    // Approved-vendor enforcement: a PO bound to a supplier must reference an APPROVED
+    // supplier in the master, and the snapshot name is taken from it (no free-text drift).
+    if (input.supplierId) {
+      const supplier = await this.suppliers.get(input.supplierId);
+      if (!supplier || supplier.tenantId !== input.tenantId) throw new Error(`supplier ${input.supplierId} not found`);
+      if (!isApproved(supplier)) throw new Error(`supplier ${supplier.name} is not approved (status ${supplier.status})`);
+      input = { ...input, supplierName: supplier.name };
+    }
     const po = await this.commands.execute<PurchaseOrder>({
       id: newId(),
       name: CREATE_PO,

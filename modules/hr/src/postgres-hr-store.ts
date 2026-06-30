@@ -31,8 +31,8 @@ export class PostgresEmployeeStore implements EmployeeStore {
     const conn = (tx as PoolClient) || this.pool;
     const res = await conn.query(
       `insert into public.aura_hr_employees (
-        id, tenant_id, company_id, first_name, last_name, email, phone, role, department, status, joined_date, visa_expiry, permit_expiry, labor_camp, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        id, tenant_id, company_id, first_name, last_name, email, phone, role, department, status, joined_date, visa_expiry, permit_expiry, labor_camp, iban, mol_employee_id, bank_routing_code, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       on conflict (id) do update set
         first_name = excluded.first_name,
         last_name = excluded.last_name,
@@ -44,6 +44,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
         visa_expiry = excluded.visa_expiry,
         permit_expiry = excluded.permit_expiry,
         labor_camp = excluded.labor_camp,
+        iban = excluded.iban,
+        mol_employee_id = excluded.mol_employee_id,
+        bank_routing_code = excluded.bank_routing_code,
         updated_at = excluded.updated_at
       returning *`,
       [
@@ -61,6 +64,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
         employee.visaExpiry,
         employee.permitExpiry,
         employee.laborCamp,
+        employee.iban,
+        employee.molEmployeeId,
+        employee.bankRoutingCode,
         employee.createdAt,
         employee.updatedAt,
       ],
@@ -109,6 +115,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
       visaExpiry: dateOnly(row.visa_expiry),
       permitExpiry: dateOnly(row.permit_expiry),
       laborCamp: row.labor_camp,
+      iban: row.iban ?? null,
+      molEmployeeId: row.mol_employee_id ?? null,
+      bankRoutingCode: row.bank_routing_code ?? null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

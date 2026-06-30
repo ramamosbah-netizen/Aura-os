@@ -14,6 +14,8 @@ export interface PurchaseOrder {
   /** PO number / reference. */
   reference: string | null;
   title: string;
+  /** Approved-vendor FK into the supplier master (null for legacy/free-text POs). */
+  supplierId: Id | null;
   supplierName: string | null;
   /** The project this PO is spent against — reference + snapshot, not a join. */
   projectId: Id | null;
@@ -30,6 +32,7 @@ export interface NewPurchaseOrder {
   companyId?: Id | null;
   reference?: string | null;
   title: string;
+  supplierId?: Id | null;
   supplierName?: string | null;
   projectId?: Id | null;
   projectName?: string | null;
@@ -46,6 +49,7 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     companyId: input.companyId ?? null,
     reference: input.reference?.trim() || null,
     title: input.title.trim(),
+    supplierId: input.supplierId ?? null,
     supplierName: input.supplierName?.trim() || null,
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,

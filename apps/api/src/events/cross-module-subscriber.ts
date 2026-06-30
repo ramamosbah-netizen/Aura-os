@@ -5,7 +5,7 @@ import { ProjectService, WbsService, CbsService } from '@aura/projects';
 import { PurchaseOrderService } from '@aura/procurement';
 import { TenderService } from '@aura/tendering';
 import { AccountService } from '@aura/crm';
-import { CustomerInvoiceService } from '@aura/finance';
+import { CustomerInvoiceService, InvoiceService } from '@aura/finance';
 import type { DomainEvent } from '@aura/shared';
 
 /**
@@ -21,7 +21,8 @@ import type { DomainEvent } from '@aura/shared';
  *   │ (stage = 'won')              │     │ (auto-draft tender)     │     │ (auto-draft contract)    │     │ (auto-create project)│
  *   └──────────────────────────────┘     └─────────────────────────┘     └──────────────────────────┘     └──────────────────────┘
  *
- *   contracts.ipc.certified ──► (auto-draft client AR invoice for the net certified)
+ *   contracts.ipc.certified         ──► (auto-draft client AR invoice for the net certified)
+ *   subcontracts.backcharge.recovered ──► (auto-draft a supplier AP debit note — negative invoice — reducing the subcontractor payable)
  *   procurement.po.created  ──► (log committed cost against project)
  *   inventory.grn.created   ──► (auto-transition PO to 'received' & suggest AP invoice)
  *   finance.invoice.paid    ──► (log actual cost against project)
@@ -41,6 +42,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly tenders: TenderService,
     private readonly accounts: AccountService,
     private readonly customerInvoices: CustomerInvoiceService,
+    private readonly supplierInvoices: InvoiceService,
   ) {}
 
   onModuleInit(): void {
@@ -147,6 +149,36 @@ export class CrossModuleSubscriber implements OnModuleInit {
         );
       } catch (err) {
         this.logger.error(`Failed to auto-draft AR invoice from ipc.certified: ${err}`);
+      }
+    });
+
+    // ── Subcontracting money-flow: back-charge recovered → auto-draft AP debit note ──
+    // The mirror of ipc.certified → AR. A back-charge recovered from a subcontractor is the
+    // signal to reduce what we owe them: we raise a DRAFT supplier (AP) invoice with a NEGATIVE
+    // value — a debit note — carrying the subcontractor snapshot. Netted against their payables in
+    // AP aging; finance reviews & approves. Skips when there's no recovery amount.
+    this.bus.subscribe('subcontracts.backcharge.recovered', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const amount = Number(p.amount) || 0;
+        if (amount <= 0) return; // nothing to deduct
+        const reference = (p.reference as string) ?? 'BC';
+        const subcontractor = (p.subcontractor as string)?.trim() || 'Subcontractor';
+        const subcontractId = (p.subcontractId as string) ?? e.aggregateId;
+        const invoice = await this.supplierInvoices.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          reference: `DN-${reference}-${subcontractId.slice(0, 8)}`,
+          title: `Back-charge recovery ${reference} — ${subcontractor}`,
+          supplierName: subcontractor,
+          value: -amount, // negative supplier invoice = debit note reducing the subcontractor payable
+          status: 'draft',
+        });
+        this.logger.log(
+          `⚡ backcharge.recovered → auto-drafted AP debit note "${invoice.reference}" vs ${subcontractor} (−${amount})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-draft AP debit note from backcharge.recovered: ${err}`);
       }
     });
 

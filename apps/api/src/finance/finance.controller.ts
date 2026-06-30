@@ -32,6 +32,11 @@ import {
   type BankGuarantee,
   type GuaranteeType,
   BankGuaranteeService,
+  type PostDatedCheque,
+  type ChequeDirection,
+  type ChequeAction,
+  type ChequeSummary,
+  PostDatedChequeService,
 } from '@aura/finance';
 
 interface CreateInvoiceDto {
@@ -96,6 +101,7 @@ export class FinanceController {
     private readonly pettyCash: PettyCashService,
     private readonly customerInvoices: CustomerInvoiceService,
     private readonly bankGuarantees: BankGuaranteeService,
+    private readonly postDatedCheques: PostDatedChequeService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -582,6 +588,75 @@ export class FinanceController {
     if (!['release', 'claim', 'expire'].includes(dto?.action)) throw new BadRequestException("action must be 'release', 'claim', or 'expire'");
     try {
       return await this.bankGuarantees.changeStatus(id, dto.action);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── POST-DATED CHEQUES (PDC) ─────────────────────────────────────────────
+
+  @Post('post-dated-cheques')
+  async createPostDatedCheque(
+    @Body() dto: { chequeNumber: string; direction: ChequeDirection; partyName: string; bankName: string; amount: number; currency?: string; issueDate: string; maturityDate: string; reference?: string; notes?: string },
+  ): Promise<PostDatedCheque> {
+    if (!dto?.chequeNumber?.trim()) throw new BadRequestException('chequeNumber is required');
+    if (!dto?.partyName?.trim()) throw new BadRequestException('partyName is required');
+    if (!dto?.bankName?.trim()) throw new BadRequestException('bankName is required');
+    if (!dto?.issueDate || !dto?.maturityDate) throw new BadRequestException('issueDate and maturityDate are required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.postDatedCheques.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        chequeNumber: dto.chequeNumber,
+        direction: dto.direction,
+        partyName: dto.partyName,
+        bankName: dto.bankName,
+        amount: Number(dto.amount),
+        currency: dto.currency,
+        issueDate: dto.issueDate,
+        maturityDate: dto.maturityDate,
+        reference: dto.reference ?? null,
+        notes: dto.notes,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // literal routes before :id
+  @Get('post-dated-cheques/maturing')
+  maturingCheques(@Query('withinDays') withinDays?: string): Promise<PostDatedCheque[]> {
+    const days = withinDays ? Number(withinDays) : 7;
+    return this.postDatedCheques.maturingSoon(this.tenant.get().tenantId, Number.isFinite(days) ? days : 7);
+  }
+
+  @Get('post-dated-cheques/summary')
+  chequeSummary(@Query('withinDays') withinDays?: string): Promise<ChequeSummary> {
+    const days = withinDays ? Number(withinDays) : 7;
+    return this.postDatedCheques.summary(this.tenant.get().tenantId, Number.isFinite(days) ? days : 7);
+  }
+
+  @Get('post-dated-cheques')
+  listPostDatedCheques(@Query('status') status?: PostDatedCheque['status'], @Query('direction') direction?: ChequeDirection): Promise<PostDatedCheque[]> {
+    return this.postDatedCheques.list({ tenantId: this.tenant.get().tenantId, status, direction, limit: 200 });
+  }
+
+  @Get('post-dated-cheques/:id')
+  async getPostDatedCheque(@Param('id') id: string): Promise<PostDatedCheque> {
+    const found = await this.postDatedCheques.get(id);
+    if (!found) throw new NotFoundException(`post-dated cheque ${id} not found`);
+    return found;
+  }
+
+  @Patch('post-dated-cheques/:id/status')
+  async changeChequeStatus(@Param('id') id: string, @Body() dto: { action: ChequeAction }): Promise<PostDatedCheque> {
+    if (!['deposit', 'clear', 'bounce', 'represent', 'cancel'].includes(dto?.action)) {
+      throw new BadRequestException("action must be 'deposit', 'clear', 'bounce', 'represent', or 'cancel'");
+    }
+    try {
+      return await this.postDatedCheques.changeStatus(id, dto.action);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

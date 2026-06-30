@@ -63,14 +63,29 @@ post the deduction to finance AP, exactly as `contracts.ipc.certified` drives AR
   - summary: count 2, gross 15,000, markup 1,000, recovered 11,000, outstanding 0,
     byStatus {recovered:1, written_off:1}
   - spine: 2 `raised`, 3 `statusChanged`, 2 `recovered` events emitted.
+- **LIVE Supabase verification** (post-merge): migration `0071` applied via
+  `pnpm db:migrate` (8 applied incl. 0071, 64 already current). API booted against
+  the live Postgres store and the full lifecycle re-run: raise BC-001 (gross 20,000
+  + 12.5% → markup 2,500, recoverable 22,500) → agree → partial recover 10,000 →
+  full recover 12,500 (outstanding 0 → **recovered**); **re-fetched from the DB**
+  to confirm persistence (recovered 22,500, status `recovered`); summary correct.
 
-> Live Supabase migration not run this session — the DB password is chat-pasted,
-> not stored in the worktree. Migration `0071` follows the exact IPC-migration shape that
-> was applied live, and the full path is proven end-to-end against the in-memory
-> store. Apply with `pnpm db:migrate` when credentials are available.
+## Follow-up shipped — AP-deduction reactor
+
+`subcontracts.backcharge.recovered` → **auto-draft a supplier (AP) debit note** — the
+mirror of `contracts.ipc.certified` → AR. In `apps/api/src/events/cross-module-subscriber.ts`
+the reactor calls `InvoiceService.create` with a **negative `value`** (a debit note),
+carrying the subcontractor snapshot; it nets against their payables in AP aging and
+finance reviews/approves it. The `recovered` event payload gained a `subcontractor`
+name snapshot so the reactor needs no join. Skips when the recovery amount ≤ 0.
+
+Verified LIVE on Supabase (single clean API instance): recover 9,000 from BC-001 vs
+Artisan Joinery LLC → reactor fires → AP invoice `DN-BC-001-…` **value −9,000**, status
+`draft`, queryable via `/finance/invoices`. (Note: against the live session-pooler the
+CommandBus create takes ~15–20 s; allow for relay+create latency when observing. Also:
+never run two API instances against one DB while testing reactors — the outbox relay's
+`FOR UPDATE SKIP LOCKED` will split events across instances' buses.)
 
 ## Next candidates
 
-- Wire a reactor: `subcontracts.backcharge.recovered` → finance AP deduction
-  (mirror of `contracts.ipc.certified` → AR).
 - Net agreed-but-unrecovered back-charges into the subcontractor claim's payable.

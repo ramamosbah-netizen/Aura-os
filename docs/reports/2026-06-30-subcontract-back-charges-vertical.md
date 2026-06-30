@@ -70,8 +70,22 @@ post the deduction to finance AP, exactly as `contracts.ipc.certified` drives AR
   full recover 12,500 (outstanding 0 → **recovered**); **re-fetched from the DB**
   to confirm persistence (recovered 22,500, status `recovered`); summary correct.
 
+## Follow-up shipped — AP-deduction reactor
+
+`subcontracts.backcharge.recovered` → **auto-draft a supplier (AP) debit note** — the
+mirror of `contracts.ipc.certified` → AR. In `apps/api/src/events/cross-module-subscriber.ts`
+the reactor calls `InvoiceService.create` with a **negative `value`** (a debit note),
+carrying the subcontractor snapshot; it nets against their payables in AP aging and
+finance reviews/approves it. The `recovered` event payload gained a `subcontractor`
+name snapshot so the reactor needs no join. Skips when the recovery amount ≤ 0.
+
+Verified LIVE on Supabase (single clean API instance): recover 9,000 from BC-001 vs
+Artisan Joinery LLC → reactor fires → AP invoice `DN-BC-001-…` **value −9,000**, status
+`draft`, queryable via `/finance/invoices`. (Note: against the live session-pooler the
+CommandBus create takes ~15–20 s; allow for relay+create latency when observing. Also:
+never run two API instances against one DB while testing reactors — the outbox relay's
+`FOR UPDATE SKIP LOCKED` will split events across instances' buses.)
+
 ## Next candidates
 
-- Wire a reactor: `subcontracts.backcharge.recovered` → finance AP deduction
-  (mirror of `contracts.ipc.certified` → AR).
 - Net agreed-but-unrecovered back-charges into the subcontractor claim's payable.

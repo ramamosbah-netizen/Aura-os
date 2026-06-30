@@ -421,6 +421,7 @@ export class SubcontractsService {
         payload: {
           reference: updated.reference,
           subcontractId: updated.subcontractId,
+          subcontractor: updated.subcontractorName,
           amount: Number(amount),
           recoveredAmount: updated.recoveredAmount,
           outstandingAmount: updated.outstandingAmount,

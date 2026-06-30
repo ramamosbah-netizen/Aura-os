@@ -3,6 +3,7 @@ import { AmcStore, AMC_STORE } from './store.interface';
 import { ServiceContract, ContractStatus } from './domain/service-contract';
 import { WorkOrder, WorkOrderPriority, WorkOrderType, GeoCoordinate } from './domain/work-order';
 import { SupportTicket, TicketPriority } from './domain/support-ticket';
+import { PpmSchedule, PpmFrequency } from './domain/ppm-schedule';
 
 let idCounter = 1;
 const genId = () => `amc-${(idCounter++).toString().padStart(5, '0')}`;
@@ -139,6 +140,66 @@ export class AmcService {
     await this.store.saveTicket(ticket);
     this.logger.log(`[AMC] Ticket ${ticket.ticketNumber} resolved`);
     return ticket;
+  }
+
+  // ── PPM Schedules (preventive maintenance) ───────────────────
+
+  async createPpmSchedule(params: {
+    tenantId: string;
+    companyId?: string;
+    contractId: string;
+    assetId?: string;
+    taskDescription: string;
+    frequency: PpmFrequency;
+    startDate: Date;
+  }): Promise<PpmSchedule> {
+    const contract = await this.store.findContract(params.contractId);
+    if (!contract) throw new Error(`Contract ${params.contractId} not found`);
+    const schedule = new PpmSchedule({ id: genId(), ...params });
+    await this.store.savePpm(schedule);
+    this.logger.log(`[AMC] PPM schedule created: ${schedule.frequency} "${schedule.taskDescription}" on contract ${schedule.contractId}`);
+    return schedule;
+  }
+
+  async listPpmSchedules(tenantId: string, contractId?: string): Promise<PpmSchedule[]> {
+    return this.store.listPpms(tenantId, contractId);
+  }
+
+  async deactivatePpmSchedule(id: string): Promise<PpmSchedule> {
+    const schedule = await this.store.findPpm(id);
+    if (!schedule) throw new Error(`PPM schedule ${id} not found`);
+    schedule.deactivate();
+    await this.store.savePpm(schedule);
+    return schedule;
+  }
+
+  /**
+   * Generate preventive work-order visits for every active schedule due as of `asOf`,
+   * advancing each schedule one interval. Returns the work orders created.
+   */
+  async generateDueVisits(tenantId: string, asOf: Date = new Date()): Promise<WorkOrder[]> {
+    const schedules = await this.store.listPpms(tenantId);
+    const created: WorkOrder[] = [];
+    for (const schedule of schedules) {
+      if (!schedule.isDue(asOf)) continue;
+      const order = new WorkOrder({
+        id: genId(),
+        tenantId: schedule.tenantId,
+        companyId: schedule.companyId,
+        contractId: schedule.contractId,
+        orderNumber: `PPM-${schedule.id}-${schedule.visitsGenerated + 1}`,
+        assetId: schedule.assetId,
+        description: `[PPM] ${schedule.taskDescription}`,
+        type: 'preventive',
+        scheduledDate: new Date(schedule.nextDueDate.getTime()),
+      });
+      await this.store.saveWorkOrder(order);
+      schedule.advance();
+      await this.store.savePpm(schedule);
+      created.push(order);
+    }
+    this.logger.log(`[AMC] Generated ${created.length} preventive visit(s) due as of ${asOf.toISOString().slice(0, 10)}`);
+    return created;
   }
 
   // ── Dispatch Board ────────────────────────────────────────────

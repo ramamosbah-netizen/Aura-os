@@ -3,12 +3,14 @@ import { AmcStore } from './store.interface';
 import { ServiceContract } from './domain/service-contract';
 import { WorkOrder } from './domain/work-order';
 import { SupportTicket } from './domain/support-ticket';
+import { PpmSchedule } from './domain/ppm-schedule';
 
 @Injectable()
 export class InMemoryAmcStore implements AmcStore {
   private readonly contracts = new Map<string, ServiceContract>();
   private readonly workOrders = new Map<string, WorkOrder>();
   private readonly tickets = new Map<string, SupportTicket>();
+  private readonly ppms = new Map<string, PpmSchedule>();
 
   constructor() {
     this.seed();
@@ -134,6 +136,19 @@ export class InMemoryAmcStore implements AmcStore {
   async listTickets(tenantId: string, contractId?: string): Promise<SupportTicket[]> {
     return Array.from(this.tickets.values()).filter(
       (t) => t.tenantId === tenantId && (!contractId || t.contractId === contractId)
+    );
+  }
+
+  // --- PPM Schedules ---
+  async savePpm(schedule: PpmSchedule): Promise<void> {
+    this.ppms.set(schedule.id, schedule);
+  }
+  async findPpm(id: string): Promise<PpmSchedule | null> {
+    return this.ppms.get(id) ?? null;
+  }
+  async listPpms(tenantId: string, contractId?: string): Promise<PpmSchedule[]> {
+    return Array.from(this.ppms.values()).filter(
+      (p) => p.tenantId === tenantId && (!contractId || p.contractId === contractId)
     );
   }
 }

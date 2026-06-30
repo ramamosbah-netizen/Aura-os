@@ -7,6 +7,7 @@ import {
   InMemoryFuelLogStore,
   InMemoryMaintenanceStore,
   InMemoryTrafficFineStore,
+  InMemorySalikChargeStore,
 } from '../in-memory-fleet-store';
 import { FleetService } from '../fleet.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -45,7 +46,7 @@ describe('Fleet Bounded Context', () => {
       const fuelLogStore = new InMemoryFuelLogStore();
       const maintenanceStore = new InMemoryMaintenanceStore();
 
-      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), mockEvents, mockTx, mockAccess);
+      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), mockEvents, mockTx, mockAccess);
 
       const vehicle = await service.createVehicle(null, {
         tenantId: 't1',
@@ -75,7 +76,7 @@ describe('Fleet Bounded Context', () => {
       const fuelLogStore = new InMemoryFuelLogStore();
       const maintenanceStore = new InMemoryMaintenanceStore();
 
-      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), mockEvents, mockTx, mockAccess);
+      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), mockEvents, mockTx, mockAccess);
 
       const log = await service.logFuel(null, {
         tenantId: 't1',
@@ -101,7 +102,7 @@ describe('Fleet Bounded Context', () => {
       const fuelLogStore = new InMemoryFuelLogStore();
       const maintenanceStore = new InMemoryMaintenanceStore();
 
-      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), mockEvents, mockTx, mockAccess);
+      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), mockEvents, mockTx, mockAccess);
 
       const record = await service.scheduleMaintenance(null, {
         tenantId: 't1',

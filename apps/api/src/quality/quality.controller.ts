@@ -7,6 +7,8 @@ import {
   type Itp,
   type NewItpPoint,
   type PointResult,
+  type MaterialApproval,
+  type MarDecision,
   QualityService,
 } from '@aura/quality';
 
@@ -273,6 +275,66 @@ export class QualityController {
   async closeItp(@Param('id') id: string): Promise<Itp> {
     try {
       return await this.qualityService.closeItp(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Material Approval Requests (MAR) ───────────────────────────────────────
+
+  @Post('material-approvals')
+  async createMar(@Body() dto: { projectId: string; projectName?: string; reference: string; materialName: string; manufacturer?: string; supplier?: string; specification?: string; discipline?: string }): Promise<MaterialApproval> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
+    if (!dto?.materialName?.trim()) throw new BadRequestException('materialName is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.qualityService.createMaterialApproval({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        projectId: dto.projectId,
+        projectName: dto.projectName,
+        reference: dto.reference,
+        materialName: dto.materialName,
+        manufacturer: dto.manufacturer,
+        supplier: dto.supplier,
+        specification: dto.specification,
+        discipline: dto.discipline,
+        createdBy: ctx.actorId || null,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('material-approvals')
+  listMars(): Promise<MaterialApproval[]> {
+    return this.qualityService.listMaterialApprovals(this.tenant.get().tenantId);
+  }
+
+  @Put('material-approvals/:id/submit')
+  async submitMar(@Param('id') id: string): Promise<MaterialApproval> {
+    try {
+      return await this.qualityService.submitMaterialApproval(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('material-approvals/:id/review')
+  async reviewMar(@Param('id') id: string, @Body() dto: { decision: MarDecision; comments?: string }): Promise<MaterialApproval> {
+    const ctx = this.tenant.get();
+    try {
+      return await this.qualityService.reviewMaterialApproval(ctx.tenantId, id, dto?.decision, ctx.actorId || null, dto?.comments);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('material-approvals/:id/revise')
+  async reviseMar(@Param('id') id: string): Promise<MaterialApproval> {
+    try {
+      return await this.qualityService.reviseMaterialApproval(this.tenant.get().tenantId, id);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

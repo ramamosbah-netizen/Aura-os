@@ -1,6 +1,6 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { type StockItem, type StockMovement, type StockDirection, StockService } from '@aura/inventory';
+import { type StockItem, type StockMovement, type StockDirection, type ValuationSummary, type ReorderReport, StockService } from '@aura/inventory';
 
 interface CreateStockItemDto {
   code: string;
@@ -16,6 +16,11 @@ interface MovementDto {
   quantity: number;
   reason?: string;
   unitCost?: number;
+}
+
+interface ReorderDto {
+  reorderLevel: number;
+  reorderQty?: number;
 }
 
 /** Inventory stock API — items + on-hand movements. */
@@ -50,11 +55,17 @@ export class StockController {
     return this.stock.listItems({ tenantId: ctx.tenantId, warehouse, limit: 200 });
   }
 
-  // literal route before :id
+  // literal routes before `:id`
   @Get('valuation')
-  valuation(@Query('warehouse') warehouse?: string) {
+  valuation(@Query('warehouse') warehouse?: string): Promise<ValuationSummary> {
     const ctx = this.tenant.get();
-    return this.stock.valuation({ tenantId: ctx.tenantId, warehouse, limit: 1000 });
+    return this.stock.valuation({ tenantId: ctx.tenantId, warehouse, limit: 200 });
+  }
+
+  @Get('reorder')
+  reorder(@Query('warehouse') warehouse?: string): Promise<ReorderReport> {
+    const ctx = this.tenant.get();
+    return this.stock.reorderReport({ tenantId: ctx.tenantId, warehouse, limit: 200 });
   }
 
   @Get(':id')
@@ -75,6 +86,16 @@ export class StockController {
       return await this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost);
     } catch (e) {
       // surface domain rejections (e.g. insufficient stock) as a 400 with the real reason
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Patch(':id/reorder')
+  async setReorder(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: ReorderDto): Promise<StockItem> {
+    if (!(Number(dto?.reorderLevel) >= 0)) throw new BadRequestException('reorderLevel must be zero or positive');
+    try {
+      return await this.stock.setReorderPolicy(id, dto.reorderLevel, dto.reorderQty ?? 0);
+    } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
   }

@@ -7,6 +7,7 @@ import {
   INSPECTION_REQUEST_STORE,
   SNAG_STORE,
   ITP_STORE,
+  MATERIAL_APPROVAL_STORE,
   QualityService,
 } from './quality.service';
 
@@ -15,6 +16,7 @@ import {
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
   InMemoryItpStore,
+  InMemoryMaterialApprovalStore,
 } from './in-memory-quality-store';
 
 import {
@@ -22,6 +24,7 @@ import {
   PostgresInspectionRequestStore,
   PostgresSnagStore,
   PostgresItpStore,
+  PostgresMaterialApprovalStore,
 } from './postgres-quality-store';
 
 @Module({
@@ -50,6 +53,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresItpStore(pool) : new InMemoryItpStore(),
+    },
+    {
+      provide: MATERIAL_APPROVAL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresMaterialApprovalStore(pool) : new InMemoryMaterialApprovalStore(),
     },
     QualityService,
   ],

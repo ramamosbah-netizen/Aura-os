@@ -92,10 +92,13 @@ function buildHarness() {
     cbs,
     tenant,
     noop, // PurchaseOrderService
+    noop, // PurchaseRequestService
     tenders,
-    noop, // AccountService
+    noop, // AccountService (CRM)
     customerInvoices,
     noop, // InvoiceService (AP)
+    noop, // AccountService (Finance) — GL account resolver
+    noop, // JournalService
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 

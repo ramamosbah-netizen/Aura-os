@@ -11,6 +11,9 @@ interface StockItem {
   unit: string;
   warehouse: string;
   quantityOnHand: number;
+  avgCost: number;
+  reorderLevel: number;
+  reorderQty: number;
 }
 
 export default async function StockPage() {

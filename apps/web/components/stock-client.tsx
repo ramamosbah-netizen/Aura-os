@@ -9,6 +9,9 @@ interface StockItem {
   unit: string;
   warehouse: string;
   quantityOnHand: number;
+  avgCost: number;
+  reorderLevel: number;
+  reorderQty: number;
 }
 
 interface Movement {
@@ -17,7 +20,13 @@ interface Movement {
   quantity: number;
   reason: string;
   balanceAfter: number;
+  unitCost: number;
+  valueAfter: number;
   createdAt: string;
+}
+
+function money(n: number): string {
+  return n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 interface Detail {
@@ -40,10 +49,19 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
   const [opening, setOpening] = useState('');
+  const [openingCost, setOpeningCost] = useState('');
 
   // movement form
   const [qty, setQty] = useState('');
   const [reason, setReason] = useState('');
+  const [unitCost, setUnitCost] = useState('');
+
+  // reorder policy form (per open item)
+  const [roLevel, setRoLevel] = useState('');
+  const [roQty, setRoQty] = useState('');
+
+  const totalValue = items.reduce((sum, it) => sum + it.quantityOnHand * it.avgCost, 0);
+  const belowReorder = items.filter((it) => it.reorderLevel > 0 && it.quantityOnHand <= it.reorderLevel).length;
 
   async function refresh(): Promise<void> {
     const res = await fetch('/api/inventory/stock');
@@ -59,7 +77,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
     const res = await fetch('/api/inventory/stock', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code, name, unit: unit || undefined, openingQty: opening ? Number(opening) : undefined }),
+      body: JSON.stringify({ code, name, unit: unit || undefined, openingQty: opening ? Number(opening) : undefined, openingCost: openingCost ? Number(openingCost) : undefined }),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -70,6 +88,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
     setName('');
     setUnit('');
     setOpening('');
+    setOpeningCost('');
     await refresh();
   }
 
@@ -81,8 +100,26 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
     }
     setOpenId(id);
     setDetail(null);
+    const it = items.find((i) => i.id === id);
+    setRoLevel(it && it.reorderLevel > 0 ? String(it.reorderLevel) : '');
+    setRoQty(it && it.reorderQty > 0 ? String(it.reorderQty) : '');
     const res = await fetch(`/api/inventory/stock/${id}`);
     if (res.ok) setDetail(await res.json());
+  }
+
+  async function saveReorder(id: string): Promise<void> {
+    setErr('');
+    const res = await fetch(`/api/inventory/stock/${id}/reorder`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reorderLevel: roLevel ? Number(roLevel) : 0, reorderQty: roQty ? Number(roQty) : 0 }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setErr(d.message ?? d.error ?? 'Failed to set reorder policy');
+      return;
+    }
+    await refresh();
   }
 
   async function move(id: string, direction: 'in' | 'out'): Promise<void> {
@@ -94,7 +131,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
     const res = await fetch(`/api/inventory/stock/${id}/movements`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ direction, quantity: Number(qty), reason: reason || undefined }),
+      body: JSON.stringify({ direction, quantity: Number(qty), reason: reason || undefined, unitCost: direction === 'in' && unitCost ? Number(unitCost) : undefined }),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -103,6 +140,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
     }
     setQty('');
     setReason('');
+    setUnitCost('');
     const dres = await fetch(`/api/inventory/stock/${id}`);
     if (dres.ok) setDetail(await dres.json());
     await refresh();
@@ -115,9 +153,20 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
         <input style={s.input} placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} />
         <input style={s.inputXs} placeholder="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
         <input style={s.inputXs} placeholder="Opening" type="number" value={opening} onChange={(e) => setOpening(e.target.value)} />
+        <input style={s.inputXs} placeholder="Cost/unit" type="number" value={openingCost} onChange={(e) => setOpeningCost(e.target.value)} />
         <button type="button" style={s.primary} onClick={createItem}>Add item</button>
       </div>
       {err && <p style={s.err}>{err}</p>}
+
+      <div style={s.valBar}>
+        <span style={s.valLabel}>Total inventory value (WAC)</span>
+        <span style={s.valAmt}>AED {money(totalValue)}</span>
+      </div>
+      {belowReorder > 0 && (
+        <div style={s.reorderBanner}>
+          ⚠ {belowReorder} item{belowReorder > 1 ? 's' : ''} at or below reorder level — replenishment needed.
+        </div>
+      )}
 
       <table style={s.table}>
         <thead>
@@ -126,11 +175,13 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
             <th style={s.th}>Item</th>
             <th style={s.th}>Warehouse</th>
             <th style={s.thR}>On hand</th>
+            <th style={s.thR}>Avg cost</th>
+            <th style={s.thR}>Value</th>
           </tr>
         </thead>
         <tbody>
           {items.length === 0 ? (
-            <tr><td style={s.muted} colSpan={4}>No stock items yet — add one above.</td></tr>
+            <tr><td style={s.muted} colSpan={6}>No stock items yet — add one above.</td></tr>
           ) : (
             items.map((it) => (
               <Fragment key={it.id}>
@@ -138,16 +189,28 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                   <td style={s.tdCode}>{openId === it.id ? '▾ ' : '▸ '}{it.code}</td>
                   <td style={s.td}>{it.name}</td>
                   <td style={s.tdMuted}>{it.warehouse}</td>
-                  <td style={it.quantityOnHand <= 0 ? s.tdLow : s.tdR}>{it.quantityOnHand} {it.unit}</td>
+                  <td style={it.quantityOnHand <= 0 ? s.tdLow : s.tdR}>
+                    {it.quantityOnHand} {it.unit}
+                    {it.reorderLevel > 0 && it.quantityOnHand <= it.reorderLevel && <span style={s.roTag}>reorder</span>}
+                  </td>
+                  <td style={s.tdR}>{money(it.avgCost)}</td>
+                  <td style={s.tdR}>{money(it.quantityOnHand * it.avgCost)}</td>
                 </tr>
                 {openId === it.id && (
                   <tr>
-                    <td style={s.detailCell} colSpan={4}>
+                    <td style={s.detailCell} colSpan={6}>
                       <div style={s.moveBar}>
                         <input style={s.inputXs} placeholder="Qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+                        <input style={s.inputXs} placeholder="Cost/unit" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
                         <input style={s.input} placeholder="Reason (e.g. GRN receipt, site issue)" value={reason} onChange={(e) => setReason(e.target.value)} />
                         <button type="button" style={s.inBtn} onClick={() => move(it.id, 'in')}>Receive (in)</button>
                         <button type="button" style={s.outBtn} onClick={() => move(it.id, 'out')}>Issue (out)</button>
+                      </div>
+                      <div style={s.moveBar}>
+                        <span style={s.roLabel}>Reorder policy:</span>
+                        <input style={s.inputXs} placeholder="Level" type="number" value={roLevel} onChange={(e) => setRoLevel(e.target.value)} />
+                        <input style={s.inputXs} placeholder="Order qty" type="number" value={roQty} onChange={(e) => setRoQty(e.target.value)} />
+                        <button type="button" style={s.outBtn} onClick={() => saveReorder(it.id)}>Save policy</button>
                       </div>
                       {!detail ? (
                         <p style={s.muted}>Loading movements…</p>
@@ -156,7 +219,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                       ) : (
                         <table style={s.subTable}>
                           <thead>
-                            <tr><th style={s.thS}>When</th><th style={s.thS}>Type</th><th style={s.thSR}>Qty</th><th style={s.thS}>Reason</th><th style={s.thSR}>Balance</th></tr>
+                            <tr><th style={s.thS}>When</th><th style={s.thS}>Type</th><th style={s.thSR}>Qty</th><th style={s.thSR}>Unit cost</th><th style={s.thS}>Reason</th><th style={s.thSR}>Balance</th><th style={s.thSR}>Value</th></tr>
                           </thead>
                           <tbody>
                             {detail.movements.map((m) => (
@@ -164,8 +227,10 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                                 <td style={s.tdS}>{fmtDate(m.createdAt)}</td>
                                 <td style={s.tdS}><span style={m.direction === 'in' ? s.inTag : s.outTag}>{m.direction === 'in' ? 'receipt' : 'issue'}</span></td>
                                 <td style={s.tdSR}>{m.quantity}</td>
+                                <td style={s.tdSR}>{money(m.unitCost)}</td>
                                 <td style={s.tdS}>{m.reason}</td>
                                 <td style={s.tdSR}>{m.balanceAfter}</td>
+                                <td style={s.tdSR}>{money(m.valueAfter)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -190,6 +255,12 @@ const s = {
   inputXs: { width: 86, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
   primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', padding: '9px 14px', fontSize: 13.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13, margin: '4px 2px' } as CSSProperties,
+  valBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', marginTop: 4 } as CSSProperties,
+  valLabel: { color: 'var(--muted)', fontSize: 13 } as CSSProperties,
+  valAmt: { fontSize: 18, fontWeight: 700, letterSpacing: -0.3 } as CSSProperties,
+  reorderBanner: { background: 'var(--panel-2)', border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 10, padding: '8px 14px', marginTop: 8, fontSize: 13 } as CSSProperties,
+  roTag: { marginLeft: 6, fontSize: 10.5, color: 'var(--bad)', border: '1px solid var(--bad)', borderRadius: 999, padding: '0 6px', fontWeight: 600 } as CSSProperties,
+  roLabel: { color: 'var(--muted)', fontSize: 13, alignSelf: 'center' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 12 } as CSSProperties,
   th: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
   thR: { textAlign: 'right', color: 'var(--muted)', fontWeight: 500, padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,

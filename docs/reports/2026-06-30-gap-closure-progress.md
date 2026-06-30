@@ -73,11 +73,8 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 - Reference implementation on customer-invoices: `listPaged` (in-memory slice; postgres `LIMIT/OFFSET` + `COUNT(*) OVER()`) → `GET /finance/customer-invoices/paged?limit&offset`. Tests in `shared/src/pagination.test.ts`. Verified live (3 rows, limit 2: page 1 `hasMore:true`, offset 2 `hasMore:false`).
 - **Rollout pending:** only customer-invoices migrated; the other ~30 list endpoints still use `limit`-only — apply the same `listPaged` pattern store-by-store.
 
-### B9. Inventory valuation (moving-average cost + COGS)  ·  `feat(inventory)`
-- `domain/stock.ts` — StockItem `avgCost`; movements carry `unitCost` + `cogs`; pure `valueMovement` (in: recompute weighted-average; out: COGS = qty × avg, avg unchanged). Migration `0077`.
-- `StockService.recordMovement(…, unitCost?)` + `valuation()` (Σ on-hand × avg). `GET /inventory/stock/valuation`; `/inventory/valuation` web page.
-- **Proof:** domain test + live: open 100@10 + recv 100@14 → avg **12**; issue 50 → COGS **600**; valuation **1,800**.
-- FIFO not implemented (WAC chosen — no cost-layer state required).
+### B9. Inventory valuation (moving-average cost)  ·  *superseded by PR #12*
+Inventory valuation landed independently on `main` via **PR #12** ("module-depth verticals — inventory accounting"): WAC (`computeWac`), `summariseValuation`/`ValuationSummary`, plus reorder-level policy + low-stock reorder report (migrations `0073`/`0074`). My parallel cost-to-cost + COGS implementation was therefore **dropped during the PR #13 merge** (resolved to main's superset); only the `/inventory/valuation` web page was kept, reconciled to main's `ValuationSummary` shape. Net: the gap is closed — by main, not this branch.
 
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).

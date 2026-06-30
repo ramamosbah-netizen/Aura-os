@@ -10,6 +10,9 @@ import {
   type DocumentExpiryReport,
   type EosbResult,
   type TerminationType,
+  type AttendanceRecord,
+  type AttendanceSummary,
+  type AttendanceStatus,
   HrService,
   calculateEosb,
 } from '@aura/hr';
@@ -237,6 +240,44 @@ export class HrController {
   async rejectTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
     try {
       return await this.hrService.rejectTimesheetEntry(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Attendance ───────────────────────────────────────────────────────────
+
+  @Post('attendance')
+  async recordAttendance(@Body() dto: { employeeId: string; employeeName?: string; date: string; checkIn?: string; checkOut?: string; status?: AttendanceStatus; notes?: string }): Promise<AttendanceRecord> {
+    if (!dto?.employeeId || !dto?.date) throw new BadRequestException('employeeId and date required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.hrService.recordAttendance({ tenantId: ctx.tenantId, companyId: ctx.companyId, createdBy: ctx.actorId, ...dto });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('attendance')
+  listAttendance(@Query('employeeId') employeeId?: string): Promise<AttendanceRecord[]> {
+    return this.hrService.listAttendance(this.tenant.get().tenantId, employeeId);
+  }
+
+  @Get('attendance/summary')
+  async attendanceSummary(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('employeeId') employeeId?: string,
+  ): Promise<AttendanceSummary> {
+    if (!from || !to) throw new BadRequestException('from and to (YYYY-MM-DD) are required');
+    return this.hrService.attendanceSummary(this.tenant.get().tenantId, from, to, employeeId);
+  }
+
+  @Put('attendance/:id/checkout')
+  async checkOutAttendance(@Param('id') id: string, @Body() dto: { checkOut: string }): Promise<AttendanceRecord> {
+    if (!dto?.checkOut) throw new BadRequestException('checkOut (HH:MM) is required');
+    try {
+      return await this.hrService.checkOutAttendance(this.tenant.get().tenantId, id, dto.checkOut);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

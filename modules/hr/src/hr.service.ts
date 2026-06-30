@@ -9,6 +9,7 @@ import { type TimesheetEntry, makeTimesheetEntry, submitTimesheet, approveTimesh
 import { type ExpenseClaim, makeExpenseClaim, submitClaim, approveClaim, rejectClaim, reimburseClaim } from './domain/expense-claim';
 import { type StaffAdvance, makeStaffAdvance, approveAdvance, rejectAdvance, disburseAdvance, recordRepayment } from './domain/staff-advance';
 import { type DocumentExpiryReport, buildDocumentExpiryReport } from './domain/document-expiry';
+import { type AttendanceRecord, type AttendanceSummary, type NewAttendanceRecord, makeAttendanceRecord, checkOutAttendance, summariseAttendance } from './domain/attendance';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
@@ -16,6 +17,7 @@ export const PAYROLL_RUN_STORE = Symbol('PAYROLL_RUN_STORE');
 export const TIMESHEET_STORE = Symbol('TIMESHEET_STORE');
 export const EXPENSE_CLAIM_STORE = Symbol('EXPENSE_CLAIM_STORE');
 export const STAFF_ADVANCE_STORE = Symbol('STAFF_ADVANCE_STORE');
+export const ATTENDANCE_STORE = Symbol('ATTENDANCE_STORE');
 
 import {
   type EmployeeStore,
@@ -24,6 +26,7 @@ import {
   type TimesheetStore,
   type ExpenseClaimStore,
   type StaffAdvanceStore,
+  type AttendanceStore,
 } from './store.interface';
 
 export const HR_EVENT = {
@@ -40,6 +43,8 @@ export const HR_EVENT = {
   advanceApproved: 'hr.staff_advance.approved',
   advanceDisbursed: 'hr.staff_advance.disbursed',
   advanceRepaid: 'hr.staff_advance.repaid',
+  attendanceRecorded: 'hr.attendance.recorded',
+  attendanceCheckedOut: 'hr.attendance.checked_out',
 };
 
 @Injectable()
@@ -53,6 +58,7 @@ export class HrService {
     @Inject(TIMESHEET_STORE) private readonly timesheetStore: TimesheetStore,
     @Inject(EXPENSE_CLAIM_STORE) private readonly expenseClaimStore: ExpenseClaimStore,
     @Inject(STAFF_ADVANCE_STORE) private readonly staffAdvanceStore: StaffAdvanceStore,
+    @Inject(ATTENDANCE_STORE) private readonly attendanceStore: AttendanceStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -347,6 +353,53 @@ export class HrService {
 
   listTimesheetsByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]> {
     return this.timesheetStore.findByEmployee(tenantId, employeeId);
+  }
+
+  // ── Attendance ───────────────────────────────────────────────────────────
+
+  async recordAttendance(input: NewAttendanceRecord): Promise<AttendanceRecord> {
+    const record = makeAttendanceRecord(input);
+    await this.attendanceStore.save(record);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.attendanceRecorded,
+        tenantId: record.tenantId,
+        companyId: record.companyId,
+        actorId: record.createdBy,
+        aggregateType: 'hr.attendance',
+        aggregateId: record.id,
+        payload: { employeeId: record.employeeId, date: record.date, status: record.status, workedHours: record.workedHours },
+      }),
+    ]);
+    this.logger.log(`Attendance recorded: ${record.employeeName} ${record.date} (${record.status}, ${record.workedHours}h)`);
+    return record;
+  }
+
+  async checkOutAttendance(tenantId: string, id: string, checkOut: string): Promise<AttendanceRecord> {
+    const record = await this.attendanceStore.findById(tenantId, id);
+    if (!record) throw new Error(`attendance record ${id} not found`);
+    const updated = checkOutAttendance(record, checkOut);
+    await this.attendanceStore.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: HR_EVENT.attendanceCheckedOut,
+        tenantId,
+        companyId: record.companyId,
+        actorId: record.createdBy,
+        aggregateType: 'hr.attendance',
+        aggregateId: id,
+        payload: { employeeId: record.employeeId, date: record.date, checkOut, workedHours: updated.workedHours },
+      }),
+    ]);
+    return updated;
+  }
+
+  listAttendance(tenantId: string, employeeId?: string): Promise<AttendanceRecord[]> {
+    return employeeId ? this.attendanceStore.findByEmployee(tenantId, employeeId) : this.attendanceStore.findByTenant(tenantId);
+  }
+
+  async attendanceSummary(tenantId: string, from: string, to: string, employeeId?: string): Promise<AttendanceSummary> {
+    return summariseAttendance(await this.attendanceStore.findByDateRange(tenantId, from, to, employeeId));
   }
 
   // ── Expense Claims ───────────────────────────────────────────────────────

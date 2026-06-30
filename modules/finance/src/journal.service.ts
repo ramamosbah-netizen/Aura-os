@@ -3,7 +3,9 @@ import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shar
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import { FINANCE_EVENT } from './domain/invoice';
 import { type Journal, type NewJournal, makeJournal } from './domain/journal';
+import { periodOf } from './domain/period-close';
 import { JOURNAL_STORE, type JournalFilter, type JournalStore } from './journal-store';
+import { PERIOD_CLOSE_STORE, type PeriodCloseStore } from './period-close-store';
 
 @Injectable()
 export class JournalService {
@@ -12,6 +14,7 @@ export class JournalService {
   constructor(
     @Inject(JOURNAL_STORE) private readonly store: JournalStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(PERIOD_CLOSE_STORE) private readonly periodCloses: PeriodCloseStore,
     private readonly access: AccessService,
   ) {}
 
@@ -23,6 +26,13 @@ export class JournalService {
     }
 
     const journal = makeJournal(input);
+
+    // Period-close guard: never post into a locked fiscal period.
+    const period = periodOf(journal.postedAt);
+    if (await this.periodCloses.findByPeriod(journal.tenantId, period)) {
+      throw new Error(`Period ${period} is closed — cannot post journal "${journal.description}"`);
+    }
+
     await this.store.create(journal);
 
     await this.events.append([

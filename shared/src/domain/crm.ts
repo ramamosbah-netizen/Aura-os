@@ -24,6 +24,10 @@ export interface Opportunity {
   tenantId: Id;
   companyId: Id | null;
   leadId: Id | null;
+  /** The CRM account (client) this opportunity is for — reference + snapshot, the head
+   * of the deal chain. Carried down to the auto-created tender → contract → project. */
+  accountId: Id | null;
+  accountName: string | null;
   title: string;
   value: number;
   stage: OpportunityStage;
@@ -65,6 +69,8 @@ export interface NewOpportunity {
   tenantId: Id;
   companyId?: Id | null;
   leadId?: Id | null;
+  accountId?: Id | null;
+  accountName?: string | null;
   title: string;
   value?: number;
   stage?: OpportunityStage;
@@ -79,6 +85,8 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
     leadId: input.leadId ?? null,
+    accountId: input.accountId ?? null,
+    accountName: input.accountName?.trim() || null,
     title: input.title.trim(),
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     stage: input.stage ?? 'qualification',

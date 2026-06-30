@@ -69,6 +69,7 @@ interface CreateJournalLineDto {
 interface CreateJournalDto {
   description: string;
   reference?: string | null;
+  postedAt?: string | null;
   lines: CreateJournalLineDto[];
 }
 
@@ -197,28 +198,34 @@ export class FinanceController {
   // ── JOURNALS ─────────────────────────────────────────────────────────────
 
   @Post('journals')
-  postJournal(@Body() dto: CreateJournalDto): Promise<Journal> {
+  async postJournal(@Body() dto: CreateJournalDto): Promise<Journal> {
     if (!dto?.description?.trim()) throw new BadRequestException('description is required');
     if (!dto?.lines || dto.lines.length < 2) {
       throw new BadRequestException('At least 2 lines are required for a double-entry journal');
     }
     const ctx = this.tenant.get();
-    return this.journals.post(
-      {
-        tenantId: ctx.tenantId,
-        description: dto.description,
-        reference: dto.reference,
-        createdBy: ctx.actorId,
-        lines: dto.lines.map((l) => ({
-          accountId: l.accountId,
-          accountCode: l.accountCode,
-          accountName: l.accountName,
-          debit: l.debit ?? 0,
-          credit: l.credit ?? 0,
-        })),
-      },
-      ctx.actorId ?? undefined,
-    );
+    try {
+      return await this.journals.post(
+        {
+          tenantId: ctx.tenantId,
+          description: dto.description,
+          reference: dto.reference,
+          postedAt: dto.postedAt,
+          createdBy: ctx.actorId,
+          lines: dto.lines.map((l) => ({
+            accountId: l.accountId,
+            accountCode: l.accountCode,
+            accountName: l.accountName,
+            debit: l.debit ?? 0,
+            credit: l.credit ?? 0,
+          })),
+        },
+        ctx.actorId ?? undefined,
+      );
+    } catch (err) {
+      // Closed-period and double-entry-balance violations are client errors, not 500s.
+      throw new BadRequestException(err instanceof Error ? err.message : 'journal post failed');
+    }
   }
 
   @Get('journals')

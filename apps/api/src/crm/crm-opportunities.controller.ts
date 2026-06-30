@@ -6,6 +6,8 @@ import { OpportunityService } from '@aura/crm';
 interface CreateOpportunityDto {
   title: string;
   leadId?: string;
+  accountId?: string;
+  accountName?: string;
   value?: number;
   stage?: OpportunityStage;
   winProbability?: number;
@@ -14,6 +16,8 @@ interface CreateOpportunityDto {
 
 interface UpdateOpportunityDto {
   title?: string;
+  accountId?: string;
+  accountName?: string;
   value?: number;
   stage?: OpportunityStage;
   winProbability?: number;
@@ -35,6 +39,8 @@ export class CrmOpportunitiesController {
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
       leadId: dto.leadId,
+      accountId: dto.accountId,
+      accountName: dto.accountName,
       title: dto.title,
       value: dto.value,
       stage: dto.stage,

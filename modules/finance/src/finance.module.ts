@@ -51,6 +51,18 @@ import { InMemoryPostDatedChequeStore } from './in-memory-post-dated-cheque-stor
 import { PostgresPostDatedChequeStore } from './postgres-post-dated-cheque-store';
 import { PostDatedChequeService } from './post-dated-cheque.service';
 
+import { PERIOD_CLOSE_STORE } from './period-close-store';
+import { InMemoryPeriodCloseStore } from './in-memory-period-close-store';
+import { PostgresPeriodCloseStore } from './postgres-period-close-store';
+import { PeriodCloseService } from './period-close.service';
+
+import { BUDGET_STORE } from './budget-store';
+import { InMemoryBudgetStore } from './in-memory-budget-store';
+import { PostgresBudgetStore } from './postgres-budget-store';
+import { BudgetService } from './budget.service';
+
+import { StatementsService } from './statements.service';
+
 import { ProcurementModule } from '@aura/procurement';
 import { InventoryModule } from '@aura/inventory';
 import { ProfitLossProjection } from './projections/profit-loss.projection';
@@ -131,6 +143,18 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresPostDatedChequeStore(pool) : new InMemoryPostDatedChequeStore(),
     },
+    {
+      provide: PERIOD_CLOSE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPeriodCloseStore(pool) : new InMemoryPeriodCloseStore(),
+    },
+    {
+      provide: BUDGET_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresBudgetStore(pool) : new InMemoryBudgetStore(),
+    },
     InvoiceService,
     AccountService,
     JournalService,
@@ -141,8 +165,11 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
     CustomerInvoiceService,
     BankGuaranteeService,
     PostDatedChequeService,
+    StatementsService,
+    PeriodCloseService,
+    BudgetService,
   ],
-  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService, PostDatedChequeService],
+  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, BankGuaranteeService, PostDatedChequeService, StatementsService, PeriodCloseService, BudgetService],
 })
 export class FinanceModule implements OnModuleInit {
   constructor(private readonly projectionEngine: ProjectionEngine) {}

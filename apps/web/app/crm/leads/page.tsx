@@ -18,6 +18,8 @@ interface Lead {
 interface Opportunity {
   id: string;
   leadId: string | null;
+  accountId: string | null;
+  accountName: string | null;
   title: string;
   value: number;
   stage: string;
@@ -26,10 +28,16 @@ interface Opportunity {
   createdAt: string;
 }
 
+interface Account {
+  id: string;
+  name: string;
+}
+
 export default async function CrmLeadsPage() {
-  const [leads, opportunities] = await Promise.all([
+  const [leads, opportunities, accounts] = await Promise.all([
     getJson<Lead[]>('/api/crm/leads'),
     getJson<Opportunity[]>('/api/crm/opportunities'),
+    getJson<Account[]>('/api/crm/accounts'),
   ]);
 
   return (
@@ -44,6 +52,7 @@ export default async function CrmLeadsPage() {
       <CrmPipelineClient
         initialLeads={leads ?? []}
         initialOpportunities={opportunities ?? []}
+        initialAccounts={accounts ?? []}
       />
     </div>
   );

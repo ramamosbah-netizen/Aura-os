@@ -32,6 +32,9 @@ export interface NewJournal {
   reference?: string | null;
   description: string;
   createdBy?: Id | null;
+  /** ISO date/timestamp the entry is posted on (defaults to now). Enables backdated
+   * entries — and lets period-close reject posting into a closed prior month. */
+  postedAt?: string | null;
   lines: NewJournalLine[];
 }
 
@@ -58,7 +61,7 @@ export function makeJournal(input: NewJournal): Journal {
     tenantId: eClean(input.tenantId),
     reference: input.reference?.trim() || null,
     description: input.description.trim(),
-    postedAt: new Date().toISOString(),
+    postedAt: input.postedAt || new Date().toISOString(),
     createdBy: input.createdBy ?? null,
     lines,
   };

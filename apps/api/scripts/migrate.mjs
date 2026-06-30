@@ -37,6 +37,20 @@ async function main() {
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
+  // Guard: no two migrations may share the same numeric prefix. A collision means a
+  // merge introduced a duplicate number — fail fast rather than silently skip one.
+  const byNumber = new Map();
+  for (const f of files) {
+    const n = f.match(/^(\d+)/)?.[1];
+    if (!n) continue;
+    if (byNumber.has(n)) {
+      throw new Error(
+        `duplicate migration number ${n}: "${byNumber.get(n)}" and "${f}" — renumber one before running`,
+      );
+    }
+    byNumber.set(n, f);
+  }
+
   let ran = 0;
   for (const file of files) {
     if (applied.has(file)) {

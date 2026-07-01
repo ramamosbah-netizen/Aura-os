@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Asset, makeAsset } from './domain/asset';
@@ -7,7 +7,7 @@ import { type DepreciationSchedule, type DepreciationMethod, computeDepreciation
 import { type AssetMaintenance, makeAssetMaintenance } from './domain/asset-maintenance';
 import { type AssetInspection, makeAssetInspection } from './domain/asset-inspection';
 import { type AssetDisposal, type NewAssetDisposal, makeAssetDisposal, ASSET_DISPOSAL_EVENT } from './domain/asset-disposal';
-import { type AssetStore, type AssetMaintenanceStore, type AssetInspectionStore, type AssetDisposalStore } from './store.interface';
+import { type AssetStore, type AssetMaintenanceStore, type AssetInspectionStore, type AssetDisposalStore, type AssetFilter } from './store.interface';
 
 export const ASSET_STORE = Symbol('ASSET_STORE');
 export const ASSET_MAINTENANCE_STORE = Symbol('ASSET_MAINTENANCE_STORE');
@@ -104,6 +104,10 @@ export class AssetsService {
 
   listAssets(tenantId: string): Promise<Asset[]> {
     return this.assetStore.findByTenant(tenantId);
+  }
+
+  listAssetsPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>> {
+    return this.assetStore.listPaged(filter, page);
   }
 
   // ── Disposal ────────────────────────────────────────────────────────────────

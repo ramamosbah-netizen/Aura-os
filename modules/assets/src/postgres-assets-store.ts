@@ -1,10 +1,11 @@
 import type { Pool, PoolClient } from 'pg';
 import type { TxHandle } from '@aura/core';
+import { type Page, type PageParams, makePage } from '@aura/shared';
 import type { Asset } from './domain/asset';
 import type { AssetMaintenance } from './domain/asset-maintenance';
 import type { AssetInspection } from './domain/asset-inspection';
 import type { AssetDisposal } from './domain/asset-disposal';
-import type { AssetStore, AssetMaintenanceStore, AssetInspectionStore, AssetDisposalStore } from './store.interface';
+import type { AssetStore, AssetMaintenanceStore, AssetInspectionStore, AssetDisposalStore, AssetFilter } from './store.interface';
 
 export class PostgresAssetDisposalStore implements AssetDisposalStore {
   constructor(private readonly pool: Pool) {}
@@ -149,6 +150,36 @@ export class PostgresAssetStore implements AssetStore {
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
+  }
+
+  private buildWhere(filter: AssetFilter): { whereSql: string; params: unknown[] } {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) {
+        params.push(val);
+        where.push(`${col} = $${params.length}`);
+      }
+    };
+    add('tenant_id', filter.tenantId);
+    add('category', filter.category);
+    add('status', filter.status);
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async listPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_assets ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<any>(
+      `SELECT * FROM public.aura_assets ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map((row) => this.mapAsset(row)), total, page);
   }
 }
 

@@ -362,7 +362,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 
 | Module | Cmp | Arch | DB | API | UI | Tests | Remaining work to reach 100% |
 |---|--:|--:|--:|--:|--:|--:|---|
-| CRM | 72 | 88 | 82 | 88 | 70 | 70 | contacts entity, activities/tasks, email integration (pagination ✅ this session) |
+| CRM | 88 | 88 | 86 | 90 | 72 | 72 | email integration (MS Graph) — contacts ✅, activities/tasks ✅, pagination ✅ |
 | Tendering | 65 | 85 | 78 | 78 | 60 | 65 | bid scoring, competitor analysis, pagination |
 | Contracts | 68 | 85 | 80 | 80 | 62 | 65 | clause library, obligations tracking, pagination |
 | Projects | 72 | 86 | 82 | 82 | 70 | 80 | resource levelling, rev-rec, pagination (Gantt ✅) |
@@ -371,14 +371,14 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Finance | 90 | 88 | 86 | 90 | 78 | 90 | fixed-asset GL link, group consolidation, statements-UI polish (multi-currency AP/AR + FX reval, statements, dashboards, pagination ✅) |
 | HR | 74 | 85 | 82 | 82 | 68 | 90 | attendance, org chart, appraisal, WPS file |
 | HSE | 60 | 84 | 80 | 78 | 60 | 55 | risk assessments, audits, training matrix |
-| Quality | 60 | 84 | 80 | 78 | 58 | 55 | calibration, audit schedules |
+| Quality | 70 | 85 | 84 | 82 | 60 | 60 | audit schedules (calibration register ✅) |
 | Site | 60 | 84 | 80 | 78 | 58 | 55 | labour-by-trade, progress % |
 | Subcontracts | 68 | 84 | 80 | 80 | 60 | 55 | retention-release UI (back-charges reactor ✅) |
 | Doc-Control | 58 | 84 | 78 | 78 | 55 | 55 | drawing register, distribution matrix |
 | Engineering | 55 | 82 | 76 | 76 | 52 | 45 | MAR/TQ, model viewer, tests |
 | Fleet | 62 | 84 | 80 | 80 | 60 | 60 | Salik/tolls, GPS telematics (fines ✅) |
 | Assets | 60 | 84 | 80 | 80 | 58 | 55 | disposal/GL posting, QR tagging |
-| AMC | 70 | 82 | 80 | 80 | 55 | 60 | Finance billing link, richer PPM UI (**Postgres persistence + migration ✅ — no longer in-memory**) |
+| AMC | 75 | 82 | 80 | 82 | 55 | 60 | richer PPM UI (Postgres persistence ✅; Finance billing link ✅ via amc.workorder.completed → AR invoice) |
 
 **Session deltas (2026-07-01):** Finance multi-currency (AP+AR) + FX revaluation posting; standard pagination contract (COUNT + LIMIT/OFFSET + `Page` envelope) rolled out to **all transactional lists** — Finance, Procurement, Inventory, CRM, Projects (project/variation/closeout), Contracts (contract/IPC), Tendering, Engineering (drawing/RFI/submittal). Left unpaged by design: WBS/CBS tree nodes, delay-events, and small lookup tables. **#22 ✅ substantially complete** (remaining: subcontracts consolidated store). **#23 ✅** global `ValidationPipe` + `class-validator` installed; finance `CreateInvoiceDto` migrated to a decorated class — remaining interface DTOs migrate incrementally (pipe is a safe no-op until each is decorated). **Both Tier-1 infrastructure items now closed.**
 

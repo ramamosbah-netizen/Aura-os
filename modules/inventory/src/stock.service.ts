@@ -16,6 +16,7 @@ import {
   summariseValuation,
   summariseReorder,
 } from './domain/stock';
+import { computeFifo } from './domain/fifo';
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
 
 /**
@@ -110,6 +111,18 @@ export class StockService {
 
   listItems(filter?: StockFilter): Promise<StockItem[]> {
     return this.store.listItems(filter);
+  }
+
+  /** FIFO valuation for one item, replayed from its movement history (WAC stays the GL method). */
+  async fifoValuation(id: Id): Promise<{ code: string; onHand: number; fifoValue: number; wacValue: number; cogsTotal: number; layers: Array<{ quantity: number; unitCost: number }> } | null> {
+    const item = await this.store.getItem(id);
+    if (!item) return null;
+    const moves = (await this.store.listMovements(id))
+      .slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+      .map((m) => ({ direction: m.direction, quantity: m.quantity, unitCost: m.unitCost }));
+    const f = computeFifo(moves);
+    return { code: item.code, ...f, wacValue: Math.round(item.quantityOnHand * item.avgCost * 100) / 100 };
   }
 
   /** Inventory valuation report: each item's on-hand × WAC, plus the grand total. */

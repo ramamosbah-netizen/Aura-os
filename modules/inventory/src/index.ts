@@ -5,6 +5,7 @@ export * from './in-memory-goods-receipt-store';
 export * from './postgres-goods-receipt-store';
 export * from './goods-receipt.service';
 export * from './domain/stock';
+export * from './domain/fifo';
 export * from './stock-store';
 export * from './in-memory-stock-store';
 export * from './postgres-stock-store';

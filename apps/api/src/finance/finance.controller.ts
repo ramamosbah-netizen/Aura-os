@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -46,18 +47,19 @@ import {
   ProfitCenterService,
 } from '@aura/finance';
 
-interface CreateInvoiceDto {
-  title: string;
-  reference?: string;
-  poId?: string | null;
-  poTitle?: string | null;
-  supplierName?: string | null;
-  projectId?: string | null;
-  projectName?: string | null;
-  status?: InvoiceStatus;
-  value?: number;
-  currency?: string;
-  exchangeRate?: number;
+// Decorated DTO — validated + coerced by the global ValidationPipe (whitelist strips unknown keys).
+class CreateInvoiceDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() poId?: string | null;
+  @IsOptional() @IsString() poTitle?: string | null;
+  @IsOptional() @IsString() supplierName?: string | null;
+  @IsOptional() @IsString() projectId?: string | null;
+  @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsIn(['draft', 'approved', 'paid', 'cancelled']) status?: InvoiceStatus;
+  @IsOptional() @IsNumber() @Min(0) value?: number;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsNumber() @Min(0) exchangeRate?: number;
 }
 
 interface CreateAccountDto {

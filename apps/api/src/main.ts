@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from 'dotenv';
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import crypto from 'node:crypto';
 import { AuthService, TenantContext } from '@aura/core';
@@ -20,6 +20,9 @@ async function bootstrap(): Promise<void> {
   app.enableCors();
   app.enableShutdownHooks(); // so OutboxRelay.onModuleDestroy clears its timer
   app.useGlobalFilters(new AccessDeniedFilter());
+  // Global input validation. Safe for existing interface DTOs (no class metadata → skipped);
+  // activates per-field validation + type coercion as DTOs are migrated to decorated classes.
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
 
   // Per-request identity: verify a bearer token and bind the request context (ALS).
   // No token / auth off -> the dev default (actorId null), preserving the staged pass-through.

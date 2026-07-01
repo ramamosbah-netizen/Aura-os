@@ -295,14 +295,14 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 8 partial, 7 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 9 partial, 6 open — assurance/CI/hygiene largely deferred with the P0 ops track.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
 | 39 | SWC transform for vitest (HTTP e2e) | ❌ | no swc dep |
 | 40 | Supertest E2E (4 chains) | ❌ | no supertest; only in-memory reactor E2E |
 | 41 | Playwright smoke | ❌ | no playwright |
-| 42 | Coverage tooling + CI gate | ❌ | no coverage/CI |
+| 42 | Coverage tooling + CI gate | ◐ | `@vitest/coverage-v8` + `test:coverage` (finance 43.8%); CI gate open |
 | 43 | Dependency/SAST scan in CI | ❌ | no `.github/workflows` |
 | 44 | Global exception filter + taxonomy | ✅ | `AllExceptionsFilter` → `{statusCode,error,code,message,correlationId}` |
 | 45 | OpenAPI/Swagger | ✅ | `/api/docs` UI + `/api/docs-json` (openapi 3.0.0) |

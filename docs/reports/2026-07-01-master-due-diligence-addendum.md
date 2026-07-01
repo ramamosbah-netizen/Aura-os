@@ -1,6 +1,6 @@
 # AURA OS — Master Due-Diligence · ADDENDUM (Matrices + under-reviewed areas)
 
-**Date:** 2026-07-01 (rev 7) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+**Date:** 2026-07-01 (rev 8) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
 
 **Rev-7 change:** **gap F (saved views) closed** — SavedViewService + `/views` + `☆ Save view` on lists (migration 0093, `fb54cf9`).
 **Rev-6 (prior):** **gap H (UI Gantt) closed** — `/projects/schedule` renders planned vs baseline vs actual-% bars.
@@ -22,7 +22,7 @@
 | HR / CRM / Quality / Fleet / Subcontracts | 3–7 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Tendering / Assets / HSE / Site / AMC / Engineering / Doc-Control | 1–2 | ◐ | ❌ | ❌ | ❌ | ❌ |
 
-**Verified (rev 7):** print for **9 documents**; **5 dashboards**; **CSV export on 9 lists**; **UI Gantt**; **saved views** (`/views`). Remaining UI gaps: advanced-filter DSL, Excel export.
+**Verified (rev 8):** print for **9 documents**; **5 dashboards**; **CSV export on 9 lists**; **UI Gantt**; **saved views** (`/views`). Remaining UI gaps: advanced-filter DSL, Excel export.
 
 ---
 
@@ -147,7 +147,7 @@
 | Aspect | Finding |
 |---|---|
 | Queries / indexes | `(tenant_id)`/`(tenant_id,status)`/FK indexes present; no composite/partial tuning |
-| N+1 | Journal `list()` loops a lines-query per journal; aging/EVM/statements aggregate in-app |
+| N+1 | Journal `list()` **fixed** (batched `ANY($1)`); aging/EVM/statements still aggregate in-app |
 | Pagination | Contract exists, applied in ~9 files only → unbounded scans elsewhere |
 | Caching | None |
 | Connection pool | Single `pg` pool; no pgBouncer/replica |
@@ -179,7 +179,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |
 | F | Saved views / advanced filters | P2 | ◐ — saved views ✅ (`/views`); advanced-filter DSL open |
-| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | open |
+| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | ◐ — journal N+1 fixed; APM/load-test/pagination-rollout open |
 | H | UI Gantt render over the new schedule/baseline data | P2 | ✅ **done** — `/projects/schedule` (planned vs baseline vs actual-%) |
 
 These are **additive** to the master report's P0–P3 list (security/ops P0 still dominate).

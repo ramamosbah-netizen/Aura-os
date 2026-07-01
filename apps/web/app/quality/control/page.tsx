@@ -61,12 +61,37 @@ interface Snag {
   updatedAt: string;
 }
 
+interface ChecklistItem {
+  question: string;
+  standard: string;
+  status: 'pending' | 'compliant' | 'non_compliant' | 'not_applicable';
+  findings: string | null;
+  ncrId: string | null;
+}
+
+interface AuditSchedule {
+  id: string;
+  tenantId: string;
+  companyId: string | null;
+  projectId: string;
+  projectName: string | null;
+  auditNumber: string;
+  auditType: string;
+  scheduledDate: string;
+  auditorName: string;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  checklist: ChecklistItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default async function QualityControlPage() {
-  const [ncrs, inspections, snags, projects] = await Promise.all([
+  const [ncrs, inspections, snags, projects, audits] = await Promise.all([
     getJson<Ncr[]>('/api/quality/ncrs'),
     getJson<InspectionRequest[]>('/api/quality/irs'),
     getJson<Snag[]>('/api/quality/snags'),
     getJson<Project[]>('/api/projects/projects'),
+    getJson<AuditSchedule[]>('/api/quality/audits'),
   ]);
 
   return (
@@ -81,6 +106,7 @@ export default async function QualityControlPage() {
         initialInspections={inspections ?? []}
         initialSnags={snags ?? []}
         projects={projects ?? []}
+        initialAudits={audits ?? []}
       />
     </div>
   );

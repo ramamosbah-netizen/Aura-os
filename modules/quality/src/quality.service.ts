@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Ncr, makeNcr } from './domain/ncr';
@@ -17,6 +17,7 @@ import {
 } from './domain/material-approval';
 
 import { type Calibration, type NewCalibration, makeCalibration, calibrationStatus } from './domain/calibration';
+import { type AuditSchedule, type ChecklistItem, type NewAuditSchedule, makeAuditSchedule, QUALITY_AUDIT_EVENT } from './domain/audit-schedule';
 
 export const NCR_STORE = Symbol('NCR_STORE');
 export const INSPECTION_REQUEST_STORE = Symbol('INSPECTION_REQUEST_STORE');
@@ -24,6 +25,7 @@ export const SNAG_STORE = Symbol('SNAG_STORE');
 export const ITP_STORE = Symbol('ITP_STORE');
 export const MATERIAL_APPROVAL_STORE = Symbol('MATERIAL_APPROVAL_STORE');
 export const CALIBRATION_STORE = Symbol('CALIBRATION_STORE');
+export const AUDIT_SCHEDULE_STORE = Symbol('AUDIT_SCHEDULE_STORE');
 
 import {
   type NcrStore,
@@ -32,6 +34,8 @@ import {
   type ItpStore,
   type MaterialApprovalStore,
   type CalibrationStore,
+  type AuditScheduleStore,
+  type MaterialApprovalFilter,
 } from './store.interface';
 
 export const QUALITY_EVENT = {
@@ -57,6 +61,7 @@ export class QualityService {
     @Inject(ITP_STORE) private readonly itpStore: ItpStore,
     @Inject(MATERIAL_APPROVAL_STORE) private readonly marStore: MaterialApprovalStore,
     @Inject(CALIBRATION_STORE) private readonly calibrationStore: CalibrationStore,
+    @Inject(AUDIT_SCHEDULE_STORE) private readonly auditStore: AuditScheduleStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -407,6 +412,36 @@ export class QualityService {
     return this.marStore.findAll(tenantId);
   }
 
+  listMaterialApprovalsPaged(filter: MaterialApprovalFilter, page: PageParams): Promise<Page<MaterialApproval>> {
+    return this.marStore.listPaged(filter, page);
+  }
+
+  /**
+   * Quality hard gate for Procurement PO issuance.
+   * Checks if the given supplier has any **rejected** MARs on the project.
+   * Returns `{ passed: true }` if clear, or `{ passed: false, reason }` if blocked.
+   */
+  async checkMaterialApprovalGate(
+    tenantId: string,
+    projectId: string,
+    supplierName: string,
+  ): Promise<{ passed: boolean; rejectedMars?: string[]; reason?: string }> {
+    if (!projectId || !supplierName) return { passed: true };
+    const mars = await this.marStore.findByProject(projectId, tenantId);
+    const rejected = mars.filter(
+      (m) => m.status === 'rejected' && m.supplier.toLowerCase() === supplierName.toLowerCase(),
+    );
+    if (rejected.length > 0) {
+      const refs = rejected.map((m) => m.reference);
+      return {
+        passed: false,
+        rejectedMars: refs,
+        reason: `Supplier "${supplierName}" has ${rejected.length} rejected Material Approval Request(s) on this project: ${refs.join(', ')}`,
+      };
+    }
+    return { passed: true };
+  }
+
   // ── Equipment calibration ──────────────────────────────────────────────────
 
   async recordCalibration(input: NewCalibration): Promise<Calibration> {
@@ -429,5 +464,117 @@ export class QualityService {
   async listCalibrations(tenantId: Id): Promise<Calibration[]> {
     const all = await this.calibrationStore.findAll(tenantId);
     return all.map((c) => ({ ...c, status: calibrationStatus(c.dueDate) }));
+  }
+
+  // ── ISO Checklists & Audits ───────────────────────────────────────────────
+
+  async scheduleAudit(actorId: string | null, input: NewAuditSchedule): Promise<AuditSchedule> {
+    if (actorId && this.access) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(actorId, { permission: 'quality.calibration.create', orgPath });
+    }
+
+    const audit = makeAuditSchedule(input);
+    const event = makeEvent({
+      type: QUALITY_AUDIT_EVENT.created,
+      tenantId: audit.tenantId,
+      companyId: audit.companyId,
+      actorId,
+      aggregateType: 'quality.audit',
+      aggregateId: audit.id,
+      payload: { auditNumber: audit.auditNumber, auditType: audit.auditType, scheduledDate: audit.scheduledDate },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.auditStore.save(audit, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Audit schedule created: ${audit.auditNumber} (${audit.auditType}) by ${audit.auditorName}`);
+    return audit;
+  }
+
+  getAudit(tenantId: string, id: string): Promise<AuditSchedule | null> {
+    return this.auditStore.findById(id, tenantId);
+  }
+
+  listAudits(tenantId: string): Promise<AuditSchedule[]> {
+    return this.auditStore.findAll(tenantId);
+  }
+
+  async updateAuditChecklist(
+    tenantId: string,
+    id: string,
+    checklist: ChecklistItem[],
+    status?: AuditSchedule['status'],
+  ): Promise<AuditSchedule> {
+    const audit = await this.auditStore.findById(id, tenantId);
+    if (!audit) throw new Error(`Audit schedule with ID ${id} not found`);
+
+    audit.checklist = checklist;
+    if (status) {
+      audit.status = status;
+    }
+    audit.updatedAt = new Date().toISOString();
+
+    await this.auditStore.save(audit);
+    return audit;
+  }
+
+  async generateNcrFromFailedCheck(
+    tenantId: string,
+    actorId: string | null,
+    auditId: string,
+    itemIndex: number,
+  ): Promise<Ncr> {
+    const audit = await this.auditStore.findById(auditId, tenantId);
+    if (!audit) throw new Error(`Audit schedule with ID ${auditId} not found`);
+
+    const item = audit.checklist[itemIndex];
+    if (!item) throw new Error(`Checklist item at index ${itemIndex} not found`);
+    if (item.status !== 'non_compliant') {
+      throw new Error(`Checklist item must be non_compliant to spawn NCR`);
+    }
+    if (item.ncrId) {
+      const existing = await this.ncrStore.findById(item.ncrId, tenantId);
+      if (existing) return existing;
+    }
+
+    const ncrCount = (await this.ncrStore.findAll(tenantId)).length;
+    const ncrNumber = `NCR-AUD-${String(ncrCount + 1).padStart(3, '0')}`;
+
+    const ncr = makeNcr({
+      tenantId,
+      companyId: audit.companyId,
+      projectId: audit.projectId,
+      projectName: audit.projectName,
+      ncrNumber,
+      description: `Failed ISO Audit checklist item: "${item.question}" (Standard: ${item.standard}). Findings: ${item.findings ?? 'None specified'}.`,
+      severity: 'minor',
+      raisedBy: actorId,
+    });
+
+    item.ncrId = ncr.id;
+    audit.updatedAt = new Date().toISOString();
+
+    const event = makeEvent({
+      type: 'quality.ncr.raised',
+      tenantId,
+      companyId: ncr.companyId,
+      actorId,
+      aggregateType: 'quality.ncr',
+      aggregateId: ncr.id,
+      payload: { ncrNumber: ncr.ncrNumber, severity: ncr.severity, auditId },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.ncrStore.save(ncr, handle);
+      await this.auditStore.save(audit, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.warn(`Non-conformance ticket ${ncr.ncrNumber} auto-generated from failed audit check: ${item.question}`);
+    return ncr;
   }
 }

@@ -4,6 +4,7 @@ export * from './domain/snag';
 export * from './domain/itp';
 export * from './domain/material-approval';
 export * from './domain/calibration';
+export * from './domain/audit-schedule';
 export * from './quality.service';
 export * from './quality.module';
 export * from './store.interface';

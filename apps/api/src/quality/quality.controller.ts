@@ -10,6 +10,8 @@ import {
   type MaterialApproval,
   type MarDecision,
   type Calibration,
+  type AuditSchedule,
+  type ChecklistItem,
   QualityService,
 } from '@aura/quality';
 
@@ -382,5 +384,92 @@ export class QualityController {
     const found = await this.qualityService.getCalibration(this.tenant.get().tenantId, id);
     if (!found) throw new BadRequestException(`calibration ${id} not found`);
     return found;
+  }
+
+  // ── ISO Checklists & Audits ───────────────────────────────────────────────
+
+  @Post('audits')
+  async scheduleAudit(
+    @Body()
+    dto: {
+      projectId: string;
+      projectName?: string;
+      auditNumber: string;
+      auditType: string;
+      scheduledDate: string;
+      auditorName: string;
+      checklist?: ChecklistItem[];
+    },
+  ): Promise<AuditSchedule> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.auditNumber?.trim()) throw new BadRequestException('auditNumber is required');
+    if (!dto?.auditType?.trim()) throw new BadRequestException('auditType is required');
+    if (!dto?.scheduledDate) throw new BadRequestException('scheduledDate is required');
+    if (!dto?.auditorName?.trim()) throw new BadRequestException('auditorName is required');
+
+    const ctx = this.tenant.get();
+    try {
+      return await this.qualityService.scheduleAudit(ctx.actorId, {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        projectId: dto.projectId,
+        projectName: dto.projectName,
+        auditNumber: dto.auditNumber,
+        auditType: dto.auditType,
+        scheduledDate: dto.scheduledDate,
+        auditorName: dto.auditorName,
+        checklist: dto.checklist,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('audits')
+  listAudits(): Promise<AuditSchedule[]> {
+    return this.qualityService.listAudits(this.tenant.get().tenantId);
+  }
+
+  @Get('audits/:id')
+  async getAudit(@Param('id') id: string): Promise<AuditSchedule> {
+    const found = await this.qualityService.getAudit(this.tenant.get().tenantId, id);
+    if (!found) throw new BadRequestException(`audit ${id} not found`);
+    return found;
+  }
+
+  @Put('audits/:id/checklist')
+  async updateAuditChecklist(
+    @Param('id') id: string,
+    @Body() dto: { checklist: ChecklistItem[]; status?: AuditSchedule['status'] },
+  ): Promise<AuditSchedule> {
+    if (!Array.isArray(dto?.checklist)) throw new BadRequestException('checklist must be an array');
+    try {
+      return await this.qualityService.updateAuditChecklist(
+        this.tenant.get().tenantId,
+        id,
+        dto.checklist,
+        dto.status,
+      );
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('audits/:id/checklist/:itemIndex/ncr')
+  async generateNcrFromFailedCheck(
+    @Param('id') id: string,
+    @Param('itemIndex') itemIndex: string,
+  ): Promise<Ncr> {
+    const ctx = this.tenant.get();
+    try {
+      return await this.qualityService.generateNcrFromFailedCheck(
+        ctx.tenantId,
+        ctx.actorId,
+        id,
+        Number(itemIndex),
+      );
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

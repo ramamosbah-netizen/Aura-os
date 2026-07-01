@@ -9,6 +9,7 @@ import {
   ITP_STORE,
   MATERIAL_APPROVAL_STORE,
   CALIBRATION_STORE,
+  AUDIT_SCHEDULE_STORE,
   QualityService,
 } from './quality.service';
 
@@ -19,6 +20,7 @@ import {
   InMemoryItpStore,
   InMemoryMaterialApprovalStore,
   InMemoryCalibrationStore,
+  InMemoryAuditScheduleStore,
 } from './in-memory-quality-store';
 
 import {
@@ -28,6 +30,7 @@ import {
   PostgresItpStore,
   PostgresMaterialApprovalStore,
   PostgresCalibrationStore,
+  PostgresAuditScheduleStore,
 } from './postgres-quality-store';
 
 @Module({
@@ -68,6 +71,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresCalibrationStore(pool) : new InMemoryCalibrationStore(),
+    },
+    {
+      provide: AUDIT_SCHEDULE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresAuditScheduleStore(pool) : new InMemoryAuditScheduleStore(),
     },
     QualityService,
   ],

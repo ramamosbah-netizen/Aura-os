@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { type Quotation, type NewQuotationLine, QuotationService } from '@aura/crm';
+import { type Contract, ContractService } from '@aura/contracts';
 
 interface CreateQuotationDto {
   quoteNumber: string;
@@ -17,8 +18,31 @@ interface CreateQuotationDto {
 export class CrmQuotationsController {
   constructor(
     private readonly quotations: QuotationService,
+    private readonly contracts: ContractService,
     private readonly tenant: TenantContext,
   ) {}
+
+  /** One-click convert an accepted quotation into a draft contract (carries value + account). */
+  @Post(':id/convert-to-contract')
+  async convertToContract(@Param('id') id: string): Promise<Contract> {
+    const q = await this.quotations.get(id);
+    if (!q) throw new NotFoundException(`quotation ${id} not found`);
+    if (q.status !== 'accepted') throw new BadRequestException(`quotation must be 'accepted' to convert (is '${q.status}')`);
+    const ctx = this.tenant.get();
+    return this.contracts.create(
+      {
+        tenantId: ctx.tenantId,
+        companyId: q.companyId,
+        title: `Contract from ${q.quoteNumber} — ${q.customerName}`,
+        accountId: q.accountId,
+        accountName: q.customerName,
+        value: q.total,
+        status: 'draft',
+        createdBy: ctx.actorId,
+      },
+      `contract-from-quotation:${q.id}`,
+    );
+  }
 
   @Post()
   async create(@Body() dto: CreateQuotationDto): Promise<Quotation> {

@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import { AuthService, TenantContext } from '@aura/core';
 import { AppModule } from './app.module';
 import { AccessDeniedFilter } from './auth/access-denied.filter';
+import { AllExceptionsFilter } from './common/all-exceptions.filter';
 
 // Load apps/api/.env.local (gitignored) before the kernel reads DATABASE_URL.
 // dist/main.js → ../.env.local resolves to apps/api/.env.local.
@@ -19,7 +20,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api/v1');
   app.enableCors();
   app.enableShutdownHooks(); // so OutboxRelay.onModuleDestroy clears its timer
-  app.useGlobalFilters(new AccessDeniedFilter());
+  app.useGlobalFilters(new AllExceptionsFilter(), new AccessDeniedFilter());
 
   // Per-request identity: verify a bearer token and bind the request context (ALS).
   // No token / auth off -> the dev default (actorId null), preserving the staged pass-through.

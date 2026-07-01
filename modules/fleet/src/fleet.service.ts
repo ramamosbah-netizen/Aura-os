@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Vehicle, makeVehicle } from './domain/vehicle';
@@ -7,13 +7,15 @@ import { type FuelLog, makeFuelLog } from './domain/fuel-log';
 import { type MaintenanceRecord, makeMaintenanceRecord } from './domain/maintenance';
 import { type TrafficFine, makeTrafficFine, assignFine, disputeFine, payFine } from './domain/traffic-fine';
 import { type SalikCharge, type NewSalikCharge, type SalikSummary, makeSalikCharge, allocateSalik, disputeSalik, summariseSalik } from './domain/salik-charge';
-import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore, type SalikChargeStore } from './store.interface';
+import { type VehicleTelemetry, makeVehicleTelemetry, FLEET_TELEMETRY_EVENT } from './domain/telemetry';
+import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore, type SalikChargeStore, type TelemetryStore, type VehicleFilter } from './store.interface';
 
 export const VEHICLE_STORE = Symbol('VEHICLE_STORE');
 export const FUEL_LOG_STORE = Symbol('FUEL_LOG_STORE');
 export const MAINTENANCE_STORE = Symbol('MAINTENANCE_STORE');
 export const TRAFFIC_FINE_STORE = Symbol('TRAFFIC_FINE_STORE');
 export const SALIK_CHARGE_STORE = Symbol('SALIK_CHARGE_STORE');
+export const TELEMETRY_STORE = Symbol('TELEMETRY_STORE');
 
 export const FLEET_EVENT = {
   vehicleCreated: 'fleet.vehicle.created',
@@ -26,6 +28,8 @@ export const FLEET_EVENT = {
   salikRecorded: 'fleet.salik.recorded',
   salikAllocated: 'fleet.salik.allocated',
   salikDisputed: 'fleet.salik.disputed',
+  telemetryReceived: 'fleet.telemetry.received',
+  registrationExpiring: 'fleet.vehicle.registration_expiring',
 };
 
 @Injectable()
@@ -38,6 +42,7 @@ export class FleetService {
     @Inject(MAINTENANCE_STORE) private readonly maintenanceStore: MaintenanceStore,
     @Inject(TRAFFIC_FINE_STORE) private readonly trafficFineStore: TrafficFineStore,
     @Inject(SALIK_CHARGE_STORE) private readonly salikStore: SalikChargeStore,
+    @Inject(TELEMETRY_STORE) private readonly telemetryStore: TelemetryStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -109,6 +114,10 @@ export class FleetService {
 
   listVehicles(tenantId: string): Promise<Vehicle[]> {
     return this.vehicleStore.findByTenant(tenantId);
+  }
+
+  listVehiclesPaged(filter: VehicleFilter, page: PageParams): Promise<Page<Vehicle>> {
+    return this.vehicleStore.listPaged(filter, page);
   }
 
   // ── Fuel Logs ─────────────────────────────────────────────────────────────
@@ -373,5 +382,92 @@ export class FleetService {
 
   async salikSummary(tenantId: string): Promise<SalikSummary> {
     return summariseSalik(await this.salikStore.findByTenant(tenantId));
+  }
+
+  // ── GPS Telematics & Expiry Triggers ───────────────────────────────────────
+
+  async recordTelemetry(
+    tenantId: string,
+    input: {
+      vehicleId: string;
+      latitude: number;
+      longitude: number;
+      speed: number;
+      odometer?: number | null;
+      recordedAt?: string;
+    },
+  ): Promise<VehicleTelemetry> {
+    const vehicle = await this.vehicleStore.findById(tenantId, input.vehicleId);
+    if (!vehicle) throw new Error(`Vehicle with ID ${input.vehicleId} not found`);
+
+    const telemetry = makeVehicleTelemetry({ ...input, tenantId });
+    const event = makeEvent({
+      type: FLEET_EVENT.telemetryReceived,
+      tenantId: telemetry.tenantId,
+      companyId: vehicle.companyId,
+      actorId: null,
+      aggregateType: 'fleet.vehicle',
+      aggregateId: vehicle.id,
+      payload: { latitude: telemetry.latitude, longitude: telemetry.longitude, speed: telemetry.speed, odometer: telemetry.odometer },
+    });
+
+    vehicle.lastLatitude = telemetry.latitude;
+    vehicle.lastLongitude = telemetry.longitude;
+    vehicle.lastSpeed = telemetry.speed;
+    if (telemetry.odometer !== null) {
+      vehicle.lastOdometer = telemetry.odometer;
+    }
+    vehicle.lastTelemetryAt = telemetry.recordedAt;
+    vehicle.updatedAt = new Date().toISOString();
+
+    await this.tx.run(async (handle) => {
+      await this.telemetryStore.save(telemetry, handle);
+      await this.vehicleStore.save(vehicle, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Telemetry updated for vehicle ${vehicle.plateNumber}: speed=${telemetry.speed} km/h`);
+    return telemetry;
+  }
+
+  async getTelemetryForVehicle(tenantId: string, vehicleId: string): Promise<VehicleTelemetry[]> {
+    return this.telemetryStore.findByVehicle(tenantId, vehicleId);
+  }
+
+  async checkRegistrationsAndTriggerRenewals(tenantId: string): Promise<{ vehicleId: string; plateNumber: string; daysRemaining: number }[]> {
+    const vehicles = await this.vehicleStore.findByTenant(tenantId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const triggered: { vehicleId: string; plateNumber: string; daysRemaining: number }[] = [];
+
+    for (const v of vehicles) {
+      if (!v.registrationExpiry) continue;
+      const expiry = new Date(v.registrationExpiry);
+      expiry.setHours(0, 0, 0, 0);
+
+      const diffTime = expiry.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // Trigger renew task trigger if registration expires within 30 days
+      if (diffDays <= 30) {
+        triggered.push({ vehicleId: v.id, plateNumber: v.plateNumber, daysRemaining: diffDays });
+        
+        const event = makeEvent({
+          type: FLEET_EVENT.registrationExpiring,
+          tenantId: v.tenantId,
+          companyId: v.companyId,
+          actorId: null,
+          aggregateType: 'fleet.vehicle',
+          aggregateId: v.id,
+          payload: { plateNumber: v.plateNumber, registrationExpiry: v.registrationExpiry, daysRemaining: diffDays },
+        });
+
+        await this.events.append([event]);
+        this.logger.warn(`Mulkiya registration expiry trigger hit for vehicle ${v.plateNumber}: ${diffDays} days remaining`);
+      }
+    }
+
+    return triggered;
   }
 }

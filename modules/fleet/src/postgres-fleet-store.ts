@@ -1,11 +1,13 @@
 import type { Pool, PoolClient } from 'pg';
 import type { TxHandle } from '@aura/core';
+import { type Page, type PageParams, makePage } from '@aura/shared';
 import type { Vehicle } from './domain/vehicle';
 import type { FuelLog } from './domain/fuel-log';
 import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
 import type { SalikCharge } from './domain/salik-charge';
-import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore } from './store.interface';
+import type { VehicleTelemetry } from './domain/telemetry';
+import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore, TelemetryStore, VehicleFilter } from './store.interface';
 
 // pg returns `date` columns as a JS Date constructed in the server's local TZ.
 // Extract the calendar date via LOCAL components so we get the date that was actually stored.
@@ -25,8 +27,9 @@ export class PostgresVehicleStore implements VehicleStore {
     const conn = (tx as PoolClient) || this.pool;
     const res = await conn.query(
       `insert into public.aura_fleet_vehicles (
-        id, tenant_id, company_id, make, model, year, plate_number, registration_expiry, status, driver_employee_id, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        id, tenant_id, company_id, make, model, year, plate_number, registration_expiry, status, driver_employee_id,
+        last_latitude, last_longitude, last_speed, last_odometer, last_telemetry_at, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       on conflict (id) do update set
         make = excluded.make,
         model = excluded.model,
@@ -35,6 +38,11 @@ export class PostgresVehicleStore implements VehicleStore {
         registration_expiry = excluded.registration_expiry,
         status = excluded.status,
         driver_employee_id = excluded.driver_employee_id,
+        last_latitude = excluded.last_latitude,
+        last_longitude = excluded.last_longitude,
+        last_speed = excluded.last_speed,
+        last_odometer = excluded.last_odometer,
+        last_telemetry_at = excluded.last_telemetry_at,
         updated_at = excluded.updated_at
       returning *`,
       [
@@ -48,6 +56,11 @@ export class PostgresVehicleStore implements VehicleStore {
         vehicle.registrationExpiry,
         vehicle.status,
         vehicle.driverEmployeeId,
+        vehicle.lastLatitude,
+        vehicle.lastLongitude,
+        vehicle.lastSpeed,
+        vehicle.lastOdometer,
+        vehicle.lastTelemetryAt,
         vehicle.createdAt,
         vehicle.updatedAt,
       ],
@@ -92,9 +105,45 @@ export class PostgresVehicleStore implements VehicleStore {
       registrationExpiry: row.registration_expiry instanceof Date ? row.registration_expiry.toISOString().split('T')[0] : row.registration_expiry ? String(row.registration_expiry) : null,
       status: row.status,
       driverEmployeeId: row.driver_employee_id,
+      lastLatitude: row.last_latitude !== null && row.last_latitude !== undefined ? Number(row.last_latitude) : null,
+      lastLongitude: row.last_longitude !== null && row.last_longitude !== undefined ? Number(row.last_longitude) : null,
+      lastSpeed: row.last_speed !== null && row.last_speed !== undefined ? Number(row.last_speed) : null,
+      lastOdometer: row.last_odometer !== null && row.last_odometer !== undefined ? Number(row.last_odometer) : null,
+      lastTelemetryAt: row.last_telemetry_at instanceof Date ? row.last_telemetry_at.toISOString() : (row.last_telemetry_at ? String(row.last_telemetry_at) : null),
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
+  }
+
+  private buildWhere(filter: VehicleFilter): { whereSql: string; params: unknown[] } {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) {
+        params.push(val);
+        where.push(`${col} = $${params.length}`);
+      }
+    };
+    add('tenant_id', filter.tenantId);
+    add('status', filter.status);
+    add('make', filter.make);
+    add('model', filter.model);
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async listPaged(filter: VehicleFilter, page: PageParams): Promise<Page<Vehicle>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_fleet_vehicles ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<any>(
+      `SELECT * FROM public.aura_fleet_vehicles ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map((row) => this.mapVehicle(row)), total, page);
   }
 }
 
@@ -371,6 +420,50 @@ export class PostgresSalikChargeStore implements SalikChargeStore {
       notes: row.notes || '',
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    };
+  }
+}
+
+export class PostgresTelemetryStore implements TelemetryStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(t: VehicleTelemetry, tx?: TxHandle): Promise<VehicleTelemetry> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_fleet_telemetry_logs (
+        id, tenant_id, vehicle_id, latitude, longitude, speed, odometer, recorded_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [t.id, t.tenantId, t.vehicleId, t.latitude, t.longitude, t.speed, t.odometer, t.recordedAt],
+    );
+    return t;
+  }
+
+  async findByVehicle(tenantId: string, vehicleId: string): Promise<VehicleTelemetry[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_fleet_telemetry_logs where tenant_id = $1 and vehicle_id = $2 order by recorded_at desc`,
+      [tenantId, vehicleId],
+    );
+    return res.rows.map(this.mapTelemetry);
+  }
+
+  async findByTenant(tenantId: string): Promise<VehicleTelemetry[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_fleet_telemetry_logs where tenant_id = $1 order by recorded_at desc`,
+      [tenantId],
+    );
+    return res.rows.map(this.mapTelemetry);
+  }
+
+  private mapTelemetry(row: any): VehicleTelemetry {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      vehicleId: row.vehicle_id,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      speed: Number(row.speed),
+      odometer: row.odometer !== null && row.odometer !== undefined ? Number(row.odometer) : null,
+      recordedAt: row.recorded_at instanceof Date ? row.recorded_at.toISOString() : String(row.recorded_at),
     };
   }
 }

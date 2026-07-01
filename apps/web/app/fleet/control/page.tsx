@@ -15,6 +15,11 @@ interface Vehicle {
   registrationExpiry: string | null;
   status: 'active' | 'maintenance' | 'retired';
   driverEmployeeId: string | null;
+  lastLatitude: number | null;
+  lastLongitude: number | null;
+  lastSpeed: number | null;
+  lastOdometer: number | null;
+  lastTelemetryAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

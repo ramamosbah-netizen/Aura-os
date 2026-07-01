@@ -4,11 +4,21 @@ import type { FuelLog } from './domain/fuel-log';
 import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
 import type { SalikCharge } from './domain/salik-charge';
+import type { VehicleTelemetry } from './domain/telemetry';
+import type { Page, PageParams } from '@aura/shared';
+
+export interface VehicleFilter {
+  tenantId?: string;
+  status?: string;
+  make?: string;
+  model?: string;
+}
 
 export interface VehicleStore {
   save(vehicle: Vehicle, tx?: TxHandle): Promise<Vehicle>;
   findById(tenantId: string, id: string): Promise<Vehicle | null>;
   findByTenant(tenantId: string): Promise<Vehicle[]>;
+  listPaged(filter: VehicleFilter, page: PageParams): Promise<Page<Vehicle>>;
   delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
 }
 
@@ -40,4 +50,10 @@ export interface SalikChargeStore {
   findById(tenantId: string, id: string): Promise<SalikCharge | null>;
   findByTenant(tenantId: string): Promise<SalikCharge[]>;
   findByVehicle(tenantId: string, vehicleId: string): Promise<SalikCharge[]>;
+}
+
+export interface TelemetryStore {
+  save(telemetry: VehicleTelemetry, tx?: TxHandle): Promise<VehicleTelemetry>;
+  findByVehicle(tenantId: string, vehicleId: string): Promise<VehicleTelemetry[]>;
+  findByTenant(tenantId: string): Promise<VehicleTelemetry[]>;
 }

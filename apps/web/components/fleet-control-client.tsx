@@ -14,6 +14,11 @@ interface Vehicle {
   registrationExpiry: string | null;
   status: 'active' | 'maintenance' | 'retired';
   driverEmployeeId: string | null;
+  lastLatitude: number | null;
+  lastLongitude: number | null;
+  lastSpeed: number | null;
+  lastOdometer: number | null;
+  lastTelemetryAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,7 +69,7 @@ export default function FleetControlClient({
   initialMaintenance,
   employees,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'fuel' | 'maintenance'>('vehicles');
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'fuel' | 'maintenance' | 'telematics'>('vehicles');
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(initialFuelLogs);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>(initialMaintenance);
@@ -91,6 +96,72 @@ export default function FleetControlClient({
   const [maintDate, setMaintDate] = useState(new Date().toISOString().split('T')[0]);
   const [maintDesc, setMaintDesc] = useState('');
   const [maintCost, setMaintCost] = useState<number>(0);
+
+  // Telematics Form State
+  const [gpsVehicleId, setGpsVehicleId] = useState(vehicles[0]?.id || '');
+  const [gpsLat, setGpsLat] = useState('25.2048');
+  const [gpsLng, setGpsLng] = useState('55.2708');
+  const [gpsSpeed, setGpsSpeed] = useState('60');
+  const [gpsOdo, setGpsOdo] = useState('10000');
+  const [scanResult, setScanResult] = useState<string | null>(null);
+
+  const handleSimulateGPS = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gpsVehicleId || !gpsLat || !gpsLng || !gpsSpeed) return;
+    setError(null);
+    try {
+      const res = await fetch('/api/fleet/telemetry', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          vehicleId: gpsVehicleId,
+          latitude: Number(gpsLat),
+          longitude: Number(gpsLng),
+          speed: Number(gpsSpeed),
+          odometer: gpsOdo ? Number(gpsOdo) : undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const telemetryLog = await res.json();
+      
+      // Update vehicles state with new telemetry
+      setVehicles(vehicles.map((v) => {
+        if (v.id === gpsVehicleId) {
+          return {
+            ...v,
+            lastLatitude: telemetryLog.latitude,
+            lastLongitude: telemetryLog.longitude,
+            lastSpeed: telemetryLog.speed,
+            lastOdometer: telemetryLog.odometer,
+            lastTelemetryAt: telemetryLog.recordedAt,
+          };
+        }
+        return v;
+      }));
+      setScanResult('Telemetry webhook delivered successfully!');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send telemetry update');
+    }
+  };
+
+  const handleCheckExpirations = async () => {
+    setError(null);
+    setScanResult(null);
+    try {
+      const res = await fetch('/api/fleet/vehicles/check-expiry', {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const triggered = await res.json();
+      if (triggered.length === 0) {
+        setScanResult('Scan complete: No expiring registrations found within 30 days.');
+      } else {
+        setScanResult(`Scan complete: Triggered renewal notifications and tasks for ${triggered.length} vehicle(s): ${triggered.map((x: any) => x.plateNumber).join(', ')}`);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to execute registration scan');
+    }
+  };
 
   const handleCreateVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -271,6 +342,12 @@ export default function FleetControlClient({
           style={activeTab === 'maintenance' ? st.activeTabBtn : st.tabBtn}
         >
           Preventative Maintenance
+        </button>
+        <button
+          onClick={() => setActiveTab('telematics')}
+          style={activeTab === 'telematics' ? st.activeTabBtn : st.tabBtn}
+        >
+          GPS Telematics & Expirations
         </button>
       </div>
 
@@ -627,6 +704,126 @@ export default function FleetControlClient({
                             </button>
                           )}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {activeTab === 'telematics' && (
+        <div>
+          {/* Expiry Scanner Card */}
+          <div style={st.formCard}>
+            <h3 style={st.formTitle}>Mulkiya Registration Renewals</h3>
+            <p style={st.muted}>
+              Systematically scan vehicle documents for upcoming expirations. Vehicles with registration expiring within 30 days will trigger automated alerts and task records.
+            </p>
+            <button
+              onClick={handleCheckExpirations}
+              style={{ ...st.btn, marginTop: 12, background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}
+            >
+              Scan & Trigger Renewal Tasks
+            </button>
+            {scanResult && <div style={{ marginTop: 12, fontSize: 13, color: '#34d399' }}>{scanResult}</div>}
+          </div>
+
+          {/* Webhook simulator */}
+          <form onSubmit={handleSimulateGPS} style={st.formCard}>
+            <h3 style={st.formTitle}>Simulate Telematics GPS Webhook</h3>
+            <div style={st.formGrid}>
+              <div style={st.field}>
+                <label style={st.label}>Select Vehicle</label>
+                <select
+                  value={gpsVehicleId}
+                  onChange={(e) => setGpsVehicleId(e.target.value)}
+                  style={st.select}
+                  required
+                >
+                  <option value="">-- Select Vehicle --</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.make} {v.model} ({v.plateNumber})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Latitude</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  placeholder="e.g. 25.2048"
+                  value={gpsLat}
+                  onChange={(e) => setGpsLat(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Longitude</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  placeholder="e.g. 55.2708"
+                  value={gpsLng}
+                  onChange={(e) => setGpsLng(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Speed (km/h)</label>
+                <input
+                  type="number"
+                  placeholder="80"
+                  value={gpsSpeed}
+                  onChange={(e) => setGpsSpeed(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Odometer (km)</label>
+                <input
+                  type="number"
+                  placeholder="15000"
+                  value={gpsOdo}
+                  onChange={(e) => setGpsOdo(e.target.value)}
+                  style={st.input}
+                />
+              </div>
+            </div>
+            <button type="submit" style={st.btn}>Dispatch Webhook Update</button>
+          </form>
+
+          {/* Telematics directory */}
+          <section style={st.panel}>
+            <h3 style={st.panelTitle}>Real-time GPS Fleet Positions</h3>
+            {vehicles.filter(v => v.lastLatitude).length === 0 ? (
+              <p style={st.muted}>No real-time telematics coordinates logged yet.</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={st.table}>
+                  <thead>
+                    <tr>
+                      {['Vehicle', 'Latitude', 'Longitude', 'Speed', 'Odometer', 'Last Ping'].map((h) => (
+                        <th key={h} style={st.th}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vehicles.filter(v => v.lastLatitude).map((v) => (
+                      <tr key={v.id}>
+                        <td style={st.tdBold}>{v.make} {v.model} ({v.plateNumber})</td>
+                        <td style={st.tdCode}>{v.lastLatitude}</td>
+                        <td style={st.tdCode}>{v.lastLongitude}</td>
+                        <td style={st.tdBold}>{v.lastSpeed} km/h</td>
+                        <td style={st.tdCode}>{v.lastOdometer?.toLocaleString()} km</td>
+                        <td style={st.tdMuted}>{v.lastTelemetryAt ? new Date(v.lastTelemetryAt).toLocaleString() : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

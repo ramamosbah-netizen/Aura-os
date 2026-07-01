@@ -1,6 +1,8 @@
 # AURA OS — Master Due-Diligence · ADDENDUM (Matrices + under-reviewed areas)
 
-**Date:** 2026-07-01 (rev 8) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+**Date:** 2026-07-01 (rev 9) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+
+**rev 9:** AP multi-currency + FX revaluation posting landed (Tier-1 #8 closed). AP invoices carry currency/exchangeRate/baseValue (migration 0096); reval posts unrealized gain/loss to GL (AP credit-normal: rate↑ = loss Dr 5900/Cr 2010, rate↓ = gain Dr 2010/Cr 4900) via `GET/POST /finance/invoices/fx-revaluation[/post]`. Multi-currency (AP/GL) now ✅.
 
 **Rev-7 change:** **gap F (saved views) closed** — SavedViewService + `/views` + `☆ Save view` on lists (migration 0093, `fb54cf9`).
 **Rev-6 (prior):** **gap H (UI Gantt) closed** — `/projects/schedule` renders planned vs baseline vs actual-% bars.
@@ -35,7 +37,7 @@
 | Double-entry GL | ✅ | Financial statements (P&L/BS/CF/TB) | ✅ |
 | Period close | ✅ | Budgeting + vs-actual | ✅ |
 | Revenue recognition (IFRS-15) | ✅ | Cost centres / Profit centres | ✅ |
-| Multi-currency (AR) | ◐ | Multi-currency (AP/GL) | ❌ |
+| Multi-currency (AR) | ✅ | Multi-currency (AP/GL) | ✅ |
 | Intercompany elimination | ❌ | Consolidation | ❌ |
 | AP/AR + aging | ✅ | PDC / Bank guarantees / VAT | ✅ |
 | P2P (PR→RFQ→PO→GRN→3-way) | ✅ | Approval matrix | ✅ |
@@ -106,7 +108,7 @@
 |---|:--:|:--:|:--:|:--:|:--:|
 | GL + statements + period close | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Budget / rev-rec / cost+profit centres | ✅ | ✅ | ✅ | ◐ | ✅ |
-| Multi-currency + consolidation | ✅ | ✅ | ✅ | ✅ | ◐ (AR only) |
+| Multi-currency + consolidation | ✅ | ✅ | ✅ | ✅ | ✅ (AR+AP, FX reval) |
 | Intercompany | ✅ | ✅ | ✅ | ◐ | ✗ |
 | P2P + 3-way + approval matrix | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Inventory valuation | ✅ FIFO/WAC/std | ✅ | ✅ | ✅ | ◐ WAC only |

@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import type { Employee } from './domain/employee';
 import type { Leave } from './domain/leave';
@@ -99,7 +99,7 @@ export class PostgresEmployeeStore implements EmployeeStore {
     return (res.rowCount ?? 0) > 0;
   }
 
-  private mapEmployee(row: any): Employee {
+  private mapEmployee(row: QueryResultRow): Employee {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -187,7 +187,7 @@ export class PostgresLeaveStore implements LeaveStore {
     return (res.rowCount ?? 0) > 0;
   }
 
-  private mapLeave(row: any): Leave {
+  private mapLeave(row: QueryResultRow): Leave {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -271,7 +271,7 @@ export class PostgresPayrollRunStore implements PayrollRunStore {
     return (res.rowCount ?? 0) > 0;
   }
 
-  private mapPayrollRun(row: any): PayrollRun {
+  private mapPayrollRun(row: QueryResultRow): PayrollRun {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -331,7 +331,7 @@ export class PostgresTimesheetStore implements TimesheetStore {
     return res.rows.map(this.mapTs);
   }
 
-  private mapTs(row: any): TimesheetEntry {
+  private mapTs(row: QueryResultRow): TimesheetEntry {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -383,7 +383,7 @@ export class PostgresExpenseClaimStore implements ExpenseClaimStore {
     return res.rows.map((r) => this.mapClaim(r));
   }
 
-  private mapClaim(row: any): ExpenseClaim {
+  private mapClaim(row: QueryResultRow): ExpenseClaim {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -435,7 +435,7 @@ export class PostgresStaffAdvanceStore implements StaffAdvanceStore {
     return res.rows.map((r) => this.mapAdvance(r));
   }
 
-  private mapAdvance(row: any): StaffAdvance {
+  private mapAdvance(row: QueryResultRow): StaffAdvance {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -491,7 +491,7 @@ export class PostgresAttendanceStore implements AttendanceStore {
     return res.rows.map((r) => this.mapAtt(r));
   }
 
-  private mapAtt(row: any): AttendanceRecord {
+  private mapAtt(row: QueryResultRow): AttendanceRecord {
     return {
       id: row.id,
       tenantId: row.tenant_id,

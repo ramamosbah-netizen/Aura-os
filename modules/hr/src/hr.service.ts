@@ -287,6 +287,10 @@ export class HrService {
     return this.payrollRunStore.findByTenant(tenantId);
   }
 
+  getPayrollRun(tenantId: string, id: string): Promise<PayrollRun | null> {
+    return this.payrollRunStore.findById(tenantId, id);
+  }
+
   // ── Timesheets ─────────────────────────────────────────────────────────────
 
   async createTimesheetEntry(input: {

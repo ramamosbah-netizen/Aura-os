@@ -18,13 +18,16 @@ interface Row {
   wbs_node_id: string | null;
   status: string;
   value: string | number;
+  currency: string | null;
+  exchange_rate: string | number | null;
+  base_value: string | number | null;
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
-  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, wbs_node_id, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, wbs_node_id, status, value, currency, exchange_rate, base_value, owner_id, created_by, created_at';
 
 function rowToInvoice(r: Row): Invoice {
   return {
@@ -41,6 +44,9 @@ function rowToInvoice(r: Row): Invoice {
     wbsNodeId: r.wbs_node_id,
     status: r.status as Invoice['status'],
     value: Number(r.value),
+    currency: r.currency ?? 'AED',
+    exchangeRate: r.exchange_rate == null ? 1 : Number(r.exchange_rate),
+    baseValue: r.base_value == null ? Number(r.value) : Number(r.base_value),
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
@@ -62,8 +68,8 @@ export class PostgresInvoiceStore implements InvoiceStore {
 
   private insert(executor: Pool | PoolClient, i: Invoice): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_finance_invoices (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [i.id, i.tenantId, i.companyId, i.reference, i.title, i.poId, i.poTitle, i.supplierName, i.projectId, i.projectName, i.wbsNodeId, i.status, i.value, i.ownerId, i.createdBy, i.createdAt],
+      `INSERT INTO public.aura_finance_invoices (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+      [i.id, i.tenantId, i.companyId, i.reference, i.title, i.poId, i.poTitle, i.supplierName, i.projectId, i.projectName, i.wbsNodeId, i.status, i.value, i.currency, i.exchangeRate, i.baseValue, i.ownerId, i.createdBy, i.createdAt],
     );
   }
 

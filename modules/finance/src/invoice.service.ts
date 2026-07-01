@@ -1,11 +1,19 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService } from '@aura/core';
+import type { Currency } from '@aura/shared';
 import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeInvoice } from './domain/invoice';
 import { type ApAgingReport, buildApAging } from './domain/ap-aging';
+import { computeFxRevaluation } from './domain/fx-revaluation';
 import { INVOICE_STORE, type InvoiceFilter, type InvoiceStore } from './invoice-store';
+import { JournalService } from './journal.service';
+import { AccountService } from './account.service';
+import type { AccountType } from './domain/account';
 import { PurchaseOrderService } from '@aura/procurement';
 import { GoodsReceiptService, type GoodsReceipt } from '@aura/inventory';
+
+/** AP invoices are "open" (revaluable) when approved-but-unpaid. */
+const AP_OPEN = ['approved'];
 
 const CREATE_INVOICE = 'finance.invoice.create';
 
@@ -32,6 +40,9 @@ export class InvoiceService implements OnModuleInit {
     private readonly goodsReceipts: GoodsReceiptService,
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
+    private readonly fx: ExchangeRateService,
+    private readonly journals: JournalService,
+    private readonly accounts: AccountService,
   ) {}
 
   onModuleInit(): void {
@@ -77,6 +88,11 @@ export class InvoiceService implements OnModuleInit {
   }
 
   async create(input: NewInvoice, idempotencyKey?: string | null): Promise<Invoice> {
+    // Multi-currency: resolve the effective rate to base for a non-AED AP invoice without an explicit rate.
+    const currency = (input.currency ?? 'AED').toUpperCase();
+    if (currency !== 'AED' && input.exchangeRate === undefined) {
+      input = { ...input, exchangeRate: await this.fx.getRate(input.tenantId, currency as Currency, 'AED') };
+    }
     const invoice = await this.commands.execute<Invoice>({
       id: newId(),
       name: CREATE_INVOICE,
@@ -192,5 +208,53 @@ export class InvoiceService implements OnModuleInit {
   async aging(tenantId: string, asOf?: string): Promise<ApAgingReport> {
     const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
     return buildApAging(all, asOf ?? new Date().toISOString().slice(0, 10));
+  }
+
+  /** FX revaluation — unrealized gain/loss on open foreign-currency AP at current rates. */
+  async fxRevaluation(tenantId: string, asOf?: string, baseCurrency = 'AED') {
+    const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
+    const rateCache = new Map<string, number>();
+    for (const inv of all) {
+      const c = (inv.currency ?? baseCurrency).toUpperCase();
+      if (c !== baseCurrency && !rateCache.has(c)) {
+        rateCache.set(c, await this.fx.getRate(tenantId, c as Currency, baseCurrency as Currency));
+      }
+    }
+    return computeFxRevaluation(
+      // AP has no partial payments: outstanding = full value while approved.
+      all.map((i) => ({ invoiceNumber: i.reference ?? i.id, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate ?? 1, total: i.value, amountPaid: 0, status: i.status })),
+      (c) => rateCache.get(c) ?? 1,
+      asOf ?? new Date().toISOString().slice(0, 10),
+      baseCurrency,
+      AP_OPEN,
+    );
+  }
+
+  private async ensureAccount(tenantId: string, code: string, name: string, type: AccountType) {
+    const existing = await this.accounts.getByCode(tenantId, code);
+    return existing ?? this.accounts.create({ tenantId, code, name, type });
+  }
+
+  /** Compute the AP FX revaluation and post the unrealized gain/loss journal to the GL. */
+  async postFxRevaluation(tenantId: string, asOf?: string, actorId?: Id): Promise<{ revaluation: Awaited<ReturnType<InvoiceService['fxRevaluation']>>; journalId: string | null }> {
+    const reval = await this.fxRevaluation(tenantId, asOf);
+    // AP is a credit-normal liability: a higher current rate means we owe MORE in base terms,
+    // so a positive delta (base@current − base@booked) is an economic LOSS. Invert for P&L.
+    const economicGain = Math.round(-reval.totalGainLoss * 100) / 100;
+    if (economicGain === 0) return { revaluation: reval, journalId: null };
+
+    const apControl = await this.ensureAccount(tenantId, '2010', 'Accounts Payable', 'liability');
+    const gainAcc = await this.ensureAccount(tenantId, '4900', 'FX Gain (unrealized)', 'revenue');
+    const lossAcc = await this.ensureAccount(tenantId, '5900', 'FX Loss (unrealized)', 'expense');
+    const amount = Math.abs(economicGain);
+    // gain (owe less): Dr AP / Cr FX gain · loss (owe more): Dr FX loss / Cr AP
+    const lines = economicGain > 0
+      ? [{ accountId: apControl.id, accountCode: apControl.code, accountName: apControl.name, debit: amount, credit: 0 },
+         { accountId: gainAcc.id, accountCode: gainAcc.code, accountName: gainAcc.name, debit: 0, credit: amount }]
+      : [{ accountId: lossAcc.id, accountCode: lossAcc.code, accountName: lossAcc.name, debit: amount, credit: 0 },
+         { accountId: apControl.id, accountCode: apControl.code, accountName: apControl.name, debit: 0, credit: amount }];
+    const journal = await this.journals.post({ tenantId, description: `Unrealized FX revaluation (AP) as of ${reval.asOf}`, reference: `FXREVAL-AP-${reval.asOf}`, lines }, actorId);
+    this.logger.log(`Posted AP FX revaluation ${reval.asOf}: ${economicGain > 0 ? 'gain' : 'loss'} ${amount} (journal ${journal.id})`);
+    return { revaluation: reval, journalId: journal.id };
   }
 }

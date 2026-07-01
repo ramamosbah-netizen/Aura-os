@@ -31,7 +31,7 @@ export interface FxRevaluation {
 }
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
-const OPEN = new Set(['issued', 'partially_paid']);
+const AR_OPEN = ['issued', 'partially_paid'];
 
 /** rateFor: current rate (foreign→base) per currency. Base-currency invoices are excluded. */
 export function computeFxRevaluation(
@@ -39,7 +39,9 @@ export function computeFxRevaluation(
   rateFor: (currency: string) => number,
   asOf: string,
   baseCurrency = 'AED',
+  openStatuses: string[] = AR_OPEN,
 ): FxRevaluation {
+  const OPEN = new Set(openStatuses);
   const lines: RevalLine[] = [];
   for (const inv of invoices) {
     if (!OPEN.has(inv.status)) continue;

@@ -56,6 +56,8 @@ interface CreateInvoiceDto {
   projectName?: string | null;
   status?: InvoiceStatus;
   value?: number;
+  currency?: string;
+  exchangeRate?: number;
 }
 
 interface CreateAccountDto {
@@ -136,6 +138,8 @@ export class FinanceController {
       projectName: dto.projectName ?? null,
       status: dto.status,
       value: dto.value,
+      currency: dto.currency,
+      exchangeRate: dto.exchangeRate,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
@@ -154,6 +158,17 @@ export class FinanceController {
   @Get('invoices/aging')
   apAging(@Query('asOf') asOf?: string): Promise<ApAgingReport> {
     return this.invoices.aging(this.tenant.get().tenantId, asOf);
+  }
+
+  @Get('invoices/fx-revaluation')
+  apFxRevaluation(@Query('asOf') asOf?: string) {
+    return this.invoices.fxRevaluation(this.tenant.get().tenantId, asOf);
+  }
+
+  @Post('invoices/fx-revaluation/post')
+  postApFxRevaluation(@Body() body?: { asOf?: string }) {
+    const ctx = this.tenant.get();
+    return this.invoices.postFxRevaluation(ctx.tenantId, body?.asOf, ctx.actorId ?? undefined);
   }
 
   @Get('invoices/paged')

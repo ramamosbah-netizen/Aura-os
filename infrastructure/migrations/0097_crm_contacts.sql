@@ -7,9 +7,9 @@
 
 create table if not exists public.aura_crm_contacts (
   id            uuid primary key,
-  tenant_id     uuid not null,
-  company_id    uuid,
-  account_id    uuid,
+  tenant_id     text not null,
+  company_id    text,
+  account_id    text,
   account_name  text,
   name          text not null,
   job_title     text,
@@ -17,8 +17,8 @@ create table if not exists public.aura_crm_contacts (
   phone         text,
   is_primary    boolean not null default false,
   status        text not null default 'active',
-  owner_id      uuid,
-  created_by    uuid,
+  owner_id      text,
+  created_by    text,
   created_at    timestamptz not null default now()
 );
 

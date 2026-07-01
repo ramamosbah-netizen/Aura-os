@@ -382,6 +382,23 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 
 **Session deltas (2026-07-01):** Finance multi-currency (AP+AR) + FX revaluation posting; standard pagination contract (COUNT + LIMIT/OFFSET + `Page` envelope) rolled out to **all transactional lists** — Finance, Procurement, Inventory, CRM, Projects (project/variation/closeout), Contracts (contract/IPC), Tendering, Engineering (drawing/RFI/submittal). Left unpaged by design: WBS/CBS tree nodes, delay-events, and small lookup tables. **#22 ✅ substantially complete** (remaining: subcontracts consolidated store). **#23 ✅** global `ValidationPipe` + `class-validator` installed; finance `CreateInvoiceDto` migrated to a decorated class — remaining interface DTOs migrate incrementally (pipe is a safe no-op until each is decorated). **Both Tier-1 infrastructure items now closed.**
 
+**Module-depth verticals shipped this session (each: domain → in-memory + Postgres stores → service → API → live migration → tests green → committed):**
+
+| # | Vertical | Module | Migration |
+|--:|---|---|--:|
+| 1 | Contacts | CRM | 0097 |
+| 2 | Activities / tasks (+complete) | CRM | 0098 |
+| 3 | Equipment calibration register | Quality | 0099 |
+| 4 | Asset disposal + gain/loss (+`assets.asset.disposed`) | Assets | 0100 |
+| 5 | Bid scoring (go/no-go, weighted) | Tendering | 0101 |
+| 6 | Labour allocation by trade (man-hour roll-up) | Site | 0102 |
+| 7 | Drawing/document register + distribution matrix | Doc-Control | 0103 |
+| 8 | Risk assessment / JSA (risk matrix) | HSE | 0104 |
+
+Also corrected stale scorecard gaps that were **already built**: AMC Postgres persistence + AMC→AR billing (`amc.workorder.completed` reactor), inventory FIFO/WAC. Live DB now at **migration 0104**.
+
+**Remaining verticals to 100%:** Engineering MAR/TQ · HR attendance/WPS-SIF/org-chart/appraisal · Subcontracts pagination + retention-release UI · Fleet Salik/tolls · Finance fixed-asset GL reactor (consume `assets.asset.disposed`) + group consolidation · CRM MS-Graph email seam (needs Azure creds) · HSE training matrix.
+
 ---
 
 ## L. CORRECTIONS TO PASS-1

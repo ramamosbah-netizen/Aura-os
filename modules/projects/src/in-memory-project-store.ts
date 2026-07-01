@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Project } from './domain/project';
 import type { ProjectFilter, ProjectStore } from './project-store';
@@ -28,5 +29,10 @@ export class InMemoryProjectStore implements ProjectStore {
     if (filter.contractId) out = out.filter((p) => p.contractId === filter.contractId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: ProjectFilter, page: PageParams): Promise<Page<Project>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

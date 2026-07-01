@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Project,
   type ProjectStatus,
@@ -127,6 +128,20 @@ export class ProjectsController {
     @Query('contractId') contractId?: string,
   ): Promise<Project[]> {
     return this.projects.list({ status, accountId, contractId, limit: 100 });
+  }
+
+  @Get('projects/paged')
+  pagedProjects(
+    @Query('status') status?: string,
+    @Query('accountId') accountId?: string,
+    @Query('contractId') contractId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.projects.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, accountId, contractId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('projects/:id')
@@ -352,6 +367,19 @@ export class ProjectsController {
     return this.variations.getProjectSummary(ctx.tenantId, projectId);
   }
 
+  @Get('variations/paged')
+  pagedVariations(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.variations.listPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Patch('variations/:id/status')
   async changeVariationStatus(@Param('id') id: string, @Body() dto: { status: VariationStatus }): Promise<VariationOrder> {
     const valid: VariationStatus[] = ['draft', 'submitted', 'approved', 'rejected'];
@@ -394,6 +422,19 @@ export class ProjectsController {
   listCloseouts(@Query('projectId') projectId?: string, @Query('status') status?: string): Promise<ProjectCloseout[]> {
     const ctx = this.tenant.get();
     return this.closeouts.list({ tenantId: ctx.tenantId, projectId, status, limit: 200 });
+  }
+
+  @Get('closeouts/paged')
+  pagedCloseouts(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.closeouts.listPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Patch('closeouts/:id/items/:index')

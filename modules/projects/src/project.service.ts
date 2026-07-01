@@ -79,4 +79,8 @@ export class ProjectService implements OnModuleInit {
   list(filter?: ProjectFilter): Promise<Project[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: ProjectFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

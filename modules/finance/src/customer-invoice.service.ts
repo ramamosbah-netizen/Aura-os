@@ -11,6 +11,7 @@ import {
   cancelInvoice,
 } from './domain/customer-invoice';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
+import { computeFxRevaluation } from './domain/fx-revaluation';
 import { CUSTOMER_INVOICE_STORE, type CustomerInvoiceFilter, type CustomerInvoiceStore } from './customer-invoice-store';
 
 /**
@@ -103,6 +104,24 @@ export class CustomerInvoiceService {
 
   listPaged(filter: CustomerInvoiceFilter, page: PageParams) {
     return this.store.listPaged(filter, page);
+  }
+
+  /** FX revaluation — unrealized gain/loss on open foreign-currency AR at current rates. */
+  async fxRevaluation(tenantId: string, asOf?: string, baseCurrency = 'AED') {
+    const all = await this.store.list({ tenantId, limit: 1000 });
+    const rateCache = new Map<string, number>();
+    for (const inv of all) {
+      const c = (inv.currency ?? baseCurrency).toUpperCase();
+      if (c !== baseCurrency && !rateCache.has(c)) {
+        rateCache.set(c, await this.fx.getRate(tenantId, c as Currency, baseCurrency as Currency));
+      }
+    }
+    return computeFxRevaluation(
+      all.map((i) => ({ invoiceNumber: i.invoiceNumber, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate ?? 1, total: i.total, amountPaid: i.amountPaid, status: i.status })),
+      (c) => rateCache.get(c) ?? 1,
+      asOf ?? new Date().toISOString().slice(0, 10),
+      baseCurrency,
+    );
   }
 
   /** AR aging — outstanding receivables bucketed by overdue age, as of `asOf` (default today). */

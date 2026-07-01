@@ -578,6 +578,11 @@ export class FinanceController {
     return this.customerInvoices.aging(this.tenant.get().tenantId, asOf);
   }
 
+  @Get('customer-invoices/fx-revaluation')
+  fxRevaluation(@Query('asOf') asOf?: string): Promise<import('@aura/finance').FxRevaluation> {
+    return this.customerInvoices.fxRevaluation(this.tenant.get().tenantId, asOf);
+  }
+
   // Paginated list (the pagination contract): ?limit&offset → { items, total, limit, offset, hasMore }
   @Get('customer-invoices/paged')
   pagedCustomerInvoices(

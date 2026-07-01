@@ -172,7 +172,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 | # | Gap | Priority | Status |
 |---|---|--:|---|
 | A | Document output engine — Invoice/PO/GRN/IPC print | P1 | ✅ **done** (rev 2); extend to Contract/Payslip/Statements |
-| B | Module + executive dashboards with charts | P1 | ◐ **started** — SVG chart kit + Finance dashboard (aging/P&L/cost-centre KPIs) shipped; other modules pending |
+| B | Module + executive dashboards with charts | P1 | ◐ **mostly done** — chart kit + Finance/Projects/Procurement dashboards; HR/Inventory dashboards pending |
 | C | Bulk export (CSV/Excel) over list + report endpoints | P1 | ◐ **started** — reusable ExportButton (CSV) on Stock + Customer-Invoices; roll out to remaining lists |
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |

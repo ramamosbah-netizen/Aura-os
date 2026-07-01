@@ -49,6 +49,7 @@ export * from './projections/olap-export.service';
 export * from './reliability/circuit-breaker';
 export * from './reliability/rate-limiter';
 export * from './notifications/notification.service';
+export * from './notifications/notification-store';
 export * from './config/feature-flag.service';
 export * from './jobs/background-job.service';
 export * from './integration/connector.service';

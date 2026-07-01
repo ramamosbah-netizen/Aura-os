@@ -1,5 +1,7 @@
 # AURA OS — Enterprise Software Due-Diligence & Completion Audit
 
+> ⚠️ **PARTIALLY SUPERSEDED (2026-06-30).** Many findings were closed the next day (gaps B1–B12: finance statements/period-close/budgeting/rev-rec/FX/consolidation, AMC persistence, deal-chain automation, notifications, approval matrix, inventory valuation). See **`2026-06-30-depth-analysis-current-state.md`** for the re-scored current state (engineering ~62%→~73%). Preserved unedited below as the point-in-time audit.
+
 > **Auditor:** Chief Enterprise Software Architect / Technical Due-Diligence Lead (CTO · Enterprise Architect · ERP Solution Architect · Principal Engineer · DevOps · Security · DBA · QA Director · UX · PM lenses)
 > **Date:** 2026-06-29 · **Method:** read-only source inspection, single-pass, evidence-based · **No code modified.**
 > **Scope verified:** 17 business modules, kernel (`core`), `intelligence` layer, `apps/api` (NestJS), `apps/web` (Next.js), `infrastructure/migrations` (0001–0070), `shared`.

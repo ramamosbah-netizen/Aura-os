@@ -8,6 +8,8 @@
 > Whole-workspace gates after each gap: **build 22/22 · typecheck 42/42 · tests 41/41**.
 > Migrations now **77** (latest `0076`). Security/RLS hardening remains intentionally deferred.
 >
+> **Depth analysis / re-scored current state:** see **`2026-06-30-depth-analysis-current-state.md`**.
+>
 > **Shipping status:**
 > - **[PR #10](https://github.com/ramamosbah-netizen/Aura-os/pull/10) — MERGED** (3 commits): §B1 deal-chain hardening + opportunity→account · §B2 AMC persistence · §B3 financial statements · §B4 period close.
 > - **[PR #11](https://github.com/ramamosbah-netizen/Aura-os/pull/11) — OPEN** (2 commits): §B5 budgeting · §B6 revenue recognition (+ this report).
@@ -76,6 +78,23 @@ Composed at the **app layer** so no module depends on another (the same pattern 
 ### B9. Inventory valuation (moving-average cost)  ·  *superseded by PR #12*
 Inventory valuation landed independently on `main` via **PR #12** ("module-depth verticals — inventory accounting"): WAC (`computeWac`), `summariseValuation`/`ValuationSummary`, plus reorder-level policy + low-stock reorder report (migrations `0073`/`0074`). My parallel cost-to-cost + COGS implementation was therefore **dropped during the PR #13 merge** (resolved to main's superset); only the `/inventory/valuation` web page was kept, reconciled to main's `ValuationSummary` shape. Net: the gap is closed — by main, not this branch.
 
+### B10. Procurement approval matrix  ·  `feat(procurement)`
+- `domain/approval-matrix.ts` — tiered thresholds (≤5k auto, ≤50k Manager, ≤500k Director, else Board) + pure `requiredApproval(value)`.
+- PO statuses `pending_approval`/`approved`; `submitForApproval` + `approve(id, level)` (rejects under-level) + a **gate** in `changeStatus('issued')` (must be approved unless auto). `POST /procurement/purchase-orders/:id/{submit,approve}`. No migration.
+- **Proof:** domain test + live: 300k PO → issue blocked (400); approve@L1 rejected (need L2); approve@L2 → approved; issue → 200.
+- Web: the PO list now drives the flow — draft → **Submit for approval** → **Approve** → **Issue PO** (status-coloured), via new submit/approve BFF routes.
+
+### B11. Notifications center (persisted + event-wired)  ·  `feat(core)`
+- `notification-store.ts` (Notification + port + in-memory/postgres) + migration `0078`; `NotificationService` gained `record/list/markRead/unreadCount` (channel dispatch stays log-stub — real email/SMS is external).
+- `notifications-subscriber.ts` raises notifications from `po.approved` / `ipc.certified` / `period.closed` / `tender.awarded`. `GET /notifications` (+`unread-count`), `PATCH /notifications/:id/read`; `/notifications` web center + nav.
+- **Proof:** service test + live: approve a 300k PO → "PO approved" notification persisted, unread count 1.
+
+### B12. Group consolidation  ·  `feat(finance)`  ·  (was "blocked" — now unblocked)
+- Added a **company dimension** to the GL: `Journal.companyId` (nullable) + postgres persistence (migration `0079`) + controller passes `companyId` (defaults to the request company).
+- `StatementsService.consolidated(tenantId, asOf)` → per-company income statement + balance sheet (journals filtered by `companyId`) + a consolidated (group) column. `GET /finance/statements/consolidated`; `/finance/consolidation` web page (per-company + Group columns).
+- **Proof:** domain test + live: co-a 150k + co-b 80k → **group 230k**.
+- No intercompany elimination yet (simple summation).
+
 ### B4. Period close  ·  `feat(finance)`  ·  (completes the financial close)
 - `domain/period-close.ts` + store (in-memory/postgres) + `PeriodCloseService` (close/reopen/isClosed/list, idempotent close, emits `finance.period.{closed,reopened}`). **Migration `0075`** (unique `tenant_id + period`).
 - **The guard:** `JournalService.post` now consults the period-close store and **rejects posting into a closed period**. `makeJournal`/`NewJournal` gained an optional `postedAt`, so backdated entries into a closed prior month are blocked too. The journal endpoint maps the closed-period/balance error to a clean **400** (was 500).
@@ -90,7 +109,7 @@ Ranked by value, unchanged from the audits minus what's now done:
 
 1. **Pagination rollout** — apply the B8 `listPaged` contract to the remaining ~30 list endpoints. *(next)*
 2. **Per-transaction multi-currency + FX revaluation** — needs a currency dimension on the GL/invoices (B7 delivered the rate registry + conversion only).
-3. Procurement approval matrix; group consolidation; notifications delivery; FIFO valuation layers (B9 delivered WAC).
+3. Intercompany elimination (B12 does simple summation); FIFO valuation layers; real notification channel delivery (email/SMS).
 
 **Deferred by explicit project decision (not regressions):** DB-enforced RLS / FORCE RLS / least-priv app role, auth-on-by-default, secrets rotation, CI/CD, containerization, observability, backups. These remain the Tier-0 production blockers to close **last**, after the feature surface is complete.
 

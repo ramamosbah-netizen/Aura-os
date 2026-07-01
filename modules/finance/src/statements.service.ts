@@ -52,4 +52,44 @@ export class StatementsService {
     const { accounts, journals } = await this.load(tenantId);
     return buildCashFlow(accounts, journals, from, to);
   }
+
+  /**
+   * Group consolidation: per-company income statement + balance sheet, plus a consolidated
+   * (whole-tenant) set. Journals tagged with a companyId roll into that company; the
+   * consolidated column is every journal (the group). `asOf` bounds the balance sheet.
+   */
+  async consolidated(tenantId: Id, asOf?: string | null): Promise<ConsolidatedStatements> {
+    const { accounts, journals } = await this.load(tenantId);
+    const companyIds = [...new Set(journals.map((j) => j.companyId).filter((c): c is string => !!c))].sort();
+
+    const companies: ConsolidatedCompany[] = companyIds.map((companyId) => {
+      const cj = journals.filter((j) => j.companyId === companyId);
+      return {
+        companyId,
+        incomeStatement: buildIncomeStatement(accounts, cj, null, asOf),
+        balanceSheet: buildBalanceSheet(accounts, cj, asOf),
+      };
+    });
+
+    return {
+      asOf: asOf ?? null,
+      companies,
+      consolidated: {
+        incomeStatement: buildIncomeStatement(accounts, journals, null, asOf),
+        balanceSheet: buildBalanceSheet(accounts, journals, asOf),
+      },
+    };
+  }
+}
+
+export interface ConsolidatedCompany {
+  companyId: string;
+  incomeStatement: IncomeStatement;
+  balanceSheet: BalanceSheet;
+}
+
+export interface ConsolidatedStatements {
+  asOf: string | null;
+  companies: ConsolidatedCompany[];
+  consolidated: { incomeStatement: IncomeStatement; balanceSheet: BalanceSheet };
 }

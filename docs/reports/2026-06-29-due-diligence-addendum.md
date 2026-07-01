@@ -1,5 +1,7 @@
 # AURA OS — Due-Diligence Audit · ADDENDUM (Blueprint conformance · E2E traces · measured depth)
 
+> ⚠️ **PARTIALLY SUPERSEDED (2026-06-30).** §C "chain automation ≈ 20%" is **corrected** — the chain is auto-orchestrated by the event reactor. Tier-1 finance/ERP-correctness backlog (statements, period-close, budgeting, rev-rec, multi-currency, consolidation, approval matrix) is **largely closed**. See **`2026-06-30-depth-analysis-current-state.md`**. Preserved unedited below.
+
 > Companion to `2026-06-29-enterprise-due-diligence-audit.md`. This addendum answers the 10 deeper questions the first pass skipped: **(1) conformance to the Blueprint/Module-Map/Constitution, (2) per-workflow completeness, (3) inter-module chains, (4) end-to-end traces, (5) business-rule side-effects, (6) a real competitor matrix, (7) measured DB depth, (8) measured code quality, (9) performance, (10) deeper frontend** — plus the **per-domain done/missing table** and a **numbered, prioritized backlog**.
 > Everything below is **measured from source** (grep/counts), not estimated. No files modified.
 

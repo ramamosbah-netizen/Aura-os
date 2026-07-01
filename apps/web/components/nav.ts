@@ -16,7 +16,10 @@ export interface NavGroup {
 export const NAV: NavGroup[] = [
   {
     title: 'Workspace',
-    items: [{ label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' }],
+    items: [
+      { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' },
+      { label: 'Notifications', href: '/notifications', glyph: '🔔', desc: 'In-app notification center (event-driven)' },
+    ],
   },
   {
     title: 'Deal chain',
@@ -73,6 +76,7 @@ export const NAV: NavGroup[] = [
       { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
       { label: 'Ledger & COA', href: '/finance/ledger', glyph: '◳', desc: 'Finance — double-entry general ledger' },
       { label: 'Financial Statements', href: '/finance/statements', glyph: '▣', desc: 'Finance — P&L, balance sheet, cash flow & trial balance from the GL' },
+      { label: 'Group Consolidation', href: '/finance/consolidation', glyph: '▦', desc: 'Finance — per-company + consolidated group financials' },
       { label: 'Period Close', href: '/finance/period-close', glyph: '🔒', desc: 'Finance — lock fiscal months against further journal posting' },
       { label: 'Budgets', href: '/finance/budgets', glyph: '▥', desc: 'Finance — budgets & budget-vs-actual folded live from the GL' },
       { label: 'Revenue Recognition', href: '/finance/revenue-recognition', glyph: '◷', desc: 'Finance — IFRS-15 %-complete revenue per project & over/under-billing' },

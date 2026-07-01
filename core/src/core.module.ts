@@ -43,6 +43,8 @@ import { OlapExportService } from './projections/olap-export.service';
 import { CircuitBreaker } from './reliability/circuit-breaker';
 import { RateLimiter } from './reliability/rate-limiter';
 import { NotificationService } from './notifications/notification.service';
+import { SAVED_VIEW_STORE, InMemorySavedViewStore, PostgresSavedViewStore } from './views/saved-view-store';
+import { SavedViewService } from './views/saved-view.service';
 import { FeatureFlagService } from './config/feature-flag.service';
 import { BackgroundJobService } from './jobs/background-job.service';
 import { ConnectorService } from './integration/connector.service';
@@ -87,6 +89,13 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     { provide: CircuitBreaker, useFactory: () => new CircuitBreaker() },
     RateLimiter,
     NotificationService,
+    {
+      provide: SAVED_VIEW_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSavedViewStore(pool) : new InMemorySavedViewStore(),
+    },
+    SavedViewService,
     FeatureFlagService,
     BackgroundJobService,
     ConnectorService,
@@ -170,6 +179,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     CircuitBreaker,
     RateLimiter,
     NotificationService,
+    SavedViewService,
     FeatureFlagService,
     BackgroundJobService,
     ConnectorService,

@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Project } from './domain/project';
 
@@ -19,4 +19,5 @@ export interface ProjectStore {
   createWithClient(tx: TxHandle | null, project: Project): Promise<void>;
   get(id: Id): Promise<Project | null>;
   list(filter?: ProjectFilter): Promise<Project[]>;
+  listPaged(filter: ProjectFilter, page: PageParams): Promise<Page<Project>>;
 }

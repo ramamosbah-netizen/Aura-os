@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { Supplier } from './domain/supplier';
 import type { SupplierFilter, SupplierStore } from './supplier-store';
 
@@ -30,5 +31,10 @@ export class InMemorySupplierStore implements SupplierStore {
     if (filter.category) out = out.filter((s) => s.category === filter.category);
     out.sort((a, b) => (a.name < b.name ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: SupplierFilter, page: PageParams): Promise<Page<Supplier>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

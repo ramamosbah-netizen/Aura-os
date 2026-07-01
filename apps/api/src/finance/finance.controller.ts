@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams, parseCsv } from '@aura/shared';
 import {
@@ -46,16 +47,19 @@ import {
   ProfitCenterService,
 } from '@aura/finance';
 
-interface CreateInvoiceDto {
-  title: string;
-  reference?: string;
-  poId?: string | null;
-  poTitle?: string | null;
-  supplierName?: string | null;
-  projectId?: string | null;
-  projectName?: string | null;
-  status?: InvoiceStatus;
-  value?: number;
+// Decorated DTO — validated + coerced by the global ValidationPipe (whitelist strips unknown keys).
+class CreateInvoiceDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() poId?: string | null;
+  @IsOptional() @IsString() poTitle?: string | null;
+  @IsOptional() @IsString() supplierName?: string | null;
+  @IsOptional() @IsString() projectId?: string | null;
+  @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsIn(['draft', 'approved', 'paid', 'cancelled']) status?: InvoiceStatus;
+  @IsOptional() @IsNumber() @Min(0) value?: number;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsNumber() @Min(0) exchangeRate?: number;
 }
 
 interface CreateAccountDto {
@@ -136,6 +140,8 @@ export class FinanceController {
       projectName: dto.projectName ?? null,
       status: dto.status,
       value: dto.value,
+      currency: dto.currency,
+      exchangeRate: dto.exchangeRate,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
@@ -154,6 +160,17 @@ export class FinanceController {
   @Get('invoices/aging')
   apAging(@Query('asOf') asOf?: string): Promise<ApAgingReport> {
     return this.invoices.aging(this.tenant.get().tenantId, asOf);
+  }
+
+  @Get('invoices/fx-revaluation')
+  apFxRevaluation(@Query('asOf') asOf?: string) {
+    return this.invoices.fxRevaluation(this.tenant.get().tenantId, asOf);
+  }
+
+  @Post('invoices/fx-revaluation/post')
+  postApFxRevaluation(@Body() body?: { asOf?: string }) {
+    const ctx = this.tenant.get();
+    return this.invoices.postFxRevaluation(ctx.tenantId, body?.asOf, ctx.actorId ?? undefined);
   }
 
   @Get('invoices/paged')
@@ -603,6 +620,12 @@ export class FinanceController {
   @Get('customer-invoices/fx-revaluation')
   fxRevaluation(@Query('asOf') asOf?: string): Promise<import('@aura/finance').FxRevaluation> {
     return this.customerInvoices.fxRevaluation(this.tenant.get().tenantId, asOf);
+  }
+
+  @Post('customer-invoices/fx-revaluation/post')
+  postFxRevaluation(@Query('asOf') asOf?: string) {
+    const ctx = this.tenant.get();
+    return this.customerInvoices.postFxRevaluation(ctx.tenantId, asOf, ctx.actorId ?? undefined);
   }
 
   // Paginated list (the pagination contract): ?limit&offset → { items, total, limit, offset, hasMore }

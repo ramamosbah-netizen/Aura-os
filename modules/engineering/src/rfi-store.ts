@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Rfi } from './domain/rfi';
 
@@ -17,6 +17,7 @@ export interface RfiStore {
   get(id: Id): Promise<Rfi | null>;
   getByCode(tenantId: Id, projectId: Id, code: string): Promise<Rfi | null>;
   list(filter?: RfiFilter): Promise<Rfi[]>;
+  listPaged(filter: RfiFilter, page: PageParams): Promise<Page<Rfi>>;
 }
 
 export const RFI_STORE = Symbol('RfiStore');

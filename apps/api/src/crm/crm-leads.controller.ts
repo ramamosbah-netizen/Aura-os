@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { type Lead, type LeadStatus, type LeadSource } from '@aura/shared';
+import { parsePageParams, type Lead, type LeadStatus, type LeadSource } from '@aura/shared';
 import { LeadService } from '@aura/crm';
 
 interface CreateLeadDto {
@@ -55,6 +55,18 @@ export class CrmLeadsController {
   list(@Query('status') status?: LeadStatus): Promise<Lead[]> {
     const ctx = this.tenant.get();
     return this.leads.list({ tenantId: ctx.tenantId, status, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('status') status?: LeadStatus,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.leads.listPaged(
+      { tenantId: this.tenant.get().tenantId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

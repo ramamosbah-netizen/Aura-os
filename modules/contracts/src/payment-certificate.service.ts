@@ -166,6 +166,10 @@ export class PaymentCertificateService {
     return this.store.list(filter);
   }
 
+  listPaged(filter: CertificateFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
+
   /** Contract billing summary: the certificate register + work-done / retention / net to date. */
   async getContractSummary(
     tenantId: Id,

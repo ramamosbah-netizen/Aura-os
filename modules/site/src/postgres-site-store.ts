@@ -4,7 +4,65 @@ import type { DailyReport } from './domain/daily-report';
 import type { DelayLog } from './domain/delay-log';
 import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
-import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore } from './store.interface';
+import type { LabourAllocation } from './domain/labour-allocation';
+import { type Page, PageParams, makePage } from '@aura/shared';
+import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, DailyReportFilter } from './store.interface';
+
+export class PostgresLabourAllocationStore implements LabourAllocationStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(a: LabourAllocation, tx?: TxHandle): Promise<void> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_site_labour_allocations (
+        id, tenant_id, company_id, project_id, project_name, date, trade, headcount, hours, man_hours, subcontractor_name, notes, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      on conflict (id) do update set
+        headcount = excluded.headcount, hours = excluded.hours, man_hours = excluded.man_hours,
+        notes = excluded.notes, updated_at = excluded.updated_at`,
+      [a.id, a.tenantId, a.companyId, a.projectId, a.projectName, a.date, a.trade, a.headcount, a.hours, a.manHours, a.subcontractorName, a.notes, a.createdBy, a.createdAt, a.updatedAt],
+    );
+  }
+
+  async findById(id: string, tenantId: string): Promise<LabourAllocation | null> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_labour_allocations where id = $1 and tenant_id = $2`, [id, tenantId]);
+    if (res.rowCount === 0) return null;
+    return this.mapAllocation(res.rows[0]);
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<LabourAllocation[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_labour_allocations where project_id = $1 and tenant_id = $2 order by date desc`, [projectId, tenantId]);
+    return res.rows.map(this.mapAllocation);
+  }
+
+  async findAll(tenantId: string): Promise<LabourAllocation[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_labour_allocations where tenant_id = $1 order by date desc`, [tenantId]);
+    return res.rows.map(this.mapAllocation);
+  }
+
+  private mapAllocation(row: any): LabourAllocation {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
+      trade: row.trade,
+      headcount: Number(row.headcount),
+      hours: Number(row.hours),
+      manHours: Number(row.man_hours),
+      subcontractorName: row.subcontractor_name,
+      notes: row.notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    };
+  }
+}
 
 export class PostgresDailyReportStore implements DailyReportStore {
   constructor(private readonly pool: Pool) {}
@@ -80,6 +138,36 @@ export class PostgresDailyReportStore implements DailyReportStore {
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
+  }
+
+  private buildWhere(filter: DailyReportFilter): { whereSql: string; params: unknown[] } {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) {
+        params.push(val);
+        where.push(`${col} = $${params.length}`);
+      }
+    };
+    add('tenant_id', filter.tenantId);
+    add('project_id', filter.projectId);
+    add('status', filter.status);
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async listPaged(filter: DailyReportFilter, page: PageParams): Promise<Page<DailyReport>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_site_daily_reports ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<any>(
+      `SELECT * FROM public.aura_site_daily_reports ${whereSql} ORDER BY date DESC, created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map((row) => this.mapDailyReport(row)), total, page);
   }
 }
 

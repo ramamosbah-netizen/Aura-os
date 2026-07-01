@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { Quotation, QuotationLine } from './domain/quotation';
 import type { QuotationFilter, QuotationStore } from './quotation-store';
 
@@ -70,7 +71,7 @@ export class PostgresQuotationStore implements QuotationStore {
     return res.rows.length ? rowTo(res.rows[0]) : null;
   }
 
-  async list(filter: QuotationFilter = {}): Promise<Quotation[]> {
+  private buildWhere(filter: QuotationFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
@@ -82,12 +83,28 @@ export class PostgresQuotationStore implements QuotationStore {
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('account_id', filter.accountId);
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async list(filter: QuotationFilter = {}): Promise<Quotation[]> {
+    const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_crm_quotations ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowTo);
+  }
+  async listPaged(filter: QuotationFilter, page: PageParams): Promise<Page<Quotation>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_crm_quotations ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_quotations ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowTo), total, page);
   }
 }

@@ -43,6 +43,7 @@ describe('Payment recording idempotency', () => {
 
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, mockPO, mockGRN, numbering, audit,
+      { getRate: async () => 1 } as any, {} as any, {} as any,
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);
@@ -76,6 +77,7 @@ describe('Payment recording idempotency', () => {
 
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, mockPO, mockGRN, numbering, audit,
+      { getRate: async () => 1 } as any, {} as any, {} as any,
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);

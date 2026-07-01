@@ -7,6 +7,7 @@ import {
   type TrafficFine,
   type SalikCharge,
   type SalikSummary,
+  type VehicleTelemetry,
   FleetService,
 } from '@aura/fleet';
 
@@ -259,5 +260,41 @@ export class FleetController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // ── GPS Telematics & Expiry Triggers ───────────────────────────────────────
+
+  @Post('telemetry/webhook')
+  async recordTelemetry(@Body() dto: { vehicleId: string; latitude: number; longitude: number; speed: number; odometer?: number; recordedAt?: string }): Promise<VehicleTelemetry> {
+    if (!dto?.vehicleId) throw new BadRequestException('vehicleId is required');
+    if (dto?.latitude === undefined) throw new BadRequestException('latitude is required');
+    if (dto?.longitude === undefined) throw new BadRequestException('longitude is required');
+    if (dto?.speed === undefined) throw new BadRequestException('speed is required');
+
+    const ctx = this.tenant.get();
+    try {
+      return await this.fleetService.recordTelemetry(ctx.tenantId, {
+        vehicleId: dto.vehicleId,
+        latitude: Number(dto.latitude),
+        longitude: Number(dto.longitude),
+        speed: Number(dto.speed),
+        odometer: dto.odometer !== undefined ? Number(dto.odometer) : undefined,
+        recordedAt: dto.recordedAt,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('vehicles/:id/telemetry')
+  getVehicleTelemetry(@Param('id') id: string): Promise<VehicleTelemetry[]> {
+    const ctx = this.tenant.get();
+    return this.fleetService.getTelemetryForVehicle(ctx.tenantId, id);
+  }
+
+  @Post('vehicles/check-expiry')
+  checkExpiryAndTriggerRenewals(): Promise<{ vehicleId: string; plateNumber: string; daysRemaining: number }[]> {
+    const ctx = this.tenant.get();
+    return this.fleetService.checkRegistrationsAndTriggerRenewals(ctx.tenantId);
   }
 }

@@ -3,6 +3,15 @@ import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
 import type { ToolboxTalk } from './domain/toolbox-talk';
+import type { RiskAssessment } from './domain/risk-assessment';
+import type { SafetyTrainingRecord } from './domain/safety-training';
+
+export interface RiskAssessmentStore {
+  save(ra: RiskAssessment, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<RiskAssessment | null>;
+  findByProject(projectId: string, tenantId: string): Promise<RiskAssessment[]>;
+  findAll(tenantId: string): Promise<RiskAssessment[]>;
+}
 
 export interface HseIncidentStore {
   save(incident: HseIncident, tx?: TxHandle): Promise<void>;
@@ -30,4 +39,11 @@ export interface ToolboxTalkStore {
   findById(id: string, tenantId: string): Promise<ToolboxTalk | null>;
   findByProject(projectId: string, tenantId: string): Promise<ToolboxTalk[]>;
   findAll(tenantId: string): Promise<ToolboxTalk[]>;
+}
+
+export interface SafetyTrainingStore {
+  save(record: SafetyTrainingRecord, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<SafetyTrainingRecord | null>;
+  findByWorker(workerId: string, tenantId: string): Promise<SafetyTrainingRecord[]>;
+  findAll(tenantId: string): Promise<SafetyTrainingRecord[]>;
 }

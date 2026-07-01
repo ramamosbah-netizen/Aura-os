@@ -141,6 +141,9 @@ describe('Finance depth features', () => {
         mockGoodsReceipts,
         mockNumbering,
         mockAudit,
+        { getRate: async () => 1 } as any,
+        {} as any,
+        {} as any,
       );
       invoiceService.onModuleInit();
       const accountService = new AccountService(accountStore, mockAccess);
@@ -229,6 +232,9 @@ describe('Finance depth features', () => {
         mockGoodsReceipts,
         mockNumbering,
         mockAudit,
+        { getRate: async () => 1 } as any,
+        {} as any,
+        {} as any,
       );
       invoiceService.onModuleInit();
 
@@ -292,6 +298,9 @@ describe('Finance depth features', () => {
         grnService,
         mockNumbering,
         mockAudit,
+        { getRate: async () => 1 } as any,
+        {} as any,
+        {} as any,
       );
       invoiceService.onModuleInit();
 

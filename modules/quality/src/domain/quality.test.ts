@@ -8,6 +8,8 @@ import {
   InMemorySnagStore,
   InMemoryItpStore,
   InMemoryMaterialApprovalStore,
+  InMemoryCalibrationStore,
+  InMemoryAuditScheduleStore,
 } from '../in-memory-quality-store';
 import { QualityService } from '../quality.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -43,7 +45,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
 
       const ncr = await service.raiseNcr({
         tenantId: 't1',
@@ -67,7 +69,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
 
       const ir = await service.requestInspection({
         tenantId: 't1',
@@ -92,7 +94,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
 
       const snag = await service.logSnag({
         tenantId: 't1',
@@ -108,6 +110,50 @@ describe('Quality Module Bounded Context', () => {
       const resolved = await service.resolveSnag('t1', null, snag.id, 'resolved');
       expect(resolved.status).toBe('resolved');
       expect(resolved.resolvedAt).not.toBeNull();
+    });
+  });
+
+  describe('Material Approvals Pagination', () => {
+    it('paginates material approvals correctly', async () => {
+      const ncrStore = new InMemoryNcrStore();
+      const irStore = new InMemoryInspectionRequestStore();
+      const snagStore = new InMemorySnagStore();
+      const itpStore = new InMemoryItpStore();
+      const marStore = new InMemoryMaterialApprovalStore();
+      const calStore = new InMemoryCalibrationStore();
+
+      const service = new QualityService(ncrStore, irStore, snagStore, itpStore, marStore, calStore, new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
+
+      await service.createMaterialApproval({
+        tenantId: 't1',
+        projectId: 'p1',
+        reference: 'MAR-001',
+        materialName: 'Steel Rebar Grade 60',
+        supplier: 'Steel Corp',
+      });
+      await service.createMaterialApproval({
+        tenantId: 't1',
+        projectId: 'p1',
+        reference: 'MAR-002',
+        materialName: 'Portland Cement Type I',
+        supplier: 'Cement Co',
+      });
+      await service.createMaterialApproval({
+        tenantId: 't1',
+        projectId: 'p2',
+        reference: 'MAR-003',
+        materialName: 'Ready Mix Concrete C40',
+        supplier: 'Steel Corp',
+      });
+
+      const page1 = await service.listMaterialApprovalsPaged({ tenantId: 't1' }, { limit: 2, offset: 0 });
+      expect(page1.items.length).toBe(2);
+      expect(page1.total).toBe(3);
+      expect(page1.hasMore).toBe(true);
+
+      const pageSupplier = await service.listMaterialApprovalsPaged({ tenantId: 't1', supplier: 'Steel Corp' }, { limit: 10, offset: 0 });
+      expect(pageSupplier.items.length).toBe(2);
+      expect(pageSupplier.items.every(item => item.supplier === 'Steel Corp')).toBe(true);
     });
   });
 });

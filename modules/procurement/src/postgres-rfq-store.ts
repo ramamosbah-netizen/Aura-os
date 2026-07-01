@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { Rfq, RfqQuote } from './domain/rfq';
 import type { RfqFilter, RfqStore } from './rfq-store';
 
@@ -90,7 +91,7 @@ export class PostgresRfqStore implements RfqStore {
     return res.rows.length ? rowToRfq(res.rows[0]) : null;
   }
 
-  async list(filter: RfqFilter = {}): Promise<Rfq[]> {
+  private buildWhere(filter: RfqFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
@@ -102,13 +103,32 @@ export class PostgresRfqStore implements RfqStore {
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('pr_id', filter.prId);
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async list(filter: RfqFilter = {}): Promise<Rfq[]> {
+    const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<RfqRow>(
       `SELECT ${RFQ_COLS} FROM public.aura_procurement_rfqs ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToRfq);
+  }
+
+  async listPaged(filter: RfqFilter, page: PageParams): Promise<Page<Rfq>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_procurement_rfqs ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<RfqRow>(
+      `SELECT ${RFQ_COLS} FROM public.aura_procurement_rfqs ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToRfq), total, page);
   }
 
   async addQuote(q: RfqQuote): Promise<void> {

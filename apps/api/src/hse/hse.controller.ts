@@ -5,6 +5,10 @@ import {
   type PermitToWork,
   type CapaAction,
   type ToolboxTalk,
+  type RiskAssessment,
+  type RiskLine,
+  type RiskAssessmentStatus,
+  type SafetyTrainingRecord,
   HseService,
 } from '@aura/hse';
 
@@ -34,6 +38,15 @@ interface RaiseCapaDto {
   actionRequired: string;
   assignedTo?: string;
   dueDate: string;
+}
+
+interface RecordSafetyTrainingDto {
+  workerName: string;
+  workerId: string;
+  inductionDate: string;
+  cardNumber?: string;
+  cardExpiry?: string;
+  certifications?: string[];
 }
 
 @Controller('hse')
@@ -197,5 +210,83 @@ export class HseController {
   listToolboxTalks(): Promise<ToolboxTalk[]> {
     const ctx = this.tenant.get();
     return this.hseService.listToolboxTalks(ctx.tenantId);
+  }
+
+  // ── Risk assessments (JSA) ──────────────────────────────────────────────────
+
+  @Post('risk-assessments')
+  createRiskAssessment(
+    @Body() dto: { projectId: string; projectName?: string; reference: string; activity: string; assessor?: string; hazards: RiskLine[]; status?: RiskAssessmentStatus; reviewDate?: string },
+  ): Promise<RiskAssessment> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
+    if (!dto?.activity?.trim()) throw new BadRequestException('activity is required');
+    if (!Array.isArray(dto?.hazards) || dto.hazards.length === 0) throw new BadRequestException('at least one hazard is required');
+    const ctx = this.tenant.get();
+    return this.hseService.createRiskAssessment({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? undefined,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      reference: dto.reference,
+      activity: dto.activity,
+      assessor: dto.assessor,
+      hazards: dto.hazards,
+      status: dto.status,
+      reviewDate: dto.reviewDate,
+      createdBy: ctx.actorId ?? undefined,
+    });
+  }
+
+  @Get('risk-assessments')
+  listRiskAssessments(): Promise<RiskAssessment[]> {
+    return this.hseService.listRiskAssessments(this.tenant.get().tenantId);
+  }
+
+  @Put('risk-assessments/:id/approve')
+  async approveRiskAssessment(@Param('id') id: string): Promise<RiskAssessment> {
+    try {
+      return await this.hseService.approveRiskAssessment(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Safety Training Matrix ──────────────────────────────────────────────────
+
+  @Post('training')
+  async recordSafetyTraining(@Body() dto: RecordSafetyTrainingDto): Promise<SafetyTrainingRecord> {
+    if (!dto?.workerName?.trim()) throw new BadRequestException('workerName is required');
+    if (!dto?.workerId?.trim()) throw new BadRequestException('workerId is required');
+    if (!dto?.inductionDate?.trim()) throw new BadRequestException('inductionDate is required');
+
+    const ctx = this.tenant.get();
+    try {
+      return await this.hseService.recordSafetyTraining({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        workerName: dto.workerName,
+        workerId: dto.workerId,
+        inductionDate: dto.inductionDate,
+        cardNumber: dto.cardNumber,
+        cardExpiry: dto.cardExpiry,
+        certifications: dto.certifications,
+        createdBy: ctx.actorId || null,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('training')
+  listSafetyTraining(): Promise<SafetyTrainingRecord[]> {
+    const ctx = this.tenant.get();
+    return this.hseService.listSafetyTraining(ctx.tenantId);
+  }
+
+  @Get('training/worker/:workerId')
+  getSafetyTrainingForWorker(@Param('workerId') workerId: string): Promise<SafetyTrainingRecord[]> {
+    const ctx = this.tenant.get();
+    return this.hseService.getSafetyTrainingForWorker(ctx.tenantId, workerId);
   }
 }

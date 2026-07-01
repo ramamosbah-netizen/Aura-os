@@ -1,4 +1,5 @@
-import type { Id, Opportunity } from '@aura/shared';
+import type { Id, Opportunity, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { OpportunityFilter, OpportunityStore } from './opportunity-store';
 
@@ -29,5 +30,10 @@ export class InMemoryOpportunityStore implements OpportunityStore {
     if (filter.leadId) out = out.filter((o) => o.leadId === filter.leadId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: OpportunityFilter, page: PageParams): Promise<Page<Opportunity>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

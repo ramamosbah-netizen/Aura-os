@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type GoodsReceipt, type GoodsReceiptStatus, GoodsReceiptService } from '@aura/inventory';
 
 interface CreateGoodsReceiptDto {
@@ -50,6 +51,20 @@ export class InventoryController {
     @Query('projectId') projectId?: string,
   ): Promise<GoodsReceipt[]> {
     return this.grns.list({ status, poId, projectId, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('status') status?: string,
+    @Query('poId') poId?: string,
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.grns.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, poId, projectId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

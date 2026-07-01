@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Project,
   type ProjectStatus,
@@ -29,6 +30,8 @@ import {
   type ProjectSchedule,
   type ScheduleSummary,
   type NewScheduleTask,
+  type PlanTaskInput,
+  type SchedulePlan,
   ScheduleService,
 } from '@aura/projects';
 
@@ -127,6 +130,20 @@ export class ProjectsController {
     @Query('contractId') contractId?: string,
   ): Promise<Project[]> {
     return this.projects.list({ status, accountId, contractId, limit: 100 });
+  }
+
+  @Get('projects/paged')
+  pagedProjects(
+    @Query('status') status?: string,
+    @Query('accountId') accountId?: string,
+    @Query('contractId') contractId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.projects.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, accountId, contractId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('projects/:id')
@@ -352,6 +369,19 @@ export class ProjectsController {
     return this.variations.getProjectSummary(ctx.tenantId, projectId);
   }
 
+  @Get('variations/paged')
+  pagedVariations(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.variations.listPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Patch('variations/:id/status')
   async changeVariationStatus(@Param('id') id: string, @Body() dto: { status: VariationStatus }): Promise<VariationOrder> {
     const valid: VariationStatus[] = ['draft', 'submitted', 'approved', 'rejected'];
@@ -394,6 +424,19 @@ export class ProjectsController {
   listCloseouts(@Query('projectId') projectId?: string, @Query('status') status?: string): Promise<ProjectCloseout[]> {
     const ctx = this.tenant.get();
     return this.closeouts.list({ tenantId: ctx.tenantId, projectId, status, limit: 200 });
+  }
+
+  @Get('closeouts/paged')
+  pagedCloseouts(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.closeouts.listPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Patch('closeouts/:id/items/:index')
@@ -456,6 +499,20 @@ export class ProjectsController {
   @Get('schedules')
   listSchedules(): Promise<ProjectSchedule[]> {
     return this.schedule.list(this.tenant.get().tenantId);
+  }
+
+  // Reactive planning: CPM forward-pass reschedule + resource levelling (stateless compute).
+  @Post('schedules/plan')
+  planSchedule(
+    @Body() dto: { projectStart: string; tasks: PlanTaskInput[]; capacity?: Record<string, number> },
+  ): SchedulePlan {
+    if (!dto?.projectStart) throw new BadRequestException('projectStart (YYYY-MM-DD) is required');
+    if (!Array.isArray(dto?.tasks) || dto.tasks.length === 0) throw new BadRequestException('at least one task is required');
+    try {
+      return this.schedule.plan(dto.tasks, dto.projectStart, dto.capacity);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   @Post('schedules/:projectId/baseline')

@@ -49,4 +49,8 @@ export class TransferService {
   list(filter?: TransferFilter): Promise<StockTransfer[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: TransferFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

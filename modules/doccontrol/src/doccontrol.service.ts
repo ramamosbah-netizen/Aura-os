@@ -11,6 +11,9 @@ import { CORRESPONDENCE_STORE, type CorrespondenceStore } from './store.interfac
 import { type Submittal, type ReviewCode, makeSubmittal, submitForReview, returnWithCode } from './domain/submittal';
 import { SUBMITTAL_STORE, type SubmittalStore } from './store.interface';
 
+import { type DrawingRegisterEntry, type NewDrawingRegisterEntry, type RegisterStatus, makeDrawingRegisterEntry, reviseRegisterEntry } from './domain/drawing-register';
+import { DRAWING_REGISTER_STORE, type DrawingRegisterStore } from './store.interface';
+
 export const DOCCONTROL_EVENT = {
   transmittalSent: 'doccontrol.transmittal.sent',
   correspondenceLogged: 'doccontrol.correspondence.logged',
@@ -26,6 +29,7 @@ export class DocControlService {
     @Inject(TRANSMITTAL_STORE) private readonly transmittalStore: TransmittalStore,
     @Inject(CORRESPONDENCE_STORE) private readonly correspondenceStore: CorrespondenceStore,
     @Inject(SUBMITTAL_STORE) private readonly submittalStore: SubmittalStore,
+    @Inject(DRAWING_REGISTER_STORE) private readonly registerStore: DrawingRegisterStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -223,5 +227,35 @@ export class DocControlService {
 
   listSubmittals(tenantId: Id): Promise<Submittal[]> {
     return this.submittalStore.findAll(tenantId);
+  }
+
+  // ── Drawing / Document Register (distribution matrix) ───────────────────────
+
+  async createRegisterEntry(input: NewDrawingRegisterEntry): Promise<DrawingRegisterEntry> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'doccontrol.register.create', orgPath });
+    }
+    const entry = makeDrawingRegisterEntry(input);
+    await this.tx.run(async (handle) => { await this.registerStore.save(entry, handle); });
+    this.logger.log(`Register entry: ${entry.documentNumber} rev ${entry.currentRevision} (${entry.status})`);
+    return entry;
+  }
+
+  async reviseRegisterEntry(tenantId: Id, id: Id, revision: string, status: RegisterStatus, revisionDate?: string): Promise<DrawingRegisterEntry> {
+    const entry = await this.registerStore.findById(id, tenantId);
+    if (!entry) throw new Error(`register entry ${id} not found`);
+    const updated = reviseRegisterEntry(entry, revision, status, revisionDate);
+    await this.tx.run(async (handle) => { await this.registerStore.save(updated, handle); });
+    return updated;
+  }
+
+  listRegister(tenantId: Id): Promise<DrawingRegisterEntry[]> {
+    return this.registerStore.findAll(tenantId);
+  }
+
+  listRegisterByProject(tenantId: Id, projectId: Id): Promise<DrawingRegisterEntry[]> {
+    return this.registerStore.findByProject(projectId, tenantId);
   }
 }

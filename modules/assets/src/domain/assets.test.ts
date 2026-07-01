@@ -6,6 +6,7 @@ import {
   InMemoryAssetStore,
   InMemoryAssetMaintenanceStore,
   InMemoryAssetInspectionStore,
+  InMemoryAssetDisposalStore,
 } from '../in-memory-assets-store';
 import { AssetsService } from '../assets.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -44,7 +45,7 @@ describe('Assets Bounded Context', () => {
       const maintenanceStore = new InMemoryAssetMaintenanceStore();
       const inspectionStore = new InMemoryAssetInspectionStore();
 
-      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, mockEvents, mockTx, mockAccess);
+      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
 
       const asset = await service.createAsset(null, {
         tenantId: 't1',
@@ -67,6 +68,48 @@ describe('Assets Bounded Context', () => {
       const afterDelete = await service.listAssets('t1');
       expect(afterDelete.length).toBe(0);
     });
+
+    it('paginates asset list correctly', async () => {
+      const assetStore = new InMemoryAssetStore();
+      const maintenanceStore = new InMemoryAssetMaintenanceStore();
+      const inspectionStore = new InMemoryAssetInspectionStore();
+
+      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
+
+      await service.createAsset(null, {
+        tenantId: 't1',
+        name: 'Asset 1',
+        serialNumber: 'SN-001',
+        category: 'Machinery',
+        purchaseDate: '2026-02-15',
+        purchaseCost: 1000,
+      });
+      await service.createAsset(null, {
+        tenantId: 't1',
+        name: 'Asset 2',
+        serialNumber: 'SN-002',
+        category: 'Vehicles',
+        purchaseDate: '2026-02-16',
+        purchaseCost: 2000,
+      });
+      await service.createAsset(null, {
+        tenantId: 't1',
+        name: 'Asset 3',
+        serialNumber: 'SN-003',
+        category: 'Machinery',
+        purchaseDate: '2026-02-17',
+        purchaseCost: 3000,
+      });
+
+      const page1 = await service.listAssetsPaged({ tenantId: 't1' }, { limit: 2, offset: 0 });
+      expect(page1.items.length).toBe(2);
+      expect(page1.total).toBe(3);
+      expect(page1.hasMore).toBe(true);
+
+      const pageCategory = await service.listAssetsPaged({ tenantId: 't1', category: 'Machinery' }, { limit: 10, offset: 0 });
+      expect(pageCategory.items.length).toBe(2);
+      expect(pageCategory.items.every(item => item.category === 'Machinery')).toBe(true);
+    });
   });
 
   describe('Asset Maintenance', () => {
@@ -75,7 +118,7 @@ describe('Assets Bounded Context', () => {
       const maintenanceStore = new InMemoryAssetMaintenanceStore();
       const inspectionStore = new InMemoryAssetInspectionStore();
 
-      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, mockEvents, mockTx, mockAccess);
+      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
 
       const m = await service.scheduleMaintenance(null, {
         tenantId: 't1',
@@ -100,7 +143,7 @@ describe('Assets Bounded Context', () => {
       const maintenanceStore = new InMemoryAssetMaintenanceStore();
       const inspectionStore = new InMemoryAssetInspectionStore();
 
-      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, mockEvents, mockTx, mockAccess);
+      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
 
       const ins = await service.recordInspection(null, {
         tenantId: 't1',

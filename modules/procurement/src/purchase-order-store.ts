@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { PurchaseOrder } from './domain/purchase-order';
 
@@ -21,4 +21,5 @@ export interface PurchaseOrderStore {
   updateWithClient(tx: TxHandle | null, po: PurchaseOrder): Promise<void>;
   get(id: Id): Promise<PurchaseOrder | null>;
   list(filter?: PurchaseOrderFilter): Promise<PurchaseOrder[]>;
+  listPaged(filter: PurchaseOrderFilter, page: PageParams): Promise<Page<PurchaseOrder>>;
 }

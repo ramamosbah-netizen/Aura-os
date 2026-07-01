@@ -13,6 +13,9 @@ import {
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
 import { CUSTOMER_INVOICE_STORE, type CustomerInvoiceFilter, type CustomerInvoiceStore } from './customer-invoice-store';
+import { JournalService } from './journal.service';
+import { AccountService } from './account.service';
+import type { AccountType } from './domain/account';
 
 /**
  * Customer (AR) invoice service — the receivable side. Owns
@@ -26,7 +29,35 @@ export class CustomerInvoiceService {
     @Inject(CUSTOMER_INVOICE_STORE) private readonly store: CustomerInvoiceStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly fx: ExchangeRateService,
+    private readonly journals: JournalService,
+    private readonly accounts: AccountService,
   ) {}
+
+  private async ensureAccount(tenantId: string, code: string, name: string, type: AccountType) {
+    const existing = await this.accounts.getByCode(tenantId, code);
+    return existing ?? this.accounts.create({ tenantId, code, name, type });
+  }
+
+  /** Compute the AR FX revaluation and post the unrealized gain/loss journal to the GL. */
+  async postFxRevaluation(tenantId: string, asOf?: string, actorId?: Id): Promise<{ revaluation: Awaited<ReturnType<CustomerInvoiceService['fxRevaluation']>>; journalId: string | null }> {
+    const reval = await this.fxRevaluation(tenantId, asOf);
+    const gl = Math.round(reval.totalGainLoss * 100) / 100;
+    if (gl === 0) return { revaluation: reval, journalId: null };
+
+    const arControl = await this.ensureAccount(tenantId, '1200', 'Accounts Receivable', 'asset');
+    const gainAcc = await this.ensureAccount(tenantId, '4900', 'FX Gain (unrealized)', 'revenue');
+    const lossAcc = await this.ensureAccount(tenantId, '5900', 'FX Loss (unrealized)', 'expense');
+    const amount = Math.abs(gl);
+    // gain: Dr AR / Cr FX gain · loss: Dr FX loss / Cr AR
+    const lines = gl > 0
+      ? [{ accountId: arControl.id, accountCode: arControl.code, accountName: arControl.name, debit: amount, credit: 0 },
+         { accountId: gainAcc.id, accountCode: gainAcc.code, accountName: gainAcc.name, debit: 0, credit: amount }]
+      : [{ accountId: lossAcc.id, accountCode: lossAcc.code, accountName: lossAcc.name, debit: amount, credit: 0 },
+         { accountId: arControl.id, accountCode: arControl.code, accountName: arControl.name, debit: 0, credit: amount }];
+    const journal = await this.journals.post({ tenantId, description: `Unrealized FX revaluation (AR) as of ${reval.asOf}`, reference: `FXREVAL-${reval.asOf}`, lines }, actorId);
+    this.logger.log(`Posted AR FX revaluation ${reval.asOf}: ${gl > 0 ? 'gain' : 'loss'} ${amount} (journal ${journal.id})`);
+    return { revaluation: reval, journalId: journal.id };
+  }
 
   async create(input: NewCustomerInvoice): Promise<CustomerInvoice> {
     // Multi-currency: for a non-base (≠AED) invoice with no explicit rate, resolve the

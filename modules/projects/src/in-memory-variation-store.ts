@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { VariationOrder } from './domain/variation';
 import type { VariationFilter, VariationStore } from './variation-store';
 
@@ -26,5 +27,10 @@ export class InMemoryVariationStore implements VariationStore {
     if (filter.status) out = out.filter((v) => v.status === filter.status);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: VariationFilter, page: PageParams): Promise<Page<VariationOrder>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

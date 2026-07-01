@@ -6,6 +6,8 @@ import {
   type AssetInspection,
   type DepreciationSchedule,
   type DepreciationMethod,
+  type AssetDisposal,
+  type DisposalMethod,
   AssetsService,
 } from '@aura/assets';
 
@@ -173,5 +175,36 @@ export class AssetsController {
   listInspections(): Promise<AssetInspection[]> {
     const ctx = this.tenant.get();
     return this.assetsService.listInspections(ctx.tenantId);
+  }
+
+  // ── Disposal ────────────────────────────────────────────────────────────────
+
+  @Post('disposals')
+  async disposeAsset(
+    @Body() dto: { assetId: string; disposalDate: string; method: DisposalMethod; proceeds?: number; bookValue?: number; notes?: string },
+  ): Promise<AssetDisposal> {
+    if (!dto?.assetId) throw new BadRequestException('assetId is required');
+    if (!dto?.disposalDate) throw new BadRequestException('disposalDate is required');
+    if (!dto?.method) throw new BadRequestException('method is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.assetsService.disposeAsset(ctx.actorId, {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        assetId: dto.assetId,
+        disposalDate: dto.disposalDate,
+        method: dto.method,
+        proceeds: dto.proceeds,
+        bookValue: dto.bookValue,
+        notes: dto.notes ?? null,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('disposals')
+  listDisposals(): Promise<AssetDisposal[]> {
+    return this.assetsService.listDisposals(this.tenant.get().tenantId);
   }
 }

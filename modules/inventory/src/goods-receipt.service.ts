@@ -76,4 +76,8 @@ export class GoodsReceiptService implements OnModuleInit {
   list(filter?: GoodsReceiptFilter): Promise<GoodsReceipt[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: GoodsReceiptFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type Quotation, type NewQuotationLine, QuotationService } from '@aura/crm';
 import { type Contract, ContractService } from '@aura/contracts';
 
@@ -72,6 +73,19 @@ export class CrmQuotationsController {
   @Get()
   list(@Query('status') status?: Quotation['status'], @Query('accountId') accountId?: string): Promise<Quotation[]> {
     return this.quotations.list({ tenantId: this.tenant.get().tenantId, status, accountId, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('status') status?: Quotation['status'],
+    @Query('accountId') accountId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.quotations.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, accountId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

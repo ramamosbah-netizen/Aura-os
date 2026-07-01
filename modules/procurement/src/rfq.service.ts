@@ -137,4 +137,8 @@ export class RfqService {
   list(filter?: RfqFilter): Promise<Rfq[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: RfqFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

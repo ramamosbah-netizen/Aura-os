@@ -58,11 +58,55 @@ interface MaterialConsumption {
   updatedAt: string;
 }
 
+interface LabourAllocation {
+  id: string;
+  tenantId: string;
+  companyId: string | null;
+  projectId: string;
+  projectName: string | null;
+  date: string;
+  trade: string;
+  headcount: number;
+  hours: number;
+  manHours: number;
+  subcontractorName: string | null;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ScheduleTask {
+  name: string;
+  plannedStart: string;
+  plannedEnd: string;
+  baselineStart: string | null;
+  baselineEnd: string | null;
+  actualStart: string | null;
+  actualEnd: string | null;
+  percentComplete: number;
+}
+
+interface ProjectSchedule {
+  id: string;
+  tenantId: string;
+  companyId: string | null;
+  projectId: string;
+  projectName: string | null;
+  tasks: ScheduleTask[];
+  baselineSetAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default async function SiteControlPage() {
-  const [dailyReports, delayLogs, materialConsumption, projects] = await Promise.all([
+  const [dailyReports, delayLogs, materialConsumption, labourAllocations, schedules, projects] = await Promise.all([
     getJson<DailyReport[]>('/api/site/daily-reports'),
     getJson<DelayLog[]>('/api/site/delay-logs'),
     getJson<MaterialConsumption[]>('/api/site/material-consumption'),
+    getJson<LabourAllocation[]>('/api/site/labour'),
+    getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
   ]);
 
@@ -70,13 +114,15 @@ export default async function SiteControlPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Site Control</h1>
       <p style={st.sub}>
-        Operational site journals, diary entries, delay management, and material consumption tracking.
+        Operational site journals, diary entries, delay management, material consumption, and labour allocations.
       </p>
 
       <SiteControlClient
         initialDailyReports={dailyReports ?? []}
         initialDelayLogs={delayLogs ?? []}
         initialMaterialConsumption={materialConsumption ?? []}
+        initialLabourAllocations={labourAllocations ?? []}
+        schedules={schedules ?? []}
         projects={projects ?? []}
       />
     </div>

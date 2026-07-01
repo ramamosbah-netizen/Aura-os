@@ -2,7 +2,35 @@ import type { DailyReport } from './domain/daily-report';
 import type { DelayLog } from './domain/delay-log';
 import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
-import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore } from './store.interface';
+import type { LabourAllocation } from './domain/labour-allocation';
+import { type Page, PageParams, paginate } from '@aura/shared';
+import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, DailyReportFilter } from './store.interface';
+
+export class InMemoryLabourAllocationStore implements LabourAllocationStore {
+  private readonly items = new Map<string, LabourAllocation>();
+
+  async save(allocation: LabourAllocation): Promise<void> {
+    this.items.set(allocation.id, { ...allocation });
+  }
+
+  async findById(id: string, tenantId: string): Promise<LabourAllocation | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return { ...item };
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<LabourAllocation[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.projectId === projectId && i.tenantId === tenantId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  async findAll(tenantId: string): Promise<LabourAllocation[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+}
 
 export class InMemoryDailyReportStore implements DailyReportStore {
   private readonly items = new Map<string, DailyReport>();
@@ -27,6 +55,21 @@ export class InMemoryDailyReportStore implements DailyReportStore {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: DailyReportFilter, page: PageParams): Promise<Page<DailyReport>> {
+    let all = Array.from(this.items.values());
+    if (filter.tenantId) {
+      all = all.filter((i) => i.tenantId === filter.tenantId);
+    }
+    if (filter.projectId) {
+      all = all.filter((i) => i.projectId === filter.projectId);
+    }
+    if (filter.status) {
+      all = all.filter((i) => i.status === filter.status);
+    }
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return paginate(all.map((item) => ({ ...item })), page);
   }
 }
 

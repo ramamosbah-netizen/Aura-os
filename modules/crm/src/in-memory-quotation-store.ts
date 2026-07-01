@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { Quotation } from './domain/quotation';
 import type { QuotationFilter, QuotationStore } from './quotation-store';
 
@@ -21,5 +22,10 @@ export class InMemoryQuotationStore implements QuotationStore {
     if (filter.accountId) out = out.filter((q) => q.accountId === filter.accountId);
     out.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: QuotationFilter, page: PageParams): Promise<Page<Quotation>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

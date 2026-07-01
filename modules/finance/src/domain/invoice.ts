@@ -24,8 +24,13 @@ export interface Invoice {
   projectName: string | null;
   wbsNodeId: Id | null;
   status: InvoiceStatus;
-  /** Invoice amount. */
+  /** Invoice amount (in `currency`). */
   value: number;
+  /** Invoice currency (ISO); value is in this currency. */
+  currency: string;
+  /** Rate to base (AED): baseValue = value × exchangeRate. 1 for base-currency invoices. */
+  exchangeRate: number;
+  baseValue: number;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -44,6 +49,8 @@ export interface NewInvoice {
   wbsNodeId?: Id | null;
   status?: InvoiceStatus;
   value?: number;
+  currency?: string;
+  exchangeRate?: number;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
@@ -63,6 +70,9 @@ export function makeInvoice(input: NewInvoice): Invoice {
     wbsNodeId: input.wbsNodeId ?? null,
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    currency: (input.currency ?? 'AED').trim().toUpperCase(),
+    exchangeRate: input.exchangeRate === undefined ? 1 : Number(input.exchangeRate),
+    baseValue: Math.round((Number.isFinite(input.value) ? Number(input.value) : 0) * (input.exchangeRate === undefined ? 1 : Number(input.exchangeRate)) * 100) / 100,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

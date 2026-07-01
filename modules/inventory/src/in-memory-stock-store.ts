@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { StockItem, StockMovement } from './domain/stock';
 import type { StockFilter, StockStore } from './stock-store';
 
@@ -31,6 +32,11 @@ export class InMemoryStockStore implements StockStore {
     if (filter.warehouse) out = out.filter((i) => i.warehouse === filter.warehouse);
     out.sort((a, b) => (a.code < b.code ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listItemsPaged(filter: StockFilter, page: PageParams): Promise<Page<StockItem>> {
+    const all = await this.listItems({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 
   async addMovement(movement: StockMovement): Promise<void> {

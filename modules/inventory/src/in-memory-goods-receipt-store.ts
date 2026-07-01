@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { GoodsReceipt } from './domain/goods-receipt';
 import type { GoodsReceiptFilter, GoodsReceiptStore } from './goods-receipt-store';
@@ -28,5 +29,10 @@ export class InMemoryGoodsReceiptStore implements GoodsReceiptStore {
     if (filter.projectId) out = out.filter((g) => g.projectId === filter.projectId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: GoodsReceiptFilter, page: PageParams): Promise<Page<GoodsReceipt>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

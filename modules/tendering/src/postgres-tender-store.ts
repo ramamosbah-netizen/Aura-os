@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 import type { TenderFilter, TenderStore } from './tender-store';
@@ -102,5 +103,26 @@ export class PostgresTenderStore implements TenderStore {
       params,
     );
     return res.rows.map(rowToTender);
+  }
+
+  async listPaged(filter: TenderFilter, page: PageParams): Promise<Page<Tender>> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
+    };
+    add('tenant_id', filter.tenantId);
+    add('status', filter.status);
+    add('account_id', filter.accountId);
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_tendering_tenders ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_tendering_tenders ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToTender), total, page);
   }
 }

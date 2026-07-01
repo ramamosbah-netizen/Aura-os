@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 import type { TenderFilter, TenderStore } from './tender-store';
@@ -35,5 +36,10 @@ export class InMemoryTenderStore implements TenderStore {
     if (filter.accountId) out = out.filter((t) => t.accountId === filter.accountId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: TenderFilter, page: PageParams): Promise<Page<Tender>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

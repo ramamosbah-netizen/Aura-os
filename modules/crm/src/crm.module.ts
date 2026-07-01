@@ -21,6 +21,16 @@ import { InMemoryQuotationStore } from './in-memory-quotation-store';
 import { PostgresQuotationStore } from './postgres-quotation-store';
 import { QuotationService } from './quotation.service';
 
+import { CRM_CONTACT_STORE } from './contact-store';
+import { InMemoryContactStore } from './in-memory-contact-store';
+import { PostgresContactStore } from './postgres-contact-store';
+import { ContactService } from './contact.service';
+
+import { CRM_ACTIVITY_STORE } from './activity-store';
+import { InMemoryActivityStore } from './in-memory-activity-store';
+import { PostgresActivityStore } from './postgres-activity-store';
+import { ActivityService } from './activity.service';
+
 /**
  * The CRM business module. Imports the kernel (CoreModule) for the event store,
  * access platform, and shared pg pool; picks a Postgres or in-memory account store
@@ -54,11 +64,25 @@ import { QuotationService } from './quotation.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresQuotationStore(pool) : new InMemoryQuotationStore(),
     },
+    {
+      provide: CRM_CONTACT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresContactStore(pool) : new InMemoryContactStore(),
+    },
+    {
+      provide: CRM_ACTIVITY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresActivityStore(pool) : new InMemoryActivityStore(),
+    },
     AccountService,
     LeadService,
     OpportunityService,
     QuotationService,
+    ContactService,
+    ActivityService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService],
+  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService],
 })
 export class CrmModule {}

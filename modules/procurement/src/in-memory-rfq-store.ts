@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { Rfq, RfqQuote } from './domain/rfq';
 import type { RfqFilter, RfqStore } from './rfq-store';
 
@@ -27,6 +28,11 @@ export class InMemoryRfqStore implements RfqStore {
     if (filter.prId) out = out.filter((r) => r.prId === filter.prId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: RfqFilter, page: PageParams): Promise<Page<Rfq>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 
   async addQuote(quote: RfqQuote): Promise<void> {

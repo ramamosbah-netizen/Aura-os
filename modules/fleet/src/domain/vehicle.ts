@@ -11,6 +11,11 @@ export interface Vehicle {
   registrationExpiry: string | null; // YYYY-MM-DD
   status: 'active' | 'maintenance' | 'retired';
   driverEmployeeId: string | null;
+  lastLatitude: number | null;
+  lastLongitude: number | null;
+  lastSpeed: number | null;
+  lastOdometer: number | null;
+  lastTelemetryAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +45,11 @@ export function makeVehicle(input: NewVehicle): Vehicle {
     registrationExpiry: input.registrationExpiry ?? null,
     status: input.status ?? 'active',
     driverEmployeeId: input.driverEmployeeId ?? null,
+    lastLatitude: null,
+    lastLongitude: null,
+    lastSpeed: null,
+    lastOdometer: null,
+    lastTelemetryAt: null,
     createdAt: now,
     updatedAt: now,
   };

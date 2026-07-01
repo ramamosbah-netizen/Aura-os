@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { PurchaseRequest } from './domain/purchase-request';
 import type { PurchaseRequestFilter, PurchaseRequestStore } from './purchase-request-store';
 
@@ -25,5 +26,10 @@ export class InMemoryPurchaseRequestStore implements PurchaseRequestStore {
     if (filter.projectId) out = out.filter((r) => r.projectId === filter.projectId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: PurchaseRequestFilter, page: PageParams): Promise<Page<PurchaseRequest>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

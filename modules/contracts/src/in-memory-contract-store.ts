@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Contract } from './domain/contract';
 import type { ContractFilter, ContractStore } from './contract-store';
@@ -36,5 +37,10 @@ export class InMemoryContractStore implements ContractStore {
     if (filter.tenderId) out = out.filter((c) => c.tenderId === filter.tenderId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: ContractFilter, page: PageParams): Promise<Page<Contract>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

@@ -60,10 +60,27 @@ interface CapaAction {
   updatedAt: string;
 }
 
+interface SafetyTrainingRecord {
+  id: string;
+  tenantId: string;
+  companyId: string | null;
+  workerName: string;
+  workerId: string;
+  inductionDate: string;
+  cardNumber: string | null;
+  cardExpiry: string | null;
+  certifications: string[];
+  status: 'valid' | 'expired';
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Props {
   initialIncidents: HseIncident[];
   initialPermits: PermitToWork[];
   initialCapas: CapaAction[];
+  initialTrainingRecords: SafetyTrainingRecord[];
   projects: Project[];
 }
 
@@ -71,12 +88,14 @@ export default function HseControlClient({
   initialIncidents,
   initialPermits,
   initialCapas,
+  initialTrainingRecords,
   projects,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'incidents' | 'ptws' | 'capas'>('incidents');
+  const [activeTab, setActiveTab] = useState<'incidents' | 'ptws' | 'capas' | 'training'>('incidents');
   const [incidents, setIncidents] = useState<HseIncident[]>(initialIncidents);
   const [permits, setPermits] = useState<PermitToWork[]>(initialPermits);
   const [capas, setCapas] = useState<CapaAction[]>(initialCapas);
+  const [trainingRecords, setTrainingRecords] = useState<SafetyTrainingRecord[]>(initialTrainingRecords);
 
   // General State
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
@@ -100,6 +119,50 @@ export default function HseControlClient({
   const [capaActionRequired, setCapaActionRequired] = useState('');
   const [capaAssignedTo, setCapaAssignedTo] = useState('');
   const [capaDueDate, setCapaDueDate] = useState('');
+
+  // Safety Training Form State
+  const [workerName, setWorkerName] = useState('');
+  const [workerId, setWorkerId] = useState('');
+  const [inductionDate, setInductionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [certificationsInput, setCertificationsInput] = useState('');
+
+  const handleRecordTraining = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workerName.trim() || !workerId.trim() || !inductionDate) return;
+
+    setError(null);
+    try {
+      const certifications = certificationsInput
+        .split(',')
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+
+      const res = await fetch('/api/hse/training', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          workerName,
+          workerId,
+          inductionDate,
+          cardNumber: cardNumber || undefined,
+          cardExpiry: cardExpiry || undefined,
+          certifications,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const newRecord = await res.json();
+      setTrainingRecords([newRecord, ...trainingRecords]);
+      setWorkerName('');
+      setWorkerId('');
+      setCardNumber('');
+      setCardExpiry('');
+      setCertificationsInput('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to record safety training entry');
+    }
+  };
 
   const selectedProjName = projects.find((p) => p.id === selectedProjectId)?.title || null;
 
@@ -256,6 +319,12 @@ export default function HseControlClient({
           style={activeTab === 'capas' ? st.activeTabBtn : st.tabBtn}
         >
           CAPA Corrective Actions
+        </button>
+        <button
+          onClick={() => setActiveTab('training')}
+          style={activeTab === 'training' ? st.activeTabBtn : st.tabBtn}
+        >
+          Safety Training Matrix
         </button>
       </div>
 
@@ -594,6 +663,161 @@ export default function HseControlClient({
                             Mark Completed
                           </button>
                         )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+      )}
+
+      {activeTab === 'training' && (
+        <div>
+          {/* Create Form */}
+          <form onSubmit={handleRecordTraining} style={st.formCard}>
+            <h3 style={st.formTitle}>Record Safety Induction & Certifications</h3>
+            <div style={st.formGrid}>
+              <div style={st.field}>
+                <label style={st.label}>Worker Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ahmed Khan"
+                  value={workerName}
+                  onChange={(e) => setWorkerName(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Worker ID / Passport / Emirates ID</label>
+                <input
+                  type="text"
+                  placeholder="e.g. W-77402"
+                  value={workerId}
+                  onChange={(e) => setWorkerId(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Induction Date</label>
+                <input
+                  type="date"
+                  value={inductionDate}
+                  onChange={(e) => setInductionDate(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>HSE Card Number (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. HSE-2026-904"
+                  value={cardNumber}
+                  onChange={(e) => setCardNumber(e.target.value)}
+                  style={st.input}
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>HSE Card Expiry Date (Optional)</label>
+                <input
+                  type="date"
+                  value={cardExpiry}
+                  onChange={(e) => setCardExpiry(e.target.value)}
+                  style={st.input}
+                />
+              </div>
+              <div style={{ ...st.field, gridColumn: 'span 2' }}>
+                <label style={st.label}>Safety Certifications (Comma separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Work at Height, Confined Space, First Aid, Scaffolding Supervisor"
+                  value={certificationsInput}
+                  onChange={(e) => setCertificationsInput(e.target.value)}
+                  style={st.input}
+                />
+              </div>
+            </div>
+            <button type="submit" style={st.btn}>Record Induction Entry</button>
+          </form>
+
+          {/* List panel */}
+          <section style={st.panel}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Worker Safety Training Matrix</h3>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--muted)', alignSelf: 'center', marginRight: 6 }}>Status Filters:</span>
+                <span style={{
+                  fontSize: 11,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  background: 'rgba(52, 211, 153, 0.1)',
+                  color: '#34d399',
+                  border: '1px solid rgba(52, 211, 153, 0.2)',
+                  fontWeight: 600
+                }}>
+                  Valid: {trainingRecords.filter(r => r.status === 'valid').length}
+                </span>
+                <span style={{
+                  fontSize: 11,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  background: 'rgba(248, 113, 113, 0.1)',
+                  color: '#f87171',
+                  border: '1px solid rgba(248, 113, 113, 0.2)',
+                  fontWeight: 600
+                }}>
+                  Expired: {trainingRecords.filter(r => r.status === 'expired').length}
+                </span>
+              </div>
+            </div>
+
+            {trainingRecords.length === 0 ? (
+              <p style={st.muted}>No safety training records registered yet.</p>
+            ) : (
+              <table style={st.table}>
+                <thead>
+                  <tr>
+                    {['Worker Name', 'Worker ID', 'Induction Date', 'HSE Card No.', 'Card Expiry', 'Certifications', 'Status'].map((h) => (
+                      <th key={h} style={st.th}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {trainingRecords.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ ...st.td, fontWeight: 600, color: '#fff' }}>{r.workerName}</td>
+                      <td style={st.tdCode}>{r.workerId}</td>
+                      <td style={st.tdMuted}>{r.inductionDate}</td>
+                      <td style={st.tdMuted}>{r.cardNumber || 'N/A'}</td>
+                      <td style={st.tdCode}>{r.cardExpiry || 'No Expiry'}</td>
+                      <td style={st.td}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {r.certifications.length === 0 ? (
+                            <span style={{ color: 'var(--muted)', fontSize: 11.5 }}>None</span>
+                          ) : (
+                            r.certifications.map((cert, index) => (
+                              <span key={index} style={{
+                                fontSize: 11,
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                color: 'var(--muted)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 6,
+                                padding: '1px 6px',
+                              }}>
+                                {cert}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td style={st.td}>
+                        <span style={r.status === 'valid' ? st.tagApproved : st.tagOutbound}>
+                          {r.status}
+                        </span>
                       </td>
                     </tr>
                   ))}

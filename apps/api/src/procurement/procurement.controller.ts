@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ApprovalMatrixService, type ApprovalRule } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type PurchaseOrder,
   type PurchaseOrderStatus,
@@ -103,6 +104,19 @@ export class ProcurementController {
     return this.pos.list({ status, projectId, limit: 100 });
   }
 
+  @Get('purchase-orders/paged')
+  pagedPos(
+    @Query('status') status?: string,
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.pos.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, projectId },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('purchase-orders/:id')
   async getPo(@Param('id') id: string): Promise<PurchaseOrder> {
     const found = await this.pos.get(id);
@@ -170,6 +184,19 @@ export class ProcurementController {
     return this.prs.list({ tenantId: ctx.tenantId, status, projectId, limit: 100 });
   }
 
+  @Get('purchase-requests/paged')
+  pagedPrs(
+    @Query('status') status?: string,
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.prs.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, projectId },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('purchase-requests/:id')
   async getPr(@Param('id') id: string): Promise<PurchaseRequest> {
     const found = await this.prs.get(id);
@@ -216,6 +243,18 @@ export class ProcurementController {
   listRfqs(@Query('status') status?: string): Promise<Rfq[]> {
     const ctx = this.tenant.get();
     return this.rfqs.list({ tenantId: ctx.tenantId, status, limit: 100 });
+  }
+
+  @Get('rfqs/paged')
+  pagedRfqs(
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.rfqs.listPaged(
+      { tenantId: this.tenant.get().tenantId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('rfqs/:id')
@@ -288,6 +327,19 @@ export class ProcurementController {
   @Get('suppliers')
   listSuppliers(@Query('status') status?: Supplier['status'], @Query('category') category?: SupplierCategory): Promise<Supplier[]> {
     return this.suppliers.list({ tenantId: this.tenant.get().tenantId, status, category, limit: 200 });
+  }
+
+  @Get('suppliers/paged')
+  pagedSuppliers(
+    @Query('status') status?: Supplier['status'],
+    @Query('category') category?: SupplierCategory,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.suppliers.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, category },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('suppliers/:id')

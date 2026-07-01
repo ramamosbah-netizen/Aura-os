@@ -7,6 +7,7 @@ import {
   InMemoryDelayLogStore,
   InMemoryMaterialConsumptionStore,
   InMemorySiteInstructionStore,
+  InMemoryLabourAllocationStore,
 } from '../in-memory-site-store';
 import { SiteService } from '../site.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -51,6 +52,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         delayLogStore,
         materialStore,
         new InMemorySiteInstructionStore(),
+        new InMemoryLabourAllocationStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -69,6 +71,51 @@ describe('Construction / Site Control Module Bounded Context', () => {
       const submitted = await service.submitDailyReport('t1', null, r.id);
       expect(submitted.status).toBe('submitted');
     });
+
+    it('paginates daily reports correctly', async () => {
+      const dailyReportStore = new InMemoryDailyReportStore();
+      const delayLogStore = new InMemoryDelayLogStore();
+      const materialStore = new InMemoryMaterialConsumptionStore();
+
+      const service = new SiteService(
+        dailyReportStore,
+        delayLogStore,
+        materialStore,
+        new InMemorySiteInstructionStore(),
+        new InMemoryLabourAllocationStore(),
+        mockEvents,
+        mockTx,
+        mockAccess,
+      );
+
+      await service.createDailyReport({
+        tenantId: 't1',
+        projectId: 'p1',
+        date: '2026-06-27',
+        workDescription: 'Poured concrete for foundation slab 3B',
+      });
+      await service.createDailyReport({
+        tenantId: 't1',
+        projectId: 'p1',
+        date: '2026-06-28',
+        workDescription: 'Laying steel mesh',
+      });
+      await service.createDailyReport({
+        tenantId: 't1',
+        projectId: 'p2',
+        date: '2026-06-29',
+        workDescription: 'Formwork inspection',
+      });
+
+      const page1 = await service.listDailyReportsPaged({ tenantId: 't1' }, { limit: 2, offset: 0 });
+      expect(page1.items.length).toBe(2);
+      expect(page1.total).toBe(3);
+      expect(page1.hasMore).toBe(true);
+
+      const pageProject = await service.listDailyReportsPaged({ tenantId: 't1', projectId: 'p2' }, { limit: 10, offset: 0 });
+      expect(pageProject.items.length).toBe(1);
+      expect(pageProject.items[0].projectId).toBe('p2');
+    });
   });
 
   describe('Delay Logs', () => {
@@ -82,6 +129,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         delayLogStore,
         materialStore,
         new InMemorySiteInstructionStore(),
+        new InMemoryLabourAllocationStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -117,6 +165,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         delayLogStore,
         materialStore,
         new InMemorySiteInstructionStore(),
+        new InMemoryLabourAllocationStore(),
         mockEvents,
         mockTx,
         mockAccess,

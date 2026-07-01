@@ -1,6 +1,8 @@
 # AURA OS — Master Due-Diligence · ADDENDUM (Matrices + under-reviewed areas)
 
-**Date:** 2026-07-01 (rev 8) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+**Date:** 2026-07-01 (rev 9) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+
+**rev 9:** AP multi-currency + FX revaluation posting landed (Tier-1 #8 closed). AP invoices carry currency/exchangeRate/baseValue (migration 0096); reval posts unrealized gain/loss to GL (AP credit-normal: rate↑ = loss Dr 5900/Cr 2010, rate↓ = gain Dr 2010/Cr 4900) via `GET/POST /finance/invoices/fx-revaluation[/post]`. Multi-currency (AP/GL) now ✅.
 
 **Rev-7 change:** **gap F (saved views) closed** — SavedViewService + `/views` + `☆ Save view` on lists (migration 0093, `fb54cf9`).
 **Rev-6 (prior):** **gap H (UI Gantt) closed** — `/projects/schedule` renders planned vs baseline vs actual-% bars.
@@ -35,7 +37,7 @@
 | Double-entry GL | ✅ | Financial statements (P&L/BS/CF/TB) | ✅ |
 | Period close | ✅ | Budgeting + vs-actual | ✅ |
 | Revenue recognition (IFRS-15) | ✅ | Cost centres / Profit centres | ✅ |
-| Multi-currency (AR) | ◐ | Multi-currency (AP/GL) | ❌ |
+| Multi-currency (AR) | ✅ | Multi-currency (AP/GL) | ✅ |
 | Intercompany elimination | ❌ | Consolidation | ❌ |
 | AP/AR + aging | ✅ | PDC / Bank guarantees / VAT | ✅ |
 | P2P (PR→RFQ→PO→GRN→3-way) | ✅ | Approval matrix | ✅ |
@@ -106,7 +108,7 @@
 |---|:--:|:--:|:--:|:--:|:--:|
 | GL + statements + period close | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Budget / rev-rec / cost+profit centres | ✅ | ✅ | ✅ | ◐ | ✅ |
-| Multi-currency + consolidation | ✅ | ✅ | ✅ | ✅ | ◐ (AR only) |
+| Multi-currency + consolidation | ✅ | ✅ | ✅ | ✅ | ✅ (AR+AP, FX reval) |
 | Intercompany | ✅ | ✅ | ✅ | ◐ | ✗ |
 | P2P + 3-way + approval matrix | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Inventory valuation | ✅ FIFO/WAC/std | ✅ | ✅ | ✅ | ◐ WAC only |
@@ -179,7 +181,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |
 | F | Saved views / advanced filters | P2 | ◐ — saved views ✅ (`/views`); advanced-filter DSL open |
-| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | ◐ — journal N+1 fixed; APM/load-test/pagination-rollout open |
+| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | ◐ — journal N+1 fixed; pagination live on finance (AP/AR), procurement (PO/PR/RFQ/supplier), inventory (GRN/transfer/stock), crm (lead/opportunity/quotation/account); APM/load-test + remaining modules (projects/contracts/tendering/engineering/subcontracts) open |
 | H | UI Gantt render over the new schedule/baseline data | P2 | ✅ **done** — `/projects/schedule` (planned vs baseline vs actual-%) |
 
 These are **additive** to the master report's P0–P3 list (security/ops P0 still dominate).

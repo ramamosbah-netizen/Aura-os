@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Account } from './domain/account';
 import type { AccountFilter, AccountStore } from './account-store';
@@ -26,5 +27,10 @@ export class InMemoryAccountStore implements AccountStore {
     if (filter.status) out = out.filter((a) => a.status === filter.status);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: AccountFilter, page: PageParams): Promise<Page<Account>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

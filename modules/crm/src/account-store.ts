@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Account } from './domain/account';
 
@@ -18,4 +18,5 @@ export interface AccountStore {
   createWithClient(tx: TxHandle | null, account: Account): Promise<void>;
   get(id: Id): Promise<Account | null>;
   list(filter?: AccountFilter): Promise<Account[]>;
+  listPaged(filter: AccountFilter, page: PageParams): Promise<Page<Account>>;
 }

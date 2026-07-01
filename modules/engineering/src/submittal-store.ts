@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Submittal } from './domain/submittal';
 
@@ -17,6 +17,7 @@ export interface SubmittalStore {
   get(id: Id): Promise<Submittal | null>;
   getByCode(tenantId: Id, projectId: Id, code: string): Promise<Submittal | null>;
   list(filter?: SubmittalFilter): Promise<Submittal[]>;
+  listPaged(filter: SubmittalFilter, page: PageParams): Promise<Page<Submittal>>;
 }
 
 export const SUBMITTAL_STORE = Symbol('SubmittalStore');

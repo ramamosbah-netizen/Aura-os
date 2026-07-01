@@ -1,22 +1,25 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Asset, makeAsset } from './domain/asset';
 import { type DepreciationSchedule, type DepreciationMethod, computeDepreciation } from './domain/depreciation';
 import { type AssetMaintenance, makeAssetMaintenance } from './domain/asset-maintenance';
 import { type AssetInspection, makeAssetInspection } from './domain/asset-inspection';
-import { type AssetStore, type AssetMaintenanceStore, type AssetInspectionStore } from './store.interface';
+import { type AssetDisposal, type NewAssetDisposal, makeAssetDisposal, ASSET_DISPOSAL_EVENT } from './domain/asset-disposal';
+import { type AssetStore, type AssetMaintenanceStore, type AssetInspectionStore, type AssetDisposalStore, type AssetFilter } from './store.interface';
 
 export const ASSET_STORE = Symbol('ASSET_STORE');
 export const ASSET_MAINTENANCE_STORE = Symbol('ASSET_MAINTENANCE_STORE');
 export const ASSET_INSPECTION_STORE = Symbol('ASSET_INSPECTION_STORE');
+export const ASSET_DISPOSAL_STORE = Symbol('ASSET_DISPOSAL_STORE');
 
 export const ASSETS_EVENT = {
   assetCreated: 'assets.created',
   maintenanceScheduled: 'assets.maintenance.scheduled',
   maintenanceCompleted: 'assets.maintenance.completed',
   inspectionRecorded: 'assets.inspection.recorded',
+  assetDisposed: ASSET_DISPOSAL_EVENT.disposed,
 };
 
 @Injectable()
@@ -27,6 +30,7 @@ export class AssetsService {
     @Inject(ASSET_STORE) private readonly assetStore: AssetStore,
     @Inject(ASSET_MAINTENANCE_STORE) private readonly maintenanceStore: AssetMaintenanceStore,
     @Inject(ASSET_INSPECTION_STORE) private readonly inspectionStore: AssetInspectionStore,
+    @Inject(ASSET_DISPOSAL_STORE) private readonly disposalStore: AssetDisposalStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -100,6 +104,52 @@ export class AssetsService {
 
   listAssets(tenantId: string): Promise<Asset[]> {
     return this.assetStore.findByTenant(tenantId);
+  }
+
+  listAssetsPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>> {
+    return this.assetStore.listPaged(filter, page);
+  }
+
+  // ── Disposal ────────────────────────────────────────────────────────────────
+
+  /**
+   * Retire an asset: record the disposal (proceeds, book value → gain/loss), set the asset
+   * status to 'disposed', and emit `assets.asset.disposed` for Finance to post to the GL.
+   */
+  async disposeAsset(actorId: string | null, input: NewAssetDisposal): Promise<AssetDisposal> {
+    const asset = await this.assetStore.findById(input.tenantId, input.assetId);
+    if (!asset) throw new Error(`asset ${input.assetId} not found`);
+    if (asset.status === 'disposed') throw new Error(`asset ${input.assetId} is already disposed`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId ?? asset.companyId) orgPath.push({ level: 'company', id: (input.companyId ?? asset.companyId) as Id });
+      this.access.assert(actorId, { permission: 'assets.asset.dispose', orgPath });
+    }
+
+    const disposal = makeAssetDisposal({ ...input, companyId: input.companyId ?? asset.companyId, assetName: input.assetName ?? asset.name, createdBy: actorId });
+    const disposedAsset: Asset = { ...asset, status: 'disposed', updatedAt: new Date().toISOString() };
+    const event = makeEvent({
+      type: ASSETS_EVENT.assetDisposed,
+      tenantId: disposal.tenantId,
+      companyId: disposal.companyId,
+      actorId,
+      aggregateType: 'assets.asset',
+      aggregateId: disposal.assetId,
+      payload: { assetName: disposal.assetName, method: disposal.method, proceeds: disposal.proceeds, bookValue: disposal.bookValue, gainLoss: disposal.gainLoss },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.disposalStore.save(disposal, handle);
+      await this.assetStore.save(disposedAsset, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Asset disposed: ${disposal.assetName} via ${disposal.method} — proceeds ${disposal.proceeds}, gain/loss ${disposal.gainLoss}`);
+    return disposal;
+  }
+
+  listDisposals(tenantId: string): Promise<AssetDisposal[]> {
+    return this.disposalStore.findByTenant(tenantId);
   }
 
   /** Depreciation schedule + net book value for an asset (uses its cost + purchase date). */

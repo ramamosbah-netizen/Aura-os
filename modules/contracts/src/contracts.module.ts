@@ -11,6 +11,16 @@ import { InMemoryPaymentCertificateStore } from './in-memory-payment-certificate
 import { PostgresPaymentCertificateStore } from './postgres-payment-certificate-store';
 import { PaymentCertificateService } from './payment-certificate.service';
 
+import { CLAUSE_STORE } from './clause-store';
+import { InMemoryClauseStore } from './in-memory-clause-store';
+import { PostgresClauseStore } from './postgres-clause-store';
+import { ClauseService } from './clause.service';
+
+import { OBLIGATION_STORE } from './obligation-store';
+import { InMemoryObligationStore } from './in-memory-obligation-store';
+import { PostgresObligationStore } from './postgres-obligation-store';
+import { ObligationService } from './obligation.service';
+
 /** The Contracts business module — same shape as CRM/Tendering (the module template). */
 @Module({
   imports: [CoreModule],
@@ -29,7 +39,21 @@ import { PaymentCertificateService } from './payment-certificate.service';
         pool ? new PostgresPaymentCertificateStore(pool) : new InMemoryPaymentCertificateStore(),
     },
     PaymentCertificateService,
+    {
+      provide: CLAUSE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresClauseStore(pool) : new InMemoryClauseStore(),
+    },
+    ClauseService,
+    {
+      provide: OBLIGATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresObligationStore(pool) : new InMemoryObligationStore(),
+    },
+    ObligationService,
   ],
-  exports: [ContractService, PaymentCertificateService],
+  exports: [ContractService, PaymentCertificateService, ClauseService, ObligationService],
 })
 export class ContractsModule {}

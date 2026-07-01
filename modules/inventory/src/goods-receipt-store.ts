@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { GoodsReceipt } from './domain/goods-receipt';
 
@@ -19,4 +19,5 @@ export interface GoodsReceiptStore {
   createWithClient(tx: TxHandle | null, grn: GoodsReceipt): Promise<void>;
   get(id: Id): Promise<GoodsReceipt | null>;
   list(filter?: GoodsReceiptFilter): Promise<GoodsReceipt[]>;
+  listPaged(filter: GoodsReceiptFilter, page: PageParams): Promise<Page<GoodsReceipt>>;
 }

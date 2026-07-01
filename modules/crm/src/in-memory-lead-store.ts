@@ -1,4 +1,5 @@
-import type { Id, Lead } from '@aura/shared';
+import type { Id, Lead, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { LeadFilter, LeadStore } from './lead-store';
 
@@ -28,5 +29,10 @@ export class InMemoryLeadStore implements LeadStore {
     if (filter.status) out = out.filter((l) => l.status === filter.status);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: LeadFilter, page: PageParams): Promise<Page<Lead>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

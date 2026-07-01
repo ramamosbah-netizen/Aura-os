@@ -7,6 +7,8 @@ import {
   InMemoryPermitToWorkStore,
   InMemoryCapaActionStore,
   InMemoryToolboxTalkStore,
+  InMemoryRiskAssessmentStore,
+  InMemorySafetyTrainingStore,
 } from '../in-memory-hse-store';
 import { HseService } from '../hse.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -43,7 +45,7 @@ describe('HSE Module Bounded Context', () => {
       const ptwStore = new InMemoryPermitToWorkStore();
       const capaStore = new InMemoryCapaActionStore();
 
-      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), mockEvents, mockTx, mockAccess);
+      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), new InMemoryRiskAssessmentStore(), new InMemorySafetyTrainingStore(), mockEvents, mockTx, mockAccess);
 
       const inc = await service.reportIncident({
         tenantId: 't1',
@@ -67,7 +69,7 @@ describe('HSE Module Bounded Context', () => {
       const ptwStore = new InMemoryPermitToWorkStore();
       const capaStore = new InMemoryCapaActionStore();
 
-      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), mockEvents, mockTx, mockAccess);
+      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), new InMemoryRiskAssessmentStore(), new InMemorySafetyTrainingStore(), mockEvents, mockTx, mockAccess);
 
       const permit = await service.requestPermit({
         tenantId: 't1',
@@ -92,7 +94,7 @@ describe('HSE Module Bounded Context', () => {
       const ptwStore = new InMemoryPermitToWorkStore();
       const capaStore = new InMemoryCapaActionStore();
 
-      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), mockEvents, mockTx, mockAccess);
+      const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), new InMemoryRiskAssessmentStore(), new InMemorySafetyTrainingStore(), mockEvents, mockTx, mockAccess);
 
       const capa = await service.raiseCapa({
         tenantId: 't1',
@@ -108,6 +110,57 @@ describe('HSE Module Bounded Context', () => {
       const completed = await service.completeCapa('t1', null, capa.id);
       expect(completed.status).toBe('completed');
       expect(completed.completedAt).not.toBeNull();
+    });
+  });
+
+  describe('Safety Training Matrix', () => {
+    it('records safety training records and marks expired status correctly', async () => {
+      const incidentStore = new InMemoryHseIncidentStore();
+      const ptwStore = new InMemoryPermitToWorkStore();
+      const capaStore = new InMemoryCapaActionStore();
+      const trainingStore = new InMemorySafetyTrainingStore();
+
+      const service = new HseService(
+        incidentStore,
+        ptwStore,
+        capaStore,
+        new InMemoryToolboxTalkStore(),
+        new InMemoryRiskAssessmentStore(),
+        trainingStore,
+        mockEvents,
+        mockTx,
+        mockAccess,
+      );
+
+      const r1 = await service.recordSafetyTraining({
+        tenantId: 't1',
+        workerName: 'Ahmed Khan',
+        workerId: 'E-AHMED-101',
+        inductionDate: '2026-06-01',
+        cardExpiry: '2027-06-01',
+        certifications: ['Work at Height', 'Confined Space'],
+      });
+
+      expect(r1.status).toBe('valid');
+      expect(r1.certifications).toContain('Work at Height');
+
+      // expired card scenario
+      const r2 = await service.recordSafetyTraining({
+        tenantId: 't1',
+        workerName: 'John Doe',
+        workerId: 'E-JOHN-102',
+        inductionDate: '2025-01-01',
+        cardExpiry: '2025-06-01', // expired already
+      });
+
+      expect(r2.status).toBe('expired');
+
+      const all = await service.listSafetyTraining('t1');
+      expect(all.length).toBe(2);
+
+      const forAhmed = await service.getSafetyTrainingForWorker('t1', 'E-AHMED-101');
+      expect(forAhmed.length).toBe(1);
+      expect(forAhmed[0].workerName).toBe('Ahmed Khan');
     });
   });
 });

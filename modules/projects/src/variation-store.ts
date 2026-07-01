@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { VariationOrder } from './domain/variation';
 
 export const VARIATION_STORE = Symbol('VARIATION_STORE');
@@ -15,4 +15,5 @@ export interface VariationStore {
   update(v: VariationOrder): Promise<void>;
   get(id: Id): Promise<VariationOrder | null>;
   list(filter?: VariationFilter): Promise<VariationOrder[]>;
+  listPaged(filter: VariationFilter, page: PageParams): Promise<Page<VariationOrder>>;
 }

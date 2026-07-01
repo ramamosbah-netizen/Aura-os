@@ -81,4 +81,8 @@ export class QuotationService {
   list(filter?: QuotationFilter): Promise<Quotation[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: QuotationFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

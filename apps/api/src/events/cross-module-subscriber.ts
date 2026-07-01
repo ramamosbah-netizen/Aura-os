@@ -473,6 +473,120 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Subcontract: claim certified → auto-draft AP invoice ─────────────
+    this.bus.subscribe('subcontracts.claim.statusChanged', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        if (p.status !== 'certified') return;
+
+        const subcontractor = (p.subcontractor as string) ?? 'Subcontractor';
+        const claimNumber = p.claimNumber as number;
+        const netCertifiedValue = Number(p.netCertifiedValue) || 0;
+        const subcontractId = p.subcontractId as string;
+        const subcontractTitle = (p.subcontractTitle as string) ?? null;
+        const projectId = (p.projectId as string) ?? null;
+        const projectName = (p.projectName as string) ?? null;
+
+        if (netCertifiedValue <= 0) {
+          this.logger.log(`↩ claim.certified → net value is ${netCertifiedValue}, skipping AP invoice`);
+          return;
+        }
+
+        const idempotencyKey = `ap-subcon-claim:${e.aggregateId}`;
+
+        await this.supplierInvoices.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          title: `Subcontractor Claim #${claimNumber} — ${subcontractor}${subcontractTitle ? ` (${subcontractTitle})` : ''}`,
+          supplierName: subcontractor,
+          projectId,
+          projectName,
+          value: netCertifiedValue,
+        }, idempotencyKey);
+
+        this.logger.log(`⚡ claim.certified → auto-drafted AP invoice for ${subcontractor} claim #${claimNumber}: $${netCertifiedValue}`);
+      } catch (err) {
+        this.logger.error(`Failed to auto-draft AP invoice from claim.certified: ${err}`);
+      }
+    });
+
+    // ── Asset: asset disposed → post disposal entry to General Ledger ─────
+    this.bus.subscribe('assets.asset.disposed', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const proceeds = Number(p.proceeds) || 0;
+        const bookValue = Number(p.bookValue) || 0;
+        const gainLoss = Number(p.gainLoss) || 0;
+        const assetName = (p.assetName as string) ?? 'Asset';
+
+        const fixedAssets = await this.ensureAccount(e.tenantId, '1500', 'Fixed Assets', 'asset');
+        const lossAcc = await this.ensureAccount(e.tenantId, '5920', 'Loss on Asset Disposal', 'expense');
+        const gainAcc = await this.ensureAccount(e.tenantId, '4920', 'Gain on Asset Disposal', 'revenue');
+
+        const ref = `DISP-${e.aggregateId.slice(0, 8)}`;
+        const existing = await this.journals.list({ tenantId: e.tenantId, reference: ref });
+        if (existing.length > 0) {
+          this.logger.log(`↩ asset.disposed → GL journal ${ref} already exists, skipping`);
+          return;
+        }
+
+        const lines: any[] = [];
+
+        // 1. Credit Fixed Assets for the bookValue (writing off the remaining book value)
+        lines.push({
+          accountId: fixedAssets.id,
+          accountCode: fixedAssets.code,
+          accountName: fixedAssets.name,
+          debit: 0,
+          credit: bookValue,
+        });
+
+        // 2. Debit Bank/Cash if there are proceeds
+        if (proceeds > 0) {
+          const bank = await this.ensureAccount(e.tenantId, '1010', 'Main Bank Account', 'asset');
+          lines.push({
+            accountId: bank.id,
+            accountCode: bank.code,
+            accountName: bank.name,
+            debit: proceeds,
+            credit: 0,
+          });
+        }
+
+        // 3. Debit Loss or Credit Gain
+        if (gainLoss < 0) {
+          lines.push({
+            accountId: lossAcc.id,
+            accountCode: lossAcc.code,
+            accountName: lossAcc.name,
+            debit: Math.abs(gainLoss),
+            credit: 0,
+          });
+        } else if (gainLoss > 0) {
+          lines.push({
+            accountId: gainAcc.id,
+            accountCode: gainAcc.code,
+            accountName: gainAcc.name,
+            debit: 0,
+            credit: gainLoss,
+          });
+        }
+
+        await this.journals.post({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          reference: ref,
+          description: `Asset disposal: ${assetName} via ${p.method ?? 'Disposal'}`,
+          lines,
+        });
+
+        this.logger.log(`⚡ asset.disposed → posted GL ${ref} for ${assetName} (proceeds: ${proceeds}, bookValue: ${bookValue}, gainLoss: ${gainLoss})`);
+      } catch (err) {
+        this.logger.error(`Failed to post asset disposal GL from asset.disposed: ${err}`);
+      }
+    });
+
     this.logger.log('Cross-module event subscribers registered (CRM → Tender → Contract → Project deal chain + operate loop)');
   }
 }
+

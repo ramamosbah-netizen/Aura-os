@@ -89,4 +89,8 @@ export class CloseoutService {
   list(filter?: CloseoutFilter): Promise<ProjectCloseout[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: CloseoutFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

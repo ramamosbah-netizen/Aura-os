@@ -1,4 +1,4 @@
-import type { Id, Lead, LeadStatus } from '@aura/shared';
+import type { Id, Lead, LeadStatus, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 
 export const CRM_LEAD_STORE = Symbol('CRM_LEAD_STORE');
@@ -15,4 +15,5 @@ export interface LeadStore {
   update(lead: Lead): Promise<void>;
   get(id: Id): Promise<Lead | null>;
   list(filter?: LeadFilter): Promise<Lead[]>;
+  listPaged(filter: LeadFilter, page: PageParams): Promise<Page<Lead>>;
 }

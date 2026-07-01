@@ -94,6 +94,10 @@ export class VariationService {
     return this.store.list(filter);
   }
 
+  listPaged(filter: VariationFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
+
   /** Project variation register + revised contract value (original + approved variations). */
   async getProjectSummary(
     tenantId: Id,

@@ -60,11 +60,36 @@ interface Snag {
   updatedAt: string;
 }
 
+interface ChecklistItem {
+  question: string;
+  standard: string;
+  status: 'pending' | 'compliant' | 'non_compliant' | 'not_applicable';
+  findings: string | null;
+  ncrId: string | null;
+}
+
+interface AuditSchedule {
+  id: string;
+  tenantId: string;
+  companyId: string | null;
+  projectId: string;
+  projectName: string | null;
+  auditNumber: string;
+  auditType: string;
+  scheduledDate: string;
+  auditorName: string;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  checklist: ChecklistItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Props {
   initialNcrs: Ncr[];
   initialInspections: InspectionRequest[];
   initialSnags: Snag[];
   projects: Project[];
+  initialAudits: AuditSchedule[];
 }
 
 export default function QualityControlClient({
@@ -72,15 +97,24 @@ export default function QualityControlClient({
   initialInspections,
   initialSnags,
   projects,
+  initialAudits,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'ncrs' | 'irs' | 'snags'>('ncrs');
+  const [activeTab, setActiveTab] = useState<'ncrs' | 'irs' | 'snags' | 'audits'>('ncrs');
   const [ncrs, setNcrs] = useState<Ncr[]>(initialNcrs);
   const [inspections, setInspections] = useState<InspectionRequest[]>(initialInspections);
   const [snags, setSnags] = useState<Snag[]>(initialSnags);
+  const [audits, setAudits] = useState<AuditSchedule[]>(initialAudits);
+  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
 
   // General State
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
   const [error, setError] = useState<string | null>(null);
+
+  // Audit Form State
+  const [auditNumber, setAuditNumber] = useState('');
+  const [auditType, setAuditType] = useState('ISO 9001:2015');
+  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0]);
+  const [auditorName, setAuditorName] = useState('');
 
   // NCR Form State
   const [ncrNumber, setNcrNumber] = useState('');
@@ -106,6 +140,113 @@ export default function QualityControlClient({
   const [commentsInput, setCommentsInput] = useState<{ [id: string]: string }>({});
 
   const selectedProjName = projects.find((p) => p.id === selectedProjectId)?.title || null;
+
+  const handleScheduleAudit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auditNumber.trim() || !auditType.trim() || !scheduledDate || !auditorName.trim()) return;
+
+    setError(null);
+    try {
+      const res = await fetch('/api/quality/audits', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          projectName: selectedProjName,
+          auditNumber,
+          auditType,
+          scheduledDate,
+          auditorName,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const newAudit = await res.json();
+      setAudits([newAudit, ...audits]);
+      setAuditNumber('');
+      setAuditorName('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to schedule audit');
+    }
+  };
+
+  const handleUpdateChecklistStatus = async (
+    auditId: string,
+    itemIndex: number,
+    status: ChecklistItem['status'],
+    findings?: string | null,
+  ) => {
+    const audit = audits.find((a) => a.id === auditId);
+    if (!audit) return;
+
+    const newChecklist = audit.checklist.map((item, idx) => {
+      if (idx === itemIndex) {
+        return {
+          ...item,
+          status,
+          findings: findings !== undefined ? findings : item.findings,
+        };
+      }
+      return item;
+    });
+
+    setError(null);
+    try {
+      const res = await fetch(`/api/quality/audits/${auditId}/checklist`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          checklist: newChecklist,
+          status: 'in_progress',
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      setAudits(audits.map((a) => (a.id === auditId ? updated : a)));
+    } catch (err: any) {
+      setError(err.message || 'Failed to update checklist item');
+    }
+  };
+
+  const handleCompleteAudit = async (auditId: string) => {
+    const audit = audits.find((a) => a.id === auditId);
+    if (!audit) return;
+    setError(null);
+    try {
+      const res = await fetch(`/api/quality/audits/${auditId}/checklist`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          checklist: audit.checklist,
+          status: 'completed',
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      setAudits(audits.map((a) => (a.id === auditId ? updated : a)));
+    } catch (err: any) {
+      setError(err.message || 'Failed to complete audit');
+    }
+  };
+
+  const handleGenerateNcr = async (auditId: string, itemIndex: number) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/quality/audits/${auditId}/checklist/${itemIndex}/ncr`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const ncr = await res.json();
+      setNcrs([ncr, ...ncrs]);
+
+      const auditRes = await fetch(`/api/quality/audits/${auditId}`);
+      if (auditRes.ok) {
+        const updatedAudit = await auditRes.json();
+        setAudits(audits.map((a) => (a.id === auditId ? updatedAudit : a)));
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate NCR ticket');
+    }
+  };
 
   const handleRaiseNcr = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -282,6 +423,12 @@ export default function QualityControlClient({
           style={activeTab === 'snags' ? st.activeTabBtn : st.tabBtn}
         >
           Snagging & Punch List
+        </button>
+        <button
+          onClick={() => setActiveTab('audits')}
+          style={activeTab === 'audits' ? st.activeTabBtn : st.tabBtn}
+        >
+          ISO Checklist Audits
         </button>
       </div>
 
@@ -688,6 +835,240 @@ export default function QualityControlClient({
           </section>
         </div>
       )}
+
+      {activeTab === 'audits' && (
+        <div>
+          {/* Schedule ISO Audit Form */}
+          <form onSubmit={handleScheduleAudit} style={st.formCard}>
+            <h3 style={st.formTitle}>Schedule ISO Checklist Audit</h3>
+            <div style={st.formGrid}>
+              <div style={st.field}>
+                <label style={st.label}>Project</label>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  style={st.select}
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Audit Reference Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g. AUD-9001-002"
+                  value={auditNumber}
+                  onChange={(e) => setAuditNumber(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Audit Type / Standard</label>
+                <select
+                  value={auditType}
+                  onChange={(e) => setAuditType(e.target.value)}
+                  style={st.select}
+                >
+                  <option value="ISO 9001:2015">ISO 9001:2015 (Quality Management)</option>
+                  <option value="ISO 14001:2015">ISO 14001:2015 (Environmental)</option>
+                  <option value="ISO 45001:2018">ISO 45001:2018 (Safety Management)</option>
+                  <option value="Internal HSE">Internal HSE Checklist</option>
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Scheduled Date</label>
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={{ ...st.field, gridColumn: 'span 2' }}>
+                <label style={st.label}>Lead Auditor Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Johnathan Smith, Quality Lead"
+                  value={auditorName}
+                  onChange={(e) => setAuditorName(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+            </div>
+            <button type="submit" style={st.btn}>Schedule Audit</button>
+          </form>
+
+          {/* Audits Ledger */}
+          <section style={{ ...st.panel, marginBottom: 24 }}>
+            <h3 style={st.panelTitle}>Audit Schedules Ledger</h3>
+            {audits.length === 0 ? (
+              <p style={st.muted}>No scheduled audits recorded yet.</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={st.table}>
+                  <thead>
+                    <tr>
+                      {['Audit #', 'Standard', 'Project', 'Scheduled Date', 'Auditor', 'Status', 'Actions'].map((h) => (
+                        <th key={h} style={st.th}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {audits.map((a) => (
+                      <tr key={a.id} style={{ background: selectedAuditId === a.id ? 'rgba(255, 255, 255, 0.03)' : 'transparent' }}>
+                        <td style={st.tdCode}>{a.auditNumber}</td>
+                        <td style={st.tdBold}>{a.auditType}</td>
+                        <td style={st.tdMuted}>{a.projectName || '—'}</td>
+                        <td style={st.tdMuted}>{a.scheduledDate}</td>
+                        <td style={st.td}>{a.auditorName}</td>
+                        <td style={st.td}>
+                          <span style={
+                            a.status === 'completed' ? st.tagApproved :
+                            a.status === 'in_progress' ? st.tagActive :
+                            a.status === 'cancelled' ? st.tagOutbound : st.tagPending
+                          }>
+                            {a.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td style={st.td}>
+                          <button
+                            onClick={() => setSelectedAuditId(a.id)}
+                            style={{ ...st.btnAction, marginRight: 6 }}
+                          >
+                            Inspect Checklist
+                          </button>
+                          {a.status !== 'completed' && a.status !== 'cancelled' && (
+                            <button
+                              onClick={() => handleCompleteAudit(a.id)}
+                              style={st.btnApprove}
+                            >
+                              Complete Audit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Checklist Inspection Section */}
+          {selectedAuditId && (() => {
+            const audit = audits.find((a) => a.id === selectedAuditId);
+            if (!audit) return null;
+            return (
+              <section style={st.panel}>
+                <h3 style={st.panelTitle}>
+                  ISO Checklist Verification: {audit.auditNumber} ({audit.auditType})
+                </h3>
+                <p style={{ ...st.muted, marginBottom: 20 }}>
+                  Review standard clauses and log compliance assessments below.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {audit.checklist.map((item, index) => {
+                    const matchedNcr = ncrs.find((n) => n.id === item.ncrId);
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          background: 'var(--panel-2)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 10,
+                          padding: 16,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                          <div>
+                            <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>
+                              {item.standard}
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>
+                              {item.question}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {(['compliant', 'non_compliant', 'not_applicable'] as const).map((s) => (
+                              <button
+                                key={s}
+                                disabled={audit.status === 'completed'}
+                                onClick={() => handleUpdateChecklistStatus(audit.id, index, s)}
+                                style={{
+                                  padding: '4px 8px',
+                                  borderRadius: 6,
+                                  border: item.status === s ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                  background: item.status === s ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+                                  color: item.status === s ? '#38bdf8' : 'var(--muted)',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {s.replace('_', ' ')}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Findings / Notes */}
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            placeholder="Auditor findings / compliance remarks..."
+                            disabled={audit.status === 'completed'}
+                            value={item.findings || ''}
+                            onChange={(e) => {
+                              const newChecklist = audit.checklist.map((c, i) => {
+                                if (i === index) return { ...c, findings: e.target.value };
+                                return c;
+                              });
+                              setAudits(audits.map((a) => (a.id === audit.id ? { ...a, checklist: newChecklist } : a)));
+                            }}
+                            onBlur={(e) => handleUpdateChecklistStatus(audit.id, index, item.status, e.target.value)}
+                            style={{ ...st.input, flex: 1, padding: '6px 10px' }}
+                          />
+
+                          {/* NCR Linkage */}
+                          {item.status === 'non_compliant' && (
+                            <div>
+                              {item.ncrId ? (
+                                <span style={{ ...st.tagOutbound, padding: '6px 12px', fontSize: 12, display: 'inline-block' }}>
+                                  NCR Link: {matchedNcr ? matchedNcr.ncrNumber : 'Associated'}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={audit.status === 'completed'}
+                                  onClick={() => handleGenerateNcr(audit.id, index)}
+                                  style={{ ...st.btnReject, padding: '7px 12px' }}
+                                >
+                                  🚨 Generate NCR Ticket
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }
@@ -823,6 +1204,7 @@ const st = {
     borderBottom: '1px solid var(--border)',
   } as CSSProperties,
   td: { padding: '11px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  tdBold: { padding: '11px 12px', borderBottom: '1px solid var(--border)', fontWeight: 600 } as CSSProperties,
   tdCode: { padding: '11px 12px', borderBottom: '1px solid var(--border)', fontFamily: 'monospace', fontWeight: 600 } as CSSProperties,
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
   tagApproved: {

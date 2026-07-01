@@ -81,4 +81,56 @@ describe('Procurement Full Cycle', () => {
       expect(pos[0].status).toBe('draft');
     });
   });
+
+  describe('Quality Gate — MAR rejection blocks PO issuance', () => {
+    it('blocks PO issuance when the supplier has a rejected MAR on the project', async () => {
+      const poStore = new InMemoryPurchaseOrderStore();
+      const qualityGate = {
+        checkMaterialApprovalGate: async (_t: string, _p: string, supplier: string) => {
+          if (supplier === 'Blocked Supplier Co') {
+            return { passed: false, reason: 'Supplier "Blocked Supplier Co" has 1 rejected Material Approval Request(s) on this project: MAR-001' };
+          }
+          return { passed: true };
+        },
+      };
+
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore(), qualityGate);
+      poService.onModuleInit();
+
+      const po = await poService.create({
+        tenantId: 't1',
+        title: 'Rebar Supply',
+        supplierName: 'Blocked Supplier Co',
+        projectId: 'proj-1',
+        projectName: 'Marina Tower',
+        value: 50,
+      });
+
+      await expect(
+        poService.changeStatus(po.id, 'issued'),
+      ).rejects.toThrow('Quality gate blocked PO issuance');
+    });
+
+    it('allows PO issuance when the supplier has no rejected MARs', async () => {
+      const poStore = new InMemoryPurchaseOrderStore();
+      const qualityGate = {
+        checkMaterialApprovalGate: async () => ({ passed: true }),
+      };
+
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore(), qualityGate);
+      poService.onModuleInit();
+
+      const po = await poService.create({
+        tenantId: 't1',
+        title: 'Safe Rebar Supply',
+        supplierName: 'Approved Supplier Co',
+        projectId: 'proj-1',
+        projectName: 'Marina Tower',
+        value: 50,
+      });
+
+      const issued = await poService.changeStatus(po.id, 'issued');
+      expect(issued.status).toBe('issued');
+    });
+  });
 });

@@ -7,6 +7,7 @@ import {
   DELAY_LOG_STORE,
   MATERIAL_CONSUMPTION_STORE,
   SITE_INSTRUCTION_STORE,
+  LABOUR_ALLOCATION_STORE,
   SiteService,
 } from './site.service';
 
@@ -15,6 +16,7 @@ import {
   InMemoryDelayLogStore,
   InMemoryMaterialConsumptionStore,
   InMemorySiteInstructionStore,
+  InMemoryLabourAllocationStore,
 } from './in-memory-site-store';
 
 import {
@@ -22,6 +24,7 @@ import {
   PostgresDelayLogStore,
   PostgresMaterialConsumptionStore,
   PostgresSiteInstructionStore,
+  PostgresLabourAllocationStore,
 } from './postgres-site-store';
 
 @Module({
@@ -50,6 +53,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresSiteInstructionStore(pool) : new InMemorySiteInstructionStore(),
+    },
+    {
+      provide: LABOUR_ALLOCATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresLabourAllocationStore(pool) : new InMemoryLabourAllocationStore(),
     },
     SiteService,
   ],

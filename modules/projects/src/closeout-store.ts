@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { ProjectCloseout } from './domain/closeout';
 
 export const CLOSEOUT_STORE = Symbol('CLOSEOUT_STORE');
@@ -16,4 +16,5 @@ export interface CloseoutStore {
   get(id: Id): Promise<ProjectCloseout | null>;
   getByProject(tenantId: Id, projectId: Id): Promise<ProjectCloseout | null>;
   list(filter?: CloseoutFilter): Promise<ProjectCloseout[]>;
+  listPaged(filter: CloseoutFilter, page: PageParams): Promise<Page<ProjectCloseout>>;
 }

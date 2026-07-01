@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
@@ -6,6 +6,12 @@ import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
 import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
 import { isApproved } from './domain/supplier';
+
+/** Optional quality gate — injected when the Quality module is loaded. */
+export const QUALITY_GATE = Symbol('QUALITY_GATE');
+export interface QualityGate {
+  checkMaterialApprovalGate(tenantId: string, projectId: string, supplierName: string): Promise<{ passed: boolean; reason?: string }>;
+}
 
 const CREATE_PO = 'procurement.po.create';
 
@@ -30,6 +36,7 @@ export class PurchaseOrderService implements OnModuleInit {
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
     @Inject(SUPPLIER_STORE) private readonly suppliers: SupplierStore,
+    @Optional() @Inject(QUALITY_GATE) private readonly qualityGate?: QualityGate,
   ) {}
 
   onModuleInit(): void {
@@ -139,6 +146,14 @@ export class PurchaseOrderService implements OnModuleInit {
       throw new Error(`PO ${existing.reference ?? id} (value ${existing.value}) requires approval before it can be issued`);
     }
 
+    // Quality gate: reject issuance if the supplier has rejected MARs on the same project.
+    if (status === 'issued' && this.qualityGate && existing.projectId && existing.supplierName) {
+      const gate = await this.qualityGate.checkMaterialApprovalGate(existing.tenantId, existing.projectId, existing.supplierName);
+      if (!gate.passed) {
+        throw new Error(`Quality gate blocked PO issuance: ${gate.reason}`);
+      }
+    }
+
     const updated: PurchaseOrder = { ...existing, status };
 
     let eventType: string = PROCUREMENT_EVENT.poUpdated;
@@ -208,5 +223,9 @@ export class PurchaseOrderService implements OnModuleInit {
 
   list(filter?: PurchaseOrderFilter): Promise<PurchaseOrder[]> {
     return this.store.list(filter);
+  }
+
+  listPaged(filter: PurchaseOrderFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
   }
 }

@@ -5,6 +5,8 @@ import {
   type DelayLog,
   type MaterialConsumption,
   type SiteInstruction,
+  type LabourAllocation,
+  type TradeManHours,
   SiteService,
 } from '@aura/site';
 
@@ -201,5 +203,40 @@ export class SiteController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // ── Labour allocation (manpower by trade) ───────────────────────────────────
+
+  @Post('labour')
+  createLabour(
+    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; subcontractorName?: string; notes?: string },
+  ): Promise<LabourAllocation> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.trade?.trim()) throw new BadRequestException('trade is required');
+    if (!dto?.date) throw new BadRequestException('date is required');
+    const ctx = this.tenant.get();
+    return this.siteService.createLabourAllocation({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? undefined,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      date: dto.date,
+      trade: dto.trade,
+      headcount: Number(dto.headcount) || 0,
+      hours: Number(dto.hours) || 0,
+      subcontractorName: dto.subcontractorName,
+      notes: dto.notes,
+      createdBy: ctx.actorId ?? undefined,
+    });
+  }
+
+  @Get('labour')
+  listLabour(): Promise<LabourAllocation[]> {
+    return this.siteService.listLabourAllocations(this.tenant.get().tenantId);
+  }
+
+  @Get('labour/by-trade/:projectId')
+  labourByTrade(@Param('projectId') projectId: string): Promise<TradeManHours[]> {
+    return this.siteService.labourByTrade(this.tenant.get().tenantId, projectId);
   }
 }

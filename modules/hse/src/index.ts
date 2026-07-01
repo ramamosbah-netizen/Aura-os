@@ -2,6 +2,8 @@ export * from './domain/hse-incident';
 export * from './domain/permit-to-work';
 export * from './domain/capa-action';
 export * from './domain/toolbox-talk';
+export * from './domain/risk-assessment';
+export * from './domain/safety-training';
 export * from './hse.service';
 export * from './hse.module';
 export * from './store.interface';

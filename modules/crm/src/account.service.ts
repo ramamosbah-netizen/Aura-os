@@ -79,4 +79,8 @@ export class AccountService implements OnModuleInit {
   list(filter?: AccountFilter): Promise<Account[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: AccountFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

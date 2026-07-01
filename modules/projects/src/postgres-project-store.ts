@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Project } from './domain/project';
 import type { ProjectFilter, ProjectStore } from './project-store';
@@ -91,5 +92,27 @@ export class PostgresProjectStore implements ProjectStore {
       params,
     );
     return res.rows.map(rowToProject);
+  }
+
+  async listPaged(filter: ProjectFilter, page: PageParams): Promise<Page<Project>> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
+    };
+    add('tenant_id', filter.tenantId);
+    add('status', filter.status);
+    add('account_id', filter.accountId);
+    add('contract_id', filter.contractId);
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_projects_projects ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_projects_projects ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToProject), total, page);
   }
 }

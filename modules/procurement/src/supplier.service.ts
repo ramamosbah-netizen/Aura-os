@@ -69,4 +69,8 @@ export class SupplierService {
   list(filter?: SupplierFilter): Promise<Supplier[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: SupplierFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

@@ -8,6 +8,7 @@ import {
   InMemoryMaintenanceStore,
   InMemoryTrafficFineStore,
   InMemorySalikChargeStore,
+  InMemoryTelemetryStore,
 } from '../in-memory-fleet-store';
 import { FleetService } from '../fleet.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -18,6 +19,7 @@ const mockAccess = {
 
 const mockEvents = {
   appendWithClient: async () => [],
+  append: async () => [],
 } as unknown as EventStore;
 
 const mockTx: TxRunner = {
@@ -46,7 +48,7 @@ describe('Fleet Bounded Context', () => {
       const fuelLogStore = new InMemoryFuelLogStore();
       const maintenanceStore = new InMemoryMaintenanceStore();
 
-      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), mockEvents, mockTx, mockAccess);
+      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), new InMemoryTelemetryStore(), mockEvents, mockTx, mockAccess);
 
       const vehicle = await service.createVehicle(null, {
         tenantId: 't1',
@@ -68,6 +70,45 @@ describe('Fleet Bounded Context', () => {
       const afterDelete = await service.listVehicles('t1');
       expect(afterDelete.length).toBe(0);
     });
+
+    it('paginates vehicle list correctly', async () => {
+      const vehicleStore = new InMemoryVehicleStore();
+      const fuelLogStore = new InMemoryFuelLogStore();
+      const maintenanceStore = new InMemoryMaintenanceStore();
+
+      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), new InMemoryTelemetryStore(), mockEvents, mockTx, mockAccess);
+
+      await service.createVehicle(null, {
+        tenantId: 't1',
+        make: 'Toyota',
+        model: 'Hilux',
+        year: 2024,
+        plateNumber: 'dxb-1',
+      });
+      await service.createVehicle(null, {
+        tenantId: 't1',
+        make: 'Toyota',
+        model: 'Camry',
+        year: 2023,
+        plateNumber: 'dxb-2',
+      });
+      await service.createVehicle(null, {
+        tenantId: 't1',
+        make: 'Nissan',
+        model: 'Patrol',
+        year: 2025,
+        plateNumber: 'dxb-3',
+      });
+
+      const page1 = await service.listVehiclesPaged({ tenantId: 't1' }, { limit: 2, offset: 0 });
+      expect(page1.items.length).toBe(2);
+      expect(page1.total).toBe(3);
+      expect(page1.hasMore).toBe(true);
+
+      const pageMake = await service.listVehiclesPaged({ tenantId: 't1', make: 'Toyota' }, { limit: 10, offset: 0 });
+      expect(pageMake.items.length).toBe(2);
+      expect(pageMake.items.every(item => item.make === 'Toyota')).toBe(true);
+    });
   });
 
   describe('Fuel Logging', () => {
@@ -76,7 +117,7 @@ describe('Fleet Bounded Context', () => {
       const fuelLogStore = new InMemoryFuelLogStore();
       const maintenanceStore = new InMemoryMaintenanceStore();
 
-      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), mockEvents, mockTx, mockAccess);
+      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), new InMemoryTelemetryStore(), mockEvents, mockTx, mockAccess);
 
       const log = await service.logFuel(null, {
         tenantId: 't1',
@@ -102,7 +143,7 @@ describe('Fleet Bounded Context', () => {
       const fuelLogStore = new InMemoryFuelLogStore();
       const maintenanceStore = new InMemoryMaintenanceStore();
 
-      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), mockEvents, mockTx, mockAccess);
+      const service = new FleetService(vehicleStore, fuelLogStore, maintenanceStore, new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), new InMemoryTelemetryStore(), mockEvents, mockTx, mockAccess);
 
       const record = await service.scheduleMaintenance(null, {
         tenantId: 't1',
@@ -118,6 +159,87 @@ describe('Fleet Bounded Context', () => {
       const completed = await service.completeMaintenance('t1', null, record.id, 650);
       expect(completed.status).toBe('completed');
       expect(completed.cost).toBe(650);
+    });
+  });
+
+  describe('GPS Telematics & Expiry Triggers', () => {
+    it('records telematics data and updates vehicle location state', async () => {
+      const vehicleStore = new InMemoryVehicleStore();
+      const telemetryStore = new InMemoryTelemetryStore();
+      const service = new FleetService(
+        vehicleStore,
+        new InMemoryFuelLogStore(),
+        new InMemoryMaintenanceStore(),
+        new InMemoryTrafficFineStore(),
+        new InMemorySalikChargeStore(),
+        telemetryStore,
+        mockEvents,
+        mockTx,
+        mockAccess,
+      );
+
+      const vehicle = await service.createVehicle(null, {
+        tenantId: 't1',
+        make: 'Toyota',
+        model: 'Hilux',
+        year: 2024,
+        plateNumber: 'dxb-100',
+      });
+
+      const tel = await service.recordTelemetry('t1', {
+        vehicleId: vehicle.id,
+        latitude: 25.2048,
+        longitude: 55.2708,
+        speed: 80,
+        odometer: 15000,
+        recordedAt: '2026-07-01T12:00:00Z',
+      });
+
+      expect(tel.speed).toBe(80);
+
+      const updatedVehicle = await service.getVehicle('t1', vehicle.id);
+      expect(updatedVehicle?.lastLatitude).toBe(25.2048);
+      expect(updatedVehicle?.lastLongitude).toBe(55.2708);
+      expect(updatedVehicle?.lastSpeed).toBe(80);
+      expect(updatedVehicle?.lastOdometer).toBe(15000);
+      expect(updatedVehicle?.lastTelemetryAt).toBe('2026-07-01T12:00:00Z');
+
+      const logs = await service.getTelemetryForVehicle('t1', vehicle.id);
+      expect(logs.length).toBe(1);
+    });
+
+    it('triggers alerts for expiring Mulkiya registration within 30 days', async () => {
+      const vehicleStore = new InMemoryVehicleStore();
+      const service = new FleetService(
+        vehicleStore,
+        new InMemoryFuelLogStore(),
+        new InMemoryMaintenanceStore(),
+        new InMemoryTrafficFineStore(),
+        new InMemorySalikChargeStore(),
+        new InMemoryTelemetryStore(),
+        mockEvents,
+        mockTx,
+        mockAccess,
+      );
+
+      // expires in 15 days
+      const d = new Date();
+      d.setDate(d.getDate() + 15);
+      const expiryStr = d.toISOString().split('T')[0];
+
+      await service.createVehicle(null, {
+        tenantId: 't1',
+        make: 'Toyota',
+        model: 'Hilux',
+        year: 2024,
+        plateNumber: 'dxb-expires',
+        registrationExpiry: expiryStr,
+      });
+
+      const triggered = await service.checkRegistrationsAndTriggerRenewals('t1');
+      expect(triggered.length).toBe(1);
+      expect(triggered[0].plateNumber).toBe('DXB-EXPIRES');
+      expect(triggered[0].daysRemaining).toBeLessThanOrEqual(15);
     });
   });
 });

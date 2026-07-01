@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { PaymentCertificate } from './domain/payment-certificate';
 
@@ -21,4 +21,5 @@ export interface PaymentCertificateStore {
   updateWithClient(tx: TxHandle | null, cert: PaymentCertificate): Promise<void>;
   get(id: Id): Promise<PaymentCertificate | null>;
   list(filter?: CertificateFilter): Promise<PaymentCertificate[]>;
+  listPaged(filter: CertificateFilter, page: PageParams): Promise<Page<PaymentCertificate>>;
 }

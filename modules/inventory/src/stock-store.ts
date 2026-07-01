@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { StockItem, StockMovement } from './domain/stock';
 
 /** DI token for the stock store. */
@@ -16,6 +16,7 @@ export interface StockStore {
   getItem(id: Id): Promise<StockItem | null>;
   getItemByCode(tenantId: Id, code: string): Promise<StockItem | null>;
   listItems(filter?: StockFilter): Promise<StockItem[]>;
+  listItemsPaged(filter: StockFilter, page: PageParams): Promise<Page<StockItem>>;
   addMovement(movement: StockMovement): Promise<void>;
   listMovements(stockItemId: Id): Promise<StockMovement[]>;
 }

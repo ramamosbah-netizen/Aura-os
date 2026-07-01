@@ -4,7 +4,9 @@ import type { FuelLog } from './domain/fuel-log';
 import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
 import type { SalikCharge } from './domain/salik-charge';
-import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore } from './store.interface';
+import type { VehicleTelemetry } from './domain/telemetry';
+import { type Page, type PageParams, paginate } from '@aura/shared';
+import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore, TelemetryStore, VehicleFilter } from './store.interface';
 
 export class InMemoryVehicleStore implements VehicleStore {
   private items = new Map<string, Vehicle>();
@@ -25,6 +27,24 @@ export class InMemoryVehicleStore implements VehicleStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: VehicleFilter, page: PageParams): Promise<Page<Vehicle>> {
+    let all = Array.from(this.items.values());
+    if (filter.tenantId) {
+      all = all.filter((item) => item.tenantId === filter.tenantId);
+    }
+    if (filter.status) {
+      all = all.filter((item) => item.status === filter.status);
+    }
+    if (filter.make) {
+      all = all.filter((item) => item.make.toLowerCase() === filter.make!.toLowerCase());
+    }
+    if (filter.model) {
+      all = all.filter((item) => item.model.toLowerCase() === filter.model!.toLowerCase());
+    }
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return paginate(all, page);
   }
 
   async delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean> {
@@ -155,5 +175,27 @@ export class InMemorySalikChargeStore implements SalikChargeStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId && item.vehicleId === vehicleId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
+
+export class InMemoryTelemetryStore implements TelemetryStore {
+  private items = new Map<string, VehicleTelemetry>();
+
+  async save(telemetry: VehicleTelemetry, tx?: TxHandle): Promise<VehicleTelemetry> {
+    const copy = { ...telemetry };
+    this.items.set(copy.id, copy);
+    return copy;
+  }
+
+  async findByVehicle(tenantId: string, vehicleId: string): Promise<VehicleTelemetry[]> {
+    return Array.from(this.items.values())
+      .filter((item) => item.tenantId === tenantId && item.vehicleId === vehicleId)
+      .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+  }
+
+  async findByTenant(tenantId: string): Promise<VehicleTelemetry[]> {
+    return Array.from(this.items.values())
+      .filter((item) => item.tenantId === tenantId)
+      .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
   }
 }

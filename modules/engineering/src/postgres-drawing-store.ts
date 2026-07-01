@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Drawing } from './domain/drawing';
 import type { DrawingFilter, DrawingStore } from './drawing-store';
@@ -94,6 +95,16 @@ export class PostgresDrawingStore implements DrawingStore {
     return res.rows.length ? rowToDrawing(res.rows[0]) : null;
   }
 
+  async getLatestByCode(tenantId: Id, projectId: Id, code: string): Promise<Drawing | null> {
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_engineering_drawings 
+       WHERE tenant_id = $1 AND project_id = $2 AND code = $3 
+       ORDER BY created_at DESC LIMIT 1`,
+      [tenantId, projectId, code],
+    );
+    return res.rows.length ? rowToDrawing(res.rows[0]) : null;
+  }
+
   async list(filter: DrawingFilter = {}): Promise<Drawing[]> {
     const where: string[] = [];
     const params: unknown[] = [];
@@ -119,5 +130,26 @@ export class PostgresDrawingStore implements DrawingStore {
       params,
     );
     return res.rows.map(rowToDrawing);
+  }
+
+  async listPaged(filter: DrawingFilter, page: PageParams): Promise<Page<Drawing>> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
+    };
+    add('tenant_id', filter.tenantId);
+    add('project_id', filter.projectId);
+    add('status', filter.status);
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_engineering_drawings ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_engineering_drawings ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToDrawing), total, page);
   }
 }

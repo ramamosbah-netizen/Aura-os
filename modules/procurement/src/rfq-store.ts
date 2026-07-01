@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { Rfq, RfqQuote } from './domain/rfq';
 
 /** DI token for the RFQ store. */
@@ -16,6 +16,7 @@ export interface RfqStore {
   update(rfq: Rfq): Promise<void>;
   get(id: Id): Promise<Rfq | null>;
   list(filter?: RfqFilter): Promise<Rfq[]>;
+  listPaged(filter: RfqFilter, page: PageParams): Promise<Page<Rfq>>;
   addQuote(quote: RfqQuote): Promise<void>;
   updateQuote(quote: RfqQuote): Promise<void>;
   getQuote(id: Id): Promise<RfqQuote | null>;

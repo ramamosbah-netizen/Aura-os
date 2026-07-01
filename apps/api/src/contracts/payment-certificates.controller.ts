@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type CertificateStatus, type PaymentCertificate, PaymentCertificateService } from '@aura/contracts';
 
 interface CreateCertificateDto {
@@ -53,6 +54,19 @@ export class PaymentCertificatesController {
   list(@Query('contractId') contractId?: string, @Query('status') status?: string): Promise<PaymentCertificate[]> {
     const ctx = this.tenant.get();
     return this.certificates.list({ tenantId: ctx.tenantId, contractId, status, limit: 200 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('contractId') contractId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.certificates.listPaged(
+      { tenantId: this.tenant.get().tenantId, contractId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('summary/:contractId')

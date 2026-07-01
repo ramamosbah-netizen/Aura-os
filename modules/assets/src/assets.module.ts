@@ -6,6 +6,7 @@ import {
   ASSET_STORE,
   ASSET_MAINTENANCE_STORE,
   ASSET_INSPECTION_STORE,
+  ASSET_DISPOSAL_STORE,
   AssetsService,
 } from './assets.service';
 
@@ -13,12 +14,14 @@ import {
   InMemoryAssetStore,
   InMemoryAssetMaintenanceStore,
   InMemoryAssetInspectionStore,
+  InMemoryAssetDisposalStore,
 } from './in-memory-assets-store';
 
 import {
   PostgresAssetStore,
   PostgresAssetMaintenanceStore,
   PostgresAssetInspectionStore,
+  PostgresAssetDisposalStore,
 } from './postgres-assets-store';
 
 @Module({
@@ -41,6 +44,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresAssetInspectionStore(pool) : new InMemoryAssetInspectionStore(),
+    },
+    {
+      provide: ASSET_DISPOSAL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresAssetDisposalStore(pool) : new InMemoryAssetDisposalStore(),
     },
     AssetsService,
   ],

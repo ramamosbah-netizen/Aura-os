@@ -8,6 +8,7 @@ import {
   MAINTENANCE_STORE,
   TRAFFIC_FINE_STORE,
   SALIK_CHARGE_STORE,
+  TELEMETRY_STORE,
   FleetService,
 } from './fleet.service';
 
@@ -17,6 +18,7 @@ import {
   InMemoryMaintenanceStore,
   InMemoryTrafficFineStore,
   InMemorySalikChargeStore,
+  InMemoryTelemetryStore,
 } from './in-memory-fleet-store';
 
 import {
@@ -25,6 +27,7 @@ import {
   PostgresMaintenanceStore,
   PostgresTrafficFineStore,
   PostgresSalikChargeStore,
+  PostgresTelemetryStore,
 } from './postgres-fleet-store';
 
 @Module({
@@ -59,6 +62,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresSalikChargeStore(pool) : new InMemorySalikChargeStore(),
+    },
+    {
+      provide: TELEMETRY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTelemetryStore(pool) : new InMemoryTelemetryStore(),
     },
     FleetService,
   ],

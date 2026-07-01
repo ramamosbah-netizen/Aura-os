@@ -3,7 +3,55 @@ import type { TxHandle } from '@aura/core';
 import type { Asset } from './domain/asset';
 import type { AssetMaintenance } from './domain/asset-maintenance';
 import type { AssetInspection } from './domain/asset-inspection';
-import type { AssetStore, AssetMaintenanceStore, AssetInspectionStore } from './store.interface';
+import type { AssetDisposal } from './domain/asset-disposal';
+import type { AssetStore, AssetMaintenanceStore, AssetInspectionStore, AssetDisposalStore } from './store.interface';
+
+export class PostgresAssetDisposalStore implements AssetDisposalStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(d: AssetDisposal, tx?: TxHandle): Promise<void> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_asset_disposals (
+        id, tenant_id, company_id, asset_id, asset_name, disposal_date, method, proceeds, book_value, gain_loss, notes, created_by, created_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      on conflict (id) do update set
+        proceeds = excluded.proceeds, book_value = excluded.book_value, gain_loss = excluded.gain_loss, notes = excluded.notes`,
+      [d.id, d.tenantId, d.companyId, d.assetId, d.assetName, d.disposalDate, d.method, d.proceeds, d.bookValue, d.gainLoss, d.notes, d.createdBy, d.createdAt],
+    );
+  }
+
+  async findById(tenantId: string, id: string): Promise<AssetDisposal | null> {
+    const res = await this.pool.query(
+      `select * from public.aura_asset_disposals where id = $1 and tenant_id = $2`, [id, tenantId]);
+    if (res.rowCount === 0) return null;
+    return this.mapDisposal(res.rows[0]);
+  }
+
+  async findByTenant(tenantId: string): Promise<AssetDisposal[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_asset_disposals where tenant_id = $1 order by disposal_date desc`, [tenantId]);
+    return res.rows.map(this.mapDisposal);
+  }
+
+  private mapDisposal(row: any): AssetDisposal {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      assetId: row.asset_id,
+      assetName: row.asset_name,
+      disposalDate: row.disposal_date instanceof Date ? row.disposal_date.toISOString().split('T')[0] : String(row.disposal_date),
+      method: row.method,
+      proceeds: Number(row.proceeds),
+      bookValue: Number(row.book_value),
+      gainLoss: Number(row.gain_loss),
+      notes: row.notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at.toISOString(),
+    };
+  }
+}
 
 /**
  * Format a `date` column as YYYY-MM-DD using LOCAL parts. node-pg parses `date` to a Date at

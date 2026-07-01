@@ -2,6 +2,7 @@ export * from './domain/asset';
 export * from './domain/depreciation';
 export * from './domain/asset-maintenance';
 export * from './domain/asset-inspection';
+export * from './domain/asset-disposal';
 export * from './store.interface';
 export * from './in-memory-assets-store';
 export * from './postgres-assets-store';

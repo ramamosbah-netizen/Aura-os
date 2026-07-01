@@ -6,6 +6,7 @@ import {
   InMemoryAssetStore,
   InMemoryAssetMaintenanceStore,
   InMemoryAssetInspectionStore,
+  InMemoryAssetDisposalStore,
 } from '../in-memory-assets-store';
 import { AssetsService } from '../assets.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -44,7 +45,7 @@ describe('Assets Bounded Context', () => {
       const maintenanceStore = new InMemoryAssetMaintenanceStore();
       const inspectionStore = new InMemoryAssetInspectionStore();
 
-      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, mockEvents, mockTx, mockAccess);
+      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
 
       const asset = await service.createAsset(null, {
         tenantId: 't1',
@@ -75,7 +76,7 @@ describe('Assets Bounded Context', () => {
       const maintenanceStore = new InMemoryAssetMaintenanceStore();
       const inspectionStore = new InMemoryAssetInspectionStore();
 
-      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, mockEvents, mockTx, mockAccess);
+      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
 
       const m = await service.scheduleMaintenance(null, {
         tenantId: 't1',
@@ -100,7 +101,7 @@ describe('Assets Bounded Context', () => {
       const maintenanceStore = new InMemoryAssetMaintenanceStore();
       const inspectionStore = new InMemoryAssetInspectionStore();
 
-      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, mockEvents, mockTx, mockAccess);
+      const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
 
       const ins = await service.recordInspection(null, {
         tenantId: 't1',

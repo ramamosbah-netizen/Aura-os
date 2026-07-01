@@ -377,7 +377,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Doc-Control | 58 | 84 | 78 | 78 | 55 | 55 | drawing register, distribution matrix |
 | Engineering | 55 | 82 | 76 | 76 | 52 | 45 | MAR/TQ, model viewer, tests |
 | Fleet | 62 | 84 | 80 | 80 | 60 | 60 | Salik/tolls, GPS telematics (fines ✅) |
-| Assets | 60 | 84 | 80 | 80 | 58 | 55 | disposal/GL posting, QR tagging |
+| Assets | 70 | 85 | 84 | 84 | 58 | 60 | QR tagging (disposal + gain/loss + assets.asset.disposed event ✅; GL-posting reactor pending) |
 | AMC | 75 | 82 | 80 | 82 | 55 | 60 | richer PPM UI (Postgres persistence ✅; Finance billing link ✅ via amc.workorder.completed → AR invoice) |
 
 **Session deltas (2026-07-01):** Finance multi-currency (AP+AR) + FX revaluation posting; standard pagination contract (COUNT + LIMIT/OFFSET + `Page` envelope) rolled out to **all transactional lists** — Finance, Procurement, Inventory, CRM, Projects (project/variation/closeout), Contracts (contract/IPC), Tendering, Engineering (drawing/RFI/submittal). Left unpaged by design: WBS/CBS tree nodes, delay-events, and small lookup tables. **#22 ✅ substantially complete** (remaining: subcontracts consolidated store). **#23 ✅** global `ValidationPipe` + `class-validator` installed; finance `CreateInvoiceDto` migrated to a decorated class — remaining interface DTOs migrate incrementally (pipe is a safe no-op until each is decorated). **Both Tier-1 infrastructure items now closed.**

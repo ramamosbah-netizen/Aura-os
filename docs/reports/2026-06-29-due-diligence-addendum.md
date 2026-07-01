@@ -363,7 +363,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Module | Cmp | Arch | DB | API | UI | Tests | Remaining work to reach 100% |
 |---|--:|--:|--:|--:|--:|--:|---|
 | CRM | 88 | 88 | 86 | 90 | 72 | 72 | email integration (MS Graph) — contacts ✅, activities/tasks ✅, pagination ✅ |
-| Tendering | 65 | 85 | 78 | 78 | 60 | 65 | bid scoring, competitor analysis, pagination |
+| Tendering | 74 | 86 | 82 | 84 | 62 | 65 | competitor analysis (bid scoring go/no-go ✅, pagination ✅) |
 | Contracts | 68 | 85 | 80 | 80 | 62 | 65 | clause library, obligations tracking, pagination |
 | Projects | 72 | 86 | 82 | 82 | 70 | 80 | resource levelling, rev-rec, pagination (Gantt ✅) |
 | Procurement | 82 | 88 | 84 | 90 | 72 | 75 | PO↔supplier-master FK, framework agreements (pagination ✅) |
@@ -372,7 +372,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | HR | 74 | 85 | 82 | 82 | 68 | 90 | attendance, org chart, appraisal, WPS file |
 | HSE | 60 | 84 | 80 | 78 | 60 | 55 | risk assessments, audits, training matrix |
 | Quality | 70 | 85 | 84 | 82 | 60 | 60 | audit schedules (calibration register ✅) |
-| Site | 60 | 84 | 80 | 78 | 58 | 55 | labour-by-trade, progress % |
+| Site | 70 | 85 | 84 | 84 | 60 | 60 | progress % (labour-by-trade allocation + man-hour roll-up ✅) |
 | Subcontracts | 68 | 84 | 80 | 80 | 60 | 55 | retention-release UI (back-charges reactor ✅) |
 | Doc-Control | 58 | 84 | 78 | 78 | 55 | 55 | drawing register, distribution matrix |
 | Engineering | 55 | 82 | 76 | 76 | 52 | 45 | MAR/TQ, model viewer, tests |

@@ -295,7 +295,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 7 partial, 8 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 8 partial, 7 open — assurance/CI/hygiene largely deferred with the P0 ops track.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|

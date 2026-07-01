@@ -71,6 +71,7 @@ export const NAV: NavGroup[] = [
       { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
       { label: 'Subcontract Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
       { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
+      { label: 'Finance Dashboard', href: '/finance/dashboard', glyph: '📊', desc: 'Finance — KPIs & charts (aging, P&L, cost centres)' },
       { label: 'Ledger & COA', href: '/finance/ledger', glyph: '◳', desc: 'Finance — double-entry general ledger' },
       { label: 'Financial Statements', href: '/finance/statements', glyph: '▣', desc: 'Finance — P&L, balance sheet, cash flow & trial balance from the GL' },
       { label: 'Period Close', href: '/finance/period-close', glyph: '🔒', desc: 'Finance — lock fiscal months against further journal posting' },

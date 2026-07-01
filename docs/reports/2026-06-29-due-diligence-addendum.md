@@ -364,7 +364,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 |---|--:|--:|--:|--:|--:|--:|---|
 | CRM | 88 | 88 | 86 | 90 | 72 | 72 | email integration (MS Graph) — contacts ✅, activities/tasks ✅, pagination ✅ |
 | Tendering | 74 | 86 | 82 | 84 | 62 | 65 | competitor analysis (bid scoring go/no-go ✅, pagination ✅) |
-| Contracts | 68 | 85 | 80 | 80 | 62 | 65 | clause library, obligations tracking, pagination |
+| Contracts | 82 | 86 | 84 | 88 | 64 | 68 | clause library ✅ + obligation tracking (due-soon/breach feed) ✅ + IPC + pagination ✅ |
 | Projects | 82 | 88 | 82 | 86 | 72 | 85 | revenue recognition (Gantt ✅, pagination ✅, CPM reactive reschedule + resource levelling ✅) |
 | Procurement | 86 | 88 | 84 | 90 | 72 | 78 | PO↔supplier-master FK, framework agreements (pagination ✅; MAR/quality hard-gate on PO issue ✅) |
 | Inventory | 80 | 88 | 84 | 90 | 70 | 75 | valuation UI, reorder auto-PR, barcode (FIFO/WAC + pagination ✅) |

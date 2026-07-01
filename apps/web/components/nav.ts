@@ -27,6 +27,7 @@ export const NAV: NavGroup[] = [
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
       { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Delivery & execution' },
+      { label: 'Projects Dashboard', href: '/projects/dashboard', glyph: '📊', desc: 'Portfolio value & counts by status' },
       { label: 'Variations', href: '/projects/variations', glyph: '◷', desc: 'Change orders & revised contract value' },
       { label: 'Payment Certificates', href: '/contracts/certificates', glyph: '◰', desc: 'Interim payment certificates (IPC) — progress billing & retention' },
     ],
@@ -34,6 +35,7 @@ export const NAV: NavGroup[] = [
   {
     title: 'Operate',
     items: [
+      { label: 'Procurement Dashboard', href: '/procurement/dashboard', glyph: '📊', desc: 'PO spend & counts by status' },
       { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
       { label: 'Purchase requests', href: '/procurement/purchase-requests', glyph: '▤', desc: 'Procurement request & approval' },
       { label: 'RFQs', href: '/procurement/rfqs', glyph: '◷', desc: 'Vendor quotations & bid comparison' },

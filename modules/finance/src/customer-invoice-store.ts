@@ -16,4 +16,6 @@ export interface CustomerInvoiceStore {
   list(filter?: CustomerInvoiceFilter): Promise<CustomerInvoice[]>;
   /** Paged list with total — pushes LIMIT/OFFSET to the source (the pagination contract). */
   listPaged(filter: CustomerInvoiceFilter, page: PageParams): Promise<Page<CustomerInvoice>>;
+  /** Soft-delete / restore (sets or clears deleted_at). */
+  setDeleted(tenantId: string, id: Id, deleted: boolean): Promise<void>;
 }

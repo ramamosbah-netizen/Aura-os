@@ -101,6 +101,9 @@ export class CustomerInvoiceService {
     return this.store.list(filter);
   }
 
+  softDelete(tenantId: Id, id: Id): Promise<void> { return this.store.setDeleted(tenantId, id, true); }
+  restore(tenantId: Id, id: Id): Promise<void> { return this.store.setDeleted(tenantId, id, false); }
+
   listPaged(filter: CustomerInvoiceFilter, page: PageParams) {
     return this.store.listPaged(filter, page);
   }

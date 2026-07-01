@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { parsePageParams, parseCsv } from '@aura/shared';
 import {
@@ -633,6 +633,18 @@ export class FinanceController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  @Delete('customer-invoices/:id')
+  async softDeleteCustomerInvoice(@Param('id') id: string): Promise<{ deleted: string }> {
+    await this.customerInvoices.softDelete(this.tenant.get().tenantId, id);
+    return { deleted: id };
+  }
+
+  @Post('customer-invoices/:id/restore')
+  async restoreCustomerInvoice(@Param('id') id: string): Promise<{ restored: string }> {
+    await this.customerInvoices.restore(this.tenant.get().tenantId, id);
+    return { restored: id };
   }
 
   // ── BANK GUARANTEES / BONDS ──────────────────────────────────────────────

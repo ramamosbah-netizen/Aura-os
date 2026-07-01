@@ -84,6 +84,40 @@ function buildHarness() {
   // Services the reactor depends on but these tests don't exercise.
   const noop = {} as any;
 
+  const mockFinanceAccounts = {
+    getByCode: async (tenantId: string, code: string) => {
+      return { id: `acc-${code}`, code, name: `Account ${code}` };
+    },
+    create: async (input: any) => {
+      return { id: `acc-${input.code}`, code: input.code, name: input.name };
+    },
+  } as any;
+
+  const postedJournals: any[] = [];
+  const mockJournals = {
+    list: async (filter: any) => {
+      return postedJournals.filter(j => j.reference === filter.reference);
+    },
+    post: async (input: any) => {
+      postedJournals.push(input);
+      return { id: 'journal-1', ...input };
+    },
+  } as any;
+
+  const createdApInvoices: any[] = [];
+  const usedIdempotencyKeys = new Set<string>();
+  const mockSupplierInvoices = {
+    create: async (input: any, idempotencyKey?: string) => {
+      if (idempotencyKey && usedIdempotencyKeys.has(idempotencyKey)) {
+        return createdApInvoices.find((i: any) => true); // return first as cached
+      }
+      if (idempotencyKey) usedIdempotencyKeys.add(idempotencyKey);
+      const invoice = { id: `inv-${createdApInvoices.length + 1}`, ...input };
+      createdApInvoices.push(invoice);
+      return invoice;
+    },
+  } as any;
+
   const subscriber = new CrossModuleSubscriber(
     bus,
     contracts,
@@ -96,13 +130,13 @@ function buildHarness() {
     tenders,
     noop, // AccountService (CRM)
     customerInvoices,
-    noop, // InvoiceService (AP)
-    noop, // AccountService (Finance) — GL account resolver
-    noop, // JournalService
+    mockSupplierInvoices, // InvoiceService (AP)
+    mockFinanceAccounts, // AccountService (Finance) — GL account resolver
+    mockJournals, // JournalService
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices };
+  return { bus, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices };
 }
 
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
@@ -225,5 +259,129 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     const invoices = await h.customerInvoices.list({ tenantId });
     expect(invoices).toHaveLength(1);
     expect(invoices[0].customerName).toBe('Acme Developments LLC');
+  });
+
+  it('posts a balanced GL journal entry when an asset is disposed', async () => {
+    const disposalEvent = makeEvent({
+      type: 'assets.asset.disposed',
+      tenantId,
+      companyId: 'company-1',
+      actorId: 'actor-1',
+      aggregateType: 'assets.asset',
+      aggregateId: 'asset-123',
+      payload: {
+        assetName: 'Laser Leveler',
+        method: 'sell',
+        proceeds: 1200,
+        bookValue: 1000,
+        gainLoss: 200,
+      },
+    });
+
+    await h.bus.publish(disposalEvent);
+
+    expect(h.postedJournals).toHaveLength(1);
+    const j = h.postedJournals[0];
+    expect(j.companyId).toBe('company-1');
+    expect(j.reference).toBe('DISP-asset-12');
+    expect(j.description).toContain('Laser Leveler');
+
+    const fixedAssetLine = j.lines.find((l: any) => l.accountCode === '1500');
+    const bankLine = j.lines.find((l: any) => l.accountCode === '1010');
+    const gainLine = j.lines.find((l: any) => l.accountCode === '4920');
+
+    expect(fixedAssetLine.credit).toBe(1000);
+    expect(bankLine.debit).toBe(1200);
+    expect(gainLine.credit).toBe(200);
+  });
+
+  it('posts a balanced GL journal entry with loss when an asset is disposed for less than book value', async () => {
+    const disposalEvent = makeEvent({
+      type: 'assets.asset.disposed',
+      tenantId,
+      companyId: 'company-1',
+      actorId: 'actor-1',
+      aggregateType: 'assets.asset',
+      aggregateId: 'asset-456',
+      payload: {
+        assetName: 'Excavator Model S',
+        method: 'scrap',
+        proceeds: 500,
+        bookValue: 800,
+        gainLoss: -300,
+      },
+    });
+
+    await h.bus.publish(disposalEvent);
+
+    const j = h.postedJournals.find((j: any) => j.reference === 'DISP-asset-45');
+    expect(j).toBeDefined();
+
+    const fixedAssetLine = j!.lines.find((l: any) => l.accountCode === '1500');
+    const bankLine = j!.lines.find((l: any) => l.accountCode === '1010');
+    const lossLine = j!.lines.find((l: any) => l.accountCode === '5920');
+
+    expect(fixedAssetLine.credit).toBe(800);
+    expect(bankLine.debit).toBe(500);
+    expect(lossLine.debit).toBe(300);
+  });
+
+  it('auto-drafts an AP invoice when a subcontract claim is certified', async () => {
+    const claimEvent = makeEvent({
+      type: 'subcontracts.claim.statusChanged',
+      tenantId,
+      companyId: 'company-1',
+      actorId: 'certifier-1',
+      aggregateType: 'subcontracts.claim',
+      aggregateId: 'claim-001',
+      payload: {
+        status: 'certified',
+        claimNumber: 1,
+        netCertifiedValue: 45000,
+        retentionWithheld: 5000,
+        isRetentionRelease: false,
+        retentionReleased: 0,
+        subcontractId: 'sc-abc',
+        subcontractor: 'Al Falah Steel Works',
+        subcontractTitle: 'Structural Steel Package',
+        projectId: 'proj-xyz',
+        projectName: 'Marina Tower',
+      },
+    });
+
+    await h.bus.publish(claimEvent);
+
+    expect(h.createdApInvoices).toHaveLength(1);
+    const inv = h.createdApInvoices[0];
+    expect(inv.supplierName).toBe('Al Falah Steel Works');
+    expect(inv.value).toBe(45000);
+    expect(inv.projectId).toBe('proj-xyz');
+    expect(inv.projectName).toBe('Marina Tower');
+    expect(inv.title).toContain('Al Falah Steel Works');
+    expect(inv.title).toContain('#1');
+  });
+
+  it('is idempotent: re-delivered claim.certified does not duplicate AP invoice', async () => {
+    const claimEvent = makeEvent({
+      type: 'subcontracts.claim.statusChanged',
+      tenantId,
+      companyId: null,
+      actorId: null,
+      aggregateType: 'subcontracts.claim',
+      aggregateId: 'claim-idem',
+      payload: {
+        status: 'certified',
+        claimNumber: 2,
+        netCertifiedValue: 30000,
+        subcontractId: 'sc-def',
+        subcontractor: 'Gulf MEP Ltd',
+      },
+    });
+
+    await h.bus.publish(claimEvent);
+    await h.bus.publish(claimEvent); // re-delivery
+
+    const matching = h.createdApInvoices.filter((i: any) => i.supplierName === 'Gulf MEP Ltd');
+    expect(matching).toHaveLength(1);
   });
 });

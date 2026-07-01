@@ -45,6 +45,11 @@ export class NotificationsSubscriber implements OnModuleInit {
       void raise(e, `Tender won: ${p.title ?? ''}`.trim(), `Tender awarded (value ${p.value ?? 0}) — a contract was drafted downstream.`, 'tendering', 'tendering.tender');
     });
 
-    this.logger.log('Notification subscribers registered (po.approved, ipc.certified, period.closed, tender.awarded)');
+    this.bus.subscribe('fleet.vehicle.registration_expiring', (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      void raise(e, `Mulkiya expiring: ${p.plateNumber ?? ''}`.trim(), `Vehicle ${p.plateNumber ?? ''} registration expires on ${p.registrationExpiry ?? ''} (${p.daysRemaining ?? 0} days remaining). Please schedule renewal.`, 'fleet', 'fleet.vehicle');
+    });
+
+    this.logger.log('Notification subscribers registered (po.approved, ipc.certified, period.closed, tender.awarded, registration.expiring)');
   }
 }

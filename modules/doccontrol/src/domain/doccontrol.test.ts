@@ -4,6 +4,7 @@ import { makeCorrespondence } from './correspondence';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
+import { InMemoryDrawingRegisterStore } from '../in-memory-drawing-register-store';
 import { DocControlService } from '../doccontrol.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -41,6 +42,7 @@ describe('Document Control Module Bounded Context', () => {
         transmittalStore,
         correspondenceStore,
         new InMemorySubmittalStore(),
+        new InMemoryDrawingRegisterStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -69,6 +71,7 @@ describe('Document Control Module Bounded Context', () => {
         transmittalStore,
         correspondenceStore,
         new InMemorySubmittalStore(),
+        new InMemoryDrawingRegisterStore(),
         mockEvents,
         mockTx,
         mockAccess

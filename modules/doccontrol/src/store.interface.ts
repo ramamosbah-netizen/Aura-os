@@ -2,6 +2,14 @@ import type { TxHandle } from '@aura/core';
 import type { Transmittal } from './domain/transmittal';
 import type { Correspondence } from './domain/correspondence';
 import type { Submittal } from './domain/submittal';
+import type { DrawingRegisterEntry } from './domain/drawing-register';
+
+export interface DrawingRegisterStore {
+  save(entry: DrawingRegisterEntry, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<DrawingRegisterEntry | null>;
+  findByProject(projectId: string, tenantId: string): Promise<DrawingRegisterEntry[]>;
+  findAll(tenantId: string): Promise<DrawingRegisterEntry[]>;
+}
 
 export interface TransmittalStore {
   save(transmittal: Transmittal, tx?: TxHandle): Promise<void>;
@@ -27,3 +35,4 @@ export interface SubmittalStore {
 export const TRANSMITTAL_STORE = Symbol('TRANSMITTAL_STORE');
 export const CORRESPONDENCE_STORE = Symbol('CORRESPONDENCE_STORE');
 export const SUBMITTAL_STORE = Symbol('SUBMITTAL_STORE');
+export const DRAWING_REGISTER_STORE = Symbol('DRAWING_REGISTER_STORE');

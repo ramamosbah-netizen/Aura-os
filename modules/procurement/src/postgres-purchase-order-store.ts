@@ -10,6 +10,7 @@ interface Row {
   company_id: string | null;
   reference: string | null;
   title: string;
+  supplier_id: string | null;
   supplier_name: string | null;
   project_id: string | null;
   project_name: string | null;
@@ -21,7 +22,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, reference, title, supplier_name, project_id, project_name, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, project_id, project_name, status, value, owner_id, created_by, created_at';
 
 function rowToPo(r: Row): PurchaseOrder {
   return {
@@ -30,6 +31,7 @@ function rowToPo(r: Row): PurchaseOrder {
     companyId: r.company_id,
     reference: r.reference,
     title: r.title,
+    supplierId: r.supplier_id,
     supplierName: r.supplier_name,
     projectId: r.project_id,
     projectName: r.project_name,
@@ -56,8 +58,8 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
 
   private insert(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierName, p.projectId, p.projectName, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
+      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierId, p.supplierName, p.projectId, p.projectName, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
     );
   }
 
@@ -72,8 +74,8 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
 
   private upd(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
     return executor.query(
-      `UPDATE public.aura_procurement_purchase_orders SET reference=$2, title=$3, supplier_name=$4, status=$5, value=$6, owner_id=$7 WHERE id=$1`,
-      [p.id, p.reference, p.title, p.supplierName, p.status, p.value, p.ownerId],
+      `UPDATE public.aura_procurement_purchase_orders SET reference=$2, title=$3, supplier_id=$4, supplier_name=$5, status=$6, value=$7, owner_id=$8 WHERE id=$1`,
+      [p.id, p.reference, p.title, p.supplierId, p.supplierName, p.status, p.value, p.ownerId],
     );
   }
 

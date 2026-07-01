@@ -20,6 +20,8 @@ import {
   type VariationType,
   type VariationStatus,
   VariationService,
+  type ProjectCloseout,
+  CloseoutService,
 } from '@aura/projects';
 
 interface CreateProjectDto {
@@ -82,6 +84,7 @@ export class ProjectsController {
     private readonly cbs: CbsService,
     private readonly delayEot: DelayEotService,
     private readonly variations: VariationService,
+    private readonly closeouts: CloseoutService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -362,6 +365,44 @@ export class ProjectsController {
       decidedBy: ctx.actorId ?? 'system',
       revisedCompletionDate: dto.revisedCompletionDate,
     });
+  }
+
+  // ── Closeout ───────────────────────────────────────────────────────────────
+
+  @Post('closeouts')
+  async startCloseout(@Body() dto: { projectId: string; projectName?: string; items?: string[]; notes?: string }): Promise<ProjectCloseout> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.closeouts.start({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, items: dto.items, notes: dto.notes, createdBy: ctx.actorId });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('closeouts')
+  listCloseouts(@Query('projectId') projectId?: string, @Query('status') status?: string): Promise<ProjectCloseout[]> {
+    const ctx = this.tenant.get();
+    return this.closeouts.list({ tenantId: ctx.tenantId, projectId, status, limit: 200 });
+  }
+
+  @Patch('closeouts/:id/items/:index')
+  async setCloseoutItem(@Param('id') id: string, @Param('index') index: string, @Body() dto: { done: boolean }): Promise<ProjectCloseout> {
+    try {
+      return await this.closeouts.setItem(this.tenant.get().tenantId, id, Number(index), dto?.done ?? false);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Post('closeouts/:id/finalize')
+  async finalizeCloseout(@Param('id') id: string, @Body() dto: { handoverDate: string; dlpMonths?: number }): Promise<ProjectCloseout> {
+    if (!dto?.handoverDate) throw new BadRequestException('handoverDate is required');
+    try {
+      return await this.closeouts.finalize(this.tenant.get().tenantId, id, dto.handoverDate, dto.dlpMonths);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }
 

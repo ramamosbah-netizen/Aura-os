@@ -26,6 +26,8 @@ export class WorkOrder {
   assignedTo?: string;
   scheduledDate?: Date;
   completedDate?: Date;
+  /** Billable amount captured on completion; drives the AMC → AR invoice reactor. */
+  cost?: number;
   location?: GeoCoordinate;
   readonly createdAt: Date;
   updatedAt: Date;
@@ -70,9 +72,10 @@ export class WorkOrder {
     this.updatedAt = new Date();
   }
 
-  complete(): void {
+  complete(cost?: number): void {
     this.status = 'completed';
     this.completedDate = new Date();
+    if (cost !== undefined) this.cost = cost;
     this.updatedAt = new Date();
   }
 

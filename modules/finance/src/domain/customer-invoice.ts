@@ -39,6 +39,12 @@ export interface CustomerInvoice {
   subtotal: number;
   vatTotal: number;
   total: number;
+  /** Invoice currency (ISO). Line amounts/total are in this currency. */
+  currency: string;
+  /** Rate to the base currency (AED): baseTotal = total × exchangeRate. 1 for base-currency invoices. */
+  exchangeRate: number;
+  /** Total converted to base currency (AED) for consolidated reporting. */
+  baseTotal: number;
   amountPaid: number;
   status: CustomerInvoiceStatus;
   createdAt: string;
@@ -56,6 +62,8 @@ export interface NewCustomerInvoice {
   issueDate: string;
   dueDate?: string | null;
   lines: NewCustomerInvoiceLine[];
+  currency?: string;
+  exchangeRate?: number;
   createdBy?: Id | null;
 }
 
@@ -92,6 +100,11 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
   if (!input.lines || input.lines.length === 0) throw new Error('at least one line item is required');
   const lines = input.lines.map(buildLine);
   const { subtotal, vatTotal, total } = computeTotals(lines);
+  const currency = (input.currency ?? 'AED').trim().toUpperCase();
+  const exchangeRate = input.exchangeRate === undefined ? 1 : Number(input.exchangeRate);
+  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error('exchangeRate must be positive');
+  if (currency === 'AED' && exchangeRate !== 1) throw new Error('base-currency (AED) invoices must have exchangeRate 1');
+  const baseTotal = round2(total * exchangeRate);
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -107,6 +120,9 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
     subtotal,
     vatTotal,
     total,
+    currency,
+    exchangeRate,
+    baseTotal,
     amountPaid: 0,
     status: 'draft',
     createdAt: new Date().toISOString(),

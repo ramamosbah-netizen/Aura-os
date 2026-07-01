@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { type Id, type PageParams, type Currency, makeEvent } from '@aura/shared';
+import { EVENT_STORE, type EventStore, ExchangeRateService } from '@aura/core';
 import {
   CUSTOMER_INVOICE_EVENT,
   type CustomerInvoice,
@@ -24,9 +24,17 @@ export class CustomerInvoiceService {
   constructor(
     @Inject(CUSTOMER_INVOICE_STORE) private readonly store: CustomerInvoiceStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    private readonly fx: ExchangeRateService,
   ) {}
 
   async create(input: NewCustomerInvoice): Promise<CustomerInvoice> {
+    // Multi-currency: for a non-base (≠AED) invoice with no explicit rate, resolve the
+    // effective rate to the base currency so baseTotal is computed for consolidated reporting.
+    const currency = (input.currency ?? 'AED').toUpperCase();
+    if (currency !== 'AED' && input.exchangeRate === undefined) {
+      const rate = await this.fx.getRate(input.tenantId, currency as Currency, 'AED');
+      input = { ...input, exchangeRate: rate };
+    }
     const inv = makeCustomerInvoice(input);
     await this.store.save(inv);
     await this.events.append([

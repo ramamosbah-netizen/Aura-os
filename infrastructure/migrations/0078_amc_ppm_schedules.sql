@@ -1,5 +1,6 @@
 -- ============================================================
--- AURA OS — migration 0074: AMC PPM (Preventive Maintenance) Schedules
+-- AURA OS — migration 0078: AMC PPM (Preventive Maintenance) Schedules
+-- (renumbered from 0074 — collided with 0074_inventory_reorder_levels on merge)
 -- ------------------------------------------------------------
 -- Completes AMC persistence: the PPM schedule entity (added after 0038) gets its
 -- own table. A recurring plan attached to a service contract that generates

@@ -28,6 +28,9 @@ interface CreateEmployeeDto {
   visaExpiry?: string | null;
   permitExpiry?: string | null;
   laborCamp?: string | null;
+  iban?: string | null;
+  molEmployeeId?: string | null;
+  bankRoutingCode?: string | null;
 }
 
 interface RequestLeaveDto {
@@ -82,7 +85,21 @@ export class HrController {
       visaExpiry: dto.visaExpiry,
       permitExpiry: dto.permitExpiry,
       laborCamp: dto.laborCamp,
+      iban: dto.iban,
+      molEmployeeId: dto.molEmployeeId,
+      bankRoutingCode: dto.bankRoutingCode,
     });
+  }
+
+  @Post('wps')
+  async generateWps(@Body() dto: { periodStart: string; periodEnd: string; establishmentId: string; bankCode: string }): Promise<import('@aura/hr').SifResult> {
+    if (!dto?.periodStart || !dto?.periodEnd) throw new BadRequestException('periodStart and periodEnd are required');
+    if (!dto?.establishmentId?.trim() || !dto?.bankCode?.trim()) throw new BadRequestException('establishmentId and bankCode are required');
+    try {
+      return await this.hrService.generateWps(this.tenant.get().tenantId, dto);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   @Delete('employees/:id')

@@ -10,6 +10,7 @@ import { type ExpenseClaim, makeExpenseClaim, submitClaim, approveClaim, rejectC
 import { type StaffAdvance, makeStaffAdvance, approveAdvance, rejectAdvance, disburseAdvance, recordRepayment } from './domain/staff-advance';
 import { type DocumentExpiryReport, buildDocumentExpiryReport } from './domain/document-expiry';
 import { type AttendanceRecord, type AttendanceSummary, type NewAttendanceRecord, makeAttendanceRecord, checkOutAttendance, summariseAttendance } from './domain/attendance';
+import { type SifResult, type WpsEmployeeLine, generateSif } from './domain/wps';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
@@ -81,6 +82,9 @@ export class HrService {
       visaExpiry?: string | null;
       permitExpiry?: string | null;
       laborCamp?: string | null;
+      iban?: string | null;
+      molEmployeeId?: string | null;
+      bankRoutingCode?: string | null;
     },
   ): Promise<Employee> {
     if (actorId) {
@@ -353,6 +357,43 @@ export class HrService {
 
   listTimesheetsByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]> {
     return this.timesheetStore.findByEmployee(tenantId, employeeId);
+  }
+
+  // ── WPS (Wage Protection System) ───────────────────────────────────────────
+
+  /** Generate the WPS SIF for all payroll runs in a period, joined to employee bank details. */
+  async generateWps(
+    tenantId: string,
+    params: { periodStart: string; periodEnd: string; establishmentId: string; bankCode: string },
+  ): Promise<SifResult> {
+    const runs = (await this.payrollRunStore.findByTenant(tenantId)).filter(
+      (r) => r.periodStart === params.periodStart && r.periodEnd === params.periodEnd,
+    );
+    if (runs.length === 0) throw new Error(`no payroll runs for period ${params.periodStart}..${params.periodEnd}`);
+
+    const ms = new Date(params.periodEnd).getTime() - new Date(params.periodStart).getTime();
+    const days = Math.min(30, Math.max(1, Math.round(ms / 86_400_000) + 1));
+
+    const lines: WpsEmployeeLine[] = [];
+    for (const run of runs) {
+      const emp = await this.employeeStore.findById(tenantId, run.employeeId);
+      if (!emp) throw new Error(`employee ${run.employeeId} not found`);
+      lines.push({
+        molEmployeeId: emp.molEmployeeId ?? '',
+        bankRoutingCode: emp.bankRoutingCode ?? '',
+        iban: emp.iban ?? '',
+        startDate: run.periodStart,
+        endDate: run.periodEnd,
+        days,
+        fixedIncome: run.basicSalary,
+        variableIncome: run.allowances,
+        name: `${emp.firstName} ${emp.lastName}`,
+      });
+    }
+    return generateSif(
+      { establishmentId: params.establishmentId, bankCode: params.bankCode, payMonth: params.periodStart.slice(0, 7) },
+      lines,
+    );
   }
 
   // ── Attendance ───────────────────────────────────────────────────────────

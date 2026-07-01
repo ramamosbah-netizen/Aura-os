@@ -15,6 +15,10 @@ export interface Employee {
   visaExpiry: string | null; // YYYY-MM-DD
   permitExpiry: string | null; // YYYY-MM-DD
   laborCamp: string | null;
+  // WPS (UAE Wage Protection System) payout details:
+  iban: string | null;            // employee salary IBAN
+  molEmployeeId: string | null;   // MoHRE/labour-card person id
+  bankRoutingCode: string | null; // routing code of the employee's bank/exchange agent
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +37,9 @@ export interface NewEmployee {
   visaExpiry?: string | null;
   permitExpiry?: string | null;
   laborCamp?: string | null;
+  iban?: string | null;
+  molEmployeeId?: string | null;
+  bankRoutingCode?: string | null;
 }
 
 export function makeEmployee(input: NewEmployee): Employee {
@@ -52,6 +59,9 @@ export function makeEmployee(input: NewEmployee): Employee {
     visaExpiry: input.visaExpiry ?? null,
     permitExpiry: input.permitExpiry ?? null,
     laborCamp: input.laborCamp ? input.laborCamp.trim() : null,
+    iban: input.iban ? input.iban.trim().toUpperCase().replace(/\s+/g, '') : null,
+    molEmployeeId: input.molEmployeeId ? input.molEmployeeId.trim() : null,
+    bankRoutingCode: input.bankRoutingCode ? input.bankRoutingCode.trim() : null,
     createdAt: now,
     updatedAt: now,
   };

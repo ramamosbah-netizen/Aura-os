@@ -585,6 +585,12 @@ export class FinanceController {
     return this.customerInvoices.fxRevaluation(this.tenant.get().tenantId, asOf);
   }
 
+  @Post('customer-invoices/fx-revaluation/post')
+  postFxRevaluation(@Query('asOf') asOf?: string) {
+    const ctx = this.tenant.get();
+    return this.customerInvoices.postFxRevaluation(ctx.tenantId, asOf, ctx.actorId ?? undefined);
+  }
+
   // Paginated list (the pagination contract): ?limit&offset → { items, total, limit, offset, hasMore }
   @Get('customer-invoices/paged')
   pagedCustomerInvoices(

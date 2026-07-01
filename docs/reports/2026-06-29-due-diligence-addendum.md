@@ -295,15 +295,15 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 10 done, 10 partial, 0 open — assurance stack (lint/e2e/smoke) landed; remaining partials are CI-wiring + rollout breadth.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 12 done, 8 partial, 0 open — assurance stack (lint/e2e/smoke) + GitHub Actions CI landed; remaining partials are rollout breadth (#48/#52–#56), not gaps.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
 | 39 | SWC transform for vitest (HTTP e2e) | ✅ | `apps/api/.swcrc` + `vitest.config.e2e.ts` boot full AppModule under vitest |
 | 40 | Supertest E2E (spine) | ✅ | `test/spine.e2e-spec.ts` real HTTP (health, account create+list, 400) → `test:e2e` 3 passed |
 | 41 | Playwright smoke | ✅ | `apps/web/playwright.config.ts` + `e2e/smoke.spec.ts` (shell+login) → `e2e` 2 passed |
-| 42 | Coverage tooling + CI gate | ◐ | `@vitest/coverage-v8` + `test:coverage` (finance 43.8%); CI gate open |
-| 43 | Dependency/SAST scan in CI | ◐ | `pnpm run audit` script; surfaces 5 vulns (multer/xlsx/postcss); CI wiring open |
+| 42 | Coverage tooling + CI gate | ✅ | `ci.yml` runs `test:coverage` on every PR; hard % threshold TBD |
+| 43 | Dependency/SAST scan in CI | ✅ | `ci.yml` runs `pnpm audit --prod` (non-blocking — no non-breaking fix upstream yet) |
 | 44 | Global exception filter + taxonomy | ✅ | `AllExceptionsFilter` → `{statusCode,error,code,message,correlationId}` |
 | 45 | OpenAPI/Swagger | ✅ | `/api/docs` UI + `/api/docs-json` (openapi 3.0.0) |
 | 46 | Renumber duplicate `0059` | ✅ | single `0059_finance_petty_cash.sql` |

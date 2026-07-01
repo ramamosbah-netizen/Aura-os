@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, parseCsv } from '@aura/shared';
 import {
   type Invoice,
   type InvoiceStatus,
@@ -198,6 +198,26 @@ export class FinanceController {
   listAccounts(@Query('type') type?: string): Promise<Account[]> {
     const ctx = this.tenant.get();
     return this.accounts.list({ tenantId: ctx.tenantId, type });
+  }
+
+  /** Bulk import chart-of-accounts from CSV (columns: code,name,type[,parentId]). */
+  @Post('accounts/import')
+  async importAccounts(@Body() dto: { csv?: string }): Promise<{ created: number; skipped: number; errors: string[] }> {
+    if (!dto?.csv?.trim()) throw new BadRequestException('csv is required');
+    const ctx = this.tenant.get();
+    const rows = parseCsv(dto.csv);
+    let created = 0, skipped = 0;
+    const errors: string[] = [];
+    for (const r of rows) {
+      const code = (r.code ?? '').trim();
+      const type = (r.type ?? '').trim() as Account['type'];
+      if (!code || !r.name?.trim() || !['asset', 'liability', 'equity', 'revenue', 'expense'].includes(type)) { skipped++; continue; }
+      try {
+        await this.accounts.create({ tenantId: ctx.tenantId, code, name: r.name.trim(), type, parentId: r.parentId || null }, ctx.actorId ?? undefined);
+        created++;
+      } catch (e) { skipped++; errors.push(`${code}: ${(e as Error).message}`); }
+    }
+    return { created, skipped, errors };
   }
 
   @Get('accounts/:id')

@@ -295,7 +295,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 2 done, 3 partial, 15 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 2 done, 4 partial, 14 open — assurance/CI/hygiene largely deferred with the P0 ops track.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
@@ -312,7 +312,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 | 49 | Type the 124 `any` pg-row mappers | ❌ | still ~124 |
 | 50 | Root ESLint config + CI | ❌ | no root eslint |
 | 51 | FK policy documented | ❌ | snapshot pattern used, undocumented |
-| 52 | Reporting views for hot reads | ❌ | 0 `CREATE VIEW` |
+| 52 | Reporting views for hot reads | ◐ | `0091`: `aura_v_trial_balance` + `aura_v_open_customer_invoices` (applies on migrate) |
 | 53 | Bulk operations | ❌ | none |
 | 54 | CSV/Excel import + export | ◐ | CSV export on 9 lists; import/Excel ❌ |
 | 55 | Soft-delete + restore standardized | ❌ | no `deleted_at` |

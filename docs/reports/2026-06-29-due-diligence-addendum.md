@@ -366,18 +366,18 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Tendering | 74 | 86 | 82 | 84 | 62 | 65 | competitor analysis (bid scoring go/no-go ✅, pagination ✅) |
 | Contracts | 68 | 85 | 80 | 80 | 62 | 65 | clause library, obligations tracking, pagination |
 | Projects | 72 | 86 | 82 | 82 | 70 | 80 | resource levelling, rev-rec, pagination (Gantt ✅) |
-| Procurement | 82 | 88 | 84 | 90 | 72 | 75 | PO↔supplier-master FK, framework agreements (pagination ✅) |
+| Procurement | 86 | 88 | 84 | 90 | 72 | 78 | PO↔supplier-master FK, framework agreements (pagination ✅; MAR/quality hard-gate on PO issue ✅) |
 | Inventory | 80 | 88 | 84 | 90 | 70 | 75 | valuation UI, reorder auto-PR, barcode (FIFO/WAC + pagination ✅) |
-| Finance | 90 | 88 | 86 | 90 | 78 | 90 | fixed-asset GL link, group consolidation, statements-UI polish (multi-currency AP/AR + FX reval, statements, dashboards, pagination ✅) |
+| Finance | 92 | 88 | 88 | 90 | 78 | 90 | group consolidation, statements-UI polish (multi-currency AP/AR + FX reval, statements, dashboards, pagination ✅; asset-disposal→GL reactor ✅) |
 | HR | 74 | 85 | 82 | 82 | 68 | 90 | attendance, org chart, appraisal, WPS file |
-| HSE | 68 | 85 | 84 | 82 | 60 | 60 | audits, training matrix (risk assessments/JSA with risk matrix ✅) |
-| Quality | 70 | 85 | 84 | 82 | 60 | 60 | audit schedules (calibration register ✅) |
-| Site | 70 | 85 | 84 | 84 | 60 | 60 | progress % (labour-by-trade allocation + man-hour roll-up ✅) |
-| Subcontracts | 68 | 84 | 80 | 80 | 60 | 55 | retention-release UI (back-charges reactor ✅) |
+| HSE | 78 | 85 | 86 | 84 | 62 | 62 | risk assessments/JSA ✅ + safety training matrix ✅ (inductions/cards/certs); remaining: audit trail depth |
+| Quality | 80 | 86 | 86 | 84 | 62 | 65 | calibration register ✅ + audit schedules + NCR generation ✅ |
+| Site | 76 | 85 | 84 | 86 | 64 | 60 | labour-by-trade ✅ + progress % vs baseline ✅; remaining: resource histograms |
+| Subcontracts | 74 | 84 | 82 | 82 | 62 | 60 | back-charges reactor ✅ + retention-release ✅; remaining: pagination |
 | Doc-Control | 70 | 85 | 84 | 84 | 58 | 55 | drawing register + distribution matrix ✅ (revision control); remaining: transmittal-linked history |
-| Engineering | 55 | 82 | 76 | 76 | 52 | 45 | MAR/TQ, model viewer, tests |
-| Fleet | 62 | 84 | 80 | 80 | 60 | 60 | Salik/tolls, GPS telematics (fines ✅) |
-| Assets | 70 | 85 | 84 | 84 | 58 | 60 | QR tagging (disposal + gain/loss + assets.asset.disposed event ✅; GL-posting reactor pending) |
+| Engineering | 72 | 85 | 84 | 86 | 55 | 60 | TQ ✅ + submittal→drawing auto-revise ✅ + pagination ✅; remaining: BIM/IFC model viewer |
+| Fleet | 72 | 85 | 84 | 84 | 62 | 62 | GPS telemetry webhooks + Mulkiya-renewal tasks ✅ (fines/Salik ✅); remaining: geofencing |
+| Assets | 74 | 85 | 86 | 84 | 58 | 62 | QR tagging (disposal + gain/loss ✅; disposal→GL posting reactor ✅; pagination ✅) |
 | AMC | 75 | 82 | 80 | 82 | 55 | 60 | richer PPM UI (Postgres persistence ✅; Finance billing link ✅ via amc.workorder.completed → AR invoice) |
 
 **Session deltas (2026-07-01):** Finance multi-currency (AP+AR) + FX revaluation posting; standard pagination contract (COUNT + LIMIT/OFFSET + `Page` envelope) rolled out to **all transactional lists** — Finance, Procurement, Inventory, CRM, Projects (project/variation/closeout), Contracts (contract/IPC), Tendering, Engineering (drawing/RFI/submittal). Left unpaged by design: WBS/CBS tree nodes, delay-events, and small lookup tables. **#22 ✅ substantially complete** (remaining: subcontracts consolidated store). **#23 ✅** global `ValidationPipe` + `class-validator` installed; finance `CreateInvoiceDto` migrated to a decorated class — remaining interface DTOs migrate incrementally (pipe is a safe no-op until each is decorated). **Both Tier-1 infrastructure items now closed.**
@@ -394,10 +394,16 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | 6 | Labour allocation by trade (man-hour roll-up) | Site | 0102 |
 | 7 | Drawing/document register + distribution matrix | Doc-Control | 0103 |
 | 8 | Risk assessment / JSA (risk matrix) | HSE | 0104 |
+| 9 | Technical Query (TQ) + submittal→drawing auto-revise | Engineering | 0105 |
+| 10 | Safety training matrix (inductions/cards/certs) | HSE | 0106 |
+| 11 | GPS telemetry webhooks + Mulkiya-renewal tasks | Fleet | 0107 |
+| 12 | Audit schedules + NCR generation | Quality | 0108 |
+| 13 | Progress % vs baseline | Site | — |
+| 14 | Retention-release in progress claims | Subcontracts | — |
 
-Also corrected stale scorecard gaps that were **already built**: AMC Postgres persistence + AMC→AR billing (`amc.workorder.completed` reactor), inventory FIFO/WAC. Live DB now at **migration 0104**.
+**Cross-module reactors closed this session:** asset-disposal → GL journal (`assets.asset.disposed` → balanced posting); subcontract-claim → AP invoice on certification; **MAR/quality hard-gate** blocking PO issue for unapproved manufacturers. Assets + Subcontracts pagination extended. Also corrected stale scorecard gaps already built: AMC persistence + AMC→AR billing, inventory FIFO/WAC. Live DB now at **migration 0108**.
 
-**Remaining verticals to 100%:** Engineering MAR/TQ · HR attendance/WPS-SIF/org-chart/appraisal · Subcontracts pagination + retention-release UI · Fleet Salik/tolls · Finance fixed-asset GL reactor (consume `assets.asset.disposed`) + group consolidation · CRM MS-Graph email seam (needs Azure creds) · HSE training matrix.
+**Remaining verticals to 100%:** HR attendance/WPS-SIF/org-chart/appraisal · Contracts clause library + obligations · Projects resource levelling + rev-rec · Inventory barcode/reorder-auto-PR · Finance group consolidation · Engineering BIM/IFC model viewer · Doc-Control transmittal-linked history · CRM MS-Graph email seam (needs Azure creds) · subcontracts pagination · DB-integration + HTTP-E2E test layers.
 
 ---
 

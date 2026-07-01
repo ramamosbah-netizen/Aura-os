@@ -370,11 +370,11 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Inventory | 80 | 88 | 84 | 90 | 70 | 75 | valuation UI, reorder auto-PR, barcode (FIFO/WAC + pagination ✅) |
 | Finance | 90 | 88 | 86 | 90 | 78 | 90 | fixed-asset GL link, group consolidation, statements-UI polish (multi-currency AP/AR + FX reval, statements, dashboards, pagination ✅) |
 | HR | 74 | 85 | 82 | 82 | 68 | 90 | attendance, org chart, appraisal, WPS file |
-| HSE | 60 | 84 | 80 | 78 | 60 | 55 | risk assessments, audits, training matrix |
+| HSE | 68 | 85 | 84 | 82 | 60 | 60 | audits, training matrix (risk assessments/JSA with risk matrix ✅) |
 | Quality | 70 | 85 | 84 | 82 | 60 | 60 | audit schedules (calibration register ✅) |
 | Site | 70 | 85 | 84 | 84 | 60 | 60 | progress % (labour-by-trade allocation + man-hour roll-up ✅) |
 | Subcontracts | 68 | 84 | 80 | 80 | 60 | 55 | retention-release UI (back-charges reactor ✅) |
-| Doc-Control | 58 | 84 | 78 | 78 | 55 | 55 | drawing register, distribution matrix |
+| Doc-Control | 70 | 85 | 84 | 84 | 58 | 55 | drawing register + distribution matrix ✅ (revision control); remaining: transmittal-linked history |
 | Engineering | 55 | 82 | 76 | 76 | 52 | 45 | MAR/TQ, model viewer, tests |
 | Fleet | 62 | 84 | 80 | 80 | 60 | 60 | Salik/tolls, GPS telematics (fines ✅) |
 | Assets | 70 | 85 | 84 | 84 | 58 | 60 | QR tagging (disposal + gain/loss + assets.asset.disposed event ✅; GL-posting reactor pending) |

@@ -295,7 +295,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 4 done, 7 partial, 9 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 7 partial, 8 open — assurance/CI/hygiene largely deferred with the P0 ops track.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
@@ -307,7 +307,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 | 44 | Global exception filter + taxonomy | ✅ | `AllExceptionsFilter` → `{statusCode,error,code,message,correlationId}` |
 | 45 | OpenAPI/Swagger | ✅ | `/api/docs` UI + `/api/docs-json` (openapi 3.0.0) |
 | 46 | Renumber duplicate `0059` | ✅ | single `0059_finance_petty_cash.sql` |
-| 47 | Down-migrations | ❌ | none |
+| 47 | Down-migrations | ✅ | `-- @DOWN` + `migrate.mjs down` (verified rollback) |
 | 48 | Standardize `date::text` mapping | ◐ | newer stores (incl. AMC) use `::text`; not universal |
 | 49 | Type the 124 `any` pg-row mappers | ❌ | still ~124 |
 | 50 | Root ESLint config + CI | ❌ | no root eslint |

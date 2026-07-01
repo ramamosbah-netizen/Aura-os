@@ -295,7 +295,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 9 partial, 6 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 10 partial, 5 open — assurance/CI/hygiene largely deferred with the P0 ops track.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
@@ -303,7 +303,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 | 40 | Supertest E2E (4 chains) | ❌ | no supertest; only in-memory reactor E2E |
 | 41 | Playwright smoke | ❌ | no playwright |
 | 42 | Coverage tooling + CI gate | ◐ | `@vitest/coverage-v8` + `test:coverage` (finance 43.8%); CI gate open |
-| 43 | Dependency/SAST scan in CI | ❌ | no `.github/workflows` |
+| 43 | Dependency/SAST scan in CI | ◐ | `pnpm run audit` script; surfaces 5 vulns (multer/xlsx/postcss); CI wiring open |
 | 44 | Global exception filter + taxonomy | ✅ | `AllExceptionsFilter` → `{statusCode,error,code,message,correlationId}` |
 | 45 | OpenAPI/Swagger | ✅ | `/api/docs` UI + `/api/docs-json` (openapi 3.0.0) |
 | 46 | Renumber duplicate `0059` | ✅ | single `0059_finance_petty_cash.sql` |

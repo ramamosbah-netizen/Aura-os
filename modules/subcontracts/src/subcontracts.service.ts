@@ -165,6 +165,7 @@ export class SubcontractsService {
     await this.store.updateClaim(updated);
     this.logger.log(`Claim #${updated.claimNumber} certified by ${certifierId} for net amount $${updated.netCertifiedValue}`);
 
+    const subcontract = await this.store.getSubcontract(updated.subcontractId);
     await this.events.append([
       makeEvent({
         type: CLAIM_EVENT.statusChanged,
@@ -178,6 +179,10 @@ export class SubcontractsService {
           claimNumber: updated.claimNumber,
           netCertifiedValue: updated.netCertifiedValue,
           retentionWithheld: updated.retentionWithheld,
+          isRetentionRelease: updated.isRetentionRelease,
+          retentionReleased: updated.retentionReleased,
+          subcontractId: updated.subcontractId,
+          subcontractor: subcontract?.subcontractorName ?? null,
         },
       }),
     ]);

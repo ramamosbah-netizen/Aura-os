@@ -82,7 +82,7 @@ export default function SubcontractsList({
   }
 
   async function submitClaim(subcontractId: string) {
-    let payload: any = { subcontractId };
+    const payload: any = { subcontractId };
 
     if (isRetentionRelease) {
       const relVal = Number(retentionReleased);

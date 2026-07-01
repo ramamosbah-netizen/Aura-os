@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import type { DailyReport } from './domain/daily-report';
 import type { DelayLog } from './domain/delay-log';
@@ -122,7 +122,7 @@ export class PostgresDailyReportStore implements DailyReportStore {
     return res.rows.map(this.mapDailyReport);
   }
 
-  private mapDailyReport(row: any): DailyReport {
+  private mapDailyReport(row: QueryResultRow): DailyReport {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -228,7 +228,7 @@ export class PostgresDelayLogStore implements DelayLogStore {
     return res.rows.map(this.mapDelayLog);
   }
 
-  private mapDelayLog(row: any): DelayLog {
+  private mapDelayLog(row: QueryResultRow): DelayLog {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -303,7 +303,7 @@ export class PostgresMaterialConsumptionStore implements MaterialConsumptionStor
     return res.rows.map(this.mapMaterialConsumption);
   }
 
-  private mapMaterialConsumption(row: any): MaterialConsumption {
+  private mapMaterialConsumption(row: QueryResultRow): MaterialConsumption {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -355,7 +355,7 @@ export class PostgresSiteInstructionStore implements SiteInstructionStore {
     return res.rows.map(this.mapSi);
   }
 
-  private mapSi(row: any): SiteInstruction {
+  private mapSi(row: QueryResultRow): SiteInstruction {
     return {
       id: row.id,
       tenantId: row.tenant_id,

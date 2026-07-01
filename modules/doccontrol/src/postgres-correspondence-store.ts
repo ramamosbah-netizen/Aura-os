@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import type { Correspondence } from './domain/correspondence';
 import type { CorrespondenceStore } from './store.interface';
@@ -69,7 +69,7 @@ export class PostgresCorrespondenceStore implements CorrespondenceStore {
     return res.rows.map(this.mapRow);
   }
 
-  private mapRow(row: any): Correspondence {
+  private mapRow(row: QueryResultRow): Correspondence {
     return {
       id: row.id,
       tenantId: row.tenant_id,

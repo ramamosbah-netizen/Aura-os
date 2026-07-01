@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import { type Page, type PageParams, makePage } from '@aura/shared';
 import type { Asset } from './domain/asset';
@@ -133,7 +133,7 @@ export class PostgresAssetStore implements AssetStore {
     );
   }
 
-  private mapAsset(row: any): Asset {
+  private mapAsset(row: QueryResultRow): Asset {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -228,7 +228,7 @@ export class PostgresAssetMaintenanceStore implements AssetMaintenanceStore {
     return res.rows.map(this.mapMaintenance);
   }
 
-  private mapMaintenance(row: any): AssetMaintenance {
+  private mapMaintenance(row: QueryResultRow): AssetMaintenance {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -289,7 +289,7 @@ export class PostgresAssetInspectionStore implements AssetInspectionStore {
     return res.rows.map(this.mapInspection);
   }
 
-  private mapInspection(row: any): AssetInspection {
+  private mapInspection(row: QueryResultRow): AssetInspection {
     return {
       id: row.id,
       tenantId: row.tenant_id,

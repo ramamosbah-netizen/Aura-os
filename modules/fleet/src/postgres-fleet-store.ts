@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import { type Page, type PageParams, makePage } from '@aura/shared';
 import type { Vehicle } from './domain/vehicle';
@@ -93,7 +93,7 @@ export class PostgresVehicleStore implements VehicleStore {
     return (res.rowCount ?? 0) > 0;
   }
 
-  private mapVehicle(row: any): Vehicle {
+  private mapVehicle(row: QueryResultRow): Vehicle {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -211,7 +211,7 @@ export class PostgresFuelLogStore implements FuelLogStore {
     return (res.rowCount ?? 0) > 0;
   }
 
-  private mapFuelLog(row: any): FuelLog {
+  private mapFuelLog(row: QueryResultRow): FuelLog {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -290,7 +290,7 @@ export class PostgresMaintenanceStore implements MaintenanceStore {
     return (res.rowCount ?? 0) > 0;
   }
 
-  private mapMaintenance(row: any): MaintenanceRecord {
+  private mapMaintenance(row: QueryResultRow): MaintenanceRecord {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -345,7 +345,7 @@ export class PostgresTrafficFineStore implements TrafficFineStore {
     return res.rows.map(this.mapFine);
   }
 
-  private mapFine(row: any): TrafficFine {
+  private mapFine(row: QueryResultRow): TrafficFine {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -404,7 +404,7 @@ export class PostgresSalikChargeStore implements SalikChargeStore {
     return res.rows.map(this.mapSalik);
   }
 
-  private mapSalik(row: any): SalikCharge {
+  private mapSalik(row: QueryResultRow): SalikCharge {
     return {
       id: row.id,
       tenantId: row.tenant_id,

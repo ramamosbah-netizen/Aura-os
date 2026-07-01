@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
@@ -121,7 +121,7 @@ export class PostgresHseIncidentStore implements HseIncidentStore {
     return res.rows.map(this.mapHseIncident);
   }
 
-  private mapHseIncident(row: any): HseIncident {
+  private mapHseIncident(row: QueryResultRow): HseIncident {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -199,7 +199,7 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
     return res.rows.map(this.mapPermit);
   }
 
-  private mapPermit(row: any): PermitToWork {
+  private mapPermit(row: QueryResultRow): PermitToWork {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -278,7 +278,7 @@ export class PostgresCapaActionStore implements CapaActionStore {
     return res.rows.map(this.mapCapa);
   }
 
-  private mapCapa(row: any): CapaAction {
+  private mapCapa(row: QueryResultRow): CapaAction {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -330,7 +330,7 @@ export class PostgresToolboxTalkStore implements ToolboxTalkStore {
     return res.rows.map(this.mapTalk);
   }
 
-  private mapTalk(row: any): ToolboxTalk {
+  private mapTalk(row: QueryResultRow): ToolboxTalk {
     return {
       id: row.id,
       tenantId: row.tenant_id,

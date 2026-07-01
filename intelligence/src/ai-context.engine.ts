@@ -51,7 +51,7 @@ export class AiContextEngine {
   }): Promise<AiContextWindow> {
     const { tenantId, query, entityTypes, maxEntities = 10 } = params;
 
-    let entities = Array.from(this.snapshots.values())
+    const entities = Array.from(this.snapshots.values())
       .filter((s) => s.tenantId === tenantId)
       .filter((s) => !entityTypes || entityTypes.includes(s.entityType))
       .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())

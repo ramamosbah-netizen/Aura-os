@@ -12,10 +12,20 @@ packages:
   - "modules/*"
   - "intelligence"
   - "infrastructure"
-allowBuilds:
-  core-js: false
-  esbuild: true
-  sharp: true
+
+# Build-script policy. Every dependency that ships a postinstall/native build step must
+# be listed with an explicit true/false — otherwise `pnpm install` stops on the
+# "ignored build scripts" prompt and exits non-zero, which would break CI.
+#   esbuild / sharp → native binaries we need built.
+#   @scarf/scarf    → analytics beacon; never run.
+#   @swc/core       → ships prebuilt platform binaries; no build needed.
+#   core-js         → postinstall ad; never run.
 onlyBuiltDependencies:
   - esbuild
   - sharp
+allowBuilds:
+  esbuild: true
+  sharp: true
+  '@scarf/scarf': false
+  '@swc/core': false
+  core-js: false

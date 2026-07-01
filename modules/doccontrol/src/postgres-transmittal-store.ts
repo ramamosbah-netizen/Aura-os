@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import type { Transmittal } from './domain/transmittal';
 import type { TransmittalStore } from './store.interface';
@@ -67,7 +67,7 @@ export class PostgresTransmittalStore implements TransmittalStore {
     return res.rows.map(this.mapRow);
   }
 
-  private mapRow(row: any): Transmittal {
+  private mapRow(row: QueryResultRow): Transmittal {
     return {
       id: row.id,
       tenantId: row.tenant_id,

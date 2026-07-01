@@ -16,3 +16,7 @@ coverage/
 **/src/**/*.js.map
 **/src/**/*.d.ts
 **/src/**/*.d.ts.map
+
+# Playwright
+/apps/web/playwright-report/
+/apps/web/test-results/

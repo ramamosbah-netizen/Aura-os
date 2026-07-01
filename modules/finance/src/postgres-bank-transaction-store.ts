@@ -83,7 +83,7 @@ export class PostgresBankTransactionStore implements BankTransactionStore {
     add('bank_account_id', filter.bankAccountId);
     add('status', filter.status);
 
-    let whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     let limitSql = '';
     if (filter.limit) {
       params.push(filter.limit);

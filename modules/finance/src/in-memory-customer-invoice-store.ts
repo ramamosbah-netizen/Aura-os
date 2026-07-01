@@ -15,7 +15,7 @@ export class InMemoryCustomerInvoiceStore implements CustomerInvoiceStore {
   }
 
   async list(filter: CustomerInvoiceFilter = {}): Promise<CustomerInvoice[]> {
-    let out = [...this.data.values()];
+    let out = [...this.data.values()].filter((i) => !i.deletedAt);
     if (filter.tenantId) out = out.filter((i) => i.tenantId === filter.tenantId);
     if (filter.status) out = out.filter((i) => i.status === filter.status);
     if (filter.projectId) out = out.filter((i) => i.projectId === filter.projectId);
@@ -27,5 +27,10 @@ export class InMemoryCustomerInvoiceStore implements CustomerInvoiceStore {
     const all = await this.list({ ...filter, limit: undefined });
     const items = all.slice(page.offset, page.offset + page.limit);
     return makePage(items, all.length, page);
+  }
+
+  async setDeleted(tenantId: string, id: Id, deleted: boolean): Promise<void> {
+    const inv = this.data.get(id);
+    if (inv && inv.tenantId === tenantId) inv.deletedAt = deleted ? new Date().toISOString() : null;
   }
 }

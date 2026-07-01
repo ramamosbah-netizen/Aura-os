@@ -47,6 +47,8 @@ export interface CustomerInvoice {
   baseTotal: number;
   amountPaid: number;
   status: CustomerInvoiceStatus;
+  /** Soft-delete timestamp; null = live. Deleted rows are hidden from lists but restorable. */
+  deletedAt: string | null;
   createdAt: string;
   createdBy: Id | null;
 }
@@ -125,6 +127,7 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
     baseTotal,
     amountPaid: 0,
     status: 'draft',
+    deletedAt: null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };

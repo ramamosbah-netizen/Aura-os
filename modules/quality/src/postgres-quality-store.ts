@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import type { Ncr } from './domain/ncr';
 import type { InspectionRequest } from './domain/inspection-request';
@@ -133,7 +133,7 @@ export class PostgresNcrStore implements NcrStore {
     return res.rows.map(this.mapNcr);
   }
 
-  private mapNcr(row: any): Ncr {
+  private mapNcr(row: QueryResultRow): Ncr {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -212,7 +212,7 @@ export class PostgresInspectionRequestStore implements InspectionRequestStore {
     return res.rows.map(this.mapIr);
   }
 
-  private mapIr(row: any): InspectionRequest {
+  private mapIr(row: QueryResultRow): InspectionRequest {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -289,7 +289,7 @@ export class PostgresSnagStore implements SnagStore {
     return res.rows.map(this.mapSnag);
   }
 
-  private mapSnag(row: any): Snag {
+  private mapSnag(row: QueryResultRow): Snag {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -339,7 +339,7 @@ export class PostgresItpStore implements ItpStore {
     return res.rows.map(this.mapItp);
   }
 
-  private mapItp(row: any): Itp {
+  private mapItp(row: QueryResultRow): Itp {
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -391,7 +391,7 @@ export class PostgresMaterialApprovalStore implements MaterialApprovalStore {
     return res.rows.map(this.mapMar);
   }
 
-  private mapMar(row: any): MaterialApproval {
+  private mapMar(row: QueryResultRow): MaterialApproval {
     return {
       id: row.id,
       tenantId: row.tenant_id,

@@ -20,7 +20,7 @@
 | HR / CRM / Quality / Fleet / Subcontracts | 3–7 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Tendering / Assets / HSE / Site / AMC / Engineering / Doc-Control | 1–2 | ◐ | ❌ | ❌ | ❌ | ❌ |
 
-**Verified:** 72 print/business pages; **0 module dashboards**, **0 chart library**, **0 bulk export**. **Print now shipped for 4 core documents** (Invoice/PO/GRN/IPC via a reusable A4 `DocumentSheet` + native print-to-PDF); remaining print (payslip, contract, statements) and dashboards/charts/export are the top UI gaps.
+**Verified (rev 3):** print shipped for **7 documents** (Invoice/PO/GRN/IPC/Quotation/Contract/Subcontract via reusable A4 `DocumentSheet`); **5 dashboards** (Finance/Projects/Procurement/HR/Inventory via a dependency-free SVG chart kit); **CSV export** on Stock + Customer-Invoices. Remaining UI gaps: export rollout to all lists, payslip/statement print, saved views.
 
 ---
 
@@ -112,8 +112,8 @@
 | Gantt / scheduling | ✅ | ✅ | ✅ | ✅ | ◐ (data only) |
 | Construction vertical (IPC/ITP/subcontract/WPS) | ◐ | ◐ | ✗ | ✗ | ✅ **edge** |
 | Document print/output mgmt | ✅ | ✅ | ✅ | ✅ | ◐ (4 docs) |
-| BI / dashboards | ✅ | ✅ | ✅ | ◐ | ✗ |
-| Reporting/export engine | ✅ | ✅ | ✅ | ✅ | ✗ |
+| BI / dashboards | ✅ | ✅ | ✅ | ◐ | ◐ (5 dashboards) |
+| Reporting/export engine | ✅ | ✅ | ✅ | ✅ | ◐ (CSV, partial) |
 | Workflow designer | ✅ | ✅ | ✅ | ✅ | ✗ |
 | AI (extraction/forecast/assistant) | ✅ | ✅ | ✅ | ◐ | ✗ |
 | Mobile / portals | ✅ | ✅ | ✅ | ✅ | ✗ |
@@ -172,7 +172,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 | # | Gap | Priority | Status |
 |---|---|--:|---|
 | A | Document output engine — Invoice/PO/GRN/IPC print | P1 | ✅ **done** (rev 2); extend to Contract/Payslip/Statements |
-| B | Module + executive dashboards with charts | P1 | ◐ **mostly done** — chart kit + Finance/Projects/Procurement dashboards; HR/Inventory dashboards pending |
+| B | Module + executive dashboards with charts | P1 | ✅ **done** — chart kit + Finance/Projects/Procurement/HR/Inventory dashboards |
 | C | Bulk export (CSV/Excel) over list + report endpoints | P1 | ◐ **started** — reusable ExportButton (CSV) on Stock + Customer-Invoices; roll out to remaining lists |
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |

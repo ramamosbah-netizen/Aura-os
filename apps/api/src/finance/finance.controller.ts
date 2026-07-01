@@ -635,6 +635,19 @@ export class FinanceController {
     }
   }
 
+  // Bulk operation (reference): soft-delete or restore many invoices in one call.
+  @Post('customer-invoices/bulk')
+  async bulkCustomerInvoices(@Body() dto: { action?: 'delete' | 'restore'; ids?: string[] }): Promise<{ action: string; affected: number }> {
+    if (dto?.action !== 'delete' && dto?.action !== 'restore') throw new BadRequestException("action must be 'delete' or 'restore'");
+    if (!Array.isArray(dto?.ids) || dto.ids.length === 0) throw new BadRequestException('ids[] is required');
+    const tenantId = this.tenant.get().tenantId;
+    for (const id of dto.ids) {
+      if (dto.action === 'delete') await this.customerInvoices.softDelete(tenantId, id);
+      else await this.customerInvoices.restore(tenantId, id);
+    }
+    return { action: dto.action, affected: dto.ids.length };
+  }
+
   @Delete('customer-invoices/:id')
   async softDeleteCustomerInvoice(@Param('id') id: string): Promise<{ deleted: string }> {
     await this.customerInvoices.softDelete(this.tenant.get().tenantId, id);

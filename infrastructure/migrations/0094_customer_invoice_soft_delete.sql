@@ -6,3 +6,7 @@ alter table public.aura_finance_customer_invoices
 
 create index if not exists idx_aura_finance_customer_invoices_live
   on public.aura_finance_customer_invoices (tenant_id) where deleted_at is null;
+
+-- @DOWN
+drop index if exists idx_aura_finance_customer_invoices_live;
+alter table public.aura_finance_customer_invoices drop column if exists deleted_at;

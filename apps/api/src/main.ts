@@ -9,6 +9,7 @@ import { AuthService, TenantContext } from '@aura/core';
 import { AppModule } from './app.module';
 import { AccessDeniedFilter } from './auth/access-denied.filter';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 // Load apps/api/.env.local (gitignored) before the kernel reads DATABASE_URL.
 // dist/main.js → ../.env.local resolves to apps/api/.env.local.
@@ -21,6 +22,13 @@ async function bootstrap(): Promise<void> {
   app.enableCors();
   app.enableShutdownHooks(); // so OutboxRelay.onModuleDestroy clears its timer
   app.useGlobalFilters(new AllExceptionsFilter(), new AccessDeniedFilter());
+
+  // OpenAPI/Swagger — spec at /api/docs-json, UI at /api/docs.
+  const doc = SwaggerModule.createDocument(
+    app,
+    new DocumentBuilder().setTitle('AURA OS API').setVersion('1').addBearerAuth().build(),
+  );
+  SwaggerModule.setup('api/docs', app, doc);
 
   // Per-request identity: verify a bearer token and bind the request context (ALS).
   // No token / auth off -> the dev default (actorId null), preserving the staged pass-through.

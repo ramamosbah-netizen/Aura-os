@@ -23,6 +23,7 @@ function inv(over: Partial<CustomerInvoice>): CustomerInvoice {
     baseTotal: 1000,
     amountPaid: 0,
     status: 'issued',
+    deletedAt: null,
     createdAt: '2026-01-01T00:00:00Z',
     createdBy: null,
     ...over,

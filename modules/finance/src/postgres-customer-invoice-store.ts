@@ -23,13 +23,14 @@ interface Row {
   base_total: string | number | null;
   amount_paid: string | number;
   status: string;
+  deleted_at: Date | string | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
   'id, tenant_id, company_id, invoice_number, customer_name, project_id, project_name, contract_ref, ' +
-  'issue_date::text AS issue_date, due_date::text AS due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total, amount_paid, status, created_by, created_at';
+  'issue_date::text AS issue_date, due_date::text AS due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total, amount_paid, status, deleted_at, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 function rowTo(r: Row): CustomerInvoice {
@@ -54,6 +55,7 @@ function rowTo(r: Row): CustomerInvoice {
     baseTotal: r.base_total == null ? Number(r.total) : Number(r.base_total),
     amountPaid: Number(r.amount_paid),
     status: r.status as CustomerInvoice['status'],
+    deletedAt: r.deleted_at ? iso(r.deleted_at) : null,
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
   };
@@ -83,7 +85,7 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
   }
 
   async list(filter: CustomerInvoiceFilter = {}): Promise<CustomerInvoice[]> {
-    const where: string[] = [];
+    const where: string[] = ['deleted_at IS NULL'];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
       if (val) {
@@ -104,7 +106,7 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
   }
 
   async listPaged(filter: CustomerInvoiceFilter, page: PageParams): Promise<Page<CustomerInvoice>> {
-    const where: string[] = [];
+    const where: string[] = ['deleted_at IS NULL'];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
       if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
@@ -123,5 +125,12 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
     );
     const total = res.rows.length ? Number(res.rows[0].total_count) : 0;
     return makePage(res.rows.map(rowTo), total, page);
+  }
+
+  async setDeleted(tenantId: string, id: Id, deleted: boolean): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_finance_customer_invoices SET deleted_at = ${deleted ? 'now()' : 'NULL'} WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id],
+    );
   }
 }

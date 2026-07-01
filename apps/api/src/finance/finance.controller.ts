@@ -1,6 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, parseCsv } from '@aura/shared';
 import {
   type Invoice,
   type InvoiceStatus,
@@ -212,6 +212,26 @@ export class FinanceController {
   listAccounts(@Query('type') type?: string): Promise<Account[]> {
     const ctx = this.tenant.get();
     return this.accounts.list({ tenantId: ctx.tenantId, type });
+  }
+
+  /** Bulk import chart-of-accounts from CSV (columns: code,name,type[,parentId]). */
+  @Post('accounts/import')
+  async importAccounts(@Body() dto: { csv?: string }): Promise<{ created: number; skipped: number; errors: string[] }> {
+    if (!dto?.csv?.trim()) throw new BadRequestException('csv is required');
+    const ctx = this.tenant.get();
+    const rows = parseCsv(dto.csv);
+    let created = 0, skipped = 0;
+    const errors: string[] = [];
+    for (const r of rows) {
+      const code = (r.code ?? '').trim();
+      const type = (r.type ?? '').trim() as Account['type'];
+      if (!code || !r.name?.trim() || !['asset', 'liability', 'equity', 'revenue', 'expense'].includes(type)) { skipped++; continue; }
+      try {
+        await this.accounts.create({ tenantId: ctx.tenantId, code, name: r.name.trim(), type, parentId: r.parentId || null }, ctx.actorId ?? undefined);
+        created++;
+      } catch (e) { skipped++; errors.push(`${code}: ${(e as Error).message}`); }
+    }
+    return { created, skipped, errors };
   }
 
   @Get('accounts/:id')
@@ -632,6 +652,31 @@ export class FinanceController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // Bulk operation (reference): soft-delete or restore many invoices in one call.
+  @Post('customer-invoices/bulk')
+  async bulkCustomerInvoices(@Body() dto: { action?: 'delete' | 'restore'; ids?: string[] }): Promise<{ action: string; affected: number }> {
+    if (dto?.action !== 'delete' && dto?.action !== 'restore') throw new BadRequestException("action must be 'delete' or 'restore'");
+    if (!Array.isArray(dto?.ids) || dto.ids.length === 0) throw new BadRequestException('ids[] is required');
+    const tenantId = this.tenant.get().tenantId;
+    for (const id of dto.ids) {
+      if (dto.action === 'delete') await this.customerInvoices.softDelete(tenantId, id);
+      else await this.customerInvoices.restore(tenantId, id);
+    }
+    return { action: dto.action, affected: dto.ids.length };
+  }
+
+  @Delete('customer-invoices/:id')
+  async softDeleteCustomerInvoice(@Param('id') id: string): Promise<{ deleted: string }> {
+    await this.customerInvoices.softDelete(this.tenant.get().tenantId, id);
+    return { deleted: id };
+  }
+
+  @Post('customer-invoices/:id/restore')
+  async restoreCustomerInvoice(@Param('id') id: string): Promise<{ restored: string }> {
+    await this.customerInvoices.restore(this.tenant.get().tenantId, id);
+    return { restored: id };
   }
 
   // ── BANK GUARANTEES / BONDS ──────────────────────────────────────────────

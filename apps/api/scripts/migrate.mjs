@@ -51,17 +51,43 @@ async function main() {
     byNumber.set(n, f);
   }
 
+  // Split a migration into UP / DOWN halves on the `-- @DOWN` marker (down is optional).
+  const split = (sql) => {
+    const i = sql.indexOf('-- @DOWN');
+    return i < 0 ? { up: sql, down: null } : { up: sql.slice(0, i), down: sql.slice(i) };
+  };
+
+  // Rollback mode: `node migrate.mjs down` reverts the most recently applied migration.
+  if (process.argv[2] === 'down') {
+    const last = files.filter((f) => applied.has(f)).pop();
+    if (!last) { console.log('Nothing to roll back.'); return; }
+    const { down } = split(readFileSync(join(migrationsDir, last), 'utf8'));
+    if (!down) throw new Error(`${last} has no "-- @DOWN" section — cannot roll back`);
+    console.log(`↩ rolling back ${last} ...`);
+    await client.query('BEGIN');
+    try {
+      await client.query(down);
+      await client.query('delete from public.aura_migrations where filename = $1', [last]);
+      await client.query('COMMIT');
+      console.log(`✓ rolled back ${last}`);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw new Error(`rollback ${last} failed: ${err.message}`);
+    }
+    return;
+  }
+
   let ran = 0;
   for (const file of files) {
     if (applied.has(file)) {
       console.log(`• skip  ${file} (already applied)`);
       continue;
     }
-    const sql = readFileSync(join(migrationsDir, file), 'utf8');
+    const { up } = split(readFileSync(join(migrationsDir, file), 'utf8'));
     console.log(`→ apply ${file} ...`);
     await client.query('BEGIN');
     try {
-      await client.query(sql);
+      await client.query(up);
       await client.query('insert into public.aura_migrations (filename) values ($1)', [file]);
       await client.query('COMMIT');
       ran += 1;

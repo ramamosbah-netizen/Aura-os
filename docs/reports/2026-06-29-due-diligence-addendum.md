@@ -294,6 +294,32 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 38. Notifications delivery (email/SMS/push) wired to events.
 
 ### TIER 2 — Assurance, API, data hygiene — 20
+
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 12 done, 8 partial, 0 open — assurance stack (lint/e2e/smoke) + GitHub Actions CI landed; remaining partials are rollout breadth (#48/#52–#56), not gaps.
+
+| # | Item | Status | Evidence |
+|---|---|:--:|---|
+| 39 | SWC transform for vitest (HTTP e2e) | ✅ | `apps/api/.swcrc` + `vitest.config.e2e.ts` boot full AppModule under vitest |
+| 40 | Supertest E2E (spine) | ✅ | `test/spine.e2e-spec.ts` real HTTP (health, account create+list, 400) → `test:e2e` 3 passed |
+| 41 | Playwright smoke | ✅ | `apps/web/playwright.config.ts` + `e2e/smoke.spec.ts` (shell+login) → `e2e` 2 passed |
+| 42 | Coverage tooling + CI gate | ✅ | `ci.yml` runs `test:coverage` on every PR; hard % threshold TBD |
+| 43 | Dependency/SAST scan in CI | ✅ | `ci.yml` runs `pnpm audit --prod` (non-blocking — no non-breaking fix upstream yet) |
+| 44 | Global exception filter + taxonomy | ✅ | `AllExceptionsFilter` → `{statusCode,error,code,message,correlationId}` |
+| 45 | OpenAPI/Swagger | ✅ | `/api/docs` UI + `/api/docs-json` (openapi 3.0.0) |
+| 46 | Renumber duplicate `0059` | ✅ | single `0059_finance_petty_cash.sql` |
+| 47 | Down-migrations | ✅ | `-- @DOWN` + `migrate.mjs down` (verified rollback) |
+| 48 | Standardize `date::text` mapping | ◐ | newer stores (incl. AMC) use `::text`; not universal |
+| 49 | Type the `any` pg-row mappers | ✅ | `row: QueryResultRow` across 9 pg stores; 0 mapper `any` left (finance already typed) |
+| 50 | Root ESLint config + CI | ✅ | `eslint.config.mjs` (flat, tseslint) + `pnpm lint` → 0 errors; CI wiring open |
+| 51 | FK policy documented | ✅ | `docs/adr/0001-fk-policy.md` |
+| 52 | Reporting views for hot reads | ◐ | `0091`: `aura_v_trial_balance` + `aura_v_open_customer_invoices` (applies on migrate) |
+| 53 | Bulk operations | ◐ | reference: customer-invoices bulk delete/restore |
+| 54 | CSV/Excel import + export | ◐ | CSV export (9 lists) + accounts CSV import; Excel ❌ |
+| 55 | Soft-delete + restore standardized | ◐ | reference on customer-invoices (`deleted_at`, DELETE/restore); rollout pending |
+| 56 | Attachments/comments via DMS all modules | ❌ | DMS exists; not per-module |
+| 57 | Idempotency-key **required** (not just honored) | ❌ | honored, not enforced |
+| 58 | Roll CommandBus to non-spine modules | ◐ | spine on bus; ~10 non-spine inline |
+
 39. SWC transform for vitest → unblock Nest HTTP e2e.
 40. Supertest E2E for the 4 core chains (P2P, O2C, deal-chain, service).
 41. Playwright smoke for top 10 pages.

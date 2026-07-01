@@ -8,6 +8,7 @@ import {
   SNAG_STORE,
   ITP_STORE,
   MATERIAL_APPROVAL_STORE,
+  CALIBRATION_STORE,
   QualityService,
 } from './quality.service';
 
@@ -17,6 +18,7 @@ import {
   InMemorySnagStore,
   InMemoryItpStore,
   InMemoryMaterialApprovalStore,
+  InMemoryCalibrationStore,
 } from './in-memory-quality-store';
 
 import {
@@ -25,6 +27,7 @@ import {
   PostgresSnagStore,
   PostgresItpStore,
   PostgresMaterialApprovalStore,
+  PostgresCalibrationStore,
 } from './postgres-quality-store';
 
 @Module({
@@ -59,6 +62,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresMaterialApprovalStore(pool) : new InMemoryMaterialApprovalStore(),
+    },
+    {
+      provide: CALIBRATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCalibrationStore(pool) : new InMemoryCalibrationStore(),
     },
     QualityService,
   ],

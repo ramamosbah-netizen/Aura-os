@@ -9,6 +9,7 @@ import {
   type PointResult,
   type MaterialApproval,
   type MarDecision,
+  type Calibration,
   QualityService,
 } from '@aura/quality';
 
@@ -338,5 +339,48 @@ export class QualityController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // ── Equipment calibration ──────────────────────────────────────────────────
+
+  @Post('calibrations')
+  async recordCalibration(
+    @Body() dto: { projectId?: string; projectName?: string; equipmentName: string; equipmentSerial: string; instrumentType?: string; calibrationDate: string; dueDate: string; certificateNumber?: string; calibratedBy?: string; notes?: string },
+  ): Promise<Calibration> {
+    if (!dto?.equipmentName?.trim()) throw new BadRequestException('equipmentName is required');
+    if (!dto?.equipmentSerial?.trim()) throw new BadRequestException('equipmentSerial is required');
+    if (!dto?.calibrationDate || !dto?.dueDate) throw new BadRequestException('calibrationDate and dueDate are required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.qualityService.recordCalibration({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        projectId: dto.projectId ?? null,
+        projectName: dto.projectName ?? null,
+        equipmentName: dto.equipmentName,
+        equipmentSerial: dto.equipmentSerial,
+        instrumentType: dto.instrumentType ?? null,
+        calibrationDate: dto.calibrationDate,
+        dueDate: dto.dueDate,
+        certificateNumber: dto.certificateNumber ?? null,
+        calibratedBy: dto.calibratedBy ?? null,
+        notes: dto.notes ?? null,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('calibrations')
+  listCalibrations(): Promise<Calibration[]> {
+    return this.qualityService.listCalibrations(this.tenant.get().tenantId);
+  }
+
+  @Get('calibrations/:id')
+  async getCalibration(@Param('id') id: string): Promise<Calibration> {
+    const found = await this.qualityService.getCalibration(this.tenant.get().tenantId, id);
+    if (!found) throw new BadRequestException(`calibration ${id} not found`);
+    return found;
   }
 }

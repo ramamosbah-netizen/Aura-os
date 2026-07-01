@@ -4,6 +4,14 @@ import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
 import type { MaterialApproval } from './domain/material-approval';
+import type { Calibration } from './domain/calibration';
+
+export interface CalibrationStore {
+  save(cal: Calibration, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<Calibration | null>;
+  findByProject(projectId: string, tenantId: string): Promise<Calibration[]>;
+  findAll(tenantId: string): Promise<Calibration[]>;
+}
 
 export interface NcrStore {
   save(ncr: Ncr, tx?: TxHandle): Promise<void>;

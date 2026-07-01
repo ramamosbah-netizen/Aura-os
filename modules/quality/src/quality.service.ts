@@ -16,11 +16,14 @@ import {
   reviseMaterialApproval,
 } from './domain/material-approval';
 
+import { type Calibration, type NewCalibration, makeCalibration, calibrationStatus } from './domain/calibration';
+
 export const NCR_STORE = Symbol('NCR_STORE');
 export const INSPECTION_REQUEST_STORE = Symbol('INSPECTION_REQUEST_STORE');
 export const SNAG_STORE = Symbol('SNAG_STORE');
 export const ITP_STORE = Symbol('ITP_STORE');
 export const MATERIAL_APPROVAL_STORE = Symbol('MATERIAL_APPROVAL_STORE');
+export const CALIBRATION_STORE = Symbol('CALIBRATION_STORE');
 
 import {
   type NcrStore,
@@ -28,6 +31,7 @@ import {
   type SnagStore,
   type ItpStore,
   type MaterialApprovalStore,
+  type CalibrationStore,
 } from './store.interface';
 
 export const QUALITY_EVENT = {
@@ -52,6 +56,7 @@ export class QualityService {
     @Inject(SNAG_STORE) private readonly snagStore: SnagStore,
     @Inject(ITP_STORE) private readonly itpStore: ItpStore,
     @Inject(MATERIAL_APPROVAL_STORE) private readonly marStore: MaterialApprovalStore,
+    @Inject(CALIBRATION_STORE) private readonly calibrationStore: CalibrationStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -400,5 +405,29 @@ export class QualityService {
 
   listMaterialApprovals(tenantId: Id): Promise<MaterialApproval[]> {
     return this.marStore.findAll(tenantId);
+  }
+
+  // ── Equipment calibration ──────────────────────────────────────────────────
+
+  async recordCalibration(input: NewCalibration): Promise<Calibration> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'quality.calibration.create', orgPath });
+    }
+    const cal = makeCalibration(input);
+    await this.tx.run(async (handle) => { await this.calibrationStore.save(cal, handle); });
+    this.logger.log(`Calibration recorded: ${cal.equipmentName} (${cal.equipmentSerial}) due ${cal.dueDate} [${cal.status}]`);
+    return cal;
+  }
+
+  getCalibration(tenantId: Id, id: Id): Promise<Calibration | null> {
+    return this.calibrationStore.findById(id, tenantId);
+  }
+
+  /** All calibration records for a tenant, with `status` recomputed against today. */
+  async listCalibrations(tenantId: Id): Promise<Calibration[]> {
+    const all = await this.calibrationStore.findAll(tenantId);
+    return all.map((c) => ({ ...c, status: calibrationStatus(c.dueDate) }));
   }
 }

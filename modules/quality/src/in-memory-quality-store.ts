@@ -3,7 +3,34 @@ import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
 import type { MaterialApproval } from './domain/material-approval';
-import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore } from './store.interface';
+import type { Calibration } from './domain/calibration';
+import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore, CalibrationStore } from './store.interface';
+
+export class InMemoryCalibrationStore implements CalibrationStore {
+  private readonly items = new Map<string, Calibration>();
+
+  async save(cal: Calibration): Promise<void> {
+    this.items.set(cal.id, { ...cal });
+  }
+
+  async findById(id: string, tenantId: string): Promise<Calibration | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return { ...item };
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<Calibration[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.projectId === projectId && i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findAll(tenantId: string): Promise<Calibration[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
 
 export class InMemoryNcrStore implements NcrStore {
   private readonly items = new Map<string, Ncr>();

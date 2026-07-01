@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type Opportunity, type OpportunityStage } from '@aura/shared';
-import { OpportunityService } from '@aura/crm';
+import { type Quotation, OpportunityService, QuotationService } from '@aura/crm';
 
 interface CreateOpportunityDto {
   title: string;
@@ -28,8 +28,28 @@ interface UpdateOpportunityDto {
 export class CrmOpportunitiesController {
   constructor(
     private readonly opportunities: OpportunityService,
+    private readonly quotations: QuotationService,
     private readonly tenant: TenantContext,
   ) {}
+
+  /** One-click convert a won opportunity into a draft quotation (carries value + account). */
+  @Post(':id/convert-to-quotation')
+  async convertToQuotation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Quotation> {
+    const opp = await this.opportunities.get(id);
+    if (!opp) throw new NotFoundException(`opportunity ${id} not found`);
+    if (opp.stage !== 'won') throw new BadRequestException(`opportunity must be 'won' to convert (is '${opp.stage}')`);
+    const ctx = this.tenant.get();
+    return this.quotations.create({
+      tenantId: ctx.tenantId,
+      companyId: opp.companyId,
+      quoteNumber: `QT-OPP-${opp.id.slice(0, 8)}`,
+      customerName: opp.accountName ?? 'Client',
+      accountId: opp.accountId,
+      issueDate: new Date().toISOString().slice(0, 10),
+      lines: [{ description: opp.title, quantity: 1, unitPrice: opp.value, vatRate: 5 }],
+      createdBy: ctx.actorId,
+    });
+  }
 
   @Post()
   create(@Body() dto: CreateOpportunityDto): Promise<Opportunity> {

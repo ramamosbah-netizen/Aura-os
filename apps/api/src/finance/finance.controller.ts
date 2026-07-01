@@ -155,6 +155,20 @@ export class FinanceController {
     return this.invoices.aging(this.tenant.get().tenantId, asOf);
   }
 
+  @Get('invoices/paged')
+  pagedInvoices(
+    @Query('status') status?: string,
+    @Query('poId') poId?: string,
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.invoices.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, poId, projectId },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('invoices/:id')
   async getInvoice(@Param('id') id: string): Promise<Invoice> {
     const found = await this.invoices.get(id);

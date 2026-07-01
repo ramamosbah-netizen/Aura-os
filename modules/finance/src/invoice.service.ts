@@ -184,6 +184,10 @@ export class InvoiceService implements OnModuleInit {
     return this.store.list(filter);
   }
 
+  listPaged(filter: InvoiceFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
+
   /** AP aging — approved-but-unpaid supplier liability bucketed by invoice-date age. */
   async aging(tenantId: string, asOf?: string): Promise<ApAgingReport> {
     const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });

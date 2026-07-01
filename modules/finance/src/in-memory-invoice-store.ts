@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import { type Id, type Page, type PageParams, makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Invoice } from './domain/invoice';
 import type { InvoiceFilter, InvoiceStore } from './invoice-store';
@@ -36,5 +36,10 @@ export class InMemoryInvoiceStore implements InvoiceStore {
     if (filter.projectId) out = out.filter((i) => i.projectId === filter.projectId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: InvoiceFilter, page: PageParams): Promise<Page<Invoice>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return makePage(all.slice(page.offset, page.offset + page.limit), all.length, page);
   }
 }

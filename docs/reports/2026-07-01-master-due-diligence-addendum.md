@@ -20,7 +20,7 @@
 | HR / CRM / Quality / Fleet / Subcontracts | 3–7 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Tendering / Assets / HSE / Site / AMC / Engineering / Doc-Control | 1–2 | ◐ | ❌ | ❌ | ❌ | ❌ |
 
-**Verified (rev 4):** print shipped for **9 documents** (Invoice/PO/GRN/IPC/Quotation/Contract/Subcontract/**Payslip/Statements**); **5 dashboards** (Finance/Projects/Procurement/HR/Inventory); **CSV export** on Stock + Customer-Invoices. Remaining UI gaps: export rollout to all lists, saved views.
+**Verified (rev 5):** print for **9 documents**; **5 dashboards**; **CSV export on 9 lists**. Remaining UI gaps: saved views/advanced filters, Excel export, UI Gantt render.
 
 ---
 
@@ -113,7 +113,7 @@
 | Construction vertical (IPC/ITP/subcontract/WPS) | ◐ | ◐ | ✗ | ✗ | ✅ **edge** |
 | Document print/output mgmt | ✅ | ✅ | ✅ | ✅ | ◐ (9 docs) |
 | BI / dashboards | ✅ | ✅ | ✅ | ◐ | ◐ (5 dashboards) |
-| Reporting/export engine | ✅ | ✅ | ✅ | ✅ | ◐ (CSV, partial) |
+| Reporting/export engine | ✅ | ✅ | ✅ | ✅ | ◐ (CSV on 9 lists) |
 | Workflow designer | ✅ | ✅ | ✅ | ✅ | ✗ |
 | AI (extraction/forecast/assistant) | ✅ | ✅ | ✅ | ◐ | ✗ |
 | Mobile / portals | ✅ | ✅ | ✅ | ✅ | ✗ |
@@ -173,7 +173,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 |---|---|--:|---|
 | A | Document output engine (9 docs incl. Contract/Payslip/Statements) | P1 | ✅ **done** |
 | B | Module + executive dashboards with charts | P1 | ✅ **done** — chart kit + Finance/Projects/Procurement/HR/Inventory dashboards |
-| C | Bulk export (CSV/Excel) over list + report endpoints | P1 | ◐ **started** — reusable ExportButton (CSV) on Stock + Customer-Invoices; roll out to remaining lists |
+| C | Bulk export (CSV) over list endpoints | P1 | ✅ **done** — ExportButton on 9 lists (stock, customer-invoices, attendance, salik, expense-claims, fines, staff-advances, suppliers, quotations); Excel/report-export optional |
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |
 | F | Saved views / advanced filters | P2 | open |

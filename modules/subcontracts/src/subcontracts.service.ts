@@ -183,6 +183,9 @@ export class SubcontractsService {
           retentionReleased: updated.retentionReleased,
           subcontractId: updated.subcontractId,
           subcontractor: subcontract?.subcontractorName ?? null,
+          subcontractTitle: subcontract?.title ?? null,
+          projectId: subcontract?.projectId ?? null,
+          projectName: subcontract?.projectName ?? null,
         },
       }),
     ]);

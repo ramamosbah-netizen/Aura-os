@@ -97,7 +97,9 @@ Still genuinely **absent**: baseline/Gantt schedule (7), project close-out workf
 - **FIFO** cost layers (WAC shipped).
 - Real notification **channel delivery** (email/SMS) — currently a log stub.
 - AMC → Finance **billing link**; project **close-out** + **warranty/DLP**; **Gantt/baseline** schedule.
-- Pagination **rollout** to the other ~30 list endpoints (one reference impl exists).
+- **Pagination Rollout:**
+   * *Current Status:* Standardized pagination (`PageParams`, limit, offset) is active on CRM, Procurement, Inventory, Finance, Projects, Contracts, Tendering, Engineering, Assets (via `listAssetsPaged`), Fleet (via `listVehiclesPaged`), Quality (Material Approvals), and **Site (Daily Reports)** (via `listDailyReportsPaged` supporting `DailyReportFilter`).
+   * *Gaps:* `subcontracts`, `quality` (other entities), `site` (other entities), `hr`, `hse`, `amc` still rely on unpaginated/default-limit lists.
 
 ### Production blockers — UNCHANGED, deliberately deferred (the real remaining risk)
 These are the audit's Tier-0 set and remain open by explicit project decision:

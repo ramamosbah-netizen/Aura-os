@@ -181,7 +181,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |
 | F | Saved views / advanced filters | P2 | ◐ — saved views ✅ (`/views`); advanced-filter DSL open |
-| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | ◐ — journal N+1 fixed; APM/load-test/pagination-rollout open |
+| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | ◐ — journal N+1 fixed; pagination live on finance (AP/AR), procurement (PO/PR/RFQ/supplier), inventory (GRN/transfer/stock); APM/load-test + remaining modules (projects/crm/contracts/tendering/engineering/subcontracts) open |
 | H | UI Gantt render over the new schedule/baseline data | P2 | ✅ **done** — `/projects/schedule` (planned vs baseline vs actual-%) |
 
 These are **additive** to the master report's P0–P3 list (security/ops P0 still dominate).

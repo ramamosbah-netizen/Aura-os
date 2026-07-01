@@ -20,7 +20,7 @@
 | HR / CRM / Quality / Fleet / Subcontracts | 3–7 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Tendering / Assets / HSE / Site / AMC / Engineering / Doc-Control | 1–2 | ◐ | ❌ | ❌ | ❌ | ❌ |
 
-**Verified (rev 3):** print shipped for **7 documents** (Invoice/PO/GRN/IPC/Quotation/Contract/Subcontract via reusable A4 `DocumentSheet`); **5 dashboards** (Finance/Projects/Procurement/HR/Inventory via a dependency-free SVG chart kit); **CSV export** on Stock + Customer-Invoices. Remaining UI gaps: export rollout to all lists, payslip/statement print, saved views.
+**Verified (rev 4):** print shipped for **9 documents** (Invoice/PO/GRN/IPC/Quotation/Contract/Subcontract/**Payslip/Statements**); **5 dashboards** (Finance/Projects/Procurement/HR/Inventory); **CSV export** on Stock + Customer-Invoices. Remaining UI gaps: export rollout to all lists, saved views.
 
 ---
 
@@ -111,7 +111,7 @@
 | Project costing / EVM | ✅ | ✅ | ◐ | ◐ | ✅ |
 | Gantt / scheduling | ✅ | ✅ | ✅ | ✅ | ◐ (data only) |
 | Construction vertical (IPC/ITP/subcontract/WPS) | ◐ | ◐ | ✗ | ✗ | ✅ **edge** |
-| Document print/output mgmt | ✅ | ✅ | ✅ | ✅ | ◐ (4 docs) |
+| Document print/output mgmt | ✅ | ✅ | ✅ | ✅ | ◐ (9 docs) |
 | BI / dashboards | ✅ | ✅ | ✅ | ◐ | ◐ (5 dashboards) |
 | Reporting/export engine | ✅ | ✅ | ✅ | ✅ | ◐ (CSV, partial) |
 | Workflow designer | ✅ | ✅ | ✅ | ✅ | ✗ |
@@ -171,7 +171,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 
 | # | Gap | Priority | Status |
 |---|---|--:|---|
-| A | Document output engine — Invoice/PO/GRN/IPC print | P1 | ✅ **done** (rev 2); extend to Contract/Payslip/Statements |
+| A | Document output engine (9 docs incl. Contract/Payslip/Statements) | P1 | ✅ **done** |
 | B | Module + executive dashboards with charts | P1 | ✅ **done** — chart kit + Finance/Projects/Procurement/HR/Inventory dashboards |
 | C | Bulk export (CSV/Excel) over list + report endpoints | P1 | ◐ **started** — reusable ExportButton (CSV) on Stock + Customer-Invoices; roll out to remaining lists |
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |

@@ -6,17 +6,20 @@ import { type DailyReport, makeDailyReport } from './domain/daily-report';
 import { type DelayLog, makeDelayLog } from './domain/delay-log';
 import { type MaterialConsumption, makeMaterialConsumption } from './domain/material-consumption';
 import { type SiteInstruction, makeSiteInstruction, acknowledgeInstruction, closeInstruction } from './domain/site-instruction';
+import { type LabourAllocation, type TradeManHours, makeLabourAllocation, summariseByTrade } from './domain/labour-allocation';
 
 export const DAILY_REPORT_STORE = Symbol('DAILY_REPORT_STORE');
 export const DELAY_LOG_STORE = Symbol('DELAY_LOG_STORE');
 export const MATERIAL_CONSUMPTION_STORE = Symbol('MATERIAL_CONSUMPTION_STORE');
 export const SITE_INSTRUCTION_STORE = Symbol('SITE_INSTRUCTION_STORE');
+export const LABOUR_ALLOCATION_STORE = Symbol('LABOUR_ALLOCATION_STORE');
 
 import {
   type DailyReportStore,
   type DelayLogStore,
   type MaterialConsumptionStore,
   type SiteInstructionStore,
+  type LabourAllocationStore,
 } from './store.interface';
 
 export const SITE_EVENT = {
@@ -36,6 +39,7 @@ export class SiteService {
     @Inject(DELAY_LOG_STORE) private readonly delayLogStore: DelayLogStore,
     @Inject(MATERIAL_CONSUMPTION_STORE) private readonly materialConsumptionStore: MaterialConsumptionStore,
     @Inject(SITE_INSTRUCTION_STORE) private readonly siteInstructionStore: SiteInstructionStore,
+    @Inject(LABOUR_ALLOCATION_STORE) private readonly labourStore: LabourAllocationStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -285,5 +289,41 @@ export class SiteService {
 
   listMaterialConsumption(tenantId: Id): Promise<MaterialConsumption[]> {
     return this.materialConsumptionStore.findAll(tenantId);
+  }
+
+  // ── Labour allocation (manpower by trade) ───────────────────────────────────
+
+  async createLabourAllocation(input: {
+    tenantId: string;
+    companyId?: string;
+    projectId: string;
+    projectName?: string;
+    date: string;
+    trade: string;
+    headcount: number;
+    hours: number;
+    subcontractorName?: string;
+    notes?: string;
+    createdBy?: string;
+  }): Promise<LabourAllocation> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
+    }
+    const allocation = makeLabourAllocation(input);
+    await this.tx.run(async (handle) => { await this.labourStore.save(allocation, handle); });
+    this.logger.log(`Labour logged: ${allocation.headcount}× ${allocation.trade} @ ${allocation.hours}h = ${allocation.manHours}mh on ${allocation.projectId}`);
+    return allocation;
+  }
+
+  listLabourAllocations(tenantId: Id): Promise<LabourAllocation[]> {
+    return this.labourStore.findAll(tenantId);
+  }
+
+  /** Manpower rolled up by trade for a project (headcount + man-hours). */
+  async labourByTrade(tenantId: Id, projectId: Id): Promise<TradeManHours[]> {
+    const rows = await this.labourStore.findByProject(projectId, tenantId);
+    return summariseByTrade(rows);
   }
 }

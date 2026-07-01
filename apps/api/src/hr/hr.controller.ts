@@ -191,6 +191,15 @@ export class HrController {
     return this.hrService.markPayrollPaid(ctx.tenantId, ctx.actorId, id);
   }
 
+  @Get('leave-balance/:employeeId')
+  leaveBalance(
+    @Param('employeeId') employeeId: string,
+    @Query('asOf') asOf?: string,
+    @Query('annualDays') annualDays?: string,
+  ): Promise<import('@aura/hr').LeaveBalance> {
+    return this.hrService.leaveBalance(this.tenant.get().tenantId, employeeId, asOf, annualDays ? Number(annualDays) : undefined);
+  }
+
   @Get('payroll')
   listPayrollRuns(): Promise<PayrollRun[]> {
     const ctx = this.tenant.get();

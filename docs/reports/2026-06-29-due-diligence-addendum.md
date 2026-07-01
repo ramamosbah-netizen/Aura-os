@@ -295,7 +295,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 3 done, 7 partial, 10 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 4 done, 7 partial, 9 open — assurance/CI/hygiene largely deferred with the P0 ops track.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
@@ -311,7 +311,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 | 48 | Standardize `date::text` mapping | ◐ | newer stores (incl. AMC) use `::text`; not universal |
 | 49 | Type the 124 `any` pg-row mappers | ❌ | still ~124 |
 | 50 | Root ESLint config + CI | ❌ | no root eslint |
-| 51 | FK policy documented | ❌ | snapshot pattern used, undocumented |
+| 51 | FK policy documented | ✅ | `docs/adr/0001-fk-policy.md` |
 | 52 | Reporting views for hot reads | ◐ | `0091`: `aura_v_trial_balance` + `aura_v_open_customer_invoices` (applies on migrate) |
 | 53 | Bulk operations | ◐ | reference: customer-invoices bulk delete/restore |
 | 54 | CSV/Excel import + export | ◐ | CSV export (9 lists) + accounts CSV import; Excel ❌ |

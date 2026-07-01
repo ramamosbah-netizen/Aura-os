@@ -6,6 +6,7 @@ import { InMemoryDrawingStore } from '../in-memory-drawing-store';
 import { InMemoryRfiStore } from '../in-memory-rfi-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryTechnicalQueryStore } from '../in-memory-technical-query-store';
+import { InMemoryBimModelStore } from '../in-memory-bim-model-store';
 import { EngineeringService } from '../engineering.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -46,6 +47,7 @@ describe('Engineering Module Bounded Context', () => {
         rfiStore,
         submittalStore,
         new InMemoryTechnicalQueryStore(),
+        new InMemoryBimModelStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -84,6 +86,7 @@ describe('Engineering Module Bounded Context', () => {
         rfiStore,
         submittalStore,
         new InMemoryTechnicalQueryStore(),
+        new InMemoryBimModelStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -117,6 +120,7 @@ describe('Engineering Module Bounded Context', () => {
         rfiStore,
         submittalStore,
         new InMemoryTechnicalQueryStore(),
+        new InMemoryBimModelStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -147,6 +151,7 @@ describe('Engineering Module Bounded Context', () => {
         new InMemoryRfiStore(),
         new InMemorySubmittalStore(),
         new InMemoryTechnicalQueryStore(),
+        new InMemoryBimModelStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -199,6 +204,7 @@ describe('Engineering Module Bounded Context', () => {
         rfiStore,
         submittalStore,
         tqStore,
+        new InMemoryBimModelStore(),
         mockEvents,
         mockTx,
         mockAccess

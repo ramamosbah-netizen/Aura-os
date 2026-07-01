@@ -14,6 +14,9 @@ import { SUBMITTAL_STORE, type SubmittalFilter, type SubmittalStore } from './su
 import { type TechnicalQuery, type NewTechnicalQuery, makeTechnicalQuery, respondToQuery } from './domain/technical-query';
 import { TECHNICAL_QUERY_STORE, type TqFilter, type TechnicalQueryStore } from './technical-query-store';
 
+import { type BimModel, type NewBimModel, type ModelStatus, makeBimModel, bumpModelVersion, BIM_MODEL_EVENT } from './domain/bim-model';
+import { BIM_MODEL_STORE, type BimModelFilter, type BimModelStore } from './bim-model-store';
+
 @Injectable()
 export class EngineeringService {
   private readonly logger = new Logger('Engineering');
@@ -23,6 +26,7 @@ export class EngineeringService {
     @Inject(RFI_STORE) private readonly rfiStore: RfiStore,
     @Inject(SUBMITTAL_STORE) private readonly submittalStore: SubmittalStore,
     @Inject(TECHNICAL_QUERY_STORE) private readonly tqStore: TechnicalQueryStore,
+    @Inject(BIM_MODEL_STORE) private readonly bimStore: BimModelStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -378,5 +382,61 @@ export class EngineeringService {
 
   listTechnicalQueriesPaged(filter: TqFilter, page: import('@aura/shared').PageParams) {
     return this.tqStore.listPaged(filter, page);
+  }
+
+  // ── BIM / model registry (viewer backbone) ──────────────────────────────────
+
+  async registerBimModel(input: NewBimModel): Promise<BimModel> {
+    if (input.uploadedBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.uploadedBy, { permission: 'engineering.bim_model.register', orgPath });
+    }
+    const model = makeBimModel(input);
+    const event = makeEvent({
+      type: BIM_MODEL_EVENT.registered,
+      tenantId: model.tenantId, companyId: model.companyId, actorId: model.uploadedBy,
+      aggregateType: 'engineering.bim_model', aggregateId: model.id,
+      payload: { code: model.code, discipline: model.discipline, format: model.format, projectId: model.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.bimStore.save(model);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`BIM model registered: ${model.code} (${model.format}, ${model.discipline})`);
+    return model;
+  }
+
+  async newBimModelVersion(
+    tenantId: Id,
+    id: Id,
+    patch: { revision: string; storageKey?: string | null; fileUrl?: string | null; fileSizeBytes?: number | null; status?: ModelStatus },
+  ): Promise<BimModel> {
+    const model = await this.bimStore.get(id);
+    if (!model || model.tenantId !== tenantId) throw new Error(`BIM model ${id} not found`);
+    const updated = bumpModelVersion(model, patch);
+    const event = makeEvent({
+      type: BIM_MODEL_EVENT.versioned,
+      tenantId, companyId: model.companyId, actorId: null,
+      aggregateType: 'engineering.bim_model', aggregateId: id,
+      payload: { code: model.code, version: updated.version, revision: updated.revision },
+    });
+    await this.tx.run(async (handle) => {
+      await this.bimStore.save(updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return updated;
+  }
+
+  getBimModel(id: Id): Promise<BimModel | null> {
+    return this.bimStore.get(id);
+  }
+
+  listBimModels(filter?: BimModelFilter): Promise<BimModel[]> {
+    return this.bimStore.list(filter);
+  }
+
+  listBimModelsPaged(filter: BimModelFilter, page: import('@aura/shared').PageParams) {
+    return this.bimStore.listPaged(filter, page);
   }
 }

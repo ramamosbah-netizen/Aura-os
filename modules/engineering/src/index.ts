@@ -19,5 +19,10 @@ export * from './technical-query-store';
 export * from './in-memory-technical-query-store';
 export * from './postgres-technical-query-store';
 
+export * from './domain/bim-model';
+export * from './bim-model-store';
+export * from './in-memory-bim-model-store';
+export * from './postgres-bim-model-store';
+
 export * from './engineering.service';
 export * from './engineering.module';

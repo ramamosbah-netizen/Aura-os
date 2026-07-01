@@ -11,6 +11,10 @@ import {
   type TechnicalQuery,
   type TqPriority,
   type TqDiscipline,
+  type BimModel,
+  type ModelDiscipline,
+  type ModelFormat,
+  type ModelStatus,
   EngineeringService
 } from '@aura/engineering';
 
@@ -332,6 +336,79 @@ export class EngineeringController {
     const ctx = this.tenant.get();
     try {
       return await this.engineeringService.respondTechnicalQuery(ctx.tenantId, ctx.actorId, id, dto.response);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── BIM / model registry (viewer backbone) ──────────────────────────────────
+
+  @Post('bim-models')
+  registerBimModel(
+    @Body() dto: { projectId: string; projectName?: string; code: string; name: string; discipline?: ModelDiscipline; format?: ModelFormat; storageKey?: string; fileUrl?: string; revision?: string; status?: ModelStatus; fileSizeBytes?: number; federationGroup?: string; notes?: string },
+  ): Promise<BimModel> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    if (!dto?.name?.trim()) throw new BadRequestException('name is required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.registerBimModel({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      projectName: dto.projectName ?? null,
+      code: dto.code,
+      name: dto.name,
+      discipline: dto.discipline,
+      format: dto.format,
+      storageKey: dto.storageKey ?? null,
+      fileUrl: dto.fileUrl ?? null,
+      revision: dto.revision,
+      status: dto.status,
+      fileSizeBytes: dto.fileSizeBytes ?? null,
+      federationGroup: dto.federationGroup ?? null,
+      notes: dto.notes ?? null,
+      uploadedBy: ctx.actorId,
+    });
+  }
+
+  @Get('bim-models')
+  listBimModels(
+    @Query('projectId') projectId?: string,
+    @Query('discipline') discipline?: string,
+    @Query('status') status?: string,
+  ): Promise<BimModel[]> {
+    return this.engineeringService.listBimModels({ tenantId: this.tenant.get().tenantId, projectId, discipline, status, limit: 200 });
+  }
+
+  @Get('bim-models/paged')
+  pagedBimModels(
+    @Query('projectId') projectId?: string,
+    @Query('discipline') discipline?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listBimModelsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, discipline, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
+  @Get('bim-models/:id')
+  async getBimModel(@Param('id') id: string): Promise<BimModel> {
+    const found = await this.engineeringService.getBimModel(id);
+    if (!found) throw new NotFoundException(`BIM model ${id} not found`);
+    return found;
+  }
+
+  @Put('bim-models/:id/version')
+  async newBimModelVersion(
+    @Param('id') id: string,
+    @Body() dto: { revision: string; storageKey?: string; fileUrl?: string; fileSizeBytes?: number; status?: ModelStatus },
+  ): Promise<BimModel> {
+    if (!dto?.revision?.trim()) throw new BadRequestException('revision is required');
+    try {
+      return await this.engineeringService.newBimModelVersion(this.tenant.get().tenantId, id, dto);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }

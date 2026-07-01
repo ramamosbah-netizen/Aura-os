@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type DailyReport, makeDailyReport } from './domain/daily-report';
@@ -20,6 +20,7 @@ import {
   type MaterialConsumptionStore,
   type SiteInstructionStore,
   type LabourAllocationStore,
+  type DailyReportFilter,
 } from './store.interface';
 
 export const SITE_EVENT = {
@@ -108,6 +109,10 @@ export class SiteService {
 
   listDailyReports(tenantId: Id): Promise<DailyReport[]> {
     return this.dailyReportStore.findAll(tenantId);
+  }
+
+  listDailyReportsPaged(filter: DailyReportFilter, page: PageParams): Promise<Page<DailyReport>> {
+    return this.dailyReportStore.listPaged(filter, page);
   }
 
   // ── Delay Logs ─────────────────────────────────────────────────────────────

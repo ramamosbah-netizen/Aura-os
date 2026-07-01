@@ -5,7 +5,8 @@ import type { DelayLog } from './domain/delay-log';
 import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
 import type { LabourAllocation } from './domain/labour-allocation';
-import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore } from './store.interface';
+import { type Page, PageParams, makePage } from '@aura/shared';
+import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, DailyReportFilter } from './store.interface';
 
 export class PostgresLabourAllocationStore implements LabourAllocationStore {
   constructor(private readonly pool: Pool) {}
@@ -137,6 +138,36 @@ export class PostgresDailyReportStore implements DailyReportStore {
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
+  }
+
+  private buildWhere(filter: DailyReportFilter): { whereSql: string; params: unknown[] } {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) {
+        params.push(val);
+        where.push(`${col} = $${params.length}`);
+      }
+    };
+    add('tenant_id', filter.tenantId);
+    add('project_id', filter.projectId);
+    add('status', filter.status);
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async listPaged(filter: DailyReportFilter, page: PageParams): Promise<Page<DailyReport>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_site_daily_reports ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<any>(
+      `SELECT * FROM public.aura_site_daily_reports ${whereSql} ORDER BY date DESC, created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map((row) => this.mapDailyReport(row)), total, page);
   }
 }
 

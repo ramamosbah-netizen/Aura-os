@@ -12,11 +12,20 @@ export interface LabourAllocationStore {
   findAll(tenantId: string): Promise<LabourAllocation[]>;
 }
 
+import type { Page, PageParams } from '@aura/shared';
+
+export interface DailyReportFilter {
+  tenantId?: string;
+  projectId?: string;
+  status?: string;
+}
+
 export interface DailyReportStore {
   save(report: DailyReport, tx?: TxHandle): Promise<void>;
   findById(id: string, tenantId: string): Promise<DailyReport | null>;
   findByProject(projectId: string, tenantId: string): Promise<DailyReport[]>;
   findAll(tenantId: string): Promise<DailyReport[]>;
+  listPaged(filter: DailyReportFilter, page: PageParams): Promise<Page<DailyReport>>;
 }
 
 export interface DelayLogStore {

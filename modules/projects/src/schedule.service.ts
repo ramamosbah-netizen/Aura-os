@@ -13,6 +13,7 @@ import {
   summariseSchedule,
 } from './domain/schedule';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
+import { type PlanTaskInput, type SchedulePlan, planSchedule } from './domain/schedule-planning';
 
 /** Project schedule (Gantt) service — one per project; owns `aura_projects_schedules`. */
 @Injectable()
@@ -71,5 +72,14 @@ export class ScheduleService {
 
   list(tenantId: Id): Promise<ProjectSchedule[]> {
     return this.store.list(tenantId);
+  }
+
+  /**
+   * Compute a resource-leveled, dependency-driven plan (CPM forward pass + resource levelling).
+   * Stateless planning tool — returns computed start/finish, critical path, and resource peaks
+   * without mutating the stored schedule. `capacity` maps a resource name → its daily unit limit.
+   */
+  plan(tasks: PlanTaskInput[], projectStart: string, capacity?: Record<string, number>): SchedulePlan {
+    return planSchedule(tasks, projectStart, capacity ?? {});
   }
 }

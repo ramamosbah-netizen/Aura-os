@@ -30,6 +30,8 @@ import {
   type ProjectSchedule,
   type ScheduleSummary,
   type NewScheduleTask,
+  type PlanTaskInput,
+  type SchedulePlan,
   ScheduleService,
 } from '@aura/projects';
 
@@ -497,6 +499,20 @@ export class ProjectsController {
   @Get('schedules')
   listSchedules(): Promise<ProjectSchedule[]> {
     return this.schedule.list(this.tenant.get().tenantId);
+  }
+
+  // Reactive planning: CPM forward-pass reschedule + resource levelling (stateless compute).
+  @Post('schedules/plan')
+  planSchedule(
+    @Body() dto: { projectStart: string; tasks: PlanTaskInput[]; capacity?: Record<string, number> },
+  ): SchedulePlan {
+    if (!dto?.projectStart) throw new BadRequestException('projectStart (YYYY-MM-DD) is required');
+    if (!Array.isArray(dto?.tasks) || dto.tasks.length === 0) throw new BadRequestException('at least one task is required');
+    try {
+      return this.schedule.plan(dto.tasks, dto.projectStart, dto.capacity);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   @Post('schedules/:projectId/baseline')

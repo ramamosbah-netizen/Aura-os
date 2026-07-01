@@ -35,6 +35,7 @@ export * from './in-memory-cashflow-forecast-store';
 export * from './postgres-cashflow-forecast-store';
 export * from './cashflow-forecast.service';
 export * from './domain/schedule';
+export * from './domain/schedule-planning';
 export * from './schedule-store';
 export * from './in-memory-schedule-store';
 export * from './postgres-schedule-store';

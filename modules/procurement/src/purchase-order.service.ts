@@ -209,4 +209,8 @@ export class PurchaseOrderService implements OnModuleInit {
   list(filter?: PurchaseOrderFilter): Promise<PurchaseOrder[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: PurchaseOrderFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

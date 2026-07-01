@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { PurchaseOrder } from './domain/purchase-order';
 import type { PurchaseOrderFilter, PurchaseOrderStore } from './purchase-order-store';
@@ -35,5 +36,10 @@ export class InMemoryPurchaseOrderStore implements PurchaseOrderStore {
     if (filter.projectId) out = out.filter((p) => p.projectId === filter.projectId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: PurchaseOrderFilter, page: PageParams): Promise<Page<PurchaseOrder>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

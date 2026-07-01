@@ -126,4 +126,8 @@ export class PurchaseRequestService {
   list(filter?: PurchaseRequestFilter): Promise<PurchaseRequest[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: PurchaseRequestFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

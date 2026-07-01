@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { Supplier } from './domain/supplier';
 import type { SupplierFilter, SupplierStore } from './supplier-store';
 
@@ -70,7 +71,7 @@ export class PostgresSupplierStore implements SupplierStore {
     return res.rows.length ? rowTo(res.rows[0]) : null;
   }
 
-  async list(filter: SupplierFilter = {}): Promise<Supplier[]> {
+  private buildWhere(filter: SupplierFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
@@ -82,12 +83,31 @@ export class PostgresSupplierStore implements SupplierStore {
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('category', filter.category);
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async list(filter: SupplierFilter = {}): Promise<Supplier[]> {
+    const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 200);
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_procurement_suppliers ${whereSql} ORDER BY name ASC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowTo);
+  }
+
+  async listPaged(filter: SupplierFilter, page: PageParams): Promise<Page<Supplier>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_procurement_suppliers ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_procurement_suppliers ${whereSql} ORDER BY name ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowTo), total, page);
   }
 }

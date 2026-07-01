@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, Fragment, useState } from 'react';
+import ExportButton from './export-button';
 
 interface StockItem {
   id: string;
@@ -155,6 +156,8 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
         <input style={s.inputXs} placeholder="Opening" type="number" value={opening} onChange={(e) => setOpening(e.target.value)} />
         <input style={s.inputXs} placeholder="Cost/unit" type="number" value={openingCost} onChange={(e) => setOpeningCost(e.target.value)} />
         <button type="button" style={s.primary} onClick={createItem}>Add item</button>
+        <ExportButton filename="stock" rows={items as unknown as Array<Record<string, unknown>>}
+          columns={[{ key: 'code' }, { key: 'name' }, { key: 'warehouse' }, { key: 'quantityOnHand', label: 'onHand' }, { key: 'avgCost' }, { key: 'reorderLevel' }]} />
       </div>
       {err && <p style={s.err}>{err}</p>}
 

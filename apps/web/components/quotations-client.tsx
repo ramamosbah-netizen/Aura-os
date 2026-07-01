@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import ExportButton from './export-button';
 
 interface Line { description: string; quantity: number; unitPrice: number; vatRate: number; lineNet: number; lineVat: number }
 interface Quotation {
@@ -112,6 +113,8 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
       </div>
 
       <h2 style={st.h2}>Quotations</h2>
+      <div style={{ margin: '8px 0' }}><ExportButton filename="quotations" rows={quotes as unknown as Array<Record<string, unknown>>}
+        columns={[{ key: 'quoteNumber' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'total' }, { key: 'status' }]} /></div>
       {quotes.length === 0 ? (
         <p style={st.muted}>No quotations yet.</p>
       ) : (

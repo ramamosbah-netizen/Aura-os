@@ -44,6 +44,7 @@ export * from './postgres-petty-cash-store';
 export * from './petty-cash.service';
 
 export * from './domain/customer-invoice';
+export * from './domain/fx-revaluation';
 export * from './domain/ar-aging';
 export * from './customer-invoice-store';
 export * from './in-memory-customer-invoice-store';

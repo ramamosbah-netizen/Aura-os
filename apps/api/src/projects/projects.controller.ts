@@ -22,6 +22,14 @@ import {
   VariationService,
   type ProjectCloseout,
   CloseoutService,
+  type ProjectCashflowForecast,
+  type CashflowSummary,
+  type NewCashflowPeriod,
+  CashflowForecastService,
+  type ProjectSchedule,
+  type ScheduleSummary,
+  type NewScheduleTask,
+  ScheduleService,
 } from '@aura/projects';
 
 interface CreateProjectDto {
@@ -85,6 +93,8 @@ export class ProjectsController {
     private readonly delayEot: DelayEotService,
     private readonly variations: VariationService,
     private readonly closeouts: CloseoutService,
+    private readonly cashflow: CashflowForecastService,
+    private readonly schedule: ScheduleService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -403,6 +413,65 @@ export class ProjectsController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // ── Cash-flow forecast ───────────────────────────────────────────────────────
+
+  @Post('cashflow-forecasts')
+  async saveCashflow(@Body() dto: { projectId: string; projectName?: string; periods?: NewCashflowPeriod[]; notes?: string }): Promise<ProjectCashflowForecast> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.cashflow.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, periods: dto.periods, notes: dto.notes, createdBy: ctx.actorId });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('cashflow-forecasts')
+  listCashflow(): Promise<ProjectCashflowForecast[]> {
+    return this.cashflow.list(this.tenant.get().tenantId);
+  }
+
+  @Get('cashflow-forecasts/summary/:projectId')
+  async cashflowSummary(@Param('projectId') projectId: string): Promise<CashflowSummary> {
+    const s = await this.cashflow.summary(this.tenant.get().tenantId, projectId);
+    if (!s) throw new NotFoundException(`no cash-flow forecast for project ${projectId}`);
+    return s;
+  }
+
+  // ── Schedule (Gantt + baseline) ──────────────────────────────────────────────
+
+  @Post('schedules')
+  async saveSchedule(@Body() dto: { projectId: string; projectName?: string; tasks?: NewScheduleTask[] }): Promise<ProjectSchedule> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.schedule.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, tasks: dto.tasks, createdBy: ctx.actorId });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('schedules')
+  listSchedules(): Promise<ProjectSchedule[]> {
+    return this.schedule.list(this.tenant.get().tenantId);
+  }
+
+  @Post('schedules/:projectId/baseline')
+  async setBaseline(@Param('projectId') projectId: string): Promise<ProjectSchedule> {
+    try {
+      return await this.schedule.setBaseline(this.tenant.get().tenantId, projectId);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('schedules/summary/:projectId')
+  async scheduleSummary(@Param('projectId') projectId: string): Promise<ScheduleSummary> {
+    const s = await this.schedule.summary(this.tenant.get().tenantId, projectId);
+    if (!s) throw new NotFoundException(`no schedule for project ${projectId}`);
+    return s;
   }
 }
 

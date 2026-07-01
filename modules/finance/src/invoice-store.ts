@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Invoice } from './domain/invoice';
 
@@ -22,4 +22,5 @@ export interface InvoiceStore {
   updateWithClient(tx: TxHandle | null, invoice: Invoice): Promise<void>;
   get(id: Id): Promise<Invoice | null>;
   list(filter?: InvoiceFilter): Promise<Invoice[]>;
+  listPaged(filter: InvoiceFilter, page: PageParams): Promise<Page<Invoice>>;
 }

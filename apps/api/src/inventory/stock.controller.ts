@@ -75,6 +75,13 @@ export class StockController {
     return found;
   }
 
+  @Get(':id/fifo')
+  async fifo(@Param('id', ParseUuidOr404Pipe) id: string) {
+    const f = await this.stock.fifoValuation(id);
+    if (!f) throw new NotFoundException(`stock item ${id} not found`);
+    return f;
+  }
+
   @Post(':id/movements')
   async recordMovement(
     @Param('id', ParseUuidOr404Pipe) id: string,

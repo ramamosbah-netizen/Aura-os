@@ -156,6 +156,20 @@ export class FinanceController {
     return this.invoices.aging(this.tenant.get().tenantId, asOf);
   }
 
+  @Get('invoices/paged')
+  pagedInvoices(
+    @Query('status') status?: string,
+    @Query('poId') poId?: string,
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.invoices.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, poId, projectId },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('invoices/:id')
   async getInvoice(@Param('id') id: string): Promise<Invoice> {
     const found = await this.invoices.get(id);
@@ -564,6 +578,11 @@ export class FinanceController {
   @Get('customer-invoices/aging')
   arAging(@Query('asOf') asOf?: string): Promise<ArAgingReport> {
     return this.customerInvoices.aging(this.tenant.get().tenantId, asOf);
+  }
+
+  @Get('customer-invoices/fx-revaluation')
+  fxRevaluation(@Query('asOf') asOf?: string): Promise<import('@aura/finance').FxRevaluation> {
+    return this.customerInvoices.fxRevaluation(this.tenant.get().tenantId, asOf);
   }
 
   // Paginated list (the pagination contract): ?limit&offset → { items, total, limit, offset, hasMore }

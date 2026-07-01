@@ -11,6 +11,7 @@ import { type StaffAdvance, makeStaffAdvance, approveAdvance, rejectAdvance, dis
 import { type DocumentExpiryReport, buildDocumentExpiryReport } from './domain/document-expiry';
 import { type AttendanceRecord, type AttendanceSummary, type NewAttendanceRecord, makeAttendanceRecord, checkOutAttendance, summariseAttendance } from './domain/attendance';
 import { type SifResult, type WpsEmployeeLine, generateSif } from './domain/wps';
+import { type LeaveBalance, computeLeaveBalance } from './domain/leave-balance';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
@@ -220,6 +221,19 @@ export class HrService {
     return this.leaveStore.findByTenant(tenantId);
   }
 
+  /** Computed leave balance: pro-rata accrual from join date minus approved leave taken. */
+  async leaveBalance(tenantId: string, employeeId: string, asOf?: string, annualDays = 30): Promise<LeaveBalance> {
+    const emp = await this.employeeStore.findById(tenantId, employeeId);
+    if (!emp) throw new Error(`employee ${employeeId} not found`);
+    const leaves = await this.leaveStore.findByEmployee(tenantId, employeeId);
+    return computeLeaveBalance({
+      annualDays,
+      joinedDate: emp.joinedDate,
+      asOf: asOf ?? new Date().toISOString().slice(0, 10),
+      leaves: leaves.map((l) => ({ startDate: l.startDate, endDate: l.endDate, status: l.status })),
+    });
+  }
+
   // ── Payroll Runs ────────────────────────────────────────────────────────────
 
   async runPayroll(
@@ -285,6 +299,10 @@ export class HrService {
 
   listPayrollRuns(tenantId: string): Promise<PayrollRun[]> {
     return this.payrollRunStore.findByTenant(tenantId);
+  }
+
+  getPayrollRun(tenantId: string, id: string): Promise<PayrollRun | null> {
+    return this.payrollRunStore.findById(tenantId, id);
   }
 
   // ── Timesheets ─────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import ExportButton from './export-button';
 
 interface Employee {
   id: string;
@@ -109,6 +110,7 @@ export default function ExpenseClaimsClient({ initialClaims, employees }: { init
       </div>
 
       <h2 style={st.h2}>Claims</h2>
+      <div style={{ margin: '8px 0' }}><div style={{ margin: '8px 0' }}><ExportButton filename="expense-claims" rows={claims as unknown as Array<Record<string, unknown>>} /></div></div>
       {claims.length === 0 ? (
         <p style={st.muted}>No expense claims yet.</p>
       ) : (

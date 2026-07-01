@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import ExportButton from './export-button';
 
 interface Supplier {
   id: string;
@@ -95,6 +96,7 @@ export default function SuppliersClient({ initialSuppliers }: { initialSuppliers
       {error && <p style={st.err}>{error}</p>}
 
       <h2 style={st.h2}>Suppliers</h2>
+      <div style={{ margin: '8px 0' }}><div style={{ margin: '8px 0' }}><ExportButton filename="suppliers" rows={suppliers as unknown as Array<Record<string, unknown>>} /></div></div>
       {suppliers.length === 0 ? (
         <p style={st.muted}>No suppliers registered.</p>
       ) : (

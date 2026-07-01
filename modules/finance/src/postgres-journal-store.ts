@@ -108,13 +108,18 @@ export class PostgresJournalStore implements JournalStore {
       params,
     );
 
-    const journals: Journal[] = [];
-    for (const jr of jRes.rows) {
-      const lRes = await this.pool.query<LineRow>(
-        `SELECT ${LINE_COLS} FROM public.aura_finance_journal_lines WHERE journal_id = $1`,
-        [jr.id],
-      );
-      const lines: JournalLine[] = lRes.rows.map((r) => ({
+    if (jRes.rows.length === 0) return [];
+
+    // Batched line fetch (was N+1: one lines-query per journal).
+    const ids = jRes.rows.map((r) => r.id);
+    const lRes = await this.pool.query<LineRow>(
+      `SELECT ${LINE_COLS} FROM public.aura_finance_journal_lines WHERE journal_id = ANY($1)`,
+      [ids],
+    );
+    const linesByJournal = new Map<string, JournalLine[]>();
+    for (const r of lRes.rows) {
+      const list = linesByJournal.get(r.journal_id) ?? [];
+      list.push({
         id: r.id,
         accountId: r.account_id,
         accountCode: r.account_code,
@@ -123,18 +128,19 @@ export class PostgresJournalStore implements JournalStore {
         credit: Number(r.credit),
         costCenterId: r.cost_center_id ?? null,
         profitCenterId: r.profit_center_id ?? null,
-      }));
-      journals.push({
-        id: jr.id,
-        tenantId: jr.tenant_id,
-        companyId: jr.company_id,
-        reference: jr.reference,
-        description: jr.description,
-        createdBy: jr.created_by,
-        postedAt: jr.posted_at instanceof Date ? jr.posted_at.toISOString() : String(jr.posted_at),
-        lines,
       });
+      linesByJournal.set(r.journal_id, list);
     }
-    return journals;
+
+    return jRes.rows.map((jr) => ({
+      id: jr.id,
+      tenantId: jr.tenant_id,
+      companyId: jr.company_id,
+      reference: jr.reference,
+      description: jr.description,
+      createdBy: jr.created_by,
+      postedAt: jr.posted_at instanceof Date ? jr.posted_at.toISOString() : String(jr.posted_at),
+      lines: linesByJournal.get(jr.id) ?? [],
+    }));
   }
 }

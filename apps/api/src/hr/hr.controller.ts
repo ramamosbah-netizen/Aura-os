@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Employee,
@@ -191,10 +191,26 @@ export class HrController {
     return this.hrService.markPayrollPaid(ctx.tenantId, ctx.actorId, id);
   }
 
+  @Get('leave-balance/:employeeId')
+  leaveBalance(
+    @Param('employeeId') employeeId: string,
+    @Query('asOf') asOf?: string,
+    @Query('annualDays') annualDays?: string,
+  ): Promise<import('@aura/hr').LeaveBalance> {
+    return this.hrService.leaveBalance(this.tenant.get().tenantId, employeeId, asOf, annualDays ? Number(annualDays) : undefined);
+  }
+
   @Get('payroll')
   listPayrollRuns(): Promise<PayrollRun[]> {
     const ctx = this.tenant.get();
     return this.hrService.listPayrollRuns(ctx.tenantId);
+  }
+
+  @Get('payroll/:id')
+  async getPayrollRun(@Param('id') id: string): Promise<PayrollRun> {
+    const run = await this.hrService.getPayrollRun(this.tenant.get().tenantId, id);
+    if (!run) throw new NotFoundException(`payroll run ${id} not found`);
+    return run;
   }
 
   // ── End-of-Service Benefit (gratuity) — stateless UAE calculator ──────────

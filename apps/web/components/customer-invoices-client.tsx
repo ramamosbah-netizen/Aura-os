@@ -1,6 +1,8 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import ExportButton from './export-button';
+import SaveViewButton from './save-view-button';
 
 interface Line {
   description: string;
@@ -110,6 +112,11 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
       <div style={st.cards}>
         <div style={st.card}><div style={st.cardLabel}>Issued (total)</div><div style={st.cardVal}>{totals.issued.toLocaleString()} AED</div></div>
         <div style={st.card}><div style={st.cardLabel}>Outstanding receivable</div><div style={st.cardVal}>{totals.outstanding.toLocaleString()} AED</div></div>
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
+          <SaveViewButton />
+          <ExportButton filename="customer-invoices" rows={invoices as unknown as Array<Record<string, unknown>>}
+            columns={[{ key: 'invoiceNumber' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'currency' }, { key: 'total' }, { key: 'amountPaid' }, { key: 'status' }]} />
+        </div>
       </div>
 
       <h2 style={st.h2}>New invoice</h2>

@@ -368,6 +368,39 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Subcontract: certified retention-release claim → auto-draft AP invoice ──
+    // A certified retention-release claim is the signal to pay the subcontractor the retention we
+    // held back — a positive supplier (AP) invoice for the released amount, carrying the
+    // subcontractor snapshot. Skips normal (non-release) claims and zero releases.
+    this.bus.subscribe('subcontracts.claim.statusChanged', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        if (p.status !== 'certified' || !p.isRetentionRelease) return;
+        const amount = Number(p.retentionReleased) || 0;
+        if (amount <= 0) return;
+        const claimNumber = (p.claimNumber as string) ?? 'RET';
+        const subcontractor = (p.subcontractor as string)?.trim() || 'Subcontractor';
+        const subcontractId = (p.subcontractId as string) ?? e.aggregateId;
+        const invoice = await this.supplierInvoices.create(
+          {
+            tenantId: e.tenantId,
+            companyId: e.companyId,
+            reference: `RET-${claimNumber}-${subcontractId.slice(0, 8)}`,
+            title: `Retention release ${claimNumber} — ${subcontractor}`,
+            supplierName: subcontractor,
+            value: amount, // positive AP invoice = retention now payable to the subcontractor
+            status: 'draft',
+          },
+          `ap-from-retention-release:${e.aggregateId}`,
+        );
+        this.logger.log(
+          `⚡ claim.certified (retention release) → auto-drafted AP invoice "${invoice.reference}" vs ${subcontractor} (${amount})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-draft AP invoice from retention-release claim: ${err}`);
+      }
+    });
+
     // ── Service: AMC work-order completed → auto-draft client AR invoice ──
     // Closes the AMC money-loop (mirror of ipc.certified → AR): a completed, costed service
     // visit is the signal to bill the client. Raises a DRAFT customer (AR) invoice for the

@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import ExportButton from './export-button';
 
 interface AttendanceRecord {
   id: string;
@@ -114,6 +115,7 @@ export default function AttendanceClient({ initialRecords }: { initialRecords: A
         <span style={s.stat}><b>{totalHours}</b> total hours</span>
       </div>
 
+      <div style={{ margin: '8px 0' }}><ExportButton filename="attendance" rows={records as unknown as Array<Record<string, unknown>>} columns={[{ key: 'date' }, { key: 'employeeName', label: 'employee' }, { key: 'status' }, { key: 'checkIn' }, { key: 'checkOut' }, { key: 'workedHours' }]} /></div>
       <table style={s.table}>
         <thead>
           <tr>

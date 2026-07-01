@@ -1,8 +1,9 @@
 # AURA OS — Master Due-Diligence · ADDENDUM (Matrices + under-reviewed areas)
 
-**Date:** 2026-07-01 (rev 2) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+**Date:** 2026-07-01 (rev 6) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
 
-**Rev-2 changes (shipped since rev 1, migrations now 92):** document/print engine (Invoice/PO/GRN/IPC → A4 PDF) → gap A closed; project schedule + baseline (Gantt data) → Feature-matrix Gantt now ◐.
+**Rev-6 change:** **gap H (UI Gantt) closed** — `/projects/schedule` renders planned vs baseline vs actual-% bars over the schedule data (`5945270`). Feature/benchmark Gantt now ✅.
+**Rev-2–5 (prior):** document/print engine (9 docs) → gap A ✅; 5 dashboards → gap B ✅; CSV export on 9 lists → gap C ✅.
 
 ---
 
@@ -20,7 +21,7 @@
 | HR / CRM / Quality / Fleet / Subcontracts | 3–7 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Tendering / Assets / HSE / Site / AMC / Engineering / Doc-Control | 1–2 | ◐ | ❌ | ❌ | ❌ | ❌ |
 
-**Verified (rev 5):** print for **9 documents**; **5 dashboards**; **CSV export on 9 lists**. Remaining UI gaps: saved views/advanced filters, Excel export, UI Gantt render.
+**Verified (rev 6):** print for **9 documents**; **5 dashboards**; **CSV export on 9 lists**; **UI Gantt** (`/projects/schedule`). Remaining UI gaps: saved views/advanced filters, Excel export.
 
 ---
 
@@ -40,7 +41,7 @@
 | Supplier master + approved-vendor FK | ✅ | Inventory WAC + COGS→GL | ✅ |
 | Reorder → auto-PR | ✅ | Inventory FIFO / batch / serial | ❌ |
 | Deal chain automation | ✅ | IPC progress billing | ✅ |
-| Project EVM | ✅ | Gantt / baseline schedule | ◐ data (no UI Gantt) |
+| Project EVM | ✅ | Gantt / baseline schedule | ✅ (data + UI) |
 | Cash-flow forecast | ✅ | Project closeout + DLP | ✅ |
 | Warranty/DLP claim workflow | ❌ | Subcontract back-charges→AP | ✅ |
 | HR payroll + EOSB | ✅ | WPS SIF | ✅ |
@@ -63,7 +64,7 @@
 | Inventory perpetual | Receipt→WAC→issue→COGS→GL; reorder→PR | 95% | GRNI clearing on AP invoice |
 | HR Hire-to-Pay | Employee→leave→attendance→payroll→WPS→EOSB | 85% | Leave-balance accrual; payroll not auto-fed by attendance |
 | Service (AMC) | Contract→PPM→WO→complete→AR invoice | 90% | SLA timers shallow |
-| Project lifecycle | Setup→WBS/CBS→EVM→schedule/baseline→variations→cash-flow→closeout→DLP | 90% | Warranty claims; no UI Gantt render |
+| Project lifecycle | Setup→WBS/CBS→EVM→schedule/baseline→variations→cash-flow→closeout→DLP | 92% | Warranty claims |
 
 ---
 
@@ -109,7 +110,7 @@
 | P2P + 3-way + approval matrix | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Inventory valuation | ✅ FIFO/WAC/std | ✅ | ✅ | ✅ | ◐ WAC only |
 | Project costing / EVM | ✅ | ✅ | ◐ | ◐ | ✅ |
-| Gantt / scheduling | ✅ | ✅ | ✅ | ✅ | ◐ (data only) |
+| Gantt / scheduling | ✅ | ✅ | ✅ | ✅ | ✅ (data + UI) |
 | Construction vertical (IPC/ITP/subcontract/WPS) | ◐ | ◐ | ✗ | ✗ | ✅ **edge** |
 | Document print/output mgmt | ✅ | ✅ | ✅ | ✅ | ◐ (9 docs) |
 | BI / dashboards | ✅ | ✅ | ✅ | ◐ | ◐ (5 dashboards) |
@@ -178,7 +179,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |
 | F | Saved views / advanced filters | P2 | open |
 | G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | open |
-| H | UI Gantt render over the new schedule/baseline data | P2 | open |
+| H | UI Gantt render over the new schedule/baseline data | P2 | ✅ **done** — `/projects/schedule` (planned vs baseline vs actual-%) |
 
 These are **additive** to the master report's P0–P3 list (security/ops P0 still dominate).
 

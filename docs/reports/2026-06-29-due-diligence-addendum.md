@@ -294,6 +294,32 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 38. Notifications delivery (email/SMS/push) wired to events.
 
 ### TIER 2 — Assurance, API, data hygiene — 20
+
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 1 done, 4 partial, 15 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+
+| # | Item | Status | Evidence |
+|---|---|:--:|---|
+| 39 | SWC transform for vitest (HTTP e2e) | ❌ | no swc dep |
+| 40 | Supertest E2E (4 chains) | ❌ | no supertest; only in-memory reactor E2E |
+| 41 | Playwright smoke | ❌ | no playwright |
+| 42 | Coverage tooling + CI gate | ❌ | no coverage/CI |
+| 43 | Dependency/SAST scan in CI | ❌ | no `.github/workflows` |
+| 44 | Global exception filter + taxonomy | ◐ | `AccessDeniedFilter` only; controllers try/catch→400 |
+| 45 | OpenAPI/Swagger | ❌ | no `@nestjs/swagger` |
+| 46 | Renumber duplicate `0059` | ✅ | single `0059_finance_petty_cash.sql` |
+| 47 | Down-migrations | ❌ | none |
+| 48 | Standardize `date::text` mapping | ◐ | newer stores (incl. AMC) use `::text`; not universal |
+| 49 | Type the 124 `any` pg-row mappers | ❌ | still ~124 |
+| 50 | Root ESLint config + CI | ❌ | no root eslint |
+| 51 | FK policy documented | ❌ | snapshot pattern used, undocumented |
+| 52 | Reporting views for hot reads | ❌ | 0 `CREATE VIEW` |
+| 53 | Bulk operations | ❌ | none |
+| 54 | CSV/Excel import + export | ◐ | CSV export on 9 lists; import/Excel ❌ |
+| 55 | Soft-delete + restore standardized | ❌ | no `deleted_at` |
+| 56 | Attachments/comments via DMS all modules | ❌ | DMS exists; not per-module |
+| 57 | Idempotency-key **required** (not just honored) | ❌ | honored, not enforced |
+| 58 | Roll CommandBus to non-spine modules | ◐ | spine on bus; ~10 non-spine inline |
+
 39. SWC transform for vitest → unblock Nest HTTP e2e.
 40. Supertest E2E for the 4 core chains (P2P, O2C, deal-chain, service).
 41. Playwright smoke for top 10 pages.

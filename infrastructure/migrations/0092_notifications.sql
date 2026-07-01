@@ -22,5 +22,6 @@ create index if not exists idx_aura_notifications_tenant on public.aura_notifica
 
 alter table public.aura_notifications enable row level security;
 
+drop policy if exists notifications_rls on public.aura_notifications;
 create policy notifications_rls on public.aura_notifications
   for all using (tenant_id = public.current_tenant_id());

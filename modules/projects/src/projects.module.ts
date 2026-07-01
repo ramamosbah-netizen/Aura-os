@@ -36,6 +36,11 @@ import { InMemoryCashflowForecastStore } from './in-memory-cashflow-forecast-sto
 import { PostgresCashflowForecastStore } from './postgres-cashflow-forecast-store';
 import { CashflowForecastService } from './cashflow-forecast.service';
 
+import { SCHEDULE_STORE } from './schedule-store';
+import { InMemoryScheduleStore } from './in-memory-schedule-store';
+import { PostgresScheduleStore } from './postgres-schedule-store';
+import { ScheduleService } from './schedule.service';
+
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
   imports: [CoreModule],
@@ -88,6 +93,12 @@ import { CashflowForecastService } from './cashflow-forecast.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresCashflowForecastStore(pool) : new InMemoryCashflowForecastStore(),
     },
+    {
+      provide: SCHEDULE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresScheduleStore(pool) : new InMemoryScheduleStore(),
+    },
     ProjectService,
     WbsService,
     CbsService,
@@ -95,7 +106,8 @@ import { CashflowForecastService } from './cashflow-forecast.service';
     VariationService,
     CloseoutService,
     CashflowForecastService,
+    ScheduleService,
   ],
-  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService, CloseoutService, CashflowForecastService],
+  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService],
 })
 export class ProjectsModule {}

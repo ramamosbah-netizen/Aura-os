@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { GoodsReceipt } from './domain/goods-receipt';
 import type { GoodsReceiptFilter, GoodsReceiptStore } from './goods-receipt-store';
@@ -73,7 +74,7 @@ export class PostgresGoodsReceiptStore implements GoodsReceiptStore {
     return res.rows.length ? rowToGrn(res.rows[0]) : null;
   }
 
-  async list(filter: GoodsReceiptFilter = {}): Promise<GoodsReceipt[]> {
+  private buildWhere(filter: GoodsReceiptFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
@@ -86,12 +87,29 @@ export class PostgresGoodsReceiptStore implements GoodsReceiptStore {
     add('status', filter.status);
     add('po_id', filter.poId);
     add('project_id', filter.projectId);
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async list(filter: GoodsReceiptFilter = {}): Promise<GoodsReceipt[]> {
+    const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_inventory_grns ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToGrn);
+  }
+
+  async listPaged(filter: GoodsReceiptFilter, page: PageParams): Promise<Page<GoodsReceipt>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_inventory_grns ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_inventory_grns ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToGrn), total, page);
   }
 }

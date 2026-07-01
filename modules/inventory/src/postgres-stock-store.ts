@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { StockItem, StockMovement } from './domain/stock';
 import type { StockFilter, StockStore } from './stock-store';
 
@@ -100,7 +101,7 @@ export class PostgresStockStore implements StockStore {
     return res.rows.length ? rowToItem(res.rows[0]) : null;
   }
 
-  async listItems(filter: StockFilter = {}): Promise<StockItem[]> {
+  private buildItemWhere(filter: StockFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
@@ -111,13 +112,30 @@ export class PostgresStockStore implements StockStore {
     };
     add('tenant_id', filter.tenantId);
     add('warehouse', filter.warehouse);
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async listItems(filter: StockFilter = {}): Promise<StockItem[]> {
+    const { whereSql, params } = this.buildItemWhere(filter);
     params.push(filter.limit ?? 200);
     const res = await this.pool.query<ItemRow>(
       `SELECT ${ITEM_COLS} FROM public.aura_inventory_stock_items ${whereSql} ORDER BY code ASC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToItem);
+  }
+
+  async listItemsPaged(filter: StockFilter, page: PageParams): Promise<Page<StockItem>> {
+    const { whereSql, params } = this.buildItemWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_inventory_stock_items ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<ItemRow>(
+      `SELECT ${ITEM_COLS} FROM public.aura_inventory_stock_items ${whereSql} ORDER BY code ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToItem), total, page);
   }
 
   async addMovement(m: StockMovement): Promise<void> {

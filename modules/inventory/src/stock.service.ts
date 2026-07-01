@@ -113,6 +113,10 @@ export class StockService {
     return this.store.listItems(filter);
   }
 
+  listItemsPaged(filter: StockFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listItemsPaged(filter, page);
+  }
+
   /** FIFO valuation for one item, replayed from its movement history (WAC stays the GL method). */
   async fifoValuation(id: Id): Promise<{ code: string; onHand: number; fifoValue: number; wacValue: number; cogsTotal: number; layers: Array<{ quantity: number; unitCost: number }> } | null> {
     const item = await this.store.getItem(id);

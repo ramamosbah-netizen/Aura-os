@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { StockTransfer } from './domain/stock-transfer';
 import type { TransferFilter, TransferStore } from './transfer-store';
 
@@ -19,5 +20,10 @@ export class InMemoryTransferStore implements TransferStore {
     if (filter.tenantId) out = out.filter((t) => t.tenantId === filter.tenantId);
     out.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: TransferFilter, page: PageParams): Promise<Page<StockTransfer>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

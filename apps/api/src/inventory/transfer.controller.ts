@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type StockTransfer, TransferService } from '@aura/inventory';
 
 interface CreateTransferDto {
@@ -38,6 +39,14 @@ export class TransferController {
   list(): Promise<StockTransfer[]> {
     const ctx = this.tenant.get();
     return this.transfers.list({ tenantId: ctx.tenantId, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.transfers.listPaged(
+      { tenantId: this.tenant.get().tenantId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type StockItem, type StockMovement, type StockDirection, type ValuationSummary, type ReorderReport, StockService } from '@aura/inventory';
 
 interface CreateStockItemDto {
@@ -56,6 +57,18 @@ export class StockController {
   }
 
   // literal routes before `:id`
+  @Get('paged')
+  pagedItems(
+    @Query('warehouse') warehouse?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.stock.listItemsPaged(
+      { tenantId: this.tenant.get().tenantId, warehouse },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('valuation')
   valuation(@Query('warehouse') warehouse?: string): Promise<ValuationSummary> {
     const ctx = this.tenant.get();

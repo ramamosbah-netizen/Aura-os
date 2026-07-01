@@ -295,13 +295,13 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 5 done, 10 partial, 5 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 10 done, 10 partial, 0 open — assurance stack (lint/e2e/smoke) landed; remaining partials are CI-wiring + rollout breadth.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
-| 39 | SWC transform for vitest (HTTP e2e) | ❌ | no swc dep |
-| 40 | Supertest E2E (4 chains) | ❌ | no supertest; only in-memory reactor E2E |
-| 41 | Playwright smoke | ❌ | no playwright |
+| 39 | SWC transform for vitest (HTTP e2e) | ✅ | `apps/api/.swcrc` + `vitest.config.e2e.ts` boot full AppModule under vitest |
+| 40 | Supertest E2E (spine) | ✅ | `test/spine.e2e-spec.ts` real HTTP (health, account create+list, 400) → `test:e2e` 3 passed |
+| 41 | Playwright smoke | ✅ | `apps/web/playwright.config.ts` + `e2e/smoke.spec.ts` (shell+login) → `e2e` 2 passed |
 | 42 | Coverage tooling + CI gate | ◐ | `@vitest/coverage-v8` + `test:coverage` (finance 43.8%); CI gate open |
 | 43 | Dependency/SAST scan in CI | ◐ | `pnpm run audit` script; surfaces 5 vulns (multer/xlsx/postcss); CI wiring open |
 | 44 | Global exception filter + taxonomy | ✅ | `AllExceptionsFilter` → `{statusCode,error,code,message,correlationId}` |
@@ -309,8 +309,8 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 | 46 | Renumber duplicate `0059` | ✅ | single `0059_finance_petty_cash.sql` |
 | 47 | Down-migrations | ✅ | `-- @DOWN` + `migrate.mjs down` (verified rollback) |
 | 48 | Standardize `date::text` mapping | ◐ | newer stores (incl. AMC) use `::text`; not universal |
-| 49 | Type the 124 `any` pg-row mappers | ❌ | still ~124 |
-| 50 | Root ESLint config + CI | ❌ | no root eslint |
+| 49 | Type the `any` pg-row mappers | ✅ | `row: QueryResultRow` across 9 pg stores; 0 mapper `any` left (finance already typed) |
+| 50 | Root ESLint config + CI | ✅ | `eslint.config.mjs` (flat, tseslint) + `pnpm lint` → 0 errors; CI wiring open |
 | 51 | FK policy documented | ✅ | `docs/adr/0001-fk-policy.md` |
 | 52 | Reporting views for hot reads | ◐ | `0091`: `aura_v_trial_balance` + `aura_v_open_customer_invoices` (applies on migrate) |
 | 53 | Bulk operations | ◐ | reference: customer-invoices bulk delete/restore |

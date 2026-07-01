@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { type Opportunity, type OpportunityStage } from '@aura/shared';
+import { parsePageParams, type Opportunity, type OpportunityStage } from '@aura/shared';
 import { type Quotation, OpportunityService, QuotationService } from '@aura/crm';
 
 interface CreateOpportunityDto {
@@ -85,6 +85,19 @@ export class CrmOpportunitiesController {
   list(@Query('stage') stage?: OpportunityStage, @Query('leadId') leadId?: string): Promise<Opportunity[]> {
     const ctx = this.tenant.get();
     return this.opportunities.list({ tenantId: ctx.tenantId, stage, leadId, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('stage') stage?: OpportunityStage,
+    @Query('leadId') leadId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.opportunities.listPaged(
+      { tenantId: this.tenant.get().tenantId, stage, leadId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

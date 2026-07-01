@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Account } from './domain/account';
 import type { AccountFilter, AccountStore } from './account-store';
@@ -62,7 +63,7 @@ export class PostgresAccountStore implements AccountStore {
     return res.rows.length ? rowToAccount(res.rows[0]) : null;
   }
 
-  async list(filter: AccountFilter = {}): Promise<Account[]> {
+  private buildWhere(filter: AccountFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     if (filter.tenantId) {
@@ -73,12 +74,28 @@ export class PostgresAccountStore implements AccountStore {
       params.push(filter.status);
       where.push(`status = $${params.length}`);
     }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async list(filter: AccountFilter = {}): Promise<Account[]> {
+    const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_crm_accounts ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToAccount);
+  }
+  async listPaged(filter: AccountFilter, page: PageParams): Promise<Page<Account>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_crm_accounts ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_accounts ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToAccount), total, page);
   }
 }

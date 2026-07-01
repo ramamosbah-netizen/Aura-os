@@ -86,4 +86,8 @@ export class LeadService {
   list(filter?: LeadFilter): Promise<Lead[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: LeadFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

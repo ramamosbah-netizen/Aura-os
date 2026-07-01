@@ -165,4 +165,8 @@ Provide your response strictly in the following JSON format:
   list(filter?: OpportunityFilter): Promise<Opportunity[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: OpportunityFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

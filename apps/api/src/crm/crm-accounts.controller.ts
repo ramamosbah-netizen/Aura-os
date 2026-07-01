@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type Account, type AccountStatus, AccountService } from '@aura/crm';
 
 interface CreateAccountDto {
@@ -39,6 +40,18 @@ export class CrmAccountsController {
   @Get()
   list(@Query('status') status?: string): Promise<Account[]> {
     return this.accounts.list({ status, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.accounts.listPaged(
+      { tenantId: this.tenant.get().tenantId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

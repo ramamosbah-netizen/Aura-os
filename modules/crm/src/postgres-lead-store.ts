@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id, Lead, LeadStatus, LeadSource } from '@aura/shared';
+import type { Id, Lead, LeadStatus, LeadSource, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { LeadFilter, LeadStore } from './lead-store';
 
@@ -71,7 +72,7 @@ export class PostgresLeadStore implements LeadStore {
     return res.rows.length ? rowToLead(res.rows[0]) : null;
   }
 
-  async list(filter: LeadFilter = {}): Promise<Lead[]> {
+  private buildWhere(filter: LeadFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     if (filter.tenantId) {
@@ -82,12 +83,28 @@ export class PostgresLeadStore implements LeadStore {
       params.push(filter.status);
       where.push(`status = $${params.length}`);
     }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async list(filter: LeadFilter = {}): Promise<Lead[]> {
+    const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<LeadRow>(
       `SELECT ${COLS} FROM public.aura_crm_leads ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToLead);
+  }
+  async listPaged(filter: LeadFilter, page: PageParams): Promise<Page<Lead>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_crm_leads ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<LeadRow>(
+      `SELECT ${COLS} FROM public.aura_crm_leads ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToLead), total, page);
   }
 }

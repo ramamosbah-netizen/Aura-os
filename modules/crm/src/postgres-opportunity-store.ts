@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id, Opportunity, OpportunityStage } from '@aura/shared';
+import type { Id, Opportunity, OpportunityStage, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { OpportunityFilter, OpportunityStore } from './opportunity-store';
 
@@ -90,7 +91,7 @@ export class PostgresOpportunityStore implements OpportunityStore {
     return res.rows.length ? rowToOpportunity(res.rows[0]) : null;
   }
 
-  async list(filter: OpportunityFilter = {}): Promise<Opportunity[]> {
+  private buildWhere(filter: OpportunityFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
     if (filter.tenantId) {
@@ -105,12 +106,28 @@ export class PostgresOpportunityStore implements OpportunityStore {
       params.push(filter.leadId);
       where.push(`lead_id = $${params.length}`);
     }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  async list(filter: OpportunityFilter = {}): Promise<Opportunity[]> {
+    const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<OppRow>(
       `SELECT ${COLS} FROM public.aura_crm_opportunities ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToOpportunity);
+  }
+  async listPaged(filter: OpportunityFilter, page: PageParams): Promise<Page<Opportunity>> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_crm_opportunities ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<OppRow>(
+      `SELECT ${COLS} FROM public.aura_crm_opportunities ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToOpportunity), total, page);
   }
 }

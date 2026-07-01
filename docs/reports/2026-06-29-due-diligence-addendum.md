@@ -295,7 +295,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 
 ### TIER 2 — Assurance, API, data hygiene — 20
 
-**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 3 done, 6 partial, 11 open — assurance/CI/hygiene largely deferred with the P0 ops track.
+**Status (verified 2026-07-01 · ✅ done · ◐ partial · ❌ open):** 3 done, 7 partial, 10 open — assurance/CI/hygiene largely deferred with the P0 ops track.
 
 | # | Item | Status | Evidence |
 |---|---|:--:|---|
@@ -313,7 +313,7 @@ Verified by tracing domain state-machines + service methods + events. ✅ step w
 | 50 | Root ESLint config + CI | ❌ | no root eslint |
 | 51 | FK policy documented | ❌ | snapshot pattern used, undocumented |
 | 52 | Reporting views for hot reads | ◐ | `0091`: `aura_v_trial_balance` + `aura_v_open_customer_invoices` (applies on migrate) |
-| 53 | Bulk operations | ❌ | none |
+| 53 | Bulk operations | ◐ | reference: customer-invoices bulk delete/restore |
 | 54 | CSV/Excel import + export | ◐ | CSV export (9 lists) + accounts CSV import; Excel ❌ |
 | 55 | Soft-delete + restore standardized | ◐ | reference on customer-invoices (`deleted_at`, DELETE/restore); rollout pending |
 | 56 | Attachments/comments via DMS all modules | ❌ | DMS exists; not per-module |

@@ -5,6 +5,9 @@ import {
   type PermitToWork,
   type CapaAction,
   type ToolboxTalk,
+  type RiskAssessment,
+  type RiskLine,
+  type RiskAssessmentStatus,
   HseService,
 } from '@aura/hse';
 
@@ -197,5 +200,45 @@ export class HseController {
   listToolboxTalks(): Promise<ToolboxTalk[]> {
     const ctx = this.tenant.get();
     return this.hseService.listToolboxTalks(ctx.tenantId);
+  }
+
+  // ── Risk assessments (JSA) ──────────────────────────────────────────────────
+
+  @Post('risk-assessments')
+  createRiskAssessment(
+    @Body() dto: { projectId: string; projectName?: string; reference: string; activity: string; assessor?: string; hazards: RiskLine[]; status?: RiskAssessmentStatus; reviewDate?: string },
+  ): Promise<RiskAssessment> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
+    if (!dto?.activity?.trim()) throw new BadRequestException('activity is required');
+    if (!Array.isArray(dto?.hazards) || dto.hazards.length === 0) throw new BadRequestException('at least one hazard is required');
+    const ctx = this.tenant.get();
+    return this.hseService.createRiskAssessment({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? undefined,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      reference: dto.reference,
+      activity: dto.activity,
+      assessor: dto.assessor,
+      hazards: dto.hazards,
+      status: dto.status,
+      reviewDate: dto.reviewDate,
+      createdBy: ctx.actorId ?? undefined,
+    });
+  }
+
+  @Get('risk-assessments')
+  listRiskAssessments(): Promise<RiskAssessment[]> {
+    return this.hseService.listRiskAssessments(this.tenant.get().tenantId);
+  }
+
+  @Put('risk-assessments/:id/approve')
+  async approveRiskAssessment(@Param('id') id: string): Promise<RiskAssessment> {
+    try {
+      return await this.hseService.approveRiskAssessment(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

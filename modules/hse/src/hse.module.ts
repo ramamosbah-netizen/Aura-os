@@ -7,6 +7,7 @@ import {
   PTW_STORE,
   CAPA_STORE,
   TOOLBOX_STORE,
+  RISK_ASSESSMENT_STORE,
   HseService,
 } from './hse.service';
 
@@ -15,6 +16,7 @@ import {
   InMemoryPermitToWorkStore,
   InMemoryCapaActionStore,
   InMemoryToolboxTalkStore,
+  InMemoryRiskAssessmentStore,
 } from './in-memory-hse-store';
 
 import {
@@ -22,6 +24,7 @@ import {
   PostgresPermitToWorkStore,
   PostgresCapaActionStore,
   PostgresToolboxTalkStore,
+  PostgresRiskAssessmentStore,
 } from './postgres-hse-store';
 
 @Module({
@@ -50,6 +53,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresToolboxTalkStore(pool) : new InMemoryToolboxTalkStore(),
+    },
+    {
+      provide: RISK_ASSESSMENT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresRiskAssessmentStore(pool) : new InMemoryRiskAssessmentStore(),
     },
     HseService,
   ],

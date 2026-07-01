@@ -6,17 +6,20 @@ import { type HseIncident, makeHseIncident } from './domain/hse-incident';
 import { type PermitToWork, makePermitToWork } from './domain/permit-to-work';
 import { type CapaAction, makeCapaAction } from './domain/capa-action';
 import { type ToolboxTalk, makeToolboxTalk } from './domain/toolbox-talk';
+import { type RiskAssessment, type NewRiskAssessment, makeRiskAssessment, approveRiskAssessment } from './domain/risk-assessment';
 
 export const INCIDENT_STORE = Symbol('INCIDENT_STORE');
 export const PTW_STORE = Symbol('PTW_STORE');
 export const CAPA_STORE = Symbol('CAPA_STORE');
 export const TOOLBOX_STORE = Symbol('TOOLBOX_STORE');
+export const RISK_ASSESSMENT_STORE = Symbol('RISK_ASSESSMENT_STORE');
 
 import {
   type HseIncidentStore,
   type PermitToWorkStore,
   type CapaActionStore,
   type ToolboxTalkStore,
+  type RiskAssessmentStore,
 } from './store.interface';
 
 export const HSE_EVENT = {
@@ -35,6 +38,7 @@ export class HseService {
     @Inject(PTW_STORE) private readonly ptwStore: PermitToWorkStore,
     @Inject(CAPA_STORE) private readonly capaStore: CapaActionStore,
     @Inject(TOOLBOX_STORE) private readonly toolboxStore: ToolboxTalkStore,
+    @Inject(RISK_ASSESSMENT_STORE) private readonly riskStore: RiskAssessmentStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -279,5 +283,35 @@ export class HseService {
 
   listCapas(tenantId: Id): Promise<CapaAction[]> {
     return this.capaStore.findAll(tenantId);
+  }
+
+  // ── Risk assessments (JSA) ──────────────────────────────────────────────────
+
+  async createRiskAssessment(input: NewRiskAssessment): Promise<RiskAssessment> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'hse.risk_assessment.create', orgPath });
+    }
+    const ra = makeRiskAssessment(input);
+    await this.tx.run(async (handle) => { await this.riskStore.save(ra, handle); });
+    this.logger.log(`Risk assessment ${ra.reference} for "${ra.activity}": residual ${ra.residualScore} (${ra.residualBand})`);
+    return ra;
+  }
+
+  async approveRiskAssessment(tenantId: Id, id: Id): Promise<RiskAssessment> {
+    const ra = await this.riskStore.findById(id, tenantId);
+    if (!ra) throw new Error(`risk assessment ${id} not found`);
+    const updated = approveRiskAssessment(ra);
+    await this.tx.run(async (handle) => { await this.riskStore.save(updated, handle); });
+    return updated;
+  }
+
+  getRiskAssessment(tenantId: Id, id: Id): Promise<RiskAssessment | null> {
+    return this.riskStore.findById(id, tenantId);
+  }
+
+  listRiskAssessments(tenantId: Id): Promise<RiskAssessment[]> {
+    return this.riskStore.findAll(tenantId);
   }
 }

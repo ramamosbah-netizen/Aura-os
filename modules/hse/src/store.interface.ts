@@ -3,6 +3,14 @@ import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
 import type { ToolboxTalk } from './domain/toolbox-talk';
+import type { RiskAssessment } from './domain/risk-assessment';
+
+export interface RiskAssessmentStore {
+  save(ra: RiskAssessment, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<RiskAssessment | null>;
+  findByProject(projectId: string, tenantId: string): Promise<RiskAssessment[]>;
+  findAll(tenantId: string): Promise<RiskAssessment[]>;
+}
 
 export interface HseIncidentStore {
   save(incident: HseIncident, tx?: TxHandle): Promise<void>;

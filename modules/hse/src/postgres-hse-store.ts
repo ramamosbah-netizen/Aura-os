@@ -4,7 +4,66 @@ import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
 import type { ToolboxTalk } from './domain/toolbox-talk';
-import type { HseIncidentStore, PermitToWorkStore, CapaActionStore, ToolboxTalkStore } from './store.interface';
+import type { RiskAssessment, RiskLine } from './domain/risk-assessment';
+import type { HseIncidentStore, PermitToWorkStore, CapaActionStore, ToolboxTalkStore, RiskAssessmentStore } from './store.interface';
+
+export class PostgresRiskAssessmentStore implements RiskAssessmentStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(ra: RiskAssessment, tx?: TxHandle): Promise<void> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_hse_risk_assessments (
+        id, tenant_id, company_id, project_id, project_name, reference, activity, assessor, hazards,
+        initial_score, residual_score, residual_band, status, review_date, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      on conflict (id) do update set
+        activity = excluded.activity, assessor = excluded.assessor, hazards = excluded.hazards,
+        initial_score = excluded.initial_score, residual_score = excluded.residual_score,
+        residual_band = excluded.residual_band, status = excluded.status, review_date = excluded.review_date,
+        updated_at = excluded.updated_at`,
+      [ra.id, ra.tenantId, ra.companyId, ra.projectId, ra.projectName, ra.reference, ra.activity, ra.assessor, JSON.stringify(ra.hazards),
+       ra.initialScore, ra.residualScore, ra.residualBand, ra.status, ra.reviewDate, ra.createdBy, ra.createdAt, ra.updatedAt],
+    );
+  }
+
+  async findById(id: string, tenantId: string): Promise<RiskAssessment | null> {
+    const res = await this.pool.query(`select * from public.aura_hse_risk_assessments where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rowCount === 0 ? null : this.mapRow(res.rows[0]);
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<RiskAssessment[]> {
+    const res = await this.pool.query(`select * from public.aura_hse_risk_assessments where project_id = $1 and tenant_id = $2 order by created_at desc`, [projectId, tenantId]);
+    return res.rows.map(this.mapRow);
+  }
+
+  async findAll(tenantId: string): Promise<RiskAssessment[]> {
+    const res = await this.pool.query(`select * from public.aura_hse_risk_assessments where tenant_id = $1 order by created_at desc`, [tenantId]);
+    return res.rows.map(this.mapRow);
+  }
+
+  private mapRow(row: any): RiskAssessment {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      reference: row.reference,
+      activity: row.activity,
+      assessor: row.assessor,
+      hazards: (typeof row.hazards === 'string' ? JSON.parse(row.hazards) : (row.hazards ?? [])) as RiskLine[],
+      initialScore: Number(row.initial_score),
+      residualScore: Number(row.residual_score),
+      residualBand: row.residual_band,
+      status: row.status,
+      reviewDate: row.review_date instanceof Date ? row.review_date.toISOString().split('T')[0] : (row.review_date ? String(row.review_date) : null),
+      createdBy: row.created_by,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    };
+  }
+}
 
 export class PostgresHseIncidentStore implements HseIncidentStore {
   constructor(private readonly pool: Pool) {}

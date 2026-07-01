@@ -365,7 +365,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | CRM | 88 | 88 | 86 | 90 | 72 | 72 | email integration (MS Graph) — contacts ✅, activities/tasks ✅, pagination ✅ |
 | Tendering | 74 | 86 | 82 | 84 | 62 | 65 | competitor analysis (bid scoring go/no-go ✅, pagination ✅) |
 | Contracts | 68 | 85 | 80 | 80 | 62 | 65 | clause library, obligations tracking, pagination |
-| Projects | 72 | 86 | 82 | 82 | 70 | 80 | resource levelling, rev-rec, pagination (Gantt ✅) |
+| Projects | 82 | 88 | 82 | 86 | 72 | 85 | revenue recognition (Gantt ✅, pagination ✅, CPM reactive reschedule + resource levelling ✅) |
 | Procurement | 86 | 88 | 84 | 90 | 72 | 78 | PO↔supplier-master FK, framework agreements (pagination ✅; MAR/quality hard-gate on PO issue ✅) |
 | Inventory | 80 | 88 | 84 | 90 | 70 | 75 | valuation UI, reorder auto-PR, barcode (FIFO/WAC + pagination ✅) |
 | Finance | 92 | 88 | 88 | 90 | 78 | 90 | group consolidation, statements-UI polish (multi-currency AP/AR + FX reval, statements, dashboards, pagination ✅; asset-disposal→GL reactor ✅) |

@@ -1,6 +1,8 @@
 # AURA OS — Master Due-Diligence · ADDENDUM (Matrices + under-reviewed areas)
 
-**Date:** 2026-07-01 · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified. No code modified.
+**Date:** 2026-07-01 (rev 2) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+
+**Rev-2 changes (shipped since rev 1, migrations now 92):** document/print engine (Invoice/PO/GRN/IPC → A4 PDF) → gap A closed; project schedule + baseline (Gantt data) → Feature-matrix Gantt now ◐.
 
 ---
 
@@ -10,17 +12,15 @@
 
 | Module | Pages now | Has List+Form+Detail | Dashboard | Print/PDF | Export | Charts |
 |---|--:|:--:|:--:|:--:|:--:|:--:|
-| Finance | 16 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| HR | 7 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Procurement | 4 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Inventory | 4 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Finance | 16 | ✅ | ❌ | ◐ invoice | ❌ | ❌ |
+| Procurement | 4 | ✅ | ❌ | ◐ PO | ❌ | ❌ |
+| Inventory | 4 | ✅ | ❌ | ◐ GRN | ❌ | ❌ |
+| Contracts | 2 | ◐ | ❌ | ◐ IPC | ❌ | ❌ |
 | Projects | 2 | ◐ | ❌ | ❌ | ❌ | ❌ |
-| CRM | 3 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Quality / Fleet / Subcontracts | 3 each | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Contracts / Tendering / Assets / HSE / Site / AMC | 2 each | ◐ | ❌ | ❌ | ❌ | ❌ |
-| Engineering / Doc-Control | 1 each | ❌ | ❌ | ❌ | ❌ | ❌ |
+| HR / CRM / Quality / Fleet / Subcontracts | 3–7 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Tendering / Assets / HSE / Site / AMC / Engineering / Doc-Control | 1–2 | ◐ | ❌ | ❌ | ❌ | ❌ |
 
-**Verified:** 68 pages total; **0 module dashboards**, **0 print/PDF**, **0 export**, **0 chart library** (only 2 files touch PDF, both non-document; ~10 inline `<svg>`, no charting lib). **Print/Export is the single largest UI/ERP gap.**
+**Verified:** 72 print/business pages; **0 module dashboards**, **0 chart library**, **0 bulk export**. **Print now shipped for 4 core documents** (Invoice/PO/GRN/IPC via a reusable A4 `DocumentSheet` + native print-to-PDF); remaining print (payslip, contract, statements) and dashboards/charts/export are the top UI gaps.
 
 ---
 
@@ -40,13 +40,13 @@
 | Supplier master + approved-vendor FK | ✅ | Inventory WAC + COGS→GL | ✅ |
 | Reorder → auto-PR | ✅ | Inventory FIFO / batch / serial | ❌ |
 | Deal chain automation | ✅ | IPC progress billing | ✅ |
-| Project EVM | ✅ | Gantt / baseline schedule | ❌ |
+| Project EVM | ✅ | Gantt / baseline schedule | ◐ data (no UI Gantt) |
 | Cash-flow forecast | ✅ | Project closeout + DLP | ✅ |
 | Warranty/DLP claim workflow | ❌ | Subcontract back-charges→AP | ✅ |
 | HR payroll + EOSB | ✅ | WPS SIF | ✅ |
 | Attendance | ✅ | Appraisal / org chart | ❌ |
 | AMC persisted + PPM + →AR billing | ✅ | Quality ITP/MAR | ✅ |
-| Fleet fines + Salik | ✅ | Print/PDF documents | ❌ |
+| Fleet fines + Salik | ✅ | Print/PDF (Invoice/PO/GRN/IPC) | ◐ 4 docs |
 | Dashboards / BI | ❌ | Notifications (email/SMS) | ❌ |
 | Global search (⌘K) | ✅ | Saved views / advanced filters | ❌ |
 
@@ -63,7 +63,7 @@
 | Inventory perpetual | Receipt→WAC→issue→COGS→GL; reorder→PR | 95% | GRNI clearing on AP invoice |
 | HR Hire-to-Pay | Employee→leave→attendance→payroll→WPS→EOSB | 85% | Leave-balance accrual; payroll not auto-fed by attendance |
 | Service (AMC) | Contract→PPM→WO→complete→AR invoice | 90% | SLA timers shallow |
-| Project lifecycle | Setup→WBS/CBS→EVM→variations→closeout→DLP | 80% | No Gantt/baseline; warranty claims |
+| Project lifecycle | Setup→WBS/CBS→EVM→schedule/baseline→variations→cash-flow→closeout→DLP | 90% | Warranty claims; no UI Gantt render |
 
 ---
 
@@ -79,7 +79,7 @@
 | Inventory valuation / reorder | ✅ data | Salik / fines summary | ✅ data |
 | Delay analysis | ✅ data | KPI / executive dashboard | ❌ |
 
-**Verified:** reports exist as **JSON data endpoints only** — **0 printable/exportable reports, 0 visual dashboards, 0 charts**. Every "✅ data" needs a presentation layer (table→chart, print, export).
+**Verified:** reports still exist as **JSON data endpoints only** — **0 visual dashboards, 0 charts, 0 bulk export**. Document **print** now exists for Invoice/PO/GRN/IPC (not for these list reports). Every "✅ data" still needs a presentation layer (chart/print/export).
 
 ---
 
@@ -109,9 +109,9 @@
 | P2P + 3-way + approval matrix | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Inventory valuation | ✅ FIFO/WAC/std | ✅ | ✅ | ✅ | ◐ WAC only |
 | Project costing / EVM | ✅ | ✅ | ◐ | ◐ | ✅ |
-| Gantt / scheduling | ✅ | ✅ | ✅ | ✅ | ✗ |
+| Gantt / scheduling | ✅ | ✅ | ✅ | ✅ | ◐ (data only) |
 | Construction vertical (IPC/ITP/subcontract/WPS) | ◐ | ◐ | ✗ | ✗ | ✅ **edge** |
-| Document print/output mgmt | ✅ | ✅ | ✅ | ✅ | ✗ |
+| Document print/output mgmt | ✅ | ✅ | ✅ | ✅ | ◐ (4 docs) |
 | BI / dashboards | ✅ | ✅ | ✅ | ◐ | ✗ |
 | Reporting/export engine | ✅ | ✅ | ✅ | ✅ | ✗ |
 | Workflow designer | ✅ | ✅ | ✅ | ✅ | ✗ |
@@ -119,7 +119,7 @@
 | Mobile / portals | ✅ | ✅ | ✅ | ✅ | ✗ |
 | RBAC admin UI / localization | ✅ | ✅ | ✅ | ✅ | ✗ |
 
-**Read:** AURA matches Tier-1 on **finance depth + construction vertical**; trails on **output (print/BI), scheduling, AI, mobile/portals, admin/i18n, consolidation**.
+**Read:** AURA matches Tier-1 on **finance depth + construction vertical**; document print now partial; still trails on **BI/dashboards, export, UI Gantt, AI, mobile/portals, admin/i18n, consolidation**.
 
 ---
 
@@ -169,15 +169,16 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 
 ## J. New gaps surfaced by this addendum
 
-| # | Gap | Priority |
-|---|---|--:|
-| A | Document output engine — print/PDF/Excel for Invoice, PO, GRN, IPC, Contract, Payroll | **P1** |
-| B | Module + executive dashboards with charts (EVM, aging, cash-flow S-curve, KPIs) | **P1** |
-| C | Reporting/export layer over the existing JSON report endpoints | **P1** |
-| D | Per-route permission enforcement (`@Permissions` on every controller action incl. export/print) | **P1** |
-| E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** |
-| F | Saved views / advanced filters | P2 |
-| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 |
+| # | Gap | Priority | Status |
+|---|---|--:|---|
+| A | Document output engine — Invoice/PO/GRN/IPC print | P1 | ✅ **done** (rev 2); extend to Contract/Payslip/Statements |
+| B | Module + executive dashboards with charts (EVM, aging, cash-flow S-curve, KPIs) | **P1** | open |
+| C | Bulk export (CSV/Excel) over list + report endpoints | **P1** | open |
+| D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
+| E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |
+| F | Saved views / advanced filters | P2 | open |
+| G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | open |
+| H | UI Gantt render over the new schedule/baseline data | P2 | open |
 
 These are **additive** to the master report's P0–P3 list (security/ops P0 still dominate).
 

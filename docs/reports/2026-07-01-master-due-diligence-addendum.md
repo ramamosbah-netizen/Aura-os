@@ -1,8 +1,9 @@
 # AURA OS — Master Due-Diligence · ADDENDUM (Matrices + under-reviewed areas)
 
-**Date:** 2026-07-01 (rev 6) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
+**Date:** 2026-07-01 (rev 7) · Companion to `2026-07-01-master-due-diligence.md`. Adds the five executive matrices and the 10 areas the first pass under-covered. All source-verified.
 
-**Rev-6 change:** **gap H (UI Gantt) closed** — `/projects/schedule` renders planned vs baseline vs actual-% bars over the schedule data (`5945270`). Feature/benchmark Gantt now ✅.
+**Rev-7 change:** **gap F (saved views) closed** — SavedViewService + `/views` + `☆ Save view` on lists (migration 0093, `fb54cf9`).
+**Rev-6 (prior):** **gap H (UI Gantt) closed** — `/projects/schedule` renders planned vs baseline vs actual-% bars.
 **Rev-2–5 (prior):** document/print engine (9 docs) → gap A ✅; 5 dashboards → gap B ✅; CSV export on 9 lists → gap C ✅.
 
 ---
@@ -21,7 +22,7 @@
 | HR / CRM / Quality / Fleet / Subcontracts | 3–7 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Tendering / Assets / HSE / Site / AMC / Engineering / Doc-Control | 1–2 | ◐ | ❌ | ❌ | ❌ | ❌ |
 
-**Verified (rev 6):** print for **9 documents**; **5 dashboards**; **CSV export on 9 lists**; **UI Gantt** (`/projects/schedule`). Remaining UI gaps: saved views/advanced filters, Excel export.
+**Verified (rev 7):** print for **9 documents**; **5 dashboards**; **CSV export on 9 lists**; **UI Gantt**; **saved views** (`/views`). Remaining UI gaps: advanced-filter DSL, Excel export.
 
 ---
 
@@ -49,7 +50,7 @@
 | AMC persisted + PPM + →AR billing | ✅ | Quality ITP/MAR | ✅ |
 | Fleet fines + Salik | ✅ | Print/PDF (Invoice/PO/GRN/IPC) | ◐ 4 docs |
 | Dashboards / BI | ❌ | Notifications (email/SMS) | ❌ |
-| Global search (⌘K) | ✅ | Saved views / advanced filters | ❌ |
+| Global search (⌘K) | ✅ | Saved views / advanced filters | ◐ (saved views ✅; filter DSL ❌) |
 
 ---
 
@@ -177,7 +178,7 @@ Production (20%) and Commercial (45%) are **confirmed unchanged** — feature ri
 | C | Bulk export (CSV) over list endpoints | P1 | ✅ **done** — ExportButton on 9 lists (stock, customer-invoices, attendance, salik, expense-claims, fines, staff-advances, suppliers, quotations); Excel/report-export optional |
 | D | Per-route permission enforcement (`@Permissions` incl. export/print) | **P1** | open |
 | E | Real AI features (OCR/invoice extraction, forecasting on data, assistant, pgvector RAG) | **P2** | open |
-| F | Saved views / advanced filters | P2 | open |
+| F | Saved views / advanced filters | P2 | ◐ — saved views ✅ (`/views`); advanced-filter DSL open |
 | G | Performance baseline (APM + load test + N+1/pagination fixes) | P2 | open |
 | H | UI Gantt render over the new schedule/baseline data | P2 | ✅ **done** — `/projects/schedule` (planned vs baseline vs actual-%) |
 

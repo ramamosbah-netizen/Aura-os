@@ -3,7 +3,8 @@ import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
 import type { ToolboxTalk } from './domain/toolbox-talk';
 import type { RiskAssessment } from './domain/risk-assessment';
-import type { HseIncidentStore, PermitToWorkStore, CapaActionStore, ToolboxTalkStore, RiskAssessmentStore } from './store.interface';
+import type { SafetyTrainingRecord } from './domain/safety-training';
+import type { HseIncidentStore, PermitToWorkStore, CapaActionStore, ToolboxTalkStore, RiskAssessmentStore, SafetyTrainingStore } from './store.interface';
 
 export class InMemoryRiskAssessmentStore implements RiskAssessmentStore {
   private readonly items = new Map<string, RiskAssessment>();
@@ -129,6 +130,32 @@ export class InMemoryToolboxTalkStore implements ToolboxTalkStore {
   }
 
   async findAll(tenantId: string): Promise<ToolboxTalk[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
+
+export class InMemorySafetyTrainingStore implements SafetyTrainingStore {
+  private readonly items = new Map<string, SafetyTrainingRecord>();
+
+  async save(record: SafetyTrainingRecord): Promise<void> {
+    this.items.set(record.id, { ...record });
+  }
+
+  async findById(id: string, tenantId: string): Promise<SafetyTrainingRecord | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return { ...item };
+  }
+
+  async findByWorker(workerId: string, tenantId: string): Promise<SafetyTrainingRecord[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.workerId === workerId && i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findAll(tenantId: string): Promise<SafetyTrainingRecord[]> {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

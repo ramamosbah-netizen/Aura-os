@@ -5,7 +5,8 @@ import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
 import type { ToolboxTalk } from './domain/toolbox-talk';
 import type { RiskAssessment, RiskLine } from './domain/risk-assessment';
-import type { HseIncidentStore, PermitToWorkStore, CapaActionStore, ToolboxTalkStore, RiskAssessmentStore } from './store.interface';
+import type { SafetyTrainingRecord } from './domain/safety-training';
+import type { HseIncidentStore, PermitToWorkStore, CapaActionStore, ToolboxTalkStore, RiskAssessmentStore, SafetyTrainingStore } from './store.interface';
 
 export class PostgresRiskAssessmentStore implements RiskAssessmentStore {
   constructor(private readonly pool: Pool) {}
@@ -343,6 +344,71 @@ export class PostgresToolboxTalkStore implements ToolboxTalkStore {
       notes: row.notes || '',
       createdBy: row.created_by,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    };
+  }
+}
+
+export class PostgresSafetyTrainingStore implements SafetyTrainingStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(r: SafetyTrainingRecord, tx?: TxHandle): Promise<void> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_hse_safety_training (
+        id, tenant_id, company_id, worker_name, worker_id, induction_date, card_number, card_expiry, certifications, status, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13)
+      on conflict (tenant_id, worker_id) do update set
+        worker_name = excluded.worker_name,
+        induction_date = excluded.induction_date,
+        card_number = excluded.card_number,
+        card_expiry = excluded.card_expiry,
+        certifications = excluded.certifications,
+        status = excluded.status,
+        updated_at = excluded.updated_at`,
+      [r.id, r.tenantId, r.companyId, r.workerName, r.workerId, r.inductionDate, r.cardNumber, r.cardExpiry, JSON.stringify(r.certifications), r.status, r.createdBy, r.createdAt, r.updatedAt],
+    );
+  }
+
+  async findById(id: string, tenantId: string): Promise<SafetyTrainingRecord | null> {
+    const res = await this.pool.query(
+      `select * from public.aura_hse_safety_training where id = $1 and tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (res.rowCount === 0) return null;
+    return this.mapTraining(res.rows[0]);
+  }
+
+  async findByWorker(workerId: string, tenantId: string): Promise<SafetyTrainingRecord[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_hse_safety_training where worker_id = $1 and tenant_id = $2 order by created_at desc`,
+      [workerId, tenantId]
+    );
+    return res.rows.map(this.mapTraining);
+  }
+
+  async findAll(tenantId: string): Promise<SafetyTrainingRecord[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_hse_safety_training where tenant_id = $1 order by created_at desc`,
+      [tenantId]
+    );
+    return res.rows.map(this.mapTraining);
+  }
+
+  private mapTraining(row: any): SafetyTrainingRecord {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      workerName: row.worker_name,
+      workerId: row.worker_id,
+      inductionDate: row.induction_date instanceof Date ? row.induction_date.toISOString().split('T')[0] : String(row.induction_date),
+      cardNumber: row.card_number,
+      cardExpiry: row.card_expiry instanceof Date ? row.card_expiry.toISOString().split('T')[0] : (row.card_expiry ? String(row.card_expiry) : null),
+      certifications: (typeof row.certifications === 'string' ? JSON.parse(row.certifications) : (row.certifications ?? [])) as string[],
+      status: row.status as 'valid' | 'expired',
+      createdBy: row.created_by,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
     };
   }
 }

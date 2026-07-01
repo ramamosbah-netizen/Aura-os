@@ -8,6 +8,7 @@ import {
   type RiskAssessment,
   type RiskLine,
   type RiskAssessmentStatus,
+  type SafetyTrainingRecord,
   HseService,
 } from '@aura/hse';
 
@@ -37,6 +38,15 @@ interface RaiseCapaDto {
   actionRequired: string;
   assignedTo?: string;
   dueDate: string;
+}
+
+interface RecordSafetyTrainingDto {
+  workerName: string;
+  workerId: string;
+  inductionDate: string;
+  cardNumber?: string;
+  cardExpiry?: string;
+  certifications?: string[];
 }
 
 @Controller('hse')
@@ -240,5 +250,43 @@ export class HseController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // ── Safety Training Matrix ──────────────────────────────────────────────────
+
+  @Post('training')
+  async recordSafetyTraining(@Body() dto: RecordSafetyTrainingDto): Promise<SafetyTrainingRecord> {
+    if (!dto?.workerName?.trim()) throw new BadRequestException('workerName is required');
+    if (!dto?.workerId?.trim()) throw new BadRequestException('workerId is required');
+    if (!dto?.inductionDate?.trim()) throw new BadRequestException('inductionDate is required');
+
+    const ctx = this.tenant.get();
+    try {
+      return await this.hseService.recordSafetyTraining({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId || null,
+        workerName: dto.workerName,
+        workerId: dto.workerId,
+        inductionDate: dto.inductionDate,
+        cardNumber: dto.cardNumber,
+        cardExpiry: dto.cardExpiry,
+        certifications: dto.certifications,
+        createdBy: ctx.actorId || null,
+      });
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('training')
+  listSafetyTraining(): Promise<SafetyTrainingRecord[]> {
+    const ctx = this.tenant.get();
+    return this.hseService.listSafetyTraining(ctx.tenantId);
+  }
+
+  @Get('training/worker/:workerId')
+  getSafetyTrainingForWorker(@Param('workerId') workerId: string): Promise<SafetyTrainingRecord[]> {
+    const ctx = this.tenant.get();
+    return this.hseService.getSafetyTrainingForWorker(ctx.tenantId, workerId);
   }
 }

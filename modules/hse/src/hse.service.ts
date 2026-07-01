@@ -7,12 +7,14 @@ import { type PermitToWork, makePermitToWork } from './domain/permit-to-work';
 import { type CapaAction, makeCapaAction } from './domain/capa-action';
 import { type ToolboxTalk, makeToolboxTalk } from './domain/toolbox-talk';
 import { type RiskAssessment, type NewRiskAssessment, makeRiskAssessment, approveRiskAssessment } from './domain/risk-assessment';
+import { type SafetyTrainingRecord, type NewSafetyTrainingRecord, makeSafetyTrainingRecord, SAFETY_TRAINING_EVENT } from './domain/safety-training';
 
 export const INCIDENT_STORE = Symbol('INCIDENT_STORE');
 export const PTW_STORE = Symbol('PTW_STORE');
 export const CAPA_STORE = Symbol('CAPA_STORE');
 export const TOOLBOX_STORE = Symbol('TOOLBOX_STORE');
 export const RISK_ASSESSMENT_STORE = Symbol('RISK_ASSESSMENT_STORE');
+export const SAFETY_TRAINING_STORE = Symbol('SAFETY_TRAINING_STORE');
 
 import {
   type HseIncidentStore,
@@ -20,6 +22,7 @@ import {
   type CapaActionStore,
   type ToolboxTalkStore,
   type RiskAssessmentStore,
+  type SafetyTrainingStore,
 } from './store.interface';
 
 export const HSE_EVENT = {
@@ -39,6 +42,7 @@ export class HseService {
     @Inject(CAPA_STORE) private readonly capaStore: CapaActionStore,
     @Inject(TOOLBOX_STORE) private readonly toolboxStore: ToolboxTalkStore,
     @Inject(RISK_ASSESSMENT_STORE) private readonly riskStore: RiskAssessmentStore,
+    @Inject(SAFETY_TRAINING_STORE) private readonly trainingStore: SafetyTrainingStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -313,5 +317,42 @@ export class HseService {
 
   listRiskAssessments(tenantId: Id): Promise<RiskAssessment[]> {
     return this.riskStore.findAll(tenantId);
+  }
+
+  // ── Safety Training Matrix ──────────────────────────────────────────────────
+
+  async recordSafetyTraining(input: NewSafetyTrainingRecord): Promise<SafetyTrainingRecord> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'hse.training.record', orgPath });
+    }
+
+    const record = makeSafetyTrainingRecord(input);
+    const event = makeEvent({
+      type: SAFETY_TRAINING_EVENT.recorded,
+      tenantId: record.tenantId,
+      companyId: record.companyId,
+      actorId: record.createdBy,
+      aggregateType: 'hse.safety_training',
+      aggregateId: record.id,
+      payload: { workerId: record.workerId, workerName: record.workerName, status: record.status },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.trainingStore.save(record, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Safety training record saved for ${record.workerName} (${record.workerId}): status ${record.status}`);
+    return record;
+  }
+
+  listSafetyTraining(tenantId: Id): Promise<SafetyTrainingRecord[]> {
+    return this.trainingStore.findAll(tenantId);
+  }
+
+  getSafetyTrainingForWorker(tenantId: Id, workerId: string): Promise<SafetyTrainingRecord[]> {
+    return this.trainingStore.findByWorker(workerId, tenantId);
   }
 }

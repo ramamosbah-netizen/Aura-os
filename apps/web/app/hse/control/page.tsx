@@ -61,11 +61,28 @@ interface CapaAction {
   updatedAt: string;
 }
 
+interface SafetyTrainingRecord {
+  id: string;
+  tenantId: string;
+  companyId: string | null;
+  workerName: string;
+  workerId: string;
+  inductionDate: string;
+  cardNumber: string | null;
+  cardExpiry: string | null;
+  certifications: string[];
+  status: 'valid' | 'expired';
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default async function HseControlPage() {
-  const [incidents, permits, capas, projects] = await Promise.all([
+  const [incidents, permits, capas, trainingRecords, projects] = await Promise.all([
     getJson<HseIncident[]>('/api/hse/incidents'),
     getJson<PermitToWork[]>('/api/hse/ptws'),
     getJson<CapaAction[]>('/api/hse/capas'),
+    getJson<SafetyTrainingRecord[]>('/api/hse/training'),
     getJson<Project[]>('/api/projects/projects'),
   ]);
 
@@ -73,13 +90,14 @@ export default async function HseControlPage() {
     <div style={st.page}>
       <h1 style={st.h1}>HSE Control</h1>
       <p style={st.sub}>
-        Health, Safety, and Environment monitoring. Track and resolve safety incidents, issue Permits to Work (PTW), and raise Corrective and Preventive Actions (CAPA).
+        Health, Safety, and Environment monitoring. Track incidents, Permits to Work (PTW), Corrective and Preventive Actions (CAPA), and Safety Training Matrix.
       </p>
 
       <HseControlClient
         initialIncidents={incidents ?? []}
         initialPermits={permits ?? []}
         initialCapas={capas ?? []}
+        initialTrainingRecords={trainingRecords ?? []}
         projects={projects ?? []}
       />
     </div>

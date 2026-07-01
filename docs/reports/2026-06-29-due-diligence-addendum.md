@@ -375,7 +375,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Site | 76 | 85 | 84 | 86 | 64 | 60 | labour-by-trade ✅ + progress % vs baseline ✅; remaining: resource histograms |
 | Subcontracts | 74 | 84 | 82 | 82 | 62 | 60 | back-charges reactor ✅ + retention-release ✅; remaining: pagination |
 | Doc-Control | 70 | 85 | 84 | 84 | 58 | 55 | drawing register + distribution matrix ✅ (revision control); remaining: transmittal-linked history |
-| Engineering | 72 | 85 | 84 | 86 | 55 | 60 | TQ ✅ + submittal→drawing auto-revise ✅ + pagination ✅; remaining: BIM/IFC model viewer |
+| Engineering | 80 | 86 | 86 | 88 | 58 | 62 | TQ ✅ + submittal→drawing auto-revise ✅ + BIM/model registry ✅ (viewer backbone); remaining: in-browser IFC render (frontend web-ifc) |
 | Fleet | 72 | 85 | 84 | 84 | 62 | 62 | GPS telemetry webhooks + Mulkiya-renewal tasks ✅ (fines/Salik ✅); remaining: geofencing |
 | Assets | 74 | 85 | 86 | 84 | 58 | 62 | QR tagging (disposal + gain/loss ✅; disposal→GL posting reactor ✅; pagination ✅) |
 | AMC | 75 | 82 | 80 | 82 | 55 | 60 | richer PPM UI (Postgres persistence ✅; Finance billing link ✅ via amc.workorder.completed → AR invoice) |

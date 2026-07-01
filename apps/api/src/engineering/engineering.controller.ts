@@ -8,6 +8,9 @@ import {
   type DrawingStatus,
   type SubmittalStatus,
   type SubmittalType,
+  type TechnicalQuery,
+  type TqPriority,
+  type TqDiscipline,
   EngineeringService
 } from '@aura/engineering';
 
@@ -265,5 +268,72 @@ export class EngineeringController {
     const found = await this.engineeringService.getSubmittal(id);
     if (!found) throw new NotFoundException(`Submittal ${id} not found`);
     return found;
+  }
+
+  // ── Technical Queries (TQ) ──────────────────────────────────────────────────
+
+  @Post('technical-queries')
+  createTq(
+    @Body() dto: { projectId: string; projectName?: string; code: string; title: string; query: string; priority?: TqPriority; discipline?: TqDiscipline; drawingReference?: string; costImpact?: boolean; timeImpact?: boolean; assignedTo?: string },
+  ): Promise<TechnicalQuery> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    if (!dto?.query?.trim()) throw new BadRequestException('query is required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.createTechnicalQuery({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      projectName: dto.projectName ?? null,
+      code: dto.code,
+      title: dto.title ?? dto.code,
+      query: dto.query,
+      priority: dto.priority,
+      discipline: dto.discipline,
+      drawingReference: dto.drawingReference ?? null,
+      costImpact: dto.costImpact,
+      timeImpact: dto.timeImpact,
+      assignedTo: dto.assignedTo ?? null,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Get('technical-queries')
+  listTqs(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: TechnicalQuery['status'],
+  ): Promise<TechnicalQuery[]> {
+    return this.engineeringService.listTechnicalQueries({ tenantId: this.tenant.get().tenantId, projectId, status, limit: 100 });
+  }
+
+  @Get('technical-queries/paged')
+  pagedTqs(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: TechnicalQuery['status'],
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listTechnicalQueriesPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
+  @Get('technical-queries/:id')
+  async getTq(@Param('id') id: string): Promise<TechnicalQuery> {
+    const found = await this.engineeringService.getTechnicalQuery(id);
+    if (!found) throw new NotFoundException(`technical query ${id} not found`);
+    return found;
+  }
+
+  @Put('technical-queries/:id/respond')
+  async respondTq(@Param('id') id: string, @Body() dto: { response: string }): Promise<TechnicalQuery> {
+    if (!dto?.response?.trim()) throw new BadRequestException('response is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.engineeringService.respondTechnicalQuery(ctx.tenantId, ctx.actorId, id, dto.response);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
   }
 }

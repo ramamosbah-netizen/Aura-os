@@ -16,6 +16,7 @@ export interface DrawingStore {
   updateWithClient(tx: TxHandle | null, drawing: Drawing): Promise<void>;
   get(id: Id): Promise<Drawing | null>;
   getByCode(tenantId: Id, projectId: Id, code: string, revision: string): Promise<Drawing | null>;
+  getLatestByCode(tenantId: Id, projectId: Id, code: string): Promise<Drawing | null>;
   list(filter?: DrawingFilter): Promise<Drawing[]>;
   listPaged(filter: DrawingFilter, page: PageParams): Promise<Page<Drawing>>;
 }

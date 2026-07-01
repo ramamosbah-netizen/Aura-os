@@ -95,6 +95,16 @@ export class PostgresDrawingStore implements DrawingStore {
     return res.rows.length ? rowToDrawing(res.rows[0]) : null;
   }
 
+  async getLatestByCode(tenantId: Id, projectId: Id, code: string): Promise<Drawing | null> {
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_engineering_drawings 
+       WHERE tenant_id = $1 AND project_id = $2 AND code = $3 
+       ORDER BY created_at DESC LIMIT 1`,
+      [tenantId, projectId, code],
+    );
+    return res.rows.length ? rowToDrawing(res.rows[0]) : null;
+  }
+
   async list(filter: DrawingFilter = {}): Promise<Drawing[]> {
     const where: string[] = [];
     const params: unknown[] = [];

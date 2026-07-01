@@ -37,6 +37,20 @@ export class InMemoryDrawingStore implements DrawingStore {
     return null;
   }
 
+  async getLatestByCode(tenantId: Id, projectId: Id, code: string): Promise<Drawing | null> {
+    let latest: Drawing | null = null;
+    for (const d of this.items.values()) {
+      if (d.tenantId === tenantId && d.projectId === projectId && d.code === code) {
+        // `>=` so that on identical createdAt timestamps (same-ms creates in a test/fast path)
+        // the later-inserted row wins — Map preserves insertion order = creation order.
+        if (!latest || new Date(d.createdAt) >= new Date(latest.createdAt)) {
+          latest = { ...d };
+        }
+      }
+    }
+    return latest;
+  }
+
   async list(filter: DrawingFilter = {}): Promise<Drawing[]> {
     let list = [...this.items.values()];
     if (filter.tenantId) list = list.filter((i) => i.tenantId === filter.tenantId);

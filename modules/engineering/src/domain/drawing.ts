@@ -57,4 +57,6 @@ export const ENGINEERING_EVENT = {
   rfiAnswered: 'engineering.rfi.answered',
   submittalCreated: 'engineering.submittal.created',
   submittalStatusChanged: 'engineering.submittal.status_changed',
+  tqRaised: 'engineering.tq.raised',
+  tqResponded: 'engineering.tq.responded',
 } as const;

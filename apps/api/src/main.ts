@@ -41,7 +41,24 @@ async function bootstrap(): Promise<void> {
     new Logger('Bootstrap').error('AUTH_REQUIRED is set but AUTH_JWT_SECRET is missing — cannot enforce; running open.');
   }
   const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status'];
+  // Spine create endpoints where an Idempotency-Key may be *required* (not just honored).
+  const requireIdem = process.env.IDEMPOTENCY_REQUIRED === 'true';
+  const SPINE_CREATES = [
+    '/api/v1/crm/accounts', '/api/v1/tendering/tenders', '/api/v1/contracts/contracts',
+    '/api/v1/projects/projects', '/api/v1/procurement/purchase-orders', '/api/v1/inventory/grns',
+    '/api/v1/finance/invoices', '/api/v1/finance/payments',
+  ];
   app.use(async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
+    // Idempotency-Key enforcement on spine creates (gated; default off — non-breaking).
+    if (requireIdem && req.method === 'POST') {
+      const path = (req.url ?? '').split('?')[0];
+      if (SPINE_CREATES.includes(path) && !req.headers['idempotency-key']) {
+        res.statusCode = 400;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ statusCode: 400, error: 'Bad Request', code: 'IDEMPOTENCY_REQUIRED', message: 'Idempotency-Key header is required for this create' }));
+        return;
+      }
+    }
     const h = req.headers['authorization'];
     const ctx = await auth.contextFromHeader(Array.isArray(h) ? h[0] : h);
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { CoreModule, PG_POOL } from '@aura/core';
+import { QualityModule, QualityService } from '@aura/quality';
 import { PURCHASE_ORDER_STORE } from './purchase-order-store';
 import { InMemoryPurchaseOrderStore } from './in-memory-purchase-order-store';
 import { PostgresPurchaseOrderStore } from './postgres-purchase-order-store';
@@ -21,9 +22,11 @@ import { InMemorySupplierStore } from './in-memory-supplier-store';
 import { PostgresSupplierStore } from './postgres-supplier-store';
 import { SupplierService } from './supplier.service';
 
+import { QUALITY_GATE } from './purchase-order.service';
+
 /** The Procurement business module — same shape as the deal-chain modules. */
 @Module({
-  imports: [CoreModule],
+  imports: [CoreModule, QualityModule],
   providers: [
     {
       provide: PURCHASE_ORDER_STORE,
@@ -53,6 +56,10 @@ import { SupplierService } from './supplier.service';
     PurchaseRequestService,
     RfqService,
     SupplierService,
+    {
+      provide: QUALITY_GATE,
+      useExisting: QualityService,
+    },
   ],
   exports: [PurchaseOrderService, PurchaseRequestService, RfqService, SupplierService],
 })

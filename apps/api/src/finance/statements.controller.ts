@@ -5,6 +5,7 @@ import {
   type CashFlow,
   type IncomeStatement,
   type TrialBalance,
+  type ConsolidatedStatements,
   StatementsService,
 } from '@aura/finance';
 
@@ -39,5 +40,10 @@ export class StatementsController {
   @Get('cash-flow')
   cashFlow(@Query('from') from?: string, @Query('to') to?: string): Promise<CashFlow> {
     return this.statements.cashFlow(this.tenant.get().tenantId, from || null, to || null);
+  }
+
+  @Get('consolidated')
+  consolidated(@Query('asOf') asOf?: string): Promise<ConsolidatedStatements> {
+    return this.statements.consolidated(this.tenant.get().tenantId, asOf || null);
   }
 }

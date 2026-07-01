@@ -37,7 +37,30 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        setErr(d.error ?? 'Failed to update PO status');
+        setErr(d.error ?? d.message ?? 'Failed to update PO status');
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setErr('Failed to connect to the API.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Approval matrix actions: draft → submit (auto-approves small POs) → approve → issue.
+  async function act(id: string, action: 'submit' | 'approve', body?: Record<string, unknown>) {
+    setBusyId(id);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/procurement/purchase-orders/${id}/${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body ?? {}),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setErr(d.error ?? d.message ?? `Failed to ${action} PO`);
       } else {
         router.refresh();
       }
@@ -81,12 +104,17 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
                     <td style={s.tdMuted}>{fmt(po.createdAt)}</td>
                     <td style={s.td}>
                       {po.status === 'draft' && (
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => updateStatus(po.id, 'issued')}
-                          style={s.btnAccent}
-                        >
+                        <button type="button" disabled={isBusy} onClick={() => act(po.id, 'submit')} style={s.btnAccent}>
+                          {isBusy ? 'Submitting…' : 'Submit for approval'}
+                        </button>
+                      )}
+                      {po.status === 'pending_approval' && (
+                        <button type="button" disabled={isBusy} onClick={() => act(po.id, 'approve', { approverLevel: 3 })} style={s.btnAccent}>
+                          {isBusy ? 'Approving…' : 'Approve'}
+                        </button>
+                      )}
+                      {po.status === 'approved' && (
+                        <button type="button" disabled={isBusy} onClick={() => updateStatus(po.id, 'issued')} style={s.btnAccent}>
                           {isBusy ? 'Issuing…' : 'Issue PO'}
                         </button>
                       )}
@@ -154,7 +182,15 @@ const s = {
     let color = 'var(--muted)';
     let border = '1px solid var(--border)';
     let background = 'var(--panel-2)';
-    if (status === 'issued') {
+    if (status === 'pending_approval') {
+      color = '#f59e0b';
+      border = '1px solid rgba(245,158,11,0.25)';
+      background = 'rgba(245,158,11,0.06)';
+    } else if (status === 'approved') {
+      color = 'var(--good)';
+      border = '1px solid rgba(40,167,69,0.2)';
+      background = 'rgba(40,167,69,0.05)';
+    } else if (status === 'issued') {
       color = 'var(--accent)';
       border = '1px solid rgba(255,193,7,0.2)';
       background = 'rgba(255,193,7,0.05)';

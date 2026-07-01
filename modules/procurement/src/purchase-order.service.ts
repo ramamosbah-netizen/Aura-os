@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
+import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
 import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
 import { isApproved } from './domain/supplier';
@@ -103,9 +104,41 @@ export class PurchaseOrderService implements OnModuleInit {
     return po;
   }
 
+  /** Submit a PO for approval. Auto-approves below the matrix threshold; otherwise → pending_approval. */
+  async submitForApproval(id: Id): Promise<PurchaseOrder> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`PO ${id} not found`);
+    const req = requiredApproval(existing.value);
+    return this.transition(existing, req.autoApproved ? 'approved' : 'pending_approval', PROCUREMENT_EVENT.poUpdated, {
+      requiredLevel: req.level, requiredLabel: req.label, autoApproved: req.autoApproved,
+    });
+  }
+
+  /**
+   * Approve a PO. The approver's level must meet the value's required approval level
+   * (the matrix); under-level approval is rejected.
+   */
+  async approve(id: Id, approverLevel: number): Promise<PurchaseOrder> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`PO ${id} not found`);
+    const req = requiredApproval(existing.value);
+    if (Number(approverLevel) < req.level) {
+      throw new Error(`approval level ${approverLevel} is below the required level ${req.level} (${req.label}) for value ${existing.value}`);
+    }
+    return this.transition(existing, 'approved', PROCUREMENT_EVENT.poApproved, {
+      approverLevel: Number(approverLevel), requiredLevel: req.level, requiredLabel: req.label,
+    });
+  }
+
   async changeStatus(id: Id, status: PurchaseOrderStatus): Promise<PurchaseOrder> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`PO ${id} not found`);
+
+    // Approval gate: a PO above the auto-approve threshold must be 'approved' before it can issue.
+    if (status === 'issued' && existing.status !== 'approved' && !requiredApproval(existing.value).autoApproved) {
+      throw new Error(`PO ${existing.reference ?? id} (value ${existing.value}) requires approval before it can be issued`);
+    }
+
     const updated: PurchaseOrder = { ...existing, status };
 
     let eventType: string = PROCUREMENT_EVENT.poUpdated;
@@ -137,6 +170,35 @@ export class PurchaseOrderService implements OnModuleInit {
       await this.events.appendWithClient(handle, [event]);
     });
     this.logger.log(`PO ${updated.title} (${updated.id}) status changed to ${status}`);
+    return updated;
+  }
+
+  /** Atomic status transition + spine event (shared by submit/approve/changeStatus paths). */
+  private async transition(
+    existing: PurchaseOrder,
+    status: PurchaseOrderStatus,
+    eventType: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<PurchaseOrder> {
+    const updated: PurchaseOrder = { ...existing, status };
+    const event = makeEvent({
+      type: eventType,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'procurement.po',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title, status: updated.status, value: updated.value, supplier: updated.supplierName,
+        project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
+        ...extra,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`PO ${updated.title} (${updated.id}) → ${status}`);
     return updated;
   }
 

@@ -45,6 +45,7 @@ import { RateLimiter } from './reliability/rate-limiter';
 import { NotificationService } from './notifications/notification.service';
 import { SAVED_VIEW_STORE, InMemorySavedViewStore, PostgresSavedViewStore } from './views/saved-view-store';
 import { SavedViewService } from './views/saved-view.service';
+import { NOTIFICATION_STORE, InMemoryNotificationStore, PostgresNotificationStore } from './notifications/notification-store';
 import { FeatureFlagService } from './config/feature-flag.service';
 import { BackgroundJobService } from './jobs/background-job.service';
 import { ConnectorService } from './integration/connector.service';
@@ -88,6 +89,12 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     OlapExportService,
     { provide: CircuitBreaker, useFactory: () => new CircuitBreaker() },
     RateLimiter,
+    {
+      provide: NOTIFICATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresNotificationStore(pool) : new InMemoryNotificationStore(),
+    },
     NotificationService,
     {
       provide: SAVED_VIEW_STORE,

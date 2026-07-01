@@ -1,5 +1,6 @@
 // @aura/procurement — the Procurement business module (operate-side purchase orders).
 export * from './domain/purchase-order';
+export * from './domain/approval-matrix';
 export * from './domain/purchase-request';
 export * from './purchase-order-store';
 export * from './purchase-request-store';

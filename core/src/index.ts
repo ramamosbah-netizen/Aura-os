@@ -51,6 +51,7 @@ export * from './reliability/rate-limiter';
 export * from './notifications/notification.service';
 export * from './views/saved-view-store';
 export * from './views/saved-view.service';
+export * from './notifications/notification-store';
 export * from './config/feature-flag.service';
 export * from './jobs/background-job.service';
 export * from './integration/connector.service';

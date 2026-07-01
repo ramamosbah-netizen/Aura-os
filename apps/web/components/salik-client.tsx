@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import ExportButton from './export-button';
 
 interface Vehicle { id: string; make: string; model: string; plateNumber: string }
 
@@ -102,6 +103,7 @@ export default function SalikClient({ initialCharges, vehicles }: { initialCharg
         <span style={s.stat}>Total (excl. disputed): <b>AED {total.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</b></span>
       </div>
 
+      <div style={{ margin: '8px 0' }}><ExportButton filename="salik" rows={charges as unknown as Array<Record<string, unknown>>} columns={[{ key: 'chargeDate' }, { key: 'gate' }, { key: 'amount' }, { key: 'status' }, { key: 'allocatedTo' }]} /></div>
       <table style={s.table}>
         <thead>
           <tr>

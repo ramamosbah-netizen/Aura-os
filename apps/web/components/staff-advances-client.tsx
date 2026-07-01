@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import ExportButton from './export-button';
 
 interface Employee { id: string; firstName?: string; lastName?: string; name?: string }
 interface StaffAdvance {
@@ -98,6 +99,7 @@ export default function StaffAdvancesClient({ initialAdvances, employees }: { in
       </div>
 
       <h2 style={st.h2}>Advances</h2>
+      <div style={{ margin: '8px 0' }}><div style={{ margin: '8px 0' }}><ExportButton filename="staff-advances" rows={advances as unknown as Array<Record<string, unknown>>} /></div></div>
       {advances.length === 0 ? (
         <p style={st.muted}>No staff advances yet.</p>
       ) : (

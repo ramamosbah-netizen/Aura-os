@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Contract } from './domain/contract';
 
@@ -22,4 +22,5 @@ export interface ContractStore {
   updateWithClient(tx: TxHandle | null, contract: Contract): Promise<void>;
   get(id: Id): Promise<Contract | null>;
   list(filter?: ContractFilter): Promise<Contract[]>;
+  listPaged(filter: ContractFilter, page: PageParams): Promise<Page<Contract>>;
 }

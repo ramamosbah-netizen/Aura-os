@@ -124,4 +124,8 @@ export class ContractService implements OnModuleInit {
   list(filter?: ContractFilter): Promise<Contract[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: ContractFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { PaymentCertificate } from './domain/payment-certificate';
 import type { CertificateFilter, PaymentCertificateStore } from './payment-certificate-store';
@@ -35,5 +36,10 @@ export class InMemoryPaymentCertificateStore implements PaymentCertificateStore 
     if (filter.status) out = out.filter((c) => c.status === filter.status);
     out.sort((a, b) => (a.sequence < b.sequence ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: CertificateFilter, page: PageParams): Promise<Page<PaymentCertificate>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

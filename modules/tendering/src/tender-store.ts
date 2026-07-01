@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 
@@ -21,5 +21,6 @@ export interface TenderStore {
   updateWithClient(tx: TxHandle | null, tender: Tender): Promise<void>;
   get(id: Id): Promise<Tender | null>;
   list(filter?: TenderFilter): Promise<Tender[]>;
+  listPaged(filter: TenderFilter, page: PageParams): Promise<Page<Tender>>;
 }
 

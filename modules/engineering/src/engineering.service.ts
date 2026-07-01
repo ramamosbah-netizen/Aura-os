@@ -117,6 +117,10 @@ export class EngineeringService {
     return this.drawingStore.list(filter);
   }
 
+  listDrawingsPaged(filter: DrawingFilter, page: import('@aura/shared').PageParams) {
+    return this.drawingStore.listPaged(filter, page);
+  }
+
   // ── RFIs (Request For Information) ─────────────────────────────────────────
 
   async createRfi(input: NewRfi): Promise<Rfi> {
@@ -187,6 +191,10 @@ export class EngineeringService {
     return this.rfiStore.list(filter);
   }
 
+  listRfisPaged(filter: RfiFilter, page: import('@aura/shared').PageParams) {
+    return this.rfiStore.listPaged(filter, page);
+  }
+
   // ── Technical/Material Submittals ──────────────────────────────────────────
 
   async createSubmittal(input: NewSubmittal): Promise<Submittal> {
@@ -255,5 +263,9 @@ export class EngineeringService {
 
   listSubmittals(filter?: SubmittalFilter): Promise<Submittal[]> {
     return this.submittalStore.list(filter);
+  }
+
+  listSubmittalsPaged(filter: SubmittalFilter, page: import('@aura/shared').PageParams) {
+    return this.submittalStore.listPaged(filter, page);
   }
 }

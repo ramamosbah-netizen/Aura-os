@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Submittal } from './domain/submittal';
 import type { SubmittalFilter, SubmittalStore } from './submittal-store';
@@ -43,5 +44,10 @@ export class InMemorySubmittalStore implements SubmittalStore {
     if (filter.status) list = list.filter((i) => i.status === filter.status);
     list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? list.slice(0, filter.limit) : list;
+  }
+
+  async listPaged(filter: SubmittalFilter, page: PageParams): Promise<Page<Submittal>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

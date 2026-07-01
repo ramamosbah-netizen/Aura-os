@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Put, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem } from '@aura/tendering';
 import * as xlsx from 'xlsx';
 
@@ -58,6 +59,19 @@ export class TenderingController {
   @Get()
   list(@Query('status') status?: string, @Query('accountId') accountId?: string): Promise<Tender[]> {
     return this.tenders.list({ status, accountId, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('status') status?: string,
+    @Query('accountId') accountId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.tenders.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, accountId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

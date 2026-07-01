@@ -167,6 +167,10 @@ export class TenderService implements OnModuleInit {
     return this.store.list(filter);
   }
 
+  listPaged(filter: TenderFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
+
   // ── BOQ & Cost Estimating ─────────────────────────────────────
 
   async getOrCreateBOQ(tenantId: string, companyId: string | null, tenderId: Id): Promise<{ boq: BOQ; items: BOQItem[] }> {

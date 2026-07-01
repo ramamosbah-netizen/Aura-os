@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Drawing,
   type Rfi,
@@ -113,6 +114,19 @@ export class EngineeringController {
     });
   }
 
+  @Get('drawings/paged')
+  pagedDrawings(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: DrawingStatus,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listDrawingsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('drawings/:id')
   async getDrawing(@Param('id') id: string): Promise<Drawing> {
     const found = await this.engineeringService.getDrawing(id);
@@ -163,6 +177,19 @@ export class EngineeringController {
       status,
       limit: 100,
     });
+  }
+
+  @Get('rfis/paged')
+  pagedRfis(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: Rfi['status'],
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listRfisPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('rfis/:id')
@@ -218,6 +245,19 @@ export class EngineeringController {
       status,
       limit: 100,
     });
+  }
+
+  @Get('submittals/paged')
+  pagedSubmittals(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: SubmittalStatus,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listSubmittalsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('submittals/:id')

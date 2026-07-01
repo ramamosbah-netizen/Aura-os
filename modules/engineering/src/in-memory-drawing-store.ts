@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Drawing } from './domain/drawing';
 import type { DrawingFilter, DrawingStore } from './drawing-store';
@@ -43,5 +44,10 @@ export class InMemoryDrawingStore implements DrawingStore {
     if (filter.status) list = list.filter((i) => i.status === filter.status);
     list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? list.slice(0, filter.limit) : list;
+  }
+
+  async listPaged(filter: DrawingFilter, page: PageParams): Promise<Page<Drawing>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

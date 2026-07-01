@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type Contract, type ContractStatus, ContractService } from '@aura/contracts';
 
 interface CreateContractDto {
@@ -64,6 +65,20 @@ export class ContractsController {
     @Query('tenderId') tenderId?: string,
   ): Promise<Contract[]> {
     return this.contracts.list({ status, accountId, tenderId, limit: 100 });
+  }
+
+  @Get('paged')
+  paged(
+    @Query('status') status?: string,
+    @Query('accountId') accountId?: string,
+    @Query('tenderId') tenderId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.contracts.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, accountId, tenderId },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get(':id')

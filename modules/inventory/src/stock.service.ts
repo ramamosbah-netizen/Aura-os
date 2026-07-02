@@ -9,12 +9,16 @@ import {
   type NewStockItem,
   type ValuationSummary,
   type ReorderReport,
+  type UomConversion,
   makeStockItem,
   makeStockMovement,
   applyMovement,
   computeWac,
+  normaliseAltUnits,
   summariseValuation,
   summariseReorder,
+  toBaseQty,
+  uomFactor,
 } from './domain/stock';
 import { computeFifo, fifoIssueCost, fifoReceiptState, type FifoMove } from './domain/fifo';
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
@@ -42,6 +46,10 @@ export class StockService {
     }
     const existing = await this.store.getItemByCode(input.tenantId, input.code.trim());
     if (existing) throw new Error(`stock item code ${input.code} already exists`);
+    if (input.barcode?.trim()) {
+      const dup = await this.store.getItemByBarcode(input.tenantId, input.barcode.trim());
+      if (dup) throw new Error(`barcode ${input.barcode} is already assigned to ${dup.code}`);
+    }
 
     const item = makeStockItem(input);
     await this.store.createItem(item);
@@ -60,10 +68,20 @@ export class StockService {
     return item;
   }
 
-  /** Record a stock movement (in/out), updating the item's on-hand. Issues can't go negative. */
-  async recordMovement(stockItemId: Id, direction: StockDirection, quantity: number, reason?: string, unitCost?: number): Promise<{ item: StockItem; movement: StockMovement }> {
+  /**
+   * Record a stock movement (in/out), updating the item's on-hand. Issues can't go negative.
+   * `unit` may be any of the item's UOMs — quantity converts to base, and a receipt's
+   * unitCost (priced per entered unit) converts to a per-base-unit rate.
+   */
+  async recordMovement(stockItemId: Id, direction: StockDirection, quantity: number, reason?: string, unitCost?: number, unit?: string): Promise<{ item: StockItem; movement: StockMovement }> {
     const item = await this.store.getItem(stockItemId);
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
+
+    const factor = uomFactor(item, unit);
+    const baseQty = toBaseQty(item, quantity, unit);
+    const baseUnitCost = unitCost !== undefined ? Number(unitCost) / factor : undefined;
+    quantity = baseQty;
+    unitCost = baseUnitCost;
 
     const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
     let newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));
@@ -123,6 +141,32 @@ export class StockService {
 
   getItem(id: Id): Promise<StockItem | null> {
     return this.store.getItem(id);
+  }
+
+  /** Scanner flow: resolve an item from its barcode. */
+  getItemByBarcode(tenantId: Id, barcode: string): Promise<StockItem | null> {
+    return this.store.getItemByBarcode(tenantId, barcode.trim());
+  }
+
+  /** Assign/replace an item's barcode and alternative UOMs. */
+  async setItemUom(stockItemId: Id, input: { barcode?: string | null; altUnits?: UomConversion[] }): Promise<StockItem> {
+    const item = await this.store.getItem(stockItemId);
+    if (!item) throw new Error(`stock item ${stockItemId} not found`);
+
+    let barcode = item.barcode;
+    if (input.barcode !== undefined) {
+      barcode = input.barcode?.trim() || null;
+      if (barcode) {
+        const dup = await this.store.getItemByBarcode(item.tenantId, barcode);
+        if (dup && dup.id !== item.id) throw new Error(`barcode ${barcode} is already assigned to ${dup.code}`);
+      }
+    }
+    const altUnits = input.altUnits !== undefined ? normaliseAltUnits(item.unit, input.altUnits) : item.altUnits;
+
+    const updated: StockItem = { ...item, barcode, altUnits };
+    await this.store.updateItem(updated);
+    this.logger.log(`UOM/barcode set for ${item.code}: barcode=${barcode ?? '—'}, altUnits=${altUnits.map((u) => `${u.unit}×${u.factor}`).join(',') || '—'}`);
+    return updated;
   }
 
   async getItemWithMovements(id: Id): Promise<{ item: StockItem; movements: StockMovement[] } | null> {

@@ -15,6 +15,7 @@ export interface StockStore {
   updateItem(item: StockItem): Promise<void>;
   getItem(id: Id): Promise<StockItem | null>;
   getItemByCode(tenantId: Id, code: string): Promise<StockItem | null>;
+  getItemByBarcode(tenantId: Id, barcode: string): Promise<StockItem | null>;
   listItems(filter?: StockFilter): Promise<StockItem[]>;
   listItemsPaged(filter: StockFilter, page: PageParams): Promise<Page<StockItem>>;
   addMovement(movement: StockMovement): Promise<void>;

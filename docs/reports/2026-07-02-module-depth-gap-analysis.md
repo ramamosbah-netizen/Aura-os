@@ -1,7 +1,7 @@
 # AURA OS — Module Vertical-Depth Gap Analysis (2026-07-02)
 
 Source of truth: current codebase (branch `feat/module-depth-verticals-jun30`). Verified by file
-inspection + grep, not memory. 17 L2 modules · 90+ domain entities · 15 cross-module reactors · DB @ migration 0123.
+inspection + grep, not memory. 17 L2 modules · 90+ domain entities · 15 cross-module reactors · DB @ migration 0124.
 
 Legend: ✅ present · ◐ partial · ❌ missing.
 
@@ -16,7 +16,7 @@ Legend: ✅ present · ◐ partial · ❌ missing.
 | Contracts | ✅ high | (clause library ✅, obligations+due-soon ✅, IPC ✅) — none material |
 | Projects | ✅ high | **Revenue recognition** UI polish; resource histogram viz (CPM reschedule + levelling ✅) |
 | Procurement | ✅ high | Framework/blanket agreements ✅ (rate card, ceiling drawdown, call-off→PO, 0122); approval matrix ✅, 3-way ✅, MAR gate ✅ |
-| Inventory | ◐ | ✅ FIFO cost layers→COGS (per-item WAC\|FIFO); remaining: **barcode + multi-UOM** |
+| Inventory | ✅ | FIFO cost layers→COGS ✅ (per-item WAC\|FIFO); barcode + multi-UOM ✅ (scan lookup, alt-unit movements, 0124) |
 | Finance | ✅ high | ✅ **Intercompany eliminations** (reversing entries; group nets intra-group to zero) |
 | HR | ✅ high | ✅ **Performance appraisal** + ✅ **org-chart** (attendance ✅, WPS SIF ✅, payroll ✅) |
 | HSE | ◐ | **Training-matrix** ✅ + risk-assessment ✅ present; audit-trail depth ◐; pagination ✅ (incidents, PTWs) |
@@ -83,7 +83,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 **P2 — depth completeness**
 5. ✅ Pagination on remaining transactional lists (finance/inventory/subcontracts/AMC/HSE) — Tier-1 #22 closed.
 6. ✅ HR appraisal + ✅ org-chart + ✅ Tendering estimate engine + ✅ Procurement framework agreements.
-7. ✅ Doc-Control transmittal↔drawing revision history + ✅ Assets QR tags. Remaining: Inventory barcode/UOM.
+7. ✅ Doc-Control transmittal↔drawing revision history + ✅ Assets QR tags + ✅ Inventory barcode/multi-UOM. **Item closed.**
 8. Soft-delete standardization; notifications email/SMS delivery; remaining DTO decoration.
 
 **P3 — assurance / architecture**
@@ -109,8 +109,9 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | Procurement framework agreements: rate card + ceiling, activate/terminate, call-off→PO (approved-vendor + idempotent) | 0122 |
 | ✅ | Doc-Control transmittal items: transmittal↔register linkage + per-document revision history endpoint | 0123 |
 | ✅ | Assets QR tags: `GET assets/:id/qr-tag` (+`/svg`, `POST qr-tags/batch`) — derived, `qrcode` dep in @aura/assets | — |
+| ✅ | Inventory barcode + multi-UOM: `GET stock/by-barcode/:barcode`, `PATCH stock/:id/uom`, movements accept `unit` (qty + unitCost convert to base) | 0124 |
 
-**Next:** Inventory barcode/UOM (last of P2 item 7), then soft-delete standardization / notifications delivery / remaining DTOs (item 8).
+**Next:** P2 item 8 — soft-delete standardization, notifications email/SMS delivery, remaining ~30 controller DTOs.
 
 ---
 *Verified from source 2026-07-02. No files modified by this analysis.*

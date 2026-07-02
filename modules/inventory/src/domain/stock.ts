@@ -5,6 +5,12 @@ import { type Id, newId } from '@aura/shared';
  * what's actually held). A StockItem is an SKU at a warehouse with a running on-hand
  * quantity; every StockMovement (in/out) adjusts it. Issues can't drive on-hand negative.
  */
+/** An alternative unit of measure: 1 <unit> = <factor> base units (e.g. 1 box = 12 pcs). */
+export interface UomConversion {
+  unit: string;
+  factor: number;
+}
+
 export interface StockItem {
   id: Id;
   tenantId: Id;
@@ -12,6 +18,10 @@ export interface StockItem {
   code: string;
   name: string;
   unit: string;
+  /** Scannable barcode (EAN/Code128/QR payload) — unique per tenant when set. */
+  barcode: string | null;
+  /** Alternative UOMs; quantities entered in these convert to the base unit. */
+  altUnits: UomConversion[];
   warehouse: string;
   quantityOnHand: number;
   /** Moving weighted-average unit cost (WAC); inventory value = quantityOnHand × avgCost.
@@ -33,6 +43,8 @@ export interface NewStockItem {
   code: string;
   name: string;
   unit?: string;
+  barcode?: string | null;
+  altUnits?: UomConversion[];
   warehouse?: string;
   openingQty?: number;
   openingCost?: number;
@@ -44,6 +56,20 @@ export interface NewStockItem {
 
 export type CostingMethod = 'wac' | 'fifo';
 
+/** Validate + normalise a set of alternative UOMs against the base unit. */
+export function normaliseAltUnits(baseUnit: string, altUnits: UomConversion[] | undefined): UomConversion[] {
+  const seen = new Set<string>([baseUnit.toLowerCase()]);
+  return (altUnits ?? []).map((u) => {
+    const unit = u.unit?.trim();
+    const factor = Number(u.factor);
+    if (!unit) throw new Error('alt unit name is required');
+    if (seen.has(unit.toLowerCase())) throw new Error(`duplicate unit "${unit}"`);
+    seen.add(unit.toLowerCase());
+    if (!Number.isFinite(factor) || factor <= 0) throw new Error(`alt unit "${unit}" needs a positive factor`);
+    return { unit, factor };
+  });
+}
+
 export function makeStockItem(input: NewStockItem): StockItem {
   if (!input.code || !input.code.trim()) throw new Error('stock item code is required');
   if (!input.name || !input.name.trim()) throw new Error('stock item name is required');
@@ -51,13 +77,16 @@ export function makeStockItem(input: NewStockItem): StockItem {
   if (input.openingQty !== undefined && (!Number.isFinite(opening) || opening < 0)) {
     throw new Error('opening quantity cannot be negative');
   }
+  const unit = input.unit?.trim() || 'pcs';
   return {
     id: newId(),
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
     code: input.code.trim(),
     name: input.name.trim(),
-    unit: input.unit?.trim() || 'pcs',
+    unit,
+    barcode: input.barcode?.trim() || null,
+    altUnits: normaliseAltUnits(unit, input.altUnits),
     warehouse: input.warehouse?.trim() || 'Main',
     quantityOnHand: Number.isFinite(opening) ? opening : 0,
     avgCost: Math.max(0, Number(input.openingCost) || 0),
@@ -67,6 +96,22 @@ export function makeStockItem(input: NewStockItem): StockItem {
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };
+}
+
+/** Base-units-per-1 of the given unit. Undefined/base unit → 1; unknown units are rejected. */
+export function uomFactor(item: Pick<StockItem, 'unit' | 'altUnits'>, unit?: string): number {
+  const u = unit?.trim();
+  if (!u || u.toLowerCase() === item.unit.toLowerCase()) return 1;
+  const alt = item.altUnits.find((a) => a.unit.toLowerCase() === u.toLowerCase());
+  if (!alt) throw new Error(`unknown unit "${u}" (base ${item.unit}${item.altUnits.length ? `, alt ${item.altUnits.map((a) => a.unit).join('/')}` : ''})`);
+  return alt.factor;
+}
+
+/** Convert a quantity entered in any of the item's units to the base unit. */
+export function toBaseQty(item: Pick<StockItem, 'unit' | 'altUnits'>, quantity: number, unit?: string): number {
+  const q = Number(quantity);
+  if (!Number.isFinite(q) || q <= 0) throw new Error('quantity must be positive');
+  return Math.round(q * uomFactor(item, unit) * 10000) / 10000;
 }
 
 export type StockDirection = 'in' | 'out';

@@ -1,12 +1,14 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type StockItem, type StockMovement, type StockDirection, type ValuationSummary, type ReorderReport, StockService } from '@aura/inventory';
+import { type StockItem, type StockMovement, type StockDirection, type ValuationSummary, type ReorderReport, type UomConversion, StockService } from '@aura/inventory';
 
 interface CreateStockItemDto {
   code: string;
   name: string;
   unit?: string;
+  barcode?: string;
+  altUnits?: UomConversion[];
   warehouse?: string;
   openingQty?: number;
   openingCost?: number;
@@ -18,6 +20,13 @@ interface MovementDto {
   quantity: number;
   reason?: string;
   unitCost?: number;
+  /** Optional UOM the quantity (and unitCost) are entered in — converts to base. */
+  unit?: string;
+}
+
+interface UomDto {
+  barcode?: string | null;
+  altUnits?: UomConversion[];
 }
 
 interface ReorderDto {
@@ -44,6 +53,8 @@ export class StockController {
       code: dto.code,
       name: dto.name,
       unit: dto.unit,
+      barcode: dto.barcode,
+      altUnits: dto.altUnits,
       warehouse: dto.warehouse,
       openingQty: dto.openingQty,
       openingCost: dto.openingCost,
@@ -83,6 +94,14 @@ export class StockController {
     return this.stock.reorderReport({ tenantId: ctx.tenantId, warehouse, limit: 200 });
   }
 
+  /** Scanner flow: barcode → item. */
+  @Get('by-barcode/:barcode')
+  async byBarcode(@Param('barcode') barcode: string): Promise<StockItem> {
+    const found = await this.stock.getItemByBarcode(this.tenant.get().tenantId, barcode);
+    if (!found) throw new NotFoundException(`no stock item with barcode ${barcode}`);
+    return found;
+  }
+
   @Get(':id')
   async getItem(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ item: StockItem; movements: StockMovement[] }> {
     const found = await this.stock.getItemWithMovements(id);
@@ -105,9 +124,21 @@ export class StockController {
     if (dto?.direction !== 'in' && dto?.direction !== 'out') throw new BadRequestException("direction must be 'in' or 'out'");
     if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
     try {
-      return await this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost);
+      return await this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost, dto.unit);
     } catch (e) {
       // surface domain rejections (e.g. insufficient stock) as a 400 with the real reason
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Patch(':id/uom')
+  async setUom(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UomDto): Promise<StockItem> {
+    if (dto?.barcode === undefined && dto?.altUnits === undefined) {
+      throw new BadRequestException('barcode or altUnits is required');
+    }
+    try {
+      return await this.stock.setItemUom(id, { barcode: dto.barcode, altUnits: dto.altUnits });
+    } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
   }

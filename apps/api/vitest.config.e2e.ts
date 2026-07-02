@@ -14,5 +14,12 @@ export default defineConfig({
     // In-memory: no DATABASE_URL → AppModule wires InMemory stores (no live DB needed in CI).
     env: { DATABASE_URL: '', NODE_ENV: 'test' },
   },
-  plugins: [swc.vite({ module: { type: 'es6' } })],
+  plugins: [
+    swc.vite({
+      module: { type: 'es6' },
+      // Match tsconfig.base.json useDefineForClassFields:false — DTO class fields
+      // must not materialise as undefined own-properties (PATCH spread-wipe bug).
+      jsc: { transform: { useDefineForClassFields: false } },
+    }),
+  ],
 });

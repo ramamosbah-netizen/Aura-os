@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    // Legacy class-field semantics: fields without initializers are NOT emitted.
+    // DTO classes must not materialise absent body fields as undefined own-properties —
+    // PATCH handlers spread DTOs over stored entities and would wipe values otherwise.
+    "useDefineForClassFields": false,
     "module": "CommonJS",
     "moduleResolution": "Node",
     "lib": ["ES2022"],

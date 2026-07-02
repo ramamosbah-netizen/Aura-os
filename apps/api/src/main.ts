@@ -24,7 +24,15 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter(), new AccessDeniedFilter());
   // Global input validation. Safe for existing interface DTOs (no class metadata → skipped);
   // activates per-field validation + type coercion as DTOs are migrated to decorated classes.
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
+  // exposeUnsetFields:false — absent body fields must stay ABSENT on the transformed DTO;
+  // otherwise class fields materialise as undefined own-properties and `{...existing, ...dto}`
+  // in PATCH handlers wipes stored values.
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidUnknownValues: false,
+    transformOptions: { exposeUnsetFields: false },
+  }));
 
   // OpenAPI/Swagger — spec at /api/docs-json, UI at /api/docs.
   const doc = SwaggerModule.createDocument(

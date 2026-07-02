@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -47,44 +47,44 @@ class CreateProjectDto {
   @IsOptional() @IsNumber() value?: number;
 }
 
-interface CreateWbsNodeDto {
-  projectId: string;
-  parentId?: string | null;
-  code: string;
-  title: string;
-  plannedValue?: number;
+class CreateWbsNodeDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() parentId?: string | null;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsNumber() plannedValue?: number;
 }
 
-interface CreateCbsNodeDto {
-  projectId: string;
-  parentId?: string | null;
-  code: string;
-  title: string;
-  category?: CbsCategory;
-  budgetAmount?: number;
-  currency?: string;
-  notes?: string;
+class CreateCbsNodeDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() parentId?: string | null;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() category?: CbsCategory;
+  @IsOptional() @IsNumber() budgetAmount?: number;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsString() notes?: string;
 }
 
-interface CreateDelayDto {
-  projectId: string;
-  title: string;
-  causeCategory?: string;
-  startDate: string;
-  endDate?: string;
-  delayDays?: number;
-  isConcurrent?: boolean;
-  linkedActivityCode?: string;
-  description?: string;
+class CreateDelayDto {
+  @IsString() projectId!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() causeCategory?: string;
+  @IsString() startDate!: string;
+  @IsOptional() @IsString() endDate?: string;
+  @IsOptional() @IsNumber() delayDays?: number;
+  @IsOptional() @IsBoolean() isConcurrent?: boolean;
+  @IsOptional() @IsString() linkedActivityCode?: string;
+  @IsOptional() @IsString() description?: string;
 }
 
-interface CreateEotDto {
-  projectId: string;
-  title: string;
-  submittedDays: number;
-  justification?: string;
-  originalCompletionDate?: string;
-  delayEventIds?: string[];
+class CreateEotDto {
+  @IsString() projectId!: string;
+  @IsString() title!: string;
+  @IsNumber() submittedDays!: number;
+  @IsOptional() @IsString() justification?: string;
+  @IsOptional() @IsString() originalCompletionDate?: string;
+  @IsOptional() @IsArray() delayEventIds?: string[];
 }
 
 /** Projects API — stamps tenant/actor from context, delegates to Services. */

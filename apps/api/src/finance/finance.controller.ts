@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams, parseCsv } from '@aura/shared';
 import {
@@ -62,37 +62,37 @@ class CreateInvoiceDto {
   @IsOptional() @IsNumber() @Min(0) exchangeRate?: number;
 }
 
-interface CreateAccountDto {
-  code: string;
-  name: string;
-  type: AccountType;
-  parentId?: string | null;
+class CreateAccountDto {
+  @IsString() code!: string;
+  @IsString() name!: string;
+  @IsString() type!: AccountType;
+  @IsOptional() @IsString() parentId?: string | null;
 }
 
-interface CreateJournalLineDto {
-  accountId: string;
-  accountCode: string;
-  accountName: string;
-  debit: number;
-  credit: number;
-  costCenterId?: string | null;
-  profitCenterId?: string | null;
+class CreateJournalLineDto {
+  @IsString() accountId!: string;
+  @IsString() accountCode!: string;
+  @IsString() accountName!: string;
+  @IsNumber() debit!: number;
+  @IsNumber() credit!: number;
+  @IsOptional() @IsString() costCenterId?: string | null;
+  @IsOptional() @IsString() profitCenterId?: string | null;
 }
 
-interface CreateJournalDto {
-  description: string;
-  reference?: string | null;
-  postedAt?: string | null;
-  companyId?: string | null;
-  counterpartyCompanyId?: string | null;
-  lines: CreateJournalLineDto[];
+class CreateJournalDto {
+  @IsString() description!: string;
+  @IsOptional() @IsString() reference?: string | null;
+  @IsOptional() @IsString() postedAt?: string | null;
+  @IsOptional() @IsString() companyId?: string | null;
+  @IsOptional() @IsString() counterpartyCompanyId?: string | null;
+  @IsArray() lines!: CreateJournalLineDto[];
 }
 
-interface CreatePaymentDto {
-  invoiceId: string;
-  bankAccountId: string;
-  amount: number;
-  reference?: string | null;
+class CreatePaymentDto {
+  @IsString() invoiceId!: string;
+  @IsString() bankAccountId!: string;
+  @IsNumber() amount!: number;
+  @IsOptional() @IsString() reference?: string | null;
 }
 
 interface ImportBankTransactionsDto {

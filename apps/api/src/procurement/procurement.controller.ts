@@ -28,28 +28,28 @@ class CreatePurchaseOrderDto {
   @IsOptional() @IsNumber() value?: number;
 }
 
-interface CreatePurchaseRequestDto {
-  title: string;
-  reference?: string;
-  projectId?: string | null;
-  projectName?: string | null;
-  status?: PurchaseRequestStatus;
-  value?: number;
+class CreatePurchaseRequestDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() projectId?: string | null;
+  @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsString() status?: PurchaseRequestStatus;
+  @IsOptional() @IsNumber() value?: number;
 }
 
-interface CreateRfqDto {
-  title: string;
-  reference?: string;
-  prId?: string | null;
-  prTitle?: string | null;
-  dueDate?: string | null;
+class CreateRfqDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() prId?: string | null;
+  @IsOptional() @IsString() prTitle?: string | null;
+  @IsOptional() @IsString() dueDate?: string | null;
 }
 
-interface AddQuoteDto {
-  supplierName: string;
-  amount: number;
-  leadTimeDays?: number | null;
-  notes?: string | null;
+class AddQuoteDto {
+  @IsString() supplierName!: string;
+  @IsNumber() amount!: number;
+  @IsOptional() @IsNumber() leadTimeDays?: number | null;
+  @IsOptional() @IsString() notes?: string | null;
 }
 
 /** Procurement API — stamps tenant/actor from context, delegates to Services. */

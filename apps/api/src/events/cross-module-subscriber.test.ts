@@ -118,6 +118,15 @@ function buildHarness() {
     },
   } as any;
 
+  const createdPrs: any[] = [];
+  const mockPurchaseRequests = {
+    create: async (input: any) => {
+      const pr = { id: `pr-${createdPrs.length + 1}`, ...input };
+      createdPrs.push(pr);
+      return pr;
+    },
+  } as any;
+
   const subscriber = new CrossModuleSubscriber(
     bus,
     contracts,
@@ -126,7 +135,7 @@ function buildHarness() {
     cbs,
     tenant,
     noop, // PurchaseOrderService
-    noop, // PurchaseRequestService
+    mockPurchaseRequests,
     tenders,
     noop, // AccountService (CRM)
     customerInvoices,
@@ -136,7 +145,7 @@ function buildHarness() {
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices };
+  return { bus, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs };
 }
 
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
@@ -359,6 +368,60 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(inv.projectName).toBe('Marina Tower');
     expect(inv.title).toContain('Al Falah Steel Works');
     expect(inv.title).toContain('#1');
+  });
+
+  it('auto-drafts a replenishment PR when an issue crosses the reorder level', async () => {
+    const movement = (quantity: number, balanceAfter: number) =>
+      makeEvent({
+        type: 'inventory.stock.movement_recorded',
+        tenantId,
+        companyId: null,
+        actorId: null,
+        aggregateType: 'inventory.stock',
+        aggregateId: 'item-cbl',
+        payload: {
+          direction: 'out',
+          quantity,
+          balanceAfter,
+          reorderLevel: 50,
+          reorderQty: 200,
+          avgCost: 2.5,
+          code: 'CBL-CAT6',
+          name: 'Cat6 Cable',
+          unit: 'box',
+        },
+      });
+
+    // 60 → 40: crosses the level (50) → exactly one PR at reorderQty × WAC.
+    await h.bus.publish(movement(20, 40));
+    expect(h.createdPrs).toHaveLength(1);
+    expect(h.createdPrs[0].reference).toBe('PR-RO-CBL-CAT6');
+    expect(h.createdPrs[0].value).toBe(500); // 200 × 2.5
+    expect(h.createdPrs[0].status).toBe('draft');
+
+    // 40 → 30: already below the level → no second PR for the same dip.
+    await h.bus.publish(movement(10, 30));
+    expect(h.createdPrs).toHaveLength(1);
+  });
+
+  it('does not draft a PR for receipts or items without a reorder policy', async () => {
+    await h.bus.publish(
+      makeEvent({
+        type: 'inventory.stock.movement_recorded',
+        tenantId, companyId: null, actorId: null,
+        aggregateType: 'inventory.stock', aggregateId: 'item-x',
+        payload: { direction: 'in', quantity: 10, balanceAfter: 5, reorderLevel: 50, code: 'X' },
+      }),
+    );
+    await h.bus.publish(
+      makeEvent({
+        type: 'inventory.stock.movement_recorded',
+        tenantId, companyId: null, actorId: null,
+        aggregateType: 'inventory.stock', aggregateId: 'item-y',
+        payload: { direction: 'out', quantity: 10, balanceAfter: 2, reorderLevel: 0, code: 'Y' },
+      }),
+    );
+    expect(h.createdPrs).toHaveLength(0);
   });
 
   it('is idempotent: re-delivered claim.certified does not duplicate AP invoice', async () => {

@@ -1,8 +1,14 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import { type WbsNode, type WbsNodeStatus, makeWbsNode, calculateEvm, type EvmMetrics } from './domain/wbs';
 import { WBS_STORE, type WbsNodeFilter, type WbsStore } from './wbs-store';
+
+/** Optional ITP release gate — injected when the Quality module is loaded (mirrors procurement's QUALITY_GATE). */
+export const ITP_GATE = Symbol('ITP_GATE');
+export interface ItpGate {
+  checkItpReleaseGate(tenantId: string, projectId: string): Promise<{ passed: boolean; reason?: string }>;
+}
 
 @Injectable()
 export class WbsService {
@@ -12,6 +18,7 @@ export class WbsService {
     @Inject(WBS_STORE) private readonly store: WbsStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    @Optional() @Inject(ITP_GATE) private readonly itpGate?: ItpGate,
   ) {}
 
   async create(input: {
@@ -68,6 +75,15 @@ export class WbsService {
 
     const updatedProgress = Math.min(100, Math.max(0, progress));
     const updatedStatus = status ?? (updatedProgress === 100 ? 'completed' : 'in_progress');
+
+    // ITP release gate: a work package cannot close while the project has active ITPs
+    // with pending inspection points (mirrors the MAR gate on PO issuance).
+    if (updatedStatus === 'completed' && existing.status !== 'completed' && this.itpGate) {
+      const gate = await this.itpGate.checkItpReleaseGate(existing.tenantId, existing.projectId);
+      if (!gate.passed) {
+        throw new Error(`ITP gate blocked WBS completion: ${gate.reason}`);
+      }
+    }
 
     const updatedNode: WbsNode = {
       ...existing,

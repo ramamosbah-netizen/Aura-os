@@ -15,13 +15,16 @@
     "lucide-react": "^1.21.0",
     "next": "^16.2.9",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "three": "^0.185.1",
+    "web-ifc": "^0.0.77"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.20.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.0",
     "typescript": "^5.9.3"
   }
 }

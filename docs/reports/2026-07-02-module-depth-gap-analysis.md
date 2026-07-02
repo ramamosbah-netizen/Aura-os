@@ -52,7 +52,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 
 | Gap | State | Fix |
 |---|---|---|
-| **Pagination rollout (#22)** | ◐ | Missing on transactional lists: finance (journal, payment, bank-transaction, petty-cash, bank-guarantee, post-dated-cheque, budget), inventory (stock items), subcontracts, AMC/HSE. (WBS/CBS trees + lookup tables intentionally exempt.) |
+| **Pagination rollout (#22)** | ◐ | Done: finance journals + payments ✅. Remaining: finance (bank-transaction, petty-cash, bank-guarantee, post-dated-cheque, budget), subcontracts, AMC/HSE. (WBS/CBS trees + lookup tables intentionally exempt.) |
 | **DTO validation (#23)** | ◐ | `ValidationPipe` global ✅; spine create-DTOs decorated ✅ (finance, CRM accounts+contacts, tendering, contracts, projects, PO, GRN); remaining ~30 controllers still interface-typed. |
 | **Soft-delete** | ❌ | Only 1 table has `deleted_at` (customer-invoices reference). Standardize audit-safe soft-delete + restore across modules. |
 | **Notifications delivery** | ◐ | In-app center ✅; email/SMS/push relay **not wired** (SMTP/SMS relay seam only). |

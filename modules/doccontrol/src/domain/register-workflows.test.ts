@@ -41,9 +41,9 @@ describe('Drawing register (service workflow)', () => {
     expect(entry.status).toBe('draft');
     expect(entry.distribution).toHaveLength(3);
 
-    const revised = await svc.reviseRegisterEntry('t1', entry.id, 'B', 'issued_for_construction', '2026-07-01');
+    const revised = await svc.reviseRegisterEntry('t1', entry.id, 'B', 'for_construction', '2026-07-01');
     expect(revised.currentRevision).toBe('B');
-    expect(revised.status).toBe('issued_for_construction');
+    expect(revised.status).toBe('for_construction');
     expect(revised.revisionDate).toBe('2026-07-01');
 
     const byProject = await svc.listRegisterByProject('t1', 'p1');
@@ -52,7 +52,7 @@ describe('Drawing register (service workflow)', () => {
 
   it('rejects revising a register entry from another tenant', async () => {
     const entry = await svc.createRegisterEntry({ tenantId: 't1', projectId: 'p1', documentNumber: 'D-1', title: 'X' });
-    await expect(svc.reviseRegisterEntry('t2', entry.id, 'B', 'issued_for_review')).rejects.toThrow(/not found/);
+    await expect(svc.reviseRegisterEntry('t2', entry.id, 'B', 'for_review')).rejects.toThrow(/not found/);
   });
 
   it('walks a submittal through submit → return with review code', async () => {

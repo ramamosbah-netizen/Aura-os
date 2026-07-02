@@ -20,8 +20,8 @@ describe('Labour by trade (service workflow)', () => {
     svc = new SiteService(
       new InMemoryDailyReportStore(),
       new InMemoryDelayLogStore(),
-      new InMemorySiteInstructionStore(),
       new InMemoryMaterialConsumptionStore(),
+      new InMemorySiteInstructionStore(),
       new InMemoryLabourAllocationStore(),
       mockEvents,
       mockTx,

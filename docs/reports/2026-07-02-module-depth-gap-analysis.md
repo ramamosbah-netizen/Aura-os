@@ -24,7 +24,7 @@ Legend: ✅ present · ◐ partial · ❌ missing.
 | Site | ✅ | labour-by-trade ✅ + progress% ✅; resource histograms ◐ |
 | Subcontracts | ◐ | Pagination ✅ (head list); back-charges ✅, retention-release ✅ |
 | Doc-Control | ✅ | Transmittal↔drawing revision history ✅ (transmittal items snapshot rev conveyed; `GET register/:id/history`, 0123); register ✅, distribution matrix ✅ |
-| Engineering | ◐ | **In-browser IFC/BIM viewer (frontend)** — registry backend ✅ (+ storage seam ✅, versioning tests ✅), TQ ✅, submittal→drawing ✅ |
+| Engineering | ✅ high | In-browser IFC/BIM viewer ✅ (`/engineering/bim`: web-ifc WASM + three.js, registry UI + revision bumps, Playwright-verified); registry backend ✅, TQ ✅, submittal→drawing ✅ |
 | Fleet | ✅ | telemetry ✅ + Mulkiya-renewal ✅ + Salik/fines ✅; geofencing ◐ |
 | Assets | ✅ | disposal→GL reactor ✅, pagination ✅, QR-tag generation ✅ (deep-link payload + SVG, single/batch/raw-SVG endpoints) |
 | AMC | ✅ | ✅ **SLA status + escalation + breach→notification**; pagination ✅ (work-orders, tickets) |
@@ -89,7 +89,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 **P3 — assurance / architecture**
 9. ✅ Per-chain HTTP E2E + ✅ thin-module unit coverage; ❌ DB-integration tests (needs live Postgres in CI — deferred with RLS).
 10. ✅ HR/Quality aggregate stores split; ✅ object-storage adapter (Supabase Storage behind DOCUMENT_STORAGE).
-11. ✅ ITP→milestone release gate; ✅ Tendering win/loss analytics (0126); ❌ Engineering in-browser IFC viewer (frontend feature — backend registry + versioning ready).
+11. ✅ ITP→milestone release gate; ✅ Tendering win/loss analytics (0126); ✅ Engineering in-browser IFC viewer (`/engineering/bim` — web-ifc/three.js, verified in-browser via Playwright).
 
 ---
 
@@ -122,9 +122,10 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | **Fix:** DTO class-field PATCH spread-wipe bug — `useDefineForClassFields:false` (caught by new chain e2e; PATCH was wiping unsent fields) | — |
 | ✅ | Business-chain HTTP e2e (deal chain + P2P) + service-workflow tests for Engineering/HSE/Site/Doc-Control | — |
 
+| ✅ | **Engineering in-browser IFC/BIM viewer** — `/engineering/bim`: model registry UI + revision bumps over the bim-models API; web-ifc (WASM) streams meshes into a three.js scene (orbit, auto-fit); loads registered file URLs or local .ifc; Playwright-verified end-to-end in a real browser | — |
+
 **Remaining (deliberately deferred):**
 - DB-integration tests + RLS enforcement — last task, needs live Postgres (per project decision).
-- Engineering in-browser IFC/BIM viewer — frontend feature; backend registry/versioning/storage seam all ready.
 - CRM MS-Graph email send, fleet geofencing evaluation, site resource-histogram viz, coverage % gate — UI/infra polish items, none block commercial flows.
 
 ---

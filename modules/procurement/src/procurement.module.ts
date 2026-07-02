@@ -24,6 +24,11 @@ import { SupplierService } from './supplier.service';
 
 import { QUALITY_GATE } from './purchase-order.service';
 
+import { FRAMEWORK_AGREEMENT_STORE } from './framework-agreement-store';
+import { InMemoryFrameworkAgreementStore } from './in-memory-framework-agreement-store';
+import { PostgresFrameworkAgreementStore } from './postgres-framework-agreement-store';
+import { FrameworkAgreementService } from './framework-agreement.service';
+
 /** The Procurement business module — same shape as the deal-chain modules. */
 @Module({
   imports: [CoreModule, QualityModule],
@@ -52,15 +57,22 @@ import { QUALITY_GATE } from './purchase-order.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresSupplierStore(pool) : new InMemorySupplierStore(),
     },
+    {
+      provide: FRAMEWORK_AGREEMENT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresFrameworkAgreementStore(pool) : new InMemoryFrameworkAgreementStore(),
+    },
     PurchaseOrderService,
     PurchaseRequestService,
     RfqService,
     SupplierService,
+    FrameworkAgreementService,
     {
       provide: QUALITY_GATE,
       useExisting: QualityService,
     },
   ],
-  exports: [PurchaseOrderService, PurchaseRequestService, RfqService, SupplierService],
+  exports: [PurchaseOrderService, PurchaseRequestService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

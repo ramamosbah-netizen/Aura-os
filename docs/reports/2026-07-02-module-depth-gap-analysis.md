@@ -1,7 +1,7 @@
 # AURA OS — Module Vertical-Depth Gap Analysis (2026-07-02)
 
 Source of truth: current codebase (branch `feat/module-depth-verticals-jun30`). Verified by file
-inspection + grep, not memory. 17 L2 modules · 90 domain entities · 15 cross-module reactors · DB @ migration 0111.
+inspection + grep, not memory. 17 L2 modules · 90+ domain entities · 15 cross-module reactors · DB @ migration 0122.
 
 Legend: ✅ present · ◐ partial · ❌ missing.
 
@@ -15,7 +15,7 @@ Legend: ✅ present · ◐ partial · ❌ missing.
 | Tendering | ✅ | Estimate engine ✅ (rate build-ups mat+lab+plant+subcon → OH → profit, tender summary, 0121); competitor win/loss analytics ❌ (bid-scoring ✅) |
 | Contracts | ✅ high | (clause library ✅, obligations+due-soon ✅, IPC ✅) — none material |
 | Projects | ✅ high | **Revenue recognition** UI polish; resource histogram viz (CPM reschedule + levelling ✅) |
-| Procurement | ✅ high | **Framework/blanket agreements** + volume pricing (approval matrix ✅, 3-way ✅, MAR gate ✅) |
+| Procurement | ✅ high | Framework/blanket agreements ✅ (rate card, ceiling drawdown, call-off→PO, 0122); approval matrix ✅, 3-way ✅, MAR gate ✅ |
 | Inventory | ◐ | ✅ FIFO cost layers→COGS (per-item WAC\|FIFO); remaining: **barcode + multi-UOM** |
 | Finance | ✅ high | ✅ **Intercompany eliminations** (reversing entries; group nets intra-group to zero) |
 | HR | ✅ high | ✅ **Performance appraisal** + ✅ **org-chart** (attendance ✅, WPS SIF ✅, payroll ✅) |
@@ -42,7 +42,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | Asset disposal → GL journal | ✅ | done |
 | Subcontract claim → AP invoice | ✅ | done |
 | MAR/Quality → PO issue hard-gate | ✅ | done (service gate) |
-| **AMC SLA breach → escalation/notification** | ❌ | add reactor on SLA `dueAt` overdue → notification + escalation |
+| AMC SLA breach → escalation/notification | ✅ | done (0118: sweep + escalation + breach→notification) |
 | **ITP/WIR approved → project milestone release gate** | ❌ | add gate so milestones can't close on open ITPs |
 | **Low-stock → auto-PR** | ◐ | event emitted; auto-PR draft reactor not confirmed wired |
 
@@ -82,7 +82,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 
 **P2 — depth completeness**
 5. ✅ Pagination on remaining transactional lists (finance/inventory/subcontracts/AMC/HSE) — Tier-1 #22 closed.
-6. ✅ HR appraisal + ✅ org-chart + ✅ Tendering estimate engine. Remaining: Procurement framework agreements.
+6. ✅ HR appraisal + ✅ org-chart + ✅ Tendering estimate engine + ✅ Procurement framework agreements.
 7. Doc-Control transmittal↔drawing revision history; Assets QR tags; Inventory barcode/UOM.
 8. Soft-delete standardization; notifications email/SMS delivery; remaining DTO decoration.
 
@@ -106,8 +106,9 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | Pagination: subcontracts, AMC (work-orders, tickets), HSE (incidents, PTWs) — `GET .../paged` | — |
 | ✅ | Pagination: finance long-tail (bank-transactions, petty-cash, bank-guarantees, PDCs, budgets) — Tier-1 #22 closed | — |
 | ✅ | Tendering estimate engine: rate build-ups (`POST tendering/estimates`, apply-to-BOQ, tender summary) | 0121 |
+| ✅ | Procurement framework agreements: rate card + ceiling, activate/terminate, call-off→PO (approved-vendor + idempotent) | 0122 |
 
-**Next:** Procurement framework agreements, then Doc-Control transmittal↔drawing history / Assets QR tags / Inventory barcode-UOM.
+**Next:** Doc-Control transmittal↔drawing revision history, Assets QR tags, Inventory barcode/UOM (P2 item 7).
 
 ---
 *Verified from source 2026-07-02. No files modified by this analysis.*

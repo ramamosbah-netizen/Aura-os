@@ -39,7 +39,7 @@ interface TicketRow {
   ticket_number: string; title: string; description: string; category: string; priority: string;
   status: string; reported_by: string; assigned_to: string | null;
   sla_response_hours: number; sla_resolution_hours: number;
-  sla_due_at: Date | null; resolved_at: Date | null; created_at: Date; updated_at: Date;
+  sla_due_at: Date | null; resolved_at: Date | null; escalation_level: number | null; created_at: Date; updated_at: Date;
 }
 interface PpmRow {
   id: string; tenant_id: string; company_id: string | null; contract_id: string;
@@ -56,7 +56,7 @@ const WORK_ORDER_COLS = `id, tenant_id, company_id, contract_id, order_number, a
   location_lat, location_lng, location_label, cost, created_at, updated_at`;
 const TICKET_COLS = `id, tenant_id, company_id, contract_id, ticket_number, title, description, category,
   priority, status, reported_by, assigned_to, sla_response_hours, sla_resolution_hours,
-  sla_due_at, resolved_at, created_at, updated_at`;
+  sla_due_at, resolved_at, escalation_level, created_at, updated_at`;
 const PPM_COLS = `id, tenant_id, company_id, contract_id, asset_id, task_description, frequency,
   start_date::text, next_due_date::text, active, visits_generated, created_at, updated_at`;
 
@@ -129,6 +129,7 @@ function rowToTicket(r: TicketRow): SupportTicket {
     assignedTo: r.assigned_to ?? undefined,
     resolvedAt: toDateObj(r.resolved_at),
     slaDueAt: r.sla_due_at ? new Date(r.sla_due_at) : t.slaDueAt,
+    escalationLevel: Number(r.escalation_level ?? 0),
     createdAt: new Date(r.created_at),
     updatedAt: new Date(r.updated_at),
   });
@@ -231,15 +232,15 @@ export class PostgresAmcStore implements AmcStore {
       `INSERT INTO public.aura_amc_tickets
          (id, tenant_id, company_id, contract_id, ticket_number, title, description, category, priority,
           status, reported_by, assigned_to, sla_response_hours, sla_resolution_hours, sla_due_at,
-          resolved_at, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          resolved_at, escalation_level, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, assigned_to = EXCLUDED.assigned_to,
-         resolved_at = EXCLUDED.resolved_at, updated_at = EXCLUDED.updated_at`,
+         resolved_at = EXCLUDED.resolved_at, escalation_level = EXCLUDED.escalation_level, updated_at = EXCLUDED.updated_at`,
       [
         t.id, t.tenantId, t.companyId ?? null, t.contractId ?? null, t.ticketNumber, t.title,
         t.description, t.category, t.priority, t.status, t.reportedBy, t.assignedTo ?? null,
-        t.slaResponseHours, t.slaResolutionHours, t.slaDueAt, t.resolvedAt ?? null, t.createdAt, t.updatedAt,
+        t.slaResponseHours, t.slaResolutionHours, t.slaDueAt, t.resolvedAt ?? null, t.escalationLevel, t.createdAt, t.updatedAt,
       ],
     );
   }

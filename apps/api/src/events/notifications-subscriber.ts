@@ -50,6 +50,11 @@ export class NotificationsSubscriber implements OnModuleInit {
       void raise(e, `Mulkiya expiring: ${p.plateNumber ?? ''}`.trim(), `Vehicle ${p.plateNumber ?? ''} registration expires on ${p.registrationExpiry ?? ''} (${p.daysRemaining ?? 0} days remaining). Please schedule renewal.`, 'fleet', 'fleet.vehicle');
     });
 
-    this.logger.log('Notification subscribers registered (po.approved, ipc.certified, period.closed, tender.awarded, registration.expiring)');
+    this.bus.subscribe('amc.ticket.sla_breached', (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      void raise(e, `SLA breach (L${p.escalationLevel ?? 1}): ${p.ticketNumber ?? ''}`.trim(), `AMC ticket "${p.title ?? ''}" (${p.priority ?? ''}) has breached its SLA (due ${p.slaDueAt ?? ''}). Escalated to level ${p.escalationLevel ?? 1}.`, 'amc', 'amc.ticket');
+    });
+
+    this.logger.log('Notification subscribers registered (po.approved, ipc.certified, period.closed, tender.awarded, registration.expiring, amc.sla_breached)');
   }
 }

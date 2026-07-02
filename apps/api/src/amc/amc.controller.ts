@@ -80,6 +80,29 @@ export class AmcController {
     }));
   }
 
+  // literal routes before :id
+  @Get('tickets/sla-status')
+  async slaStatus(@Query('tenantId') tenantId?: string) {
+    const report = await this.service.slaStatusReport(tenantId || this.tenantId());
+    return report.map((r) => ({
+      id: r.ticket.id,
+      ticketNumber: r.ticket.ticketNumber,
+      title: r.ticket.title,
+      priority: r.ticket.priority,
+      status: r.ticket.status,
+      slaStatus: r.slaStatus,
+      hoursRemaining: r.hoursRemaining,
+      escalationLevel: r.ticket.escalationLevel,
+      slaDueAt: r.ticket.slaDueAt.toISOString(),
+    }));
+  }
+
+  @Post('tickets/sla-sweep')
+  async slaSweep(@Body('tenantId') tenantId?: string) {
+    const escalated = await this.service.sweepSlaBreaches(tenantId || this.tenantId());
+    return { escalated: escalated.length, tickets: escalated.map((t) => ({ id: t.id, ticketNumber: t.ticketNumber, escalationLevel: t.escalationLevel })) };
+  }
+
   @Get('tickets/:id')
   async getTicket(@Param('id') id: string) {
     const ticket = await this.service.findTicket(id);

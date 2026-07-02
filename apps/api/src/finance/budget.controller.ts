@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type Budget, type BudgetVsActual, type NewBudgetLine, BudgetService } from '@aura/finance';
 
 interface CreateBudgetDto {
@@ -20,6 +21,11 @@ export class BudgetController {
   @Get()
   list(): Promise<Budget[]> {
     return this.budgets.list(this.tenant.get().tenantId);
+  }
+
+  @Get('paged')
+  paged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.budgets.listPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Post()

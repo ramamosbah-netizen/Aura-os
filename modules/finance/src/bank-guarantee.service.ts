@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   BANK_GUARANTEE_EVENT,
@@ -76,6 +76,10 @@ export class BankGuaranteeService {
 
   list(filter?: BankGuaranteeFilter): Promise<BankGuarantee[]> {
     return this.store.list(filter);
+  }
+
+  listPaged(filter: BankGuaranteeFilter, page: PageParams): Promise<Page<BankGuarantee>> {
+    return this.store.listPaged(filter, page);
   }
 
   /** Active guarantees expiring within `withinDays` — the treasury watch-list. */

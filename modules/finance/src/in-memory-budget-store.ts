@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { Budget } from './domain/budget';
 import type { BudgetStore } from './budget-store';
 
@@ -18,6 +19,10 @@ export class InMemoryBudgetStore implements BudgetStore {
     return [...this.budgets.values()]
       .filter((b) => b.tenantId === tenantId)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Budget>> {
+    return paginate(await this.list(tenantId), page);
   }
 
   async remove(id: Id): Promise<void> {

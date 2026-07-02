@@ -433,6 +433,19 @@ export class FinanceController {
     return this.reconciliation.listTransactions(ctx.tenantId, bankAccountId, status);
   }
 
+  @Get('bank-transactions/paged')
+  pagedBankTransactions(
+    @Query('bankAccountId') bankAccountId: string,
+    @Query('status') status?: BankTransactionStatus,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    if (!bankAccountId) throw new BadRequestException('bankAccountId is required');
+    return this.reconciliation.listTransactionsPaged(
+      this.tenant.get().tenantId, bankAccountId, parsePageParams(limit, offset), status,
+    );
+  }
+
   @Post('bank-transactions/auto-match')
   autoMatchBankTransactions(@Body() dto: { bankAccountId: string }): Promise<Array<{ transactionId: string; paymentId: string; amount: number }>> {
     if (!dto?.bankAccountId) throw new BadRequestException('bankAccountId is required');
@@ -570,6 +583,11 @@ export class FinanceController {
   @Get('petty-cash')
   listPettyCashFunds(): Promise<PettyCashFund[]> {
     return this.pettyCash.listFunds({ tenantId: this.tenant.get().tenantId, limit: 200 });
+  }
+
+  @Get('petty-cash/paged')
+  pagedPettyCashFunds(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.pettyCash.listFundsPaged({ tenantId: this.tenant.get().tenantId }, parsePageParams(limit, offset));
   }
 
   @Get('petty-cash/:id')
@@ -767,6 +785,19 @@ export class FinanceController {
     return this.bankGuarantees.list({ tenantId: this.tenant.get().tenantId, status, projectId, limit: 200 });
   }
 
+  @Get('bank-guarantees/paged')
+  pagedBankGuarantees(
+    @Query('status') status?: BankGuarantee['status'],
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.bankGuarantees.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, projectId },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('bank-guarantees/:id')
   async getBankGuarantee(@Param('id') id: string): Promise<BankGuarantee> {
     const found = await this.bankGuarantees.get(id);
@@ -832,6 +863,19 @@ export class FinanceController {
   @Get('post-dated-cheques')
   listPostDatedCheques(@Query('status') status?: PostDatedCheque['status'], @Query('direction') direction?: ChequeDirection): Promise<PostDatedCheque[]> {
     return this.postDatedCheques.list({ tenantId: this.tenant.get().tenantId, status, direction, limit: 200 });
+  }
+
+  @Get('post-dated-cheques/paged')
+  pagedPostDatedCheques(
+    @Query('status') status?: PostDatedCheque['status'],
+    @Query('direction') direction?: ChequeDirection,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.postDatedCheques.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, direction },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('post-dated-cheques/:id')

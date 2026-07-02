@@ -52,7 +52,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 
 | Gap | State | Fix |
 |---|---|---|
-| **Pagination rollout (#22)** | ◐ | Done: finance journals + payments ✅; subcontracts ✅; AMC work-orders + tickets ✅; HSE incidents + PTWs ✅. Remaining: finance (bank-transaction, petty-cash, bank-guarantee, post-dated-cheque, budget). (WBS/CBS trees + lookup tables intentionally exempt.) |
+| **Pagination rollout (#22)** | ✅ | Finance (journals, payments, bank-transactions, petty-cash, bank-guarantees, PDCs, budgets) ✅; subcontracts ✅; AMC work-orders + tickets ✅; HSE incidents + PTWs ✅. (WBS/CBS trees + lookup tables intentionally exempt.) |
 | **DTO validation (#23)** | ◐ | `ValidationPipe` global ✅; spine create-DTOs decorated ✅ (finance, CRM accounts+contacts, tendering, contracts, projects, PO, GRN); remaining ~30 controllers still interface-typed. |
 | **Soft-delete** | ❌ | Only 1 table has `deleted_at` (customer-invoices reference). Standardize audit-safe soft-delete + restore across modules. |
 | **Notifications delivery** | ◐ | In-app center ✅; email/SMS/push relay **not wired** (SMTP/SMS relay seam only). |
@@ -81,7 +81,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 4. ✅ DTO validation rollout — spine create-DTOs done (remaining ~30 controllers = P2).
 
 **P2 — depth completeness**
-5. Pagination on remaining transactional lists (finance/inventory/subcontracts/AMC/HSE).
+5. ✅ Pagination on remaining transactional lists (finance/inventory/subcontracts/AMC/HSE) — Tier-1 #22 closed.
 6. ✅ HR appraisal + ✅ org-chart. Remaining: Tendering estimate engine; Procurement framework agreements.
 7. Doc-Control transmittal↔drawing revision history; Assets QR tags; Inventory barcode/UOM.
 8. Soft-delete standardization; notifications email/SMS delivery; remaining DTO decoration.
@@ -104,8 +104,9 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | HR performance appraisals | 0120 |
 | ✅ | HR org-chart (employee managerId) | 0119 |
 | ✅ | Pagination: subcontracts, AMC (work-orders, tickets), HSE (incidents, PTWs) — `GET .../paged` | — |
+| ✅ | Pagination: finance long-tail (bank-transactions, petty-cash, bank-guarantees, PDCs, budgets) — Tier-1 #22 closed | — |
 
-**Next:** finance long-tail pagination (bank-transaction, petty-cash, bank-guarantee, PDC, budget), then Tendering estimate engine + Procurement framework agreements.
+**Next:** Tendering estimate engine + Procurement framework agreements.
 
 ---
 *Verified from source 2026-07-02. No files modified by this analysis.*

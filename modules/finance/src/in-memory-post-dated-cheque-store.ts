@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { PostDatedCheque } from './domain/post-dated-cheque';
 import type { PostDatedChequeFilter, PostDatedChequeStore } from './post-dated-cheque-store';
 
@@ -21,5 +22,10 @@ export class InMemoryPostDatedChequeStore implements PostDatedChequeStore {
     if (filter.direction) out = out.filter((c) => c.direction === filter.direction);
     out.sort((a, b) => (a.maturityDate < b.maturityDate ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: PostDatedChequeFilter, page: PageParams): Promise<Page<PostDatedCheque>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

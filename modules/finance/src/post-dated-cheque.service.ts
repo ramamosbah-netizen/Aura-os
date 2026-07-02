@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   POST_DATED_CHEQUE_EVENT,
@@ -70,6 +70,10 @@ export class PostDatedChequeService {
 
   list(filter?: PostDatedChequeFilter): Promise<PostDatedCheque[]> {
     return this.store.list(filter);
+  }
+
+  listPaged(filter: PostDatedChequeFilter, page: PageParams): Promise<Page<PostDatedCheque>> {
+    return this.store.listPaged(filter, page);
   }
 
   /** Pending cheques maturing within `withinDays` — the treasury watch-list (incl. overdue). */

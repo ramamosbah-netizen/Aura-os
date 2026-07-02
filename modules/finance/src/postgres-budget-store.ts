@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { Budget, BudgetLine } from './domain/budget';
 import type { BudgetStore } from './budget-store';
 
@@ -58,6 +59,17 @@ export class PostgresBudgetStore implements BudgetStore {
       [tenantId],
     );
     return res.rows.map(toBudget);
+  }
+
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Budget>> {
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_finance_budgets WHERE tenant_id = $1`, [tenantId]);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [tenantId, page.limit, page.offset],
+    );
+    return makePage(res.rows.map(toBudget), total, page);
   }
 
   async remove(id: Id): Promise<void> {

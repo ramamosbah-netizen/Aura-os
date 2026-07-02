@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -8,21 +9,21 @@ import {
   FrameworkAgreementService,
 } from '@aura/procurement';
 
-interface CreateFrameworkAgreementDto {
-  title: string;
-  supplierId: string;
-  validFrom: string; // YYYY-MM-DD
-  validTo: string;
-  ceilingValue: number;
-  items?: FrameworkRateItem[];
-  notes?: string;
+class CreateFrameworkAgreementDto {
+  @IsString() title!: string;
+  @IsString() supplierId!: string;
+  @IsString() validFrom!: string; // YYYY-MM-DD
+  @IsString() validTo!: string;
+  @IsNumber() ceilingValue!: number;
+  @IsOptional() @IsArray() items?: FrameworkRateItem[];
+  @IsOptional() @IsString() notes?: string;
 }
 
-interface CallOffDto {
-  title: string;
-  projectId?: string;
-  projectName?: string;
-  value: number;
+class CallOffDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() projectId?: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsNumber() value!: number;
 }
 
 /** Framework agreements (blanket POs + call-offs) API — delegates to FrameworkAgreementService. */

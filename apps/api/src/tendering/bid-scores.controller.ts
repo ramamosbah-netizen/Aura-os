@@ -1,13 +1,14 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type BidScore, type BidCriterion, BidScoreService } from '@aura/tendering';
 
-interface CreateBidScoreDto {
-  tenderId: string;
-  tenderTitle?: string;
-  criteria: BidCriterion[];
-  notes?: string;
+class CreateBidScoreDto {
+  @IsString() tenderId!: string;
+  @IsOptional() @IsString() tenderTitle?: string;
+  @IsArray() criteria!: BidCriterion[];
+  @IsOptional() @IsString() notes?: string;
 }
 
 /** Tender bid-scoring (go/no-go) API — delegates to BidScoreService. */

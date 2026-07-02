@@ -1,27 +1,28 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams, type Opportunity, type OpportunityStage } from '@aura/shared';
 import { type Quotation, OpportunityService, QuotationService } from '@aura/crm';
 
-interface CreateOpportunityDto {
-  title: string;
-  leadId?: string;
-  accountId?: string;
-  accountName?: string;
-  value?: number;
-  stage?: OpportunityStage;
-  winProbability?: number;
-  closeDate?: string;
+class CreateOpportunityDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() leadId?: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() accountName?: string;
+  @IsOptional() @IsNumber() value?: number;
+  @IsOptional() @IsString() stage?: OpportunityStage;
+  @IsOptional() @IsNumber() winProbability?: number;
+  @IsOptional() @IsString() closeDate?: string;
 }
 
-interface UpdateOpportunityDto {
-  title?: string;
-  accountId?: string;
-  accountName?: string;
-  value?: number;
-  stage?: OpportunityStage;
-  winProbability?: number;
-  closeDate?: string;
+class UpdateOpportunityDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() accountName?: string;
+  @IsOptional() @IsNumber() value?: number;
+  @IsOptional() @IsString() stage?: OpportunityStage;
+  @IsOptional() @IsNumber() winProbability?: number;
+  @IsOptional() @IsString() closeDate?: string;
 }
 
 @Controller('crm/opportunities')

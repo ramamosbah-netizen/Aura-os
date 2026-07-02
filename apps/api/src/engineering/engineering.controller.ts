@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -19,46 +20,46 @@ import {
 } from '@aura/engineering';
 
 // Shop Drawings DTOs
-interface CreateDrawingDto {
-  projectId: string;
-  projectName?: string;
-  code: string;
-  title: string;
-  revision?: string;
-  status?: DrawingStatus;
+class CreateDrawingDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() revision?: string;
+  @IsOptional() @IsString() status?: DrawingStatus;
 }
 
-interface ReviseDrawingDto {
-  revision: string;
-  title?: string;
+class ReviseDrawingDto {
+  @IsString() revision!: string;
+  @IsOptional() @IsString() title?: string;
 }
 
 // RFIs DTOs
-interface CreateRfiDto {
-  projectId: string;
-  projectName?: string;
-  code: string;
-  title: string;
-  question: string;
-  assignedTo?: string;
+class CreateRfiDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsString() question!: string;
+  @IsOptional() @IsString() assignedTo?: string;
 }
 
-interface AnswerRfiDto {
-  answer: string;
+class AnswerRfiDto {
+  @IsString() answer!: string;
 }
 
 // Technical Submittals DTOs
-interface CreateSubmittalDto {
-  projectId: string;
-  projectName?: string;
-  code: string;
-  title: string;
-  submittalType: SubmittalType;
-  status?: SubmittalStatus;
+class CreateSubmittalDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsString() submittalType!: SubmittalType;
+  @IsOptional() @IsString() status?: SubmittalStatus;
 }
 
-interface UpdateSubmittalStatusDto {
-  status: SubmittalStatus;
+class UpdateSubmittalStatusDto {
+  @IsString() status!: SubmittalStatus;
 }
 
 @Controller('engineering')

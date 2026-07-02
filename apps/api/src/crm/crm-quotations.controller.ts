@@ -1,17 +1,18 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Quotation, type NewQuotationLine, QuotationService } from '@aura/crm';
 import { type Contract, ContractService } from '@aura/contracts';
 
-interface CreateQuotationDto {
-  quoteNumber: string;
-  customerName: string;
-  accountId?: string;
-  contactName?: string;
-  issueDate: string;
-  validUntil?: string;
-  lines: NewQuotationLine[];
+class CreateQuotationDto {
+  @IsString() quoteNumber!: string;
+  @IsString() customerName!: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() contactName?: string;
+  @IsString() issueDate!: string;
+  @IsOptional() @IsString() validUntil?: string;
+  @IsArray() lines!: NewQuotationLine[];
 }
 
 /** CRM customer-quotation API — stamps tenant/actor, delegates to QuotationService. */

@@ -1,18 +1,19 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { TemplatesService, DocumentTemplate } from './templates.service';
 
-interface CreateTemplateDto {
-  name: string;
-  category: string;
-  elements?: any[];
+class CreateTemplateDto {
+  @IsString() name!: string;
+  @IsString() category!: string;
+  @IsOptional() @IsArray() elements?: any[];
 }
 
-interface UpdateTemplateDto {
-  name?: string;
-  category?: string;
-  elements?: any[];
-  status?: string;
+class UpdateTemplateDto {
+  @IsOptional() @IsString() name?: string;
+  @IsOptional() @IsString() category?: string;
+  @IsOptional() @IsArray() elements?: any[];
+  @IsOptional() @IsString() status?: string;
 }
 
 @Controller('templates')

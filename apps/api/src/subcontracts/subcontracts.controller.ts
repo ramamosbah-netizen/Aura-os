@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -15,28 +16,28 @@ import {
   SubcontractsService,
 } from '@aura/subcontracts';
 
-interface CreateSubcontractDto {
-  projectId: string;
-  projectName?: string;
-  title: string;
-  subcontractorName: string;
-  value: number;
-  retentionPercentage?: number;
+class CreateSubcontractDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() title!: string;
+  @IsString() subcontractorName!: string;
+  @IsNumber() value!: number;
+  @IsOptional() @IsNumber() retentionPercentage?: number;
 }
 
-interface CreateClaimDto {
-  subcontractId: string;
-  workCompletedValue?: number;
-  isRetentionRelease?: boolean;
-  retentionReleased?: number;
+class CreateClaimDto {
+  @IsString() subcontractId!: string;
+  @IsOptional() @IsNumber() workCompletedValue?: number;
+  @IsOptional() @IsBoolean() isRetentionRelease?: boolean;
+  @IsOptional() @IsNumber() retentionReleased?: number;
 }
 
-interface CreateBackChargeDto {
-  subcontractId: string;
-  category?: BackChargeCategory;
-  description: string;
-  grossAmount: number;
-  markupPercent?: number;
+class CreateBackChargeDto {
+  @IsString() subcontractId!: string;
+  @IsOptional() @IsString() category?: BackChargeCategory;
+  @IsString() description!: string;
+  @IsNumber() grossAmount!: number;
+  @IsOptional() @IsNumber() markupPercent?: number;
 }
 
 @Controller('subcontracts')

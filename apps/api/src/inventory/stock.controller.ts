@@ -1,18 +1,19 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type StockItem, type StockMovement, type StockDirection, type ValuationSummary, type ReorderReport, type UomConversion, StockService } from '@aura/inventory';
 
-interface CreateStockItemDto {
-  code: string;
-  name: string;
-  unit?: string;
-  barcode?: string;
-  altUnits?: UomConversion[];
-  warehouse?: string;
-  openingQty?: number;
-  openingCost?: number;
-  costingMethod?: 'wac' | 'fifo';
+class CreateStockItemDto {
+  @IsString() code!: string;
+  @IsString() name!: string;
+  @IsOptional() @IsString() unit?: string;
+  @IsOptional() @IsString() barcode?: string;
+  @IsOptional() @IsArray() altUnits?: UomConversion[];
+  @IsOptional() @IsString() warehouse?: string;
+  @IsOptional() @IsNumber() openingQty?: number;
+  @IsOptional() @IsNumber() openingCost?: number;
+  @IsOptional() @IsString() costingMethod?: 'wac' | 'fifo';
 }
 
 interface MovementDto {
@@ -24,14 +25,14 @@ interface MovementDto {
   unit?: string;
 }
 
-interface UomDto {
-  barcode?: string | null;
-  altUnits?: UomConversion[];
+class UomDto {
+  @IsOptional() @IsString() barcode?: string | null;
+  @IsOptional() @IsArray() altUnits?: UomConversion[];
 }
 
-interface ReorderDto {
-  reorderLevel: number;
-  reorderQty?: number;
+class ReorderDto {
+  @IsNumber() reorderLevel!: number;
+  @IsOptional() @IsNumber() reorderQty?: number;
 }
 
 /** Inventory stock API — items + on-hand movements. */

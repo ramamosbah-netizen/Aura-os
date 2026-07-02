@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -13,41 +14,41 @@ import {
   HseService,
 } from '@aura/hse';
 
-interface ReportIncidentDto {
-  projectId: string;
-  projectName?: string;
-  date: string;
-  severity: HseIncident['severity'];
-  description: string;
-  locationDetail: string;
+class ReportIncidentDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() date!: string;
+  @IsString() severity!: HseIncident['severity'];
+  @IsString() description!: string;
+  @IsString() locationDetail!: string;
 }
 
-interface RequestPermitDto {
-  projectId: string;
-  projectName?: string;
-  permitType: PermitToWork['permitType'];
-  validFrom: string;
-  validTo: string;
-  description: string;
+class RequestPermitDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() permitType!: PermitToWork['permitType'];
+  @IsString() validFrom!: string;
+  @IsString() validTo!: string;
+  @IsString() description!: string;
 }
 
-interface RaiseCapaDto {
-  projectId: string;
-  projectName?: string;
-  sourceType: CapaAction['sourceType'];
-  sourceId?: string;
-  actionRequired: string;
-  assignedTo?: string;
-  dueDate: string;
+class RaiseCapaDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() sourceType!: CapaAction['sourceType'];
+  @IsOptional() @IsString() sourceId?: string;
+  @IsString() actionRequired!: string;
+  @IsOptional() @IsString() assignedTo?: string;
+  @IsString() dueDate!: string;
 }
 
-interface RecordSafetyTrainingDto {
-  workerName: string;
-  workerId: string;
-  inductionDate: string;
-  cardNumber?: string;
-  cardExpiry?: string;
-  certifications?: string[];
+class RecordSafetyTrainingDto {
+  @IsString() workerName!: string;
+  @IsString() workerId!: string;
+  @IsString() inductionDate!: string;
+  @IsOptional() @IsString() cardNumber?: string;
+  @IsOptional() @IsString() cardExpiry?: string;
+  @IsOptional() @IsArray() certifications?: string[];
 }
 
 @Controller('hse')

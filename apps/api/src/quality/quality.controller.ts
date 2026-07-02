@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -16,44 +17,44 @@ import {
   QualityService,
 } from '@aura/quality';
 
-interface RaiseNcrDto {
-  projectId: string;
-  projectName?: string;
-  ncrNumber: string;
-  description: string;
-  rootCause?: string;
-  proposedCorrection?: string;
-  severity: Ncr['severity'];
-  assignedTo?: string;
+class RaiseNcrDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() ncrNumber!: string;
+  @IsString() description!: string;
+  @IsOptional() @IsString() rootCause?: string;
+  @IsOptional() @IsString() proposedCorrection?: string;
+  @IsString() severity!: Ncr['severity'];
+  @IsOptional() @IsString() assignedTo?: string;
 }
 
-interface UpdateNcrStatusDto {
-  status: Ncr['status'];
-  rootCause?: string;
-  proposedCorrection?: string;
+class UpdateNcrStatusDto {
+  @IsString() status!: Ncr['status'];
+  @IsOptional() @IsString() rootCause?: string;
+  @IsOptional() @IsString() proposedCorrection?: string;
 }
 
-interface RequestInspectionDto {
-  projectId: string;
-  projectName?: string;
-  irNumber: string;
-  discipline: InspectionRequest['discipline'];
-  locationDetail: string;
-  inspectionDate: string;
+class RequestInspectionDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() irNumber!: string;
+  @IsString() discipline!: InspectionRequest['discipline'];
+  @IsString() locationDetail!: string;
+  @IsString() inspectionDate!: string;
 }
 
-interface ResolveInspectionDto {
-  status: 'approved' | 'rejected';
-  comments?: string;
+class ResolveInspectionDto {
+  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
+  @IsOptional() @IsString() comments?: string;
 }
 
-interface LogSnagDto {
-  projectId: string;
-  projectName?: string;
-  description: string;
-  locationDetail: string;
-  severity: Snag['severity'];
-  assignedTo?: string;
+class LogSnagDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() description!: string;
+  @IsString() locationDetail!: string;
+  @IsString() severity!: Snag['severity'];
+  @IsOptional() @IsString() assignedTo?: string;
 }
 
 @Controller('quality')

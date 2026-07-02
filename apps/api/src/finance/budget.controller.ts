@@ -1,13 +1,14 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsArray, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Budget, type BudgetVsActual, type NewBudgetLine, BudgetService } from '@aura/finance';
 
-interface CreateBudgetDto {
-  name: string;
-  from: string; // YYYY-MM-DD
-  to: string;
-  lines: NewBudgetLine[];
+class CreateBudgetDto {
+  @IsString() name!: string;
+  @IsString() from!: string; // YYYY-MM-DD
+  @IsString() to!: string;
+  @IsArray() lines!: NewBudgetLine[];
 }
 
 /** Finance budgets + budget-vs-actual (actuals folded live from the GL). */

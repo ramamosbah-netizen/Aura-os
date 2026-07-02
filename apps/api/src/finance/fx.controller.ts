@@ -1,15 +1,16 @@
 import { BadRequestException, Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { ExchangeRateService, TenantContext } from '@aura/core';
 import { Money, type Currency } from '@aura/shared';
 
 const CURRENCIES: Currency[] = ['AED', 'USD', 'EUR', 'SAR', 'GBP'];
 const isCurrency = (v: unknown): v is Currency => typeof v === 'string' && (CURRENCIES as string[]).includes(v);
 
-interface SetRateDto {
-  from: Currency;
-  to: Currency;
-  rate: number;
-  effectiveDate?: string;
+class SetRateDto {
+  @IsString() from!: Currency;
+  @IsString() to!: Currency;
+  @IsNumber() rate!: number;
+  @IsOptional() @IsString() effectiveDate?: string;
 }
 
 /** Multi-currency FX: manage exchange rates + convert amounts. */

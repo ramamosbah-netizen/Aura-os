@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import {
   type Transmittal,
@@ -14,23 +15,23 @@ import {
   DocControlService
 } from '@aura/doccontrol';
 
-interface CreateTransmittalDto {
-  projectId: string;
-  projectName?: string;
-  code: string;
-  title: string;
-  sender?: string;
-  recipient?: string;
+class CreateTransmittalDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() sender?: string;
+  @IsOptional() @IsString() recipient?: string;
 }
 
-interface CreateCorrespondenceDto {
-  projectId: string;
-  projectName?: string;
-  code: string;
-  subject: string;
-  direction: 'inbound' | 'outbound';
-  sender?: string;
-  recipient?: string;
+class CreateCorrespondenceDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() subject!: string;
+  @IsString() direction!: 'inbound' | 'outbound';
+  @IsOptional() @IsString() sender?: string;
+  @IsOptional() @IsString() recipient?: string;
 }
 
 @Controller('doccontrol')

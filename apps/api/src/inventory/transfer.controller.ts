@@ -1,13 +1,14 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type StockTransfer, TransferService } from '@aura/inventory';
 
-interface CreateTransferDto {
-  sourceItemId: string;
-  destItemId: string;
-  quantity: number;
-  reason?: string;
+class CreateTransferDto {
+  @IsString() sourceItemId!: string;
+  @IsString() destItemId!: string;
+  @IsNumber() quantity!: number;
+  @IsOptional() @IsString() reason?: string;
 }
 
 @Controller('inventory/transfers')

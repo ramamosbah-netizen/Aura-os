@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import {
   type Employee,
@@ -20,42 +21,42 @@ import {
   calculateEosb,
 } from '@aura/hr';
 
-interface CreateEmployeeDto {
-  firstName: string;
-  lastName: string;
-  email?: string | null;
-  phone?: string | null;
-  role: string;
-  department: string;
-  managerId?: string | null;
-  joinedDate: string;
-  visaExpiry?: string | null;
-  permitExpiry?: string | null;
-  laborCamp?: string | null;
-  iban?: string | null;
-  molEmployeeId?: string | null;
-  bankRoutingCode?: string | null;
+class CreateEmployeeDto {
+  @IsString() firstName!: string;
+  @IsString() lastName!: string;
+  @IsOptional() @IsString() email?: string | null;
+  @IsOptional() @IsString() phone?: string | null;
+  @IsString() role!: string;
+  @IsString() department!: string;
+  @IsOptional() @IsString() managerId?: string | null;
+  @IsString() joinedDate!: string;
+  @IsOptional() @IsString() visaExpiry?: string | null;
+  @IsOptional() @IsString() permitExpiry?: string | null;
+  @IsOptional() @IsString() laborCamp?: string | null;
+  @IsOptional() @IsString() iban?: string | null;
+  @IsOptional() @IsString() molEmployeeId?: string | null;
+  @IsOptional() @IsString() bankRoutingCode?: string | null;
 }
 
-interface RequestLeaveDto {
-  employeeId: string;
-  leaveType: string;
-  startDate: string;
-  endDate: string;
-  reason?: string | null;
+class RequestLeaveDto {
+  @IsString() employeeId!: string;
+  @IsString() leaveType!: string;
+  @IsString() startDate!: string;
+  @IsString() endDate!: string;
+  @IsOptional() @IsString() reason?: string | null;
 }
 
-interface ResolveLeaveDto {
-  status: 'approved' | 'rejected';
+class ResolveLeaveDto {
+  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
 }
 
-interface RunPayrollDto {
-  employeeId: string;
-  periodStart: string;
-  periodEnd: string;
-  basicSalary: number;
-  allowances: number;
-  deductions: number;
+class RunPayrollDto {
+  @IsString() employeeId!: string;
+  @IsString() periodStart!: string;
+  @IsString() periodEnd!: string;
+  @IsNumber() basicSalary!: number;
+  @IsNumber() allowances!: number;
+  @IsNumber() deductions!: number;
 }
 
 @Controller('hr')

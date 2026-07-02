@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import {
   type Asset,
@@ -11,35 +12,35 @@ import {
   AssetsService,
 } from '@aura/assets';
 
-interface CreateAssetDto {
-  name: string;
-  serialNumber: string;
-  category: string;
-  purchaseDate: string;
-  purchaseCost: number;
-  status?: Asset['status'];
-  warrantyExpiry?: string | null;
-  nextCalibrationDate?: string | null;
-  nextInspectionDate?: string | null;
+class CreateAssetDto {
+  @IsString() name!: string;
+  @IsString() serialNumber!: string;
+  @IsString() category!: string;
+  @IsString() purchaseDate!: string;
+  @IsNumber() purchaseCost!: number;
+  @IsOptional() @IsString() status?: Asset['status'];
+  @IsOptional() @IsString() warrantyExpiry?: string | null;
+  @IsOptional() @IsString() nextCalibrationDate?: string | null;
+  @IsOptional() @IsString() nextInspectionDate?: string | null;
 }
 
-interface ScheduleMaintenanceDto {
-  assetId: string;
-  date: string;
-  description: string;
-  cost?: number;
+class ScheduleMaintenanceDto {
+  @IsString() assetId!: string;
+  @IsString() date!: string;
+  @IsString() description!: string;
+  @IsOptional() @IsNumber() cost?: number;
 }
 
-interface CompleteMaintenanceDto {
-  actualCost: number;
+class CompleteMaintenanceDto {
+  @IsNumber() actualCost!: number;
 }
 
-interface RecordInspectionDto {
-  assetId: string;
-  date: string;
-  inspector: string;
-  result: 'pass' | 'fail';
-  notes?: string | null;
+class RecordInspectionDto {
+  @IsString() assetId!: string;
+  @IsString() date!: string;
+  @IsString() inspector!: string;
+  @IsString() result!: 'pass' | 'fail';
+  @IsOptional() @IsString() notes?: string | null;
 }
 
 @Controller('assets')

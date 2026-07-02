@@ -1,17 +1,18 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Activity, type ActivityType, type ActivityStatus, type ActivityRelatedType, ActivityService } from '@aura/crm';
 
-interface CreateActivityDto {
-  type: ActivityType;
-  subject: string;
-  notes?: string;
-  relatedType?: ActivityRelatedType;
-  relatedId?: string;
-  dueDate?: string;
-  status?: ActivityStatus;
-  assigneeId?: string;
+class CreateActivityDto {
+  @IsString() type!: ActivityType;
+  @IsString() subject!: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() relatedType?: ActivityRelatedType;
+  @IsOptional() @IsString() relatedId?: string;
+  @IsOptional() @IsString() dueDate?: string;
+  @IsOptional() @IsString() status?: ActivityStatus;
+  @IsOptional() @IsString() assigneeId?: string;
 }
 
 /**

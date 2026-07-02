@@ -302,6 +302,15 @@ export class FinanceController {
     return this.journals.list({ tenantId: ctx.tenantId, reference, limit: 100 });
   }
 
+  @Get('journals/paged')
+  pagedJournals(
+    @Query('reference') reference?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.journals.listPaged({ tenantId: this.tenant.get().tenantId, reference }, parsePageParams(limit, offset));
+  }
+
   // ── Cost centres ───────────────────────────────────────────────────────────
 
   @Post('cost-centers')
@@ -384,6 +393,15 @@ export class FinanceController {
   listPayments(@Query('invoiceId') invoiceId?: string): Promise<Payment[]> {
     const ctx = this.tenant.get();
     return this.payments.list({ tenantId: ctx.tenantId, invoiceId, limit: 100 });
+  }
+
+  @Get('payments/paged')
+  pagedPayments(
+    @Query('invoiceId') invoiceId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.payments.listPaged({ tenantId: this.tenant.get().tenantId, invoiceId }, parsePageParams(limit, offset));
   }
 
   @Get('payments/:id')

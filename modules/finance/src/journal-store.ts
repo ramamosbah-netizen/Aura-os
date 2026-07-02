@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { Journal } from './domain/journal';
 
 export const JOURNAL_STORE = Symbol('JOURNAL_STORE');
@@ -13,4 +13,5 @@ export interface JournalStore {
   create(journal: Journal): Promise<void>;
   get(id: Id): Promise<Journal | null>;
   list(filter?: JournalFilter): Promise<Journal[]>;
+  listPaged(filter: JournalFilter, page: PageParams): Promise<Page<Journal>>;
 }

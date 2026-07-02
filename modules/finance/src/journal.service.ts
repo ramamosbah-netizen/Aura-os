@@ -66,4 +66,8 @@ export class JournalService {
   list(filter?: JournalFilter): Promise<Journal[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: JournalFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('u-admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -23,13 +23,13 @@ export default function LoginPage() {
       });
       if (!res.ok) {
         const d = (await res.json().catch(() => ({}))) as { error?: string };
-        setErr(d.error ?? 'Login failed');
+        setErr(d.error ?? 'Sign-in failed. Check your username and password.');
       } else {
         router.push('/');
         router.refresh();
       }
     } catch {
-      setErr('Could not reach the server.');
+      setErr('Could not reach the server. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -37,55 +37,112 @@ export default function LoginPage() {
 
   return (
     <div style={s.wrap}>
-      <form onSubmit={submit} style={s.card}>
-        <div style={s.brand}>
-          <span style={{ color: 'var(--accent)' }}>◆</span> AURA
-          <span style={{ color: 'var(--muted)' }}>OS</span>
-        </div>
-        <h1 style={s.h1}>Sign in</h1>
+      <div style={s.split}>
+        <aside style={s.brandPane}>
+          <div style={s.brand}>
+            <span style={s.brandMark}>◆</span> AURA
+            <span style={{ color: 'var(--muted)' }}>OS</span>
+          </div>
+          <h2 style={s.tagline}>One operating system for the whole enterprise.</h2>
+          <p style={s.taglineSub}>
+            CRM, tendering, contracts, projects, procurement, finance and operations — unified on a
+            single event spine.
+          </p>
+          <div style={s.brandFoot}>© {new Date().getFullYear()} AURA OS</div>
+        </aside>
 
-        <label style={s.label}>User</label>
-        <input style={s.input} value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+        <form onSubmit={submit} style={s.card}>
+          <h1 style={s.h1}>Sign in</h1>
+          <p style={s.welcome}>Welcome back. Enter your credentials to continue.</p>
 
-        <label style={s.label}>Password</label>
-        <input
-          style={s.input}
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="dev: any (unless AUTH_DEV_PASSWORD set)"
-        />
+          <label style={s.label} htmlFor="login-user">
+            Username
+          </label>
+          <input
+            id="login-user"
+            style={s.input}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            autoComplete="username"
+            autoFocus
+          />
 
-        <button type="submit" style={s.btn} disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-        {err ? <p style={s.err}>{err}</p> : null}
+          <label style={s.label} htmlFor="login-pass">
+            Password
+          </label>
+          <input
+            id="login-pass"
+            style={s.input}
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            autoComplete="current-password"
+          />
 
-        <p style={s.hint}>
-          Sign in as <code style={s.code}>u-admin</code> for deal-chain permissions. Any other user is
-          authenticated but unauthorized — writes return a clean 403.
-        </p>
-      </form>
+          <button type="submit" style={s.btn} disabled={busy}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+          {err ? <p style={s.err}>{err}</p> : null}
+
+          <p style={s.hint}>Need access? Contact your workspace administrator.</p>
+        </form>
+      </div>
     </div>
   );
 }
 
 const s = {
-  wrap: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 } as CSSProperties,
-  card: {
-    width: 360,
-    maxWidth: '100%',
+  wrap: {
+    minHeight: '100vh',
     display: 'flex',
-    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  } as CSSProperties,
+  split: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 0,
+    width: 860,
+    maxWidth: '100%',
     background: 'var(--panel)',
     border: '1px solid var(--border)',
-    borderRadius: 16,
-    padding: '28px 26px',
+    borderRadius: 20,
+    overflow: 'hidden',
     boxShadow: '0 16px 48px rgba(0,0,0,0.45)',
   } as CSSProperties,
-  brand: { fontWeight: 700, fontSize: 17, letterSpacing: 0.5, marginBottom: 18 } as CSSProperties,
-  h1: { fontSize: 22, margin: '0 0 18px' } as CSSProperties,
-  label: { fontSize: 12, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 } as CSSProperties,
+  brandPane: {
+    flex: '1 1 340px',
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '40px 36px',
+    background: 'var(--panel-2)',
+    borderRight: '1px solid var(--border)',
+    minHeight: 420,
+  } as CSSProperties,
+  brand: { fontWeight: 700, fontSize: 20, letterSpacing: 0.5, marginBottom: 28 } as CSSProperties,
+  brandMark: { color: 'var(--accent)' } as CSSProperties,
+  tagline: { fontSize: 24, lineHeight: 1.3, margin: '0 0 14px', letterSpacing: -0.3 } as CSSProperties,
+  taglineSub: { color: 'var(--muted)', fontSize: 14, lineHeight: 1.6, margin: 0, maxWidth: 320 } as CSSProperties,
+  brandFoot: { marginTop: 'auto', color: 'var(--muted)', fontSize: 12 } as CSSProperties,
+  card: {
+    flex: '1 1 340px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    padding: '40px 36px',
+  } as CSSProperties,
+  h1: { fontSize: 22, margin: '0 0 6px' } as CSSProperties,
+  welcome: { color: 'var(--muted)', fontSize: 13.5, margin: '0 0 22px' } as CSSProperties,
+  label: {
+    fontSize: 12,
+    color: 'var(--muted)',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  } as CSSProperties,
   input: {
     background: 'var(--bg)',
     border: '1px solid var(--border)',
@@ -108,11 +165,4 @@ const s = {
   } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13, margin: '12px 0 0' } as CSSProperties,
   hint: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.5, margin: '18px 0 0' } as CSSProperties,
-  code: {
-    fontFamily: 'ui-monospace, monospace',
-    background: 'var(--panel-2)',
-    border: '1px solid var(--border)',
-    borderRadius: 5,
-    padding: '1px 5px',
-  } as CSSProperties,
 };

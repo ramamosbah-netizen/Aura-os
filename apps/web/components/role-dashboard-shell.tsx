@@ -5,6 +5,7 @@ import CeoCommandCenter from './ceo-command-center';
 import CfoPortal from './cfo-portal';
 import PmDashboard from './pm-dashboard';
 import WorkCenter from './work-center';
+import { areaLabel, humanizeEventType } from '@/lib/event-labels';
 import type { DomainEvent, Document } from '@aura/shared';
 
 interface PurchaseRequest {
@@ -74,7 +75,28 @@ interface ProjectLedger {
   variance: number;
 }
 
+interface InboxItem {
+  id: string;
+  module: string;
+  kind: string;
+  title: string;
+  detail: string;
+  action: string;
+  href: string;
+  value: number | null;
+  createdAt: string | null;
+}
+
 type RoleType = 'general' | 'ceo' | 'cfo' | 'pm';
+
+type Period = 'all' | '24h' | '7d' | '30d';
+
+const PERIODS: Array<{ id: Period; label: string; ms: number | null }> = [
+  { id: 'all', label: 'All time', ms: null },
+  { id: '24h', label: 'Last 24 hours', ms: 24 * 3600_000 },
+  { id: '7d', label: 'Last 7 days', ms: 7 * 24 * 3600_000 },
+  { id: '30d', label: 'Last 30 days', ms: 30 * 24 * 3600_000 },
+];
 
 function timeAgo(iso: string): string {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -96,6 +118,7 @@ export default function RoleDashboardShell({
   funnel,
   winRate,
   ledgers,
+  inbox,
 }: {
   events: DomainEvent[] | null;
   documents: Document[] | null;
@@ -108,8 +131,11 @@ export default function RoleDashboardShell({
   funnel: Funnel | null;
   winRate: number | null;
   ledgers: ProjectLedger[];
+  inbox: InboxItem[];
 }) {
   const [selectedRole, setSelectedRole] = useState<RoleType>('general');
+  const [feedArea, setFeedArea] = useState('all');
+  const [feedPeriod, setFeedPeriod] = useState<Period>('all');
 
   // Compute activity variables
   const byArea = new Map<string, number>();
@@ -119,7 +145,13 @@ export default function RoleDashboardShell({
   }
   const areas = [...byArea.entries()].sort((a, b) => b[1] - a[1]);
   const maxArea = areas.length ? areas[0][1] : 1;
-  const recent = [...(events ?? [])].slice(0, 12);
+
+  const periodMs = PERIODS.find((p) => p.id === feedPeriod)?.ms ?? null;
+  const cutoff = periodMs === null ? null : Date.now() - periodMs;
+  const recent = (events ?? [])
+    .filter((e) => feedArea === 'all' || e.type.split('.')[0] === feedArea)
+    .filter((e) => cutoff === null || new Date(e.occurredAt).getTime() >= cutoff)
+    .slice(0, 30);
 
   return (
     <div>
@@ -162,6 +194,51 @@ export default function RoleDashboardShell({
       <div style={s.contentArea}>
         {selectedRole === 'general' && (
           <>
+            {/* Today — the decisions and dues waiting on you right now */}
+            <section style={{ marginBottom: 24 }}>
+              <div style={s.todayHeader}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Today</h2>
+                <a href="/inbox" style={s.todayLink}>
+                  Open Inbox →
+                </a>
+              </div>
+              <div style={s.todayCards}>
+                <Stat label="Pending decisions" value={inbox.length} hint="across all modules" />
+                <Stat
+                  label="Invoices to pay"
+                  value={inbox.filter((i) => i.action === 'Pay').length}
+                  hint="approved & waiting"
+                />
+                <Stat
+                  label="Tenders to decide"
+                  value={inbox.filter((i) => i.kind === 'Tender').length}
+                  hint="submitted bids"
+                />
+                <Stat
+                  label="HR approvals"
+                  value={inbox.filter((i) => i.module === 'HR').length}
+                  hint="leave · time · expenses"
+                />
+              </div>
+              {inbox.length > 0 ? (
+                <div style={{ ...s.panel, marginTop: 12 }}>
+                  <ul style={s.list}>
+                    {inbox.slice(0, 5).map((item) => (
+                      <li key={`${item.kind}-${item.id}`} style={s.todayRow}>
+                        <span style={s.todayAction}>{item.action}</span>
+                        <a href={item.href} style={s.todayTitle}>
+                          {item.title}
+                        </a>
+                        <span style={s.todayMeta}>
+                          {item.module} · {item.kind}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+
             <section style={s.cards}>
               <Stat label="Recent events" value={events?.length ?? 0} hint="on the spine" />
               <Stat label="Documents" value={documents?.length ?? 0} hint="in the DMS" />
@@ -205,7 +282,7 @@ export default function RoleDashboardShell({
                   <ul style={s.list}>
                     {areas.map(([area, n]) => (
                       <li key={area} style={s.areaRow}>
-                        <span style={s.areaName}>{area}</span>
+                        <span style={s.areaName}>{areaLabel(area)}</span>
                         <span style={s.barTrack}>
                           <span style={{ ...s.barFill, width: `${(n / maxArea) * 100}%` }} />
                         </span>
@@ -217,20 +294,52 @@ export default function RoleDashboardShell({
               </div>
 
               <div style={s.panel}>
-                <h2 style={s.panelTitle}>Recent activity</h2>
+                <div style={s.feedHeader}>
+                  <h2 style={{ ...s.panelTitle, margin: 0 }}>Recent activity</h2>
+                  <div style={s.feedFilters}>
+                    <select
+                      style={s.feedSelect}
+                      value={feedArea}
+                      onChange={(e) => setFeedArea(e.target.value)}
+                      aria-label="Filter by module"
+                    >
+                      <option value="all">All modules</option>
+                      {areas.map(([area]) => (
+                        <option key={area} value={area}>
+                          {areaLabel(area)}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      style={s.feedSelect}
+                      value={feedPeriod}
+                      onChange={(e) => setFeedPeriod(e.target.value as Period)}
+                      aria-label="Filter by period"
+                    >
+                      {PERIODS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 {recent.length === 0 ? (
-                  <p style={{ color: 'var(--muted)', margin: '6px 0 0' }}>Nothing yet.</p>
+                  <p style={{ color: 'var(--muted)', margin: '6px 0 0' }}>
+                    No activity matches these filters yet.
+                  </p>
                 ) : (
                   <ul style={s.list}>
-                    {recent.map((e) => (
-                      <li key={e.id} style={s.eventRow}>
-                        <code style={s.eventType}>{e.type}</code>
-                        <span style={s.eventTarget}>
-                          {e.aggregateType}:{e.aggregateId}
-                        </span>
-                        <span style={s.eventTime}>{timeAgo(e.occurredAt)}</span>
-                      </li>
-                    ))}
+                    {recent.map((e) => {
+                      const h = humanizeEventType(e.type);
+                      return (
+                        <li key={e.id} style={s.eventRow} title={e.type}>
+                          <span style={s.eventArea}>{h.area}</span>
+                          <span style={s.eventLabel}>{h.label}</span>
+                          <span style={s.eventTime}>{timeAgo(e.occurredAt)}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -332,7 +441,68 @@ const s = {
   barFill: { display: 'block', height: '100%', background: 'var(--accent)', borderRadius: 999 } as CSSProperties,
   areaCount: { fontSize: 13, color: 'var(--muted)', textAlign: 'right' } as CSSProperties,
   eventRow: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } as CSSProperties,
-  eventType: { fontSize: 12.5, color: 'var(--accent)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
-  eventTarget: { fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
+  eventArea: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--accent)',
+    background: 'var(--panel-2)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '1px 7px',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  eventLabel: { fontSize: 13, color: 'var(--text)' } as CSSProperties,
   eventTime: { fontSize: 12, color: 'var(--muted)', marginLeft: 'auto' } as CSSProperties,
+  feedHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  } as CSSProperties,
+  feedFilters: { display: 'flex', gap: 8 } as CSSProperties,
+  feedSelect: {
+    background: 'var(--panel-2)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    color: 'var(--text)',
+    fontSize: 12,
+    padding: '4px 8px',
+    cursor: 'pointer',
+  } as CSSProperties,
+  todayHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  } as CSSProperties,
+  todayLink: { color: 'var(--accent)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600 } as CSSProperties,
+  todayCards: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 } as CSSProperties,
+  todayRow: { display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 } as CSSProperties,
+  todayAction: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    color: 'var(--accent)',
+    background: 'var(--panel-2)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '2px 8px',
+    whiteSpace: 'nowrap',
+    minWidth: 58,
+    textAlign: 'center',
+  } as CSSProperties,
+  todayTitle: {
+    color: 'var(--text)',
+    textDecoration: 'none',
+    fontSize: 13.5,
+    fontWeight: 600,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  todayMeta: { fontSize: 12, color: 'var(--muted)', marginLeft: 'auto', whiteSpace: 'nowrap' } as CSSProperties,
 };

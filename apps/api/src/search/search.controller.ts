@@ -11,7 +11,9 @@ export class SearchController {
   ) {}
 
   @Get()
-  run(@Query('q') q = ''): Promise<SearchHit[]> {
-    return this.search.search(this.tenant.get().tenantId, q);
+  run(@Query('q') q = '', @Query('limit') limit?: string): Promise<SearchHit[]> {
+    const n = Number(limit);
+    const capped = Number.isFinite(n) && n > 0 ? Math.min(n, 100) : 20;
+    return this.search.search(this.tenant.get().tenantId, q, capped);
   }
 }

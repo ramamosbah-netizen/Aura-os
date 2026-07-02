@@ -94,7 +94,14 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
                 const isBusy = busyId === po.id;
                 return (
                   <tr key={po.id} style={s.row}>
-                    <td style={s.td}><strong>{po.title}</strong></td>
+                    <td style={s.td}>
+                      <a
+                        href={`/procurement/purchase-orders/${po.id}`}
+                        style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        {po.title}
+                      </a>
+                    </td>
                     <td style={s.tdMuted}>{po.supplierName ?? '—'}</td>
                     <td style={s.tdMuted}>{po.projectName ?? '—'}</td>
                     <td style={s.td}>

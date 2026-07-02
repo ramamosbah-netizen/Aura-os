@@ -4,6 +4,7 @@ export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
     message?: unknown;
     history?: unknown;
+    page?: unknown;
   };
 
   const message = typeof body.message === 'string' ? body.message : '';
@@ -18,6 +19,7 @@ export async function POST(request: Request): Promise<Response> {
       body: JSON.stringify({
         message,
         history: Array.isArray(body.history) ? body.history : undefined,
+        page: body.page && typeof body.page === 'object' ? body.page : undefined,
       }),
       cache: 'no-store',
     });

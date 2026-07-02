@@ -168,7 +168,14 @@ export default function InvoicesList({
               return (
                 <>
                   <tr key={inv.id} style={isPaying ? s.rowSelected : s.row}>
-                    <td style={s.td}><strong>{inv.title}</strong></td>
+                    <td style={s.td}>
+                      <a
+                        href={`/finance/invoices/${inv.id}`}
+                        style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        {inv.title}
+                      </a>
+                    </td>
                     <td style={s.tdMuted}>{inv.poTitle ?? '—'}</td>
                     <td style={s.tdMuted}>{inv.supplierName ?? '—'}</td>
                     <td style={s.tdMuted}>{inv.projectName ?? '—'}</td>

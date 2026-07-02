@@ -18,6 +18,8 @@ export const NAV: NavGroup[] = [
     title: 'Workspace',
     items: [
       { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' },
+      { label: 'Inbox', href: '/inbox', glyph: '◉', desc: 'All approvals & pending decisions, one queue' },
+      { label: 'Search', href: '/search', glyph: '⌕', desc: 'Search every module' },
       { label: 'Saved Views', href: '/views', glyph: '★', desc: 'Saved list filters' },
       { label: 'Notifications', href: '/notifications', glyph: '🔔', desc: 'In-app notification center (event-driven)' },
     ],
@@ -117,3 +119,42 @@ export const NAV: NavGroup[] = [
 ];
 
 export const ALL_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
+
+/** The nav item owning a pathname — longest href-prefix wins (breadcrumbs, AI context). */
+export function findNavMatch(pathname: string): { group: string; label: string; href: string } | null {
+  let match: { group: string; label: string; href: string } | null = null;
+  for (const group of NAV) {
+    for (const item of group.items) {
+      if (item.href === '/') continue;
+      if (
+        (pathname === item.href || pathname.startsWith(`${item.href}/`)) &&
+        (!match || item.href.length > match.href.length)
+      ) {
+        match = { group: group.title, label: item.label, href: item.href };
+      }
+    }
+  }
+  return match;
+}
+
+export interface PaletteAction {
+  label: string;
+  href: string;
+  desc: string;
+}
+
+/** ⌘K "Actions" group — each lands on the page whose creation form does the work. */
+export const CREATE_ACTIONS: PaletteAction[] = [
+  { label: 'Create Account', href: '/crm/accounts', desc: 'New customer or prospect' },
+  { label: 'Create Lead', href: '/crm/leads', desc: 'New sales lead' },
+  { label: 'Create Quotation', href: '/crm/quotations', desc: 'New customer quote' },
+  { label: 'Create Tender', href: '/tendering/tenders', desc: 'New bid / proposal' },
+  { label: 'Create Contract', href: '/contracts/contracts', desc: 'New awarded engagement' },
+  { label: 'Create Project', href: '/projects/projects', desc: 'New delivery project' },
+  { label: 'Create Purchase Request', href: '/procurement/purchase-requests', desc: 'New procurement request' },
+  { label: 'Create Purchase Order', href: '/procurement/purchase-orders', desc: 'New PO' },
+  { label: 'Create Invoice', href: '/finance/invoices', desc: 'New supplier invoice' },
+  { label: 'Create Customer Invoice', href: '/finance/customer-invoices', desc: 'New AR tax invoice' },
+  { label: 'Create Subcontract', href: '/subcontracts/subcontracts', desc: 'New subcontractor agreement' },
+  { label: 'Open Inbox', href: '/inbox', desc: 'All pending approvals' },
+];

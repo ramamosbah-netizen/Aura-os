@@ -1,4 +1,4 @@
-// @aura/core — the kernel ("OS" layer) as a Nest library.
+﻿// @aura/core — the kernel ("OS" layer) as a Nest library.
 export * from './core.module';
 export * from './events/event-bus';
 export * from './events/event-store';
@@ -21,6 +21,7 @@ export * from './dms/document-storage';
 export * from './dms/in-memory-document-store';
 export * from './dms/postgres-document-store';
 export * from './dms/local-document-storage';
+export * from './dms/supabase-document-storage';
 export * from './workflow/workflow-store';
 export * from './workflow/in-memory-workflow-store';
 export * from './workflow/postgres-workflow-store';

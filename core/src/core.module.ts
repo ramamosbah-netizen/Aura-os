@@ -18,6 +18,7 @@ import { InMemoryDocumentStore } from './dms/in-memory-document-store';
 import { PostgresDocumentStore } from './dms/postgres-document-store';
 import { DOCUMENT_STORAGE } from './dms/document-storage';
 import { LocalDocumentStorage } from './dms/local-document-storage';
+import { documentStorageFromEnv } from './dms/supabase-document-storage';
 import { WORKFLOW_STORE } from './workflow/workflow-store';
 import { InMemoryWorkflowStore } from './workflow/in-memory-workflow-store';
 import { PostgresWorkflowStore } from './workflow/postgres-workflow-store';
@@ -129,7 +130,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
       inject: [PG_POOL, EventBus],
       useFactory: (pool: Pool | null, bus: EventBus) => new OutboxRelay(pool, bus),
     },
-    { provide: DOCUMENT_STORAGE, useFactory: () => new LocalDocumentStorage() },
+    { provide: DOCUMENT_STORAGE, useFactory: () => documentStorageFromEnv(() => new LocalDocumentStorage()) },
     {
       provide: DOCUMENT_STORE,
       inject: [PG_POOL],

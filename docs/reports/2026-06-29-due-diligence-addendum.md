@@ -373,7 +373,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Procurement | 86 | 88 | 84 | 90 | 72 | 78 | PO↔supplier-master FK, framework agreements (pagination ✅; MAR/quality hard-gate on PO issue ✅) |
 | Inventory | 84 | 88 | 86 | 90 | 70 | 78 | valuation UI, reorder auto-PR, barcode/multi-UOM (per-item FIFO cost layers→COGS + WAC + pagination ✅) |
 | Finance | 94 | 88 | 90 | 90 | 78 | 92 | statements-UI polish (multi-currency AP/AR+FX reval, statements, dashboards, pagination, asset-disposal→GL, **intercompany eliminations** ✅) |
-| HR | 74 | 85 | 82 | 82 | 68 | 90 | attendance, org chart, appraisal, WPS file |
+| HR | 88 | 86 | 86 | 88 | 70 | 92 | attendance ✅, WPS SIF ✅, payroll ✅, **appraisals ✅, org-chart ✅**; remaining: succession/training |
 | HSE | 78 | 85 | 86 | 84 | 62 | 62 | risk assessments/JSA ✅ + safety training matrix ✅ (inductions/cards/certs); remaining: audit trail depth |
 | Quality | 80 | 86 | 86 | 84 | 62 | 65 | calibration register ✅ + audit schedules + NCR generation ✅ |
 | Site | 76 | 85 | 84 | 86 | 64 | 60 | labour-by-trade ✅ + progress % vs baseline ✅; remaining: resource histograms |

@@ -75,6 +75,18 @@ interface ProjectLedger {
   variance: number;
 }
 
+interface InboxItem {
+  id: string;
+  module: string;
+  kind: string;
+  title: string;
+  detail: string;
+  action: string;
+  href: string;
+  value: number | null;
+  createdAt: string | null;
+}
+
 export default async function WorkspacePage() {
   const [
     events,
@@ -87,6 +99,7 @@ export default async function WorkspacePage() {
     projects,
     pipelineData,
     ledgers,
+    inbox,
   ] = await Promise.all([
     getJson<DomainEvent[]>('/api/events'),
     getJson<Document[]>('/api/documents'),
@@ -98,6 +111,7 @@ export default async function WorkspacePage() {
     getJson<Project[]>('/api/projects/projects'),
     getJson<Pipeline>('/api/intelligence/pipeline'),
     getJson<ProjectLedger[]>('/api/intelligence/projects'),
+    getJson<InboxItem[]>('/api/inbox'),
   ]);
 
   const online = events !== null || documents !== null;
@@ -111,8 +125,8 @@ export default async function WorkspacePage() {
         </div>
       </div>
       <p style={s.sub}>
-        Your live view across the platform — fed by the event spine. Everything below is real data
-        from the kernel.
+        Your day at a glance — pending decisions, live activity and the state of the business,
+        all in one place.
       </p>
 
       {!online ? (
@@ -138,6 +152,7 @@ export default async function WorkspacePage() {
           funnel={pipelineData?.funnel ?? null}
           winRate={pipelineData?.winRate ?? null}
           ledgers={ledgers ?? []}
+          inbox={inbox ?? []}
         />
       )}
 

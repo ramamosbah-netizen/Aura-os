@@ -49,7 +49,14 @@ export default async function AccountsPage() {
             <tbody>
               {accounts.map((a) => (
                 <tr key={a.id}>
-                  <td style={st.td}>{a.name}</td>
+                  <td style={st.td}>
+                    <a
+                      href={`/crm/accounts/${a.id}`}
+                      style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      {a.name}
+                    </a>
+                  </td>
                   <td style={st.td}>
                     <span style={st.tag}>{a.status}</span>
                   </td>

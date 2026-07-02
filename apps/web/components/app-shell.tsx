@@ -4,7 +4,9 @@ import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav';
+import Breadcrumbs from './breadcrumbs';
 import CommandPalette from './command-palette';
+import TabBar from './tab-bar';
 import ThemeToggle from './theme-toggle';
 import type { SessionUser } from '@/lib/session';
 
@@ -115,6 +117,10 @@ export default function AppShell({
             <span style={s.kbdHint}>⌘K</span>
           </button>
 
+          <div style={s.crumbSlot}>
+            <Breadcrumbs />
+          </div>
+
           {/* ── Company Context Switcher ── */}
           <div style={s.companySwitcher}>
             <button
@@ -149,6 +155,7 @@ export default function AppShell({
 
           <ThemeToggle />
         </header>
+        <TabBar />
         <main style={s.main}>{children}</main>
       </div>
 
@@ -228,6 +235,7 @@ const s = {
     borderRadius: 5,
     padding: '1px 6px',
   } as CSSProperties,
+  crumbSlot: { marginLeft: 18, minWidth: 0, flex: 1, overflow: 'hidden' } as CSSProperties,
   main: { flex: 1 } as CSSProperties,
   nav: { flex: 1, overflowY: 'auto' } as CSSProperties,
   userBox: { borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 8 } as CSSProperties,

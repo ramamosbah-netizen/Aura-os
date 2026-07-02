@@ -77,7 +77,14 @@ export default async function ContractsPage() {
             <tbody>
               {contracts.map((c) => (
                 <tr key={c.id}>
-                  <td style={st.td}>{c.title}</td>
+                  <td style={st.td}>
+                    <a
+                      href={`/contracts/contracts/${c.id}`}
+                      style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      {c.title}
+                    </a>
+                  </td>
                   <td style={st.tdMuted}>{c.tenderTitle ?? '—'}</td>
                   <td style={st.tdMuted}>{c.accountName ?? '—'}</td>
                   <td style={st.td}>

@@ -9,13 +9,23 @@ import {
   useState,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { ALL_ITEMS } from './nav';
+import { ALL_ITEMS, CREATE_ACTIONS } from './nav';
+import { readRecentItems, type RecentItem } from '@/lib/recent-items';
 
 interface SearchHit {
   type: string;
   id: string;
   title: string;
   subtitle: string;
+  href: string;
+}
+
+interface InboxItem {
+  id: string;
+  module: string;
+  kind: string;
+  title: string;
+  action: string;
   href: string;
 }
 
@@ -37,6 +47,8 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState(0);
   const [hits, setHits] = useState<SearchHit[]>([]);
+  const [recents, setRecents] = useState<RecentItem[]>([]);
+  const [pending, setPending] = useState<InboxItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const navRows = useMemo<Row[]>(() => {
@@ -48,6 +60,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
   }, [query]);
 
   const rows = useMemo<Row[]>(() => {
+    const q = query.trim().toLowerCase();
     const recordRows: Row[] = hits.map((h) => ({
       href: h.href,
       label: h.title,
@@ -55,14 +68,37 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
       glyph: '◍',
       group: 'Records',
     }));
-    return [...recordRows, ...navRows];
-  }, [hits, navRows]);
+    // Recently opened records surface before anything else when the query is empty.
+    const recentRows: Row[] = !q
+      ? recents.map((r) => ({ href: r.href, label: r.title, sub: r.type, glyph: '⟲', group: 'Recent' }))
+      : [];
+    // Pending decisions from the universal inbox — actionable verbs, not just navigation.
+    const pendingRows: Row[] = pending
+      .filter((p) => !q || `${p.action} ${p.title} ${p.kind} ${p.module}`.toLowerCase().includes(q))
+      .slice(0, q ? 6 : 4)
+      .map((p) => ({ href: p.href, label: `${p.action}: ${p.title}`, sub: `${p.module} · ${p.kind}`, glyph: '◉', group: 'Pending' }));
+    // Create/command verbs.
+    const actionRows: Row[] = CREATE_ACTIONS.filter(
+      (a) => !q || `${a.label} ${a.desc}`.toLowerCase().includes(q),
+    ).map((a) => ({ href: a.href, label: a.label, sub: a.desc, glyph: '＋', group: 'Actions' }));
+    // A queried palette always offers the full results page as the escape hatch.
+    const seeAll: Row[] = q.length >= 2
+      ? [{ href: `/search?q=${encodeURIComponent(query.trim())}`, label: `See all results for “${query.trim()}”`, sub: 'Search page', glyph: '⌕', group: 'Search' }]
+      : [];
+    return [...recentRows, ...pendingRows, ...recordRows, ...(q ? actionRows : []), ...seeAll, ...navRows, ...(q ? [] : actionRows)];
+  }, [hits, navRows, recents, pending, query]);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setSel(0);
       setHits([]);
+      setRecents(readRecentItems());
+      // Live pending decisions for the "Pending" group (best-effort).
+      fetch('/api/inbox')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data: InboxItem[]) => setPending(Array.isArray(data) ? data : []))
+        .catch(() => undefined);
       const t = setTimeout(() => inputRef.current?.focus(), 0);
       return () => clearTimeout(t);
     }

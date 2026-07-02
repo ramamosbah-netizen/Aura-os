@@ -6,7 +6,32 @@ import { TimesheetEntry } from './domain/timesheet';
 import { ExpenseClaim } from './domain/expense-claim';
 import { StaffAdvance } from './domain/staff-advance';
 import { AttendanceRecord } from './domain/attendance';
-import { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore } from './store.interface';
+import { PerformanceAppraisal } from './domain/appraisal';
+import { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore } from './store.interface';
+
+export class InMemoryAppraisalStore implements AppraisalStore {
+  private items = new Map<string, PerformanceAppraisal>();
+
+  async save(a: PerformanceAppraisal): Promise<PerformanceAppraisal> {
+    const copy = { ...a };
+    this.items.set(copy.id, copy);
+    return copy;
+  }
+
+  async findById(tenantId: string, id: string): Promise<PerformanceAppraisal | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return item;
+  }
+
+  async findByTenant(tenantId: string): Promise<PerformanceAppraisal[]> {
+    return [...this.items.values()].filter((i) => i.tenantId === tenantId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findByEmployee(tenantId: string, employeeId: string): Promise<PerformanceAppraisal[]> {
+    return [...this.items.values()].filter((i) => i.tenantId === tenantId && i.employeeId === employeeId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
 
 export class InMemoryEmployeeStore implements EmployeeStore {
   private items = new Map<string, Employee>();

@@ -7,7 +7,7 @@ function emp(over: Partial<Employee>): Employee {
     id: Math.random().toString(36).slice(2),
     tenantId: 't1', companyId: null,
     firstName: 'Test', lastName: 'User', email: null, phone: null,
-    role: 'Worker', department: 'Site', status: 'active',
+    role: 'Worker', department: 'Site', managerId: null, status: 'active',
     joinedDate: '2024-01-01', visaExpiry: null, permitExpiry: null, laborCamp: null,
     iban: null, molEmployeeId: null, bankRoutingCode: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',

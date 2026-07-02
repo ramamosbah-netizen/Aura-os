@@ -6,6 +6,14 @@ import { TimesheetEntry } from './domain/timesheet';
 import { ExpenseClaim } from './domain/expense-claim';
 import { StaffAdvance } from './domain/staff-advance';
 import { AttendanceRecord } from './domain/attendance';
+import { PerformanceAppraisal } from './domain/appraisal';
+
+export interface AppraisalStore {
+  save(appraisal: PerformanceAppraisal, tx?: TxHandle): Promise<PerformanceAppraisal>;
+  findById(tenantId: string, id: string): Promise<PerformanceAppraisal | null>;
+  findByTenant(tenantId: string): Promise<PerformanceAppraisal[]>;
+  findByEmployee(tenantId: string, employeeId: string): Promise<PerformanceAppraisal[]>;
+}
 
 export interface EmployeeStore {
   save(employee: Employee, tx?: TxHandle): Promise<Employee>;

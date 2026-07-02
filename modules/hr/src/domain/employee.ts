@@ -10,6 +10,8 @@ export interface Employee {
   phone: string | null;
   role: string;
   department: string;
+  /** Reporting line — the employee's manager (self-referential); null = top of the org tree. */
+  managerId: string | null;
   status: 'active' | 'suspended' | 'terminated';
   joinedDate: string; // YYYY-MM-DD
   visaExpiry: string | null; // YYYY-MM-DD
@@ -32,6 +34,7 @@ export interface NewEmployee {
   phone?: string | null;
   role: string;
   department: string;
+  managerId?: string | null;
   status?: Employee['status'];
   joinedDate: string;
   visaExpiry?: string | null;
@@ -54,6 +57,7 @@ export function makeEmployee(input: NewEmployee): Employee {
     phone: input.phone ? input.phone.trim() : null,
     role: input.role.trim(),
     department: input.department.trim(),
+    managerId: input.managerId ?? null,
     status: input.status ?? 'active',
     joinedDate: input.joinedDate,
     visaExpiry: input.visaExpiry ?? null,

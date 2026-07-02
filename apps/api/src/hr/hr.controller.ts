@@ -13,6 +13,9 @@ import {
   type AttendanceRecord,
   type AttendanceSummary,
   type AttendanceStatus,
+  type PerformanceAppraisal,
+  type AppraisalCriterion,
+  type OrgChartNode,
   HrService,
   calculateEosb,
 } from '@aura/hr';
@@ -24,6 +27,7 @@ interface CreateEmployeeDto {
   phone?: string | null;
   role: string;
   department: string;
+  managerId?: string | null;
   joinedDate: string;
   visaExpiry?: string | null;
   permitExpiry?: string | null;
@@ -81,6 +85,7 @@ export class HrController {
       phone: dto.phone,
       role: dto.role,
       department: dto.department,
+      managerId: dto.managerId ?? null,
       joinedDate: dto.joinedDate,
       visaExpiry: dto.visaExpiry,
       permitExpiry: dto.permitExpiry,
@@ -430,5 +435,60 @@ export class HrController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // ── Performance appraisals ──────────────────────────────────────────────────
+
+  @Post('appraisals')
+  createAppraisal(
+    @Body() dto: { employeeId: string; employeeName?: string; period: string; reviewerId?: string; criteria: AppraisalCriterion[]; strengths?: string; improvements?: string; comments?: string },
+  ): Promise<PerformanceAppraisal> {
+    if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
+    if (!dto?.period?.trim()) throw new BadRequestException('period is required');
+    if (!Array.isArray(dto?.criteria) || dto.criteria.length === 0) throw new BadRequestException('at least one criterion is required');
+    const ctx = this.tenant.get();
+    return this.hrService.createAppraisal({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      employeeId: dto.employeeId,
+      employeeName: dto.employeeName ?? null,
+      period: dto.period,
+      reviewerId: dto.reviewerId ?? ctx.actorId,
+      criteria: dto.criteria,
+      strengths: dto.strengths ?? null,
+      improvements: dto.improvements ?? null,
+      comments: dto.comments ?? null,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Get('appraisals')
+  listAppraisals(@Query('employeeId') employeeId?: string): Promise<PerformanceAppraisal[]> {
+    return this.hrService.listAppraisals(this.tenant.get().tenantId, employeeId);
+  }
+
+  @Put('appraisals/:id/submit')
+  async submitAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
+    try {
+      return await this.hrService.submitAppraisal(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('appraisals/:id/acknowledge')
+  async acknowledgeAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
+    try {
+      return await this.hrService.acknowledgeAppraisal(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Org chart ──────────────────────────────────────────────────────────────
+
+  @Get('org-chart')
+  orgChart(): Promise<OrgChartNode[]> {
+    return this.hrService.orgChart(this.tenant.get().tenantId);
   }
 }

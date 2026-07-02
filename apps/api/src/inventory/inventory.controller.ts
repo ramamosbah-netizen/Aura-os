@@ -1,18 +1,19 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type GoodsReceipt, type GoodsReceiptStatus, GoodsReceiptService } from '@aura/inventory';
 
-interface CreateGoodsReceiptDto {
-  title: string;
-  reference?: string;
-  poId?: string | null;
-  poTitle?: string | null;
-  supplierName?: string | null;
-  projectId?: string | null;
-  projectName?: string | null;
-  status?: GoodsReceiptStatus;
-  value?: number;
+class CreateGoodsReceiptDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() poId?: string | null;
+  @IsOptional() @IsString() poTitle?: string | null;
+  @IsOptional() @IsString() supplierName?: string | null;
+  @IsOptional() @IsString() projectId?: string | null;
+  @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsString() status?: GoodsReceiptStatus;
+  @IsOptional() @IsNumber() value?: number;
 }
 
 /** Inventory API — stamps tenant/actor from context, delegates to GoodsReceiptService. */

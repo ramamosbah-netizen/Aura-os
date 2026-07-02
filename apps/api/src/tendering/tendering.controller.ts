@@ -1,17 +1,18 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Put, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem } from '@aura/tendering';
 import * as xlsx from 'xlsx';
 
-interface CreateTenderDto {
-  title: string;
-  reference?: string;
-  accountId?: string | null;
-  accountName?: string | null;
-  status?: TenderStatus;
-  value?: number;
+class CreateTenderDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() accountId?: string | null;
+  @IsOptional() @IsString() accountName?: string | null;
+  @IsOptional() @IsString() status?: TenderStatus;
+  @IsOptional() @IsNumber() value?: number;
 }
 
 /** Tendering API — stamps tenant/actor from context, delegates to TenderService. */

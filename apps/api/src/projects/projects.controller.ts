@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -35,15 +36,15 @@ import {
   ScheduleService,
 } from '@aura/projects';
 
-interface CreateProjectDto {
-  title: string;
-  reference?: string;
-  contractId?: string | null;
-  contractTitle?: string | null;
-  accountId?: string | null;
-  accountName?: string | null;
-  status?: ProjectStatus;
-  value?: number;
+class CreateProjectDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() contractId?: string | null;
+  @IsOptional() @IsString() contractTitle?: string | null;
+  @IsOptional() @IsString() accountId?: string | null;
+  @IsOptional() @IsString() accountName?: string | null;
+  @IsOptional() @IsString() status?: ProjectStatus;
+  @IsOptional() @IsNumber() value?: number;
 }
 
 interface CreateWbsNodeDto {

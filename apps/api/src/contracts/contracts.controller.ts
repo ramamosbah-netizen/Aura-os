@@ -1,17 +1,18 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Contract, type ContractStatus, ContractService } from '@aura/contracts';
 
-interface CreateContractDto {
-  title: string;
-  reference?: string;
-  tenderId?: string | null;
-  tenderTitle?: string | null;
-  accountId?: string | null;
-  accountName?: string | null;
-  status?: ContractStatus;
-  value?: number;
+class CreateContractDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() tenderId?: string | null;
+  @IsOptional() @IsString() tenderTitle?: string | null;
+  @IsOptional() @IsString() accountId?: string | null;
+  @IsOptional() @IsString() accountName?: string | null;
+  @IsOptional() @IsString() status?: ContractStatus;
+  @IsOptional() @IsNumber() value?: number;
 }
 
 /** Contracts API — stamps tenant/actor from context, delegates to ContractService. */

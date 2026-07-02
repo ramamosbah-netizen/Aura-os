@@ -133,6 +133,15 @@ export class PostgresNcrStore implements NcrStore {
     return res.rows.map(this.mapNcr);
   }
 
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Ncr>> {
+    const countRes = await this.pool.query<{ count: number }>(
+      `select count(*)::int as count from public.aura_quality_ncrs where tenant_id = $1`, [tenantId]);
+    const res = await this.pool.query(
+      `select * from public.aura_quality_ncrs where tenant_id = $1 order by created_at desc limit $2 offset $3`,
+      [tenantId, page.limit, page.offset]);
+    return makePage(res.rows.map(this.mapNcr), Number(countRes.rows[0]?.count ?? 0), page);
+  }
+
   private mapNcr(row: QueryResultRow): Ncr {
     return {
       id: row.id,
@@ -212,6 +221,15 @@ export class PostgresInspectionRequestStore implements InspectionRequestStore {
     return res.rows.map(this.mapIr);
   }
 
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<InspectionRequest>> {
+    const countRes = await this.pool.query<{ count: number }>(
+      `select count(*)::int as count from public.aura_quality_irs where tenant_id = $1`, [tenantId]);
+    const res = await this.pool.query(
+      `select * from public.aura_quality_irs where tenant_id = $1 order by inspection_date desc limit $2 offset $3`,
+      [tenantId, page.limit, page.offset]);
+    return makePage(res.rows.map(this.mapIr), Number(countRes.rows[0]?.count ?? 0), page);
+  }
+
   private mapIr(row: QueryResultRow): InspectionRequest {
     return {
       id: row.id,
@@ -289,6 +307,15 @@ export class PostgresSnagStore implements SnagStore {
     return res.rows.map(this.mapSnag);
   }
 
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Snag>> {
+    const countRes = await this.pool.query<{ count: number }>(
+      `select count(*)::int as count from public.aura_quality_snags where tenant_id = $1`, [tenantId]);
+    const res = await this.pool.query(
+      `select * from public.aura_quality_snags where tenant_id = $1 order by created_at desc limit $2 offset $3`,
+      [tenantId, page.limit, page.offset]);
+    return makePage(res.rows.map(this.mapSnag), Number(countRes.rows[0]?.count ?? 0), page);
+  }
+
   private mapSnag(row: QueryResultRow): Snag {
     return {
       id: row.id,
@@ -337,6 +364,15 @@ export class PostgresItpStore implements ItpStore {
   async findAll(tenantId: string): Promise<Itp[]> {
     const res = await this.pool.query(`select * from public.aura_quality_itps where tenant_id = $1 order by created_at desc`, [tenantId]);
     return res.rows.map(this.mapItp);
+  }
+
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Itp>> {
+    const countRes = await this.pool.query<{ count: number }>(
+      `select count(*)::int as count from public.aura_quality_itps where tenant_id = $1`, [tenantId]);
+    const res = await this.pool.query(
+      `select * from public.aura_quality_itps where tenant_id = $1 order by created_at desc limit $2 offset $3`,
+      [tenantId, page.limit, page.offset]);
+    return makePage(res.rows.map(this.mapItp), Number(countRes.rows[0]?.count ?? 0), page);
   }
 
   private mapItp(row: QueryResultRow): Itp {

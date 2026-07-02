@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Ncr,
   type InspectionRequest,
@@ -121,6 +122,11 @@ export class QualityController {
     return this.qualityService.listNcrs(ctx.tenantId);
   }
 
+  @Get('ncrs/paged')
+  pagedNcrs(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listNcrsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   // ── Inspection Requests (IR) ────────────────────────────────────────────────
 
   @Post('irs')
@@ -178,6 +184,11 @@ export class QualityController {
     return this.qualityService.listInspections(ctx.tenantId);
   }
 
+  @Get('irs/paged')
+  pagedInspections(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listInspectionsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   // ── Snagging / Punch List ──────────────────────────────────────────────────
 
   @Post('snags')
@@ -224,6 +235,11 @@ export class QualityController {
     return this.qualityService.listSnags(ctx.tenantId);
   }
 
+  @Get('snags/paged')
+  pagedSnags(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listSnagsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   // ── Inspection & Test Plans (ITP) ──────────────────────────────────────────
 
   @Post('itps')
@@ -253,6 +269,11 @@ export class QualityController {
   @Get('itps')
   listItps(): Promise<Itp[]> {
     return this.qualityService.listItps(this.tenant.get().tenantId);
+  }
+
+  @Get('itps/paged')
+  pagedItps(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listItpsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Put('itps/:id/activate')
@@ -313,6 +334,19 @@ export class QualityController {
   @Get('material-approvals')
   listMars(): Promise<MaterialApproval[]> {
     return this.qualityService.listMaterialApprovals(this.tenant.get().tenantId);
+  }
+
+  @Get('material-approvals/paged')
+  pagedMars(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.qualityService.listMaterialApprovalsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Put('material-approvals/:id/submit')

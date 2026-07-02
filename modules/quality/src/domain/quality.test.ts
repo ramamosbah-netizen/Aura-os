@@ -156,4 +156,38 @@ describe('Quality Module Bounded Context', () => {
       expect(pageSupplier.items.every(item => item.supplier === 'Steel Corp')).toBe(true);
     });
   });
+
+  describe('Transactional-list pagination (NCR / IR / snag / ITP)', () => {
+    it('pages each list with totals and tenant isolation', async () => {
+      const service = new QualityService(
+        new InMemoryNcrStore(), new InMemoryInspectionRequestStore(), new InMemorySnagStore(),
+        new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(),
+        new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess,
+      );
+
+      for (let i = 1; i <= 3; i++) {
+        await service.raiseNcr({ tenantId: 't1', projectId: 'p1', ncrNumber: `NCR-${i}`, description: `d${i}`, severity: 'minor' });
+        await service.requestInspection({ tenantId: 't1', projectId: 'p1', irNumber: `IR-${i}`, discipline: 'civil', locationDetail: `loc ${i}`, inspectionDate: '2026-07-01' });
+        await service.logSnag({ tenantId: 't1', projectId: 'p1', description: `snag ${i}`, locationDetail: `loc ${i}`, severity: 'low' });
+        await service.createItp({ tenantId: 't1', projectId: 'p1', reference: `ITP-${i}`, title: `plan ${i}`, points: [{ activity: 'a', pointType: 'hold' }] });
+      }
+      await service.raiseNcr({ tenantId: 't2', projectId: 'px', ncrNumber: 'OTHER', description: 'other tenant', severity: 'minor' });
+
+      const page = { limit: 2, offset: 0 };
+      for (const p of [
+        await service.listNcrsPaged('t1', page),
+        await service.listInspectionsPaged('t1', page),
+        await service.listSnagsPaged('t1', page),
+        await service.listItpsPaged('t1', page),
+      ]) {
+        expect(p.items).toHaveLength(2);
+        expect(p.total).toBe(3);
+        expect(p.hasMore).toBe(true);
+      }
+
+      const rest = await service.listNcrsPaged('t1', { limit: 2, offset: 2 });
+      expect(rest.items).toHaveLength(1);
+      expect(rest.hasMore).toBe(false);
+    });
+  });
 });

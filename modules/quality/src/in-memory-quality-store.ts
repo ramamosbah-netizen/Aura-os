@@ -58,6 +58,10 @@ export class InMemoryNcrStore implements NcrStore {
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Ncr>> {
+    return paginate(await this.findAll(tenantId), page);
+  }
 }
 
 export class InMemoryInspectionRequestStore implements InspectionRequestStore {
@@ -83,6 +87,10 @@ export class InMemoryInspectionRequestStore implements InspectionRequestStore {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<InspectionRequest>> {
+    return paginate(await this.findAll(tenantId), page);
   }
 }
 
@@ -110,6 +118,10 @@ export class InMemorySnagStore implements SnagStore {
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Snag>> {
+    return paginate(await this.findAll(tenantId), page);
+  }
 }
 
 export class InMemoryItpStore implements ItpStore {
@@ -135,6 +147,11 @@ export class InMemoryItpStore implements ItpStore {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(tenantId: string, page: PageParams): Promise<Page<Itp>> {
+    const all = await this.findAll(tenantId);
+    return paginate(all.map((i) => ({ ...i, points: i.points.map((p) => ({ ...p })) })), page);
   }
 }
 

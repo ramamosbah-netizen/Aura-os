@@ -1,4 +1,5 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import type { Ncr } from './domain/ncr';
 import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
@@ -19,6 +20,7 @@ export interface NcrStore {
   findById(id: string, tenantId: string): Promise<Ncr | null>;
   findByProject(projectId: string, tenantId: string): Promise<Ncr[]>;
   findAll(tenantId: string): Promise<Ncr[]>;
+  listPaged(tenantId: string, page: PageParams): Promise<Page<Ncr>>;
 }
 
 export interface InspectionRequestStore {
@@ -26,6 +28,7 @@ export interface InspectionRequestStore {
   findById(id: string, tenantId: string): Promise<InspectionRequest | null>;
   findByProject(projectId: string, tenantId: string): Promise<InspectionRequest[]>;
   findAll(tenantId: string): Promise<InspectionRequest[]>;
+  listPaged(tenantId: string, page: PageParams): Promise<Page<InspectionRequest>>;
 }
 
 export interface SnagStore {
@@ -33,6 +36,7 @@ export interface SnagStore {
   findById(id: string, tenantId: string): Promise<Snag | null>;
   findByProject(projectId: string, tenantId: string): Promise<Snag[]>;
   findAll(tenantId: string): Promise<Snag[]>;
+  listPaged(tenantId: string, page: PageParams): Promise<Page<Snag>>;
 }
 
 export interface ItpStore {
@@ -40,9 +44,8 @@ export interface ItpStore {
   findById(id: string, tenantId: string): Promise<Itp | null>;
   findByProject(projectId: string, tenantId: string): Promise<Itp[]>;
   findAll(tenantId: string): Promise<Itp[]>;
+  listPaged(tenantId: string, page: PageParams): Promise<Page<Itp>>;
 }
-
-import type { Page, PageParams } from '@aura/shared';
 
 export interface MaterialApprovalFilter {
   tenantId?: string;

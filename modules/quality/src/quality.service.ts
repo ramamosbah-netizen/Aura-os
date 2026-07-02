@@ -135,6 +135,10 @@ export class QualityService {
     return this.ncrStore.findAll(tenantId);
   }
 
+  listNcrsPaged(tenantId: Id, page: PageParams): Promise<Page<Ncr>> {
+    return this.ncrStore.listPaged(tenantId, page);
+  }
+
   // ── Inspection Requests (IR) ────────────────────────────────────────────────
 
   async requestInspection(input: {
@@ -201,6 +205,10 @@ export class QualityService {
 
   listInspections(tenantId: Id): Promise<InspectionRequest[]> {
     return this.irStore.findAll(tenantId);
+  }
+
+  listInspectionsPaged(tenantId: Id, page: PageParams): Promise<Page<InspectionRequest>> {
+    return this.irStore.listPaged(tenantId, page);
   }
 
   // ── Snagging / Punch List ──────────────────────────────────────────────────
@@ -272,6 +280,10 @@ export class QualityService {
     return this.snagStore.findAll(tenantId);
   }
 
+  listSnagsPaged(tenantId: Id, page: PageParams): Promise<Page<Snag>> {
+    return this.snagStore.listPaged(tenantId, page);
+  }
+
   // ── Inspection & Test Plans (ITP) ──────────────────────────────────────────
 
   async createItp(input: {
@@ -340,6 +352,10 @@ export class QualityService {
 
   listItps(tenantId: Id): Promise<Itp[]> {
     return this.itpStore.findAll(tenantId);
+  }
+
+  listItpsPaged(tenantId: Id, page: PageParams): Promise<Page<Itp>> {
+    return this.itpStore.listPaged(tenantId, page);
   }
 
   // ── Material Approval Requests (MAR) ───────────────────────────────────────

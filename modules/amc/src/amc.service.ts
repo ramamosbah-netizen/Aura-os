@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { makeEvent } from '@aura/shared';
+import { makeEvent, type Page, type PageParams } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { AmcStore, AMC_STORE } from './store.interface';
 import { ServiceContract, ContractStatus } from './domain/service-contract';
 import { WorkOrder, WorkOrderPriority, WorkOrderType, GeoCoordinate } from './domain/work-order';
-import { SupportTicket, TicketPriority } from './domain/support-ticket';
+import { SupportTicket, TicketPriority, type SlaStatus } from './domain/support-ticket';
 import { PpmSchedule, PpmFrequency } from './domain/ppm-schedule';
 
 // Real UUIDs so AMC rows are compatible with the uuid primary keys + FKs in the
@@ -56,12 +56,20 @@ export class AmcService {
     return this.store.listTickets(tenantId, contractId);
   }
 
+  async listTicketsPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<SupportTicket>> {
+    return this.store.listTicketsPaged(tenantId, page, contractId);
+  }
+
   async findTicket(id: string): Promise<SupportTicket | null> {
     return this.store.findTicket(id);
   }
 
   async listWorkOrders(tenantId: string, contractId?: string): Promise<WorkOrder[]> {
     return this.store.listWorkOrders(tenantId, contractId);
+  }
+
+  async listWorkOrdersPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<WorkOrder>> {
+    return this.store.listWorkOrdersPaged(tenantId, page, contractId);
   }
 
   async terminateContract(id: string): Promise<ServiceContract> {
@@ -167,6 +175,65 @@ export class AmcService {
     await this.store.saveTicket(ticket);
     this.logger.log(`[AMC] Ticket ${ticket.ticketNumber} resolved`);
     return ticket;
+  }
+
+  /** SLA health across open tickets, as of `now` — the countdown/at-risk/breach feed for the UI. */
+  async slaStatusReport(
+    tenantId: string,
+    now: Date = new Date(),
+  ): Promise<Array<{ ticket: SupportTicket; slaStatus: SlaStatus; hoursRemaining: number }>> {
+    const tickets = await this.store.listTickets(tenantId);
+    return tickets
+      .filter((t) => t.status !== 'resolved' && t.status !== 'closed')
+      .map((t) => ({
+        ticket: t,
+        slaStatus: t.slaStatus(now),
+        hoursRemaining: Math.round(((t.slaDueAt.getTime() - now.getTime()) / 3_600_000) * 10) / 10,
+      }))
+      .sort((a, b) => a.hoursRemaining - b.hoursRemaining);
+  }
+
+  /**
+   * Sweep open tickets for SLA breaches: each unresolved, past-due ticket is escalated (tier bumped)
+   * and an `amc.ticket.sla_breached` event emitted (→ notifications). Idempotent per breach tier —
+   * a ticket is only re-escalated by a later sweep after it breaches further. Returns escalated tickets.
+   * Intended to be called on a schedule (cron) or on demand.
+   */
+  async sweepSlaBreaches(tenantId: string, now: Date = new Date()): Promise<SupportTicket[]> {
+    const tickets = await this.store.listTickets(tenantId);
+    const escalated: SupportTicket[] = [];
+    for (const t of tickets) {
+      if (!t.isSlaBreached(now)) continue;
+      // Escalate one tier per elapsed resolution-window past the due date (bounded, idempotent).
+      const overdueMs = now.getTime() - t.slaDueAt.getTime();
+      const windowMs = Math.max(1, t.slaResolutionHours) * 3_600_000;
+      const dueLevel = 1 + Math.floor(overdueMs / windowMs);
+      if (dueLevel <= t.escalationLevel) continue; // already escalated for this breach depth
+      t.escalate();
+      await this.store.saveTicket(t);
+      await this.events.append([
+        makeEvent({
+          type: 'amc.ticket.sla_breached',
+          tenantId: t.tenantId,
+          companyId: t.companyId ?? null,
+          actorId: null,
+          aggregateType: 'amc.ticket',
+          aggregateId: t.id,
+          payload: {
+            ticketNumber: t.ticketNumber,
+            title: t.title,
+            priority: t.priority,
+            escalationLevel: t.escalationLevel,
+            slaDueAt: t.slaDueAt.toISOString(),
+            assignedTo: t.assignedTo ?? null,
+            contractId: t.contractId ?? null,
+          },
+        }),
+      ]);
+      this.logger.warn(`[AMC] SLA breach — ticket ${t.ticketNumber} escalated to L${t.escalationLevel}`);
+      escalated.push(t);
+    }
+    return escalated;
   }
 
   // ── PPM Schedules (preventive maintenance) ───────────────────

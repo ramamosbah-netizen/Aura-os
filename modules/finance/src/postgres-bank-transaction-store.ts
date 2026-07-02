@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { BankTransaction } from './domain/bank-transaction';
 import type { BankTransactionFilter, BankTransactionStore } from './bank-transaction-store';
 
@@ -95,5 +96,26 @@ export class PostgresBankTransactionStore implements BankTransactionStore {
       params,
     );
     return res.rows.map(rowToTx);
+  }
+
+  async listPaged(filter: BankTransactionFilter, page: PageParams): Promise<Page<BankTransaction>> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
+    };
+    add('tenant_id', filter.tenantId);
+    add('bank_account_id', filter.bankAccountId);
+    add('status', filter.status);
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_finance_bank_transactions ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<BankTxRow>(
+      `SELECT ${COLS} FROM public.aura_finance_bank_transactions ${whereSql} ORDER BY transaction_date DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToTx), total, page);
   }
 }

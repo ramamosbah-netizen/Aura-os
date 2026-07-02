@@ -1,18 +1,19 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type CertificateStatus, type PaymentCertificate, PaymentCertificateService } from '@aura/contracts';
 
-interface CreateCertificateDto {
-  contractId: string;
-  periodStart?: string;
-  periodEnd?: string;
-  cumulativeWorkDone: number;
-  materialsOnSite?: number;
-  retentionPercent?: number;
-  retentionCapPercent?: number;
-  advanceRecoveredToDate?: number;
-  reference?: string;
+class CreateCertificateDto {
+  @IsString() contractId!: string;
+  @IsOptional() @IsString() periodStart?: string;
+  @IsOptional() @IsString() periodEnd?: string;
+  @IsNumber() cumulativeWorkDone!: number;
+  @IsOptional() @IsNumber() materialsOnSite?: number;
+  @IsOptional() @IsNumber() retentionPercent?: number;
+  @IsOptional() @IsNumber() retentionCapPercent?: number;
+  @IsOptional() @IsNumber() advanceRecoveredToDate?: number;
+  @IsOptional() @IsString() reference?: string;
 }
 
 const VALID: CertificateStatus[] = ['draft', 'submitted', 'certified', 'paid', 'rejected'];

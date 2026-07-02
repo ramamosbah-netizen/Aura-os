@@ -25,10 +25,17 @@ export interface DispatchResult {
   error?: string;
 }
 
+const CHANNELS = ['email', 'sms', 'slack', 'teams'] as const;
+type Channel = (typeof CHANNELS)[number];
+
 /**
  * Notification delivery. Real delivery is config-gated per channel (mirrors the AI provider seam):
  *   email → POST SMTP_RELAY_URL · sms → POST SMS_RELAY_URL · slack → SLACK_WEBHOOK_URL · teams → TEAMS_WEBHOOK_URL.
  * When the channel's endpoint env is unset, it logs (dev fallback) and reports delivered:'logged'.
+ *
+ * Event-raised (tenant-broadcast) notifications carry no userId and no explicit channels;
+ * NOTIFY_CHANNELS (csv) supplies default channels and NOTIFY_FALLBACK_RECIPIENT the
+ * tenant-level recipient (e.g. an ops distribution address) so they still deliver.
  */
 @Injectable()
 export class NotificationService {
@@ -45,12 +52,22 @@ export class NotificationService {
     return undefined;
   }
 
+  /** Default channels for notifications recorded without explicit channels (NOTIFY_CHANNELS csv). */
+  defaultChannels(): Channel[] {
+    return (process.env.NOTIFY_CHANNELS ?? '')
+      .split(',')
+      .map((c) => c.trim().toLowerCase())
+      .filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
+  }
+
   /** Persist a notification (the inbox record) and best-effort dispatch to channels. */
   async record(input: NewNotification, channels: NotificationPayload['channels'] = []): Promise<Notification> {
     const n = makeNotification(input);
     await this.store.save(n);
-    if (channels.length && n.userId) {
-      await this.send({ tenantId: n.tenantId, userId: n.userId, title: n.title, body: n.body, channels });
+    const resolved = channels.length ? channels : this.defaultChannels();
+    const recipient = n.userId ?? process.env.NOTIFY_FALLBACK_RECIPIENT ?? null;
+    if (resolved.length && recipient) {
+      await this.send({ tenantId: n.tenantId, userId: recipient, title: n.title, body: n.body, channels: resolved });
     }
     return n;
   }

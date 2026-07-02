@@ -1,5 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Ncr,
   type InspectionRequest,
@@ -15,44 +17,44 @@ import {
   QualityService,
 } from '@aura/quality';
 
-interface RaiseNcrDto {
-  projectId: string;
-  projectName?: string;
-  ncrNumber: string;
-  description: string;
-  rootCause?: string;
-  proposedCorrection?: string;
-  severity: Ncr['severity'];
-  assignedTo?: string;
+class RaiseNcrDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() ncrNumber!: string;
+  @IsString() description!: string;
+  @IsOptional() @IsString() rootCause?: string;
+  @IsOptional() @IsString() proposedCorrection?: string;
+  @IsString() severity!: Ncr['severity'];
+  @IsOptional() @IsString() assignedTo?: string;
 }
 
-interface UpdateNcrStatusDto {
-  status: Ncr['status'];
-  rootCause?: string;
-  proposedCorrection?: string;
+class UpdateNcrStatusDto {
+  @IsString() status!: Ncr['status'];
+  @IsOptional() @IsString() rootCause?: string;
+  @IsOptional() @IsString() proposedCorrection?: string;
 }
 
-interface RequestInspectionDto {
-  projectId: string;
-  projectName?: string;
-  irNumber: string;
-  discipline: InspectionRequest['discipline'];
-  locationDetail: string;
-  inspectionDate: string;
+class RequestInspectionDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() irNumber!: string;
+  @IsString() discipline!: InspectionRequest['discipline'];
+  @IsString() locationDetail!: string;
+  @IsString() inspectionDate!: string;
 }
 
-interface ResolveInspectionDto {
-  status: 'approved' | 'rejected';
-  comments?: string;
+class ResolveInspectionDto {
+  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
+  @IsOptional() @IsString() comments?: string;
 }
 
-interface LogSnagDto {
-  projectId: string;
-  projectName?: string;
-  description: string;
-  locationDetail: string;
-  severity: Snag['severity'];
-  assignedTo?: string;
+class LogSnagDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() description!: string;
+  @IsString() locationDetail!: string;
+  @IsString() severity!: Snag['severity'];
+  @IsOptional() @IsString() assignedTo?: string;
 }
 
 @Controller('quality')
@@ -121,6 +123,11 @@ export class QualityController {
     return this.qualityService.listNcrs(ctx.tenantId);
   }
 
+  @Get('ncrs/paged')
+  pagedNcrs(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listNcrsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   // ── Inspection Requests (IR) ────────────────────────────────────────────────
 
   @Post('irs')
@@ -178,6 +185,11 @@ export class QualityController {
     return this.qualityService.listInspections(ctx.tenantId);
   }
 
+  @Get('irs/paged')
+  pagedInspections(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listInspectionsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   // ── Snagging / Punch List ──────────────────────────────────────────────────
 
   @Post('snags')
@@ -224,6 +236,11 @@ export class QualityController {
     return this.qualityService.listSnags(ctx.tenantId);
   }
 
+  @Get('snags/paged')
+  pagedSnags(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listSnagsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   // ── Inspection & Test Plans (ITP) ──────────────────────────────────────────
 
   @Post('itps')
@@ -253,6 +270,11 @@ export class QualityController {
   @Get('itps')
   listItps(): Promise<Itp[]> {
     return this.qualityService.listItps(this.tenant.get().tenantId);
+  }
+
+  @Get('itps/paged')
+  pagedItps(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.qualityService.listItpsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Put('itps/:id/activate')
@@ -313,6 +335,19 @@ export class QualityController {
   @Get('material-approvals')
   listMars(): Promise<MaterialApproval[]> {
     return this.qualityService.listMaterialApprovals(this.tenant.get().tenantId);
+  }
+
+  @Get('material-approvals/paged')
+  pagedMars(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.qualityService.listMaterialApprovalsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Put('material-approvals/:id/submit')

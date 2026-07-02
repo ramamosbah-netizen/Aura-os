@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ApprovalMatrixService, type ApprovalRule } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -16,39 +17,39 @@ import {
   SupplierService,
 } from '@aura/procurement';
 
-interface CreatePurchaseOrderDto {
-  title: string;
-  reference?: string;
-  supplierId?: string | null;
-  supplierName?: string | null;
-  projectId?: string | null;
-  projectName?: string | null;
-  status?: PurchaseOrderStatus;
-  value?: number;
+class CreatePurchaseOrderDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() supplierId?: string | null;
+  @IsOptional() @IsString() supplierName?: string | null;
+  @IsOptional() @IsString() projectId?: string | null;
+  @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsString() status?: PurchaseOrderStatus;
+  @IsOptional() @IsNumber() value?: number;
 }
 
-interface CreatePurchaseRequestDto {
-  title: string;
-  reference?: string;
-  projectId?: string | null;
-  projectName?: string | null;
-  status?: PurchaseRequestStatus;
-  value?: number;
+class CreatePurchaseRequestDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() projectId?: string | null;
+  @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsString() status?: PurchaseRequestStatus;
+  @IsOptional() @IsNumber() value?: number;
 }
 
-interface CreateRfqDto {
-  title: string;
-  reference?: string;
-  prId?: string | null;
-  prTitle?: string | null;
-  dueDate?: string | null;
+class CreateRfqDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() prId?: string | null;
+  @IsOptional() @IsString() prTitle?: string | null;
+  @IsOptional() @IsString() dueDate?: string | null;
 }
 
-interface AddQuoteDto {
-  supplierName: string;
-  amount: number;
-  leadTimeDays?: number | null;
-  notes?: string | null;
+class AddQuoteDto {
+  @IsString() supplierName!: string;
+  @IsNumber() amount!: number;
+  @IsOptional() @IsNumber() leadTimeDays?: number | null;
+  @IsOptional() @IsString() notes?: string | null;
 }
 
 /** Procurement API — stamps tenant/actor from context, delegates to Services. */

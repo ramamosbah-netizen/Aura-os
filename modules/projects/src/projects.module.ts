@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { CoreModule, PG_POOL } from '@aura/core';
+import { QualityModule, QualityService } from '@aura/quality';
 import { PROJECT_STORE } from './project-store';
 import { InMemoryProjectStore } from './in-memory-project-store';
 import { PostgresProjectStore } from './postgres-project-store';
@@ -9,7 +10,7 @@ import { ProjectService } from './project.service';
 import { WBS_STORE } from './wbs-store';
 import { InMemoryWbsStore } from './in-memory-wbs-store';
 import { PostgresWbsStore } from './postgres-wbs-store';
-import { WbsService } from './wbs.service';
+import { WbsService, ITP_GATE } from './wbs.service';
 
 import { CBS_STORE } from './cbs-store';
 import { InMemoryCbsStore } from './in-memory-cbs-store';
@@ -43,7 +44,7 @@ import { ScheduleService } from './schedule.service';
 
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
-  imports: [CoreModule],
+  imports: [CoreModule, QualityModule],
   providers: [
     {
       provide: PROJECT_STORE,
@@ -101,6 +102,10 @@ import { ScheduleService } from './schedule.service';
     },
     ProjectService,
     WbsService,
+    {
+      provide: ITP_GATE,
+      useExisting: QualityService,
+    },
     CbsService,
     DelayEotService,
     VariationService,

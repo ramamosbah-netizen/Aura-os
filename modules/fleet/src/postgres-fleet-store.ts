@@ -70,7 +70,7 @@ export class PostgresVehicleStore implements VehicleStore {
 
   async findById(tenantId: string, id: string): Promise<Vehicle | null> {
     const res = await this.pool.query(
-      `select * from public.aura_fleet_vehicles where id = $1 and tenant_id = $2`,
+      `select * from public.aura_fleet_vehicles where id = $1 and tenant_id = $2 and deleted_at is null`,
       [id, tenantId],
     );
     if (res.rowCount === 0) return null;
@@ -79,15 +79,15 @@ export class PostgresVehicleStore implements VehicleStore {
 
   async findByTenant(tenantId: string): Promise<Vehicle[]> {
     const res = await this.pool.query(
-      `select * from public.aura_fleet_vehicles where tenant_id = $1 order by created_at desc`,
+      `select * from public.aura_fleet_vehicles where tenant_id = $1 and deleted_at is null order by created_at desc`,
       [tenantId],
     );
     return res.rows.map(this.mapVehicle);
   }
 
-  async delete(tenantId: string, id: string): Promise<boolean> {
+  async setDeleted(tenantId: string, id: string, deleted: boolean): Promise<boolean> {
     const res = await this.pool.query(
-      `delete from public.aura_fleet_vehicles where id = $1 and tenant_id = $2`,
+      `update public.aura_fleet_vehicles set deleted_at = ${deleted ? 'now()' : 'NULL'} where id = $1 and tenant_id = $2`,
       [id, tenantId],
     );
     return (res.rowCount ?? 0) > 0;
@@ -110,6 +110,7 @@ export class PostgresVehicleStore implements VehicleStore {
       lastSpeed: row.last_speed !== null && row.last_speed !== undefined ? Number(row.last_speed) : null,
       lastOdometer: row.last_odometer !== null && row.last_odometer !== undefined ? Number(row.last_odometer) : null,
       lastTelemetryAt: row.last_telemetry_at instanceof Date ? row.last_telemetry_at.toISOString() : (row.last_telemetry_at ? String(row.last_telemetry_at) : null),
+      deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
@@ -124,11 +125,12 @@ export class PostgresVehicleStore implements VehicleStore {
         where.push(`${col} = $${params.length}`);
       }
     };
+    where.push('deleted_at IS NULL');
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('make', filter.make);
     add('model', filter.model);
-    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+    return { whereSql: `WHERE ${where.join(' AND ')}`, params };
   }
 
   async listPaged(filter: VehicleFilter, page: PageParams): Promise<Page<Vehicle>> {

@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { Payment } from './domain/payment';
 import type { PaymentFilter, PaymentStore } from './payment-store';
 
@@ -20,5 +21,10 @@ export class InMemoryPaymentStore implements PaymentStore {
     if (filter.invoiceId) out = out.filter((p) => p.invoiceId === filter.invoiceId);
     out.sort((a, b) => (a.paidAt < b.paidAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: PaymentFilter, page: PageParams): Promise<Page<Payment>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

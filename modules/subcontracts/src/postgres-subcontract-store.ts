@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { Subcontract } from './domain/subcontract';
 import type { Claim } from './domain/claim';
 import type { SubcontractVariation } from './domain/variation';
@@ -208,6 +209,27 @@ export class PostgresSubcontractStore implements SubcontractStore {
       params,
     );
     return res.rows.map(rowToSubcontract);
+  }
+
+  async listSubcontractsPaged(filter: SubcontractFilter, page: PageParams): Promise<Page<Subcontract>> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (col: string, val?: string): void => {
+      if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
+    };
+    add('tenant_id', filter.tenantId);
+    add('project_id', filter.projectId);
+    add('status', filter.status);
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_subcontracts ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<SubcontractRow>(
+      `SELECT ${SUB_COLS} FROM public.aura_subcontracts ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToSubcontract), total, page);
   }
 
   async createClaim(c: Claim): Promise<void> {

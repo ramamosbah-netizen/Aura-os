@@ -1,13 +1,14 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Account, type AccountStatus, AccountService } from '@aura/crm';
 
-interface CreateAccountDto {
-  name: string;
-  status?: AccountStatus;
-  industry?: string;
-  website?: string;
+class CreateAccountDto {
+  @IsString() name!: string;
+  @IsOptional() @IsString() status?: AccountStatus;
+  @IsOptional() @IsString() industry?: string;
+  @IsOptional() @IsString() website?: string;
 }
 
 /**

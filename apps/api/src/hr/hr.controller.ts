@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import {
   type Employee,
@@ -13,45 +14,49 @@ import {
   type AttendanceRecord,
   type AttendanceSummary,
   type AttendanceStatus,
+  type PerformanceAppraisal,
+  type AppraisalCriterion,
+  type OrgChartNode,
   HrService,
   calculateEosb,
 } from '@aura/hr';
 
-interface CreateEmployeeDto {
-  firstName: string;
-  lastName: string;
-  email?: string | null;
-  phone?: string | null;
-  role: string;
-  department: string;
-  joinedDate: string;
-  visaExpiry?: string | null;
-  permitExpiry?: string | null;
-  laborCamp?: string | null;
-  iban?: string | null;
-  molEmployeeId?: string | null;
-  bankRoutingCode?: string | null;
+class CreateEmployeeDto {
+  @IsString() firstName!: string;
+  @IsString() lastName!: string;
+  @IsOptional() @IsString() email?: string | null;
+  @IsOptional() @IsString() phone?: string | null;
+  @IsString() role!: string;
+  @IsString() department!: string;
+  @IsOptional() @IsString() managerId?: string | null;
+  @IsString() joinedDate!: string;
+  @IsOptional() @IsString() visaExpiry?: string | null;
+  @IsOptional() @IsString() permitExpiry?: string | null;
+  @IsOptional() @IsString() laborCamp?: string | null;
+  @IsOptional() @IsString() iban?: string | null;
+  @IsOptional() @IsString() molEmployeeId?: string | null;
+  @IsOptional() @IsString() bankRoutingCode?: string | null;
 }
 
-interface RequestLeaveDto {
-  employeeId: string;
-  leaveType: string;
-  startDate: string;
-  endDate: string;
-  reason?: string | null;
+class RequestLeaveDto {
+  @IsString() employeeId!: string;
+  @IsString() leaveType!: string;
+  @IsString() startDate!: string;
+  @IsString() endDate!: string;
+  @IsOptional() @IsString() reason?: string | null;
 }
 
-interface ResolveLeaveDto {
-  status: 'approved' | 'rejected';
+class ResolveLeaveDto {
+  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
 }
 
-interface RunPayrollDto {
-  employeeId: string;
-  periodStart: string;
-  periodEnd: string;
-  basicSalary: number;
-  allowances: number;
-  deductions: number;
+class RunPayrollDto {
+  @IsString() employeeId!: string;
+  @IsString() periodStart!: string;
+  @IsString() periodEnd!: string;
+  @IsNumber() basicSalary!: number;
+  @IsNumber() allowances!: number;
+  @IsNumber() deductions!: number;
 }
 
 @Controller('hr')
@@ -81,6 +86,7 @@ export class HrController {
       phone: dto.phone,
       role: dto.role,
       department: dto.department,
+      managerId: dto.managerId ?? null,
       joinedDate: dto.joinedDate,
       visaExpiry: dto.visaExpiry,
       permitExpiry: dto.permitExpiry,
@@ -107,6 +113,15 @@ export class HrController {
     const ctx = this.tenant.get();
     const success = await this.hrService.deleteEmployee(ctx.tenantId, ctx.actorId, id);
     return { success };
+  }
+
+  @Post('employees/:id/restore')
+  async restoreEmployee(@Param('id') id: string): Promise<Employee> {
+    try {
+      return await this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
   }
 
   @Get('employees')
@@ -430,5 +445,60 @@ export class HrController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+  }
+
+  // ── Performance appraisals ──────────────────────────────────────────────────
+
+  @Post('appraisals')
+  createAppraisal(
+    @Body() dto: { employeeId: string; employeeName?: string; period: string; reviewerId?: string; criteria: AppraisalCriterion[]; strengths?: string; improvements?: string; comments?: string },
+  ): Promise<PerformanceAppraisal> {
+    if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
+    if (!dto?.period?.trim()) throw new BadRequestException('period is required');
+    if (!Array.isArray(dto?.criteria) || dto.criteria.length === 0) throw new BadRequestException('at least one criterion is required');
+    const ctx = this.tenant.get();
+    return this.hrService.createAppraisal({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      employeeId: dto.employeeId,
+      employeeName: dto.employeeName ?? null,
+      period: dto.period,
+      reviewerId: dto.reviewerId ?? ctx.actorId,
+      criteria: dto.criteria,
+      strengths: dto.strengths ?? null,
+      improvements: dto.improvements ?? null,
+      comments: dto.comments ?? null,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Get('appraisals')
+  listAppraisals(@Query('employeeId') employeeId?: string): Promise<PerformanceAppraisal[]> {
+    return this.hrService.listAppraisals(this.tenant.get().tenantId, employeeId);
+  }
+
+  @Put('appraisals/:id/submit')
+  async submitAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
+    try {
+      return await this.hrService.submitAppraisal(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Put('appraisals/:id/acknowledge')
+  async acknowledgeAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
+    try {
+      return await this.hrService.acknowledgeAppraisal(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── Org chart ──────────────────────────────────────────────────────────────
+
+  @Get('org-chart')
+  orgChart(): Promise<OrgChartNode[]> {
+    return this.hrService.orgChart(this.tenant.get().tenantId);
   }
 }

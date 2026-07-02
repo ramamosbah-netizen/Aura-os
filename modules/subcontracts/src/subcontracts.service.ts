@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import { type Subcontract, type SubcontractStatus, makeSubcontract, SUBCONTRACT_EVENT } from './domain/subcontract';
 import { type Claim, type ClaimStatus, makeClaim, CLAIM_EVENT } from './domain/claim';
@@ -102,6 +102,10 @@ export class SubcontractsService {
 
   async listSubcontracts(filter?: SubcontractFilter): Promise<Subcontract[]> {
     return this.store.listSubcontracts(filter);
+  }
+
+  async listSubcontractsPaged(filter: SubcontractFilter, page: PageParams): Promise<Page<Subcontract>> {
+    return this.store.listSubcontractsPaged(filter, page);
   }
 
   // ── CLAIMS / Interim Payment Certificates (IPCs) ─────────────────────────

@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { PettyCashFund, PettyCashTransaction } from './domain/petty-cash';
 import type { PettyCashFilter, PettyCashStore } from './petty-cash-store';
 
@@ -100,6 +101,24 @@ export class PostgresPettyCashStore implements PettyCashStore {
       params,
     );
     return res.rows.map(rowToFund);
+  }
+
+  async listFundsPaged(filter: PettyCashFilter, page: PageParams): Promise<Page<PettyCashFund>> {
+    const params: unknown[] = [];
+    let where = '';
+    if (filter.tenantId) {
+      params.push(filter.tenantId);
+      where = `WHERE tenant_id = $${params.length}`;
+    }
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_finance_petty_cash_funds ${where}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<FundRow>(
+      `SELECT ${FUND_COLS} FROM public.aura_finance_petty_cash_funds ${where} ORDER BY name ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToFund), total, page);
   }
 
   async addTransaction(t: PettyCashTransaction): Promise<void> {

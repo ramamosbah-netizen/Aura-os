@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, Query, StreamableFile } from '@nestjs/common';
 import type { Document, DocumentVersion } from '@aura/shared';
 import { DmsService, type DocumentWithVersions, ParseUuidOr404Pipe, TenantContext } from '@aura/core';
 
@@ -76,5 +76,27 @@ export class DocumentsController {
     const found = await this.dms.get(id);
     if (!found) throw new NotFoundException(`document ${id} not found`);
     return found;
+  }
+
+  /** Download a version's bytes (latest by default) — closes the metadata→content loop. */
+  @Get(':id/content')
+  async download(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Query('version') version?: string,
+  ): Promise<StreamableFile> {
+    const found = await this.dms.get(id);
+    if (!found) throw new NotFoundException(`document ${id} not found`);
+    const wanted = version ? Number(version) : found.document.currentVersion;
+    const v = found.versions.find((x) => x.version === wanted);
+    if (!v) throw new NotFoundException(`document ${id} has no version ${version}`);
+    try {
+      const bytes = await this.dms.readContent(v.storageKey);
+      return new StreamableFile(bytes, {
+        type: v.contentType,
+        disposition: `attachment; filename="${v.fileName.replace(/"/g, '')}"`,
+      });
+    } catch {
+      throw new NotFoundException(`content for document ${id} v${wanted} is not in storage`);
+    }
   }
 }

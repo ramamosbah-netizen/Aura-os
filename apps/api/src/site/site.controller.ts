@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import {
   type DailyReport,
@@ -10,32 +11,32 @@ import {
   SiteService,
 } from '@aura/site';
 
-interface CreateDailyReportDto {
-  projectId: string;
-  projectName?: string;
-  date: string;
-  workDescription: string;
-  manpowerCount?: number;
-  equipmentCount?: number;
+class CreateDailyReportDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() date!: string;
+  @IsString() workDescription!: string;
+  @IsOptional() @IsNumber() manpowerCount?: number;
+  @IsOptional() @IsNumber() equipmentCount?: number;
 }
 
-interface CreateDelayLogDto {
-  projectId: string;
-  projectName?: string;
-  date: string;
-  delayType: DelayLog['delayType'];
-  description: string;
-  impactHours?: number;
+class CreateDelayLogDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() date!: string;
+  @IsString() delayType!: DelayLog['delayType'];
+  @IsString() description!: string;
+  @IsOptional() @IsNumber() impactHours?: number;
 }
 
-interface CreateMaterialConsumptionDto {
-  projectId: string;
-  projectName?: string;
-  date: string;
-  itemId: string;
-  itemName: string;
-  quantityConsumed: number;
-  unit: string;
+class CreateMaterialConsumptionDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() date!: string;
+  @IsString() itemId!: string;
+  @IsString() itemName!: string;
+  @IsNumber() quantityConsumed!: number;
+  @IsString() unit!: string;
 }
 
 @Controller('site')

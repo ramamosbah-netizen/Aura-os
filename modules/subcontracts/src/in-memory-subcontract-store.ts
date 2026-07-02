@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { Subcontract } from './domain/subcontract';
 import type { Claim } from './domain/claim';
 import type { SubcontractVariation } from './domain/variation';
@@ -30,6 +31,12 @@ export class InMemorySubcontractStore implements SubcontractStore {
     if (filter.projectId) out = out.filter((s) => s.projectId === filter.projectId);
     if (filter.status) out = out.filter((s) => s.status === filter.status);
     return out;
+  }
+
+  async listSubcontractsPaged(filter: SubcontractFilter, page: PageParams): Promise<Page<Subcontract>> {
+    const all = await this.listSubcontracts(filter);
+    all.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    return paginate(all, page);
   }
 
   async createClaim(c: Claim): Promise<void> {

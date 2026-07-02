@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { CoreModule, PG_POOL } from '@aura/core';
 
-import { TRANSMITTAL_STORE, CORRESPONDENCE_STORE, SUBMITTAL_STORE, DRAWING_REGISTER_STORE } from './store.interface';
+import { TRANSMITTAL_STORE, TRANSMITTAL_ITEM_STORE, CORRESPONDENCE_STORE, SUBMITTAL_STORE, DRAWING_REGISTER_STORE } from './store.interface';
 import { InMemoryTransmittalStore } from './in-memory-transmittal-store';
 import { PostgresTransmittalStore } from './postgres-transmittal-store';
+import { InMemoryTransmittalItemStore } from './in-memory-transmittal-item-store';
+import { PostgresTransmittalItemStore } from './postgres-transmittal-item-store';
 
 import { InMemoryCorrespondenceStore } from './in-memory-correspondence-store';
 import { PostgresCorrespondenceStore } from './postgres-correspondence-store';
@@ -25,6 +27,12 @@ import { DocControlService } from './doccontrol.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresTransmittalStore(pool) : new InMemoryTransmittalStore(),
+    },
+    {
+      provide: TRANSMITTAL_ITEM_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTransmittalItemStore(pool) : new InMemoryTransmittalItemStore(),
     },
     {
       provide: CORRESPONDENCE_STORE,

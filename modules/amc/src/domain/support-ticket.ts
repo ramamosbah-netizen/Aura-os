@@ -4,6 +4,8 @@
 
 export type TicketPriority = 'low' | 'medium' | 'high' | 'critical';
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+/** SLA health: on_track · at_risk (≤25% of the window remaining) · breached (past due, unresolved). */
+export type SlaStatus = 'on_track' | 'at_risk' | 'breached';
 
 export class SupportTicket {
   readonly id: string;
@@ -22,6 +24,8 @@ export class SupportTicket {
   readonly slaResolutionHours: number;
   readonly slaDueAt: Date;          // Computed from contract SLA + createdAt
   resolvedAt?: Date;
+  /** Escalation tier — bumped each time an unresolved breach is swept (0 = never escalated). */
+  escalationLevel = 0;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -75,7 +79,22 @@ export class SupportTicket {
     this.updatedAt = new Date();
   }
 
-  isSlaBreached(): boolean {
-    return this.status !== 'resolved' && this.status !== 'closed' && new Date() > this.slaDueAt;
+  isSlaBreached(now: Date = new Date()): boolean {
+    return this.status !== 'resolved' && this.status !== 'closed' && now > this.slaDueAt;
+  }
+
+  /** SLA health as of `now`: breached (past due), at_risk (≤25% of window left), else on_track. */
+  slaStatus(now: Date = new Date()): SlaStatus {
+    if (this.status === 'resolved' || this.status === 'closed') return 'on_track';
+    if (now > this.slaDueAt) return 'breached';
+    const windowMs = this.slaResolutionHours * 60 * 60 * 1000;
+    const remainingMs = this.slaDueAt.getTime() - now.getTime();
+    return remainingMs <= windowMs * 0.25 ? 'at_risk' : 'on_track';
+  }
+
+  /** Bump the escalation tier (called when an unresolved breach is swept). */
+  escalate(): void {
+    this.escalationLevel += 1;
+    this.updatedAt = new Date();
   }
 }

@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { Subcontract, SubcontractStatus } from './domain/subcontract';
 import type { Claim, ClaimStatus } from './domain/claim';
 import type { SubcontractVariation, VariationStatus } from './domain/variation';
@@ -35,6 +35,7 @@ export interface SubcontractStore {
   updateSubcontract(s: Subcontract): Promise<void>;
   getSubcontract(id: Id): Promise<Subcontract | null>;
   listSubcontracts(filter?: SubcontractFilter): Promise<Subcontract[]>;
+  listSubcontractsPaged(filter: SubcontractFilter, page: PageParams): Promise<Page<Subcontract>>;
 
   createClaim(c: Claim): Promise<void>;
   updateClaim(c: Claim): Promise<void>;

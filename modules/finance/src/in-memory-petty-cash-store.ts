@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { PettyCashFund, PettyCashTransaction } from './domain/petty-cash';
 import type { PettyCashFilter, PettyCashStore } from './petty-cash-store';
 
@@ -24,6 +25,11 @@ export class InMemoryPettyCashStore implements PettyCashStore {
     if (filter.tenantId) out = out.filter((f) => f.tenantId === filter.tenantId);
     out.sort((a, b) => (a.name < b.name ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listFundsPaged(filter: PettyCashFilter, page: PageParams): Promise<Page<PettyCashFund>> {
+    const all = await this.listFunds({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 
   async addTransaction(tx: PettyCashTransaction): Promise<void> {

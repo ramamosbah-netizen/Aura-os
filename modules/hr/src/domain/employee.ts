@@ -10,6 +10,8 @@ export interface Employee {
   phone: string | null;
   role: string;
   department: string;
+  /** Reporting line — the employee's manager (self-referential); null = top of the org tree. */
+  managerId: string | null;
   status: 'active' | 'suspended' | 'terminated';
   joinedDate: string; // YYYY-MM-DD
   visaExpiry: string | null; // YYYY-MM-DD
@@ -19,6 +21,8 @@ export interface Employee {
   iban: string | null;            // employee salary IBAN
   molEmployeeId: string | null;   // MoHRE/labour-card person id
   bankRoutingCode: string | null; // routing code of the employee's bank/exchange agent
+  /** Soft-delete marker — deleted employees are hidden from finds but restorable. */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +36,7 @@ export interface NewEmployee {
   phone?: string | null;
   role: string;
   department: string;
+  managerId?: string | null;
   status?: Employee['status'];
   joinedDate: string;
   visaExpiry?: string | null;
@@ -54,6 +59,7 @@ export function makeEmployee(input: NewEmployee): Employee {
     phone: input.phone ? input.phone.trim() : null,
     role: input.role.trim(),
     department: input.department.trim(),
+    managerId: input.managerId ?? null,
     status: input.status ?? 'active',
     joinedDate: input.joinedDate,
     visaExpiry: input.visaExpiry ?? null,
@@ -62,6 +68,7 @@ export function makeEmployee(input: NewEmployee): Employee {
     iban: input.iban ? input.iban.trim().toUpperCase().replace(/\s+/g, '') : null,
     molEmployeeId: input.molEmployeeId ? input.molEmployeeId.trim() : null,
     bankRoutingCode: input.bankRoutingCode ? input.bankRoutingCode.trim() : null,
+    deletedAt: null,
     createdAt: now,
     updatedAt: now,
   };

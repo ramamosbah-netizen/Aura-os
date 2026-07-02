@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import {
   type Asset,
@@ -11,35 +12,35 @@ import {
   AssetsService,
 } from '@aura/assets';
 
-interface CreateAssetDto {
-  name: string;
-  serialNumber: string;
-  category: string;
-  purchaseDate: string;
-  purchaseCost: number;
-  status?: Asset['status'];
-  warrantyExpiry?: string | null;
-  nextCalibrationDate?: string | null;
-  nextInspectionDate?: string | null;
+class CreateAssetDto {
+  @IsString() name!: string;
+  @IsString() serialNumber!: string;
+  @IsString() category!: string;
+  @IsString() purchaseDate!: string;
+  @IsNumber() purchaseCost!: number;
+  @IsOptional() @IsString() status?: Asset['status'];
+  @IsOptional() @IsString() warrantyExpiry?: string | null;
+  @IsOptional() @IsString() nextCalibrationDate?: string | null;
+  @IsOptional() @IsString() nextInspectionDate?: string | null;
 }
 
-interface ScheduleMaintenanceDto {
-  assetId: string;
-  date: string;
-  description: string;
-  cost?: number;
+class ScheduleMaintenanceDto {
+  @IsString() assetId!: string;
+  @IsString() date!: string;
+  @IsString() description!: string;
+  @IsOptional() @IsNumber() cost?: number;
 }
 
-interface CompleteMaintenanceDto {
-  actualCost: number;
+class CompleteMaintenanceDto {
+  @IsNumber() actualCost!: number;
 }
 
-interface RecordInspectionDto {
-  assetId: string;
-  date: string;
-  inspector: string;
-  result: 'pass' | 'fail';
-  notes?: string | null;
+class RecordInspectionDto {
+  @IsString() assetId!: string;
+  @IsString() date!: string;
+  @IsString() inspector!: string;
+  @IsString() result!: 'pass' | 'fail';
+  @IsOptional() @IsString() notes?: string | null;
 }
 
 @Controller('assets')
@@ -81,6 +82,15 @@ export class AssetsController {
     return { success };
   }
 
+  @Post(':id/restore')
+  async restoreAsset(@Param('id') id: string): Promise<Asset> {
+    try {
+      return await this.assetsService.restoreAsset(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
   @Get()
   listAssets(): Promise<Asset[]> {
     const ctx = this.tenant.get();
@@ -107,6 +117,35 @@ export class AssetsController {
       });
     } catch (e) {
       throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── QR tags ────────────────────────────────────────────────────────────────
+
+  @Post('qr-tags/batch')
+  async qrTagBatch(@Body() dto: { ids: string[] }) {
+    if (!Array.isArray(dto?.ids) || dto.ids.length === 0) throw new BadRequestException('ids is required');
+    return this.assetsService.getAssetQrTags(this.tenant.get().tenantId, dto.ids);
+  }
+
+  @Get(':id/qr-tag')
+  async qrTag(@Param('id') id: string) {
+    try {
+      return await this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
+  /** Raw SVG for direct printing / <img src>. */
+  @Get(':id/qr-tag/svg')
+  @Header('Content-Type', 'image/svg+xml')
+  async qrTagSvg(@Param('id') id: string): Promise<string> {
+    try {
+      const { svg } = await this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
+      return svg;
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
     }
   }
 

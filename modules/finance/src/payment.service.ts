@@ -146,4 +146,8 @@ export class PaymentService implements OnModuleInit {
   list(filter?: PaymentFilter): Promise<Payment[]> {
     return this.store.list(filter);
   }
+
+  listPaged(filter: PaymentFilter, page: import('@aura/shared').PageParams) {
+    return this.store.listPaged(filter, page);
+  }
 }

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { type BankTransaction, type BankTransactionStatus, makeBankTransaction } from './domain/bank-transaction';
 import { BANK_TRANSACTION_STORE, type BankTransactionStore } from './bank-transaction-store';
@@ -40,6 +40,10 @@ export class BankReconciliationService {
 
   async listTransactions(tenantId: Id, bankAccountId: Id, status?: BankTransactionStatus): Promise<BankTransaction[]> {
     return this.txStore.list({ tenantId, bankAccountId, status });
+  }
+
+  async listTransactionsPaged(tenantId: Id, bankAccountId: Id, page: PageParams, status?: BankTransactionStatus): Promise<Page<BankTransaction>> {
+    return this.txStore.listPaged({ tenantId, bankAccountId, status }, page);
   }
 
   async autoMatch(tenantId: Id, bankAccountId: Id): Promise<Array<{ transactionId: Id; paymentId: Id; amount: number }>> {

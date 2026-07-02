@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   PETTY_CASH_EVENT,
@@ -91,5 +91,9 @@ export class PettyCashService {
 
   listFunds(filter?: PettyCashFilter): Promise<PettyCashFund[]> {
     return this.store.listFunds(filter);
+  }
+
+  listFundsPaged(filter: PettyCashFilter, page: PageParams): Promise<Page<PettyCashFund>> {
+    return this.store.listFundsPaged(filter, page);
   }
 }

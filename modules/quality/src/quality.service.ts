@@ -5,7 +5,7 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner }
 import { type Ncr, makeNcr } from './domain/ncr';
 import { type InspectionRequest, makeInspectionRequest } from './domain/inspection-request';
 import { type Snag, makeSnag } from './domain/snag';
-import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp } from './domain/itp';
+import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp, allPointsResolved } from './domain/itp';
 import {
   type MaterialApproval,
   type NewMaterialApproval,
@@ -135,6 +135,10 @@ export class QualityService {
     return this.ncrStore.findAll(tenantId);
   }
 
+  listNcrsPaged(tenantId: Id, page: PageParams): Promise<Page<Ncr>> {
+    return this.ncrStore.listPaged(tenantId, page);
+  }
+
   // ── Inspection Requests (IR) ────────────────────────────────────────────────
 
   async requestInspection(input: {
@@ -201,6 +205,10 @@ export class QualityService {
 
   listInspections(tenantId: Id): Promise<InspectionRequest[]> {
     return this.irStore.findAll(tenantId);
+  }
+
+  listInspectionsPaged(tenantId: Id, page: PageParams): Promise<Page<InspectionRequest>> {
+    return this.irStore.listPaged(tenantId, page);
   }
 
   // ── Snagging / Punch List ──────────────────────────────────────────────────
@@ -272,6 +280,10 @@ export class QualityService {
     return this.snagStore.findAll(tenantId);
   }
 
+  listSnagsPaged(tenantId: Id, page: PageParams): Promise<Page<Snag>> {
+    return this.snagStore.listPaged(tenantId, page);
+  }
+
   // ── Inspection & Test Plans (ITP) ──────────────────────────────────────────
 
   async createItp(input: {
@@ -340,6 +352,10 @@ export class QualityService {
 
   listItps(tenantId: Id): Promise<Itp[]> {
     return this.itpStore.findAll(tenantId);
+  }
+
+  listItpsPaged(tenantId: Id, page: PageParams): Promise<Page<Itp>> {
+    return this.itpStore.listPaged(tenantId, page);
   }
 
   // ── Material Approval Requests (MAR) ───────────────────────────────────────
@@ -437,6 +453,29 @@ export class QualityService {
         passed: false,
         rejectedMars: refs,
         reason: `Supplier "${supplierName}" has ${rejected.length} rejected Material Approval Request(s) on this project: ${refs.join(', ')}`,
+      };
+    }
+    return { passed: true };
+  }
+
+  /**
+   * Quality hard gate for Projects work-package/milestone completion.
+   * A WBS node cannot be marked complete while the project has active ITPs
+   * with unresolved (pending) inspection points.
+   */
+  async checkItpReleaseGate(
+    tenantId: string,
+    projectId: string,
+  ): Promise<{ passed: boolean; openItps?: string[]; reason?: string }> {
+    if (!projectId) return { passed: true };
+    const itps = await this.itpStore.findByProject(projectId, tenantId);
+    const open = itps.filter((i) => i.status === 'active' && !allPointsResolved(i));
+    if (open.length > 0) {
+      const refs = open.map((i) => i.reference);
+      return {
+        passed: false,
+        openItps: refs,
+        reason: `Project has ${open.length} active ITP(s) with pending inspection points: ${refs.join(', ')}`,
       };
     }
     return { passed: true };

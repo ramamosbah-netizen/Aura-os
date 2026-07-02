@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import {
   type Vehicle,
@@ -11,33 +12,33 @@ import {
   FleetService,
 } from '@aura/fleet';
 
-interface CreateVehicleDto {
-  make: string;
-  model: string;
-  year: number;
-  plateNumber: string;
-  registrationExpiry?: string | null;
-  status?: Vehicle['status'];
-  driverEmployeeId?: string | null;
+class CreateVehicleDto {
+  @IsString() make!: string;
+  @IsString() model!: string;
+  @IsNumber() year!: number;
+  @IsString() plateNumber!: string;
+  @IsOptional() @IsString() registrationExpiry?: string | null;
+  @IsOptional() @IsString() status?: Vehicle['status'];
+  @IsOptional() @IsString() driverEmployeeId?: string | null;
 }
 
-interface LogFuelDto {
-  vehicleId: string;
-  date: string;
-  liters: number;
-  cost: number;
-  odometer: number;
+class LogFuelDto {
+  @IsString() vehicleId!: string;
+  @IsString() date!: string;
+  @IsNumber() liters!: number;
+  @IsNumber() cost!: number;
+  @IsNumber() odometer!: number;
 }
 
-interface ScheduleMaintenanceDto {
-  vehicleId: string;
-  date: string;
-  description: string;
-  cost?: number;
+class ScheduleMaintenanceDto {
+  @IsString() vehicleId!: string;
+  @IsString() date!: string;
+  @IsString() description!: string;
+  @IsOptional() @IsNumber() cost?: number;
 }
 
-interface CompleteMaintenanceDto {
-  actualCost: number;
+class CompleteMaintenanceDto {
+  @IsNumber() actualCost!: number;
 }
 
 @Controller('fleet')
@@ -68,6 +69,15 @@ export class FleetController {
       status: dto.status,
       driverEmployeeId: dto.driverEmployeeId,
     });
+  }
+
+  @Post('vehicles/:id/restore')
+  async restoreVehicle(@Param('id') id: string): Promise<Vehicle> {
+    try {
+      return await this.fleetService.restoreVehicle(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
   }
 
   @Delete('vehicles/:id')

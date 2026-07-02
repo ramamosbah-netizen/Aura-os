@@ -355,7 +355,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           await this.journals.post({
             tenantId: e.tenantId,
             reference: ref,
-            description: `Inventory issue (COGS): ${quantity} ${unit} ${code} @ WAC ${unitCost}`,
+            description: `Inventory issue (COGS): ${quantity} ${unit} ${code} @ ${unitCost}`,
             lines: [
               { accountId: cogs.id, accountCode: cogs.code, accountName: cogs.name, debit: amount, credit: 0 },
               { accountId: inventory.id, accountCode: inventory.code, accountName: inventory.name, debit: 0, credit: amount },

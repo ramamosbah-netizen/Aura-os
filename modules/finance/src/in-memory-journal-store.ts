@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { Journal } from './domain/journal';
 import type { JournalFilter, JournalStore } from './journal-store';
 
@@ -20,5 +21,10 @@ export class InMemoryJournalStore implements JournalStore {
     if (filter.reference) out = out.filter((j) => j.reference === filter.reference);
     out.sort((a, b) => (a.postedAt < b.postedAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: JournalFilter, page: PageParams): Promise<Page<Journal>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

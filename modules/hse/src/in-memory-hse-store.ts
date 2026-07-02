@@ -1,3 +1,5 @@
+import type { Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
@@ -56,6 +58,10 @@ export class InMemoryHseIncidentStore implements HseIncidentStore {
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+
+  async findAllPaged(tenantId: string, page: PageParams): Promise<Page<HseIncident>> {
+    return paginate(await this.findAll(tenantId), page);
+  }
 }
 
 export class InMemoryPermitToWorkStore implements PermitToWorkStore {
@@ -81,6 +87,10 @@ export class InMemoryPermitToWorkStore implements PermitToWorkStore {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findAllPaged(tenantId: string, page: PageParams): Promise<Page<PermitToWork>> {
+    return paginate(await this.findAll(tenantId), page);
   }
 }
 

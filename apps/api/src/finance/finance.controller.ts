@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams, parseCsv } from '@aura/shared';
 import {
@@ -62,36 +62,37 @@ class CreateInvoiceDto {
   @IsOptional() @IsNumber() @Min(0) exchangeRate?: number;
 }
 
-interface CreateAccountDto {
-  code: string;
-  name: string;
-  type: AccountType;
-  parentId?: string | null;
+class CreateAccountDto {
+  @IsString() code!: string;
+  @IsString() name!: string;
+  @IsString() type!: AccountType;
+  @IsOptional() @IsString() parentId?: string | null;
 }
 
-interface CreateJournalLineDto {
-  accountId: string;
-  accountCode: string;
-  accountName: string;
-  debit: number;
-  credit: number;
-  costCenterId?: string | null;
-  profitCenterId?: string | null;
+class CreateJournalLineDto {
+  @IsString() accountId!: string;
+  @IsString() accountCode!: string;
+  @IsString() accountName!: string;
+  @IsNumber() debit!: number;
+  @IsNumber() credit!: number;
+  @IsOptional() @IsString() costCenterId?: string | null;
+  @IsOptional() @IsString() profitCenterId?: string | null;
 }
 
-interface CreateJournalDto {
-  description: string;
-  reference?: string | null;
-  postedAt?: string | null;
-  companyId?: string | null;
-  lines: CreateJournalLineDto[];
+class CreateJournalDto {
+  @IsString() description!: string;
+  @IsOptional() @IsString() reference?: string | null;
+  @IsOptional() @IsString() postedAt?: string | null;
+  @IsOptional() @IsString() companyId?: string | null;
+  @IsOptional() @IsString() counterpartyCompanyId?: string | null;
+  @IsArray() lines!: CreateJournalLineDto[];
 }
 
-interface CreatePaymentDto {
-  invoiceId: string;
-  bankAccountId: string;
-  amount: number;
-  reference?: string | null;
+class CreatePaymentDto {
+  @IsString() invoiceId!: string;
+  @IsString() bankAccountId!: string;
+  @IsNumber() amount!: number;
+  @IsOptional() @IsString() reference?: string | null;
 }
 
 interface ImportBankTransactionsDto {
@@ -272,6 +273,7 @@ export class FinanceController {
         {
           tenantId: ctx.tenantId,
           companyId: dto.companyId ?? ctx.companyId,
+          counterpartyCompanyId: dto.counterpartyCompanyId ?? null,
           description: dto.description,
           reference: dto.reference,
           postedAt: dto.postedAt,
@@ -298,6 +300,15 @@ export class FinanceController {
   listJourels(@Query('reference') reference?: string): Promise<Journal[]> {
     const ctx = this.tenant.get();
     return this.journals.list({ tenantId: ctx.tenantId, reference, limit: 100 });
+  }
+
+  @Get('journals/paged')
+  pagedJournals(
+    @Query('reference') reference?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.journals.listPaged({ tenantId: this.tenant.get().tenantId, reference }, parsePageParams(limit, offset));
   }
 
   // ── Cost centres ───────────────────────────────────────────────────────────
@@ -384,6 +395,15 @@ export class FinanceController {
     return this.payments.list({ tenantId: ctx.tenantId, invoiceId, limit: 100 });
   }
 
+  @Get('payments/paged')
+  pagedPayments(
+    @Query('invoiceId') invoiceId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.payments.listPaged({ tenantId: this.tenant.get().tenantId, invoiceId }, parsePageParams(limit, offset));
+  }
+
   @Get('payments/:id')
   async getPayment(@Param('id') id: string): Promise<Payment> {
     const found = await this.payments.get(id);
@@ -411,6 +431,19 @@ export class FinanceController {
     if (!bankAccountId) throw new BadRequestException('bankAccountId is required');
     const ctx = this.tenant.get();
     return this.reconciliation.listTransactions(ctx.tenantId, bankAccountId, status);
+  }
+
+  @Get('bank-transactions/paged')
+  pagedBankTransactions(
+    @Query('bankAccountId') bankAccountId: string,
+    @Query('status') status?: BankTransactionStatus,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    if (!bankAccountId) throw new BadRequestException('bankAccountId is required');
+    return this.reconciliation.listTransactionsPaged(
+      this.tenant.get().tenantId, bankAccountId, parsePageParams(limit, offset), status,
+    );
   }
 
   @Post('bank-transactions/auto-match')
@@ -550,6 +583,11 @@ export class FinanceController {
   @Get('petty-cash')
   listPettyCashFunds(): Promise<PettyCashFund[]> {
     return this.pettyCash.listFunds({ tenantId: this.tenant.get().tenantId, limit: 200 });
+  }
+
+  @Get('petty-cash/paged')
+  pagedPettyCashFunds(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.pettyCash.listFundsPaged({ tenantId: this.tenant.get().tenantId }, parsePageParams(limit, offset));
   }
 
   @Get('petty-cash/:id')
@@ -747,6 +785,19 @@ export class FinanceController {
     return this.bankGuarantees.list({ tenantId: this.tenant.get().tenantId, status, projectId, limit: 200 });
   }
 
+  @Get('bank-guarantees/paged')
+  pagedBankGuarantees(
+    @Query('status') status?: BankGuarantee['status'],
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.bankGuarantees.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, projectId },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('bank-guarantees/:id')
   async getBankGuarantee(@Param('id') id: string): Promise<BankGuarantee> {
     const found = await this.bankGuarantees.get(id);
@@ -812,6 +863,19 @@ export class FinanceController {
   @Get('post-dated-cheques')
   listPostDatedCheques(@Query('status') status?: PostDatedCheque['status'], @Query('direction') direction?: ChequeDirection): Promise<PostDatedCheque[]> {
     return this.postDatedCheques.list({ tenantId: this.tenant.get().tenantId, status, direction, limit: 200 });
+  }
+
+  @Get('post-dated-cheques/paged')
+  pagedPostDatedCheques(
+    @Query('status') status?: PostDatedCheque['status'],
+    @Query('direction') direction?: ChequeDirection,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.postDatedCheques.listPaged(
+      { tenantId: this.tenant.get().tenantId, status, direction },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('post-dated-cheques/:id')

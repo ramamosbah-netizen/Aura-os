@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { type Budget, type BudgetVsActual, type NewBudget, buildBudgetVsActual, makeBudget } from './domain/budget';
 import { BUDGET_STORE, type BudgetStore } from './budget-store';
@@ -47,8 +47,18 @@ export class BudgetService {
     return this.store.list(tenantId);
   }
 
+  listPaged(tenantId: Id, page: PageParams): Promise<Page<Budget>> {
+    return this.store.listPaged(tenantId, page);
+  }
+
+  /** Soft-delete (audit-safe); restorable via restore(). */
   async remove(id: Id): Promise<void> {
-    await this.store.remove(id);
+    await this.store.setDeleted(id, true);
+  }
+
+  /** Undo a soft-delete. */
+  restore(id: Id): Promise<void> {
+    return this.store.setDeleted(id, false);
   }
 
   /** Budget-vs-actual for a budget, folding the GL over its date range. */

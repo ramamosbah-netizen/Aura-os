@@ -371,9 +371,9 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Contracts | 82 | 86 | 84 | 88 | 64 | 68 | clause library ✅ + obligation tracking (due-soon/breach feed) ✅ + IPC + pagination ✅ |
 | Projects | 82 | 88 | 82 | 86 | 72 | 85 | revenue recognition (Gantt ✅, pagination ✅, CPM reactive reschedule + resource levelling ✅) |
 | Procurement | 86 | 88 | 84 | 90 | 72 | 78 | PO↔supplier-master FK, framework agreements (pagination ✅; MAR/quality hard-gate on PO issue ✅) |
-| Inventory | 80 | 88 | 84 | 90 | 70 | 75 | valuation UI, reorder auto-PR, barcode (FIFO/WAC + pagination ✅) |
-| Finance | 92 | 88 | 88 | 90 | 78 | 90 | group consolidation, statements-UI polish (multi-currency AP/AR + FX reval, statements, dashboards, pagination ✅; asset-disposal→GL reactor ✅) |
-| HR | 74 | 85 | 82 | 82 | 68 | 90 | attendance, org chart, appraisal, WPS file |
+| Inventory | 84 | 88 | 86 | 90 | 70 | 78 | valuation UI, reorder auto-PR, barcode/multi-UOM (per-item FIFO cost layers→COGS + WAC + pagination ✅) |
+| Finance | 94 | 88 | 90 | 90 | 78 | 92 | statements-UI polish (multi-currency AP/AR+FX reval, statements, dashboards, pagination, asset-disposal→GL, **intercompany eliminations** ✅) |
+| HR | 88 | 86 | 86 | 88 | 70 | 92 | attendance ✅, WPS SIF ✅, payroll ✅, **appraisals ✅, org-chart ✅**; remaining: succession/training |
 | HSE | 78 | 85 | 86 | 84 | 62 | 62 | risk assessments/JSA ✅ + safety training matrix ✅ (inductions/cards/certs); remaining: audit trail depth |
 | Quality | 80 | 86 | 86 | 84 | 62 | 65 | calibration register ✅ + audit schedules + NCR generation ✅ |
 | Site | 76 | 85 | 84 | 86 | 64 | 60 | labour-by-trade ✅ + progress % vs baseline ✅; remaining: resource histograms |
@@ -382,7 +382,7 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Engineering | 80 | 86 | 86 | 88 | 58 | 62 | TQ ✅ + submittal→drawing auto-revise ✅ + BIM/model registry ✅ (viewer backbone); remaining: in-browser IFC render (frontend web-ifc) |
 | Fleet | 72 | 85 | 84 | 84 | 62 | 62 | GPS telemetry webhooks + Mulkiya-renewal tasks ✅ (fines/Salik ✅); remaining: geofencing |
 | Assets | 74 | 85 | 86 | 84 | 58 | 62 | QR tagging (disposal + gain/loss ✅; disposal→GL posting reactor ✅; pagination ✅) |
-| AMC | 75 | 82 | 80 | 82 | 55 | 60 | richer PPM UI (Postgres persistence ✅; Finance billing link ✅ via amc.workorder.completed → AR invoice) |
+| AMC | 82 | 84 | 82 | 86 | 58 | 62 | richer PPM UI (persistence ✅, billing link ✅, **SLA status + escalation + breach→notification ✅**, pagination ◐) |
 
 **Session deltas (2026-07-01):** Finance multi-currency (AP+AR) + FX revaluation posting; standard pagination contract (COUNT + LIMIT/OFFSET + `Page` envelope) rolled out to **all transactional lists** — Finance, Procurement, Inventory, CRM, Projects (project/variation/closeout), Contracts (contract/IPC), Tendering, Engineering (drawing/RFI/submittal). Left unpaged by design: WBS/CBS tree nodes, delay-events, and small lookup tables. **#22 ✅ substantially complete** (remaining: subcontracts consolidated store). **#23 ✅** global `ValidationPipe` + `class-validator` installed; finance `CreateInvoiceDto` migrated to a decorated class — remaining interface DTOs migrate incrementally (pipe is a safe no-op until each is decorated). **Both Tier-1 infrastructure items now closed.**
 

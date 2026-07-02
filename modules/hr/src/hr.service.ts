@@ -12,6 +12,7 @@ import { type DocumentExpiryReport, buildDocumentExpiryReport } from './domain/d
 import { type AttendanceRecord, type AttendanceSummary, type NewAttendanceRecord, makeAttendanceRecord, checkOutAttendance, summariseAttendance } from './domain/attendance';
 import { type SifResult, type WpsEmployeeLine, generateSif } from './domain/wps';
 import { type LeaveBalance, computeLeaveBalance } from './domain/leave-balance';
+import { type PerformanceAppraisal, type NewPerformanceAppraisal, type OrgChartNode, makePerformanceAppraisal, submitAppraisal, acknowledgeAppraisal, buildOrgChart } from './domain/appraisal';
 
 export const EMPLOYEE_STORE = Symbol('EMPLOYEE_STORE');
 export const LEAVE_STORE = Symbol('LEAVE_STORE');
@@ -20,6 +21,7 @@ export const TIMESHEET_STORE = Symbol('TIMESHEET_STORE');
 export const EXPENSE_CLAIM_STORE = Symbol('EXPENSE_CLAIM_STORE');
 export const STAFF_ADVANCE_STORE = Symbol('STAFF_ADVANCE_STORE');
 export const ATTENDANCE_STORE = Symbol('ATTENDANCE_STORE');
+export const APPRAISAL_STORE = Symbol('APPRAISAL_STORE');
 
 import {
   type EmployeeStore,
@@ -29,6 +31,7 @@ import {
   type ExpenseClaimStore,
   type StaffAdvanceStore,
   type AttendanceStore,
+  type AppraisalStore,
 } from './store.interface';
 
 export const HR_EVENT = {
@@ -61,6 +64,7 @@ export class HrService {
     @Inject(EXPENSE_CLAIM_STORE) private readonly expenseClaimStore: ExpenseClaimStore,
     @Inject(STAFF_ADVANCE_STORE) private readonly staffAdvanceStore: StaffAdvanceStore,
     @Inject(ATTENDANCE_STORE) private readonly attendanceStore: AttendanceStore,
+    @Inject(APPRAISAL_STORE) private readonly appraisalStore: AppraisalStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -79,6 +83,7 @@ export class HrService {
       phone?: string | null;
       role: string;
       department: string;
+      managerId?: string | null;
       joinedDate: string;
       visaExpiry?: string | null;
       permitExpiry?: string | null;
@@ -125,11 +130,20 @@ export class HrService {
     }
 
     await this.tx.run(async (handle) => {
-      await this.employeeStore.delete(tenantId, id);
+      await this.employeeStore.setDeleted(tenantId, id, true);
     });
 
-    this.logger.log(`Employee profile deleted: ${id}`);
+    this.logger.log(`Employee profile soft-deleted: ${id}`);
     return true;
+  }
+
+  /** Undo a soft-delete; returns the restored employee. */
+  async restoreEmployee(tenantId: string, id: string): Promise<Employee> {
+    await this.employeeStore.setDeleted(tenantId, id, false);
+    const restored = await this.employeeStore.findById(tenantId, id);
+    if (!restored) throw new Error(`Employee profile with ID ${id} not found`);
+    this.logger.log(`Employee profile restored: ${id}`);
+    return restored;
   }
 
   getEmployee(tenantId: string, id: string): Promise<Employee | null> {
@@ -621,5 +635,35 @@ export class HrService {
   async documentExpiry(tenantId: string, withinDays = 90, asOf?: string): Promise<DocumentExpiryReport> {
     const employees = await this.employeeStore.findByTenant(tenantId);
     return buildDocumentExpiryReport(employees, asOf ?? new Date().toISOString().slice(0, 10), withinDays);
+  }
+
+  // ── Performance appraisals ──────────────────────────────────────────────────
+
+  async createAppraisal(input: NewPerformanceAppraisal): Promise<PerformanceAppraisal> {
+    const a = makePerformanceAppraisal(input);
+    return this.tx.run((h) => this.appraisalStore.save(a, h));
+  }
+
+  async submitAppraisal(tenantId: Id, id: Id): Promise<PerformanceAppraisal> {
+    const a = await this.appraisalStore.findById(tenantId, id);
+    if (!a) throw new Error(`appraisal ${id} not found`);
+    return this.tx.run((h) => this.appraisalStore.save(submitAppraisal(a), h));
+  }
+
+  async acknowledgeAppraisal(tenantId: Id, id: Id): Promise<PerformanceAppraisal> {
+    const a = await this.appraisalStore.findById(tenantId, id);
+    if (!a) throw new Error(`appraisal ${id} not found`);
+    return this.tx.run((h) => this.appraisalStore.save(acknowledgeAppraisal(a), h));
+  }
+
+  listAppraisals(tenantId: Id, employeeId?: Id): Promise<PerformanceAppraisal[]> {
+    return employeeId ? this.appraisalStore.findByEmployee(tenantId, employeeId) : this.appraisalStore.findByTenant(tenantId);
+  }
+
+  // ── Org chart (derived from employee reporting lines) ──────────────────────────
+
+  async orgChart(tenantId: Id): Promise<OrgChartNode[]> {
+    const employees = await this.employeeStore.findByTenant(tenantId);
+    return buildOrgChart(employees.map((e) => ({ id: e.id, firstName: e.firstName, lastName: e.lastName, role: e.role, department: e.department, managerId: e.managerId })));
   }
 }

@@ -12,6 +12,14 @@ import { BID_SCORE_STORE } from './bid-score-store';
 import { InMemoryBidScoreStore } from './in-memory-bid-score-store';
 import { PostgresBidScoreStore } from './postgres-bid-score-store';
 import { BidScoreService } from './bid-score.service';
+import { ESTIMATE_STORE } from './estimate-store';
+import { InMemoryEstimateStore } from './in-memory-estimate-store';
+import { PostgresEstimateStore } from './postgres-estimate-store';
+import { EstimateService } from './estimate.service';
+import { TENDER_OUTCOME_STORE } from './win-loss-store';
+import { InMemoryTenderOutcomeStore } from './in-memory-win-loss-store';
+import { PostgresTenderOutcomeStore } from './postgres-win-loss-store';
+import { WinLossService } from './win-loss.service';
 
 /** The Tendering business module — same shape as CRM (the module template). */
 @Module({
@@ -35,9 +43,23 @@ import { BidScoreService } from './bid-score.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresBidScoreStore(pool) : new InMemoryBidScoreStore(),
     },
+    {
+      provide: ESTIMATE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresEstimateStore(pool) : new InMemoryEstimateStore(),
+    },
+    {
+      provide: TENDER_OUTCOME_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTenderOutcomeStore(pool) : new InMemoryTenderOutcomeStore(),
+    },
     TenderService,
     BidScoreService,
+    EstimateService,
+    WinLossService,
   ],
-  exports: [TenderService, BidScoreService],
+  exports: [TenderService, BidScoreService, EstimateService, WinLossService],
 })
 export class TenderingModule {}

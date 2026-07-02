@@ -1,4 +1,4 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
 import type { PostDatedCheque, ChequeStatus, ChequeDirection } from './domain/post-dated-cheque';
 
 export const POST_DATED_CHEQUE_STORE = Symbol('POST_DATED_CHEQUE_STORE');
@@ -14,4 +14,5 @@ export interface PostDatedChequeStore {
   save(cheque: PostDatedCheque): Promise<void>;
   get(id: Id): Promise<PostDatedCheque | null>;
   list(filter?: PostDatedChequeFilter): Promise<PostDatedCheque[]>;
+  listPaged(filter: PostDatedChequeFilter, page: PageParams): Promise<Page<PostDatedCheque>>;
 }

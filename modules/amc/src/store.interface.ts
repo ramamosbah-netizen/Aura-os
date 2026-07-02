@@ -1,3 +1,4 @@
+import type { Page, PageParams } from '@aura/shared';
 import { ServiceContract } from './domain/service-contract';
 import { WorkOrder } from './domain/work-order';
 import { SupportTicket } from './domain/support-ticket';
@@ -15,11 +16,13 @@ export interface AmcStore {
   saveWorkOrder(order: WorkOrder): Promise<void>;
   findWorkOrder(id: string): Promise<WorkOrder | null>;
   listWorkOrders(tenantId: string, contractId?: string): Promise<WorkOrder[]>;
+  listWorkOrdersPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<WorkOrder>>;
 
   // Tickets
   saveTicket(ticket: SupportTicket): Promise<void>;
   findTicket(id: string): Promise<SupportTicket | null>;
   listTickets(tenantId: string, contractId?: string): Promise<SupportTicket[]>;
+  listTicketsPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<SupportTicket>>;
 
   // PPM Schedules
   savePpm(schedule: PpmSchedule): Promise<void>;

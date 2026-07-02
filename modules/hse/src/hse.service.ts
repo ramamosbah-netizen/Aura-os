@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type HseIncident, makeHseIncident } from './domain/hse-incident';
@@ -112,6 +112,10 @@ export class HseService {
     return this.incidentStore.findAll(tenantId);
   }
 
+  listIncidentsPaged(tenantId: Id, page: PageParams): Promise<Page<HseIncident>> {
+    return this.incidentStore.findAllPaged(tenantId, page);
+  }
+
   // ── Permit To Work (PTW) ───────────────────────────────────────────────────
 
   async requestPermit(input: {
@@ -177,6 +181,10 @@ export class HseService {
 
   listPermits(tenantId: Id): Promise<PermitToWork[]> {
     return this.ptwStore.findAll(tenantId);
+  }
+
+  listPermitsPaged(tenantId: Id, page: PageParams): Promise<Page<PermitToWork>> {
+    return this.ptwStore.findAllPaged(tenantId, page);
   }
 
   // ── Toolbox Talks (daily safety briefings) ─────────────────────────────────

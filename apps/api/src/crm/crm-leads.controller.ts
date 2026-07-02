@@ -1,24 +1,25 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams, type Lead, type LeadStatus, type LeadSource } from '@aura/shared';
 import { LeadService } from '@aura/crm';
 
-interface CreateLeadDto {
-  name: string;
-  companyName?: string;
-  email?: string;
-  phone?: string;
-  status?: LeadStatus;
-  source?: LeadSource;
+class CreateLeadDto {
+  @IsString() name!: string;
+  @IsOptional() @IsString() companyName?: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() status?: LeadStatus;
+  @IsOptional() @IsString() source?: LeadSource;
 }
 
-interface UpdateLeadDto {
-  name?: string;
-  companyName?: string;
-  email?: string;
-  phone?: string;
-  status?: LeadStatus;
-  source?: LeadSource;
+class UpdateLeadDto {
+  @IsOptional() @IsString() name?: string;
+  @IsOptional() @IsString() companyName?: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() status?: LeadStatus;
+  @IsOptional() @IsString() source?: LeadSource;
 }
 
 @Controller('crm/leads')

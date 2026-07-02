@@ -1,12 +1,14 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsArray, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import { type Budget, type BudgetVsActual, type NewBudgetLine, BudgetService } from '@aura/finance';
 
-interface CreateBudgetDto {
-  name: string;
-  from: string; // YYYY-MM-DD
-  to: string;
-  lines: NewBudgetLine[];
+class CreateBudgetDto {
+  @IsString() name!: string;
+  @IsString() from!: string; // YYYY-MM-DD
+  @IsString() to!: string;
+  @IsArray() lines!: NewBudgetLine[];
 }
 
 /** Finance budgets + budget-vs-actual (actuals folded live from the GL). */
@@ -20,6 +22,11 @@ export class BudgetController {
   @Get()
   list(): Promise<Budget[]> {
     return this.budgets.list(this.tenant.get().tenantId);
+  }
+
+  @Get('paged')
+  paged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.budgets.listPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Post()
@@ -61,5 +68,13 @@ export class BudgetController {
   async remove(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ deleted: string }> {
     await this.budgets.remove(id);
     return { deleted: id };
+  }
+
+  @Post(':id/restore')
+  async restore(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Budget> {
+    await this.budgets.restore(id);
+    const restored = await this.budgets.get(id);
+    if (!restored) throw new NotFoundException(`Budget ${id} not found`);
+    return restored;
   }
 }

@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { BankGuarantee } from './domain/bank-guarantee';
 import type { BankGuaranteeFilter, BankGuaranteeStore } from './bank-guarantee-store';
 
@@ -21,5 +22,10 @@ export class InMemoryBankGuaranteeStore implements BankGuaranteeStore {
     if (filter.projectId) out = out.filter((g) => g.projectId === filter.projectId);
     out.sort((a, b) => (a.expiryDate < b.expiryDate ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  async listPaged(filter: BankGuaranteeFilter, page: PageParams): Promise<Page<BankGuarantee>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    return paginate(all, page);
   }
 }

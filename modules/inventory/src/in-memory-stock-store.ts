@@ -26,6 +26,11 @@ export class InMemoryStockStore implements StockStore {
     return found ? { ...found } : null;
   }
 
+  async getItemByBarcode(tenantId: Id, barcode: string): Promise<StockItem | null> {
+    const found = [...this.items.values()].find((i) => i.tenantId === tenantId && i.barcode === barcode);
+    return found ? { ...found } : null;
+  }
+
   async listItems(filter: StockFilter = {}): Promise<StockItem[]> {
     let out = [...this.items.values()];
     if (filter.tenantId) out = out.filter((i) => i.tenantId === filter.tenantId);

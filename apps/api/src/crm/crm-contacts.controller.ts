@@ -1,17 +1,18 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Contact, type ContactStatus, ContactService } from '@aura/crm';
 
-interface CreateContactDto {
-  name: string;
-  accountId?: string;
-  accountName?: string;
-  jobTitle?: string;
-  email?: string;
-  phone?: string;
-  isPrimary?: boolean;
-  status?: ContactStatus;
+class CreateContactDto {
+  @IsString() name!: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() accountName?: string;
+  @IsOptional() @IsString() jobTitle?: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsBoolean() isPrimary?: boolean;
+  @IsOptional() @IsString() status?: ContactStatus;
 }
 
 /**

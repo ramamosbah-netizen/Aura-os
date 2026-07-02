@@ -1,4 +1,5 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
@@ -18,6 +19,7 @@ export interface HseIncidentStore {
   findById(id: string, tenantId: string): Promise<HseIncident | null>;
   findByProject(projectId: string, tenantId: string): Promise<HseIncident[]>;
   findAll(tenantId: string): Promise<HseIncident[]>;
+  findAllPaged(tenantId: string, page: PageParams): Promise<Page<HseIncident>>;
 }
 
 export interface PermitToWorkStore {
@@ -25,6 +27,7 @@ export interface PermitToWorkStore {
   findById(id: string, tenantId: string): Promise<PermitToWork | null>;
   findByProject(projectId: string, tenantId: string): Promise<PermitToWork[]>;
   findAll(tenantId: string): Promise<PermitToWork[]>;
+  findAllPaged(tenantId: string, page: PageParams): Promise<Page<PermitToWork>>;
 }
 
 export interface CapaActionStore {

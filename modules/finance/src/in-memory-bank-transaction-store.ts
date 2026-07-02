@@ -1,4 +1,5 @@
-import type { Id } from '@aura/shared';
+import type { Id, Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import type { BankTransaction } from './domain/bank-transaction';
 import type { BankTransactionFilter, BankTransactionStore } from './bank-transaction-store';
 
@@ -33,5 +34,11 @@ export class InMemoryBankTransactionStore implements BankTransactionStore {
       out = out.slice(0, filter.limit);
     }
     return out;
+  }
+
+  async listPaged(filter: BankTransactionFilter, page: PageParams): Promise<Page<BankTransaction>> {
+    const all = await this.list({ ...filter, limit: undefined });
+    all.sort((a, b) => (a.transactionDate < b.transactionDate ? 1 : -1));
+    return paginate(all, page);
   }
 }

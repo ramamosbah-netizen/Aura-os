@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query, Logger } from '@nestjs/common';
 import { AmcService, SupportTicket, type PpmFrequency } from '@aura/amc';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 
 /**
  * AmcController — REST API endpoints for the AMC & Service Module.
@@ -80,6 +81,46 @@ export class AmcController {
     }));
   }
 
+  // literal routes before :id
+  @Get('tickets/paged')
+  async pagedTickets(
+    @Query('contractId') contractId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const page = await this.service.listTicketsPaged(this.tenantId(), parsePageParams(limit, offset), contractId);
+    return {
+      ...page,
+      items: page.items.map((t: SupportTicket) => ({
+        ...t,
+        isSlaBreached: t.isSlaBreached(),
+        timeRemainingMs: t.slaDueAt.getTime() - Date.now(),
+      })),
+    };
+  }
+
+  @Get('tickets/sla-status')
+  async slaStatus(@Query('tenantId') tenantId?: string) {
+    const report = await this.service.slaStatusReport(tenantId || this.tenantId());
+    return report.map((r) => ({
+      id: r.ticket.id,
+      ticketNumber: r.ticket.ticketNumber,
+      title: r.ticket.title,
+      priority: r.ticket.priority,
+      status: r.ticket.status,
+      slaStatus: r.slaStatus,
+      hoursRemaining: r.hoursRemaining,
+      escalationLevel: r.ticket.escalationLevel,
+      slaDueAt: r.ticket.slaDueAt.toISOString(),
+    }));
+  }
+
+  @Post('tickets/sla-sweep')
+  async slaSweep(@Body('tenantId') tenantId?: string) {
+    const escalated = await this.service.sweepSlaBreaches(tenantId || this.tenantId());
+    return { escalated: escalated.length, tickets: escalated.map((t) => ({ id: t.id, ticketNumber: t.ticketNumber, escalationLevel: t.escalationLevel })) };
+  }
+
   @Get('tickets/:id')
   async getTicket(@Param('id') id: string) {
     const ticket = await this.service.findTicket(id);
@@ -120,6 +161,15 @@ export class AmcController {
     @Query('contractId') contractId?: string,
   ) {
     return this.service.listWorkOrders(tenantId || this.tenantId(), contractId);
+  }
+
+  @Get('work-orders/paged')
+  async pagedWorkOrders(
+    @Query('contractId') contractId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.service.listWorkOrdersPaged(this.tenantId(), parsePageParams(limit, offset), contractId);
   }
 
   @Get('dispatch-board')

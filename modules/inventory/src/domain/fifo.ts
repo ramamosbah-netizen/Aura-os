@@ -17,6 +17,43 @@ export interface FifoValuation {
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
+export interface FifoIssue {
+  cogs: number;           // FIFO cost of the issued units
+  unitCost: number;       // cogs / qty (the issue's COGS rate)
+  remainingValue: number; // Σ remaining layer qty × unitCost after the issue
+  remainingQty: number;
+  avgCost: number;        // running FIFO average of remaining layers (value / qty)
+}
+
+/**
+ * Cost of a single issue under FIFO, given the item's prior movement history (chronological).
+ * Consumes the oldest layers for `issueQty` and returns the COGS + remaining-layer valuation —
+ * the amount to post Dr COGS / Cr Inventory and the new inventory carrying value.
+ */
+export function fifoIssueCost(priorMoves: FifoMove[], issueQty: number): FifoIssue {
+  const before = computeFifo(priorMoves);
+  const after = computeFifo([...priorMoves, { direction: 'out', quantity: issueQty, unitCost: 0 }]);
+  const cogs = r2(after.cogsTotal - before.cogsTotal);
+  const qty = Number(issueQty) || 0;
+  return {
+    cogs,
+    unitCost: qty > 0 ? r2(cogs / qty) : 0,
+    remainingValue: after.fifoValue,
+    remainingQty: after.onHand,
+    avgCost: after.onHand > 0 ? r2(after.fifoValue / after.onHand) : 0,
+  };
+}
+
+/** Remaining-layer valuation after a FIFO receipt of `qty @ unitCost` onto `priorMoves`. */
+export function fifoReceiptState(priorMoves: FifoMove[], qty: number, unitCost: number): { remainingValue: number; remainingQty: number; avgCost: number } {
+  const after = computeFifo([...priorMoves, { direction: 'in', quantity: qty, unitCost }]);
+  return {
+    remainingValue: after.fifoValue,
+    remainingQty: after.onHand,
+    avgCost: after.onHand > 0 ? r2(after.fifoValue / after.onHand) : 0,
+  };
+}
+
 /** `moves` must be in chronological (oldest-first) order. */
 export function computeFifo(moves: FifoMove[]): FifoValuation {
   const layers: FifoLayer[] = [];

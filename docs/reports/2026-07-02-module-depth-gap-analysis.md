@@ -1,7 +1,7 @@
 # AURA OS — Module Vertical-Depth Gap Analysis (2026-07-02)
 
 Source of truth: current codebase (branch `feat/module-depth-verticals-jun30`). Verified by file
-inspection + grep, not memory. 17 L2 modules · 90+ domain entities · 15 cross-module reactors · DB @ migration 0122.
+inspection + grep, not memory. 17 L2 modules · 90+ domain entities · 15 cross-module reactors · DB @ migration 0123.
 
 Legend: ✅ present · ◐ partial · ❌ missing.
 
@@ -23,7 +23,7 @@ Legend: ✅ present · ◐ partial · ❌ missing.
 | Quality | ✅ high | calibration ✅ + audit schedules ✅; **no pagination**; consolidated store large (524 ln) |
 | Site | ✅ | labour-by-trade ✅ + progress% ✅; resource histograms ◐ |
 | Subcontracts | ◐ | Pagination ✅ (head list); back-charges ✅, retention-release ✅ |
-| Doc-Control | ◐ | **Transmittal→drawing revision history linkage** ❌ (register ✅, distribution matrix ✅) |
+| Doc-Control | ✅ | Transmittal↔drawing revision history ✅ (transmittal items snapshot rev conveyed; `GET register/:id/history`, 0123); register ✅, distribution matrix ✅ |
 | Engineering | ◐ | **In-browser IFC/BIM viewer (frontend)** — registry backend ✅, TQ ✅, submittal→drawing ✅ |
 | Fleet | ✅ | telemetry ✅ + Mulkiya-renewal ✅ + Salik/fines ✅; geofencing ◐ |
 | Assets | ✅ | disposal→GL reactor ✅, pagination ✅; **QR-tag generation** ❌ |
@@ -83,7 +83,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 **P2 — depth completeness**
 5. ✅ Pagination on remaining transactional lists (finance/inventory/subcontracts/AMC/HSE) — Tier-1 #22 closed.
 6. ✅ HR appraisal + ✅ org-chart + ✅ Tendering estimate engine + ✅ Procurement framework agreements.
-7. Doc-Control transmittal↔drawing revision history; Assets QR tags; Inventory barcode/UOM.
+7. ✅ Doc-Control transmittal↔drawing revision history. Remaining: Assets QR tags; Inventory barcode/UOM.
 8. Soft-delete standardization; notifications email/SMS delivery; remaining DTO decoration.
 
 **P3 — assurance / architecture**
@@ -107,8 +107,9 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | Pagination: finance long-tail (bank-transactions, petty-cash, bank-guarantees, PDCs, budgets) — Tier-1 #22 closed | — |
 | ✅ | Tendering estimate engine: rate build-ups (`POST tendering/estimates`, apply-to-BOQ, tender summary) | 0121 |
 | ✅ | Procurement framework agreements: rate card + ceiling, activate/terminate, call-off→PO (approved-vendor + idempotent) | 0122 |
+| ✅ | Doc-Control transmittal items: transmittal↔register linkage + per-document revision history endpoint | 0123 |
 
-**Next:** Doc-Control transmittal↔drawing revision history, Assets QR tags, Inventory barcode/UOM (P2 item 7).
+**Next:** Assets QR tags, Inventory barcode/UOM (rest of P2 item 7).
 
 ---
 *Verified from source 2026-07-02. No files modified by this analysis.*

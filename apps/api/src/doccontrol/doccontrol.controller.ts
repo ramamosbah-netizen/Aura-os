@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Transmittal,
@@ -9,6 +9,8 @@ import {
   type RegisterStatus,
   type RegisterDiscipline,
   type RegisterDocType,
+  type TransmittalItem,
+  type TransmittalPurpose,
   DocControlService
 } from '@aura/doccontrol';
 
@@ -70,6 +72,29 @@ export class DocControlController {
   listTransmittals(): Promise<Transmittal[]> {
     const ctx = this.tenant.get();
     return this.docControlService.listTransmittals(ctx.tenantId);
+  }
+
+  @Post('transmittals/:id/items')
+  async addTransmittalItems(
+    @Param('id') id: string,
+    @Body() dto: { items: Array<{ registerEntryId: string; revision?: string; purpose?: TransmittalPurpose }> },
+  ): Promise<TransmittalItem[]> {
+    if (!Array.isArray(dto?.items) || dto.items.length === 0) {
+      throw new BadRequestException('at least one item is required');
+    }
+    if (dto.items.some((i) => !i?.registerEntryId)) {
+      throw new BadRequestException('every item needs a registerEntryId');
+    }
+    try {
+      return await this.docControlService.addTransmittalItems(this.tenant.get().tenantId, id, dto.items);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'attach items failed');
+    }
+  }
+
+  @Get('transmittals/:id/items')
+  listTransmittalItems(@Param('id') id: string): Promise<TransmittalItem[]> {
+    return this.docControlService.listTransmittalItems(this.tenant.get().tenantId, id);
   }
 
   // ── Correspondence ─────────────────────────────────────────────────────────
@@ -203,6 +228,15 @@ export class DocControlController {
       return await this.docControlService.reviseRegisterEntry(this.tenant.get().tenantId, id, dto.revision, dto.status, dto.revisionDate);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  @Get('register/:id/history')
+  async registerEntryHistory(@Param('id') id: string) {
+    try {
+      return await this.docControlService.registerEntryHistory(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
     }
   }
 }

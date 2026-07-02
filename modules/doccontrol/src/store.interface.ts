@@ -3,6 +3,7 @@ import type { Transmittal } from './domain/transmittal';
 import type { Correspondence } from './domain/correspondence';
 import type { Submittal } from './domain/submittal';
 import type { DrawingRegisterEntry } from './domain/drawing-register';
+import type { TransmittalItem } from './domain/transmittal-item';
 
 export interface DrawingRegisterStore {
   save(entry: DrawingRegisterEntry, tx?: TxHandle): Promise<void>;
@@ -32,7 +33,14 @@ export interface SubmittalStore {
   findAll(tenantId: string): Promise<Submittal[]>;
 }
 
+export interface TransmittalItemStore {
+  save(item: TransmittalItem, tx?: TxHandle): Promise<void>;
+  findByTransmittal(transmittalId: string, tenantId: string): Promise<TransmittalItem[]>;
+  findByRegisterEntry(registerEntryId: string, tenantId: string): Promise<TransmittalItem[]>;
+}
+
 export const TRANSMITTAL_STORE = Symbol('TRANSMITTAL_STORE');
+export const TRANSMITTAL_ITEM_STORE = Symbol('TRANSMITTAL_ITEM_STORE');
 export const CORRESPONDENCE_STORE = Symbol('CORRESPONDENCE_STORE');
 export const SUBMITTAL_STORE = Symbol('SUBMITTAL_STORE');
 export const DRAWING_REGISTER_STORE = Symbol('DRAWING_REGISTER_STORE');

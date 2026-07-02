@@ -14,6 +14,9 @@ import { SUBMITTAL_STORE, type SubmittalStore } from './store.interface';
 import { type DrawingRegisterEntry, type NewDrawingRegisterEntry, type RegisterStatus, makeDrawingRegisterEntry, reviseRegisterEntry } from './domain/drawing-register';
 import { DRAWING_REGISTER_STORE, type DrawingRegisterStore } from './store.interface';
 
+import { type RevisionHistoryRow, type TransmittalItem, type TransmittalPurpose, makeTransmittalItem } from './domain/transmittal-item';
+import { TRANSMITTAL_ITEM_STORE, type TransmittalItemStore } from './store.interface';
+
 export const DOCCONTROL_EVENT = {
   transmittalSent: 'doccontrol.transmittal.sent',
   correspondenceLogged: 'doccontrol.correspondence.logged',
@@ -27,6 +30,7 @@ export class DocControlService {
 
   constructor(
     @Inject(TRANSMITTAL_STORE) private readonly transmittalStore: TransmittalStore,
+    @Inject(TRANSMITTAL_ITEM_STORE) private readonly transmittalItemStore: TransmittalItemStore,
     @Inject(CORRESPONDENCE_STORE) private readonly correspondenceStore: CorrespondenceStore,
     @Inject(SUBMITTAL_STORE) private readonly submittalStore: SubmittalStore,
     @Inject(DRAWING_REGISTER_STORE) private readonly registerStore: DrawingRegisterStore,
@@ -98,6 +102,88 @@ export class DocControlService {
 
   listTransmittals(tenantId: Id): Promise<Transmittal[]> {
     return this.transmittalStore.findAll(tenantId);
+  }
+
+  // ── Transmittal items (transmittal ↔ register revision linkage) ────────────
+
+  /**
+   * Attach register documents to a transmittal. Each item snapshots the document number,
+   * title and the revision conveyed (defaults to the register's current revision). The
+   * register entry must belong to the transmittal's project.
+   */
+  async addTransmittalItems(
+    tenantId: Id,
+    transmittalId: Id,
+    items: Array<{ registerEntryId: string; revision?: string; purpose?: TransmittalPurpose }>,
+  ): Promise<TransmittalItem[]> {
+    const transmittal = await this.transmittalStore.findById(transmittalId, tenantId);
+    if (!transmittal) throw new Error(`Transmittal with ID ${transmittalId} not found`);
+
+    const created: TransmittalItem[] = [];
+    for (const input of items) {
+      const entry = await this.registerStore.findById(input.registerEntryId, tenantId);
+      if (!entry) throw new Error(`register entry ${input.registerEntryId} not found`);
+      if (entry.projectId !== transmittal.projectId) {
+        throw new Error(`register entry ${entry.documentNumber} belongs to another project`);
+      }
+      created.push(
+        makeTransmittalItem({
+          tenantId,
+          companyId: transmittal.companyId,
+          transmittalId: transmittal.id,
+          registerEntryId: entry.id,
+          documentNumber: entry.documentNumber,
+          title: entry.title,
+          revision: input.revision ?? entry.currentRevision,
+          purpose: input.purpose,
+        }),
+      );
+    }
+
+    await this.tx.run(async (handle) => {
+      for (const item of created) await this.transmittalItemStore.save(item, handle);
+    });
+    this.logger.log(`Transmittal ${transmittal.code}: ${created.length} item(s) attached`);
+    return created;
+  }
+
+  listTransmittalItems(tenantId: Id, transmittalId: Id): Promise<TransmittalItem[]> {
+    return this.transmittalItemStore.findByTransmittal(transmittalId, tenantId);
+  }
+
+  /**
+   * Revision history for a register entry: every transmittal item that conveyed it,
+   * joined to the transmittal head (code, recipient, status, sent date), newest first.
+   */
+  async registerEntryHistory(
+    tenantId: Id,
+    registerEntryId: Id,
+  ): Promise<{ entry: DrawingRegisterEntry; history: RevisionHistoryRow[] }> {
+    const entry = await this.registerStore.findById(registerEntryId, tenantId);
+    if (!entry) throw new Error(`register entry ${registerEntryId} not found`);
+
+    const items = await this.transmittalItemStore.findByRegisterEntry(registerEntryId, tenantId);
+    const heads = new Map<string, Transmittal | null>();
+    for (const item of items) {
+      if (!heads.has(item.transmittalId)) {
+        heads.set(item.transmittalId, await this.transmittalStore.findById(item.transmittalId, tenantId));
+      }
+    }
+
+    const history: RevisionHistoryRow[] = items.map((item) => {
+      const head = heads.get(item.transmittalId);
+      return {
+        revision: item.revision,
+        purpose: item.purpose,
+        transmittalId: item.transmittalId,
+        transmittalCode: head?.code ?? '(deleted)',
+        transmittalTitle: head?.title ?? '',
+        recipient: head?.recipient ?? null,
+        transmittalStatus: head?.status ?? 'unknown',
+        sentAt: item.createdAt,
+      };
+    });
+    return { entry, history };
   }
 
   // ── Correspondence ─────────────────────────────────────────────────────────

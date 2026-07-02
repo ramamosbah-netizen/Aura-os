@@ -12,7 +12,7 @@ Legend: ✅ present · ◐ partial · ❌ missing.
 | Module | Depth | Remaining gaps to fix |
 |---|:--:|---|
 | CRM | ✅ high | MS-Graph **email seam** (contacts ✅, activities/tasks ✅, pagination ✅) |
-| Tendering | ◐ | **Estimate engine** (cost build-up mat+lab+subcon); competitor win/loss analytics (bid-scoring ✅) |
+| Tendering | ✅ | Estimate engine ✅ (rate build-ups mat+lab+plant+subcon → OH → profit, tender summary, 0121); competitor win/loss analytics ❌ (bid-scoring ✅) |
 | Contracts | ✅ high | (clause library ✅, obligations+due-soon ✅, IPC ✅) — none material |
 | Projects | ✅ high | **Revenue recognition** UI polish; resource histogram viz (CPM reschedule + levelling ✅) |
 | Procurement | ✅ high | **Framework/blanket agreements** + volume pricing (approval matrix ✅, 3-way ✅, MAR gate ✅) |
@@ -82,7 +82,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 
 **P2 — depth completeness**
 5. ✅ Pagination on remaining transactional lists (finance/inventory/subcontracts/AMC/HSE) — Tier-1 #22 closed.
-6. ✅ HR appraisal + ✅ org-chart. Remaining: Tendering estimate engine; Procurement framework agreements.
+6. ✅ HR appraisal + ✅ org-chart + ✅ Tendering estimate engine. Remaining: Procurement framework agreements.
 7. Doc-Control transmittal↔drawing revision history; Assets QR tags; Inventory barcode/UOM.
 8. Soft-delete standardization; notifications email/SMS delivery; remaining DTO decoration.
 
@@ -105,8 +105,9 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | HR org-chart (employee managerId) | 0119 |
 | ✅ | Pagination: subcontracts, AMC (work-orders, tickets), HSE (incidents, PTWs) — `GET .../paged` | — |
 | ✅ | Pagination: finance long-tail (bank-transactions, petty-cash, bank-guarantees, PDCs, budgets) — Tier-1 #22 closed | — |
+| ✅ | Tendering estimate engine: rate build-ups (`POST tendering/estimates`, apply-to-BOQ, tender summary) | 0121 |
 
-**Next:** Tendering estimate engine + Procurement framework agreements.
+**Next:** Procurement framework agreements, then Doc-Control transmittal↔drawing history / Assets QR tags / Inventory barcode-UOM.
 
 ---
 *Verified from source 2026-07-02. No files modified by this analysis.*

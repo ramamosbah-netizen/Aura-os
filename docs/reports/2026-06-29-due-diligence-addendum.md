@@ -371,8 +371,8 @@ Verified by file inspection + this session's builds/tests. Cmp/Arch/DB/API/UI/Te
 | Contracts | 82 | 86 | 84 | 88 | 64 | 68 | clause library ✅ + obligation tracking (due-soon/breach feed) ✅ + IPC + pagination ✅ |
 | Projects | 82 | 88 | 82 | 86 | 72 | 85 | revenue recognition (Gantt ✅, pagination ✅, CPM reactive reschedule + resource levelling ✅) |
 | Procurement | 86 | 88 | 84 | 90 | 72 | 78 | PO↔supplier-master FK, framework agreements (pagination ✅; MAR/quality hard-gate on PO issue ✅) |
-| Inventory | 80 | 88 | 84 | 90 | 70 | 75 | valuation UI, reorder auto-PR, barcode (FIFO/WAC + pagination ✅) |
-| Finance | 92 | 88 | 88 | 90 | 78 | 90 | group consolidation, statements-UI polish (multi-currency AP/AR + FX reval, statements, dashboards, pagination ✅; asset-disposal→GL reactor ✅) |
+| Inventory | 84 | 88 | 86 | 90 | 70 | 78 | valuation UI, reorder auto-PR, barcode/multi-UOM (per-item FIFO cost layers→COGS + WAC + pagination ✅) |
+| Finance | 94 | 88 | 90 | 90 | 78 | 92 | statements-UI polish (multi-currency AP/AR+FX reval, statements, dashboards, pagination, asset-disposal→GL, **intercompany eliminations** ✅) |
 | HR | 74 | 85 | 82 | 82 | 68 | 90 | attendance, org chart, appraisal, WPS file |
 | HSE | 78 | 85 | 86 | 84 | 62 | 62 | risk assessments/JSA ✅ + safety training matrix ✅ (inductions/cards/certs); remaining: audit trail depth |
 | Quality | 80 | 86 | 86 | 84 | 62 | 65 | calibration register ✅ + audit schedules + NCR generation ✅ |

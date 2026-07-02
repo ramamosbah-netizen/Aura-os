@@ -16,7 +16,7 @@ import {
   summariseValuation,
   summariseReorder,
 } from './domain/stock';
-import { computeFifo } from './domain/fifo';
+import { computeFifo, fifoIssueCost, fifoReceiptState, type FifoMove } from './domain/fifo';
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
 
 /**
@@ -66,8 +66,30 @@ export class StockService {
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
 
     const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
-    const newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));
+    let newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));
     const movement = makeStockMovement({ stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost }, balanceAfter, newAvgCost);
+
+    // FIFO costing: value the issue (COGS) and remaining inventory from the item's cost layers,
+    // replayed from its movement history. The movement's unitCost then carries the FIFO issue rate
+    // so the perpetual-inventory GL reactor posts Dr COGS / Cr Inventory at FIFO (not WAC).
+    if (item.costingMethod === 'fifo') {
+      const prior: FifoMove[] = (await this.store.listMovements(stockItemId))
+        .slice()
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+        .map((m) => ({ direction: m.direction, quantity: m.quantity, unitCost: m.unitCost }));
+      if (direction === 'out') {
+        const f = fifoIssueCost(prior, Number(quantity));
+        movement.unitCost = f.unitCost;      // FIFO COGS rate for this issue
+        movement.valueAfter = f.remainingValue;
+        newAvgCost = f.avgCost;
+      } else {
+        const f = fifoReceiptState(prior, Number(quantity), Math.max(0, Number(unitCost) || 0));
+        movement.unitCost = Math.max(0, Number(unitCost) || 0); // receipt price
+        movement.valueAfter = f.remainingValue;
+        newAvgCost = f.avgCost;
+      }
+    }
+
     const updated: StockItem = { ...item, quantityOnHand: balanceAfter, avgCost: newAvgCost };
 
     await this.store.updateItem(updated);

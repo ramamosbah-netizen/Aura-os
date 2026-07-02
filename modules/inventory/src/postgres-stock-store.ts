@@ -16,6 +16,7 @@ interface ItemRow {
   avg_cost: string | number | null;
   reorder_level: string | number | null;
   reorder_qty: string | number | null;
+  costing_method: string | null;
   created_by: string | null;
   created_at: Date | string;
 }
@@ -33,7 +34,7 @@ interface MoveRow {
   created_at: Date | string;
 }
 
-const ITEM_COLS = 'id, tenant_id, company_id, code, name, unit, warehouse, quantity_on_hand, avg_cost, reorder_level, reorder_qty, created_by, created_at';
+const ITEM_COLS = 'id, tenant_id, company_id, code, name, unit, warehouse, quantity_on_hand, avg_cost, reorder_level, reorder_qty, costing_method, created_by, created_at';
 const MOVE_COLS = 'id, tenant_id, stock_item_id, direction, quantity, reason, balance_after, unit_cost, value_after, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
@@ -50,6 +51,7 @@ function rowToItem(r: ItemRow): StockItem {
     avgCost: Number(r.avg_cost ?? 0),
     reorderLevel: Number(r.reorder_level ?? 0),
     reorderQty: Number(r.reorder_qty ?? 0),
+    costingMethod: r.costing_method === 'fifo' ? 'fifo' : 'wac',
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
   };
@@ -76,15 +78,15 @@ export class PostgresStockStore implements StockStore {
 
   async createItem(i: StockItem): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_inventory_stock_items (${ITEM_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [i.id, i.tenantId, i.companyId, i.code, i.name, i.unit, i.warehouse, i.quantityOnHand, i.avgCost, i.reorderLevel, i.reorderQty, i.createdBy, i.createdAt],
+      `INSERT INTO public.aura_inventory_stock_items (${ITEM_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [i.id, i.tenantId, i.companyId, i.code, i.name, i.unit, i.warehouse, i.quantityOnHand, i.avgCost, i.reorderLevel, i.reorderQty, i.costingMethod, i.createdBy, i.createdAt],
     );
   }
 
   async updateItem(i: StockItem): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_inventory_stock_items SET quantity_on_hand=$2, name=$3, unit=$4, warehouse=$5, avg_cost=$6, reorder_level=$7, reorder_qty=$8 WHERE id=$1`,
-      [i.id, i.quantityOnHand, i.name, i.unit, i.warehouse, i.avgCost, i.reorderLevel, i.reorderQty],
+      `UPDATE public.aura_inventory_stock_items SET quantity_on_hand=$2, name=$3, unit=$4, warehouse=$5, avg_cost=$6, reorder_level=$7, reorder_qty=$8, costing_method=$9 WHERE id=$1`,
+      [i.id, i.quantityOnHand, i.name, i.unit, i.warehouse, i.avgCost, i.reorderLevel, i.reorderQty, i.costingMethod],
     );
   }
 

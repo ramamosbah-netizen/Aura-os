@@ -10,6 +10,7 @@ interface CreateStockItemDto {
   warehouse?: string;
   openingQty?: number;
   openingCost?: number;
+  costingMethod?: 'wac' | 'fifo';
 }
 
 interface MovementDto {
@@ -46,6 +47,7 @@ export class StockController {
       warehouse: dto.warehouse,
       openingQty: dto.openingQty,
       openingCost: dto.openingCost,
+      costingMethod: dto.costingMethod,
       createdBy: ctx.actorId,
     });
   }

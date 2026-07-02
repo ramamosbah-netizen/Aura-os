@@ -14,8 +14,11 @@ export interface StockItem {
   unit: string;
   warehouse: string;
   quantityOnHand: number;
-  /** Moving weighted-average unit cost (WAC); inventory value = quantityOnHand × avgCost. */
+  /** Moving weighted-average unit cost (WAC); inventory value = quantityOnHand × avgCost.
+   * For FIFO items this holds the running FIFO average of remaining layers (fifoValue / onHand). */
   avgCost: number;
+  /** Costing method for issue valuation + COGS posting: 'wac' (moving average) or 'fifo' (cost layers). */
+  costingMethod: CostingMethod;
   /** Replenishment trigger: when on-hand ≤ reorderLevel the item needs reordering (0 = no policy). */
   reorderLevel: number;
   /** Suggested reorder quantity when triggered (0 = unset → suggestion falls back to topping up to reorderLevel). */
@@ -35,8 +38,11 @@ export interface NewStockItem {
   openingCost?: number;
   reorderLevel?: number;
   reorderQty?: number;
+  costingMethod?: CostingMethod;
   createdBy?: Id | null;
 }
+
+export type CostingMethod = 'wac' | 'fifo';
 
 export function makeStockItem(input: NewStockItem): StockItem {
   if (!input.code || !input.code.trim()) throw new Error('stock item code is required');
@@ -57,6 +63,7 @@ export function makeStockItem(input: NewStockItem): StockItem {
     avgCost: Math.max(0, Number(input.openingCost) || 0),
     reorderLevel: Math.max(0, Number(input.reorderLevel) || 0),
     reorderQty: Math.max(0, Number(input.reorderQty) || 0),
+    costingMethod: input.costingMethod === 'fifo' ? 'fifo' : 'wac',
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };

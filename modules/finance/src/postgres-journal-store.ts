@@ -11,6 +11,7 @@ interface JournalRow {
   description: string;
   created_by: string | null;
   posted_at: Date | string;
+  counterparty_company_id: string | null;
 }
 
 interface LineRow {
@@ -25,7 +26,7 @@ interface LineRow {
   profit_center_id: string | null;
 }
 
-const JOURNAL_COLS = 'id, tenant_id, company_id, reference, description, created_by, posted_at';
+const JOURNAL_COLS = 'id, tenant_id, company_id, reference, description, created_by, posted_at, counterparty_company_id';
 const LINE_COLS = 'id, journal_id, account_id, account_code, account_name, debit, credit, cost_center_id, profit_center_id';
 
 export class PostgresJournalStore implements JournalStore {
@@ -36,8 +37,8 @@ export class PostgresJournalStore implements JournalStore {
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO public.aura_finance_journals (${JOURNAL_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [j.id, j.tenantId, j.companyId, j.reference, j.description, j.createdBy, j.postedAt],
+        `INSERT INTO public.aura_finance_journals (${JOURNAL_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [j.id, j.tenantId, j.companyId, j.reference, j.description, j.createdBy, j.postedAt, j.counterpartyCompanyId],
       );
       for (const l of j.lines) {
         await client.query(
@@ -86,6 +87,7 @@ export class PostgresJournalStore implements JournalStore {
       description: jr.description,
       createdBy: jr.created_by,
       postedAt: jr.posted_at instanceof Date ? jr.posted_at.toISOString() : String(jr.posted_at),
+      counterpartyCompanyId: jr.counterparty_company_id,
       lines,
     };
   }
@@ -140,6 +142,7 @@ export class PostgresJournalStore implements JournalStore {
       description: jr.description,
       createdBy: jr.created_by,
       postedAt: jr.posted_at instanceof Date ? jr.posted_at.toISOString() : String(jr.posted_at),
+      counterpartyCompanyId: jr.counterparty_company_id,
       lines: linesByJournal.get(jr.id) ?? [],
     }));
   }

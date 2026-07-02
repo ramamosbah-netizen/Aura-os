@@ -84,6 +84,7 @@ interface CreateJournalDto {
   reference?: string | null;
   postedAt?: string | null;
   companyId?: string | null;
+  counterpartyCompanyId?: string | null;
   lines: CreateJournalLineDto[];
 }
 
@@ -272,6 +273,7 @@ export class FinanceController {
         {
           tenantId: ctx.tenantId,
           companyId: dto.companyId ?? ctx.companyId,
+          counterpartyCompanyId: dto.counterpartyCompanyId ?? null,
           description: dto.description,
           reference: dto.reference,
           postedAt: dto.postedAt,

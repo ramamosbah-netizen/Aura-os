@@ -22,6 +22,9 @@ export interface Journal {
   description: string;
   postedAt: string;
   createdBy: Id | null;
+  /** Set when this entry is an intra-group (intercompany) transaction with another group
+   * company — consolidation reverses such entries so intra-group amounts net to zero. */
+  counterpartyCompanyId: Id | null;
   lines: JournalLine[];
 }
 
@@ -44,6 +47,8 @@ export interface NewJournal {
   /** ISO date/timestamp the entry is posted on (defaults to now). Enables backdated
    * entries — and lets period-close reject posting into a closed prior month. */
   postedAt?: string | null;
+  /** Counterparty group company for an intercompany entry (eliminated on consolidation). */
+  counterpartyCompanyId?: Id | null;
   lines: NewJournalLine[];
 }
 
@@ -75,8 +80,35 @@ export function makeJournal(input: NewJournal): Journal {
     description: input.description.trim(),
     postedAt: input.postedAt || new Date().toISOString(),
     createdBy: input.createdBy ?? null,
+    counterpartyCompanyId: input.counterpartyCompanyId ?? null,
     lines,
   };
+}
+
+/**
+ * Consolidation eliminations — for every intercompany-tagged journal (has counterpartyCompanyId),
+ * build a reversing journal (debit↔credit swapped) so that, when added to the group journal set,
+ * intra-group revenue/expense and receivables/payables net to zero in the consolidated column.
+ */
+export function buildEliminations(journals: Journal[]): Journal[] {
+  return journals
+    .filter((j) => !!j.counterpartyCompanyId)
+    .map((j) => ({
+      ...j,
+      id: `elim:${j.id}`,
+      companyId: null,
+      counterpartyCompanyId: null,
+      reference: `ELIM-${j.reference ?? j.id}`,
+      description: `Intercompany elimination: ${j.description}`,
+      lines: j.lines.map((l) => ({ ...l, id: `elim:${l.id}`, debit: l.credit, credit: l.debit })),
+    }));
+}
+
+/** Net intra-group totals removed by elimination (debits === credits by construction). */
+export function eliminationTotal(journals: Journal[]): number {
+  return journals
+    .filter((j) => !!j.counterpartyCompanyId)
+    .reduce((sum, j) => sum + j.lines.reduce((s, l) => s + l.debit, 0), 0);
 }
 
 function eClean(str: string): string {

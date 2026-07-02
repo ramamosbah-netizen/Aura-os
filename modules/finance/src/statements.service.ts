@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Id } from '@aura/shared';
 import { ACCOUNT_STORE, type AccountStore } from './account-store';
 import { JOURNAL_STORE, type JournalStore } from './journal-store';
+import { buildEliminations, eliminationTotal } from './domain/journal';
 import {
   type BalanceSheet,
   type CashFlow,
@@ -55,8 +56,10 @@ export class StatementsService {
 
   /**
    * Group consolidation: per-company income statement + balance sheet, plus a consolidated
-   * (whole-tenant) set. Journals tagged with a companyId roll into that company; the
-   * consolidated column is every journal (the group). `asOf` bounds the balance sheet.
+   * (whole-group) set with **intercompany eliminations**. Journals tagged with a companyId roll
+   * into that company; the consolidated column is every journal PLUS reversing entries for
+   * intercompany-tagged journals, so intra-group revenue/expense and receivables/payables net to
+   * zero (true consolidation, not a naive sum). `asOf` bounds the balance sheet.
    */
   async consolidated(tenantId: Id, asOf?: string | null): Promise<ConsolidatedStatements> {
     const { accounts, journals } = await this.load(tenantId);
@@ -71,12 +74,23 @@ export class StatementsService {
       };
     });
 
+    const eliminations = buildEliminations(journals);
+    const groupBefore = buildIncomeStatement(accounts, journals, null, asOf);
+    const consolidatedJournals = [...journals, ...eliminations];
+
     return {
       asOf: asOf ?? null,
       companies,
+      eliminations: {
+        entries: eliminations.length,
+        amount: Math.round(eliminationTotal(journals) * 100) / 100,
+        // group revenue before vs after removing intra-group transactions
+        revenueBeforeElimination: groupBefore.totalRevenue,
+        revenueAfterElimination: buildIncomeStatement(accounts, consolidatedJournals, null, asOf).totalRevenue,
+      },
       consolidated: {
-        incomeStatement: buildIncomeStatement(accounts, journals, null, asOf),
-        balanceSheet: buildBalanceSheet(accounts, journals, asOf),
+        incomeStatement: buildIncomeStatement(accounts, consolidatedJournals, null, asOf),
+        balanceSheet: buildBalanceSheet(accounts, consolidatedJournals, asOf),
       },
     };
   }
@@ -88,8 +102,16 @@ export interface ConsolidatedCompany {
   balanceSheet: BalanceSheet;
 }
 
+export interface ConsolidatedEliminations {
+  entries: number;
+  amount: number;
+  revenueBeforeElimination: number;
+  revenueAfterElimination: number;
+}
+
 export interface ConsolidatedStatements {
   asOf: string | null;
   companies: ConsolidatedCompany[];
+  eliminations: ConsolidatedEliminations;
   consolidated: { incomeStatement: IncomeStatement; balanceSheet: BalanceSheet };
 }

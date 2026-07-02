@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { makeEvent } from '@aura/shared';
+import { makeEvent, type Page, type PageParams } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { AmcStore, AMC_STORE } from './store.interface';
 import { ServiceContract, ContractStatus } from './domain/service-contract';
@@ -56,12 +56,20 @@ export class AmcService {
     return this.store.listTickets(tenantId, contractId);
   }
 
+  async listTicketsPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<SupportTicket>> {
+    return this.store.listTicketsPaged(tenantId, page, contractId);
+  }
+
   async findTicket(id: string): Promise<SupportTicket | null> {
     return this.store.findTicket(id);
   }
 
   async listWorkOrders(tenantId: string, contractId?: string): Promise<WorkOrder[]> {
     return this.store.listWorkOrders(tenantId, contractId);
+  }
+
+  async listWorkOrdersPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<WorkOrder>> {
+    return this.store.listWorkOrdersPaged(tenantId, page, contractId);
   }
 
   async terminateContract(id: string): Promise<ServiceContract> {

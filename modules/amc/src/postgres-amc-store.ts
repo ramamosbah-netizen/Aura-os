@@ -1,4 +1,6 @@
 import type { Pool } from 'pg';
+import type { Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import { AmcStore } from './store.interface';
 import { ServiceContract } from './domain/service-contract';
 import { WorkOrder } from './domain/work-order';
@@ -226,6 +228,21 @@ export class PostgresAmcStore implements AmcStore {
     return res.rows.map(rowToWorkOrder);
   }
 
+  async listWorkOrdersPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<WorkOrder>> {
+    const params: unknown[] = [tenantId];
+    let whereSql = `WHERE tenant_id = $1`;
+    if (contractId) { params.push(contractId); whereSql += ` AND contract_id = $2`; }
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_amc_work_orders ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<WorkOrderRow>(
+      `SELECT ${WORK_ORDER_COLS} FROM public.aura_amc_work_orders ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToWorkOrder), total, page);
+  }
+
   // --- Tickets ---
   async saveTicket(t: SupportTicket): Promise<void> {
     await this.pool.query(
@@ -257,6 +274,21 @@ export class PostgresAmcStore implements AmcStore {
     sql += ` ORDER BY created_at DESC`;
     const res = await this.pool.query<TicketRow>(sql, params);
     return res.rows.map(rowToTicket);
+  }
+
+  async listTicketsPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<SupportTicket>> {
+    const params: unknown[] = [tenantId];
+    let whereSql = `WHERE tenant_id = $1`;
+    if (contractId) { params.push(contractId); whereSql += ` AND contract_id = $2`; }
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_amc_tickets ${whereSql}`, params);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query<TicketRow>(
+      `SELECT ${TICKET_COLS} FROM public.aura_amc_tickets ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(rowToTicket), total, page);
   }
 
   // --- PPM Schedules ---

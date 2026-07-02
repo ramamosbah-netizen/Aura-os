@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type HseIncident,
   type PermitToWork,
@@ -97,6 +98,11 @@ export class HseController {
     return this.hseService.listIncidents(ctx.tenantId);
   }
 
+  @Get('incidents/paged')
+  pagedIncidents(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hseService.listIncidentsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   // ── Permits to Work ────────────────────────────────────────────────────────
 
   @Post('ptws')
@@ -136,6 +142,11 @@ export class HseController {
   listPermits(): Promise<PermitToWork[]> {
     const ctx = this.tenant.get();
     return this.hseService.listPermits(ctx.tenantId);
+  }
+
+  @Get('ptws/paged')
+  pagedPermits(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hseService.listPermitsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   // ── Corrective Actions (CAPA) ──────────────────────────────────────────────

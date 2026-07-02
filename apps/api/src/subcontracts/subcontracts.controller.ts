@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Subcontract,
   type SubcontractStatus,
@@ -78,6 +79,19 @@ export class SubcontractsController {
       projectId,
       status,
     });
+  }
+
+  @Get('paged')
+  pagedSubcontracts(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: SubcontractStatus,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.subcontracts.listSubcontractsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   // ── CLAIMS (literal routes before :id to avoid route-order capture) ─────

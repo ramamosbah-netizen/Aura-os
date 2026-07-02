@@ -19,15 +19,15 @@ Legend: ✅ present · ◐ partial · ❌ missing.
 | Inventory | ◐ | ✅ FIFO cost layers→COGS (per-item WAC\|FIFO); remaining: **barcode + multi-UOM** |
 | Finance | ✅ high | ✅ **Intercompany eliminations** (reversing entries; group nets intra-group to zero) |
 | HR | ✅ high | ✅ **Performance appraisal** + ✅ **org-chart** (attendance ✅, WPS SIF ✅, payroll ✅) |
-| HSE | ◐ | **Training-matrix** ✅ + risk-assessment ✅ present; audit-trail depth ◐; **no pagination** |
+| HSE | ◐ | **Training-matrix** ✅ + risk-assessment ✅ present; audit-trail depth ◐; pagination ✅ (incidents, PTWs) |
 | Quality | ✅ high | calibration ✅ + audit schedules ✅; **no pagination**; consolidated store large (524 ln) |
 | Site | ✅ | labour-by-trade ✅ + progress% ✅; resource histograms ◐ |
-| Subcontracts | ◐ | **Pagination** ❌ (consolidated store); back-charges ✅, retention-release ✅ |
+| Subcontracts | ◐ | Pagination ✅ (head list); back-charges ✅, retention-release ✅ |
 | Doc-Control | ◐ | **Transmittal→drawing revision history linkage** ❌ (register ✅, distribution matrix ✅) |
 | Engineering | ◐ | **In-browser IFC/BIM viewer (frontend)** — registry backend ✅, TQ ✅, submittal→drawing ✅ |
 | Fleet | ✅ | telemetry ✅ + Mulkiya-renewal ✅ + Salik/fines ✅; geofencing ◐ |
 | Assets | ✅ | disposal→GL reactor ✅, pagination ✅; **QR-tag generation** ❌ |
-| AMC | ✅ | ✅ **SLA status + escalation + breach→notification**; remaining: pagination |
+| AMC | ✅ | ✅ **SLA status + escalation + breach→notification**; pagination ✅ (work-orders, tickets) |
 
 ---
 
@@ -52,7 +52,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 
 | Gap | State | Fix |
 |---|---|---|
-| **Pagination rollout (#22)** | ◐ | Done: finance journals + payments ✅. Remaining: finance (bank-transaction, petty-cash, bank-guarantee, post-dated-cheque, budget), subcontracts, AMC/HSE. (WBS/CBS trees + lookup tables intentionally exempt.) |
+| **Pagination rollout (#22)** | ◐ | Done: finance journals + payments ✅; subcontracts ✅; AMC work-orders + tickets ✅; HSE incidents + PTWs ✅. Remaining: finance (bank-transaction, petty-cash, bank-guarantee, post-dated-cheque, budget). (WBS/CBS trees + lookup tables intentionally exempt.) |
 | **DTO validation (#23)** | ◐ | `ValidationPipe` global ✅; spine create-DTOs decorated ✅ (finance, CRM accounts+contacts, tendering, contracts, projects, PO, GRN); remaining ~30 controllers still interface-typed. |
 | **Soft-delete** | ❌ | Only 1 table has `deleted_at` (customer-invoices reference). Standardize audit-safe soft-delete + restore across modules. |
 | **Notifications delivery** | ◐ | In-app center ✅; email/SMS/push relay **not wired** (SMTP/SMS relay seam only). |
@@ -103,8 +103,9 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | DTO validation on spine create-DTOs (8 controllers) | — |
 | ✅ | HR performance appraisals | 0120 |
 | ✅ | HR org-chart (employee managerId) | 0119 |
+| ✅ | Pagination: subcontracts, AMC (work-orders, tickets), HSE (incidents, PTWs) — `GET .../paged` | — |
 
-**Next:** P2 pagination sweep (finance/subcontracts/AMC/HSE), then Tendering estimate engine + Procurement framework agreements.
+**Next:** finance long-tail pagination (bank-transaction, petty-cash, bank-guarantee, PDC, budget), then Tendering estimate engine + Procurement framework agreements.
 
 ---
 *Verified from source 2026-07-02. No files modified by this analysis.*

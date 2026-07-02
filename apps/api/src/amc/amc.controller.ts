@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query, Logger } from '@nestjs/common';
 import { AmcService, SupportTicket, type PpmFrequency } from '@aura/amc';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 
 /**
  * AmcController — REST API endpoints for the AMC & Service Module.
@@ -81,6 +82,23 @@ export class AmcController {
   }
 
   // literal routes before :id
+  @Get('tickets/paged')
+  async pagedTickets(
+    @Query('contractId') contractId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const page = await this.service.listTicketsPaged(this.tenantId(), parsePageParams(limit, offset), contractId);
+    return {
+      ...page,
+      items: page.items.map((t: SupportTicket) => ({
+        ...t,
+        isSlaBreached: t.isSlaBreached(),
+        timeRemainingMs: t.slaDueAt.getTime() - Date.now(),
+      })),
+    };
+  }
+
   @Get('tickets/sla-status')
   async slaStatus(@Query('tenantId') tenantId?: string) {
     const report = await this.service.slaStatusReport(tenantId || this.tenantId());
@@ -143,6 +161,15 @@ export class AmcController {
     @Query('contractId') contractId?: string,
   ) {
     return this.service.listWorkOrders(tenantId || this.tenantId(), contractId);
+  }
+
+  @Get('work-orders/paged')
+  async pagedWorkOrders(
+    @Query('contractId') contractId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.service.listWorkOrdersPaged(this.tenantId(), parsePageParams(limit, offset), contractId);
   }
 
   @Get('dispatch-board')

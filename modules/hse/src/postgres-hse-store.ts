@@ -1,5 +1,7 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
+import { makePage } from '@aura/shared';
 import type { HseIncident } from './domain/hse-incident';
 import type { PermitToWork } from './domain/permit-to-work';
 import type { CapaAction } from './domain/capa-action';
@@ -121,6 +123,17 @@ export class PostgresHseIncidentStore implements HseIncidentStore {
     return res.rows.map(this.mapHseIncident);
   }
 
+  async findAllPaged(tenantId: string, page: PageParams): Promise<Page<HseIncident>> {
+    const countRes = await this.pool.query<{ count: string }>(
+      `select count(*)::int as count from public.aura_hse_incidents where tenant_id = $1`, [tenantId]);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const res = await this.pool.query(
+      `select * from public.aura_hse_incidents where tenant_id = $1 order by date desc limit $2 offset $3`,
+      [tenantId, page.limit, page.offset],
+    );
+    return makePage(res.rows.map(this.mapHseIncident), total, page);
+  }
+
   private mapHseIncident(row: QueryResultRow): HseIncident {
     return {
       id: row.id,
@@ -197,6 +210,17 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
       [tenantId],
     );
     return res.rows.map(this.mapPermit);
+  }
+
+  async findAllPaged(tenantId: string, page: PageParams): Promise<Page<PermitToWork>> {
+    const countRes = await this.pool.query<{ count: string }>(
+      `select count(*)::int as count from public.aura_hse_ptws where tenant_id = $1`, [tenantId]);
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const res = await this.pool.query(
+      `select * from public.aura_hse_ptws where tenant_id = $1 order by created_at desc limit $2 offset $3`,
+      [tenantId, page.limit, page.offset],
+    );
+    return makePage(res.rows.map(this.mapPermit), total, page);
   }
 
   private mapPermit(row: QueryResultRow): PermitToWork {

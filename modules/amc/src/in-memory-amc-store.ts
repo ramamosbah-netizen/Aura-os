@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import type { Page, PageParams } from '@aura/shared';
+import { paginate } from '@aura/shared';
 import { AmcStore } from './store.interface';
 import { ServiceContract } from './domain/service-contract';
 import { WorkOrder } from './domain/work-order';
@@ -125,6 +127,11 @@ export class InMemoryAmcStore implements AmcStore {
       (o) => o.tenantId === tenantId && (!contractId || o.contractId === contractId)
     );
   }
+  async listWorkOrdersPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<WorkOrder>> {
+    const all = await this.listWorkOrders(tenantId, contractId);
+    all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return paginate(all, page);
+  }
 
   // --- Tickets ---
   async saveTicket(ticket: SupportTicket): Promise<void> {
@@ -137,6 +144,11 @@ export class InMemoryAmcStore implements AmcStore {
     return Array.from(this.tickets.values()).filter(
       (t) => t.tenantId === tenantId && (!contractId || t.contractId === contractId)
     );
+  }
+  async listTicketsPaged(tenantId: string, page: PageParams, contractId?: string): Promise<Page<SupportTicket>> {
+    const all = await this.listTickets(tenantId, contractId);
+    all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return paginate(all, page);
   }
 
   // --- PPM Schedules ---

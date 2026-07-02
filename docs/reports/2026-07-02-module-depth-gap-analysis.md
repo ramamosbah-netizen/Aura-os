@@ -26,7 +26,7 @@ Legend: ✅ present · ◐ partial · ❌ missing.
 | Doc-Control | ✅ | Transmittal↔drawing revision history ✅ (transmittal items snapshot rev conveyed; `GET register/:id/history`, 0123); register ✅, distribution matrix ✅ |
 | Engineering | ◐ | **In-browser IFC/BIM viewer (frontend)** — registry backend ✅, TQ ✅, submittal→drawing ✅ |
 | Fleet | ✅ | telemetry ✅ + Mulkiya-renewal ✅ + Salik/fines ✅; geofencing ◐ |
-| Assets | ✅ | disposal→GL reactor ✅, pagination ✅; **QR-tag generation** ❌ |
+| Assets | ✅ | disposal→GL reactor ✅, pagination ✅, QR-tag generation ✅ (deep-link payload + SVG, single/batch/raw-SVG endpoints) |
 | AMC | ✅ | ✅ **SLA status + escalation + breach→notification**; pagination ✅ (work-orders, tickets) |
 
 ---
@@ -83,7 +83,7 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 **P2 — depth completeness**
 5. ✅ Pagination on remaining transactional lists (finance/inventory/subcontracts/AMC/HSE) — Tier-1 #22 closed.
 6. ✅ HR appraisal + ✅ org-chart + ✅ Tendering estimate engine + ✅ Procurement framework agreements.
-7. ✅ Doc-Control transmittal↔drawing revision history. Remaining: Assets QR tags; Inventory barcode/UOM.
+7. ✅ Doc-Control transmittal↔drawing revision history + ✅ Assets QR tags. Remaining: Inventory barcode/UOM.
 8. Soft-delete standardization; notifications email/SMS delivery; remaining DTO decoration.
 
 **P3 — assurance / architecture**
@@ -108,8 +108,9 @@ subcontract.claim→AP, backcharge.recovered→…, **asset.disposed→GL ✅**,
 | ✅ | Tendering estimate engine: rate build-ups (`POST tendering/estimates`, apply-to-BOQ, tender summary) | 0121 |
 | ✅ | Procurement framework agreements: rate card + ceiling, activate/terminate, call-off→PO (approved-vendor + idempotent) | 0122 |
 | ✅ | Doc-Control transmittal items: transmittal↔register linkage + per-document revision history endpoint | 0123 |
+| ✅ | Assets QR tags: `GET assets/:id/qr-tag` (+`/svg`, `POST qr-tags/batch`) — derived, `qrcode` dep in @aura/assets | — |
 
-**Next:** Assets QR tags, Inventory barcode/UOM (rest of P2 item 7).
+**Next:** Inventory barcode/UOM (last of P2 item 7), then soft-delete standardization / notifications delivery / remaining DTOs (item 8).
 
 ---
 *Verified from source 2026-07-02. No files modified by this analysis.*

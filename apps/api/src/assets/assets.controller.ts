@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Asset,
@@ -107,6 +107,35 @@ export class AssetsController {
       });
     } catch (e) {
       throw new BadRequestException((e as Error).message);
+    }
+  }
+
+  // ── QR tags ────────────────────────────────────────────────────────────────
+
+  @Post('qr-tags/batch')
+  async qrTagBatch(@Body() dto: { ids: string[] }) {
+    if (!Array.isArray(dto?.ids) || dto.ids.length === 0) throw new BadRequestException('ids is required');
+    return this.assetsService.getAssetQrTags(this.tenant.get().tenantId, dto.ids);
+  }
+
+  @Get(':id/qr-tag')
+  async qrTag(@Param('id') id: string) {
+    try {
+      return await this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
+  /** Raw SVG for direct printing / <img src>. */
+  @Get(':id/qr-tag/svg')
+  @Header('Content-Type', 'image/svg+xml')
+  async qrTagSvg(@Param('id') id: string): Promise<string> {
+    try {
+      const { svg } = await this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
+      return svg;
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
     }
   }
 

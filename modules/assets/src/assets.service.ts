@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
+import QRCode from 'qrcode';
 import { type Asset, makeAsset } from './domain/asset';
+import { type AssetTag, makeAssetTag } from './domain/asset-tag';
 import { type DepreciationSchedule, type DepreciationMethod, computeDepreciation } from './domain/depreciation';
 import { type AssetMaintenance, makeAssetMaintenance } from './domain/asset-maintenance';
 import { type AssetInspection, makeAssetInspection } from './domain/asset-inspection';
@@ -108,6 +110,29 @@ export class AssetsService {
 
   listAssetsPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>> {
     return this.assetStore.listPaged(filter, page);
+  }
+
+  // ── QR tags ─────────────────────────────────────────────────────────────────
+
+  /** Printable QR tag for one asset: deep-link payload + rendered SVG label. */
+  async getAssetQrTag(tenantId: string, id: string): Promise<{ tag: AssetTag; svg: string }> {
+    const asset = await this.assetStore.findById(tenantId, id);
+    if (!asset) throw new Error(`asset ${id} not found`);
+    const tag = makeAssetTag(asset);
+    const svg = await QRCode.toString(tag.payload, { type: 'svg', errorCorrectionLevel: 'M', margin: 1 });
+    return { tag, svg };
+  }
+
+  /** Batch QR tags for label printing (missing ids are skipped, not fatal). */
+  async getAssetQrTags(tenantId: string, ids: string[]): Promise<Array<{ tag: AssetTag; svg: string }>> {
+    const out: Array<{ tag: AssetTag; svg: string }> = [];
+    for (const id of ids) {
+      const asset = await this.assetStore.findById(tenantId, id);
+      if (!asset) continue;
+      const tag = makeAssetTag(asset);
+      out.push({ tag, svg: await QRCode.toString(tag.payload, { type: 'svg', errorCorrectionLevel: 'M', margin: 1 }) });
+    }
+    return out;
   }
 
   // ── Disposal ────────────────────────────────────────────────────────────────

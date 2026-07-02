@@ -68,4 +68,12 @@ export class BudgetController {
     await this.budgets.remove(id);
     return { deleted: id };
   }
+
+  @Post(':id/restore')
+  async restore(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Budget> {
+    await this.budgets.restore(id);
+    const restored = await this.budgets.get(id);
+    if (!restored) throw new NotFoundException(`Budget ${id} not found`);
+    return restored;
+  }
 }

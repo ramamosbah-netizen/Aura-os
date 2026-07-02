@@ -19,7 +19,8 @@ export interface EmployeeStore {
   save(employee: Employee, tx?: TxHandle): Promise<Employee>;
   findById(tenantId: string, id: string): Promise<Employee | null>;
   findByTenant(tenantId: string): Promise<Employee[]>;
-  delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
+  /** Soft-delete flag: true hides the employee from finds; false restores. */
+  setDeleted(tenantId: string, id: string, deleted: boolean, tx?: TxHandle): Promise<boolean>;
 }
 
 export interface LeaveStore {

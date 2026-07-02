@@ -44,20 +44,21 @@ export class InMemoryEmployeeStore implements EmployeeStore {
 
   async findById(tenantId: string, id: string): Promise<Employee | null> {
     const item = this.items.get(id);
-    if (!item || item.tenantId !== tenantId) return null;
+    if (!item || item.tenantId !== tenantId || item.deletedAt) return null;
     return item;
   }
 
   async findByTenant(tenantId: string): Promise<Employee[]> {
     return Array.from(this.items.values())
-      .filter((item) => item.tenantId === tenantId)
+      .filter((item) => item.tenantId === tenantId && !item.deletedAt)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  async delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean> {
+  async setDeleted(tenantId: string, id: string, deleted: boolean): Promise<boolean> {
     const item = this.items.get(id);
     if (!item || item.tenantId !== tenantId) return false;
-    return this.items.delete(id);
+    item.deletedAt = deleted ? new Date().toISOString() : null;
+    return true;
   }
 }
 

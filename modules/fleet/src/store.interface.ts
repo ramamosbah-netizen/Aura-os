@@ -19,7 +19,8 @@ export interface VehicleStore {
   findById(tenantId: string, id: string): Promise<Vehicle | null>;
   findByTenant(tenantId: string): Promise<Vehicle[]>;
   listPaged(filter: VehicleFilter, page: PageParams): Promise<Page<Vehicle>>;
-  delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
+  /** Soft-delete flag: true hides the vehicle from finds; false restores. */
+  setDeleted(tenantId: string, id: string, deleted: boolean, tx?: TxHandle): Promise<boolean>;
 }
 
 export interface FuelLogStore {

@@ -19,18 +19,18 @@ export class InMemoryVehicleStore implements VehicleStore {
 
   async findById(tenantId: string, id: string): Promise<Vehicle | null> {
     const item = this.items.get(id);
-    if (!item || item.tenantId !== tenantId) return null;
+    if (!item || item.tenantId !== tenantId || item.deletedAt) return null;
     return item;
   }
 
   async findByTenant(tenantId: string): Promise<Vehicle[]> {
     return Array.from(this.items.values())
-      .filter((item) => item.tenantId === tenantId)
+      .filter((item) => item.tenantId === tenantId && !item.deletedAt)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async listPaged(filter: VehicleFilter, page: PageParams): Promise<Page<Vehicle>> {
-    let all = Array.from(this.items.values());
+    let all = Array.from(this.items.values()).filter((item) => !item.deletedAt);
     if (filter.tenantId) {
       all = all.filter((item) => item.tenantId === filter.tenantId);
     }
@@ -47,10 +47,11 @@ export class InMemoryVehicleStore implements VehicleStore {
     return paginate(all, page);
   }
 
-  async delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean> {
+  async setDeleted(tenantId: string, id: string, deleted: boolean): Promise<boolean> {
     const item = this.items.get(id);
     if (!item || item.tenantId !== tenantId) return false;
-    return this.items.delete(id);
+    item.deletedAt = deleted ? new Date().toISOString() : null;
+    return true;
   }
 }
 

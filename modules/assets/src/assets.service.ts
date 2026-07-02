@@ -93,11 +93,20 @@ export class AssetsService {
     }
 
     await this.tx.run(async (handle) => {
-      await this.assetStore.delete(tenantId, id, handle);
+      await this.assetStore.setDeleted(tenantId, id, true, handle);
     });
 
-    this.logger.log(`Asset deleted: ${id}`);
+    this.logger.log(`Asset soft-deleted: ${id}`);
     return true;
+  }
+
+  /** Undo a soft-delete; returns the restored asset. */
+  async restoreAsset(tenantId: string, id: string): Promise<Asset> {
+    await this.assetStore.setDeleted(tenantId, id, false);
+    const restored = await this.assetStore.findById(tenantId, id);
+    if (!restored) throw new Error(`Asset with ID ${id} not found`);
+    this.logger.log(`Asset restored: ${id}`);
+    return restored;
   }
 
   getAsset(tenantId: string, id: string): Promise<Asset | null> {

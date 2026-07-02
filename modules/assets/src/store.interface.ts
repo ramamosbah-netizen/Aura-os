@@ -15,7 +15,8 @@ export interface AssetFilter {
 export interface AssetStore {
   save(entity: Asset, client?: TxHandle | null): Promise<void>;
   findById(tenantId: string, id: string): Promise<Asset | null>;
-  delete(tenantId: string, id: string, client?: TxHandle | null): Promise<void>;
+  /** Soft-delete flag: true hides the asset from finds; false restores it. */
+  setDeleted(tenantId: string, id: string, deleted: boolean, client?: TxHandle | null): Promise<void>;
   findByTenant(tenantId: string): Promise<Asset[]>;
   listPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>>;
 }

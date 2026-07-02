@@ -79,7 +79,7 @@ export class PostgresEmployeeStore implements EmployeeStore {
 
   async findById(tenantId: string, id: string): Promise<Employee | null> {
     const res = await this.pool.query(
-      `select * from public.aura_hr_employees where id = $1 and tenant_id = $2`,
+      `select * from public.aura_hr_employees where id = $1 and tenant_id = $2 and deleted_at is null`,
       [id, tenantId],
     );
     if (res.rowCount === 0) return null;
@@ -88,15 +88,15 @@ export class PostgresEmployeeStore implements EmployeeStore {
 
   async findByTenant(tenantId: string): Promise<Employee[]> {
     const res = await this.pool.query(
-      `select * from public.aura_hr_employees where tenant_id = $1 order by created_at desc`,
+      `select * from public.aura_hr_employees where tenant_id = $1 and deleted_at is null order by created_at desc`,
       [tenantId],
     );
     return res.rows.map(this.mapEmployee);
   }
 
-  async delete(tenantId: string, id: string): Promise<boolean> {
+  async setDeleted(tenantId: string, id: string, deleted: boolean): Promise<boolean> {
     const res = await this.pool.query(
-      `delete from public.aura_hr_employees where id = $1 and tenant_id = $2`,
+      `update public.aura_hr_employees set deleted_at = ${deleted ? 'now()' : 'NULL'} where id = $1 and tenant_id = $2`,
       [id, tenantId],
     );
     return (res.rowCount ?? 0) > 0;
@@ -122,6 +122,7 @@ export class PostgresEmployeeStore implements EmployeeStore {
       iban: row.iban ?? null,
       molEmployeeId: row.mol_employee_id ?? null,
       bankRoutingCode: row.bank_routing_code ?? null,
+      deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

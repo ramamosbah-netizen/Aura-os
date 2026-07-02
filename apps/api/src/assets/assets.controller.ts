@@ -81,6 +81,15 @@ export class AssetsController {
     return { success };
   }
 
+  @Post(':id/restore')
+  async restoreAsset(@Param('id') id: string): Promise<Asset> {
+    try {
+      return await this.assetsService.restoreAsset(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
   @Get()
   listAssets(): Promise<Asset[]> {
     const ctx = this.tenant.get();

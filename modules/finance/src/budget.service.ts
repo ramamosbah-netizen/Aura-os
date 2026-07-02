@@ -51,8 +51,14 @@ export class BudgetService {
     return this.store.listPaged(tenantId, page);
   }
 
+  /** Soft-delete (audit-safe); restorable via restore(). */
   async remove(id: Id): Promise<void> {
-    await this.store.remove(id);
+    await this.store.setDeleted(id, true);
+  }
+
+  /** Undo a soft-delete. */
+  restore(id: Id): Promise<void> {
+    return this.store.setDeleted(id, false);
   }
 
   /** Budget-vs-actual for a budget, folding the GL over its date range. */

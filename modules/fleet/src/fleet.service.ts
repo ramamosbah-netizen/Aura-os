@@ -101,11 +101,20 @@ export class FleetService {
     }
 
     await this.tx.run(async (handle) => {
-      await this.vehicleStore.delete(tenantId, id, handle);
+      await this.vehicleStore.setDeleted(tenantId, id, true, handle);
     });
 
-    this.logger.log(`Vehicle deleted: ${id}`);
+    this.logger.log(`Vehicle soft-deleted: ${id}`);
     return true;
+  }
+
+  /** Undo a soft-delete; returns the restored vehicle. */
+  async restoreVehicle(tenantId: string, id: string): Promise<Vehicle> {
+    await this.vehicleStore.setDeleted(tenantId, id, false);
+    const restored = await this.vehicleStore.findById(tenantId, id);
+    if (!restored) throw new Error(`Vehicle with ID ${id} not found`);
+    this.logger.log(`Vehicle restored: ${id}`);
+    return restored;
   }
 
   getVehicle(tenantId: string, id: string): Promise<Vehicle | null> {

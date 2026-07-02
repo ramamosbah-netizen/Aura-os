@@ -130,11 +130,20 @@ export class HrService {
     }
 
     await this.tx.run(async (handle) => {
-      await this.employeeStore.delete(tenantId, id);
+      await this.employeeStore.setDeleted(tenantId, id, true);
     });
 
-    this.logger.log(`Employee profile deleted: ${id}`);
+    this.logger.log(`Employee profile soft-deleted: ${id}`);
     return true;
+  }
+
+  /** Undo a soft-delete; returns the restored employee. */
+  async restoreEmployee(tenantId: string, id: string): Promise<Employee> {
+    await this.employeeStore.setDeleted(tenantId, id, false);
+    const restored = await this.employeeStore.findById(tenantId, id);
+    if (!restored) throw new Error(`Employee profile with ID ${id} not found`);
+    this.logger.log(`Employee profile restored: ${id}`);
+    return restored;
   }
 
   getEmployee(tenantId: string, id: string): Promise<Employee | null> {

@@ -11,11 +11,12 @@ interface Row {
   from_date: string;
   to_date: string;
   lines: BudgetLine[] | string;
+  deleted_at: Date | null;
   created_at: Date;
   created_by: string | null;
 }
 
-const COLS = 'id, tenant_id, name, from_date::text, to_date::text, lines, created_at, created_by';
+const COLS = 'id, tenant_id, name, from_date::text, to_date::text, lines, deleted_at, created_at, created_by';
 
 function toBudget(r: Row): Budget {
   const lines = typeof r.lines === 'string' ? (JSON.parse(r.lines) as BudgetLine[]) : r.lines;
@@ -26,6 +27,7 @@ function toBudget(r: Row): Budget {
     from: r.from_date,
     to: r.to_date,
     lines: lines ?? [],
+    deletedAt: r.deleted_at ? r.deleted_at.toISOString() : null,
     createdAt: r.created_at.toISOString(),
     createdBy: r.created_by,
   };
@@ -47,7 +49,7 @@ export class PostgresBudgetStore implements BudgetStore {
 
   async get(id: Id): Promise<Budget | null> {
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE id = $1`,
+      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE id = $1 AND deleted_at IS NULL`,
       [id],
     );
     return res.rows.length ? toBudget(res.rows[0]) : null;
@@ -55,7 +57,7 @@ export class PostgresBudgetStore implements BudgetStore {
 
   async list(tenantId: string): Promise<Budget[]> {
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE tenant_id = $1 ORDER BY created_at DESC`,
+      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`,
       [tenantId],
     );
     return res.rows.map(toBudget);
@@ -63,16 +65,19 @@ export class PostgresBudgetStore implements BudgetStore {
 
   async listPaged(tenantId: string, page: PageParams): Promise<Page<Budget>> {
     const countRes = await this.pool.query<{ count: string }>(
-      `SELECT COUNT(*)::int AS count FROM public.aura_finance_budgets WHERE tenant_id = $1`, [tenantId]);
+      `SELECT COUNT(*)::int AS count FROM public.aura_finance_budgets WHERE tenant_id = $1 AND deleted_at IS NULL`, [tenantId]);
     const total = Number(countRes.rows[0]?.count ?? 0);
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
       [tenantId, page.limit, page.offset],
     );
     return makePage(res.rows.map(toBudget), total, page);
   }
 
-  async remove(id: Id): Promise<void> {
-    await this.pool.query(`DELETE FROM public.aura_finance_budgets WHERE id = $1`, [id]);
+  async setDeleted(id: Id, deleted: boolean): Promise<void> {
+    await this.pool.query(
+      `UPDATE public.aura_finance_budgets SET deleted_at = ${deleted ? 'now()' : 'NULL'} WHERE id = $1`,
+      [id],
+    );
   }
 }

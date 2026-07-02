@@ -13,6 +13,8 @@ export interface Asset {
   warrantyExpiry: string | null;
   nextCalibrationDate: string | null;
   nextInspectionDate: string | null;
+  /** Soft-delete marker — deleted assets are hidden from finds but restorable. */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +51,7 @@ export function makeAsset(input: {
     warrantyExpiry: input.warrantyExpiry || null,
     nextCalibrationDate: input.nextCalibrationDate || null,
     nextInspectionDate: input.nextInspectionDate || null,
+    deletedAt: null,
     createdAt: input.createdAt || new Date().toISOString(),
     updatedAt: input.updatedAt || new Date().toISOString(),
   };

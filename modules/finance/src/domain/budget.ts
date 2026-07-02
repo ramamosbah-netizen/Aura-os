@@ -25,6 +25,8 @@ export interface Budget {
   from: string; // 'YYYY-MM-DD' inclusive
   to: string;   // 'YYYY-MM-DD' inclusive
   lines: BudgetLine[];
+  /** Soft-delete marker — deleted budgets are hidden from finds but restorable. */
+  deletedAt: string | null;
   createdAt: string;
   createdBy: Id | null;
 }
@@ -70,6 +72,7 @@ export function makeBudget(input: NewBudget): Budget {
       accountName: l.accountName,
       amount: r2(Number(l.amount) || 0),
     })),
+    deletedAt: null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };

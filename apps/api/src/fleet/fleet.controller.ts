@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   type Vehicle,
@@ -68,6 +68,15 @@ export class FleetController {
       status: dto.status,
       driverEmployeeId: dto.driverEmployeeId,
     });
+  }
+
+  @Post('vehicles/:id/restore')
+  async restoreVehicle(@Param('id') id: string): Promise<Vehicle> {
+    try {
+      return await this.fleetService.restoreVehicle(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
   }
 
   @Delete('vehicles/:id')

@@ -110,7 +110,7 @@ export class PostgresAssetStore implements AssetStore {
 
   async findById(tenantId: string, id: string): Promise<Asset | null> {
     const res = await this.pool.query(
-      `select * from public.aura_assets where id = $1 and tenant_id = $2`,
+      `select * from public.aura_assets where id = $1 and tenant_id = $2 and deleted_at is null`,
       [id, tenantId],
     );
     if (res.rowCount === 0) return null;
@@ -119,16 +119,16 @@ export class PostgresAssetStore implements AssetStore {
 
   async findByTenant(tenantId: string): Promise<Asset[]> {
     const res = await this.pool.query(
-      `select * from public.aura_assets where tenant_id = $1 order by created_at desc`,
+      `select * from public.aura_assets where tenant_id = $1 and deleted_at is null order by created_at desc`,
       [tenantId],
     );
     return res.rows.map(this.mapAsset);
   }
 
-  async delete(tenantId: string, id: string, tx?: TxHandle): Promise<void> {
+  async setDeleted(tenantId: string, id: string, deleted: boolean, tx?: TxHandle): Promise<void> {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
-      `delete from public.aura_assets where id = $1 and tenant_id = $2`,
+      `update public.aura_assets set deleted_at = ${deleted ? 'now()' : 'NULL'} where id = $1 and tenant_id = $2`,
       [id, tenantId],
     );
   }
@@ -147,6 +147,7 @@ export class PostgresAssetStore implements AssetStore {
       warrantyExpiry: dateOnly(row.warranty_expiry),
       nextCalibrationDate: dateOnly(row.next_calibration_date),
       nextInspectionDate: dateOnly(row.next_inspection_date),
+      deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
@@ -161,10 +162,11 @@ export class PostgresAssetStore implements AssetStore {
         where.push(`${col} = $${params.length}`);
       }
     };
+    where.push('deleted_at IS NULL');
     add('tenant_id', filter.tenantId);
     add('category', filter.category);
     add('status', filter.status);
-    return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+    return { whereSql: `WHERE ${where.join(' AND ')}`, params };
   }
 
   async listPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>> {

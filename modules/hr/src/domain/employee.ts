@@ -21,6 +21,8 @@ export interface Employee {
   iban: string | null;            // employee salary IBAN
   molEmployeeId: string | null;   // MoHRE/labour-card person id
   bankRoutingCode: string | null; // routing code of the employee's bank/exchange agent
+  /** Soft-delete marker — deleted employees are hidden from finds but restorable. */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +68,7 @@ export function makeEmployee(input: NewEmployee): Employee {
     iban: input.iban ? input.iban.trim().toUpperCase().replace(/\s+/g, '') : null,
     molEmployeeId: input.molEmployeeId ? input.molEmployeeId.trim() : null,
     bankRoutingCode: input.bankRoutingCode ? input.bankRoutingCode.trim() : null,
+    deletedAt: null,
     createdAt: now,
     updatedAt: now,
   };

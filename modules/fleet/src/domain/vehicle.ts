@@ -16,6 +16,8 @@ export interface Vehicle {
   lastSpeed: number | null;
   lastOdometer: number | null;
   lastTelemetryAt: string | null;
+  /** Soft-delete marker — deleted vehicles are hidden from finds but restorable. */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,6 +52,7 @@ export function makeVehicle(input: NewVehicle): Vehicle {
     lastSpeed: null,
     lastOdometer: null,
     lastTelemetryAt: null,
+    deletedAt: null,
     createdAt: now,
     updatedAt: now,
   };

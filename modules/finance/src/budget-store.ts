@@ -8,5 +8,6 @@ export interface BudgetStore {
   get(id: Id): Promise<Budget | null>;
   list(tenantId: string): Promise<Budget[]>;
   listPaged(tenantId: string, page: PageParams): Promise<Page<Budget>>;
-  remove(id: Id): Promise<void>;
+  /** Soft-delete flag: true hides the budget from finds; false restores. */
+  setDeleted(id: Id, deleted: boolean): Promise<void>;
 }

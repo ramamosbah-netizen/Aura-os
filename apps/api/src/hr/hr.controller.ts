@@ -114,6 +114,15 @@ export class HrController {
     return { success };
   }
 
+  @Post('employees/:id/restore')
+  async restoreEmployee(@Param('id') id: string): Promise<Employee> {
+    try {
+      return await this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
   @Get('employees')
   listEmployees(): Promise<Employee[]> {
     const ctx = this.tenant.get();

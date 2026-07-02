@@ -36,25 +36,25 @@ export class InMemoryAssetStore implements AssetStore {
 
   async findById(tenantId: string, id: string): Promise<Asset | null> {
     const item = this.items.get(id);
-    if (!item || item.tenantId !== tenantId) return null;
+    if (!item || item.tenantId !== tenantId || item.deletedAt) return null;
     return { ...item };
   }
 
-  async delete(tenantId: string, id: string, client?: TxHandle | null): Promise<void> {
+  async setDeleted(tenantId: string, id: string, deleted: boolean): Promise<void> {
     const item = this.items.get(id);
     if (item && item.tenantId === tenantId) {
-      this.items.delete(id);
+      item.deletedAt = deleted ? new Date().toISOString() : null;
     }
   }
 
   async findByTenant(tenantId: string): Promise<Asset[]> {
     return Array.from(this.items.values())
-      .filter((item) => item.tenantId === tenantId)
+      .filter((item) => item.tenantId === tenantId && !item.deletedAt)
       .map((item) => ({ ...item }));
   }
 
   async listPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>> {
-    let all = Array.from(this.items.values());
+    let all = Array.from(this.items.values()).filter((item) => !item.deletedAt);
     if (filter.tenantId) {
       all = all.filter((item) => item.tenantId === filter.tenantId);
     }

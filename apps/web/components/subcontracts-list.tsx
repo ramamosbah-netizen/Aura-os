@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Subcontract {
@@ -194,8 +194,8 @@ export default function SubcontractsList({
               const isBusy = busyId === sub.id || busyId === `claim-sub-${sub.id}`;
 
               return (
-                <>
-                  <tr key={sub.id} style={isExpanded ? s.rowSelected : s.row}>
+                <Fragment key={sub.id}>
+                  <tr style={isExpanded ? s.rowSelected : s.row}>
                     <td style={s.td}>
                       <button
                         type="button"
@@ -411,7 +411,7 @@ export default function SubcontractsList({
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

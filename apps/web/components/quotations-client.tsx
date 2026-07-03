@@ -3,7 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
-import CreateDrawer from './ui/create-drawer';
+import { EntityForm } from './form-engine';
 
 interface Line { description: string; quantity: number; unitPrice: number; vatRate: number; lineNet: number; lineVat: number }
 interface Quotation {
@@ -20,7 +20,6 @@ interface Quotation {
 }
 
 const badgeKind: Record<string, string> = { draft: 'badge', sent: 'badge badge-accent', accepted: 'badge badge-good', rejected: 'badge badge-bad', expired: 'badge badge-warn' };
-const today = () => new Date().toISOString().slice(0, 10);
 
 export default function QuotationsClient({ initialQuotations }: { initialQuotations: Quotation[] }) {
   const router = useRouter();
@@ -51,17 +50,7 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
       </div>
 
       <div style={st.toolbar}>
-        <CreateDrawer
-          entity="Quotation"
-          subtitle="A customer quote with VAT line items. Send it, then accepting converts it to a contract."
-          endpoint="/api/crm/quotations"
-          fields={[
-            { name: 'quoteNumber', label: 'Quote #', kind: 'text', required: true, placeholder: 'QT-001' },
-            { name: 'issueDate', label: 'Issue date', kind: 'date', required: true, defaultValue: today() },
-            { name: 'customerName', label: 'Customer', kind: 'text', required: true, placeholder: 'e.g. Emaar Properties', span: 2 },
-            { name: 'lines', label: 'Line items', kind: 'lines', required: true },
-          ]}
-        />
+        <EntityForm id="crm.quotation" />
         <ExportButton filename="quotations" rows={quotes as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'quoteNumber' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'total' }, { key: 'status' }]} />
         {error && <span style={st.err}>{error}</span>}
@@ -86,6 +75,12 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
                     {q.status === 'sent' && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} onClick={() => act(q.id, 'accept')}>Accept</button>}
                     {q.status === 'sent' && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(q.id, 'reject')}>Reject</button>}
                     {(q.status === 'draft' || q.status === 'sent') && <button type="button" className="btn btn-ghost" style={st.smBtn} onClick={() => act(q.id, 'expire')}>Expire</button>}
+                    <EntityForm
+                      id="crm.quotation"
+                      mode="clone"
+                      initialValues={{ quoteNumber: `${q.quoteNumber}-R`, customerName: q.customerName }}
+                      initialLines={{ lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })) }}
+                    />
                   </td>
                 </tr>
               ))}

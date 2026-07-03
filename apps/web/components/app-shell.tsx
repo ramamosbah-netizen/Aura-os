@@ -9,6 +9,9 @@ import CommandPalette from './command-palette';
 import TabBar from './tab-bar';
 import ThemeToggle from './theme-toggle';
 import type { SessionUser } from '@/lib/session';
+// Form-engine plugins (field types, validators, formulas, toolbar actions)
+// register once for the whole app - before any metadata form renders.
+import '../lib/form-plugins';
 
 /**
  * The persistent app frame: a left sidebar (brand + grouped nav) and a top bar with

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import { EntityForm } from './form-engine';
 
 interface Employee {
   id: string;
@@ -164,24 +165,7 @@ export default function HrControlClient({
       {activeTab === 'employees' && (
         <div>
           <div style={st.tabHeader}>
-            <CreateDrawer
-              entity="Employee"
-              buttonLabel="Register Employee"
-              subtitle="Register an employee profile with UAE visa, work permit, and labor camp details."
-              endpoint="/api/hr/employees"
-              fields={[
-                { name: 'firstName', label: 'First name', kind: 'text', required: true, placeholder: 'John' },
-                { name: 'lastName', label: 'Last name', kind: 'text', required: true, placeholder: 'Doe' },
-                { name: 'role', label: 'Job title / role', kind: 'text', required: true, placeholder: 'e.g. Pipefitter, Site Engineer' },
-                { name: 'department', label: 'Department', kind: 'text', required: true, placeholder: 'e.g. Operations, Corporate' },
-                { name: 'joinedDate', label: 'Joined date', kind: 'date', required: true, defaultValue: today },
-                { name: 'laborCamp', label: 'Labor camp designation', kind: 'text', placeholder: 'e.g. Sonapur Block C, Al Quoz 2' },
-                { name: 'visaExpiry', label: 'UAE visa expiry', kind: 'date' },
-                { name: 'permitExpiry', label: 'Work permit expiry', kind: 'date' },
-                { name: 'email', label: 'Email address', kind: 'text', placeholder: 'john.doe@aura.com' },
-                { name: 'phone', label: 'Phone number', kind: 'text', placeholder: '+971 50...' },
-              ]}
-            />
+            <EntityForm id="hr.employee" buttonLabel="Register Employee" />
           </div>
 
           {/* List panel */}
@@ -230,12 +214,30 @@ export default function HrControlClient({
                             </span>
                           </td>
                           <td style={st.td}>
-                            <button
-                              onClick={() => handleDeleteEmployee(emp.id)}
-                              style={st.btnReject}
-                            >
-                              Delete
-                            </button>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <EntityForm
+                                id="hr.employee"
+                                mode="view"
+                                initialValues={{
+                                  firstName: emp.firstName,
+                                  lastName: emp.lastName,
+                                  role: emp.role,
+                                  department: emp.department,
+                                  joinedDate: emp.joinedDate,
+                                  visaExpiry: emp.visaExpiry ?? '',
+                                  permitExpiry: emp.permitExpiry ?? '',
+                                  laborCamp: emp.laborCamp ?? '',
+                                  email: emp.email ?? '',
+                                  phone: emp.phone ?? '',
+                                }}
+                              />
+                              <button
+                                onClick={() => handleDeleteEmployee(emp.id)}
+                                style={st.btnReject}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

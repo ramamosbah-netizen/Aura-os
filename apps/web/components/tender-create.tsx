@@ -5,6 +5,28 @@ interface AccountLite {
   name: string;
 }
 
+/** Row-level "Edit" — opens the drawer prefilled, PATCHes the tender. */
+export function TenderEdit({ tender }: { tender: { id: string; title: string; reference?: string | null; value: number } }) {
+  return (
+    <CreateDrawer
+      mode="edit"
+      entity="Tender"
+      subtitle="Update the tender's details. Status changes happen through the pipeline actions."
+      endpoint={`/api/tendering/tenders/${tender.id}`}
+      initialValues={{
+        title: tender.title,
+        reference: tender.reference ?? '',
+        value: tender.value ? String(tender.value) : '',
+      }}
+      fields={[
+        { name: 'title', label: 'Tender title', kind: 'text', required: true, span: 2 },
+        { name: 'reference', label: 'Reference', kind: 'text' },
+        { name: 'value', label: 'Value (AED)', kind: 'number' },
+      ]}
+    />
+  );
+}
+
 /** "+ New Tender" — slide-over form, optionally linked to a CRM account. */
 export default function TenderCreate({ accounts }: { accounts: AccountLite[] }) {
   return (

@@ -5,6 +5,28 @@ interface ProjectLite {
   title: string;
 }
 
+/** Row-level "Edit" — descriptive fields only; PO value is fixed once committed. */
+export function PoEdit({ po }: { po: { id: string; title: string; reference?: string | null; supplierName: string | null } }) {
+  return (
+    <CreateDrawer
+      mode="edit"
+      entity="Purchase Order"
+      subtitle="Update descriptive fields. The committed value is fixed once the PO is created."
+      endpoint={`/api/procurement/purchase-orders/${po.id}`}
+      initialValues={{
+        title: po.title,
+        reference: po.reference ?? '',
+        supplierName: po.supplierName ?? '',
+      }}
+      fields={[
+        { name: 'title', label: 'PO title', kind: 'text', required: true, span: 2 },
+        { name: 'reference', label: 'Reference', kind: 'text' },
+        { name: 'supplierName', label: 'Supplier', kind: 'text' },
+      ]}
+    />
+  );
+}
+
 /** "+ New Purchase Order" — commits spend, optionally against a delivery project
  *  (committed cost lands on the project ledger via the spine). */
 export default function PoCreate({ projects }: { projects: ProjectLite[] }) {

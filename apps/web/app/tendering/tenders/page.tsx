@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import TenderCreate from '../../../components/tender-create';
+import TenderCreate, { TenderEdit } from '../../../components/tender-create';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,8 +51,8 @@ export default async function TendersPage() {
           <table style={st.table}>
             <thead>
               <tr>
-                {['Title', 'Account', 'Status', 'Value', 'Created'].map((h) => (
-                  <th key={h} style={st.th}>
+                {['Title', 'Account', 'Status', 'Value', 'Created', ''].map((h, i) => (
+                  <th key={i} style={st.th}>
                     {h}
                   </th>
                 ))}
@@ -72,6 +72,9 @@ export default async function TendersPage() {
                   </td>
                   <td style={st.td}>{money(t.value)}</td>
                   <td style={st.tdMuted}>{fmt(t.createdAt)}</td>
+                  <td style={st.td}>
+                    <TenderEdit tender={t} />
+                  </td>
                 </tr>
               ))}
             </tbody>

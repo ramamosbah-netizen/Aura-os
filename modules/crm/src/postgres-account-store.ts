@@ -55,6 +55,22 @@ export class PostgresAccountStore implements AccountStore {
     );
   }
 
+  async update(a: Account): Promise<void> {
+    await this.upd(this.pool, a);
+  }
+
+  async updateWithClient(tx: TxHandle | null, a: Account): Promise<void> {
+    if (tx === null) return this.update(a);
+    await this.upd(tx as PoolClient, a);
+  }
+
+  private upd(executor: Pool | PoolClient, a: Account): Promise<unknown> {
+    return executor.query(
+      `UPDATE public.aura_crm_accounts SET name=$2, status=$3, industry=$4, website=$5, owner_id=$6 WHERE id=$1`,
+      [a.id, a.name, a.status, a.industry, a.website, a.ownerId],
+    );
+  }
+
   async get(id: Id): Promise<Account | null> {
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_crm_accounts WHERE id = $1`,

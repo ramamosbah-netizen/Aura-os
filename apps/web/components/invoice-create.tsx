@@ -9,6 +9,28 @@ interface PoLite {
   value: number;
 }
 
+/** Row-level "Edit" — descriptive fields only; invoice value is fixed once posted. */
+export function InvoiceEdit({ invoice }: { invoice: { id: string; title: string; reference?: string | null; supplierName: string | null } }) {
+  return (
+    <CreateDrawer
+      mode="edit"
+      entity="Invoice"
+      subtitle="Update descriptive fields. The invoice value is fixed once posted."
+      endpoint={`/api/finance/invoices/${invoice.id}`}
+      initialValues={{
+        title: invoice.title,
+        reference: invoice.reference ?? '',
+        supplierName: invoice.supplierName ?? '',
+      }}
+      fields={[
+        { name: 'title', label: 'Invoice title', kind: 'text', required: true, span: 2 },
+        { name: 'reference', label: 'Reference', kind: 'text' },
+        { name: 'supplierName', label: 'Supplier', kind: 'text' },
+      ]}
+    />
+  );
+}
+
 /** "+ New Invoice" — raised against a received PO; picking one inherits its
  *  supplier, project, and value (the operate loop closing through the contract). */
 export default function InvoiceCreate({ pos }: { pos: PoLite[] }) {

@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { InvoiceEdit } from './invoice-create';
 
 interface Invoice {
   id: string;
@@ -222,6 +223,7 @@ export default function InvoicesList({
                         {inv.status === 'paid' && (
                           <span style={{ color: 'var(--good)', fontSize: 13 }}>✓ Paid</span>
                         )}
+                        <InvoiceEdit invoice={inv} />
                       </div>
                     </td>
                   </tr>

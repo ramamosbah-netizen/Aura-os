@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Project,
@@ -43,6 +43,13 @@ class CreateProjectDto {
   @IsOptional() @IsString() contractTitle?: string | null;
   @IsOptional() @IsString() accountId?: string | null;
   @IsOptional() @IsString() accountName?: string | null;
+  @IsOptional() @IsString() status?: ProjectStatus;
+  @IsOptional() @IsNumber() value?: number;
+}
+
+class UpdateProjectDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsString() status?: ProjectStatus;
   @IsOptional() @IsNumber() value?: number;
 }
@@ -145,6 +152,23 @@ export class ProjectsController {
       { tenantId: this.tenant.get().tenantId, status, accountId, contractId },
       parsePageParams(limit, offset),
     );
+  }
+
+  /** PATCH /api/projects/projects/:id — update mutable fields (title, reference, status, value). */
+  @Patch('projects/:id')
+  async updateProject(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateProjectDto): Promise<Project> {
+    try {
+      return await this.projects.update(id, {
+        title: dto.title,
+        reference: dto.reference,
+        status: dto.status,
+        value: dto.value,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
   }
 
   @Get('projects/:id')

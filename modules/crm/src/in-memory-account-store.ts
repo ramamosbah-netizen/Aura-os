@@ -16,6 +16,14 @@ export class InMemoryAccountStore implements AccountStore {
     return this.create(account);
   }
 
+  async update(account: Account): Promise<void> {
+    this.accounts.set(account.id, { ...account });
+  }
+
+  async updateWithClient(_tx: TxHandle | null, account: Account): Promise<void> {
+    return this.update(account);
+  }
+
   async get(id: Id): Promise<Account | null> {
     const a = this.accounts.get(id);
     return a ? { ...a } : null;

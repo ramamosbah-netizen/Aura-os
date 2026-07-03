@@ -46,17 +46,22 @@ interface Props {
   entity: string;
   /** short sentence under the title explaining what this creates */
   subtitle: string;
-  /** BFF route to POST the payload to */
+  /** BFF route to POST (create) or PATCH (edit) the payload to */
   endpoint: string;
   fields: FieldSpec[];
-  /** button label override; defaults to "+ New {entity}" */
+  /** button label override; defaults to "+ New {entity}" (create) / "Edit" (edit) */
   buttonLabel?: string;
+  /** 'edit' turns this into an edit form: PATCH, prefilled fields, ghost trigger button */
+  mode?: 'create' | 'edit';
+  /** current record values to prefill in edit mode, keyed by field name */
+  initialValues?: Record<string, string>;
 }
 
 const EMPTY_LINE: LineItem = { description: '', quantity: 1, unitPrice: 0, vatRate: 5 };
 
-export default function CreateDrawer({ entity, subtitle, endpoint, fields, buttonLabel }: Props) {
+export default function CreateDrawer({ entity, subtitle, endpoint, fields, buttonLabel, mode = 'create', initialValues: editValues }: Props) {
   const router = useRouter();
+  const isEdit = mode === 'edit';
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -67,9 +72,9 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
 
   const initialValues = useMemo(() => {
     const v: Record<string, string> = {};
-    for (const f of fields) v[f.name] = f.defaultValue ?? '';
+    for (const f of fields) v[f.name] = editValues?.[f.name] ?? f.defaultValue ?? '';
     return v;
-  }, [fields]);
+  }, [fields, editValues]);
 
   const openDrawer = useCallback(() => {
     setValues(initialValues);
@@ -137,7 +142,7 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
     setErr(null);
     try {
       const res = await fetch(endpoint, {
-        method: 'POST',
+        method: isEdit ? 'PATCH' : 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(buildPayload()),
       });
@@ -146,7 +151,7 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
         setErr(d.error ?? d.message ?? `Error ${res.status}`);
       } else {
         setOpen(false);
-        setToast(`${entity} created`);
+        setToast(`${entity} ${isEdit ? 'updated' : 'created'}`);
         router.refresh();
       }
     } catch {
@@ -163,9 +168,15 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
 
   return (
     <>
-      <button type="button" className="btn btn-primary" onClick={openDrawer}>
-        <span aria-hidden>＋</span> {buttonLabel ?? `New ${entity}`}
-      </button>
+      {isEdit ? (
+        <button type="button" className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12.5 }} onClick={openDrawer}>
+          {buttonLabel ?? 'Edit'}
+        </button>
+      ) : (
+        <button type="button" className="btn btn-primary" onClick={openDrawer}>
+          <span aria-hidden>＋</span> {buttonLabel ?? `New ${entity}`}
+        </button>
+      )}
 
       {toast ? (
         <div className="toast" role="status">
@@ -180,7 +191,7 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="drawer-head">
                 <div>
-                  <h2 className="drawer-title">New {entity}</h2>
+                  <h2 className="drawer-title">{isEdit ? `Edit ${entity}` : `New ${entity}`}</h2>
                   <p className="drawer-sub">{subtitle}</p>
                 </div>
                 <button type="button" className="btn btn-ghost" onClick={close} aria-label="Close">
@@ -344,7 +355,7 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {busy ? 'Creating…' : `Create ${entity}`}
+                  {busy ? 'Saving…' : isEdit ? 'Save changes' : `Create ${entity}`}
                 </button>
               </div>
             </form>

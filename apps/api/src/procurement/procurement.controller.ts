@@ -28,6 +28,13 @@ class CreatePurchaseOrderDto {
   @IsOptional() @IsNumber() value?: number;
 }
 
+class UpdatePurchaseOrderDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() supplierId?: string;
+  @IsOptional() @IsString() supplierName?: string;
+}
+
 class CreatePurchaseRequestDto {
   @IsString() title!: string;
   @IsOptional() @IsString() reference?: string;
@@ -116,6 +123,23 @@ export class ProcurementController {
       { tenantId: this.tenant.get().tenantId, status, projectId },
       parsePageParams(limit, offset),
     );
+  }
+
+  /** PATCH /purchase-orders/:id — update descriptive fields (value is fixed after creation). */
+  @Patch('purchase-orders/:id')
+  async updatePo(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto): Promise<PurchaseOrder> {
+    try {
+      return await this.pos.update(id, {
+        title: dto.title,
+        reference: dto.reference,
+        supplierId: dto.supplierId,
+        supplierName: dto.supplierName,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
   }
 
   @Get('purchase-orders/:id')

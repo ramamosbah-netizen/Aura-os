@@ -8,6 +8,28 @@ interface TenderLite {
   value: number;
 }
 
+/** Row-level "Edit" — opens the drawer prefilled, PATCHes the contract. */
+export function ContractEdit({ contract }: { contract: { id: string; title: string; reference?: string | null; value: number } }) {
+  return (
+    <CreateDrawer
+      mode="edit"
+      entity="Contract"
+      subtitle="Update the contract's details. Status changes happen through the sign/complete actions."
+      endpoint={`/api/contracts/contracts/${contract.id}`}
+      initialValues={{
+        title: contract.title,
+        reference: contract.reference ?? '',
+        value: contract.value ? String(contract.value) : '',
+      }}
+      fields={[
+        { name: 'title', label: 'Contract title', kind: 'text', required: true, span: 2 },
+        { name: 'reference', label: 'Reference', kind: 'text' },
+        { name: 'value', label: 'Value (AED)', kind: 'number' },
+      ]}
+    />
+  );
+}
+
 /** "+ New Contract" — raised from a WON tender; picking one inherits its
  *  title, value, and account (deal-chain inheritance, composed in the UI). */
 export default function ContractCreate({ tenders }: { tenders: TenderLite[] }) {

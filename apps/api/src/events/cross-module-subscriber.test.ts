@@ -71,7 +71,7 @@ function buildHarness() {
     audit,
   );
   const contracts = new ContractService(new InMemoryContractStore(), events, tx, commands);
-  const projects = new ProjectService(new InMemoryProjectStore(), events, commands);
+  const projects = new ProjectService(new InMemoryProjectStore(), events, tx, commands);
   const wbs = new WbsService(new InMemoryWbsStore(), events, access);
   const cbs = new CbsService(new InMemoryCbsStore(), events);
   const customerInvoices = new CustomerInvoiceService(new InMemoryCustomerInvoiceStore(), events, { getRate: async () => 1 } as any);

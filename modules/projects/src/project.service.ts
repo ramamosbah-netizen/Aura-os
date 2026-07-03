@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore } from '@aura/core';
+import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROJECT_EVENT, type Project, type NewProject, makeProject } from './domain/project';
 import { PROJECT_STORE, type ProjectFilter, type ProjectStore } from './project-store';
 
@@ -21,6 +21,7 @@ export class ProjectService implements OnModuleInit {
   constructor(
     @Inject(PROJECT_STORE) private readonly store: ProjectStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
   ) {}
 
@@ -70,6 +71,29 @@ export class ProjectService implements OnModuleInit {
       payload: input,
       idempotencyKey: idempotencyKey ?? null,
     });
+  }
+
+  /** Update mutable fields on a project (title, reference, status, value). */
+  async update(id: Id, patch: Partial<Pick<Project, 'title' | 'reference' | 'status' | 'value'>>): Promise<Project> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`project ${id} not found`);
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const updated: Project = { ...existing, ...defined };
+    const event = makeEvent({
+      type: PROJECT_EVENT.updated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'projects.project',
+      aggregateId: updated.id,
+      payload: { title: updated.title, status: updated.status, value: updated.value },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Project updated: ${updated.title} (${updated.id})`);
+    return updated;
   }
 
   get(id: Id): Promise<Project | null> {

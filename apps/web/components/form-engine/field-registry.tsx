@@ -21,10 +21,13 @@ export interface FieldRendererProps {
 
 export type FieldRenderer = (props: FieldRendererProps) => ReactNode;
 
+/** How a form surface is being used; the drawer derives verb + method from it. */
+export type FormMode = 'create' | 'edit' | 'clone' | 'view';
+
 /** What a toolbar action gets to work with — enough to read and mutate the form. */
 export interface FormApi {
   schema: FormSchema;
-  mode: 'create' | 'edit';
+  mode: FormMode;
   values: Record<string, string>;
   setValues: (patch: Record<string, string>) => void;
   lines: Record<string, FormLineItem[]>;

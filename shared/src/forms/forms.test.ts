@@ -282,6 +282,22 @@ describe('AI extraction', () => {
     expect(parseExtraction(schema, '{"status": "cancelled"}')).toBeNull(); // outside the allowed set
   });
 
+  it('registers and resolves form schemas — static and factory', async () => {
+    const { registerFormSchema, resolveFormSchema, registeredFormSchemaIds } = await import('./registry');
+    const staticSchema = { id: 't.static', entity: 'X', endpoint: '/x', version: 1, fields: [] };
+    registerFormSchema('t.static', staticSchema);
+    registerFormSchema('t.factory', (ctx) => ({
+      ...staticSchema,
+      id: 't.factory',
+      entity: String(ctx?.entity ?? 'Y'),
+    }));
+
+    expect(resolveFormSchema('t.static')).toBe(staticSchema);
+    expect(resolveFormSchema('t.factory', { entity: 'Z' })?.entity).toBe('Z');
+    expect(resolveFormSchema('t.missing')).toBeUndefined();
+    expect(registeredFormSchemaIds()).toEqual(expect.arrayContaining(['t.static', 't.factory']));
+  });
+
   it('builds a review prompt from current values and parses issue arrays', async () => {
     const { buildReviewPrompt, parseReview } = await import('./ai');
     const { system, prompt } = buildReviewPrompt(schema, { quoteNumber: 'QT-9' }, { lines: [] });

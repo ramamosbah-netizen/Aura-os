@@ -3,8 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
-import { FormDrawer } from './form-engine';
-import { quotationFormSchema } from '../lib/form-schemas/quotation';
+import { EntityForm } from './form-engine';
 
 interface Line { description: string; quantity: number; unitPrice: number; vatRate: number; lineNet: number; lineVat: number }
 interface Quotation {
@@ -51,7 +50,7 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
       </div>
 
       <div style={st.toolbar}>
-        <FormDrawer schema={quotationFormSchema} />
+        <EntityForm id="crm.quotation" />
         <ExportButton filename="quotations" rows={quotes as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'quoteNumber' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'total' }, { key: 'status' }]} />
         {error && <span style={st.err}>{error}</span>}
@@ -76,6 +75,12 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
                     {q.status === 'sent' && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} onClick={() => act(q.id, 'accept')}>Accept</button>}
                     {q.status === 'sent' && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(q.id, 'reject')}>Reject</button>}
                     {(q.status === 'draft' || q.status === 'sent') && <button type="button" className="btn btn-ghost" style={st.smBtn} onClick={() => act(q.id, 'expire')}>Expire</button>}
+                    <EntityForm
+                      id="crm.quotation"
+                      mode="clone"
+                      initialValues={{ quoteNumber: `${q.quoteNumber}-R`, customerName: q.customerName }}
+                      initialLines={{ lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })) }}
+                    />
                   </td>
                 </tr>
               ))}

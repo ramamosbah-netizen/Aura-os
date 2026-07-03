@@ -1,13 +1,12 @@
 'use client';
 
-// "+ New Subcontract" — rendered by the form engine from metadata
-// (lib/form-schemas/subcontract.ts). The 'percent' field kind and its
-// validators come from the app plugin module, not the engine core.
+// "+ New Subcontract" — resolved from the Universal Create Engine registry
+// ('subcontracts.subcontract', a factory registration in lib/form-plugins.tsx
+// that receives the project options as context).
 
-import '../lib/form-plugins';
-import { FormDrawer } from './form-engine';
-import { subcontractFormSchema, type ProjectOption } from '../lib/form-schemas/subcontract';
+import { EntityForm } from './form-engine';
+import type { ProjectOption } from '../lib/form-schemas/subcontract';
 
 export default function SubcontractCreate({ projects }: { projects: ProjectOption[] }) {
-  return <FormDrawer schema={subcontractFormSchema(projects)} />;
+  return <EntityForm id="subcontracts.subcontract" ctx={{ projects }} />;
 }

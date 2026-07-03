@@ -5,7 +5,7 @@
 // this one holds everything that must also run headless (server validation,
 // tests, future mobile shells).
 
-import type { FormFieldSchema } from './schema';
+import type { FormFieldSchema, FormSchema } from './schema';
 import type { FormulaFn } from './formula';
 
 /** Returns an error message, or null when the value passes. */
@@ -15,8 +15,36 @@ export type FormValidatorFn = (
   values: Record<string, string>,
 ) => string | null;
 
+/**
+ * A registered form: either a static schema, or a factory for schemas whose
+ * options come from live data (e.g. a project dropdown). The factory context
+ * is whatever the rendering surface has at hand — plain data only.
+ */
+export type FormSchemaSource = FormSchema | ((ctx?: Record<string, unknown>) => FormSchema);
+
 const validators = new Map<string, FormValidatorFn>();
 const formulaFunctions = new Map<string, FormulaFn>();
+const formSchemas = new Map<string, FormSchemaSource>();
+
+/**
+ * Universal Create Engine registration: a module registers its schema once
+ * (keyed by schema id, e.g. 'crm.quotation') and every surface — create,
+ * edit, clone, view — resolves it from here instead of importing form files.
+ */
+export function registerFormSchema(id: string, source: FormSchemaSource): void {
+  formSchemas.set(id, source);
+}
+
+/** Resolve a registered schema; factories receive the caller's context. */
+export function resolveFormSchema(id: string, ctx?: Record<string, unknown>): FormSchema | undefined {
+  const source = formSchemas.get(id);
+  if (!source) return undefined;
+  return typeof source === 'function' ? source(ctx) : source;
+}
+
+export function registeredFormSchemaIds(): string[] {
+  return [...formSchemas.keys()];
+}
 
 export function registerFormValidator(id: string, fn: FormValidatorFn): void {
   validators.set(id, fn);

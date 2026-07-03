@@ -6,10 +6,13 @@
 // Import this module (side effects) from any client component that renders
 // a schema referencing these ids.
 
-import { registerFormulaFunction, registerFormValidator } from '@aura/shared';
+import { registerFormSchema, registerFormulaFunction, registerFormValidator } from '@aura/shared';
 import { registerFieldRenderer, registerFormToolbarAction } from '../components/form-engine';
 import AiAutofill from '../components/form-engine/ai-autofill';
 import AiReview from '../components/form-engine/ai-review';
+import { employeeFormSchema } from './form-schemas/employee';
+import { quotationFormSchema } from './form-schemas/quotation';
+import { subcontractFormSchema, type ProjectOption } from './form-schemas/subcontract';
 
 /* Custom field kind: 'percent' — numeric input with a % adornment.
    Schemas using it set dataType: 'number' so the payload stays numeric. */
@@ -54,3 +57,14 @@ registerFormToolbarAction({
   id: 'ai-review',
   render: (api) => <AiReview api={api} />,
 });
+
+/* ── Universal Create Engine registrations ──────────────────────────────
+   Each module registers its schema once; every Create / Edit / Clone /
+   View surface resolves it via <EntityForm id="…"/>. Factory registrations
+   receive the rendering surface's context (option lists etc.). */
+
+registerFormSchema('hr.employee', employeeFormSchema);
+registerFormSchema('crm.quotation', quotationFormSchema);
+registerFormSchema('subcontracts.subcontract', (ctx) =>
+  subcontractFormSchema((ctx?.projects as ProjectOption[]) ?? []),
+);

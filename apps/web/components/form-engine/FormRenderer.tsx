@@ -22,6 +22,8 @@ import { EMPTY_LINE, getFieldRenderer } from './field-registry';
 
 export interface UseFormEngineOptions {
   initialValues?: Record<string, string>;
+  /** prefill for lines fields (edit/clone/view of records that carry line items) */
+  initialLines?: Record<string, FormLineItem[]>;
   permissions?: string[];
 }
 
@@ -41,9 +43,13 @@ export interface FormEngine {
   formulaLines: Record<string, Array<Record<string, FormulaValue>>>;
 }
 
-function initialLinesFor(schema: FormSchema): Record<string, FormLineItem[]> {
+function initialLinesFor(schema: FormSchema, initial?: Record<string, FormLineItem[]>): Record<string, FormLineItem[]> {
   const out: Record<string, FormLineItem[]> = {};
-  for (const f of schema.fields) if (f.kind === 'lines') out[f.name] = [{ ...EMPTY_LINE }];
+  for (const f of schema.fields) {
+    if (f.kind !== 'lines') continue;
+    const rows = initial?.[f.name];
+    out[f.name] = rows && rows.length > 0 ? rows.map((r) => ({ ...r })) : [{ ...EMPTY_LINE }];
+  }
   return out;
 }
 
@@ -52,7 +58,7 @@ const defaultsFor = (schema: FormSchema, initial?: Record<string, string>) =>
 
 export function useFormEngine(schema: FormSchema, opts: UseFormEngineOptions = {}): FormEngine {
   const [values, setValuesState] = useState<Record<string, string>>(() => defaultsFor(schema, opts.initialValues));
-  const [lines, setLinesState] = useState<Record<string, FormLineItem[]>>(() => initialLinesFor(schema));
+  const [lines, setLinesState] = useState<Record<string, FormLineItem[]>>(() => initialLinesFor(schema, opts.initialLines));
   const [touched, setTouched] = useState(false);
 
   // line rows as plain records so formulas can SUMLINES() over them
@@ -94,7 +100,7 @@ export function useFormEngine(schema: FormSchema, opts: UseFormEngineOptions = {
     setTouched,
     reset: () => {
       setValuesState(defaultsFor(schema, opts.initialValues));
-      setLinesState(initialLinesFor(schema));
+      setLinesState(initialLinesFor(schema, opts.initialLines));
       setTouched(false);
     },
     evaluateForSubmit: () =>

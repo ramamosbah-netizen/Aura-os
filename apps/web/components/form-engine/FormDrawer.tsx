@@ -9,13 +9,19 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildFormPayload, type FormSchema } from '@aura/shared';
 import FormRenderer, { useFormEngine } from './FormRenderer';
-import { formToolbarActions, type FormApi } from './field-registry';
+import { formToolbarActions, type FormApi, type FormMode } from './field-registry';
+
+export type FormDrawerMode = FormMode;
 
 export interface FormDrawerProps {
   schema: FormSchema;
-  /** 'edit' switches to PATCH + prefilled fields + ghost trigger button */
-  mode?: 'create' | 'edit';
+  /** create = POST; edit = PATCH + prefill; clone = POST + prefill; view = read-only */
+  mode?: FormDrawerMode;
+  /** record id — appended to schema.endpoint for edit-mode PATCH */
+  recordId?: string;
   initialValues?: Record<string, string>;
+  /** prefill for lines fields (edit/clone/view of records with line items) */
+  initialLines?: Record<string, import('@aura/shared').FormLineItem[]>;
   buttonLabel?: string;
   /** permission keys of the current session (gates permission-bound fields) */
   permissions?: string[];
@@ -26,19 +32,22 @@ export interface FormDrawerProps {
 export default function FormDrawer({
   schema,
   mode = 'create',
+  recordId,
   initialValues,
+  initialLines,
   buttonLabel,
   permissions,
   onSaved,
 }: FormDrawerProps) {
   const router = useRouter();
   const isEdit = mode === 'edit';
+  const isView = mode === 'view';
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const engine = useFormEngine(schema, { initialValues, permissions });
+  const engine = useFormEngine(schema, { initialValues, initialLines, permissions });
 
   // not memoized: engine.reset closes over the current render's schema and
   // initialValues, so a fresh callback keeps edit-mode prefills up to date
@@ -69,7 +78,7 @@ export default function FormDrawer({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || isView) return;
     engine.setTouched(true);
     const evaluation = engine.evaluateForSubmit();
     if (Object.keys(evaluation.fieldErrors).length > 0 || evaluation.errors.length > 0) return;
@@ -78,7 +87,8 @@ export default function FormDrawer({
     setErr(null);
     try {
       const payload = buildFormPayload(schema.fields, evaluation.values, engine.lines, evaluation.state);
-      const res = await fetch(schema.endpoint, {
+      const endpoint = isEdit && recordId ? `${schema.endpoint}/${recordId}` : schema.endpoint;
+      const res = await fetch(endpoint, {
         method: isEdit ? 'PATCH' : 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
@@ -113,13 +123,13 @@ export default function FormDrawer({
 
   return (
     <>
-      {isEdit ? (
-        <button type="button" className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12.5 }} onClick={openDrawer}>
-          {buttonLabel ?? 'Edit'}
-        </button>
-      ) : (
+      {mode === 'create' ? (
         <button type="button" className="btn btn-primary" onClick={openDrawer}>
           <span aria-hidden>＋</span> {buttonLabel ?? `New ${schema.entity}`}
+        </button>
+      ) : (
+        <button type="button" className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12.5 }} onClick={openDrawer}>
+          {buttonLabel ?? (isEdit ? 'Edit' : mode === 'clone' ? 'Clone' : 'View')}
         </button>
       )}
 
@@ -136,10 +146,15 @@ export default function FormDrawer({
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="drawer-head">
                 <div>
-                  <h2 className="drawer-title">{isEdit ? `Edit ${schema.entity}` : `New ${schema.entity}`}</h2>
-                  {schema.subtitle ? <p className="drawer-sub">{schema.subtitle}</p> : null}
+                  <h2 className="drawer-title">
+                    {isEdit ? `Edit ${schema.entity}`
+                      : isView ? schema.entity
+                      : mode === 'clone' ? `New ${schema.entity} (copy)`
+                      : `New ${schema.entity}`}
+                  </h2>
+                  {schema.subtitle && !isView ? <p className="drawer-sub">{schema.subtitle}</p> : null}
                 </div>
-                {toolbar.length > 0 ? (
+                {toolbar.length > 0 && !isView ? (
                   <div className="fe-toolbar">{toolbar.map((a) => <span key={a.id}>{a.render(formApi)}</span>)}</div>
                 ) : null}
                 <button type="button" className="btn btn-ghost" onClick={close} aria-label="Close">
@@ -160,7 +175,7 @@ export default function FormDrawer({
                   </div>
                 ))}
 
-                <FormRenderer engine={engine} busy={busy} />
+                <FormRenderer engine={engine} busy={busy || isView} />
               </div>
 
               <div className="drawer-foot">
@@ -172,11 +187,13 @@ export default function FormDrawer({
                   </span>
                 ) : null}
                 <button type="button" className="btn" onClick={close} disabled={busy}>
-                  Cancel
+                  {isView ? 'Close' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {busy ? 'Saving…' : isEdit ? 'Save changes' : `Create ${schema.entity}`}
-                </button>
+                {!isView ? (
+                  <button type="submit" className="btn btn-primary" disabled={busy}>
+                    {busy ? 'Saving…' : isEdit ? 'Save changes' : `Create ${schema.entity}`}
+                  </button>
+                ) : null}
               </div>
             </form>
           </div>

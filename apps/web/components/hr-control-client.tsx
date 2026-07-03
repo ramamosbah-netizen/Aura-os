@@ -4,8 +4,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
-import { FormDrawer } from './form-engine';
-import { employeeFormSchema } from '../lib/form-schemas/employee';
+import { EntityForm } from './form-engine';
 
 interface Employee {
   id: string;
@@ -166,7 +165,7 @@ export default function HrControlClient({
       {activeTab === 'employees' && (
         <div>
           <div style={st.tabHeader}>
-            <FormDrawer schema={employeeFormSchema} buttonLabel="Register Employee" />
+            <EntityForm id="hr.employee" buttonLabel="Register Employee" />
           </div>
 
           {/* List panel */}
@@ -215,12 +214,30 @@ export default function HrControlClient({
                             </span>
                           </td>
                           <td style={st.td}>
-                            <button
-                              onClick={() => handleDeleteEmployee(emp.id)}
-                              style={st.btnReject}
-                            >
-                              Delete
-                            </button>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <EntityForm
+                                id="hr.employee"
+                                mode="view"
+                                initialValues={{
+                                  firstName: emp.firstName,
+                                  lastName: emp.lastName,
+                                  role: emp.role,
+                                  department: emp.department,
+                                  joinedDate: emp.joinedDate,
+                                  visaExpiry: emp.visaExpiry ?? '',
+                                  permitExpiry: emp.permitExpiry ?? '',
+                                  laborCamp: emp.laborCamp ?? '',
+                                  email: emp.email ?? '',
+                                  phone: emp.phone ?? '',
+                                }}
+                              />
+                              <button
+                                onClick={() => handleDeleteEmployee(emp.id)}
+                                style={st.btnReject}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

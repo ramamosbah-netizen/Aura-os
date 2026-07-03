@@ -32,6 +32,8 @@ export interface FieldSpec {
   /** grid width — drawer body is a 2-col grid */
   span?: 1 | 2;
   defaultValue?: string;
+  /** payload transform: 'csv' splits into a trimmed string array; 'isoDate' posts an ISO timestamp */
+  transform?: 'csv' | 'isoDate';
 }
 
 export interface LineItem {
@@ -123,7 +125,9 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
       }
       const raw = values[f.name]?.trim() ?? '';
       if (raw === '') continue;
-      if (f.kind === 'number') payload[f.name] = Number(raw) || 0;
+      if (f.transform === 'csv') payload[f.name] = raw.split(',').map((s) => s.trim()).filter(Boolean);
+      else if (f.transform === 'isoDate') payload[f.name] = new Date(raw).toISOString();
+      else if (f.kind === 'number') payload[f.name] = Number(raw) || 0;
       else payload[f.name] = raw;
       if (f.kind === 'select') {
         const opt = f.options?.find((o) => o.value === raw);

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface Project {
   id: string;
@@ -116,73 +118,16 @@ export default function SiteControlClient({
   schedules,
   projects,
 }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'daily-reports' | 'delay-logs' | 'material-consumption' | 'labour-allocations' | 'progress-mapping'>('daily-reports');
-  const [dailyReports, setDailyReports] = useState<DailyReport[]>(initialDailyReports);
-  const [delayLogs, setDelayLogs] = useState<any[]>(initialDelayLogs);
-  const [materialConsumption, setMaterialConsumption] = useState<MaterialConsumption[]>(initialMaterialConsumption);
-  const [labourAllocations, setLabourAllocations] = useState<LabourAllocation[]>(initialLabourAllocations);
-
-  // General state
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
+  const dailyReports = initialDailyReports;
+  const delayLogs = initialDelayLogs;
+  const materialConsumption = initialMaterialConsumption;
+  const labourAllocations = initialLabourAllocations;
   const [error, setError] = useState<string | null>(null);
 
-  // Daily Report form state
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
-  const [workDescription, setWorkDescription] = useState('');
-  const [manpowerCount, setManpowerCount] = useState<number>(0);
-  const [equipmentCount, setEquipmentCount] = useState<number>(0);
-
-  // Delay Log form state
-  const [delayDate, setDelayDate] = useState(new Date().toISOString().split('T')[0]);
-  const [delayType, setDelayType] = useState<DelayLog['delayType']>('weather');
-  const [delayDescription, setDelayDescription] = useState('');
-  const [delayImpactHours, setDelayImpactHours] = useState<number>(0);
-
-  // Material Consumption form state
-  const [matDate, setMatDate] = useState(new Date().toISOString().split('T')[0]);
-  const [matItemId, setMatItemId] = useState('');
-  const [matItemName, setMatItemName] = useState('');
-  const [matQuantity, setMatQuantity] = useState<number>(0);
-  const [matUnit, setMatUnit] = useState('');
-
-  // Labour Allocation form state
-  const [labourDate, setLabourDate] = useState(new Date().toISOString().split('T')[0]);
-  const [labourTrade, setLabourTrade] = useState('');
-  const [labourHeadcount, setLabourHeadcount] = useState<number>(0);
-  const [labourHours, setLabourHours] = useState<number>(0);
-  const [labourSubcontractorName, setLabourSubcontractorName] = useState('');
-  const [labourNotes, setLabourNotes] = useState('');
-
-  const selectedProjName = projects.find((p) => p.id === selectedProjectId)?.title || null;
-
-  const handleCreateDailyReport = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!workDescription.trim() || !reportDate) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/site/daily-reports', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          date: reportDate,
-          workDescription,
-          manpowerCount: Number(manpowerCount),
-          equipmentCount: Number(equipmentCount),
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newReport = await res.json();
-      setDailyReports([newReport, ...dailyReports]);
-      setWorkDescription('');
-      setManpowerCount(0);
-      setEquipmentCount(0);
-    } catch (err: any) {
-      setError(err.message || 'Failed to create daily report');
-    }
-  };
+  const today = new Date().toISOString().split('T')[0];
+  const projectOptions = projects.map((p) => ({ value: p.id, label: p.title }));
 
   const handleSubmitDailyReport = async (id: string) => {
     setError(null);
@@ -191,38 +136,9 @@ export default function SiteControlClient({
         method: 'PUT',
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setDailyReports(dailyReports.map((r) => (r.id === id ? updated : r)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to submit daily report');
-    }
-  };
-
-  const handleCreateDelayLog = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!delayDescription.trim() || !delayDate) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/site/delay-logs', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          date: delayDate,
-          delayType,
-          description: delayDescription,
-          impactHours: Number(delayImpactHours),
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newLog = await res.json();
-      setDelayLogs([newLog, ...delayLogs]);
-      setDelayDescription('');
-      setDelayImpactHours(0);
-    } catch (err: any) {
-      setError(err.message || 'Failed to log delay');
     }
   };
 
@@ -233,74 +149,9 @@ export default function SiteControlClient({
         method: 'PUT',
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setDelayLogs(delayLogs.map((l) => (l.id === id ? updated : l)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to resolve delay');
-    }
-  };
-
-  const handleCreateMaterialConsumption = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!matItemId.trim() || !matItemName.trim() || !matUnit.trim() || matQuantity <= 0) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/site/material-consumption', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          date: matDate,
-          itemId: matItemId,
-          itemName: matItemName,
-          quantityConsumed: Number(matQuantity),
-          unit: matUnit,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newEntry = await res.json();
-      setMaterialConsumption([newEntry, ...materialConsumption]);
-      setMatItemId('');
-      setMatItemName('');
-      setMatQuantity(0);
-      setMatUnit('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to log material consumption');
-    }
-  };
-
-  const handleCreateLabourAllocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!labourTrade.trim() || labourHeadcount <= 0 || labourHours <= 0) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/site/labour', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          date: labourDate,
-          trade: labourTrade,
-          headcount: Number(labourHeadcount),
-          hours: Number(labourHours),
-          subcontractorName: labourSubcontractorName || null,
-          notes: labourNotes || null,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newEntry = await res.json();
-      setLabourAllocations([newEntry, ...labourAllocations]);
-      setLabourTrade('');
-      setLabourHeadcount(0);
-      setLabourHours(0);
-      setLabourSubcontractorName('');
-      setLabourNotes('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to log labour allocation');
     }
   };
 
@@ -345,69 +196,21 @@ export default function SiteControlClient({
       {/* Tab Contents */}
       {activeTab === 'daily-reports' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleCreateDailyReport} style={st.formCard}>
-            <h3 style={st.formTitle}>Draft Daily Report</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Report Date</label>
-                <input
-                  type="date"
-                  value={reportDate}
-                  onChange={(e) => setReportDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Manpower Count</label>
-                <input
-                  type="number"
-                  placeholder="Total workers on site"
-                  value={manpowerCount}
-                  onChange={(e) => setManpowerCount(Number(e.target.value))}
-                  style={st.input}
-                  min={0}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Active Heavy Equipment Count</label>
-                <input
-                  type="number"
-                  placeholder="Total machines on site"
-                  value={equipmentCount}
-                  onChange={(e) => setEquipmentCount(Number(e.target.value))}
-                  style={st.input}
-                  min={0}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Work Description</label>
-                <textarea
-                  placeholder="Describe active tasks completed, locations worked, safety meetings held..."
-                  value={workDescription}
-                  onChange={(e) => setWorkDescription(e.target.value)}
-                  style={st.textarea}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Save Daily Report Draft</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Daily Report"
+              buttonLabel="Draft Daily Report"
+              subtitle="Draft the site diary entry for the day. It stays a draft until formally submitted."
+              endpoint="/api/site/daily-reports"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'date', label: 'Report date', kind: 'date', required: true, defaultValue: today, span: 2 },
+                { name: 'manpowerCount', label: 'Manpower count', kind: 'number', defaultValue: '0', placeholder: 'Total workers on site' },
+                { name: 'equipmentCount', label: 'Active heavy equipment count', kind: 'number', defaultValue: '0', placeholder: 'Total machines on site' },
+                { name: 'workDescription', label: 'Work description', kind: 'textarea', required: true, placeholder: 'Describe active tasks completed, locations worked, safety meetings held…' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -457,72 +260,33 @@ export default function SiteControlClient({
 
       {activeTab === 'delay-logs' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleCreateDelayLog} style={st.formCard}>
-            <h3 style={st.formTitle}>Log Project Site Delay</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Date</label>
-                <input
-                  type="date"
-                  value={delayDate}
-                  onChange={(e) => setDelayDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Delay Type</label>
-                <select
-                  value={delayType}
-                  onChange={(e) => setDelayType(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="weather">Weather Delay</option>
-                  <option value="material">Material Stock Shortage</option>
-                  <option value="access">Site Access / Civil Obstruction</option>
-                  <option value="drawings">Design drawing clarification / RFI pending</option>
-                  <option value="other">Other Outage</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Estimated Impact Hours</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  placeholder="e.g. 4.5"
-                  value={delayImpactHours}
-                  onChange={(e) => setDelayImpactHours(Number(e.target.value))}
-                  style={st.input}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Delay Description</label>
-                <textarea
-                  placeholder="Detail cause of delay, impacted tasks, immediate measures taken..."
-                  value={delayDescription}
-                  onChange={(e) => setDelayDescription(e.target.value)}
-                  style={st.textarea}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Log Delay Incident</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Delay Log"
+              buttonLabel="Log Delay Incident"
+              subtitle="Log a site delay with its cause and estimated schedule impact in hours."
+              endpoint="/api/site/delay-logs"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'date', label: 'Date', kind: 'date', required: true, defaultValue: today },
+                {
+                  name: 'delayType',
+                  label: 'Delay type',
+                  kind: 'select',
+                  defaultValue: 'weather',
+                  options: [
+                    { value: 'weather', label: 'Weather Delay' },
+                    { value: 'material', label: 'Material Stock Shortage' },
+                    { value: 'access', label: 'Site Access / Civil Obstruction' },
+                    { value: 'drawings', label: 'Design drawing clarification / RFI pending' },
+                    { value: 'other', label: 'Other Outage' },
+                  ],
+                },
+                { name: 'impactHours', label: 'Estimated impact hours', kind: 'number', defaultValue: '0', placeholder: 'e.g. 4.5', span: 2 },
+                { name: 'description', label: 'Delay description', kind: 'textarea', required: true, placeholder: 'Detail cause of delay, impacted tasks, immediate measures taken…' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -574,82 +338,22 @@ export default function SiteControlClient({
 
       {activeTab === 'material-consumption' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleCreateMaterialConsumption} style={st.formCard}>
-            <h3 style={st.formTitle}>Record Material Consumption</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Date</label>
-                <input
-                  type="date"
-                  value={matDate}
-                  onChange={(e) => setMatDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Material Item ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g. steel-rebar-16"
-                  value={matItemId}
-                  onChange={(e) => setMatItemId(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Item Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 16mm High Tensile Rebar"
-                  value={matItemName}
-                  onChange={(e) => setMatItemName(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Quantity Consumed</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g. 12.5"
-                  value={matQuantity}
-                  onChange={(e) => setMatQuantity(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Unit of Measurement</label>
-                <input
-                  type="text"
-                  placeholder="e.g. tons, bags, meters"
-                  value={matUnit}
-                  onChange={(e) => setMatUnit(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Log Material Consumption</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Material Consumption"
+              buttonLabel="Log Material Consumption"
+              subtitle="Record materials consumed on site against a project."
+              endpoint="/api/site/material-consumption"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'date', label: 'Date', kind: 'date', required: true, defaultValue: today },
+                { name: 'itemId', label: 'Material item ID', kind: 'text', required: true, placeholder: 'e.g. steel-rebar-16' },
+                { name: 'itemName', label: 'Item name', kind: 'text', required: true, placeholder: 'e.g. 16mm High Tensile Rebar', span: 2 },
+                { name: 'quantityConsumed', label: 'Quantity consumed', kind: 'number', required: true, placeholder: 'e.g. 12.5' },
+                { name: 'unit', label: 'Unit of measurement', kind: 'text', required: true, placeholder: 'e.g. tons, bags, meters' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -685,91 +389,23 @@ export default function SiteControlClient({
 
       {activeTab === 'labour-allocations' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleCreateLabourAllocation} style={st.formCard}>
-            <h3 style={st.formTitle}>Record Labour Allocation</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Date</label>
-                <input
-                  type="date"
-                  value={labourDate}
-                  onChange={(e) => setLabourDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Trade / Designation</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Mason, Steel Fixer, Carpenter"
-                  value={labourTrade}
-                  onChange={(e) => setLabourTrade(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Headcount</label>
-                <input
-                  type="number"
-                  placeholder="Number of workers"
-                  value={labourHeadcount}
-                  onChange={(e) => setLabourHeadcount(Number(e.target.value))}
-                  style={st.input}
-                  min={1}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Hours worked per person</label>
-                <input
-                  type="number"
-                  placeholder="Hours worked"
-                  value={labourHours}
-                  onChange={(e) => setLabourHours(Number(e.target.value))}
-                  style={st.input}
-                  min={1}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Subcontractor Name (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Al Falah Co."
-                  value={labourSubcontractorName}
-                  onChange={(e) => setLabourSubcontractorName(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Notes</label>
-                <textarea
-                  placeholder="Specific tasks worked, zones assigned, tool box topics discussed..."
-                  value={labourNotes}
-                  onChange={(e) => setLabourNotes(e.target.value)}
-                  style={st.textarea}
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Log Labour Allocation</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Labour Allocation"
+              buttonLabel="Log Labour Allocation"
+              subtitle="Record daily labour by trade. Man-hours = headcount × hours, computed by the API."
+              endpoint="/api/site/labour"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'date', label: 'Date', kind: 'date', required: true, defaultValue: today },
+                { name: 'trade', label: 'Trade / designation', kind: 'text', required: true, placeholder: 'e.g. Mason, Steel Fixer, Carpenter' },
+                { name: 'headcount', label: 'Headcount', kind: 'number', required: true, placeholder: 'Number of workers' },
+                { name: 'hours', label: 'Hours worked per person', kind: 'number', required: true, placeholder: 'Hours worked' },
+                { name: 'subcontractorName', label: 'Subcontractor name', kind: 'text', placeholder: 'e.g. Al Falah Co.', span: 2 },
+                { name: 'notes', label: 'Notes', kind: 'textarea', placeholder: 'Specific tasks worked, zones assigned, tool box topics discussed…' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -948,56 +584,7 @@ const st = {
     fontWeight: 600,
     fontSize: 14,
   } as CSSProperties,
-  formCard: {
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 14,
-    padding: 20,
-    margin: '0 0 24px',
-  } as CSSProperties,
-  formTitle: { margin: '0 0 16px', fontSize: 16, fontWeight: 600 } as CSSProperties,
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 } as CSSProperties,
-  field: { display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
-  label: { fontSize: 12, color: 'var(--muted)', fontWeight: 500 } as CSSProperties,
-  input: {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'var(--panel-2)',
-    color: '#fff',
-    fontSize: 13.5,
-  } as CSSProperties,
-  textarea: {
-    padding: '10px 12px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'var(--panel-2)',
-    color: '#fff',
-    fontSize: 13.5,
-    minHeight: 80,
-    resize: 'vertical',
-    fontFamily: 'inherit',
-  } as CSSProperties,
-  select: {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'var(--panel-2)',
-    color: '#fff',
-    fontSize: 13.5,
-    cursor: 'pointer',
-  } as CSSProperties,
-  btn: {
-    padding: '9px 16px',
-    borderRadius: 8,
-    background: '#fff',
-    color: '#000',
-    border: 'none',
-    fontWeight: 600,
-    fontSize: 13.5,
-    cursor: 'pointer',
-    marginTop: 16,
-  } as CSSProperties,
+  tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   btnApprove: {
     padding: '4px 10px',
     borderRadius: 6,

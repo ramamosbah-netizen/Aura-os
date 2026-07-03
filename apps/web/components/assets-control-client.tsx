@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface Asset {
   id: string;
@@ -45,151 +47,31 @@ export default function AssetsControlClient({
   initialMaintenance,
   initialInspections,
 }: Props) {
-  const [assets, setAssets] = useState<Asset[]>(initialAssets);
-  const [maintenance, setMaintenance] = useState<AssetMaintenance[]>(initialMaintenance);
-  const [inspections, setInspections] = useState<AssetInspection[]>(initialInspections);
+  const router = useRouter();
+  const assets = initialAssets;
+  const maintenance = initialMaintenance;
+  const inspections = initialInspections;
 
   const [activeTab, setActiveTab] = useState<'assets' | 'maintenance' | 'inspections'>('assets');
-  const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Form States
-  const [assetForm, setAssetForm] = useState({
-    name: '',
-    serialNumber: '',
-    category: 'Heavy Machinery',
-    purchaseDate: new Date().toISOString().split('T')[0],
-    purchaseCost: 0,
-    status: 'active' as Asset['status'],
-    warrantyExpiry: '',
-    nextCalibrationDate: '',
-    nextInspectionDate: '',
-  });
-
-  const [mForm, setMForm] = useState({
-    assetId: '',
-    date: new Date().toISOString().split('T')[0],
-    description: '',
-    cost: 0,
-  });
-
-  const [insForm, setInsForm] = useState({
-    assetId: '',
-    date: new Date().toISOString().split('T')[0],
-    inspector: '',
-    result: 'pass' as 'pass' | 'fail',
-    notes: '',
-  });
-
-  // Action Helpers
-  const handleRegisterAsset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!assetForm.name.trim() || !assetForm.serialNumber.trim()) {
-      setErrorMessage('Asset name and serial number are required');
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await fetch('/api/assets', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            ...assetForm,
-            purchaseCost: Number(assetForm.purchaseCost || 0),
-            warrantyExpiry: assetForm.warrantyExpiry || null,
-            nextCalibrationDate: assetForm.nextCalibrationDate || null,
-            nextInspectionDate: assetForm.nextInspectionDate || null,
-          }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Failed to register asset');
-        }
-
-        const newAsset = await res.json();
-        setAssets((prev) => [newAsset, ...prev]);
-        setAssetForm({
-          name: '',
-          serialNumber: '',
-          category: 'Heavy Machinery',
-          purchaseDate: new Date().toISOString().split('T')[0],
-          purchaseCost: 0,
-          status: 'active',
-          warrantyExpiry: '',
-          nextCalibrationDate: '',
-          nextInspectionDate: '',
-        });
-      } catch (err: any) {
-        setErrorMessage(err.message);
-      }
-    });
-  };
+  const today = new Date().toISOString().split('T')[0];
+  const assetOptions = assets.map((a) => ({ value: a.id, label: `${a.name} (${a.serialNumber})` }));
 
   const handleDeleteAsset = async (id: string) => {
     if (!confirm('Are you sure you want to delete this asset? This will also cascade delete all maintenance and inspection logs.')) {
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const res = await fetch(`/api/assets/${id}`, { method: 'DELETE' });
-        if (!res.ok) {
-          throw new Error('Failed to delete asset');
-        }
-        setAssets((prev) => prev.filter((item) => item.id !== id));
-        setMaintenance((prev) => prev.filter((m) => m.assetId !== id));
-        setInspections((prev) => prev.filter((ins) => ins.assetId !== id));
-      } catch (err: any) {
-        setErrorMessage(err.message);
+    try {
+      const res = await fetch(`/api/assets/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        throw new Error('Failed to delete asset');
       }
-    });
-  };
-
-  const handleScheduleMaintenance = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!mForm.assetId) {
-      setErrorMessage('Please select an asset to maintain');
-      return;
+      router.refresh();
+    } catch (err: any) {
+      setErrorMessage(err.message);
     }
-
-    if (!mForm.description.trim()) {
-      setErrorMessage('Description of maintenance is required');
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await fetch('/api/assets/maintenance', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            ...mForm,
-            cost: Number(mForm.cost || 0),
-          }),
-        });
-
-        if (!res.ok) {
-          throw new Error('Failed to schedule maintenance');
-        }
-
-        const newRecord = await res.json();
-        setMaintenance((prev) => [newRecord, ...prev]);
-        setMForm({
-          assetId: '',
-          date: new Date().toISOString().split('T')[0],
-          description: '',
-          cost: 0,
-        });
-      } catch (err: any) {
-        setErrorMessage(err.message);
-      }
-    });
   };
 
   const handleCompleteMaintenance = async (id: string) => {
@@ -202,65 +84,21 @@ export default function AssetsControlClient({
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const res = await fetch(`/api/assets/maintenance/${id}/complete`, {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ actualCost }),
-        });
+    try {
+      const res = await fetch(`/api/assets/maintenance/${id}/complete`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actualCost }),
+      });
 
-        if (!res.ok) {
-          throw new Error('Failed to complete maintenance');
-        }
-
-        const updated = await res.json();
-        setMaintenance((prev) => prev.map((item) => (item.id === id ? updated : item)));
-      } catch (err: any) {
-        setErrorMessage(err.message);
+      if (!res.ok) {
+        throw new Error('Failed to complete maintenance');
       }
-    });
-  };
 
-  const handleRecordInspection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!insForm.assetId) {
-      setErrorMessage('Please select an asset to inspect');
-      return;
+      router.refresh();
+    } catch (err: any) {
+      setErrorMessage(err.message);
     }
-
-    if (!insForm.inspector.trim()) {
-      setErrorMessage('Inspector name is required');
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await fetch('/api/assets/inspections', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(insForm),
-        });
-
-        if (!res.ok) {
-          throw new Error('Failed to record inspection');
-        }
-
-        const newRecord = await res.json();
-        setInspections((prev) => [newRecord, ...prev]);
-        setInsForm({
-          assetId: '',
-          date: new Date().toISOString().split('T')[0],
-          inspector: '',
-          result: 'pass',
-          notes: '',
-        });
-      } catch (err: any) {
-        setErrorMessage(err.message);
-      }
-    });
   };
 
   const getAssetName = (id: string) => {
@@ -316,131 +154,49 @@ export default function AssetsControlClient({
 
       {/* ── Tab: Asset Register ────────────────────────────────────────────── */}
       {activeTab === 'assets' && (
-        <div style={st.grid}>
-          {/* Form */}
-          <div className="glass" style={st.card}>
-            <h2 style={st.cardH2}>Register Capital Asset / Equipment</h2>
-            <form onSubmit={handleRegisterAsset} style={st.form}>
-              <div style={st.formGroup}>
-                <label style={st.label}>Asset Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Generator 500kVA, Forklift Model X"
-                  value={assetForm.name}
-                  onChange={(e) => setAssetForm({ ...assetForm, name: e.target.value })}
-                  style={st.input}
-                  disabled={isPending}
-                />
-              </div>
-
-              <div style={st.formRow}>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Serial Number *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. S/N-998822"
-                    value={assetForm.serialNumber}
-                    onChange={(e) => setAssetForm({ ...assetForm, serialNumber: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Category</label>
-                  <select
-                    value={assetForm.category}
-                    onChange={(e) => setAssetForm({ ...assetForm, category: e.target.value })}
-                    style={st.select}
-                    disabled={isPending}
-                  >
-                    <option value="Heavy Machinery">Heavy Machinery</option>
-                    <option value="Power Equipment">Power Equipment</option>
-                    <option value="Safety Gear">Safety Gear</option>
-                    <option value="IT Hardware">IT Hardware</option>
-                    <option value="HVAC / MEP">HVAC / MEP</option>
-                    <option value="Tools / Instrumentation">Tools / Instrumentation</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={st.formRow}>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Purchase Date</label>
-                  <input
-                    type="date"
-                    value={assetForm.purchaseDate}
-                    onChange={(e) => setAssetForm({ ...assetForm, purchaseDate: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Purchase Cost (AED)</label>
-                  <input
-                    type="number"
-                    value={assetForm.purchaseCost || ''}
-                    placeholder="0.00"
-                    onChange={(e) => setAssetForm({ ...assetForm, purchaseCost: Number(e.target.value) })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-              </div>
-
-              <div style={st.formRow}>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Warranty Expiry</label>
-                  <input
-                    type="date"
-                    value={assetForm.warrantyExpiry}
-                    onChange={(e) => setAssetForm({ ...assetForm, warrantyExpiry: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Next Calibration Date</label>
-                  <input
-                    type="date"
-                    value={assetForm.nextCalibrationDate}
-                    onChange={(e) => setAssetForm({ ...assetForm, nextCalibrationDate: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-              </div>
-
-              <div style={st.formRow}>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Next Inspection Date</label>
-                  <input
-                    type="date"
-                    value={assetForm.nextInspectionDate}
-                    onChange={(e) => setAssetForm({ ...assetForm, nextInspectionDate: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Asset Status</label>
-                  <select
-                    value={assetForm.status}
-                    onChange={(e) => setAssetForm({ ...assetForm, status: e.target.value as Asset['status'] })}
-                    style={st.select}
-                    disabled={isPending}
-                  >
-                    <option value="active">Active / Operational</option>
-                    <option value="maintenance">Under Maintenance</option>
-                    <option value="inactive">Inactive / Reserve</option>
-                    <option value="disposed">Disposed / Sold</option>
-                  </select>
-                </div>
-              </div>
-
-              <button type="submit" style={st.btnSubmit} disabled={isPending}>
-                {isPending ? 'Registering...' : 'Register Asset'}
-              </button>
-            </form>
+        <div>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Asset"
+              buttonLabel="Register Asset"
+              subtitle="Register a capital asset or piece of equipment with warranty, calibration, and inspection dates."
+              endpoint="/api/assets"
+              fields={[
+                { name: 'name', label: 'Asset name', kind: 'text', required: true, placeholder: 'e.g. Generator 500kVA, Forklift Model X', span: 2 },
+                { name: 'serialNumber', label: 'Serial number', kind: 'text', required: true, placeholder: 'e.g. S/N-998822' },
+                {
+                  name: 'category',
+                  label: 'Category',
+                  kind: 'select',
+                  defaultValue: 'Heavy Machinery',
+                  options: [
+                    { value: 'Heavy Machinery', label: 'Heavy Machinery' },
+                    { value: 'Power Equipment', label: 'Power Equipment' },
+                    { value: 'Safety Gear', label: 'Safety Gear' },
+                    { value: 'IT Hardware', label: 'IT Hardware' },
+                    { value: 'HVAC / MEP', label: 'HVAC / MEP' },
+                    { value: 'Tools / Instrumentation', label: 'Tools / Instrumentation' },
+                  ],
+                },
+                { name: 'purchaseDate', label: 'Purchase date', kind: 'date', required: true, defaultValue: today },
+                { name: 'purchaseCost', label: 'Purchase cost (AED)', kind: 'number', defaultValue: '0', placeholder: '0.00' },
+                {
+                  name: 'status',
+                  label: 'Asset status',
+                  kind: 'select',
+                  defaultValue: 'active',
+                  options: [
+                    { value: 'active', label: 'Active / Operational' },
+                    { value: 'maintenance', label: 'Under Maintenance' },
+                    { value: 'inactive', label: 'Inactive / Reserve' },
+                    { value: 'disposed', label: 'Disposed / Sold' },
+                  ],
+                },
+                { name: 'warrantyExpiry', label: 'Warranty expiry', kind: 'date' },
+                { name: 'nextCalibrationDate', label: 'Next calibration date', kind: 'date' },
+                { name: 'nextInspectionDate', label: 'Next inspection date', kind: 'date' },
+              ]}
+            />
           </div>
 
           {/* Directory */}
@@ -488,7 +244,6 @@ export default function AssetsControlClient({
                           <button
                             onClick={() => handleDeleteAsset(item.id)}
                             style={st.btnDanger}
-                            disabled={isPending}
                           >
                             Delete
                           </button>
@@ -505,68 +260,20 @@ export default function AssetsControlClient({
 
       {/* ── Tab: Preventative Maintenance ─────────────────────────────────── */}
       {activeTab === 'maintenance' && (
-        <div style={st.grid}>
-          {/* Form */}
-          <div className="glass" style={st.card}>
-            <h2 style={st.cardH2}>Schedule Asset Preventative Maintenance</h2>
-            <form onSubmit={handleScheduleMaintenance} style={st.form}>
-              <div style={st.formGroup}>
-                <label style={st.label}>Select Asset *</label>
-                <select
-                  value={mForm.assetId}
-                  onChange={(e) => setMForm({ ...mForm, assetId: e.target.value })}
-                  style={st.select}
-                  disabled={isPending}
-                >
-                  <option value="">-- Choose Asset --</option>
-                  {assets.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.serialNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={st.formRow}>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Maintenance Date *</label>
-                  <input
-                    type="date"
-                    value={mForm.date}
-                    onChange={(e) => setMForm({ ...mForm, date: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Estimated Cost (AED)</label>
-                  <input
-                    type="number"
-                    value={mForm.cost || ''}
-                    placeholder="0.00"
-                    onChange={(e) => setMForm({ ...mForm, cost: Number(e.target.value) })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-              </div>
-
-              <div style={st.formGroup}>
-                <label style={st.label}>Description of Work *</label>
-                <textarea
-                  placeholder="e.g. Regular 250hr engine service, load calibration, filter changeout"
-                  value={mForm.description}
-                  onChange={(e) => setMForm({ ...mForm, description: e.target.value })}
-                  style={st.textarea}
-                  rows={3}
-                  disabled={isPending}
-                />
-              </div>
-
-              <button type="submit" style={st.btnSubmit} disabled={isPending}>
-                {isPending ? 'Scheduling...' : 'Schedule Maintenance'}
-              </button>
-            </form>
+        <div>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Maintenance"
+              buttonLabel="Schedule Maintenance"
+              subtitle="Schedule preventative maintenance for an asset. Completing the work later records the actual cost."
+              endpoint="/api/assets/maintenance"
+              fields={[
+                { name: 'assetId', label: 'Asset', kind: 'select', required: true, options: assetOptions, span: 2 },
+                { name: 'date', label: 'Maintenance date', kind: 'date', required: true, defaultValue: today },
+                { name: 'cost', label: 'Estimated cost (AED)', kind: 'number', defaultValue: '0', placeholder: '0.00' },
+                { name: 'description', label: 'Description of work', kind: 'textarea', required: true, placeholder: 'e.g. Regular 250hr engine service, load calibration, filter changeout' },
+              ]}
+            />
           </div>
 
           {/* Ledger */}
@@ -610,7 +317,6 @@ export default function AssetsControlClient({
                             <button
                               onClick={() => handleCompleteMaintenance(item.id)}
                               style={st.btnSuccess}
-                              disabled={isPending}
                             >
                               Complete Work
                             </button>
@@ -628,83 +334,31 @@ export default function AssetsControlClient({
 
       {/* ── Tab: Calibrations & Inspections ──────────────────────────────── */}
       {activeTab === 'inspections' && (
-        <div style={st.grid}>
-          {/* Form */}
-          <div className="glass" style={st.card}>
-            <h2 style={st.cardH2}>Record Asset Inspection / Calibration</h2>
-            <form onSubmit={handleRecordInspection} style={st.form}>
-              <div style={st.formGroup}>
-                <label style={st.label}>Select Asset *</label>
-                <select
-                  value={insForm.assetId}
-                  onChange={(e) => setInsForm({ ...insForm, assetId: e.target.value })}
-                  style={st.select}
-                  disabled={isPending}
-                >
-                  <option value="">-- Choose Asset --</option>
-                  {assets.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.serialNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={st.formRow}>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Inspection Date *</label>
-                  <input
-                    type="date"
-                    value={insForm.date}
-                    onChange={(e) => setInsForm({ ...insForm, date: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Inspector Name *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Safety Inspector, John Doe"
-                    value={insForm.inspector}
-                    onChange={(e) => setInsForm({ ...insForm, inspector: e.target.value })}
-                    style={st.input}
-                    disabled={isPending}
-                  />
-                </div>
-              </div>
-
-              <div style={st.formRow}>
-                <div style={st.formGroup}>
-                  <label style={st.label}>Inspection Result *</label>
-                  <select
-                    value={insForm.result}
-                    onChange={(e) => setInsForm({ ...insForm, result: e.target.value as 'pass' | 'fail' })}
-                    style={st.select}
-                    disabled={isPending}
-                  >
-                    <option value="pass">PASS (Meets all regulations / safety parameters)</option>
-                    <option value="fail">FAIL (Action required / safety tags suspended)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={st.formGroup}>
-                <label style={st.label}>Inspection Notes</label>
-                <textarea
-                  placeholder="e.g. Brake tests valid. Minor hydraulic line wear noted, scheduled for next preventative run."
-                  value={insForm.notes}
-                  onChange={(e) => setInsForm({ ...insForm, notes: e.target.value })}
-                  style={st.textarea}
-                  rows={3}
-                  disabled={isPending}
-                />
-              </div>
-
-              <button type="submit" style={st.btnSubmit} disabled={isPending}>
-                {isPending ? 'Recording...' : 'Record Inspection Result'}
-              </button>
-            </form>
+        <div>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Inspection"
+              buttonLabel="Record Inspection"
+              subtitle="Record an inspection or calibration result for an asset."
+              endpoint="/api/assets/inspections"
+              fields={[
+                { name: 'assetId', label: 'Asset', kind: 'select', required: true, options: assetOptions, span: 2 },
+                { name: 'date', label: 'Inspection date', kind: 'date', required: true, defaultValue: today },
+                { name: 'inspector', label: 'Inspector name', kind: 'text', required: true, placeholder: 'e.g. Safety Inspector, John Doe' },
+                {
+                  name: 'result',
+                  label: 'Inspection result',
+                  kind: 'select',
+                  defaultValue: 'pass',
+                  span: 2,
+                  options: [
+                    { value: 'pass', label: 'PASS (Meets all regulations / safety parameters)' },
+                    { value: 'fail', label: 'FAIL (Action required / safety tags suspended)' },
+                  ],
+                },
+                { name: 'notes', label: 'Inspection notes', kind: 'textarea', placeholder: 'e.g. Brake tests valid. Minor hydraulic line wear noted, scheduled for next preventative run.' },
+              ]}
+            />
           </div>
 
           {/* History */}
@@ -779,15 +433,7 @@ const st = {
     fontSize: 14,
     boxShadow: '0 0 12px rgba(168, 85, 247, 0.25)',
   } as CSSProperties,
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' } as CSSProperties,
-  card: {
-    padding: '24px',
-    borderRadius: '16px',
-    background: 'rgba(255, 255, 255, 0.02)',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-    backdropFilter: 'blur(8px)',
-  } as CSSProperties,
+  tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   cardLarge: {
     padding: '24px',
     borderRadius: '16px',
@@ -797,51 +443,6 @@ const st = {
     backdropFilter: 'blur(8px)',
   } as CSSProperties,
   cardH2: { fontSize: 18, margin: '0 0 20px', fontWeight: 600, letterSpacing: -0.3 } as CSSProperties,
-  form: { display: 'flex', flexDirection: 'column', gap: '16px' } as CSSProperties,
-  formRow: { display: 'flex', gap: '16px' } as CSSProperties,
-  formGroup: { display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 } as CSSProperties,
-  label: { fontSize: 12, color: 'var(--muted)', fontWeight: 500 } as CSSProperties,
-  input: {
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    background: 'rgba(0, 0, 0, 0.2)',
-    color: 'var(--foreground)',
-    fontSize: 14,
-    outline: 'none',
-  } as CSSProperties,
-  select: {
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    background: 'rgba(0, 0, 0, 0.2)',
-    color: 'var(--foreground)',
-    fontSize: 14,
-    outline: 'none',
-    cursor: 'pointer',
-  } as CSSProperties,
-  textarea: {
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    background: 'rgba(0, 0, 0, 0.2)',
-    color: 'var(--foreground)',
-    fontSize: 14,
-    outline: 'none',
-    resize: 'vertical',
-    fontFamily: 'inherit',
-  } as CSSProperties,
-  btnSubmit: {
-    margin: '10px 0 0',
-    padding: '12px 20px',
-    borderRadius: '8px',
-    border: 'none',
-    background: 'linear-gradient(135deg, #a855f7, #ec4899)',
-    color: '#fff',
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: 'opacity 0.2s',
-  } as CSSProperties,
   tableContainer: { overflowX: 'auto' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
   trHead: { borderBottom: '1px solid rgba(255, 255, 255, 0.08)' } as CSSProperties,

@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { PoEdit } from './po-create';
 
 interface PurchaseOrder {
   id: string;
@@ -135,6 +136,7 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
                           Received ✓
                         </span>
                       )}
+                      <PoEdit po={po} />
                     </td>
                   </tr>
                 );

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface Project {
   id: string;
@@ -99,75 +101,20 @@ export default function QualityControlClient({
   projects,
   initialAudits,
 }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'ncrs' | 'irs' | 'snags' | 'audits'>('ncrs');
-  const [ncrs, setNcrs] = useState<Ncr[]>(initialNcrs);
-  const [inspections, setInspections] = useState<InspectionRequest[]>(initialInspections);
-  const [snags, setSnags] = useState<Snag[]>(initialSnags);
-  const [audits, setAudits] = useState<AuditSchedule[]>(initialAudits);
+  const ncrs = initialNcrs;
+  const inspections = initialInspections;
+  const snags = initialSnags;
+  const audits = initialAudits;
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
-
-  // General State
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
   const [error, setError] = useState<string | null>(null);
-
-  // Audit Form State
-  const [auditNumber, setAuditNumber] = useState('');
-  const [auditType, setAuditType] = useState('ISO 9001:2015');
-  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0]);
-  const [auditorName, setAuditorName] = useState('');
-
-  // NCR Form State
-  const [ncrNumber, setNcrNumber] = useState('');
-  const [ncrSeverity, setNcrSeverity] = useState<Ncr['severity']>('minor');
-  const [ncrDescription, setNcrDescription] = useState('');
-  const [ncrRootCause, setNcrRootCause] = useState('');
-  const [ncrProposedCorrection, setNcrProposedCorrection] = useState('');
-  const [ncrAssignedTo, setNcrAssignedTo] = useState('');
-
-  // IR Form State
-  const [irNumber, setIrNumber] = useState('');
-  const [irDiscipline, setIrDiscipline] = useState<InspectionRequest['discipline']>('civil');
-  const [irLocationDetail, setIrLocationDetail] = useState('');
-  const [irInspectionDate, setIrInspectionDate] = useState(new Date().toISOString().split('T')[0]);
-
-  // Snag Form State
-  const [snagDescription, setSnagDescription] = useState('');
-  const [snagLocationDetail, setSnagLocationDetail] = useState('');
-  const [snagSeverity, setSnagSeverity] = useState<Snag['severity']>('low');
-  const [snagAssignedTo, setSnagAssignedTo] = useState('');
 
   // Inline action state (for comments on IR approval/rejection)
   const [commentsInput, setCommentsInput] = useState<{ [id: string]: string }>({});
 
-  const selectedProjName = projects.find((p) => p.id === selectedProjectId)?.title || null;
-
-  const handleScheduleAudit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!auditNumber.trim() || !auditType.trim() || !scheduledDate || !auditorName.trim()) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/quality/audits', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          auditNumber,
-          auditType,
-          scheduledDate,
-          auditorName,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newAudit = await res.json();
-      setAudits([newAudit, ...audits]);
-      setAuditNumber('');
-      setAuditorName('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to schedule audit');
-    }
-  };
+  const today = new Date().toISOString().split('T')[0];
+  const projectOptions = projects.map((p) => ({ value: p.id, label: p.title }));
 
   const handleUpdateChecklistStatus = async (
     auditId: string,
@@ -200,8 +147,7 @@ export default function QualityControlClient({
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setAudits(audits.map((a) => (a.id === auditId ? updated : a)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to update checklist item');
     }
@@ -221,8 +167,7 @@ export default function QualityControlClient({
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setAudits(audits.map((a) => (a.id === auditId ? updated : a)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to complete audit');
     }
@@ -235,49 +180,9 @@ export default function QualityControlClient({
         method: 'POST',
       });
       if (!res.ok) throw new Error(await res.text());
-      const ncr = await res.json();
-      setNcrs([ncr, ...ncrs]);
-
-      const auditRes = await fetch(`/api/quality/audits/${auditId}`);
-      if (auditRes.ok) {
-        const updatedAudit = await auditRes.json();
-        setAudits(audits.map((a) => (a.id === auditId ? updatedAudit : a)));
-      }
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to generate NCR ticket');
-    }
-  };
-
-  const handleRaiseNcr = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ncrNumber.trim() || !ncrDescription.trim() || !ncrSeverity) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/quality/ncrs', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          ncrNumber: ncrNumber,
-          description: ncrDescription,
-          rootCause: ncrRootCause || undefined,
-          proposedCorrection: ncrProposedCorrection || undefined,
-          severity: ncrSeverity,
-          assignedTo: ncrAssignedTo || undefined,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newNcr = await res.json();
-      setNcrs([newNcr, ...ncrs]);
-      setNcrNumber('');
-      setNcrDescription('');
-      setNcrRootCause('');
-      setNcrProposedCorrection('');
-      setNcrAssignedTo('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to raise NCR');
     }
   };
 
@@ -290,38 +195,9 @@ export default function QualityControlClient({
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setNcrs(ncrs.map((n) => (n.id === id ? updated : n)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to update NCR status');
-    }
-  };
-
-  const handleRequestInspection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!irNumber.trim() || !irLocationDetail.trim() || !irInspectionDate) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/quality/irs', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          irNumber: irNumber,
-          discipline: irDiscipline,
-          locationDetail: irLocationDetail,
-          inspectionDate: irInspectionDate,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newIr = await res.json();
-      setInspections([newIr, ...inspections]);
-      setIrNumber('');
-      setIrLocationDetail('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to request inspection');
     }
   };
 
@@ -335,40 +211,10 @@ export default function QualityControlClient({
         body: JSON.stringify({ status, comments }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setInspections(inspections.map((ir) => (ir.id === id ? updated : ir)));
       setCommentsInput({ ...commentsInput, [id]: '' });
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to resolve inspection');
-    }
-  };
-
-  const handleLogSnag = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!snagDescription.trim() || !snagLocationDetail.trim() || !snagSeverity) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/quality/snags', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          description: snagDescription,
-          locationDetail: snagLocationDetail,
-          severity: snagSeverity,
-          assignedTo: snagAssignedTo || undefined,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newSnag = await res.json();
-      setSnags([newSnag, ...snags]);
-      setSnagDescription('');
-      setSnagLocationDetail('');
-      setSnagAssignedTo('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to log snag');
     }
   };
 
@@ -379,8 +225,7 @@ export default function QualityControlClient({
         method: 'PUT',
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setSnags(snags.map((s) => (s.id === id ? updated : s)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to resolve snag');
     }
@@ -393,8 +238,7 @@ export default function QualityControlClient({
         method: 'PUT',
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setSnags(snags.map((s) => (s.id === id ? updated : s)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to close snag');
     }
@@ -435,89 +279,32 @@ export default function QualityControlClient({
       {/* Tab Contents */}
       {activeTab === 'ncrs' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleRaiseNcr} style={st.formCard}>
-            <h3 style={st.formTitle}>Raise Non-Conformance Report (NCR)</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>NCR Reference Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. NCR-CIV-002"
-                  value={ncrNumber}
-                  onChange={(e) => setNcrNumber(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Severity</label>
-                <select
-                  value={ncrSeverity}
-                  onChange={(e) => setNcrSeverity(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="minor">Minor (Workmanship / tolerance issues)</option>
-                  <option value="major">Major (Structural deviation / material failure)</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Assigned Engineer</label>
-                <input
-                  type="text"
-                  placeholder="Name of action owner"
-                  value={ncrAssignedTo}
-                  onChange={(e) => setNcrAssignedTo(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Description of Non-Conformance</label>
-                <textarea
-                  placeholder="Detail specify deviation, location, reference drawing or test report..."
-                  value={ncrDescription}
-                  onChange={(e) => setNcrDescription(e.target.value)}
-                  style={st.textarea}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Root Cause Analysis (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Poor material mixing, faulty templates"
-                  value={ncrRootCause}
-                  onChange={(e) => setNcrRootCause(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Proposed Correction (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Demolish and rebuild slab section"
-                  value={ncrProposedCorrection}
-                  onChange={(e) => setNcrProposedCorrection(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Raise NCR</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="NCR"
+              buttonLabel="Raise NCR"
+              subtitle="Raise a non-conformance report. It moves raised → corrected → closed as the deviation is fixed and verified."
+              endpoint="/api/quality/ncrs"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'ncrNumber', label: 'NCR reference number', kind: 'text', required: true, placeholder: 'e.g. NCR-CIV-002' },
+                {
+                  name: 'severity',
+                  label: 'Severity',
+                  kind: 'select',
+                  defaultValue: 'minor',
+                  options: [
+                    { value: 'minor', label: 'Minor (Workmanship / tolerance issues)' },
+                    { value: 'major', label: 'Major (Structural deviation / material failure)' },
+                  ],
+                },
+                { name: 'assignedTo', label: 'Assigned engineer', kind: 'text', placeholder: 'Name of action owner', span: 2 },
+                { name: 'description', label: 'Description of non-conformance', kind: 'textarea', required: true, placeholder: 'Detail the deviation, location, reference drawing or test report…' },
+                { name: 'rootCause', label: 'Root cause analysis', kind: 'text', placeholder: 'e.g. Poor material mixing, faulty templates' },
+                { name: 'proposedCorrection', label: 'Proposed correction', kind: 'text', placeholder: 'e.g. Demolish and rebuild slab section' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -579,72 +366,32 @@ export default function QualityControlClient({
 
       {activeTab === 'irs' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleRequestInspection} style={st.formCard}>
-            <h3 style={st.formTitle}>Submit Inspection Request (IR)</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>IR Reference Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. IR-CIV-042"
-                  value={irNumber}
-                  onChange={(e) => setIrNumber(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Discipline</label>
-                <select
-                  value={irDiscipline}
-                  onChange={(e) => setIrDiscipline(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="civil">Civil & Structural</option>
-                  <option value="mechanical">Mechanical (HVAC/Plumbing)</option>
-                  <option value="electrical">Electrical & ELV</option>
-                  <option value="plumbing">Plumbing & Drainage</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Inspection Date</label>
-                <input
-                  type="date"
-                  value={irInspectionDate}
-                  onChange={(e) => setIrInspectionDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Location & Scope Details</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Roof deck level, axis grid 4-8. Checking slab rebar spacing..."
-                  value={irLocationDetail}
-                  onChange={(e) => setIrLocationDetail(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Submit Request</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Inspection Request"
+              buttonLabel="Submit Inspection Request"
+              subtitle="Submit an IR for QA/QC sign-off. The inspector approves or rejects it with decision comments."
+              endpoint="/api/quality/irs"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'irNumber', label: 'IR reference number', kind: 'text', required: true, placeholder: 'e.g. IR-CIV-042' },
+                {
+                  name: 'discipline',
+                  label: 'Discipline',
+                  kind: 'select',
+                  defaultValue: 'civil',
+                  options: [
+                    { value: 'civil', label: 'Civil & Structural' },
+                    { value: 'mechanical', label: 'Mechanical (HVAC/Plumbing)' },
+                    { value: 'electrical', label: 'Electrical & ELV' },
+                    { value: 'plumbing', label: 'Plumbing & Drainage' },
+                  ],
+                },
+                { name: 'inspectionDate', label: 'Inspection date', kind: 'date', required: true, defaultValue: today },
+                { name: 'locationDetail', label: 'Location & scope details', kind: 'text', required: true, placeholder: 'e.g. Roof deck level, axis grid 4-8. Checking slab rebar spacing…', span: 2 },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -713,70 +460,32 @@ export default function QualityControlClient({
 
       {activeTab === 'snags' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleLogSnag} style={st.formCard}>
-            <h3 style={st.formTitle}>Log Punch List Item / Snag</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Severity</label>
-                <select
-                  value={snagSeverity}
-                  onChange={(e) => setSnagSeverity(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="low">Low (Aesthetic touch-ups)</option>
-                  <option value="medium">Medium (Defective switches, door hinges)</option>
-                  <option value="high">High (Water leaks, no power, safety hazard)</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Location Detail</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Unit 302, Master Bedroom Bathroom"
-                  value={snagLocationDetail}
-                  onChange={(e) => setSnagLocationDetail(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Assigned Subcontractor / Tech</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Apex Plumbing Co."
-                  value={snagAssignedTo}
-                  onChange={(e) => setSnagAssignedTo(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Description of Defect</label>
-                <textarea
-                  placeholder="Describe the snag, what needs fixing..."
-                  value={snagDescription}
-                  onChange={(e) => setSnagDescription(e.target.value)}
-                  style={st.textarea}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Log Snag</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Snag"
+              buttonLabel="Log Snag"
+              subtitle="Log a punch-list defect. It moves open → resolved → closed once verified."
+              endpoint="/api/quality/snags"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                {
+                  name: 'severity',
+                  label: 'Severity',
+                  kind: 'select',
+                  defaultValue: 'low',
+                  span: 2,
+                  options: [
+                    { value: 'low', label: 'Low (Aesthetic touch-ups)' },
+                    { value: 'medium', label: 'Medium (Defective switches, door hinges)' },
+                    { value: 'high', label: 'High (Water leaks, no power, safety hazard)' },
+                  ],
+                },
+                { name: 'locationDetail', label: 'Location detail', kind: 'text', required: true, placeholder: 'e.g. Unit 302, Master Bedroom Bathroom' },
+                { name: 'assignedTo', label: 'Assigned subcontractor / tech', kind: 'text', placeholder: 'e.g. Apex Plumbing Co.' },
+                { name: 'description', label: 'Description of defect', kind: 'textarea', required: true, placeholder: 'Describe the snag, what needs fixing…' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -838,72 +547,32 @@ export default function QualityControlClient({
 
       {activeTab === 'audits' && (
         <div>
-          {/* Schedule ISO Audit Form */}
-          <form onSubmit={handleScheduleAudit} style={st.formCard}>
-            <h3 style={st.formTitle}>Schedule ISO Checklist Audit</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Audit Reference Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. AUD-9001-002"
-                  value={auditNumber}
-                  onChange={(e) => setAuditNumber(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Audit Type / Standard</label>
-                <select
-                  value={auditType}
-                  onChange={(e) => setAuditType(e.target.value)}
-                  style={st.select}
-                >
-                  <option value="ISO 9001:2015">ISO 9001:2015 (Quality Management)</option>
-                  <option value="ISO 14001:2015">ISO 14001:2015 (Environmental)</option>
-                  <option value="ISO 45001:2018">ISO 45001:2018 (Safety Management)</option>
-                  <option value="Internal HSE">Internal HSE Checklist</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Scheduled Date</label>
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(e) => setScheduledDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Lead Auditor Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Johnathan Smith, Quality Lead"
-                  value={auditorName}
-                  onChange={(e) => setAuditorName(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Schedule Audit</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Audit"
+              buttonLabel="Schedule Audit"
+              subtitle="Schedule an ISO checklist audit. The standard's clause checklist is generated automatically."
+              endpoint="/api/quality/audits"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'auditNumber', label: 'Audit reference number', kind: 'text', required: true, placeholder: 'e.g. AUD-9001-002' },
+                {
+                  name: 'auditType',
+                  label: 'Audit type / standard',
+                  kind: 'select',
+                  defaultValue: 'ISO 9001:2015',
+                  options: [
+                    { value: 'ISO 9001:2015', label: 'ISO 9001:2015 (Quality Management)' },
+                    { value: 'ISO 14001:2015', label: 'ISO 14001:2015 (Environmental)' },
+                    { value: 'ISO 45001:2018', label: 'ISO 45001:2018 (Safety Management)' },
+                    { value: 'Internal HSE', label: 'Internal HSE Checklist' },
+                  ],
+                },
+                { name: 'scheduledDate', label: 'Scheduled date', kind: 'date', required: true, defaultValue: today },
+                { name: 'auditorName', label: 'Lead auditor name', kind: 'text', required: true, placeholder: 'e.g. Johnathan Smith, Quality Lead' },
+              ]}
+            />
+          </div>
 
           {/* Audits Ledger */}
           <section style={{ ...st.panel, marginBottom: 24 }}>
@@ -1028,15 +697,12 @@ export default function QualityControlClient({
                             type="text"
                             placeholder="Auditor findings / compliance remarks..."
                             disabled={audit.status === 'completed'}
-                            value={item.findings || ''}
-                            onChange={(e) => {
-                              const newChecklist = audit.checklist.map((c, i) => {
-                                if (i === index) return { ...c, findings: e.target.value };
-                                return c;
-                              });
-                              setAudits(audits.map((a) => (a.id === audit.id ? { ...a, checklist: newChecklist } : a)));
+                            defaultValue={item.findings || ''}
+                            onBlur={(e) => {
+                              if (e.target.value !== (item.findings || '')) {
+                                handleUpdateChecklistStatus(audit.id, index, item.status, e.target.value);
+                              }
                             }}
-                            onBlur={(e) => handleUpdateChecklistStatus(audit.id, index, item.status, e.target.value)}
                             style={{ ...st.input, flex: 1, padding: '6px 10px' }}
                           />
 
@@ -1096,17 +762,7 @@ const st = {
     fontWeight: 600,
     fontSize: 14,
   } as CSSProperties,
-  formCard: {
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 14,
-    padding: 20,
-    margin: '0 0 24px',
-  } as CSSProperties,
-  formTitle: { margin: '0 0 16px', fontSize: 16, fontWeight: 600 } as CSSProperties,
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 } as CSSProperties,
-  field: { display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
-  label: { fontSize: 12, color: 'var(--muted)', fontWeight: 500 } as CSSProperties,
+  tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   input: {
     padding: '8px 12px',
     borderRadius: 8,
@@ -1122,37 +778,6 @@ const st = {
     background: 'var(--panel-2)',
     color: '#fff',
     fontSize: 12.5,
-  } as CSSProperties,
-  textarea: {
-    padding: '10px 12px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'var(--panel-2)',
-    color: '#fff',
-    fontSize: 13.5,
-    minHeight: 80,
-    resize: 'vertical',
-    fontFamily: 'inherit',
-  } as CSSProperties,
-  select: {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'var(--panel-2)',
-    color: '#fff',
-    fontSize: 13.5,
-    cursor: 'pointer',
-  } as CSSProperties,
-  btn: {
-    padding: '9px 16px',
-    borderRadius: 8,
-    background: '#fff',
-    color: '#000',
-    border: 'none',
-    fontWeight: 600,
-    fontSize: 13.5,
-    cursor: 'pointer',
-    marginTop: 16,
   } as CSSProperties,
   btnApprove: {
     padding: '4px 10px',

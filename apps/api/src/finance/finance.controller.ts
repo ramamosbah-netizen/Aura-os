@@ -62,6 +62,12 @@ class CreateInvoiceDto {
   @IsOptional() @IsNumber() @Min(0) exchangeRate?: number;
 }
 
+class UpdateInvoiceDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() supplierName?: string;
+}
+
 class CreateAccountDto {
   @IsString() code!: string;
   @IsString() name!: string;
@@ -186,6 +192,22 @@ export class FinanceController {
       { tenantId: this.tenant.get().tenantId, status, poId, projectId },
       parsePageParams(limit, offset),
     );
+  }
+
+  /** PATCH /invoices/:id — update descriptive fields (value is fixed after creation). */
+  @Patch('invoices/:id')
+  async updateInvoice(@Param('id') id: string, @Body() dto: UpdateInvoiceDto): Promise<Invoice> {
+    try {
+      return await this.invoices.update(id, {
+        title: dto.title,
+        reference: dto.reference,
+        supplierName: dto.supplierName,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
   }
 
   @Get('invoices/:id')

@@ -137,6 +137,30 @@ export class PurchaseOrderService implements OnModuleInit {
     });
   }
 
+  /** Update descriptive fields on a PO (title, reference, supplier snapshot).
+   *  Value is NOT editable — committed project cost was posted as a delta at creation. */
+  async update(id: Id, patch: Partial<Pick<PurchaseOrder, 'title' | 'reference' | 'supplierId' | 'supplierName'>>): Promise<PurchaseOrder> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`PO ${id} not found`);
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const updated: PurchaseOrder = { ...existing, ...defined };
+    const event = makeEvent({
+      type: PROCUREMENT_EVENT.poUpdated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'procurement.po',
+      aggregateId: updated.id,
+      payload: { title: updated.title, value: updated.value },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`PO updated: ${updated.title} (${updated.id})`);
+    return updated;
+  }
+
   async changeStatus(id: Id, status: PurchaseOrderStatus): Promise<PurchaseOrder> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`PO ${id} not found`);

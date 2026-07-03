@@ -15,6 +15,14 @@ class CreateTenderDto {
   @IsOptional() @IsNumber() value?: number;
 }
 
+class UpdateTenderDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() accountName?: string;
+  @IsOptional() @IsNumber() value?: number;
+}
+
 /** Tendering API — stamps tenant/actor from context, delegates to TenderService. */
 @Controller('tendering/tenders')
 export class TenderingController {
@@ -39,6 +47,24 @@ export class TenderingController {
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
+  }
+
+  /** PATCH /api/tendering/tenders/:id — update mutable fields (title, reference, value, account). */
+  @Patch(':id')
+  async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateTenderDto): Promise<Tender> {
+    try {
+      return await this.tenders.update(id, {
+        title: dto.title,
+        reference: dto.reference,
+        value: dto.value,
+        accountId: dto.accountId,
+        accountName: dto.accountName,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
   }
 
   /**

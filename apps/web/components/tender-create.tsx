@@ -1,114 +1,62 @@
-'use client';
-
-import { type CSSProperties, type FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface AccountLite {
   id: string;
   name: string;
 }
 
-/** Create a tender, optionally linked to a CRM account (the dropdown is fed from the
- *  CRM API by the server page — modules composing in the UI via the contract). */
-export default function TenderCreate({ accounts }: { accounts: AccountLite[] }) {
-  const router = useRouter();
-  const [title, setTitle] = useState('');
-  const [accountId, setAccountId] = useState('');
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const t = title.trim();
-    if (!t || busy) return;
-    setBusy(true);
-    setErr(null);
-    const account = accounts.find((a) => a.id === accountId);
-    try {
-      const res = await fetch('/api/tendering/tenders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          title: t,
-          value: Number(value) || 0,
-          accountId: accountId || null,
-          accountName: account?.name ?? null,
-        }),
-      });
-      if (!res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { error?: string };
-        setErr(d.error ?? `Error ${res.status}`);
-      } else {
-        setTitle('');
-        setValue('');
-        setAccountId('');
-        router.refresh();
-      }
-    } catch {
-      setErr('Could not reach the API.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
+/** Row-level "Edit" — opens the drawer prefilled, PATCHes the tender. */
+export function TenderEdit({ tender }: { tender: { id: string; title: string; reference?: string | null; value: number } }) {
   return (
-    <form onSubmit={submit} style={s.form}>
-      <input
-        style={s.input}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="New tender title…"
-        disabled={busy}
-      />
-      <select style={s.select} value={accountId} onChange={(e) => setAccountId(e.target.value)} disabled={busy}>
-        <option value="">No account</option>
-        {accounts.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.name}
-          </option>
-        ))}
-      </select>
-      <input
-        style={s.value}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Value"
-        inputMode="numeric"
-        disabled={busy}
-      />
-      <button type="submit" style={s.btn} disabled={busy || !title.trim()}>
-        {busy ? 'Adding…' : 'Add tender'}
-      </button>
-      {err ? <span style={s.err}>{err}</span> : null}
-    </form>
+    <CreateDrawer
+      mode="edit"
+      entity="Tender"
+      subtitle="Update the tender's details. Status changes happen through the pipeline actions."
+      endpoint={`/api/tendering/tenders/${tender.id}`}
+      initialValues={{
+        title: tender.title,
+        reference: tender.reference ?? '',
+        value: tender.value ? String(tender.value) : '',
+      }}
+      fields={[
+        { name: 'title', label: 'Tender title', kind: 'text', required: true, span: 2 },
+        { name: 'reference', label: 'Reference', kind: 'text' },
+        { name: 'value', label: 'Value (AED)', kind: 'number' },
+      ]}
+    />
   );
 }
 
-const field: CSSProperties = {
-  background: 'var(--panel)',
-  border: '1px solid var(--border)',
-  borderRadius: 10,
-  color: 'var(--text)',
-  padding: '9px 12px',
-  fontSize: 14,
-  outline: 'none',
-};
-
-const s = {
-  form: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, flexWrap: 'wrap' } as CSSProperties,
-  input: { ...field, flex: 1, minWidth: 200 } as CSSProperties,
-  select: { ...field, minWidth: 150 } as CSSProperties,
-  value: { ...field, width: 120 } as CSSProperties,
-  btn: {
-    background: 'var(--accent)',
-    color: '#0b0e14',
-    fontWeight: 600,
-    border: 'none',
-    borderRadius: 10,
-    padding: '9px 16px',
-    fontSize: 14,
-    cursor: 'pointer',
-  } as CSSProperties,
-  err: { color: 'var(--bad)', fontSize: 13, width: '100%' } as CSSProperties,
-};
+/** "+ New Tender" — slide-over form, optionally linked to a CRM account. */
+export default function TenderCreate({ accounts }: { accounts: AccountLite[] }) {
+  return (
+    <CreateDrawer
+      entity="Tender"
+      subtitle="A bid or proposal. Winning it auto-creates the Contract on the deal chain."
+      endpoint="/api/tendering/tenders"
+      fields={[
+        { name: 'title', label: 'Tender title', kind: 'text', required: true, placeholder: 'e.g. Marina Tower — ELV package', span: 2 },
+        { name: 'reference', label: 'Reference', kind: 'text', placeholder: 'e.g. TDR-2026-001' },
+        {
+          name: 'status',
+          label: 'Status',
+          kind: 'select',
+          defaultValue: 'draft',
+          options: [
+            { value: 'draft', label: 'Draft' },
+            { value: 'submitted', label: 'Submitted' },
+          ],
+        },
+        {
+          name: 'accountId',
+          label: 'Account',
+          kind: 'select',
+          labelField: 'accountName',
+          placeholder: 'No account',
+          options: accounts.map((a) => ({ value: a.id, label: a.name })),
+        },
+        { name: 'value', label: 'Value (AED)', kind: 'number', placeholder: '0' },
+      ]}
+    />
+  );
+}

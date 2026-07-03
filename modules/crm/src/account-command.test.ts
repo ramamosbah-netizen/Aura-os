@@ -24,7 +24,7 @@ function buildService() {
   const access = { assert: vi.fn() } as unknown as AccessService;
   // Real pipeline pieces; null pool / null tx exercise the in-memory fallbacks.
   const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
-  const service = new AccountService(store, events, bus);
+  const service = new AccountService(store, events, new NullTxRunner(), bus);
   service.onModuleInit(); // register the command definition
   return { service, store, events, access };
 }

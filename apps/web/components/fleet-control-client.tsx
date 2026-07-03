@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface Vehicle {
   id: string;
@@ -69,33 +71,16 @@ export default function FleetControlClient({
   initialMaintenance,
   employees,
 }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'vehicles' | 'fuel' | 'maintenance' | 'telematics'>('vehicles');
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
-  const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(initialFuelLogs);
-  const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>(initialMaintenance);
+  const vehicles = initialVehicles;
+  const fuelLogs = initialFuelLogs;
+  const maintenance = initialMaintenance;
   const [error, setError] = useState<string | null>(null);
 
-  // Vehicle Form State
-  const [make, setMake] = useState('');
-  const [model, setModel] = useState('');
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [plateNumber, setPlateNumber] = useState('');
-  const [regExpiry, setRegExpiry] = useState('');
-  const [driverId, setDriverId] = useState('');
-  const [vehicleStatus, setVehicleStatus] = useState<Vehicle['status']>('active');
-
-  // Fuel Form State
-  const [fuelVehicleId, setFuelVehicleId] = useState(vehicles[0]?.id || '');
-  const [fuelDate, setFuelDate] = useState(new Date().toISOString().split('T')[0]);
-  const [fuelLiters, setFuelLiters] = useState<number>(0);
-  const [fuelCost, setFuelCost] = useState<number>(0);
-  const [fuelOdometer, setFuelOdometer] = useState<number>(0);
-
-  // Maintenance Form State
-  const [maintVehicleId, setMaintVehicleId] = useState(vehicles[0]?.id || '');
-  const [maintDate, setMaintDate] = useState(new Date().toISOString().split('T')[0]);
-  const [maintDesc, setMaintDesc] = useState('');
-  const [maintCost, setMaintCost] = useState<number>(0);
+  const today = new Date().toISOString().split('T')[0];
+  const vehicleOptions = vehicles.map((v) => ({ value: v.id, label: `${v.make} ${v.model} (${v.plateNumber})` }));
+  const driverOptions = employees.map((emp) => ({ value: emp.id, label: `${emp.firstName} ${emp.lastName} (${emp.role})` }));
 
   // Telematics Form State
   const [gpsVehicleId, setGpsVehicleId] = useState(vehicles[0]?.id || '');
@@ -122,22 +107,8 @@ export default function FleetControlClient({
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const telemetryLog = await res.json();
-      
-      // Update vehicles state with new telemetry
-      setVehicles(vehicles.map((v) => {
-        if (v.id === gpsVehicleId) {
-          return {
-            ...v,
-            lastLatitude: telemetryLog.latitude,
-            lastLongitude: telemetryLog.longitude,
-            lastSpeed: telemetryLog.speed,
-            lastOdometer: telemetryLog.odometer,
-            lastTelemetryAt: telemetryLog.recordedAt,
-          };
-        }
-        return v;
-      }));
+      await res.json();
+      router.refresh();
       setScanResult('Telemetry webhook delivered successfully!');
     } catch (err: any) {
       setError(err.message || 'Failed to send telemetry update');
@@ -163,40 +134,6 @@ export default function FleetControlClient({
     }
   };
 
-  const handleCreateVehicle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      const res = await fetch('/api/fleet/vehicles', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          make,
-          model,
-          year: Number(year),
-          plateNumber,
-          registrationExpiry: regExpiry || null,
-          status: vehicleStatus,
-          driverEmployeeId: driverId || null,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newV = await res.json();
-      setVehicles([newV, ...vehicles]);
-      if (!fuelVehicleId) setFuelVehicleId(newV.id);
-      if (!maintVehicleId) setMaintVehicleId(newV.id);
-
-      // Reset
-      setMake('');
-      setModel('');
-      setPlateNumber('');
-      setRegExpiry('');
-      setDriverId('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create vehicle profile');
-    }
-  };
-
   const handleDeleteVehicle = async (id: string) => {
     setError(null);
     if (!confirm('Are you sure you want to delete this vehicle?')) return;
@@ -205,73 +142,9 @@ export default function FleetControlClient({
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(await res.text());
-      setVehicles(vehicles.filter((v) => v.id !== id));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to delete vehicle');
-    }
-  };
-
-  const handleLogFuel = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetVehId = fuelVehicleId || vehicles[0]?.id;
-    if (!targetVehId) {
-      setError('Please register a vehicle first.');
-      return;
-    }
-    setError(null);
-    try {
-      const res = await fetch('/api/fleet/fuel', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          vehicleId: targetVehId,
-          date: fuelDate,
-          liters: Number(fuelLiters),
-          cost: Number(fuelCost),
-          odometer: Number(fuelOdometer),
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newLog = await res.json();
-      setFuelLogs([newLog, ...fuelLogs]);
-
-      // Reset
-      setFuelLiters(0);
-      setFuelCost(0);
-      setFuelOdometer(0);
-    } catch (err: any) {
-      setError(err.message || 'Failed to log fuel entry');
-    }
-  };
-
-  const handleScheduleMaintenance = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetVehId = maintVehicleId || vehicles[0]?.id;
-    if (!targetVehId) {
-      setError('Please register a vehicle first.');
-      return;
-    }
-    setError(null);
-    try {
-      const res = await fetch('/api/fleet/maintenance', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          vehicleId: targetVehId,
-          date: maintDate,
-          description: maintDesc,
-          cost: Number(maintCost),
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newM = await res.json();
-      setMaintenance([newM, ...maintenance]);
-
-      // Reset
-      setMaintDesc('');
-      setMaintCost(0);
-    } catch (err: any) {
-      setError(err.message || 'Failed to schedule maintenance');
     }
   };
 
@@ -291,8 +164,7 @@ export default function FleetControlClient({
         body: JSON.stringify({ actualCost }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setMaintenance(maintenance.map((m) => (m.id === id ? updated : m)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to complete maintenance');
     }
@@ -354,93 +226,33 @@ export default function FleetControlClient({
       {/* Vehicles Tab */}
       {activeTab === 'vehicles' && (
         <div>
-          {/* Create Vehicle Form */}
-          <form onSubmit={handleCreateVehicle} style={st.formCard}>
-            <h3 style={st.formTitle}>Register Vehicle / Heavy Machinery</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Make / Brand</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Toyota"
-                  value={make}
-                  onChange={(e) => setMake(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Model</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Hilux Pickup"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Manufacture Year</label>
-                <input
-                  type="number"
-                  placeholder="2025"
-                  value={year}
-                  onChange={(e) => setYear(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Plate / Serial Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. DXB-12345"
-                  value={plateNumber}
-                  onChange={(e) => setPlateNumber(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Registration Expiry Date</label>
-                <input
-                  type="date"
-                  value={regExpiry}
-                  onChange={(e) => setRegExpiry(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Assigned Driver (Staff Link)</label>
-                <select
-                  value={driverId}
-                  onChange={(e) => setDriverId(e.target.value)}
-                  style={st.select}
-                >
-                  <option value="">-- No Assigned Driver --</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.firstName} {emp.lastName} ({emp.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Initial Status</label>
-                <select
-                  value={vehicleStatus}
-                  onChange={(e) => setVehicleStatus(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="active">Active</option>
-                  <option value="maintenance">Under Maintenance</option>
-                  <option value="retired">Retired / Sold</option>
-                </select>
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Register Vehicle</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Vehicle"
+              buttonLabel="Register Vehicle"
+              subtitle="Register a vehicle or heavy machinery unit with registration (Mulkiya) expiry and driver assignment."
+              endpoint="/api/fleet/vehicles"
+              fields={[
+                { name: 'make', label: 'Make / brand', kind: 'text', required: true, placeholder: 'e.g. Toyota' },
+                { name: 'model', label: 'Model', kind: 'text', required: true, placeholder: 'e.g. Hilux Pickup' },
+                { name: 'year', label: 'Manufacture year', kind: 'number', required: true, defaultValue: String(new Date().getFullYear()) },
+                { name: 'plateNumber', label: 'Plate / serial number', kind: 'text', required: true, placeholder: 'e.g. DXB-12345' },
+                { name: 'registrationExpiry', label: 'Registration expiry', kind: 'date' },
+                {
+                  name: 'status',
+                  label: 'Initial status',
+                  kind: 'select',
+                  defaultValue: 'active',
+                  options: [
+                    { value: 'active', label: 'Active' },
+                    { value: 'maintenance', label: 'Under Maintenance' },
+                    { value: 'retired', label: 'Retired / Sold' },
+                  ],
+                },
+                { name: 'driverEmployeeId', label: 'Assigned driver (staff link)', kind: 'select', options: driverOptions, span: 2 },
+              ]}
+            />
+          </div>
 
           {/* Vehicles Table */}
           <section style={st.panel}>
@@ -505,74 +317,21 @@ export default function FleetControlClient({
       {/* Fuel logs Tab */}
       {activeTab === 'fuel' && (
         <div>
-          {/* Log Fuel Form */}
-          <form onSubmit={handleLogFuel} style={st.formCard}>
-            <h3 style={st.formTitle}>Log Fuel Consumption</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Vehicle</label>
-                <select
-                  value={fuelVehicleId}
-                  onChange={(e) => setFuelVehicleId(e.target.value)}
-                  style={st.select}
-                  required
-                >
-                  <option value="">-- Select Vehicle --</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.make} {v.model} ({v.plateNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Refuel Date</label>
-                <input
-                  type="date"
-                  value={fuelDate}
-                  onChange={(e) => setFuelDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Liters (L)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="50"
-                  value={fuelLiters}
-                  onChange={(e) => setFuelLiters(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Cost (AED)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="150"
-                  value={fuelCost}
-                  onChange={(e) => setFuelCost(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Odometer Reading (km)</label>
-                <input
-                  type="number"
-                  placeholder="120000"
-                  value={fuelOdometer}
-                  onChange={(e) => setFuelOdometer(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Log Fuel Entry</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Fuel Log"
+              buttonLabel="Log Fuel Entry"
+              subtitle="Log a refuelling event with liters, cost, and the odometer reading at the pump."
+              endpoint="/api/fleet/fuel"
+              fields={[
+                { name: 'vehicleId', label: 'Vehicle', kind: 'select', required: true, options: vehicleOptions, span: 2 },
+                { name: 'date', label: 'Refuel date', kind: 'date', required: true, defaultValue: today },
+                { name: 'liters', label: 'Liters (L)', kind: 'number', required: true, placeholder: '50' },
+                { name: 'cost', label: 'Cost (AED)', kind: 'number', required: true, placeholder: '150' },
+                { name: 'odometer', label: 'Odometer reading (km)', kind: 'number', required: true, placeholder: '120000' },
+              ]}
+            />
+          </div>
 
           {/* Fuel Log registry */}
           <section style={st.panel}>
@@ -610,60 +369,20 @@ export default function FleetControlClient({
       {/* Maintenance Tab */}
       {activeTab === 'maintenance' && (
         <div>
-          {/* Schedule Maintenance Form */}
-          <form onSubmit={handleScheduleMaintenance} style={st.formCard}>
-            <h3 style={st.formTitle}>Schedule Preventative / Corrective Maintenance</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Vehicle</label>
-                <select
-                  value={maintVehicleId}
-                  onChange={(e) => setMaintVehicleId(e.target.value)}
-                  style={st.select}
-                  required
-                >
-                  <option value="">-- Select Vehicle --</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.make} {v.model} ({v.plateNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Maintenance Date</label>
-                <input
-                  type="date"
-                  value={maintDate}
-                  onChange={(e) => setMaintDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Estimated Cost (AED)</label>
-                <input
-                  type="number"
-                  placeholder="500"
-                  value={maintCost}
-                  onChange={(e) => setMaintCost(Number(e.target.value))}
-                  style={st.input}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Description of Work</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 50k km Service, Brake replacement, Salik tag replacement"
-                  value={maintDesc}
-                  onChange={(e) => setMaintDesc(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Schedule Maintenance</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Maintenance"
+              buttonLabel="Schedule Maintenance"
+              subtitle="Schedule preventative or corrective maintenance for a fleet vehicle. Completing the work records the actual cost."
+              endpoint="/api/fleet/maintenance"
+              fields={[
+                { name: 'vehicleId', label: 'Vehicle', kind: 'select', required: true, options: vehicleOptions, span: 2 },
+                { name: 'date', label: 'Maintenance date', kind: 'date', required: true, defaultValue: today },
+                { name: 'cost', label: 'Estimated cost (AED)', kind: 'number', defaultValue: '0', placeholder: '500' },
+                { name: 'description', label: 'Description of work', kind: 'text', required: true, placeholder: 'e.g. 50k km Service, Brake replacement, Salik tag replacement', span: 2 },
+              ]}
+            />
+          </div>
 
           {/* Maintenance Registry */}
           <section style={st.panel}>
@@ -848,6 +567,7 @@ const st = {
     margin: '0 0 20px',
   } as CSSProperties,
   tabs: { display: 'flex', gap: 8, margin: '0 0 24px' } as CSSProperties,
+  tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   tabBtn: {
     padding: '8px 16px',
     borderRadius: 8,

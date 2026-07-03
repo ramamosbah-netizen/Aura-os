@@ -64,6 +64,22 @@ export class PostgresProjectStore implements ProjectStore {
     );
   }
 
+  async update(p: Project): Promise<void> {
+    await this.upd(this.pool, p);
+  }
+
+  async updateWithClient(tx: TxHandle | null, p: Project): Promise<void> {
+    if (tx === null) return this.update(p);
+    await this.upd(tx as PoolClient, p);
+  }
+
+  private upd(executor: Pool | PoolClient, p: Project): Promise<unknown> {
+    return executor.query(
+      `UPDATE public.aura_projects_projects SET title=$2, reference=$3, contract_id=$4, contract_title=$5, account_id=$6, account_name=$7, status=$8, value=$9, owner_id=$10 WHERE id=$1`,
+      [p.id, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.ownerId],
+    );
+  }
+
   async get(id: Id): Promise<Project | null> {
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_projects_projects WHERE id = $1`,

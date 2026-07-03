@@ -16,6 +16,14 @@ export class InMemoryProjectStore implements ProjectStore {
     return this.create(project);
   }
 
+  async update(project: Project): Promise<void> {
+    this.projects.set(project.id, { ...project });
+  }
+
+  async updateWithClient(_tx: TxHandle | null, project: Project): Promise<void> {
+    return this.update(project);
+  }
+
   async get(id: Id): Promise<Project | null> {
     const p = this.projects.get(id);
     return p ? { ...p } : null;

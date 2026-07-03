@@ -145,6 +145,30 @@ export class InvoiceService implements OnModuleInit {
     return { matched: true };
   }
 
+  /** Update descriptive fields on an invoice (title, reference, supplier snapshot).
+   *  Value is NOT editable — actual project cost was posted as a delta at creation. */
+  async update(id: Id, patch: Partial<Pick<Invoice, 'title' | 'reference' | 'supplierName'>>): Promise<Invoice> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`Invoice ${id} not found`);
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const updated: Invoice = { ...existing, ...defined };
+    const event = makeEvent({
+      type: FINANCE_EVENT.invoiceUpdated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'finance.invoice',
+      aggregateId: updated.id,
+      payload: { title: updated.title, value: updated.value },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Invoice updated: ${updated.title} (${updated.id})`);
+    return updated;
+  }
+
   async changeStatus(id: Id, status: InvoiceStatus): Promise<Invoice> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`Invoice ${id} not found`);

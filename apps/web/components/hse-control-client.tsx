@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface Project {
   id: string;
@@ -91,206 +93,45 @@ export default function HseControlClient({
   initialTrainingRecords,
   projects,
 }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'incidents' | 'ptws' | 'capas' | 'training'>('incidents');
-  const [incidents, setIncidents] = useState<HseIncident[]>(initialIncidents);
-  const [permits, setPermits] = useState<PermitToWork[]>(initialPermits);
-  const [capas, setCapas] = useState<CapaAction[]>(initialCapas);
-  const [trainingRecords, setTrainingRecords] = useState<SafetyTrainingRecord[]>(initialTrainingRecords);
-
-  // General State
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
+  const incidents = initialIncidents;
+  const permits = initialPermits;
+  const capas = initialCapas;
+  const trainingRecords = initialTrainingRecords;
   const [error, setError] = useState<string | null>(null);
 
-  // Incident Form State
-  const [incDate, setIncDate] = useState(new Date().toISOString().split('T')[0]);
-  const [incSeverity, setIncSeverity] = useState<HseIncident['severity']>('near_miss');
-  const [incLocation, setIncLocation] = useState('');
-  const [incDescription, setIncDescription] = useState('');
-
-  // Permit Form State
-  const [ptwType, setPtwType] = useState<PermitToWork['permitType']>('hot_work');
-  const [ptwFrom, setPtwFrom] = useState('');
-  const [ptwTo, setPtwTo] = useState('');
-  const [ptwDescription, setPtwDescription] = useState('');
-
-  // CAPA Form State
-  const [capaSourceType, setCapaSourceType] = useState<CapaAction['sourceType']>('inspection');
-  const [capaSourceId, setCapaSourceId] = useState('');
-  const [capaActionRequired, setCapaActionRequired] = useState('');
-  const [capaAssignedTo, setCapaAssignedTo] = useState('');
-  const [capaDueDate, setCapaDueDate] = useState('');
-
-  // Safety Training Form State
-  const [workerName, setWorkerName] = useState('');
-  const [workerId, setWorkerId] = useState('');
-  const [inductionDate, setInductionDate] = useState(new Date().toISOString().split('T')[0]);
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [certificationsInput, setCertificationsInput] = useState('');
-
-  const handleRecordTraining = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!workerName.trim() || !workerId.trim() || !inductionDate) return;
-
-    setError(null);
-    try {
-      const certifications = certificationsInput
-        .split(',')
-        .map((c) => c.trim())
-        .filter((c) => c.length > 0);
-
-      const res = await fetch('/api/hse/training', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          workerName,
-          workerId,
-          inductionDate,
-          cardNumber: cardNumber || undefined,
-          cardExpiry: cardExpiry || undefined,
-          certifications,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newRecord = await res.json();
-      setTrainingRecords([newRecord, ...trainingRecords]);
-      setWorkerName('');
-      setWorkerId('');
-      setCardNumber('');
-      setCardExpiry('');
-      setCertificationsInput('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to record safety training entry');
-    }
-  };
-
-  const selectedProjName = projects.find((p) => p.id === selectedProjectId)?.title || null;
-
-  const handleReportIncident = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!incDescription.trim() || !incLocation.trim() || !incDate) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/hse/incidents', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          date: incDate,
-          severity: incSeverity,
-          description: incDescription,
-          locationDetail: incLocation,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newInc = await res.json();
-      setIncidents([newInc, ...incidents]);
-      setIncLocation('');
-      setIncDescription('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to report safety incident');
-    }
-  };
+  const today = new Date().toISOString().split('T')[0];
+  const projectOptions = projects.map((p) => ({ value: p.id, label: p.title }));
 
   const handleCloseIncident = async (id: string) => {
     setError(null);
     try {
-      const res = await fetch(`/api/hse/incidents/${id}/close`, {
-        method: 'PUT',
-      });
+      const res = await fetch(`/api/hse/incidents/${id}/close`, { method: 'PUT' });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setIncidents(incidents.map((i) => (i.id === id ? updated : i)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to close safety incident');
-    }
-  };
-
-  const handleRequestPermit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ptwFrom || !ptwTo || !ptwDescription.trim()) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/hse/ptws', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          permitType: ptwType,
-          validFrom: new Date(ptwFrom).toISOString(),
-          validTo: new Date(ptwTo).toISOString(),
-          description: ptwDescription,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newPermit = await res.json();
-      setPermits([newPermit, ...permits]);
-      setPtwDescription('');
-      setPtwFrom('');
-      setPtwTo('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to request permit to work');
     }
   };
 
   const handleApprovePermit = async (id: string) => {
     setError(null);
     try {
-      const res = await fetch(`/api/hse/ptws/${id}/approve`, {
-        method: 'PUT',
-      });
+      const res = await fetch(`/api/hse/ptws/${id}/approve`, { method: 'PUT' });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setPermits(permits.map((p) => (p.id === id ? updated : p)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to approve permit to work');
-    }
-  };
-
-  const handleRaiseCapa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!capaActionRequired.trim() || !capaDueDate) return;
-
-    setError(null);
-    try {
-      const res = await fetch('/api/hse/capas', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: selectedProjectId,
-          projectName: selectedProjName,
-          sourceType: capaSourceType,
-          sourceId: capaSourceId || undefined,
-          actionRequired: capaActionRequired,
-          assignedTo: capaAssignedTo || undefined,
-          dueDate: capaDueDate,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newCapa = await res.json();
-      setCapas([newCapa, ...capas]);
-      setCapaActionRequired('');
-      setCapaAssignedTo('');
-      setCapaDueDate('');
-      setCapaSourceId('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to raise CAPA corrective action');
     }
   };
 
   const handleCompleteCapa = async (id: string) => {
     setError(null);
     try {
-      const res = await fetch(`/api/hse/capas/${id}/complete`, {
-        method: 'PUT',
-      });
+      const res = await fetch(`/api/hse/capas/${id}/complete`, { method: 'PUT' });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setCapas(capas.map((c) => (c.id === id ? updated : c)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to complete CAPA corrective action');
     }
@@ -331,71 +172,32 @@ export default function HseControlClient({
       {/* Tab Contents */}
       {activeTab === 'incidents' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleReportIncident} style={st.formCard}>
-            <h3 style={st.formTitle}>Report Safety Incident / Near Miss</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Date of Incident</label>
-                <input
-                  type="date"
-                  value={incDate}
-                  onChange={(e) => setIncDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Severity Level</label>
-                <select
-                  value={incSeverity}
-                  onChange={(e) => setIncSeverity(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="near_miss">Near Miss (No Injury/Damage)</option>
-                  <option value="minor">Minor (First Aid required)</option>
-                  <option value="major">Major (Medical treatment / lost time)</option>
-                  <option value="fatal">Fatal / Severe Outage</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Location Detail</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Tower A, Shaft 3"
-                  value={incLocation}
-                  onChange={(e) => setIncLocation(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Description of Incident</label>
-                <textarea
-                  placeholder="Detailed description of what transpired, immediate actions taken, and names of individuals involved..."
-                  value={incDescription}
-                  onChange={(e) => setIncDescription(e.target.value)}
-                  style={st.textarea}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Report Incident</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Incident"
+              buttonLabel="Report Incident"
+              subtitle="Log a safety incident or near miss on a project. Closing it later requires investigation sign-off."
+              endpoint="/api/hse/incidents"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'date', label: 'Date of incident', kind: 'date', required: true, defaultValue: today },
+                {
+                  name: 'severity',
+                  label: 'Severity level',
+                  kind: 'select',
+                  defaultValue: 'near_miss',
+                  options: [
+                    { value: 'near_miss', label: 'Near Miss (no injury/damage)' },
+                    { value: 'minor', label: 'Minor (first aid required)' },
+                    { value: 'major', label: 'Major (medical treatment / lost time)' },
+                    { value: 'fatal', label: 'Fatal / severe outage' },
+                  ],
+                },
+                { name: 'locationDetail', label: 'Location detail', kind: 'text', required: true, placeholder: 'e.g. Tower A, Shaft 3', span: 2 },
+                { name: 'description', label: 'Description of incident', kind: 'textarea', required: true, placeholder: 'What transpired, immediate actions taken, individuals involved…' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -449,71 +251,34 @@ export default function HseControlClient({
 
       {activeTab === 'ptws' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleRequestPermit} style={st.formCard}>
-            <h3 style={st.formTitle}>Request Permit to Work (PTW)</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Permit Type</label>
-                <select
-                  value={ptwType}
-                  onChange={(e) => setPtwType(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="hot_work">Hot Work (Welding, cutting, grinding)</option>
-                  <option value="confined_space">Confined Space Entry</option>
-                  <option value="height_work">Working at Heights</option>
-                  <option value="electrical">High-Voltage Electrical Isolation</option>
-                  <option value="excavation">Deep Excavation & Trenching</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Valid From</label>
-                <input
-                  type="datetime-local"
-                  value={ptwFrom}
-                  onChange={(e) => setPtwFrom(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Valid To</label>
-                <input
-                  type="datetime-local"
-                  value={ptwTo}
-                  onChange={(e) => setPtwTo(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Description of Work & Safety Controls</label>
-                <textarea
-                  placeholder="Detail activities, safety measures, gas detector readings if applicable, and rescue team allocations..."
-                  value={ptwDescription}
-                  onChange={(e) => setPtwDescription(e.target.value)}
-                  style={st.textarea}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Request Permit</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Permit to Work"
+              buttonLabel="Request Permit"
+              subtitle="Request a PTW for high-risk work. It must be approved before the work window opens."
+              endpoint="/api/hse/ptws"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                {
+                  name: 'permitType',
+                  label: 'Permit type',
+                  kind: 'select',
+                  defaultValue: 'hot_work',
+                  span: 2,
+                  options: [
+                    { value: 'hot_work', label: 'Hot Work (welding, cutting, grinding)' },
+                    { value: 'confined_space', label: 'Confined Space Entry' },
+                    { value: 'height_work', label: 'Working at Heights' },
+                    { value: 'electrical', label: 'High-Voltage Electrical Isolation' },
+                    { value: 'excavation', label: 'Deep Excavation & Trenching' },
+                  ],
+                },
+                { name: 'validFrom', label: 'Valid from', kind: 'date', required: true, transform: 'isoDate' },
+                { name: 'validTo', label: 'Valid to', kind: 'date', required: true, transform: 'isoDate' },
+                { name: 'description', label: 'Work & safety controls', kind: 'textarea', required: true, placeholder: 'Activities, safety measures, gas readings, rescue team allocations…' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -563,69 +328,31 @@ export default function HseControlClient({
 
       {activeTab === 'capas' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleRaiseCapa} style={st.formCard}>
-            <h3 style={st.formTitle}>Raise Corrective & Preventive Action (CAPA)</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  style={st.select}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Source Category</label>
-                <select
-                  value={capaSourceType}
-                  onChange={(e) => setCapaSourceType(e.target.value as any)}
-                  style={st.select}
-                >
-                  <option value="inspection">Site Audit / Safety Walkthrough</option>
-                  <option value="incident">Safety Incident Follow-up</option>
-                  <option value="audit">Formal Third-Party Audit</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Due Date</label>
-                <input
-                  type="date"
-                  value={capaDueDate}
-                  onChange={(e) => setCapaDueDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Assigned Safety Officer</label>
-                <input
-                  type="text"
-                  placeholder="e.g. John Doe / HSE Executive"
-                  value={capaAssignedTo}
-                  onChange={(e) => setCapaAssignedTo(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Corrective Action Required</label>
-                <textarea
-                  placeholder="Specify findings, deviations, risk levels, and detail exactly what controls must be erected..."
-                  value={capaActionRequired}
-                  onChange={(e) => setCapaActionRequired(e.target.value)}
-                  style={st.textarea}
-                  required
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Raise CAPA Task</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="CAPA Action"
+              buttonLabel="Raise CAPA"
+              subtitle="Raise a corrective & preventive action from an inspection, incident, or audit finding."
+              endpoint="/api/hse/capas"
+              fields={[
+                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                {
+                  name: 'sourceType',
+                  label: 'Source category',
+                  kind: 'select',
+                  defaultValue: 'inspection',
+                  options: [
+                    { value: 'inspection', label: 'Site Audit / Safety Walkthrough' },
+                    { value: 'incident', label: 'Safety Incident Follow-up' },
+                    { value: 'audit', label: 'Formal Third-Party Audit' },
+                  ],
+                },
+                { name: 'dueDate', label: 'Due date', kind: 'date', required: true },
+                { name: 'assignedTo', label: 'Assigned safety officer', kind: 'text', placeholder: 'e.g. John Doe / HSE Executive', span: 2 },
+                { name: 'actionRequired', label: 'Corrective action required', kind: 'textarea', required: true, placeholder: 'Findings, deviations, risk levels, and the controls that must be erected…' },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -675,74 +402,30 @@ export default function HseControlClient({
 
       {activeTab === 'training' && (
         <div>
-          {/* Create Form */}
-          <form onSubmit={handleRecordTraining} style={st.formCard}>
-            <h3 style={st.formTitle}>Record Safety Induction & Certifications</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Worker Full Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Ahmed Khan"
-                  value={workerName}
-                  onChange={(e) => setWorkerName(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Worker ID / Passport / Emirates ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g. W-77402"
-                  value={workerId}
-                  onChange={(e) => setWorkerId(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Induction Date</label>
-                <input
-                  type="date"
-                  value={inductionDate}
-                  onChange={(e) => setInductionDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>HSE Card Number (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. HSE-2026-904"
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>HSE Card Expiry Date (Optional)</label>
-                <input
-                  type="date"
-                  value={cardExpiry}
-                  onChange={(e) => setCardExpiry(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Safety Certifications (Comma separated)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Work at Height, Confined Space, First Aid, Scaffolding Supervisor"
-                  value={certificationsInput}
-                  onChange={(e) => setCertificationsInput(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Record Induction Entry</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Training Record"
+              buttonLabel="Record Induction"
+              subtitle="Record a worker's safety induction, HSE card, and certifications."
+              endpoint="/api/hse/training"
+              fields={[
+                { name: 'workerName', label: 'Worker full name', kind: 'text', required: true, placeholder: 'e.g. Ahmed Khan' },
+                { name: 'workerId', label: 'Worker ID / Emirates ID', kind: 'text', required: true, placeholder: 'e.g. W-77402' },
+                { name: 'inductionDate', label: 'Induction date', kind: 'date', required: true, defaultValue: today },
+                { name: 'cardNumber', label: 'HSE card number', kind: 'text', placeholder: 'e.g. HSE-2026-904' },
+                { name: 'cardExpiry', label: 'HSE card expiry', kind: 'date' },
+                {
+                  name: 'certifications',
+                  label: 'Safety certifications',
+                  kind: 'text',
+                  transform: 'csv',
+                  span: 2,
+                  placeholder: 'e.g. Work at Height, Confined Space, First Aid',
+                  hint: 'Comma-separated list.',
+                },
+              ]}
+            />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -833,6 +516,7 @@ export default function HseControlClient({
 
 const st = {
   tabs: { display: 'flex', gap: 8, margin: '0 0 24px' } as CSSProperties,
+  tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   tabBtn: {
     padding: '8px 16px',
     borderRadius: 8,

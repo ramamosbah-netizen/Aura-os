@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore } from '@aura/core';
+import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_EVENT, type Account, type NewAccount, makeAccount } from './domain/account';
 import { CRM_ACCOUNT_STORE, type AccountFilter, type AccountStore } from './account-store';
 
@@ -24,6 +24,7 @@ export class AccountService implements OnModuleInit {
   constructor(
     @Inject(CRM_ACCOUNT_STORE) private readonly store: AccountStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
   ) {}
 
@@ -70,6 +71,30 @@ export class AccountService implements OnModuleInit {
       payload: input,
       idempotencyKey: idempotencyKey ?? null,
     });
+  }
+
+  /** Update mutable fields on an account (name, status, industry, website). */
+  async update(id: Id, patch: Partial<Pick<Account, 'name' | 'status' | 'industry' | 'website'>>): Promise<Account> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`account ${id} not found`);
+    if (patch.name !== undefined && !patch.name.trim()) throw new Error('account name is required');
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const updated: Account = { ...existing, ...defined };
+    const event = makeEvent({
+      type: CRM_EVENT.accountUpdated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'crm.account',
+      aggregateId: updated.id,
+      payload: { name: updated.name, status: updated.status },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Account updated: ${updated.name} (${updated.id})`);
+    return updated;
   }
 
   get(id: Id): Promise<Account | null> {

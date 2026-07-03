@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface PurchaseRequest {
   id: string;
@@ -38,55 +39,6 @@ export default function PrList({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // Form State
-  const [showForm, setShowForm] = useState(false);
-  const [title, setTitle] = useState('');
-  const [reference, setReference] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [value, setValue] = useState('');
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) {
-      setErr('Title is required.');
-      return;
-    }
-
-    setBusyId('create-pr');
-    setErr(null);
-
-    const project = projects.find((p) => p.id === selectedProjectId);
-
-    try {
-      const res = await fetch('/api/procurement/purchase-requests', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          reference: reference.trim() || undefined,
-          projectId: selectedProjectId || null,
-          projectName: project ? project.title : null,
-          value: Number(value) || 0,
-        }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setErr(d.error ?? 'Error creating PR');
-      } else {
-        setTitle('');
-        setReference('');
-        setSelectedProjectId('');
-        setValue('');
-        setShowForm(false);
-        router.refresh();
-      }
-    } catch {
-      setErr('Failed to create purchase request.');
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function updateStatus(id: string, status: 'approved' | 'rejected') {
     setBusyId(id);
     setErr(null);
@@ -115,74 +67,26 @@ export default function PrList({
 
       <div style={s.header}>
         <h2 style={s.subTitle}>Active Requests</h2>
-        <button
-          type="button"
-          onClick={() => setShowForm(!showForm)}
-          style={s.btnAccent}
-        >
-          {showForm ? 'Cancel' : '+ Create Purchase Request'}
-        </button>
+        <CreateDrawer
+          entity="Purchase Request"
+          subtitle="A procurement request. Approving it drafts the purchase order automatically."
+          endpoint="/api/procurement/purchase-requests"
+          fields={[
+            { name: 'title', label: 'Request title', kind: 'text', required: true, placeholder: 'e.g. Concrete supplier for Site B', span: 2 },
+            { name: 'reference', label: 'Reference / memo', kind: 'text', placeholder: 'e.g. PR-2026-98' },
+            { name: 'value', label: 'Estimated cost ($)', kind: 'number', placeholder: '0' },
+            {
+              name: 'projectId',
+              label: 'Link to project',
+              kind: 'select',
+              labelField: 'projectName',
+              placeholder: '— None —',
+              span: 2,
+              options: projects.map((p) => ({ value: p.id, label: p.title })),
+            },
+          ]}
+        />
       </div>
-
-      {showForm && (
-        <form onSubmit={handleCreate} style={s.form}>
-          <h4 style={s.formHeader}>Create New Purchase Request</h4>
-          <div style={s.fieldsGrid}>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Request Title</label>
-              <input
-                style={s.input}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Concrete Supplier for Site B"
-                required
-              />
-            </div>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Reference / Memo</label>
-              <input
-                style={s.input}
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                placeholder="e.g. PR-2026-98"
-              />
-            </div>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Link to Project</label>
-              <select
-                style={s.select}
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-              >
-                <option value="">— None —</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Estimated Cost ($)</label>
-              <input
-                style={s.input}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="Value"
-                inputMode="numeric"
-              />
-            </div>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
-            <button type="submit" disabled={busyId === 'create-pr'} style={s.btnAccent}>
-              Submit for Approval
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} style={s.btnSecondary}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
 
       <div style={s.panel}>
         <table style={s.table}>

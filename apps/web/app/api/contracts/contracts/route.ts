@@ -4,6 +4,8 @@ import { apiBase, authHeader } from '@/lib/api';
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
     title?: unknown;
+    reference?: unknown;
+    status?: unknown;
     value?: unknown;
     tenderId?: unknown;
     tenderTitle?: unknown;
@@ -20,6 +22,8 @@ export async function POST(request: Request): Promise<Response> {
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({
         title,
+        reference: typeof body.reference === 'string' ? body.reference : undefined,
+        status: typeof body.status === 'string' ? body.status : undefined,
         value: typeof body.value === 'number' ? body.value : 0,
         tenderId: typeof body.tenderId === 'string' ? body.tenderId : null,
         tenderTitle: typeof body.tenderTitle === 'string' ? body.tenderTitle : null,

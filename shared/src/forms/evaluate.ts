@@ -12,7 +12,7 @@
 // One re-run of formulas (not a fixpoint loop) keeps evaluation O(n) and
 // makes formula→rule→formula cycles impossible by construction.
 
-import type { FormFieldSchema, FormRule, FormSchema, RuleAction } from './schema';
+import type { FormFieldSchema, FormSchema, RuleAction } from './schema';
 import { evaluateCondition } from './conditions';
 import {
   compileFormulas,
@@ -177,9 +177,17 @@ export function evaluateForm(
   for (const f of schema.fields) {
     const st = state[f.name];
     if (st.hidden) continue;
+
+    if (f.kind === 'lines') {
+      const rows = opts.lines?.[f.name] ?? [];
+      const filled = rows.some((r) => String(r.description ?? '').trim() !== '');
+      if (st.required && !filled && !opts.skipRequired) fieldErrors[f.name] = 'Add at least one line item.';
+      continue;
+    }
+
     const raw = (values[f.name] ?? '').trim();
 
-    if (st.required && raw === '' && f.kind !== 'lines' && !opts.skipRequired) {
+    if (st.required && raw === '' && !opts.skipRequired) {
       fieldErrors[f.name] = `${f.label} is required`;
       continue;
     }

@@ -238,3 +238,47 @@ describe('evaluateForm', () => {
     expect(evaluateForm(s, { trn: '100123456789012' }).fieldErrors.trn).toBeUndefined();
   });
 });
+
+
+describe('AI extraction', () => {
+  const schema = {
+    entity: 'Quotation',
+    fields: [
+      { name: 'quoteNumber', label: 'Quote #', kind: 'text' },
+      { name: 'issueDate', label: 'Issue date', kind: 'date' },
+      { name: 'status', label: 'Status', kind: 'select', options: [{ value: 'draft', label: 'Draft' }, { value: 'sent', label: 'Sent' }] },
+      { name: 'lines', label: 'Line items', kind: 'lines' },
+      { name: 'grandTotal', label: 'Total', kind: 'number', transient: true, formula: '1' },
+    ],
+  };
+
+  it('builds a prompt listing only extractable fields with type hints', async () => {
+    const { buildExtractionPrompt } = await import('./ai');
+    const { system, prompt } = buildExtractionPrompt(schema, 'INVOICE 42');
+    expect(system).toContain('JSON');
+    expect(prompt).toContain('"quoteNumber"');
+    expect(prompt).toContain('YYYY-MM-DD');
+    expect(prompt).toContain('"draft" = Draft');
+    expect(prompt).not.toContain('grandTotal'); // transient/formula fields are never asked for
+    expect(prompt).toContain('INVOICE 42');
+  });
+
+  it('parses a fenced reply, coerces select labels, reports unknown keys', async () => {
+    const { parseExtraction } = await import('./ai');
+    const reply = `Here you go:
+\`\`\`json
+{"quoteNumber": "QT-9", "status": "Sent", "supplier": "Acme", "lines": [{"description": "CCTV", "quantity": 2, "unitPrice": 100}]}
+\`\`\``;
+    const out = parseExtraction(schema, reply);
+    expect(out).not.toBeNull();
+    expect(out?.values).toEqual({ quoteNumber: 'QT-9', status: 'sent' });
+    expect(out?.lines.lines).toEqual([{ description: 'CCTV', quantity: 2, unitPrice: 100, vatRate: 5 }]);
+    expect(out?.ignored).toEqual(['supplier']);
+  });
+
+  it('rejects replies with no JSON or out-of-set select values', async () => {
+    const { parseExtraction } = await import('./ai');
+    expect(parseExtraction(schema, 'I could not find anything.')).toBeNull();
+    expect(parseExtraction(schema, '{"status": "cancelled"}')).toBeNull(); // outside the allowed set
+  });
+});

@@ -7,7 +7,8 @@
 // a schema referencing these ids.
 
 import { registerFormulaFunction, registerFormValidator } from '@aura/shared';
-import { registerFieldRenderer } from '../components/form-engine';
+import { registerFieldRenderer, registerFormToolbarAction } from '../components/form-engine';
+import AiAutofill from '../components/form-engine/ai-autofill';
 
 /* Custom field kind: 'percent' — numeric input with a % adornment.
    Schemas using it set dataType: 'number' so the payload stays numeric. */
@@ -37,4 +38,11 @@ registerFormValidator('uae-trn', (value) =>
 registerFormulaFunction('VAT_UAE', (amount) => {
   const n = Number(amount ?? 0);
   return Number.isFinite(n) ? Math.round(n * 0.05 * 100) / 100 : 0;
+});
+
+/* Toolbar plugin: AI Auto-Fill on every metadata form — paste/upload a
+   document, review the extracted fields, apply. Uses the kernel AI seam. */
+registerFormToolbarAction({
+  id: 'ai-autofill',
+  render: (api) => <AiAutofill api={api} />,
 });

@@ -1,18 +1,9 @@
 import type { CSSProperties } from 'react';
 import type { DomainEvent, Document } from '@aura/shared';
-import { apiBase, getJson } from '@/lib/api';
+import { apiBase, currentUser, getJson } from '@/lib/api';
 import RoleDashboardShell from '../components/role-dashboard-shell';
 
 export const dynamic = 'force-dynamic';
-
-interface PurchaseRequest {
-  id: string;
-  title: string;
-  reference: string | null;
-  projectName: string | null;
-  status: 'draft' | 'approved' | 'rejected';
-  value: number;
-}
 
 interface Invoice {
   id: string;
@@ -21,24 +12,6 @@ interface Invoice {
   projectName: string | null;
   status: string;
   value: number;
-}
-
-interface Subcontract {
-  id: string;
-  title: string;
-  subcontractorName: string;
-  projectName: string | null;
-  status: string;
-  value: number;
-}
-
-interface Claim {
-  id: string;
-  subcontractId: string;
-  workCompletedValue: number;
-  certifiedValue: number | null;
-  status: string;
-  createdAt: string;
 }
 
 interface BankAccount {
@@ -87,53 +60,38 @@ interface InboxItem {
   createdAt: string | null;
 }
 
+/** Turn a session subject like "u-admin" into a friendly display name. */
+function displayName(sub: string | undefined): string | null {
+  if (!sub) return null;
+  const base = sub.replace(/^u-/, '').replace(/[-_.]+/g, ' ').trim();
+  if (!base) return null;
+  return base.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default async function WorkspacePage() {
-  const [
-    events,
-    documents,
-    purchaseRequests,
-    invoices,
-    subcontracts,
-    claims,
-    bankAccounts,
-    projects,
-    pipelineData,
-    ledgers,
-    inbox,
-  ] = await Promise.all([
-    getJson<DomainEvent[]>('/api/events'),
-    getJson<Document[]>('/api/documents'),
-    getJson<PurchaseRequest[]>('/api/procurement/purchase-requests'),
-    getJson<Invoice[]>('/api/finance/invoices'),
-    getJson<Subcontract[]>('/api/subcontracts/subcontracts'),
-    getJson<Claim[]>('/api/subcontracts/claims'),
-    getJson<BankAccount[]>('/api/finance/accounts?type=asset'),
-    getJson<Project[]>('/api/projects/projects'),
-    getJson<Pipeline>('/api/intelligence/pipeline'),
-    getJson<ProjectLedger[]>('/api/intelligence/projects'),
-    getJson<InboxItem[]>('/api/inbox'),
-  ]);
+  const [user, events, documents, invoices, bankAccounts, projects, pipelineData, ledgers, inbox] =
+    await Promise.all([
+      currentUser(),
+      getJson<DomainEvent[]>('/api/events'),
+      getJson<Document[]>('/api/documents'),
+      getJson<Invoice[]>('/api/finance/invoices'),
+      getJson<BankAccount[]>('/api/finance/accounts?type=asset'),
+      getJson<Project[]>('/api/projects/projects'),
+      getJson<Pipeline>('/api/intelligence/pipeline'),
+      getJson<ProjectLedger[]>('/api/intelligence/projects'),
+      getJson<InboxItem[]>('/api/inbox'),
+    ]);
 
   const online = events !== null || documents !== null;
 
   return (
     <div style={s.shell}>
-      <div style={s.titleRow}>
-        <h1 style={s.h1}>My Workspace</h1>
-        <div style={s.pill(online)}>
-          <span style={s.dot(online)} /> {online ? 'API online' : 'API offline'}
-        </div>
-      </div>
-      <p style={s.sub}>
-        Your day at a glance — pending decisions, live activity and the state of the business,
-        all in one place.
-      </p>
-
       {!online ? (
         <section style={s.panel}>
+          <h1 style={s.h1}>Command Center</h1>
           <h2 style={s.panelTitle}>API offline</h2>
           <p style={{ color: 'var(--muted)', margin: 0 }}>
-            Start the API to populate the Workspace:
+            Start the API to populate the Command Center:
             <br />
             <code style={s.code}>pnpm --filter @aura/api start</code> (expected at{' '}
             <code style={s.code}>{apiBase()}</code>)
@@ -143,77 +101,25 @@ export default async function WorkspacePage() {
         <RoleDashboardShell
           events={events}
           documents={documents}
-          purchaseRequests={purchaseRequests ?? []}
           invoices={invoices ?? []}
-          subcontracts={subcontracts ?? []}
-          claims={claims ?? []}
           bankAccounts={bankAccounts ?? []}
           projects={projects ?? []}
           funnel={pipelineData?.funnel ?? null}
           winRate={pipelineData?.winRate ?? null}
           ledgers={ledgers ?? []}
           inbox={inbox ?? []}
+          userName={displayName(user?.sub)}
         />
       )}
 
-      <footer style={s.footer}>AURA OS · Phase 0c — the experience shell (Workspace v1)</footer>
+      <footer style={s.footer}>AURA OS · Enterprise Command Center</footer>
     </div>
   );
-}
-
-function Stat({ label, value, hint }: { label: string; value: number; hint: string }) {
-  return (
-    <div style={s.card}>
-      <div style={s.cardValue}>{value}</div>
-      <div style={s.cardLabel}>{label}</div>
-      <div style={s.cardHint}>{hint}</div>
-    </div>
-  );
-}
-
-function Empty({ text }: { text: string }) {
-  return <p style={{ color: 'var(--muted)', margin: '6px 0 0' }}>{text}</p>;
 }
 
 const s = {
-  shell: { maxWidth: 980, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
-  titleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16,
-    marginBottom: 6,
-  } as CSSProperties,
-  pill: (ok: boolean): CSSProperties => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 13,
-    color: ok ? 'var(--good)' : 'var(--bad)',
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 999,
-    padding: '6px 12px',
-  }),
-  dot: (ok: boolean): CSSProperties => ({
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    background: ok ? 'var(--good)' : 'var(--bad)',
-  }),
-  h1: { fontSize: 34, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
-  sub: { color: 'var(--muted)', margin: '0 0 28px', maxWidth: 620, lineHeight: 1.5 } as CSSProperties,
-  cards: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 } as CSSProperties,
-  card: {
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 14,
-    padding: '18px 20px',
-  } as CSSProperties,
-  cardValue: { fontSize: 30, fontWeight: 700 } as CSSProperties,
-  cardLabel: { marginTop: 4, fontSize: 14 } as CSSProperties,
-  cardHint: { marginTop: 2, fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 } as CSSProperties,
+  shell: { maxWidth: 1080, margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
+  h1: { fontSize: 28, margin: '0 0 12px', letterSpacing: -0.5 } as CSSProperties,
   panel: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',
@@ -221,16 +127,6 @@ const s = {
     padding: '18px 20px',
   } as CSSProperties,
   panelTitle: { fontSize: 15, margin: '0 0 12px', color: 'var(--text)' } as CSSProperties,
-  list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,
-  areaRow: { display: 'grid', gridTemplateColumns: '110px 1fr 28px', alignItems: 'center', gap: 10 } as CSSProperties,
-  areaName: { fontSize: 13, color: 'var(--text)' } as CSSProperties,
-  barTrack: { height: 8, background: 'var(--panel-2)', borderRadius: 999, overflow: 'hidden' } as CSSProperties,
-  barFill: { display: 'block', height: '100%', background: 'var(--accent)', borderRadius: 999 } as CSSProperties,
-  areaCount: { fontSize: 13, color: 'var(--muted)', textAlign: 'right' } as CSSProperties,
-  eventRow: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } as CSSProperties,
-  eventType: { fontSize: 12.5, color: 'var(--accent)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
-  eventTarget: { fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
-  eventTime: { fontSize: 12, color: 'var(--muted)', marginLeft: 'auto' } as CSSProperties,
   code: {
     fontFamily: 'ui-monospace, monospace',
     fontSize: 12.5,

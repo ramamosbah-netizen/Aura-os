@@ -18,3 +18,4 @@ export * from './integration/csv';
 export * from './domain/crm';
 export * from './pagination';
 export * from './forms';
+export * from './command-center';

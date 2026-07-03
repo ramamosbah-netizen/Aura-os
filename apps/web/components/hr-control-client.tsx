@@ -4,6 +4,8 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import { FormDrawer } from './form-engine';
+import { employeeFormSchema } from '../lib/form-schemas/employee';
 
 interface Employee {
   id: string;
@@ -164,24 +166,7 @@ export default function HrControlClient({
       {activeTab === 'employees' && (
         <div>
           <div style={st.tabHeader}>
-            <CreateDrawer
-              entity="Employee"
-              buttonLabel="Register Employee"
-              subtitle="Register an employee profile with UAE visa, work permit, and labor camp details."
-              endpoint="/api/hr/employees"
-              fields={[
-                { name: 'firstName', label: 'First name', kind: 'text', required: true, placeholder: 'John' },
-                { name: 'lastName', label: 'Last name', kind: 'text', required: true, placeholder: 'Doe' },
-                { name: 'role', label: 'Job title / role', kind: 'text', required: true, placeholder: 'e.g. Pipefitter, Site Engineer' },
-                { name: 'department', label: 'Department', kind: 'text', required: true, placeholder: 'e.g. Operations, Corporate' },
-                { name: 'joinedDate', label: 'Joined date', kind: 'date', required: true, defaultValue: today },
-                { name: 'laborCamp', label: 'Labor camp designation', kind: 'text', placeholder: 'e.g. Sonapur Block C, Al Quoz 2' },
-                { name: 'visaExpiry', label: 'UAE visa expiry', kind: 'date' },
-                { name: 'permitExpiry', label: 'Work permit expiry', kind: 'date' },
-                { name: 'email', label: 'Email address', kind: 'text', placeholder: 'john.doe@aura.com' },
-                { name: 'phone', label: 'Phone number', kind: 'text', placeholder: '+971 50...' },
-              ]}
-            />
+            <FormDrawer schema={employeeFormSchema} buttonLabel="Register Employee" />
           </div>
 
           {/* List panel */}

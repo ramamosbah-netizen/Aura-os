@@ -18,6 +18,7 @@ import {
   compileFormulas,
   evaluateFormula,
   FormulaError,
+  parseFormula,
   type CompiledFormula,
   type FormulaFn,
   type FormulaValue,
@@ -55,6 +56,37 @@ export interface EvaluateFormOptions {
   permissions?: string[];
   /** skip required-field errors (used before first submit attempt) */
   skipRequired?: boolean;
+}
+
+/**
+ * Initial values for a form: field defaults, overridden by provided record
+ * values. A defaultValue starting with '=' is a formula evaluated once at
+ * open time (e.g. '=TODAY()'), keeping schemas static JSON.
+ */
+export function resolveFieldDefaults(
+  fields: FormFieldSchema[],
+  initial?: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of fields) {
+    const provided = initial?.[f.name];
+    if (provided !== undefined) {
+      out[f.name] = provided;
+      continue;
+    }
+    const dv = f.defaultValue ?? '';
+    if (dv.startsWith('=')) {
+      try {
+        const v = evaluateFormula(parseFormula(dv.slice(1)), { values: {} });
+        out[f.name] = v === null ? '' : String(v);
+      } catch {
+        out[f.name] = '';
+      }
+    } else {
+      out[f.name] = dv;
+    }
+  }
+  return out;
 }
 
 export function evaluateForm(

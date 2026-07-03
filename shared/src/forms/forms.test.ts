@@ -114,6 +114,19 @@ describe('formula engine', () => {
   });
 });
 
+describe('payload builder', () => {
+  it('skips transient fields and types custom kinds via dataType', async () => {
+    const { buildFormPayload } = await import('./payload');
+    const fields = [
+      { name: 'title', label: 'Title', kind: 'text' },
+      { name: 'retentionPct', label: 'Retention', kind: 'percent', dataType: 'number' as const },
+      { name: 'grandTotal', label: 'Total', kind: 'number', transient: true, formula: '1+1' },
+    ];
+    const payload = buildFormPayload(fields, { title: 'S-01', retentionPct: '10', grandTotal: '2' });
+    expect(payload).toEqual({ title: 'S-01', retentionPct: 10 });
+  });
+});
+
 describe('condition evaluator', () => {
   const values = { status: 'won', value: '250000', industry: '' };
 

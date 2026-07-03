@@ -3,7 +3,8 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
-import CreateDrawer from './ui/create-drawer';
+import { FormDrawer } from './form-engine';
+import { quotationFormSchema } from '../lib/form-schemas/quotation';
 
 interface Line { description: string; quantity: number; unitPrice: number; vatRate: number; lineNet: number; lineVat: number }
 interface Quotation {
@@ -20,7 +21,6 @@ interface Quotation {
 }
 
 const badgeKind: Record<string, string> = { draft: 'badge', sent: 'badge badge-accent', accepted: 'badge badge-good', rejected: 'badge badge-bad', expired: 'badge badge-warn' };
-const today = () => new Date().toISOString().slice(0, 10);
 
 export default function QuotationsClient({ initialQuotations }: { initialQuotations: Quotation[] }) {
   const router = useRouter();
@@ -51,17 +51,7 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
       </div>
 
       <div style={st.toolbar}>
-        <CreateDrawer
-          entity="Quotation"
-          subtitle="A customer quote with VAT line items. Send it, then accepting converts it to a contract."
-          endpoint="/api/crm/quotations"
-          fields={[
-            { name: 'quoteNumber', label: 'Quote #', kind: 'text', required: true, placeholder: 'QT-001' },
-            { name: 'issueDate', label: 'Issue date', kind: 'date', required: true, defaultValue: today() },
-            { name: 'customerName', label: 'Customer', kind: 'text', required: true, placeholder: 'e.g. Emaar Properties', span: 2 },
-            { name: 'lines', label: 'Line items', kind: 'lines', required: true },
-          ]}
-        />
+        <FormDrawer schema={quotationFormSchema} />
         <ExportButton filename="quotations" rows={quotes as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'quoteNumber' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'total' }, { key: 'status' }]} />
         {error && <span style={st.err}>{error}</span>}

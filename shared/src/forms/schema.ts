@@ -55,6 +55,10 @@ export interface FormFieldSchema {
   defaultValue?: string;
   /** payload transform: 'csv' splits into a trimmed string array; 'isoDate' posts an ISO timestamp */
   transform?: 'csv' | 'isoDate';
+  /** display-only (e.g. computed totals) — excluded from the submit payload */
+  transient?: boolean;
+  /** payload type for custom kinds; defaults to number for kind 'number', else string */
+  dataType?: 'string' | 'number';
   /** statically read-only (rules can also disable dynamically) */
   readonly?: boolean;
   /** statically hidden (rules can also hide dynamically) */

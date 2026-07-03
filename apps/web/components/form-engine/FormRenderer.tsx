@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import {
   evaluateForm,
   layoutFieldNames,
+  resolveFieldDefaults,
   type FormEvaluation,
   type FormLineItem,
   type FormSchema,
@@ -46,11 +47,8 @@ function initialLinesFor(schema: FormSchema): Record<string, FormLineItem[]> {
   return out;
 }
 
-function defaultsFor(schema: FormSchema, initial?: Record<string, string>): Record<string, string> {
-  const v: Record<string, string> = {};
-  for (const f of schema.fields) v[f.name] = initial?.[f.name] ?? f.defaultValue ?? '';
-  return v;
-}
+const defaultsFor = (schema: FormSchema, initial?: Record<string, string>) =>
+  resolveFieldDefaults(schema.fields, initial);
 
 export function useFormEngine(schema: FormSchema, opts: UseFormEngineOptions = {}): FormEngine {
   const [values, setValuesState] = useState<Record<string, string>>(() => defaultsFor(schema, opts.initialValues));

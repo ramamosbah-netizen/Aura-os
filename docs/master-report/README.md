@@ -28,6 +28,7 @@ or **[Gap]**.
 | 1 | Executive Summary | [vol-01-executive-summary.md](vol-01-executive-summary.md) |
 | 2 | Product Architecture | [vol-02-architecture.md](vol-02-architecture.md) |
 | 3 | Complete Module Catalog | [vol-03-module-catalog.md](vol-03-module-catalog.md) |
+| 3A | Screen Walkthroughs (93 pages) | [vol-03a-screen-walkthroughs.md](vol-03a-screen-walkthroughs.md) |
 | 4 | Kernel Documentation | [vol-04-kernel.md](vol-04-kernel.md) |
 | 5 | Enterprise Form Platform | [vol-05-form-platform.md](vol-05-form-platform.md) |
 | 6 | AI Platform | [vol-06-ai-platform.md](vol-06-ai-platform.md) |

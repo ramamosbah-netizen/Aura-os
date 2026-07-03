@@ -110,6 +110,115 @@ Workflow definitions are data (kernel workflow store); the visual designer + per
 overrides belong to the Administration Center (Volume 15). Saga orchestration covers
 compensating multi-step chains (tested); adoption beyond the spine is roadmap.
 
+## 12. State diagrams (reference)
+
+Verified against domain transition guards. `[E]` = event emitted; `⚡` = reactor consequence.
+
+### 12.1 Opportunity → Tender → Contract → Project (the spine)
+
+```
+ OPPORTUNITY: prospect ──► qualified ──► proposal ──► won [E stage_changed]
+                                   └──► lost                │
+                                                            ⚡ registers
+ TENDER:   registered ──► submitted ──► awarded [E awarded] ─⚡ creates─┐
+              │              └────────► lost [E lost] → win/loss       │
+              └ bid/no-bid score gate                                  ▼
+ CONTRACT: created ──► signed [E signed] ─⚡ creates project + WBS/CBS──┐
+              └────────► completed                                     ▼
+ PROJECT:  created ──► started ──► completed
+              (cost events fold EVM; overrun ⇒ [E budget.overrun])
+```
+
+### 12.2 Purchase Order
+
+```
+ draft ──► pending-approval (matrix tier by value) ──► approved [E] ──► issued [E]
+   ▲              │ reject                                                 │
+   └──────────────┘                                        GRN(s) received │
+                                                        ──► closed [E]
+ gates: approved-vendor check at create · 3-way match before invoice approval
+```
+
+### 12.3 GRN (Inventory)
+
+```
+ created [E] ──► inspected [E] ──► accepted [E]
+                                      │
+        ⚡ stock qty + WAC re-average + GL (Dr Inventory / Cr GRNI)
+ issue path:  stock issue ──⚡ COGS at WAC (Dr COGS / Cr Inventory)
+ low-stock:   onhand < reorder ──⚡ one idempotent PR
+```
+
+### 12.4 Supplier Invoice (AP)
+
+```
+ created [E] ──► matched (PO↔GRN↔invoice, server-side) ──► approved [E] ──► paid [E]
+                       │ mismatch ⇒ blocked with reason
+ period gate: posting rejected into closed periods (DB-level trigger on journals)
+```
+
+### 12.5 Journal / Period
+
+```
+ JOURNAL: draft ──► posted [E]   (trigger: Σdebit = Σcredit, period open)
+ PERIOD:  open ──► closed        (blocks all posting into it)
+```
+
+### 12.6 Payment Certificate (IPC) / Subcontractor claim
+
+```
+ draft ──► certified [E ipc.certified] ──⚡ AR invoice (main contract)
+ sub-IPC:  certified ──⚡ AP invoice · back-charge raised ──⚡ AP deduction
+ retention: withheld per certificate ──► released [E retention.released]
+```
+
+### 12.7 Leave / Payroll (HR)
+
+```
+ LEAVE:   requested [E] ──► approved [E] | rejected
+ PAYROLL: draft run ──► approved ──► paid [E payroll.run]
+             └ payslips + WPS SIF (SCR/EDR) generated
+```
+
+### 12.8 NCR / IR / Snag (Quality)
+
+```
+ NCR:  raised [E] ──► corrected ──► closed     (audit checklist non-compliance ⇒ auto-raise, idempotent)
+ IR:   requested ──► approved [E] | rejected   (+inspector comments)
+ SNAG: open ──► resolved ──► closed [E]
+ AUDIT: scheduled ──► in_progress (checklist) ──► completed | cancelled
+```
+
+### 12.9 Incident / PTW / CAPA (HSE)
+
+```
+ INCIDENT: reported [E] ──► investigating ──► closed
+ PTW:      draft ──► requested ──► approved [E issued] ──► expired | closed
+ CAPA:     pending [E raised] ──► in_progress ──► completed
+```
+
+### 12.10 AMC ticket / Work order
+
+```
+ TICKET: open ──► (SLA timers) ──► escalated ⚡ ──► resolved
+ WO:     created ──► completed ──⚡ AR invoice
+ PPM:    schedule ──⚡ next-due advance ──► visit ──► complete
+```
+
+### 12.11 Asset / Fleet maintenance
+
+```
+ scheduled [E] ──► completed [E] (actual cost captured at completion)
+ vehicle registration: scan (≤30d) ──⚡ notification + renewal task
+```
+
+### 12.12 Daily report / Delay (Site)
+
+```
+ REPORT: draft ──► submitted
+ DELAY:  logged (type, impact hours) ──► resolved
+```
+
 ---
 
 *Next: [Volume 12 — Business Rules Library](vol-12-business-rules-library.md)*

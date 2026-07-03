@@ -6,6 +6,8 @@ Seventeen business modules, each documented against the same template: Overview 
 Responsibilities · Screens · Forms · Entities · Workflow · Permissions · Events · Reports ·
 Dashboard · AI Features · API · Database · KPIs · Future Roadmap.
 
+> **Screen-by-screen walkthroughs of all 93 pages: [Volume 3A](vol-03a-screen-walkthroughs.md).**
+
 **Reading notes (apply to every module):**
 
 - **Entities** are verified from store ports in `modules/<m>/src/*-store.ts` (each has an

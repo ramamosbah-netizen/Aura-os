@@ -3,8 +3,11 @@
 [← Master index](README.md)
 
 PostgreSQL, shared-schema multi-tenant. **Verified 2026-07-03:** 146 `aura_*` tables ·
-223 indexes · 126 sequential migrations (duplicate-number fail-fast guard in the runner) ·
-RLS enabled on tenant tables (enforcement deferred — Volume 7 §3).
+1,788 columns · 223 indexes · 126 sequential migrations (duplicate-number fail-fast guard in
+the runner) · RLS enabled on tenant tables (enforcement deferred — Volume 7 §3).
+
+> **Full table-by-table data dictionary: [Volume 8A](vol-08a-data-dictionary.md)** —
+> generated from the migrations (columns, definitions, source migration, RLS, index counts).
 
 ---
 

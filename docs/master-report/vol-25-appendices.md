@@ -73,25 +73,24 @@ bands · **IFRS-15** revenue recognition (cost-to-cost) · double-entry accounti
 
 ## E. Architecture Decisions (summary register)
 
-| # | Decision | Where recorded |
-|--:|---|---|
-| ADR-0001 | **FK policy — snapshot-not-join across contexts**; 1 hard FK platform-wide | `docs/adr/0001-fk-policy.md` |
-| D-02 | Outbox in same tx + poll relay (SKIP LOCKED) over brokers | Vol 2 §7 / kernel comments |
-| D-03 | Dual-runtime (in-memory ⇄ Postgres) via DI on `PG_POOL` | Vol 2 §1.2 |
-| D-04 | No module→module imports; reactors only | Vol 2 §1.2 |
-| D-05 | Single AI seam; local fallback keeps AI features alive keyless | Vol 6 §1 |
-| D-06 | Form schemas are pure JSON; behavior by registry id | Vol 5 §1 |
-| D-07 | Formula engine hand-rolled, no eval; cycles rejected at compile | Vol 5 §4 |
-| D-08 | `CreateDrawer` API frozen as adapter (zero-regression migration) | Vol 5 §1 |
-| D-09 | REST-first; GraphQL demand-triggered | Vol 9 §2 |
-| D-10 | RLS authored early, **enforced last** (after feature completeness) — accepted risk, tracked P0 | Vol 7 §3 |
-| D-11 | CRM email via Microsoft Graph (GCC market) | feature decisions 2026-07-01 |
-| D-12 | Metadata designers sequenced: forms → views → dashboards → entities | Vol 14 |
-| D-13 | Export-first BI (no embedded lock-in) | Vol 16 §4 |
-| D-14 | Design system on CSS tokens; no UI framework dependency | Vol 10 |
+All fourteen decisions are formalized in `docs/adr/` (back-filled 2026-07-03):
 
-[Gap]: only ADR-0001 is formalized in `docs/adr/`; D-02…D-14 should be back-filled as ADR
-files (S effort — the content is in this report).
+| ADR | Decision |
+|--:|---|
+| [0001](../adr/0001-fk-policy.md) | **FK policy — snapshot-not-join across contexts**; 1 hard FK platform-wide |
+| [0002](../adr/0002-transactional-outbox.md) | Transactional outbox + polling relay (SKIP LOCKED) over brokers |
+| [0003](../adr/0003-dual-runtime-adapters.md) | Dual-runtime (in-memory ⇄ Postgres) via DI on `PG_POOL` |
+| [0004](../adr/0004-no-module-imports.md) | No module→module imports; idempotent reactors only |
+| [0005](../adr/0005-single-ai-seam.md) | Single AI seam; local fallback keeps AI features alive keyless |
+| [0006](../adr/0006-forms-are-json.md) | Form schemas are pure JSON; behavior by registry id |
+| [0007](../adr/0007-formula-engine-no-eval.md) | Formula engine hand-rolled, no eval; cycles rejected at compile |
+| [0008](../adr/0008-createdrawer-frozen-adapter.md) | `CreateDrawer` API frozen as adapter (zero-regression migration) |
+| [0009](../adr/0009-rest-first.md) | REST-first; GraphQL demand-triggered |
+| [0010](../adr/0010-rls-authored-early-enforced-last.md) | RLS authored early, **enforced last** — accepted risk, tracked P0 |
+| [0011](../adr/0011-crm-email-ms-graph.md) | CRM email via Microsoft Graph (GCC market) |
+| [0012](../adr/0012-metadata-designer-sequence.md) | Metadata designers sequenced: forms → views → dashboards → entities |
+| [0013](../adr/0013-export-first-bi.md) | Export-first BI (no embedded lock-in) |
+| [0014](../adr/0014-css-token-design-system.md) | Design system on CSS tokens; no UI framework dependency |
 
 ## F. RFC Process [proposed]
 

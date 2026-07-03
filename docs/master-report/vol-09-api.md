@@ -6,6 +6,9 @@
 `/api/v1` · UUID route guards · idempotency keys on spine creates · 204 web BFF pass-through
 routes.
 
+> **Full endpoint reference (every method/path/handler): [Volume 9A](vol-09a-endpoint-reference.md)** —
+> generated from controller sources.
+
 ---
 
 ## 1. REST

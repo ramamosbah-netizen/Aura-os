@@ -33,7 +33,9 @@ or **[Gap]**.
 | 6 | AI Platform | [vol-06-ai-platform.md](vol-06-ai-platform.md) |
 | 7 | Security | [vol-07-security.md](vol-07-security.md) |
 | 8 | Database | [vol-08-database.md](vol-08-database.md) |
+| 8A | Data Dictionary (146 tables, generated) | [vol-08a-data-dictionary.md](vol-08a-data-dictionary.md) |
 | 9 | API Documentation | [vol-09-api.md](vol-09-api.md) |
+| 9A | Endpoint Reference (551 handlers, generated) | [vol-09a-endpoint-reference.md](vol-09a-endpoint-reference.md) |
 | 10 | UI / UX System | [vol-10-ui-ux.md](vol-10-ui-ux.md) |
 | 11 | Workflow Catalog | [vol-11-workflow-catalog.md](vol-11-workflow-catalog.md) |
 | 12 | Business Rules Library | [vol-12-business-rules-library.md](vol-12-business-rules-library.md) |

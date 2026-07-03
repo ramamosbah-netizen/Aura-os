@@ -1,6 +1,6 @@
 # Enterprise Form Engine — Phase 1 complete + AI Auto-Fill (Phase 2 M4)
 
-**Date:** 2026-07-03 · **Branch:** `feat/enterprise-form-engine` · **Commits:** `9c4d3d0`, `5ea9782`, `591dfbc`, `c5c498e`
+**Date:** 2026-07-03 · **Branch:** `feat/enterprise-form-engine` · **Commits:** `9c4d3d0`, `5ea9782`, `591dfbc`, `c5c498e`, `c3b9b19`, `13fec02` · **PR:** #22
 
 ## Milestones shipped
 
@@ -10,6 +10,8 @@
 | M2 | Web `FormRenderer` + layout engine + `FormDrawer`; legacy `CreateDrawer` becomes a thin adapter | 5ea9782 | live: account create/edit through the new engine |
 | M3 | Metadata schemas on real surfaces + app plugin module | 591dfbc | live: all three forms exercised E2E |
 | M4 | AI Auto-Fill toolbar plugin (Phase 2 start) | c5c498e | live: extract → review → apply → formulas recompute |
+| M5 | AI Validation — advisory review with one-click suggestions | c3b9b19 | live: field-attributed issues, Apply rewrote the value |
+| M6 | Universal Create Engine — schema registry, EntityForm, clone/view modes | 13fec02 | live: quotation Clone (prefilled copy created), employee View (read-only tabs), factory ctx |
 
 ## Phase 1 scorecard (all five pillars ✅)
 
@@ -69,14 +71,13 @@
 
 ## Remaining work / suggested next milestones
 
-1. **M5 — AI validation + duplicate detection** (Phase 2): schema-aware
-   anomaly prompt + `GET` probe for near-duplicate records before save.
-2. **M6 — Universal Create Engine** (Phase 3): schema registry keyed by id
-   (`crm.account` …), generate Create/Edit/Clone/View from one registration;
-   migrate remaining legacy configs into `form-schemas/`.
-3. **M7 — Form designer** (Phase 3): admin CRUD over serialized `FormSchema`
+1. **M7 — Form designer** (Phase 3): admin CRUD over serialized `FormSchema`
    rows (the schemas are already plain JSON — the designer is an editor over
    them, backed by the existing `builder` module).
+2. Migrate the remaining ~20 legacy CreateDrawer configs into registered
+   schemas (mechanical; the adapter keeps them working meanwhile).
+3. AI duplicate detection (`GET` probe before save), Assistant, Risk
+   Analysis, Recommendations (Phase 2 remainder).
 4. PDF/OCR upload needs a server-side document endpoint (client is text-only today).
 5. Collaboration/offline/analytics (Phase 3) — need websocket + storage
    decisions; not started.

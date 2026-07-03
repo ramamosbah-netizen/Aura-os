@@ -281,4 +281,19 @@ describe('AI extraction', () => {
     expect(parseExtraction(schema, 'I could not find anything.')).toBeNull();
     expect(parseExtraction(schema, '{"status": "cancelled"}')).toBeNull(); // outside the allowed set
   });
+
+  it('builds a review prompt from current values and parses issue arrays', async () => {
+    const { buildReviewPrompt, parseReview } = await import('./ai');
+    const { system, prompt } = buildReviewPrompt(schema, { quoteNumber: 'QT-9' }, { lines: [] });
+    expect(system).toContain('JSON array');
+    expect(prompt).toContain('"quoteNumber": "QT-9"');
+
+    const issues = parseReview(schema, '[{"field":"issueDate","message":"Issue date is missing.","suggestion":null},{"field":"bogus","message":"x"}]');
+    expect(issues).toEqual([
+      { field: 'issueDate', message: 'Issue date is missing.' },
+      { message: 'x' }, // unknown field name dropped, message kept
+    ]);
+    expect(parseReview(schema, '[]')).toEqual([]);
+    expect(parseReview(schema, 'all good!')).toBeNull();
+  });
 });

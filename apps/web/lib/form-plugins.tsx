@@ -9,6 +9,7 @@
 import { registerFormulaFunction, registerFormValidator } from '@aura/shared';
 import { registerFieldRenderer, registerFormToolbarAction } from '../components/form-engine';
 import AiAutofill from '../components/form-engine/ai-autofill';
+import AiReview from '../components/form-engine/ai-review';
 
 /* Custom field kind: 'percent' — numeric input with a % adornment.
    Schemas using it set dataType: 'number' so the payload stays numeric. */
@@ -45,4 +46,11 @@ registerFormulaFunction('VAT_UAE', (amount) => {
 registerFormToolbarAction({
   id: 'ai-autofill',
   render: (api) => <AiAutofill api={api} />,
+});
+
+/* Toolbar plugin: AI data-quality review of the current draft — advisory
+   issues with one-click suggestions; never blocks the save. */
+registerFormToolbarAction({
+  id: 'ai-review',
+  render: (api) => <AiReview api={api} />,
 });

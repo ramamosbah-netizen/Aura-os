@@ -166,3 +166,80 @@ export function parseExtraction(
   if (Object.keys(values).length === 0 && Object.keys(lines).length === 0) return null;
   return { values, lines, ignored };
 }
+
+/* ── AI validation review ─────────────────────────────────────────────── */
+
+export interface ReviewIssue {
+  /** schema field the issue concerns, when the model could attribute one */
+  field?: string;
+  message: string;
+  /** proposed replacement value, applicable when field is set */
+  suggestion?: string;
+}
+
+/**
+ * Prompt asking the model to review the current record for invalid values,
+ * missing information, and unusual combinations. Advisory only — the reply
+ * never blocks a save.
+ */
+export function buildReviewPrompt(
+  schema: Pick<FormSchema, 'entity' | 'fields'>,
+  values: Record<string, string>,
+  lines?: Record<string, FormLineItem[]>,
+): ExtractionPrompt {
+  const fields = extractableFields(schema);
+  const record: Record<string, unknown> = {};
+  for (const f of fields) {
+    if (f.kind === 'lines') record[f.name] = lines?.[f.name] ?? [];
+    else if (values[f.name]?.trim()) record[f.name] = values[f.name];
+  }
+  return {
+    system: [
+      'You are a data-quality reviewer for an ERP system.',
+      'Reply with EXACTLY one JSON array and nothing else - no prose, no markdown fences.',
+      'Each element: {"field": string | null, "message": string, "suggestion": string | null}.',
+      'Report only real problems: invalid values, likely typos, missing critical information, unusual combinations.',
+      'An empty array [] means the record looks fine. Never invent problems.',
+    ].join(' '),
+    prompt: [
+      `Review this draft "${schema.entity}" record.`,
+      '',
+      'Field definitions:',
+      ...fields.map(describeField),
+      '',
+      'Record:',
+      JSON.stringify(record, null, 2),
+    ].join('\n'),
+  };
+}
+
+/** Parse the review reply; null when the reply carries no valid array. */
+export function parseReview(
+  schema: Pick<FormSchema, 'fields'>,
+  replyText: string,
+): ReviewIssue[] | null {
+  const cleaned = replyText.replace(/```(?:json)?/gi, '');
+  const start = cleaned.indexOf('[');
+  const end = cleaned.lastIndexOf(']');
+  if (start === -1 || end <= start) return null;
+  let arr: unknown;
+  try {
+    arr = JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(arr)) return null;
+
+  const names = new Set(schema.fields.map((f) => f.name));
+  const issues: ReviewIssue[] = [];
+  for (const item of arr) {
+    if (typeof item !== 'object' || item === null) continue;
+    const r = item as Record<string, unknown>;
+    if (typeof r.message !== 'string' || !r.message.trim()) continue;
+    const issue: ReviewIssue = { message: r.message.trim() };
+    if (typeof r.field === 'string' && names.has(r.field)) issue.field = r.field;
+    if (typeof r.suggestion === 'string' && r.suggestion.trim()) issue.suggestion = r.suggestion.trim();
+    issues.push(issue);
+  }
+  return issues;
+}

@@ -15,10 +15,8 @@ print-formatted document view.
 |---|---|
 | `/` | **Enterprise Command Center** — the attention-first homepage: business-health ring, AI Daily Briefing, a single ranked "Needs your attention" feed (scored across all pending decisions + budget risks) with inline `Open→` deep-links, "What to do next" top-3, and Operations/Financial/Risk snapshots + Quick Actions. CEO/CFO/PM dashboards preserved as switchable perspectives. First screen of every session. Scoring/health core: `shared/src/command-center/`; UI: `apps/web/components/command-center.tsx`. Reference: `docs/reports/2026-07-03-enterprise-command-center.md`. |
 | `/login` | JWT session start; dev mode accepts `u-admin` (Vol 7 §1). |
-| `/inbox` | **Universal inbox** — 12 pending kinds (PO approvals, GRN inspections, leave, IRs, PTWs…) aggregated with deep links; the "what needs me" queue. |
-| `/search` | Global search across 12 record types; same index feeds ⌘K. |
-| `/notifications` | In-app notification feed with read state. |
-| `/views` | Saved views manager — persisted filter/column sets per user. |
+| `/workspace` | **My Workspace hub** (2026-07-04) — one page, six tabs: 💬 **Chat** (company + department channels seeded from workspace-directory roles, 1:1 DMs, document share ≤5 MB, voice notes via MediaRecorder, unread badges, 4 s polling) · 📧 **Mail** (internal compose with recipient chips, Inbox/Sent, read tracking; every recipient gets a notification) · ◉ Inbox · 🔔 Notifications (chat/mail categories + spine events; mark one/all) · ★ Saved Views · ⌕ Search. Model `shared/src/comms/`, API `apps/api/src/comms/`, UI `apps/web/components/workspace-hub-client.tsx`. Reference: `docs/reports/2026-07-04-workspace-hub-chat-mail.md`. |
+| `/inbox` `/search` `/notifications` `/views` | Redirect into the matching `/workspace` tab (search keeps `?q=`). |
 | `/events` | Event-stream inspector — the outbox made visible; per-event payloads; ops/debug surface. |
 | `/documents` | Kernel DMS browser — uploaded documents with metadata. |
 | `/intelligence` | AI insights/briefings feed; pipeline commentary; proposal review. |

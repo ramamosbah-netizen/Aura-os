@@ -1,3 +1,4 @@
+export * from './domain/discipline';
 export * from './domain/drawing';
 export * from './domain/rfi';
 export * from './domain/submittal';

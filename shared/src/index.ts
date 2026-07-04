@@ -2,6 +2,7 @@
 export * from './domain/id';
 export * from './domain/money';
 export * from './domain/cdm';
+export * from './aggregate/aggregate';
 export * from './events/event';
 
 export * from './events/catalog';

@@ -16,6 +16,7 @@ import {
   type ModelDiscipline,
   type ModelFormat,
   type ModelStatus,
+  type Discipline,
   EngineeringService
 } from '@aura/engineering';
 
@@ -27,6 +28,7 @@ class CreateDrawingDto {
   @IsString() title!: string;
   @IsOptional() @IsString() revision?: string;
   @IsOptional() @IsString() status?: DrawingStatus;
+  @IsOptional() @IsString() discipline?: Discipline;
 }
 
 class ReviseDrawingDto {
@@ -42,6 +44,7 @@ class CreateRfiDto {
   @IsString() title!: string;
   @IsString() question!: string;
   @IsOptional() @IsString() assignedTo?: string;
+  @IsOptional() @IsString() discipline?: Discipline;
 }
 
 class AnswerRfiDto {
@@ -56,6 +59,7 @@ class CreateSubmittalDto {
   @IsString() title!: string;
   @IsString() submittalType!: SubmittalType;
   @IsOptional() @IsString() status?: SubmittalStatus;
+  @IsOptional() @IsString() discipline?: Discipline;
 }
 
 class UpdateSubmittalStatusDto {
@@ -87,6 +91,7 @@ export class EngineeringController {
       title: dto.title,
       revision: dto.revision,
       status: dto.status,
+      discipline: dto.discipline,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });
@@ -161,6 +166,7 @@ export class EngineeringController {
       title: dto.title,
       question: dto.question,
       assignedTo: dto.assignedTo,
+      discipline: dto.discipline,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });
@@ -226,6 +232,7 @@ export class EngineeringController {
       title: dto.title,
       submittalType: dto.submittalType,
       status: dto.status,
+      discipline: dto.discipline,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });

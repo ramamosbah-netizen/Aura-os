@@ -1,4 +1,5 @@
 import { type Id, newId } from '@aura/shared';
+import { type Discipline, toDiscipline } from './discipline';
 
 // Engineering domain — framework-free. A BimModel is a registered 3D/BIM model file (IFC, Revit,
 // Navisworks, DWG) for a project discipline. It is the data backbone the in-browser model viewer
@@ -7,7 +8,8 @@ import { type Id, newId } from '@aura/shared';
 
 export type ModelFormat = 'ifc' | 'rvt' | 'nwd' | 'nwc' | 'dwg' | 'glb' | 'other';
 export type ModelStatus = 'wip' | 'shared' | 'published' | 'archived';
-export type ModelDiscipline = 'architectural' | 'structural' | 'mep' | 'elv' | 'civil' | 'coordination' | 'other';
+/** @deprecated use the canonical {@link Discipline} (ADR-0012); kept as an alias for callers. */
+export type ModelDiscipline = Discipline;
 
 export interface BimModel {
   id: Id;
@@ -64,7 +66,7 @@ export function makeBimModel(input: NewBimModel): BimModel {
     projectName: input.projectName ?? null,
     code: input.code.trim(),
     name: input.name.trim(),
-    discipline: input.discipline ?? 'other',
+    discipline: toDiscipline(input.discipline),
     format: input.format ?? 'ifc',
     storageKey: input.storageKey?.trim() || null,
     fileUrl: input.fileUrl?.trim() || null,

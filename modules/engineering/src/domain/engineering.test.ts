@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { makeDrawing } from './drawing';
 import { makeRfi } from './rfi';
 import { makeSubmittal } from './submittal';
+import { makeTechnicalQuery } from './technical-query';
+import { toDiscipline } from './discipline';
 import { InMemoryDrawingStore } from '../in-memory-drawing-store';
 import { InMemoryRfiStore } from '../in-memory-rfi-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
@@ -21,6 +23,34 @@ const mockEvents = {
 const mockTx: TxRunner = {
   run: (fn) => fn(null),
 };
+
+describe('Discipline dimension (ADR-0012 shared dimension)', () => {
+  it('defaults every engineering aggregate to "other" when unset', () => {
+    const base = { tenantId: 't1', projectId: 'p1', code: 'X', title: 'T' };
+    expect(makeDrawing(base).discipline).toBe('other');
+    expect(makeRfi({ ...base, question: 'q' }).discipline).toBe('other');
+    expect(makeSubmittal({ ...base, submittalType: 'material' }).discipline).toBe('other');
+    expect(makeTechnicalQuery({ ...base, query: 'q' }).discipline).toBe('other');
+  });
+
+  it('carries a fine-grained discipline through creation', () => {
+    const d = makeDrawing({ tenantId: 't1', projectId: 'p1', code: 'E-101', title: 'Power', discipline: 'electrical' });
+    expect(d.discipline).toBe('electrical');
+  });
+
+  it('normalises casing/whitespace and falls back to "other" for unknown values', () => {
+    expect(toDiscipline('  ELV ')).toBe('elv');
+    expect(toDiscipline('Fire_Alarm')).toBe('fire_alarm');
+    expect(toDiscipline('plumbing')).toBe('plumbing');
+    expect(toDiscipline('nonsense')).toBe('other');
+    expect(toDiscipline(null)).toBe('other');
+  });
+
+  it('keeps legacy coarse values (mep/coordination) valid for existing TQ/BIM data', () => {
+    expect(toDiscipline('mep')).toBe('mep');
+    expect(toDiscipline('coordination')).toBe('coordination');
+  });
+});
 
 describe('Engineering Module Bounded Context', () => {
   describe('Drawings', () => {

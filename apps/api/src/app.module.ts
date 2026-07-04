@@ -80,6 +80,13 @@ import { StockController } from './inventory/stock.controller';
 import { TransferController } from './inventory/transfer.controller';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { WorkspaceConfigService } from './workspace/workspace-config.service';
+import {
+  WORKSPACE_CONFIG_STORE,
+  InMemoryWorkspaceConfigStore,
+  PostgresWorkspaceConfigStore,
+} from './workspace/workspace-config-store';
+import { PG_POOL } from '@aura/core';
+import type { Pool } from 'pg';
 
 /**
  * The API host. Phase 0 wires only the kernel (CoreModule) + a health check and
@@ -88,6 +95,14 @@ import { WorkspaceConfigService } from './workspace/workspace-config.service';
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
   controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmContactsController, CrmActivitiesController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, WinLossController, ContractsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController],
-  providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService],
+  providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService,
+    {
+      // Postgres-backed when a pool is configured; in-memory otherwise (dev/CI).
+      provide: WORKSPACE_CONFIG_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresWorkspaceConfigStore(pool) : new InMemoryWorkspaceConfigStore(),
+    },
+  ],
 })
 export class AppModule {}

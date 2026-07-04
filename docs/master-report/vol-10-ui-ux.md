@@ -113,6 +113,33 @@ Workspace (My Work) · global search · universal inbox · recent items · bread
 tabs · ⌘K palette verbs · context AI dock · feed filters · demo data · product language ·
 login. Reference: `docs/reports/2026-07-02-product-experience-gap-verification.md`.
 
+## 16. Command Center (homepage) — shipped 2026-07-03, branch `feat/command-center`
+
+The `/` homepage is an **attention-first Enterprise Command Center**, not a widget grid. It
+answers one question — *what requires my attention now, and what should I do next?* — along the
+Awareness → Intelligence → Prioritization → Action arc:
+
+- **Business-health ring** — an explainable 0–100 score (`computeBusinessHealth`) with named
+  drivers (decision backlog, aging approvals, budget variance, win rate) and a band
+  (strong/stable/at-risk/critical), rendered as a conic-gradient ring in the hero.
+- **AI Daily Briefing** — pulled through the existing `POST /api/intelligence/insights` seam;
+  degrades gracefully to a clear message when no model key is configured.
+- **"Needs your attention"** — a single ranked, severity-tagged feed (`buildAttentionFeed`)
+  scoring every pending decision from the universal Inbox (13 kinds) by action weight × log-scaled
+  money value × age, plus derived project budget-risk items. Each row deep-links (`Open→`) to the
+  exact record to act.
+- **"What to do next"** — the top-3 as imperative next actions (`recommendedActions`).
+- Right rail: **Operations / Financial / Risk & Compliance** snapshots, **Quick Actions** (9 create
+  shortcuts), and the **live event spine**.
+- CEO / CFO / PM dashboards are preserved as switchable command perspectives.
+
+**Architecture:** the scoring + health logic is framework-free and unit-tested in
+`shared/src/command-center/` (`attention.ts`, `health.ts` — 7 tests), so it is reusable
+server-side (digest emails, mobile) and every number is explainable. The homepage adds **no new
+API endpoints and no cross-module joins** — it reuses `InboxService`, the intelligence
+pipeline/project ledgers, and the `AiService` briefing seam. UI: `apps/web/components/command-center.tsx`,
+wired via `role-dashboard-shell.tsx`. Reference: `docs/reports/2026-07-03-enterprise-command-center.md`.
+
 ---
 
 *Next: [Volume 11 — Workflow Catalog](vol-11-workflow-catalog.md)*

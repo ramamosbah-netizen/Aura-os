@@ -5,6 +5,13 @@
 green test runs. Nothing in this report is aspirational unless explicitly marked **[Planned]**
 or **[Gap]**.
 
+> **Update 2026-07-03 (branch `feat/command-center`, commit `08f2a60`):** the `/` homepage was
+> rebuilt into an attention-first **Enterprise Command Center** — health-score ring, AI Daily
+> Briefing, a single ranked "needs your attention" feed with inline actions, and Operations/
+> Financial/Risk snapshots. Scoring/health core is framework-free + unit-tested in
+> `shared/src/command-center/`. See [Volume 10 §16](vol-10-ui-ux.md) and
+> `docs/reports/2026-07-03-enterprise-command-center.md`.
+
 **Verified platform counts (2026-07-03):**
 
 | Metric | Count |
@@ -13,10 +20,10 @@ or **[Gap]**.
 | API route handlers | 551 across 32 controller areas |
 | Web pages | 93 |
 | Web BFF routes | 204 |
-| Web components | 84 |
+| Web components | 85 |
 | SQL migrations | 126 (sequential, duplicate-guarded) |
 | Domain events in catalog | 71 |
-| Test files | 132 (vitest) + Playwright smoke e2e |
+| Test files | 133 (vitest) + Playwright smoke e2e |
 | Kernel services | 21 core service areas |
 
 ---
@@ -70,6 +77,7 @@ against the 2026-07-01 due-diligence audit and re-verified 2026-07-03.
 |---|--:|---|---|--:|
 | Kernel (events, workflow, DMS, identity, numbering, audit…) | 88% | Excellent | Yes | **9.2/10** |
 | Form Engine (metadata forms, rules, formulas, plugins, AI fill/review) | 85% | Excellent | Yes | **9.0/10** |
+| Command Center (attention scoring, business-health, AI briefing homepage) | 80% | Excellent | Yes | **8.6/10** |
 | AI Platform (provider seam, RAG, insights, autonomy, MCP) | 55% | Good | Early | **6.5/10** |
 | Integration Platform (webhooks, connectors, SDK generator) | 45% | Good | Not yet | **5.5/10** |
 | Reporting / BI | 40% | Fair | Not yet | **5.0/10** |

@@ -13,7 +13,7 @@ print-formatted document view.
 
 | Route | Walkthrough |
 |---|---|
-| `/` | **My Work** — the landing workspace: assigned/pending items, recent activity, jump-offs. First screen of every session. |
+| `/` | **Enterprise Command Center** — the attention-first homepage: business-health ring, AI Daily Briefing, a single ranked "Needs your attention" feed (scored across all pending decisions + budget risks) with inline `Open→` deep-links, "What to do next" top-3, and Operations/Financial/Risk snapshots + Quick Actions. CEO/CFO/PM dashboards preserved as switchable perspectives. First screen of every session. Scoring/health core: `shared/src/command-center/`; UI: `apps/web/components/command-center.tsx`. Reference: `docs/reports/2026-07-03-enterprise-command-center.md`. |
 | `/login` | JWT session start; dev mode accepts `u-admin` (Vol 7 §1). |
 | `/inbox` | **Universal inbox** — 12 pending kinds (PO approvals, GRN inspections, leave, IRs, PTWs…) aggregated with deep links; the "what needs me" queue. |
 | `/search` | Global search across 12 record types; same index feeds ⌘K. |

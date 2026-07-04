@@ -17,6 +17,9 @@ import {
   type ModelFormat,
   type ModelStatus,
   type Discipline,
+  type DesignChange,
+  type DesignChangeStatus,
+  type DesignChangeType,
   EngineeringService
 } from '@aura/engineering';
 
@@ -64,6 +67,23 @@ class CreateSubmittalDto {
 
 class UpdateSubmittalStatusDto {
   @IsString() status!: SubmittalStatus;
+}
+
+// Design Change DTOs
+class CreateDesignChangeDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() discipline?: Discipline;
+  @IsOptional() @IsString() changeType?: DesignChangeType;
+  @IsOptional() costImpact?: boolean;
+  @IsOptional() estimatedValue?: number;
+}
+
+class DecideDesignChangeDto {
+  @IsString() status!: DesignChangeStatus;
 }
 
 @Controller('engineering')
@@ -279,6 +299,68 @@ export class EngineeringController {
   async getSubmittal(@Param('id') id: string): Promise<Submittal> {
     const found = await this.engineeringService.getSubmittal(id);
     if (!found) throw new NotFoundException(`Submittal ${id} not found`);
+    return found;
+  }
+
+  // ── Design Changes ───────────────────────────────────────────────────────────
+
+  @Post('design-changes')
+  createDesignChange(@Body() dto: CreateDesignChangeDto): Promise<DesignChange> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+
+    const ctx = this.tenant.get();
+    return this.engineeringService.createDesignChange({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      code: dto.code,
+      title: dto.title,
+      description: dto.description,
+      discipline: dto.discipline,
+      changeType: dto.changeType,
+      costImpact: dto.costImpact,
+      estimatedValue: dto.estimatedValue,
+      ownerId: ctx.actorId,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Put('design-changes/:id/decision')
+  decideDesignChange(@Param('id') id: string, @Body() dto: DecideDesignChangeDto): Promise<DesignChange> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.decideDesignChange(ctx.tenantId, ctx.actorId, id, dto.status);
+  }
+
+  @Get('design-changes')
+  listDesignChanges(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: DesignChange['status'],
+  ): Promise<DesignChange[]> {
+    const ctx = this.tenant.get();
+    return this.engineeringService.listDesignChanges({ tenantId: ctx.tenantId, projectId, status, limit: 100 });
+  }
+
+  @Get('design-changes/paged')
+  pagedDesignChanges(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: DesignChange['status'],
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listDesignChangesPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
+  @Get('design-changes/:id')
+  async getDesignChange(@Param('id') id: string): Promise<DesignChange> {
+    const found = await this.engineeringService.getDesignChange(id);
+    if (!found) throw new NotFoundException(`Design change ${id} not found`);
     return found;
   }
 

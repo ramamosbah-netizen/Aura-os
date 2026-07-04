@@ -6,6 +6,7 @@ import { InMemoryRfiStore } from './in-memory-rfi-store';
 import { InMemorySubmittalStore } from './in-memory-submittal-store';
 import { InMemoryTechnicalQueryStore } from './in-memory-technical-query-store';
 import { InMemoryBimModelStore } from './in-memory-bim-model-store';
+import { InMemoryDesignChangeStore } from './in-memory-design-change-store';
 import { respondToQuery } from './domain/technical-query';
 import { makeTechnicalQuery } from './domain/technical-query';
 import { bumpModelVersion, makeBimModel } from './domain/bim-model';
@@ -24,6 +25,7 @@ function buildService(): EngineeringService {
     new InMemorySubmittalStore(),
     new InMemoryTechnicalQueryStore(),
     new InMemoryBimModelStore(),
+    new InMemoryDesignChangeStore(),
     mockEvents,
     mockTx,
     new AccessService(),

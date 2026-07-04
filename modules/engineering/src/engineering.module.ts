@@ -22,6 +22,10 @@ import { BIM_MODEL_STORE } from './bim-model-store';
 import { InMemoryBimModelStore } from './in-memory-bim-model-store';
 import { PostgresBimModelStore } from './postgres-bim-model-store';
 
+import { DESIGN_CHANGE_STORE } from './design-change-store';
+import { InMemoryDesignChangeStore } from './in-memory-design-change-store';
+import { PostgresDesignChangeStore } from './postgres-design-change-store';
+
 import { EngineeringService } from './engineering.service';
 
 @Module({
@@ -56,6 +60,12 @@ import { EngineeringService } from './engineering.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresBimModelStore(pool) : new InMemoryBimModelStore(),
+    },
+    {
+      provide: DESIGN_CHANGE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDesignChangeStore(pool) : new InMemoryDesignChangeStore(),
     },
     EngineeringService,
   ],

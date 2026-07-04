@@ -4,11 +4,13 @@ import { makeRfi } from './rfi';
 import { makeSubmittal } from './submittal';
 import { makeTechnicalQuery } from './technical-query';
 import { toDiscipline } from './discipline';
+import { makeDesignChange, decideDesignChange, triggersVariation } from './design-change';
 import { InMemoryDrawingStore } from '../in-memory-drawing-store';
 import { InMemoryRfiStore } from '../in-memory-rfi-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryTechnicalQueryStore } from '../in-memory-technical-query-store';
 import { InMemoryBimModelStore } from '../in-memory-bim-model-store';
+import { InMemoryDesignChangeStore } from '../in-memory-design-change-store';
 import { EngineeringService } from '../engineering.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -52,6 +54,42 @@ describe('Discipline dimension (ADR-0012 shared dimension)', () => {
   });
 });
 
+describe('Design Change → Variation trigger (ADR-0011 event composition)', () => {
+  const base = { tenantId: 't1', projectId: 'p1', code: 'DC-1', title: 'Revised riser', discipline: 'electrical' as const };
+
+  it('defaults to draft/addition, no cost impact, zero value', () => {
+    const dc = makeDesignChange(base);
+    expect(dc.status).toBe('draft');
+    expect(dc.changeType).toBe('addition');
+    expect(dc.costImpact).toBe(false);
+    expect(dc.estimatedValue).toBe(0);
+    expect(triggersVariation(dc)).toBe(false);
+  });
+
+  it('triggers a variation only when approved AND cost-impacting AND value > 0', () => {
+    const withImpact = makeDesignChange({ ...base, costImpact: true, estimatedValue: 12000 });
+    expect(triggersVariation(withImpact)).toBe(false); // still draft
+    const approved = decideDesignChange(withImpact, 'approved', 'u-qs');
+    expect(approved.status).toBe('approved');
+    expect(approved.decidedBy).toBe('u-qs');
+    expect(triggersVariation(approved)).toBe(true);
+  });
+
+  it('does NOT trigger when approved but no cost impact', () => {
+    const noImpact = makeDesignChange({ ...base, costImpact: false, estimatedValue: 5000 });
+    expect(triggersVariation(decideDesignChange(noImpact, 'approved', 'u-qs'))).toBe(false);
+  });
+
+  it('does NOT trigger when rejected', () => {
+    const dc = makeDesignChange({ ...base, costImpact: true, estimatedValue: 9000 });
+    expect(triggersVariation(decideDesignChange(dc, 'rejected', 'u-qs'))).toBe(false);
+  });
+
+  it('clamps a negative estimated value to zero', () => {
+    expect(makeDesignChange({ ...base, estimatedValue: -500 }).estimatedValue).toBe(0);
+  });
+});
+
 describe('Engineering Module Bounded Context', () => {
   describe('Drawings', () => {
     it('creates a new shop drawing in draft status', () => {
@@ -78,6 +116,7 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -117,6 +156,7 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -151,6 +191,7 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -182,6 +223,7 @@ describe('Engineering Module Bounded Context', () => {
         new InMemorySubmittalStore(),
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -235,6 +277,7 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         tqStore,
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
         mockEvents,
         mockTx,
         mockAccess

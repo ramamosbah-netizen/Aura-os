@@ -17,6 +17,9 @@ import { TECHNICAL_QUERY_STORE, type TqFilter, type TechnicalQueryStore } from '
 import { type BimModel, type NewBimModel, type ModelStatus, makeBimModel, bumpModelVersion, BIM_MODEL_EVENT } from './domain/bim-model';
 import { BIM_MODEL_STORE, type BimModelFilter, type BimModelStore } from './bim-model-store';
 
+import { type DesignChange, type NewDesignChange, type DesignChangeStatus, makeDesignChange, decideDesignChange, triggersVariation, DESIGN_CHANGE_EVENT } from './domain/design-change';
+import { DESIGN_CHANGE_STORE, type DesignChangeFilter, type DesignChangeStore } from './design-change-store';
+
 @Injectable()
 export class EngineeringService {
   private readonly logger = new Logger('Engineering');
@@ -27,6 +30,7 @@ export class EngineeringService {
     @Inject(SUBMITTAL_STORE) private readonly submittalStore: SubmittalStore,
     @Inject(TECHNICAL_QUERY_STORE) private readonly tqStore: TechnicalQueryStore,
     @Inject(BIM_MODEL_STORE) private readonly bimStore: BimModelStore,
+    @Inject(DESIGN_CHANGE_STORE) private readonly designChangeStore: DesignChangeStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -382,6 +386,79 @@ export class EngineeringService {
 
   listTechnicalQueriesPaged(filter: TqFilter, page: import('@aura/shared').PageParams) {
     return this.tqStore.listPaged(filter, page);
+  }
+
+  // ── Design Changes (engineering-originated; approval → commercial Variation) ──
+
+  async createDesignChange(input: NewDesignChange): Promise<DesignChange> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'engineering.design_change.create', orgPath });
+    }
+    const dc = makeDesignChange(input);
+    const event = makeEvent({
+      type: DESIGN_CHANGE_EVENT.raised,
+      tenantId: dc.tenantId, companyId: dc.companyId, actorId: dc.createdBy,
+      aggregateType: 'engineering.design_change', aggregateId: dc.id,
+      payload: { code: dc.code, title: dc.title, discipline: dc.discipline, projectId: dc.projectId, changeType: dc.changeType, costImpact: dc.costImpact },
+    });
+    await this.tx.run(async (handle) => {
+      await this.designChangeStore.createWithClient(handle, dc);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Design change raised: ${dc.code} (${dc.id})`);
+    return dc;
+  }
+
+  /**
+   * Decide a design change. On approval WITH a cost impact this emits
+   * `engineering.design_change.approved` carrying the value snapshot — the cross-module reactor
+   * turns that into a draft Variation in Projects (never a direct cross-module call).
+   */
+  async decideDesignChange(tenantId: Id, actorId: Id | null, id: Id, status: DesignChangeStatus): Promise<DesignChange> {
+    const dc = await this.designChangeStore.get(id);
+    if (!dc) throw new Error(`design change ${id} not found`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (dc.companyId) orgPath.push({ level: 'company', id: dc.companyId });
+      this.access.assert(actorId, { permission: 'engineering.design_change.decide', orgPath });
+    }
+    const updated = decideDesignChange(dc, status, actorId);
+    const type = status === 'approved' ? DESIGN_CHANGE_EVENT.approved
+      : status === 'rejected' ? DESIGN_CHANGE_EVENT.rejected
+      : DESIGN_CHANGE_EVENT.raised;
+    const event = makeEvent({
+      type,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId,
+      aggregateType: 'engineering.design_change', aggregateId: updated.id,
+      payload: {
+        code: updated.code, title: updated.title, status: updated.status,
+        projectId: updated.projectId, projectName: updated.projectName,
+        changeType: updated.changeType, costImpact: updated.costImpact,
+        estimatedValue: updated.estimatedValue,
+        // explicit flag so the reactor need not re-derive the trigger rule
+        triggersVariation: triggersVariation(updated),
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.designChangeStore.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Design change ${updated.code} (${updated.id}) → ${status}${triggersVariation(updated) ? ' [triggers variation]' : ''}`);
+    return updated;
+  }
+
+  getDesignChange(id: Id): Promise<DesignChange | null> {
+    return this.designChangeStore.get(id);
+  }
+
+  listDesignChanges(filter?: DesignChangeFilter): Promise<DesignChange[]> {
+    return this.designChangeStore.list(filter);
+  }
+
+  listDesignChangesPaged(filter: DesignChangeFilter, page: import('@aura/shared').PageParams) {
+    return this.designChangeStore.listPaged(filter, page);
   }
 
   // ── BIM / model registry (viewer backbone) ──────────────────────────────────

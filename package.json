@@ -16,7 +16,9 @@
     "test": "turbo run test",
     "db:migrate": "pnpm --filter @aura/api db:migrate",
     "test:coverage": "turbo run test -- --coverage",
-    "audit": "pnpm audit --prod"
+    "audit": "pnpm audit --prod",
+    "adr:new": "node scripts/adr-new.mjs",
+    "adr:check": "node scripts/adr-check.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

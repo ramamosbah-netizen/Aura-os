@@ -31,6 +31,9 @@ jobs:
       - name: Lint (ESLint — TIER-2 #50)
         run: pnpm lint
 
+      - name: ADR registry integrity (no number collisions / registry drift)
+        run: pnpm adr:check
+
       - name: Typecheck
         run: pnpm typecheck
 

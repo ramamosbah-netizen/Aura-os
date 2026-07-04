@@ -1,3 +1,15 @@
+---
+id: adr_402b16a0
+number: 0005
+title: Single AI provider seam with deterministic local fallback
+status: Accepted
+category: AI
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0005: Single AI provider seam with deterministic local fallback
 
 **Status:** Accepted

@@ -1,3 +1,15 @@
+---
+id: adr_04e53d6a
+number: 0006
+title: Form schemas are pure JSON; behavior referenced by registry id
+status: Accepted
+category: Platform
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0006: Form schemas are pure JSON; behavior referenced by registry id
 
 **Status:** Accepted (2026-07-03, form engine M1)

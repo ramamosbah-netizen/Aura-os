@@ -1,3 +1,15 @@
+---
+id: adr_340c2ce8
+number: 0012
+title: Shared Dimensions
+status: Accepted
+category: Architecture
+owner: Architecture
+date: 
+supersedes: []
+related: [0011, 0002, 0010]
+---
+
 # ADR-0012: Shared Dimensions
 
 **Status:** Accepted

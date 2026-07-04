@@ -1,3 +1,15 @@
+---
+id: adr_39cb7ebe
+number: 0014
+title: Design system on CSS custom properties; no UI framework dependency
+status: Accepted
+category: UI
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0014: Design system on CSS custom properties; no UI framework dependency
 
 **Status:** Accepted

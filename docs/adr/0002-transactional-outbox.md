@@ -1,3 +1,15 @@
+---
+id: adr_2d216ee4
+number: 0002
+title: Transactional outbox + polling relay over message brokers
+status: Accepted
+category: Platform
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0002: Transactional outbox + polling relay over message brokers
 
 **Status:** Accepted (formalized 2026-07-03; practiced since kernel v0)

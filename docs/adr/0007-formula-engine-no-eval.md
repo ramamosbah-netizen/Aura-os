@@ -1,3 +1,15 @@
+---
+id: adr_a93a1c7a
+number: 0007
+title: Hand-rolled formula engine; no eval; cycles rejected at compile
+status: Accepted
+category: Platform
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0007: Hand-rolled formula engine; no eval; cycles rejected at compile
 
 **Status:** Accepted (2026-07-03, form engine M1)

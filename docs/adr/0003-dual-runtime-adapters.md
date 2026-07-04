@@ -1,3 +1,15 @@
+---
+id: adr_f591d146
+number: 0003
+title: Dual runtime — in-memory and Postgres adapters behind one port
+status: Accepted
+category: Platform
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0003: Dual runtime — in-memory and Postgres adapters behind one port
 
 **Status:** Accepted

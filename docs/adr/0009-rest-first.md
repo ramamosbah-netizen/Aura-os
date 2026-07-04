@@ -1,3 +1,15 @@
+---
+id: adr_e76ab9a0
+number: 0009
+title: REST-first; GraphQL deferred until integrator demand
+status: Accepted
+category: Architecture
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0009: REST-first; GraphQL deferred until integrator demand
 
 **Status:** Accepted

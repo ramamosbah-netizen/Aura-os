@@ -82,7 +82,7 @@ const DISCIPLINES = [
   'fire_fighting', 'fire_alarm', 'elv', 'ict', 'security', 'cctv', 'access_control', 'bms', 'other',
 ];
 
-type Tab = 'drawings' | 'rfis' | 'submittals' | 'design-changes' | 'documents';
+type Tab = 'overview' | 'drawings' | 'rfis' | 'submittals' | 'design-changes' | 'documents';
 
 interface Props {
   initialDrawings: Drawing[];
@@ -103,7 +103,7 @@ export default function EngineeringClient({
   docTypes,
   projects,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('drawings');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [drawings, setDrawings] = useState<Drawing[]>(initialDrawings);
   const [rfis, setRfis] = useState<Rfi[]>(initialRfis);
   const [submittals, setSubmittals] = useState<Submittal[]>(initialSubmittals);
@@ -343,12 +343,48 @@ export default function EngineeringClient({
 
   const docTypeLabel = (t: string) => docTypes.find((d) => d.docType === t)?.label || t;
 
+  // ── Overview cockpit: everything computed from the already-loaded lists ──
+  const drawingsPending = drawings.filter((d) => d.status !== 'approved' && d.status !== 'rejected').length;
+  const rfisOpen = rfis.filter((r) => r.status === 'open').length;
+  const submittalsPending = submittals.filter((s) => s.status === 'draft' || s.status === 'submitted').length;
+  const dcAwaiting = designChanges.filter((d) => d.status === 'draft' || d.status === 'submitted').length;
+  const docsPending = documents.filter((d) => d.status === 'draft' || d.status === 'submitted').length;
+
+  const stats: { label: string; total: number; pending: number; tab: Tab }[] = [
+    { label: 'Shop Drawings', total: drawings.length, pending: drawingsPending, tab: 'drawings' },
+    { label: 'RFIs', total: rfis.length, pending: rfisOpen, tab: 'rfis' },
+    { label: 'Submittals', total: submittals.length, pending: submittalsPending, tab: 'submittals' },
+    { label: 'Design Changes', total: designChanges.length, pending: dcAwaiting, tab: 'design-changes' },
+    { label: 'Documents', total: documents.length, pending: docsPending, tab: 'documents' },
+  ];
+
+  const attention: { label: string; count: number; tab: Tab }[] = ([
+    { label: 'Drawings awaiting approval', count: drawingsPending, tab: 'drawings' as Tab },
+    { label: 'Open RFIs', count: rfisOpen, tab: 'rfis' as Tab },
+    { label: 'Submittals in review', count: submittalsPending, tab: 'submittals' as Tab },
+    { label: 'Design changes awaiting decision', count: dcAwaiting, tab: 'design-changes' as Tab },
+    { label: 'Documents pending approval', count: docsPending, tab: 'documents' as Tab },
+  ]).filter((a) => a.count > 0);
+
+  const byDiscipline = (() => {
+    const m = new Map<string, number>();
+    for (const d of designChanges) m.set(d.discipline, (m.get(d.discipline) ?? 0) + 1);
+    for (const d of documents) m.set(d.discipline, (m.get(d.discipline) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  })();
+
   return (
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
 
       {/* Tabs */}
       <div style={st.tabs}>
+        <button
+          onClick={() => setActiveTab('overview')}
+          style={activeTab === 'overview' ? st.activeTabBtn : st.tabBtn}
+        >
+          Overview
+        </button>
         <button
           onClick={() => setActiveTab('drawings')}
           style={activeTab === 'drawings' ? st.activeTabBtn : st.tabBtn}
@@ -382,6 +418,58 @@ export default function EngineeringClient({
       </div>
 
       {/* Tab Contents */}
+      {activeTab === 'overview' && (
+        <div>
+          <div style={st.statGrid}>
+            {stats.map((s) => (
+              <button key={s.label} onClick={() => setActiveTab(s.tab)} style={st.statCard}>
+                <span style={st.statNum}>{s.total}</span>
+                <span style={st.statLabel}>{s.label}</span>
+                <span style={s.pending > 0 ? st.statPending : st.statClear}>
+                  {s.pending > 0 ? `${s.pending} need action` : 'all clear'}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div style={st.overviewCols}>
+            <section style={st.panel}>
+              <h3 style={st.panelTitle}>Needs your attention</h3>
+              {attention.length === 0 ? (
+                <p style={st.muted}>Nothing outstanding — every engineering item is decided.</p>
+              ) : (
+                <ul style={st.attnList}>
+                  {attention.map((a) => (
+                    <li key={a.label} style={st.attnRow}>
+                      <button onClick={() => setActiveTab(a.tab)} style={st.attnLink}>
+                        <span style={st.attnCount}>{a.count}</span>
+                        <span>{a.label}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section style={st.panel}>
+              <h3 style={st.panelTitle}>By discipline</h3>
+              {byDiscipline.length === 0 ? (
+                <p style={st.muted}>No discipline-tagged records yet (design changes & documents).</p>
+              ) : (
+                <ul style={st.attnList}>
+                  {byDiscipline.map(([disc, count]) => (
+                    <li key={disc} style={st.discRow}>
+                      <span className="capitalize">{disc.replace('_', ' ')}</span>
+                      <span style={st.discCount}>{count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'drawings' && (
         <div>
           {/* Create Form */}
@@ -1046,6 +1134,31 @@ const st = {
     letterSpacing: 0.4,
   } as CSSProperties,
   formHint: { margin: '-8px 0 16px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 560 } as CSSProperties,
+  statGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, margin: '0 0 20px' } as CSSProperties,
+  statCard: {
+    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
+    padding: '16px 18px', borderRadius: 12, border: '1px solid var(--border)',
+    background: 'var(--surface, transparent)', cursor: 'pointer', textAlign: 'left',
+  } as CSSProperties,
+  statNum: { fontSize: 26, fontWeight: 700, letterSpacing: -0.5 } as CSSProperties,
+  statLabel: { fontSize: 13, fontWeight: 600 } as CSSProperties,
+  statPending: { fontSize: 11.5, color: '#fbbf24', fontWeight: 600 } as CSSProperties,
+  statClear: { fontSize: 11.5, color: '#34d399', fontWeight: 600 } as CSSProperties,
+  overviewCols: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 } as CSSProperties,
+  attnList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 } as CSSProperties,
+  attnRow: { margin: 0 } as CSSProperties,
+  attnLink: {
+    display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px',
+    borderRadius: 8, border: '1px solid var(--border)', background: 'transparent',
+    cursor: 'pointer', textAlign: 'left', fontSize: 13.5,
+  } as CSSProperties,
+  attnCount: {
+    minWidth: 26, textAlign: 'center', fontWeight: 700, fontSize: 12,
+    color: '#fbbf24', background: 'rgba(251, 191, 36, 0.12)',
+    border: '1px solid rgba(251, 191, 36, 0.25)', borderRadius: 6, padding: '2px 6px',
+  } as CSSProperties,
+  discRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 2px', fontSize: 13.5, borderBottom: '1px solid var(--border)' } as CSSProperties,
+  discCount: { fontWeight: 700, color: 'var(--muted)' } as CSSProperties,
   errorPanel: {
     background: 'rgba(248, 113, 113, 0.1)',
     color: '#f87171',

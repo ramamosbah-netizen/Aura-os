@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
-import { ProjectService, WbsService, CbsService } from '@aura/projects';
+import { ProjectService, WbsService, CbsService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService } from '@aura/tendering';
 import { AccountService } from '@aura/crm';
@@ -40,6 +40,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly projects: ProjectService,
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
+    private readonly variations: VariationService,
     private readonly tenant: TenantContext,
     private readonly pos: PurchaseOrderService,
     private readonly purchaseRequests: PurchaseRequestService,
@@ -170,6 +171,49 @@ export class CrossModuleSubscriber implements OnModuleInit {
         }
       } catch (err) {
         this.logger.error(`Failed to auto-create project from contract.signed: ${err}`);
+      }
+    });
+
+    // ── Engineering → Commercial: Design change approved → auto-draft Variation ──
+    // ADR-0011 in action: Engineering owns the design change; Projects owns the commercial
+    // variation. On approval WITH a cost impact, the design change emits an event; here we create
+    // a DRAFT variation carrying the value snapshot. QS reviews & approves it, which then rolls
+    // into the project's revised contract value. Never a direct cross-module call.
+    this.bus.subscribe('engineering.design_change.approved', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        if (p.triggersVariation !== true) return; // no cost impact / zero value → nothing commercial
+        const amount = Number(p.estimatedValue) || 0;
+        if (amount <= 0) return;
+        const projectId = p.projectId as string | undefined;
+        if (!projectId) return;
+        const changeType = p.changeType === 'omission' ? 'omission' : 'addition';
+        const code = (p.code as string) ?? 'DC';
+        const reference = `VO-DC-${e.aggregateId.slice(0, 8)}`;
+        // Idempotency: VariationService.create has no command-bus cache, so guard on the
+        // deterministic reference — an outbox retry (or re-approval) of the same design change
+        // won't spawn a second variation (mirrors the ipc.certified → AR reactor).
+        const existing = await this.variations.list({ tenantId: e.tenantId, projectId });
+        if (existing.some((v) => v.reference === reference)) {
+          this.logger.log(`↩ design_change.approved → variation ${reference} already exists, skipping`);
+          return;
+        }
+        await this.variations.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          projectId,
+          projectTitle: (p.projectName as string) ?? null,
+          reference,
+          title: `Variation from design change ${code}: ${p.title ?? ''}`.trim(),
+          description: `Auto-drafted from approved engineering design change ${code}.`,
+          type: changeType,
+          amount,
+        });
+        this.logger.log(
+          `⚡ design_change.approved → auto-drafted ${changeType} Variation ${reference} (${amount}) on project ${projectId}`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-draft variation from design_change.approved: ${err}`);
       }
     });
 

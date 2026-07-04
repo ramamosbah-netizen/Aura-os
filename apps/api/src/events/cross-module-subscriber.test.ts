@@ -127,12 +127,23 @@ function buildHarness() {
     },
   } as any;
 
+  const createdVariations: any[] = [];
+  const mockVariations = {
+    list: async () => createdVariations,
+    create: async (input: any) => {
+      const vo = { id: `vo-${createdVariations.length + 1}`, ...input };
+      createdVariations.push(vo);
+      return vo;
+    },
+  } as any;
+
   const subscriber = new CrossModuleSubscriber(
     bus,
     contracts,
     projects,
     wbs,
     cbs,
+    mockVariations, // VariationService
     tenant,
     noop, // PurchaseOrderService
     mockPurchaseRequests,
@@ -145,7 +156,7 @@ function buildHarness() {
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs, createdVariations };
 }
 
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
@@ -210,6 +221,42 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     // And re-winning the same opportunity must not spawn a second tender.
     await h.opportunities.update(opp.id, { stage: 'won' });
     expect(await h.tenders.list()).toHaveLength(1);
+  });
+
+  it('auto-drafts a Variation from an approved cost-impacting design change (Engineering → Commercial)', async () => {
+    const emit = (payload: Record<string, unknown>) =>
+      h.events.append([
+        makeEvent({
+          type: 'engineering.design_change.approved',
+          tenantId,
+          companyId: null,
+          actorId: 'u-eng',
+          aggregateType: 'engineering.design_change',
+          aggregateId: 'dc-1',
+          payload,
+        }),
+      ]);
+
+    // Approved + cost impact → one draft addition variation carrying the value.
+    await emit({ triggersVariation: true, projectId: 'proj-9', projectName: 'Marina Tower',
+      changeType: 'addition', estimatedValue: 12000, code: 'DC-1', title: 'Revised riser' });
+    expect(h.createdVariations).toHaveLength(1);
+    expect(h.createdVariations[0].type).toBe('addition');
+    expect(h.createdVariations[0].amount).toBe(12000);
+    expect(h.createdVariations[0].projectId).toBe('proj-9');
+
+    // Re-delivery of the same event (aggregateId dc-1) must not duplicate.
+    await emit({ triggersVariation: true, projectId: 'proj-9', projectName: 'Marina Tower',
+      changeType: 'addition', estimatedValue: 12000, code: 'DC-1', title: 'Revised riser' });
+    expect(h.createdVariations).toHaveLength(1);
+
+    // A design change with no cost impact must not create anything.
+    await h.events.append([
+      makeEvent({ type: 'engineering.design_change.approved', tenantId, companyId: null, actorId: 'u-eng',
+        aggregateType: 'engineering.design_change', aggregateId: 'dc-2',
+        payload: { triggersVariation: false, projectId: 'proj-9', changeType: 'addition', estimatedValue: 0, code: 'DC-2' } }),
+    ]);
+    expect(h.createdVariations).toHaveLength(1);
   });
 
   it('seeds the auto-created project with a root WBS node + CBS from the tender BOQ', async () => {

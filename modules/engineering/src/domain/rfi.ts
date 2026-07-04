@@ -1,4 +1,5 @@
 import { type Id, newId } from '@aura/shared';
+import { type Discipline, toDiscipline } from './discipline';
 
 export type RfiStatus = 'open' | 'answered' | 'closed';
 
@@ -11,6 +12,7 @@ export interface Rfi {
   question: string;
   answer: string | null;
   status: RfiStatus;
+  discipline: Discipline;
   projectId: Id;
   projectName: string | null;
   assignedTo: string | null;
@@ -27,6 +29,7 @@ export interface NewRfi {
   title: string;
   question: string;
   status?: RfiStatus;
+  discipline?: Discipline;
   projectId: Id;
   projectName?: string | null;
   assignedTo?: string | null;
@@ -45,6 +48,7 @@ export function makeRfi(input: NewRfi): Rfi {
     question: input.question.trim(),
     answer: null,
     status: input.status ?? 'open',
+    discipline: toDiscipline(input.discipline),
     projectId: input.projectId,
     projectName: input.projectName ?? null,
     assignedTo: input.assignedTo ?? null,

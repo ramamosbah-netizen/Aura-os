@@ -1,4 +1,5 @@
 import { type Id, newId } from '@aura/shared';
+import { type Discipline, toDiscipline } from './discipline';
 
 export type DrawingStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected';
 
@@ -10,6 +11,7 @@ export interface Drawing {
   title: string;
   revision: string;
   status: DrawingStatus;
+  discipline: Discipline;
   projectId: Id;
   projectName: string | null;
   ownerId: Id | null;
@@ -25,6 +27,7 @@ export interface NewDrawing {
   title: string;
   revision?: string;
   status?: DrawingStatus;
+  discipline?: Discipline;
   projectId: Id;
   projectName?: string | null;
   ownerId?: Id | null;
@@ -41,6 +44,7 @@ export function makeDrawing(input: NewDrawing): Drawing {
     title: input.title.trim(),
     revision: input.revision?.trim() || '0',
     status: input.status ?? 'draft',
+    discipline: toDiscipline(input.discipline),
     projectId: input.projectId,
     projectName: input.projectName ?? null,
     ownerId: input.ownerId ?? null,

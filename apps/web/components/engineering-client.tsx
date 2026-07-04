@@ -42,10 +42,55 @@ interface Submittal {
   createdAt: string;
 }
 
+interface DesignChange {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  title: string;
+  discipline: string;
+  changeType: 'addition' | 'omission';
+  costImpact: boolean;
+  estimatedValue: number;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+interface EngineeringDocument {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  title: string;
+  docType: string;
+  ownerModule: 'engineering' | 'hse';
+  discipline: string;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  revision: string;
+  createdAt: string;
+}
+
+interface DocTypeMeta {
+  docType: string;
+  label: string;
+  ownerModule: 'engineering' | 'hse';
+  formSchemaId: string;
+}
+
+const DISCIPLINES = [
+  'architectural', 'structural', 'civil', 'mechanical', 'electrical', 'plumbing', 'hvac',
+  'fire_fighting', 'fire_alarm', 'elv', 'ict', 'security', 'cctv', 'access_control', 'bms', 'other',
+];
+
+type Tab = 'drawings' | 'rfis' | 'submittals' | 'design-changes' | 'documents';
+
 interface Props {
   initialDrawings: Drawing[];
   initialRfis: Rfi[];
   initialSubmittals: Submittal[];
+  initialDesignChanges: DesignChange[];
+  initialDocuments: EngineeringDocument[];
+  docTypes: DocTypeMeta[];
   projects: Project[];
 }
 
@@ -53,12 +98,17 @@ export default function EngineeringClient({
   initialDrawings,
   initialRfis,
   initialSubmittals,
+  initialDesignChanges,
+  initialDocuments,
+  docTypes,
   projects,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'drawings' | 'rfis' | 'submittals'>('drawings');
+  const [activeTab, setActiveTab] = useState<Tab>('drawings');
   const [drawings, setDrawings] = useState<Drawing[]>(initialDrawings);
   const [rfis, setRfis] = useState<Rfi[]>(initialRfis);
   const [submittals, setSubmittals] = useState<Submittal[]>(initialSubmittals);
+  const [designChanges, setDesignChanges] = useState<DesignChange[]>(initialDesignChanges);
+  const [documents, setDocuments] = useState<EngineeringDocument[]>(initialDocuments);
 
   // Form states
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
@@ -73,6 +123,20 @@ export default function EngineeringClient({
   const [subCode, setSubCode] = useState('');
   const [subTitle, setSubTitle] = useState('');
   const [subType, setSubType] = useState<'material' | 'technical' | 'sample' | 'drawing'>('technical');
+
+  // Design change form
+  const [dcCode, setDcCode] = useState('');
+  const [dcTitle, setDcTitle] = useState('');
+  const [dcDiscipline, setDcDiscipline] = useState('other');
+  const [dcType, setDcType] = useState<'addition' | 'omission'>('addition');
+  const [dcCostImpact, setDcCostImpact] = useState(true);
+  const [dcValue, setDcValue] = useState('');
+
+  // Document form
+  const [docCode, setDocCode] = useState('');
+  const [docTitle, setDocTitle] = useState('');
+  const [docType, setDocType] = useState(docTypes[0]?.docType || 'method_statement');
+  const [docDiscipline, setDocDiscipline] = useState('other');
 
   // Inline action states
   const [rfiAnswers, setRfiAnswers] = useState<Record<string, string>>({});
@@ -215,6 +279,70 @@ export default function EngineeringClient({
     }
   };
 
+  const handleCreateDesignChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dcCode.trim() || !dcTitle.trim()) return;
+    setError(null);
+    try {
+      const res = await fetch('/api/engineering/design-changes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId, projectName: selectedProjName,
+          code: dcCode, title: dcTitle, discipline: dcDiscipline,
+          changeType: dcType, costImpact: dcCostImpact,
+          estimatedValue: Number(dcValue) || 0,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      setDesignChanges([created, ...designChanges]);
+      setDcCode(''); setDcTitle(''); setDcValue('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to raise design change');
+    }
+  };
+
+  const handleDecideDesignChange = async (id: string, status: 'approved' | 'rejected') => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/engineering/design-changes/${id}/decision`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      setDesignChanges((prev) => prev.map((d) => (d.id === id ? updated : d)));
+    } catch (err: any) {
+      setError(err.message || 'Failed to decide design change');
+    }
+  };
+
+  const handleCreateDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docCode.trim() || !docTitle.trim()) return;
+    setError(null);
+    try {
+      const res = await fetch('/api/engineering/documents', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId, projectName: selectedProjName,
+          code: docCode, title: docTitle, docType, discipline: docDiscipline,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      setDocuments([created, ...documents]);
+      setDocCode(''); setDocTitle('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create document');
+    }
+  };
+
+  const docTypeLabel = (t: string) => docTypes.find((d) => d.docType === t)?.label || t;
+
   return (
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
@@ -238,6 +366,18 @@ export default function EngineeringClient({
           style={activeTab === 'submittals' ? st.activeTabBtn : st.tabBtn}
         >
           Technical Submittals
+        </button>
+        <button
+          onClick={() => setActiveTab('design-changes')}
+          style={activeTab === 'design-changes' ? st.activeTabBtn : st.tabBtn}
+        >
+          Design Changes
+        </button>
+        <button
+          onClick={() => setActiveTab('documents')}
+          style={activeTab === 'documents' ? st.activeTabBtn : st.tabBtn}
+        >
+          Documents
         </button>
       </div>
 
@@ -566,6 +706,165 @@ export default function EngineeringClient({
           </section>
         </div>
       )}
+
+      {activeTab === 'design-changes' && (
+        <div>
+          <form onSubmit={handleCreateDesignChange} style={st.formCard}>
+            <h3 style={st.formTitle}>Raise Design Change</h3>
+            <p style={st.formHint}>
+              An approved design change with a cost impact automatically raises a draft commercial
+              variation on the project (QS reviews & approves it).
+            </p>
+            <div style={st.formGrid}>
+              <div style={st.field}>
+                <label style={st.label}>Project</label>
+                <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} style={st.select}>
+                  {projects.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Code</label>
+                <input type="text" placeholder="e.g. DC-101" value={dcCode} onChange={(e) => setDcCode(e.target.value)} style={st.input} required />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Title</label>
+                <input type="text" placeholder="e.g. Relocate main DB" value={dcTitle} onChange={(e) => setDcTitle(e.target.value)} style={st.input} required />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Discipline</label>
+                <select value={dcDiscipline} onChange={(e) => setDcDiscipline(e.target.value)} style={st.select}>
+                  {DISCIPLINES.map((d) => (<option key={d} value={d}>{d.replace('_', ' ')}</option>))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Change Type</label>
+                <select value={dcType} onChange={(e) => setDcType(e.target.value as 'addition' | 'omission')} style={st.select}>
+                  <option value="addition">Addition (+value)</option>
+                  <option value="omission">Omission (−value)</option>
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Estimated Value</label>
+                <input type="number" placeholder="0" value={dcValue} onChange={(e) => setDcValue(e.target.value)} style={st.input} />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Cost Impact</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38 }}>
+                  <input type="checkbox" checked={dcCostImpact} onChange={(e) => setDcCostImpact(e.target.checked)} />
+                  <span style={st.muted}>Raises a variation on approval</span>
+                </label>
+              </div>
+            </div>
+            <button type="submit" style={st.btn}>Raise Design Change</button>
+          </form>
+
+          <section style={st.panel}>
+            <h3 style={st.panelTitle}>Design Changes</h3>
+            {designChanges.length === 0 ? (
+              <p style={st.muted}>No design changes raised yet.</p>
+            ) : (
+              <table style={st.table}>
+                <thead>
+                  <tr>{['Code', 'Title', 'Discipline', 'Type', 'Value', 'Status', 'Actions'].map((h) => (<th key={h} style={st.th}>{h}</th>))}</tr>
+                </thead>
+                <tbody>
+                  {designChanges.map((d) => (
+                    <tr key={d.id}>
+                      <td style={st.tdCode}>{d.code}</td>
+                      <td style={st.td}>{d.title}</td>
+                      <td style={st.tdMuted} className="capitalize">{d.discipline.replace('_', ' ')}</td>
+                      <td style={st.tdMuted}>{d.changeType}{d.costImpact ? ' · cost' : ''}</td>
+                      <td style={st.tdMuted}>{d.estimatedValue ? d.estimatedValue.toLocaleString() : '—'}</td>
+                      <td style={st.td}>
+                        <span style={d.status === 'approved' ? st.tagApproved : d.status === 'rejected' ? st.tagRejected : st.tagPending}>{d.status}</span>
+                      </td>
+                      <td style={st.td}>
+                        {d.status !== 'approved' && d.status !== 'rejected' && (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => handleDecideDesignChange(d.id, 'approved')} style={st.btnApprove}>Approve</button>
+                            <button onClick={() => handleDecideDesignChange(d.id, 'rejected')} style={st.btnReject}>Reject</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+      )}
+
+      {activeTab === 'documents' && (
+        <div>
+          <form onSubmit={handleCreateDocument} style={st.formCard}>
+            <h3 style={st.formTitle}>Create Engineering Document</h3>
+            <p style={st.formHint}>
+              Method statements, risk assessments, specs, calc sheets, test reports and procedures
+              are one document type family — a risk assessment is owned by HSE, the rest by Engineering.
+            </p>
+            <div style={st.formGrid}>
+              <div style={st.field}>
+                <label style={st.label}>Project</label>
+                <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} style={st.select}>
+                  {projects.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Document Type</label>
+                <select value={docType} onChange={(e) => setDocType(e.target.value)} style={st.select}>
+                  {docTypes.map((t) => (<option key={t.docType} value={t.docType}>{t.label} ({t.ownerModule})</option>))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Code</label>
+                <input type="text" placeholder="e.g. MS-101" value={docCode} onChange={(e) => setDocCode(e.target.value)} style={st.input} required />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Title</label>
+                <input type="text" placeholder="e.g. Concrete pour method" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} style={st.input} required />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Discipline</label>
+                <select value={docDiscipline} onChange={(e) => setDocDiscipline(e.target.value)} style={st.select}>
+                  {DISCIPLINES.map((d) => (<option key={d} value={d}>{d.replace('_', ' ')}</option>))}
+                </select>
+              </div>
+            </div>
+            <button type="submit" style={st.btn}>Create Document</button>
+          </form>
+
+          <section style={st.panel}>
+            <h3 style={st.panelTitle}>Controlled Documents</h3>
+            {documents.length === 0 ? (
+              <p style={st.muted}>No documents created yet.</p>
+            ) : (
+              <table style={st.table}>
+                <thead>
+                  <tr>{['Code', 'Title', 'Type', 'Owner', 'Discipline', 'Rev', 'Status'].map((h) => (<th key={h} style={st.th}>{h}</th>))}</tr>
+                </thead>
+                <tbody>
+                  {documents.map((d) => (
+                    <tr key={d.id}>
+                      <td style={st.tdCode}>{d.code}</td>
+                      <td style={st.td}>{d.title}</td>
+                      <td style={st.tdMuted}>{docTypeLabel(d.docType)}</td>
+                      <td style={st.td}>
+                        <span style={d.ownerModule === 'hse' ? st.tagHse : st.tagEng}>{d.ownerModule}</span>
+                      </td>
+                      <td style={st.tdMuted} className="capitalize">{d.discipline.replace('_', ' ')}</td>
+                      <td style={st.tdMuted}>Rev {d.revision}</td>
+                      <td style={st.td}>
+                        <span style={d.status === 'approved' ? st.tagApproved : d.status === 'rejected' ? st.tagRejected : st.tagPending}>{d.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -724,6 +1023,29 @@ const st = {
     fontWeight: 600,
     textTransform: 'capitalize',
   } as CSSProperties,
+  tagHse: {
+    fontSize: 11,
+    background: 'rgba(129, 140, 248, 0.12)',
+    color: '#818cf8',
+    border: '1px solid rgba(129, 140, 248, 0.25)',
+    borderRadius: 6,
+    padding: '2px 8px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  } as CSSProperties,
+  tagEng: {
+    fontSize: 11,
+    background: 'rgba(148, 163, 184, 0.12)',
+    color: 'var(--muted)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '2px 8px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  } as CSSProperties,
+  formHint: { margin: '-8px 0 16px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 560 } as CSSProperties,
   errorPanel: {
     background: 'rgba(248, 113, 113, 0.1)',
     color: '#f87171',

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type WorkspaceConfig,
   type WorkspaceMe,
@@ -10,6 +10,7 @@ import {
   WORKSPACE_ROLES,
   isAdminRole,
 } from '@aura/shared';
+import { WORKSPACE_CONFIG_STORE, type WorkspaceConfigStore } from './workspace-config-store';
 
 export interface WorkspaceUser {
   username: string;
@@ -20,37 +21,41 @@ export interface WorkspaceUser {
 
 /**
  * Holds the admin-editable workspace configuration (users → roles, roles →
- * allowed functions). In-memory, seeded with a sensible default directory —
- * mirrors the platform's in-memory-first services; a Postgres-backed store can
- * drop in behind the same interface later. Pure resolution lives in
- * `@aura/shared` so the web filters identically.
+ * allowed functions), one document per tenant, persisted through the store
+ * (Postgres in prod, in-memory otherwise). Pure resolution lives in
+ * `@aura/shared` so the web filters identically. A tenant with no saved config
+ * yet resolves to the seeded default until the first admin save.
  */
 @Injectable()
 export class WorkspaceConfigService {
   private readonly logger = new Logger('Workspace');
-  private config: WorkspaceConfig = defaultWorkspaceConfig();
 
-  get(): WorkspaceConfig {
-    return this.config;
+  constructor(@Inject(WORKSPACE_CONFIG_STORE) private readonly store: WorkspaceConfigStore) {}
+
+  async get(tenantId: string): Promise<WorkspaceConfig> {
+    return (await this.store.get(tenantId)) ?? defaultWorkspaceConfig();
   }
 
-  update(patch: Partial<WorkspaceConfig>): WorkspaceConfig {
-    this.config = mergeWorkspaceConfig(this.config, patch);
-    this.logger.log(`Workspace config updated (${Object.keys(this.config.assignments).length} users assigned).`);
-    return this.config;
+  async update(tenantId: string, patch: Partial<WorkspaceConfig>): Promise<WorkspaceConfig> {
+    const base = await this.get(tenantId);
+    const next = mergeWorkspaceConfig(base, patch);
+    await this.store.save(tenantId, next);
+    this.logger.log(`Workspace config saved for ${tenantId} (${Object.keys(next.assignments).length} users assigned).`);
+    return next;
   }
 
   /** Effective view for one user (used by GET /workspace/me). */
-  me(username: string): WorkspaceMe {
-    return resolveWorkspaceMe(this.config, username);
+  async me(tenantId: string, username: string): Promise<WorkspaceMe> {
+    return resolveWorkspaceMe(await this.get(tenantId), username);
   }
 
   /** The directory an admin manages — every assigned user with their role. */
-  users(): WorkspaceUser[] {
-    return Object.keys(this.config.assignments)
+  async users(tenantId: string): Promise<WorkspaceUser[]> {
+    const config = await this.get(tenantId);
+    return Object.keys(config.assignments)
       .sort()
       .map((username) => {
-        const role = resolveRole(this.config, username);
+        const role = resolveRole(config, username);
         const meta = WORKSPACE_ROLES.find((r) => r.id === role);
         return { username, role, roleLabel: meta?.label ?? role, isAdmin: isAdminRole(role) };
       });

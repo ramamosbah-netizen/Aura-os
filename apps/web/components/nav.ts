@@ -121,6 +121,27 @@ export const NAV: NavGroup[] = [
 
 export const ALL_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
 
+/**
+ * Nav group → workspace `suite.*` function id. Groups mapped here are gated by
+ * the current user's allowed functions; unmapped groups (e.g. Workspace) always
+ * show. Kept next to NAV so the two never drift.
+ */
+export const GROUP_SUITE: Record<string, string> = {
+  'Deal chain': 'suite.dealChain',
+  Operate: 'suite.operate',
+  Intelligence: 'suite.intelligence',
+  Platform: 'suite.platform',
+};
+
+/** Filter nav groups by an allowed `suite.*` set; null = show everything. */
+export function visibleNav(allowedSuites: Set<string> | null): NavGroup[] {
+  if (!allowedSuites) return NAV;
+  return NAV.filter((g) => {
+    const suite = GROUP_SUITE[g.title];
+    return !suite || allowedSuites.has(suite);
+  });
+}
+
 /** The nav item owning a pathname — longest href-prefix wins (breadcrumbs, AI context). */
 export function findNavMatch(pathname: string): { group: string; label: string; href: string } | null {
   let match: { group: string; label: string; href: string } | null = null;

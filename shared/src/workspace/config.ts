@@ -31,7 +31,8 @@ export function defaultRoleFunctions(): Record<string, string[]> {
       'panel.health', 'panel.briefing', 'panel.attention', 'panel.nextActions', 'panel.financial', 'panel.risk',
       'perspective.cfo',
       'action.invoice', 'action.po',
-      'suite.finance', 'suite.dealChain',
+      // finance pages (invoices, ledger, treasury) live under the Operate nav group
+      'suite.finance', 'suite.dealChain', 'suite.operate',
     ],
     procurement: [
       'panel.briefing', 'panel.attention', 'panel.nextActions', 'panel.operations',

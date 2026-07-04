@@ -3,7 +3,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { NAV } from './nav';
+import { visibleNav } from './nav';
 import Breadcrumbs from './breadcrumbs';
 import CommandPalette from './command-palette';
 import TabBar from './tab-bar';
@@ -21,11 +21,18 @@ import '../lib/form-plugins';
 export default function AppShell({
   children,
   user,
+  navSuites,
+  isAdmin,
 }: {
   children: ReactNode;
   user?: SessionUser | null;
+  /** allowed `suite.*` ids for the current role; null/undefined = show all */
+  navSuites?: string[] | null;
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
+  // Admins always see every suite; otherwise gate by the role's allowed suites.
+  const groups = visibleNav(isAdmin || navSuites == null ? null : new Set(navSuites));
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [activeCompany, setActiveCompany] = useState('AURA Group HQ');
@@ -81,7 +88,7 @@ export default function AppShell({
           <span style={{ color: 'var(--muted)' }}>OS</span>
         </div>
         <nav style={s.nav}>
-          {NAV.map((group) => (
+          {groups.map((group) => (
             <div key={group.title} style={s.group}>
               <div style={s.groupTitle}>{group.title}</div>
               {group.items.map((item) => {

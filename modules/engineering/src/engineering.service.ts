@@ -20,6 +20,9 @@ import { BIM_MODEL_STORE, type BimModelFilter, type BimModelStore } from './bim-
 import { type DesignChange, type NewDesignChange, type DesignChangeStatus, makeDesignChange, decideDesignChange, triggersVariation, DESIGN_CHANGE_EVENT } from './domain/design-change';
 import { DESIGN_CHANGE_STORE, type DesignChangeFilter, type DesignChangeStore } from './design-change-store';
 
+import { type EngineeringDocument, type NewEngineeringDocument, type DocumentStatus, makeEngineeringDocument, transitionDocument, ENGINEERING_DOCUMENT_EVENT } from './domain/engineering-document';
+import { ENGINEERING_DOCUMENT_STORE, type EngineeringDocumentFilter, type EngineeringDocumentStore } from './engineering-document-store';
+
 @Injectable()
 export class EngineeringService {
   private readonly logger = new Logger('Engineering');
@@ -31,6 +34,7 @@ export class EngineeringService {
     @Inject(TECHNICAL_QUERY_STORE) private readonly tqStore: TechnicalQueryStore,
     @Inject(BIM_MODEL_STORE) private readonly bimStore: BimModelStore,
     @Inject(DESIGN_CHANGE_STORE) private readonly designChangeStore: DesignChangeStore,
+    @Inject(ENGINEERING_DOCUMENT_STORE) private readonly docStore: EngineeringDocumentStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -459,6 +463,73 @@ export class EngineeringService {
 
   listDesignChangesPaged(filter: DesignChangeFilter, page: import('@aura/shared').PageParams) {
     return this.designChangeStore.listPaged(filter, page);
+  }
+
+  // ── Engineering Documents (one aggregate, many docTypes; ADR-0011 point-6) ────
+
+  async createDocument(input: NewEngineeringDocument): Promise<EngineeringDocument> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'engineering.document.create', orgPath });
+    }
+    const doc = makeEngineeringDocument(input);
+    const event = makeEvent({
+      type: ENGINEERING_DOCUMENT_EVENT.created,
+      tenantId: doc.tenantId, companyId: doc.companyId, actorId: doc.createdBy,
+      aggregateType: 'engineering.document', aggregateId: doc.id,
+      payload: { code: doc.code, title: doc.title, docType: doc.docType, ownerModule: doc.ownerModule, discipline: doc.discipline, projectId: doc.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.docStore.createWithClient(handle, doc);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Engineering document created: ${doc.code} (${doc.docType}, owner=${doc.ownerModule})`);
+    return doc;
+  }
+
+  /**
+   * Move a document along its shared lifecycle. `submitted` on an HSE-owned doc (a risk assessment)
+   * is the hand-off from Engineering (origin) to HSE (owner) — the emitted event carries ownerModule
+   * so a future HSE reactor can route it into HSE's review queue (ADR-0011 event composition).
+   */
+  async transitionDocument(tenantId: Id, actorId: Id | null, id: Id, status: DocumentStatus): Promise<EngineeringDocument> {
+    const doc = await this.docStore.get(id);
+    if (!doc) throw new Error(`engineering document ${id} not found`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (doc.companyId) orgPath.push({ level: 'company', id: doc.companyId });
+      this.access.assert(actorId, { permission: 'engineering.document.transition', orgPath });
+    }
+    const updated = transitionDocument(doc, status, actorId);
+    const type = status === 'submitted' ? ENGINEERING_DOCUMENT_EVENT.submitted
+      : status === 'approved' ? ENGINEERING_DOCUMENT_EVENT.approved
+      : status === 'rejected' ? ENGINEERING_DOCUMENT_EVENT.rejected
+      : ENGINEERING_DOCUMENT_EVENT.created;
+    const event = makeEvent({
+      type,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId,
+      aggregateType: 'engineering.document', aggregateId: updated.id,
+      payload: { code: updated.code, docType: updated.docType, ownerModule: updated.ownerModule, status: updated.status, projectId: updated.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.docStore.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Engineering document ${updated.code} (${updated.docType}) → ${status}`);
+    return updated;
+  }
+
+  getDocument(id: Id): Promise<EngineeringDocument | null> {
+    return this.docStore.get(id);
+  }
+
+  listDocuments(filter?: EngineeringDocumentFilter): Promise<EngineeringDocument[]> {
+    return this.docStore.list(filter);
+  }
+
+  listDocumentsPaged(filter: EngineeringDocumentFilter, page: import('@aura/shared').PageParams) {
+    return this.docStore.listPaged(filter, page);
   }
 
   // ── BIM / model registry (viewer backbone) ──────────────────────────────────

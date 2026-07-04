@@ -5,12 +5,14 @@ import { makeSubmittal } from './submittal';
 import { makeTechnicalQuery } from './technical-query';
 import { toDiscipline } from './discipline';
 import { makeDesignChange, decideDesignChange, triggersVariation } from './design-change';
+import { makeEngineeringDocument, transitionDocument, ownerModuleOf, isDocType } from './engineering-document';
 import { InMemoryDrawingStore } from '../in-memory-drawing-store';
 import { InMemoryRfiStore } from '../in-memory-rfi-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryTechnicalQueryStore } from '../in-memory-technical-query-store';
 import { InMemoryBimModelStore } from '../in-memory-bim-model-store';
 import { InMemoryDesignChangeStore } from '../in-memory-design-change-store';
+import { InMemoryEngineeringDocumentStore } from '../in-memory-engineering-document-store';
 import { EngineeringService } from '../engineering.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -90,6 +92,40 @@ describe('Design Change → Variation trigger (ADR-0011 event composition)', () 
   });
 });
 
+describe('Engineering Document — one aggregate, many docTypes (ADR-0011 point-6)', () => {
+  const base = { tenantId: 't1', projectId: 'p1', code: 'MS-1', title: 'Concrete pour', discipline: 'structural' as const };
+
+  it('is a single aggregate discriminated by docType, sharing one lifecycle + revision + discipline', () => {
+    const ms = makeEngineeringDocument({ ...base, docType: 'method_statement' });
+    expect(ms.docType).toBe('method_statement');
+    expect(ms.status).toBe('draft');
+    expect(ms.revision).toBe('A');
+    expect(ms.discipline).toBe('structural');
+    expect(ms.fields).toEqual({});
+    const approved = transitionDocument(ms, 'approved', 'u-eng');
+    expect(approved.status).toBe('approved');
+    expect(approved.decidedBy).toBe('u-eng');
+  });
+
+  it('owns a Risk Assessment under HSE, everything else under Engineering (per decision)', () => {
+    expect(ownerModuleOf('risk_assessment')).toBe('hse');
+    expect(makeEngineeringDocument({ ...base, docType: 'risk_assessment' }).ownerModule).toBe('hse');
+    expect(ownerModuleOf('method_statement')).toBe('engineering');
+    expect(ownerModuleOf('calc_sheet')).toBe('engineering');
+  });
+
+  it('carries type-specific data in the form-engine fields payload', () => {
+    const ra = makeEngineeringDocument({ ...base, docType: 'risk_assessment', fields: { hazard: 'fall', likelihood: 3, severity: 4 } });
+    expect(ra.fields).toEqual({ hazard: 'fall', likelihood: 3, severity: 4 });
+  });
+
+  it('validates docType', () => {
+    expect(isDocType('method_statement')).toBe(true);
+    expect(isDocType('nonsense')).toBe(false);
+    expect(() => makeEngineeringDocument({ ...base, docType: 'nonsense' as never })).toThrow();
+  });
+});
+
 describe('Engineering Module Bounded Context', () => {
   describe('Drawings', () => {
     it('creates a new shop drawing in draft status', () => {
@@ -117,6 +153,7 @@ describe('Engineering Module Bounded Context', () => {
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
         new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -157,6 +194,7 @@ describe('Engineering Module Bounded Context', () => {
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
         new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -192,6 +230,7 @@ describe('Engineering Module Bounded Context', () => {
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
         new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -224,6 +263,7 @@ describe('Engineering Module Bounded Context', () => {
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
         new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -278,6 +318,7 @@ describe('Engineering Module Bounded Context', () => {
         tqStore,
         new InMemoryBimModelStore(),
         new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess

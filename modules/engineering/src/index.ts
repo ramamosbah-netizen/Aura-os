@@ -30,5 +30,10 @@ export * from './design-change-store';
 export * from './in-memory-design-change-store';
 export * from './postgres-design-change-store';
 
+export * from './domain/engineering-document';
+export * from './engineering-document-store';
+export * from './in-memory-engineering-document-store';
+export * from './postgres-engineering-document-store';
+
 export * from './engineering.service';
 export * from './engineering.module';

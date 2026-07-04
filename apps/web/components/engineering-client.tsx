@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import type { CSSProperties } from 'react';
+import FormRenderer, { useFormEngine } from '@/components/form-engine/FormRenderer';
+import { docTypeFieldSchema } from '@/lib/form-schemas/engineering-documents';
 
 interface Project {
   id: string;
@@ -84,6 +86,21 @@ const DISCIPLINES = [
 
 type Tab = 'overview' | 'drawings' | 'rfis' | 'submittals' | 'design-changes' | 'documents';
 
+// Renders a docType's type-specific fields via the platform form engine (ADR-0011 point-6): a new
+// document type is a new schema in lib/form-schemas/engineering-documents.ts, not new code here.
+// Mount with key={docType} so switching type resets the engine. Reports values up for the payload.
+function DocTypeFields({ docType, onValues }: { docType: string; onValues: (v: Record<string, string>) => void }) {
+  const schema = docTypeFieldSchema(docType) ?? { id: 'engineering.empty', entity: 'Document', endpoint: '', fields: [] };
+  const engine = useFormEngine(schema);
+  useEffect(() => { onValues(engine.values); }, [engine.values, onValues]);
+  if (schema.fields.length === 0) return null;
+  return (
+    <div style={{ margin: '4px 0 12px' }}>
+      <FormRenderer engine={engine} />
+    </div>
+  );
+}
+
 interface Props {
   initialDrawings: Drawing[];
   initialRfis: Rfi[];
@@ -137,6 +154,8 @@ export default function EngineeringClient({
   const [docTitle, setDocTitle] = useState('');
   const [docType, setDocType] = useState(docTypes[0]?.docType || 'method_statement');
   const [docDiscipline, setDocDiscipline] = useState('other');
+  const [docFields, setDocFields] = useState<Record<string, string>>({});
+  const [docNonce, setDocNonce] = useState(0);
 
   // Inline action states
   const [rfiAnswers, setRfiAnswers] = useState<Record<string, string>>({});
@@ -330,12 +349,13 @@ export default function EngineeringClient({
         body: JSON.stringify({
           projectId: selectedProjectId, projectName: selectedProjName,
           code: docCode, title: docTitle, docType, discipline: docDiscipline,
+          fields: docFields,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       const created = await res.json();
       setDocuments([created, ...documents]);
-      setDocCode(''); setDocTitle('');
+      setDocCode(''); setDocTitle(''); setDocFields({}); setDocNonce((n) => n + 1);
     } catch (err: any) {
       setError(err.message || 'Failed to create document');
     }
@@ -919,6 +939,8 @@ export default function EngineeringClient({
                 </select>
               </div>
             </div>
+            <p style={st.formHint}>{docTypeLabel(docType)} fields (type-specific — driven by its form schema):</p>
+            <DocTypeFields key={`${docType}-${docNonce}`} docType={docType} onValues={setDocFields} />
             <button type="submit" style={st.btn}>Create Document</button>
           </form>
 

@@ -39,18 +39,27 @@ every user sees only what their role allows.
   perspectives, navigation suites). `WorkspaceConfig` maps users→roles and roles→allowed
   functions; pure `resolveRole` / `visibleFunctionIds` / `resolveWorkspaceMe` are shared by API
   and web so both filter identically. 6 unit tests.
-- **API (`apps/api/src/workspace/`):** `WorkspaceConfigService` (in-memory, seeded directory) +
-  `GET/PUT /workspace/config`, `GET /workspace/me` (the caller's effective role + functions),
-  `GET /workspace/users`.
+- **API (`apps/api/src/workspace/`):** `WorkspaceConfigService` over a **store abstraction**
+  (`workspace-config-store.ts`): in-memory without `DATABASE_URL`, Postgres (JSONB per tenant,
+  migration `0127_workspace_config.sql`) with it. `GET/PUT /workspace/config`, `GET /workspace/me`
+  (the caller's effective role + functions), `GET /workspace/users`.
 - **Admin UI (`/admin/workspace`):** role cards (user + function counts), per-role function
   toggles grouped by category with a live "what this role sees" preview, member management, a full
   user directory with role dropdowns, and Preview→. Non-admins get an access-required panel.
 - **Enforcement:** the Command Center reads `/workspace/me` and shows only the allowed panels,
   quick actions and CEO/CFO/PM perspectives; an admin **"View workspace as [role]"** switch
-  previews any role's exact workspace. Falls back to full access if the workspace API is down.
+  previews any role's exact workspace. The **sidebar** is gated too: nav groups map to `suite.*`
+  functions (`GROUP_SUITE` in `nav.ts`), filtered server-side in the layout — verified live:
+  `u-finance` sees Workspace/Deal chain/Operate only, no Administrator link; admin sees all.
+  Falls back to full access if the workspace API is down.
+- **Identity-driven:** `/workspace/me` resolves the user from the JWT `sub` (`actorId`), so
+  logging in as `u-finance`/`u-ceo`/… yields that identity's role; unauthenticated dev default
+  is `u-admin`.
 - **Note:** this is the UI/experience access layer; the kernel RBAC grants (Vol 7) still gate the
-  API. Persisting the config to Postgres and driving role from a real identity claim are the
-  next steps. Reference: `docs/reports/2026-07-04-role-based-workspace-admin.md`.
+  API. Remaining: run migration 0127 against a real DB (store is wired, exercised in-memory);
+  per-user (not just per-role) overrides. References:
+  `docs/reports/2026-07-04-role-based-workspace-admin.md`,
+  `docs/reports/2026-07-04-workspace-persistence-identity-nav.md`.
 
 ## 2. The Administration Center specification (build contract)
 

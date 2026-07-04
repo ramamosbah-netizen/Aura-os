@@ -1,4 +1,4 @@
-# ADR-0012: Metadata designer sequencing - forms, then list views, dashboards, custom entities
+# ADR-0016: Metadata designer sequencing - forms, then list views, dashboards, custom entities
 
 **Status:** Accepted (2026-07-03)
 

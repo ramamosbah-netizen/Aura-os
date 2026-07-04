@@ -1,4 +1,4 @@
-# ADR-0011: CRM email integration via Microsoft Graph
+# ADR-0015: CRM email integration via Microsoft Graph
 
 **Status:** Accepted (2026-07-01)
 

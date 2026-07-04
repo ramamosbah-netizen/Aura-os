@@ -87,10 +87,12 @@ All fourteen decisions are formalized in `docs/adr/` (back-filled 2026-07-03):
 | [0008](../adr/0008-createdrawer-frozen-adapter.md) | `CreateDrawer` API frozen as adapter (zero-regression migration) |
 | [0009](../adr/0009-rest-first.md) | REST-first; GraphQL demand-triggered |
 | [0010](../adr/0010-rls-authored-early-enforced-last.md) | RLS authored early, **enforced last** — accepted risk, tracked P0 |
-| [0011](../adr/0011-crm-email-ms-graph.md) | CRM email via Microsoft Graph (GCC market) |
-| [0012](../adr/0012-metadata-designer-sequence.md) | Metadata designers sequenced: forms → views → dashboards → entities |
+| [0011](../adr/0011-aggregate-contract-platform-composition.md) | **Aggregate Contract & Platform Composition** — aggregates addressed by `(aggregateType, aggregateId)`; capabilities compose over the contract, never inherit |
+| [0012](../adr/0012-shared-dimensions.md) | **Shared dimensions** (tenant/company/project/discipline/cost-centre/…): each with status, owner, mutability |
 | [0013](../adr/0013-export-first-bi.md) | Export-first BI (no embedded lock-in) |
 | [0014](../adr/0014-css-token-design-system.md) | Design system on CSS tokens; no UI framework dependency |
+| [0015](../adr/0015-crm-email-ms-graph.md) | CRM email via Microsoft Graph (GCC market) |
+| [0016](../adr/0016-metadata-designer-sequence.md) | Metadata designers sequenced: forms → views → dashboards → entities |
 
 ## F. RFC Process [proposed]
 

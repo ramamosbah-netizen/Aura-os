@@ -78,6 +78,8 @@ import { InboxService } from './inbox/inbox.service';
 import { DemoSeeder } from './demo/demo.seeder';
 import { StockController } from './inventory/stock.controller';
 import { TransferController } from './inventory/transfer.controller';
+import { WorkspaceController } from './workspace/workspace.controller';
+import { WorkspaceConfigService } from './workspace/workspace-config.service';
 
 /**
  * The API host. Phase 0 wires only the kernel (CoreModule) + a health check and
@@ -85,7 +87,7 @@ import { TransferController } from './inventory/transfer.controller';
  */
 @Module({
   imports: [CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmContactsController, CrmActivitiesController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, WinLossController, ContractsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController],
-  providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmContactsController, CrmActivitiesController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, WinLossController, ContractsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController],
+  providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService],
 })
 export class AppModule {}

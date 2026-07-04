@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { DomainEvent, Document } from '@aura/shared';
+import type { DomainEvent, Document, WorkspaceConfig, WorkspaceMe } from '@aura/shared';
 import { apiBase, currentUser, getJson } from '@/lib/api';
 import RoleDashboardShell from '../components/role-dashboard-shell';
 
@@ -69,7 +69,7 @@ function displayName(sub: string | undefined): string | null {
 }
 
 export default async function WorkspacePage() {
-  const [user, events, documents, invoices, bankAccounts, projects, pipelineData, ledgers, inbox] =
+  const [user, events, documents, invoices, bankAccounts, projects, pipelineData, ledgers, inbox, me, workspaceConfig] =
     await Promise.all([
       currentUser(),
       getJson<DomainEvent[]>('/api/events'),
@@ -80,6 +80,8 @@ export default async function WorkspacePage() {
       getJson<Pipeline>('/api/intelligence/pipeline'),
       getJson<ProjectLedger[]>('/api/intelligence/projects'),
       getJson<InboxItem[]>('/api/inbox'),
+      getJson<WorkspaceMe>('/api/workspace/me'),
+      getJson<WorkspaceConfig>('/api/workspace/config'),
     ]);
 
   const online = events !== null || documents !== null;
@@ -109,6 +111,8 @@ export default async function WorkspacePage() {
           ledgers={ledgers ?? []}
           inbox={inbox ?? []}
           userName={displayName(user?.sub)}
+          me={me}
+          workspaceConfig={workspaceConfig}
         />
       )}
 

@@ -42,6 +42,10 @@ export interface CommandCenterProps {
   documentsCount: number;
   eventsCount: number;
   userName?: string | null;
+  /** allowed workspace-function ids for the current (or previewed) role */
+  functions?: string[];
+  /** role label shown as context, e.g. when an admin previews a role */
+  roleLabel?: string | null;
 }
 
 const BAND_COLOR: Record<HealthBand, string> = {
@@ -73,15 +77,15 @@ function greeting(): string {
 }
 
 const QUICK_ACTIONS = [
-  { label: 'RFQ', href: '/procurement/rfqs' },
-  { label: 'Purchase Order', href: '/procurement/purchase-orders' },
-  { label: 'Invoice', href: '/finance/invoices' },
-  { label: 'Contract', href: '/contracts/contracts' },
-  { label: 'Project', href: '/projects/projects' },
-  { label: 'Customer', href: '/crm/accounts' },
-  { label: 'NCR', href: '/quality/control' },
-  { label: 'Site Report', href: '/site/control' },
-  { label: 'Service Ticket', href: '/amc' },
+  { label: 'RFQ', href: '/procurement/rfqs', fn: 'action.rfq' },
+  { label: 'Purchase Order', href: '/procurement/purchase-orders', fn: 'action.po' },
+  { label: 'Invoice', href: '/finance/invoices', fn: 'action.invoice' },
+  { label: 'Contract', href: '/contracts/contracts', fn: 'action.contract' },
+  { label: 'Project', href: '/projects/projects', fn: 'action.project' },
+  { label: 'Customer', href: '/crm/accounts', fn: 'action.customer' },
+  { label: 'NCR', href: '/quality/control', fn: 'action.ncr' },
+  { label: 'Site Report', href: '/site/control', fn: 'action.siteReport' },
+  { label: 'Service Ticket', href: '/amc', fn: 'action.ticket' },
 ];
 
 export default function CommandCenter({
@@ -93,9 +97,15 @@ export default function CommandCenter({
   documentsCount,
   eventsCount,
   userName,
+  functions,
+  roleLabel,
 }: CommandCenterProps) {
   const [briefing, setBriefing] = useState<{ text: string; provider: string } | null>(null);
   const [briefingState, setBriefingState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  // Function gating: no list provided → show everything (backward compatible).
+  const allowed = functions ? new Set(functions) : null;
+  const has = (fn: string) => (allowed ? allowed.has(fn) : true);
 
   const { attention, summary, health, recs, paymentsDue } = useMemo(() => {
     const attention = buildAttentionFeed(inbox, ledgers);
@@ -133,6 +143,10 @@ export default function CommandCenter({
   const overBudget = attention.filter((a) => a.category === 'risk').length;
   const draftInvoices = invoices.filter((i) => i.status === 'draft').length;
   const topAttention = attention.slice(0, 8);
+  const quickActions = QUICK_ACTIONS.filter((a) => has(a.fn));
+  const showLeft = has('panel.attention') || has('panel.nextActions');
+  const showRightRail = has('panel.operations') || has('panel.financial') || has('panel.risk') || quickActions.length > 0 || has('panel.spine');
+  const singleColumn = !showLeft || !showRightRail;
 
   return (
     <div>
@@ -165,51 +179,61 @@ export default function CommandCenter({
             {summary.valueAtStake > 0 ? (
               <span className="cc-chip">{money(summary.valueAtStake)} AED at stake</span>
             ) : null}
+            {roleLabel ? (
+              <span className="cc-chip" style={{ color: 'var(--accent)' }}>{roleLabel} workspace</span>
+            ) : null}
           </div>
         </div>
 
-        <div className="cc-health">
-          <div
-            className="cc-health-ring"
-            style={{
-              background: `conic-gradient(${bandColor} ${health.score * 3.6}deg, var(--border) 0deg)`,
-            }}
-            title={health.drivers.map((d) => `${d.label}: ${d.detail}`).join('\n')}
-          >
-            <div className="cc-health-inner">
-              <div>
-                <div className="cc-health-score" style={{ color: bandColor }}>
-                  {health.score}
-                </div>
-                <div className="cc-health-band" style={{ color: bandColor }}>
-                  {BAND_LABEL[health.band]}
+        {has('panel.health') ? (
+          <div className="cc-health">
+            <div
+              className="cc-health-ring"
+              style={{
+                background: `conic-gradient(${bandColor} ${health.score * 3.6}deg, var(--border) 0deg)`,
+              }}
+              title={health.drivers.map((d) => `${d.label}: ${d.detail}`).join('\n')}
+            >
+              <div className="cc-health-inner">
+                <div>
+                  <div className="cc-health-score" style={{ color: bandColor }}>
+                    {health.score}
+                  </div>
+                  <div className="cc-health-band" style={{ color: bandColor }}>
+                    {BAND_LABEL[health.band]}
+                  </div>
                 </div>
               </div>
             </div>
+            <div className="cc-health-label">Business health</div>
           </div>
-          <div className="cc-health-label">Business health</div>
-        </div>
+        ) : null}
       </div>
 
       {/* AI Daily Briefing */}
-      <div className="cc-briefing">
-        <div className="cc-briefing-head">
-          <span aria-hidden>✦</span>
-          <span className="cc-briefing-title">AI Daily Briefing</span>
-          {briefing ? <span className="cc-briefing-provider">{briefing.provider}</span> : null}
+      {has('panel.briefing') ? (
+        <div className="cc-briefing">
+          <div className="cc-briefing-head">
+            <span aria-hidden>✦</span>
+            <span className="cc-briefing-title">AI Daily Briefing</span>
+            {briefing ? <span className="cc-briefing-provider">{briefing.provider}</span> : null}
+          </div>
+          <p className="cc-briefing-text">
+            {briefingState === 'loading'
+              ? 'Analyzing the pipeline and project ledgers…'
+              : briefingState === 'error'
+                ? 'Briefing unavailable — start the Intelligence API (or configure a model key) to see your daily briefing here.'
+                : briefing?.text}
+          </p>
         </div>
-        <p className="cc-briefing-text">
-          {briefingState === 'loading'
-            ? 'Analyzing the pipeline and project ledgers…'
-            : briefingState === 'error'
-              ? 'Briefing unavailable — start the Intelligence API (or configure a model key) to see your daily briefing here.'
-              : briefing?.text}
-        </p>
-      </div>
+      ) : null}
 
-      <div className="cc-grid">
+      <div className="cc-grid" style={singleColumn ? { gridTemplateColumns: '1fr' } : undefined}>
         {/* LEFT: attention feed */}
+        {showLeft ? (
         <div>
+          {has('panel.attention') ? (
+            <>
           <div className="cc-section-head">
             <h2 className="cc-section-title">
               <span aria-hidden>🎯</span> Needs your attention
@@ -249,9 +273,11 @@ export default function CommandCenter({
               ))}
             </ul>
           )}
+            </>
+          ) : null}
 
-          {recs.length > 0 ? (
-            <div style={{ marginTop: 18 }}>
+          {has('panel.nextActions') && recs.length > 0 ? (
+            <div style={{ marginTop: has('panel.attention') ? 18 : 0 }}>
               <div className="cc-section-head">
                 <h2 className="cc-section-title">
                   <span aria-hidden>➡️</span> What to do next
@@ -273,9 +299,12 @@ export default function CommandCenter({
             </div>
           ) : null}
         </div>
+        ) : null}
 
         {/* RIGHT: snapshots + quick actions */}
+        {showRightRail ? (
         <div>
+          {has('panel.operations') ? (
           <div className="cc-snap">
             <div className="cc-snap-title">
               <span aria-hidden>🏗️</span> Operations
@@ -299,7 +328,9 @@ export default function CommandCenter({
               </span>
             </div>
           </div>
+          ) : null}
 
+          {has('panel.financial') ? (
           <div className="cc-snap">
             <div className="cc-snap-title">
               <span aria-hidden>💰</span> Financial
@@ -321,7 +352,9 @@ export default function CommandCenter({
               <span className="cc-snap-value">{money(funnel?.contractValue ?? 0)} AED</span>
             </div>
           </div>
+          ) : null}
 
+          {has('panel.risk') ? (
           <div className="cc-snap">
             <div className="cc-snap-title">
               <span aria-hidden>⚠️</span> Risk &amp; compliance
@@ -343,20 +376,24 @@ export default function CommandCenter({
               <span className="cc-snap-value">{winRate === null ? '—' : `${Math.round(winRate * 100)}%`}</span>
             </div>
           </div>
+          ) : null}
 
+          {quickActions.length > 0 ? (
           <div className="cc-snap">
             <div className="cc-snap-title">
               <span aria-hidden>⚡</span> Quick actions
             </div>
             <div className="cc-quick">
-              {QUICK_ACTIONS.map((a) => (
+              {quickActions.map((a) => (
                 <a key={a.href} className="cc-quick-btn" href={a.href}>
                   <span className="cc-quick-plus">＋</span> {a.label}
                 </a>
               ))}
             </div>
           </div>
+          ) : null}
 
+          {has('panel.spine') ? (
           <div className="cc-snap" style={{ marginBottom: 0 }}>
             <div className="cc-snap-title">
               <span aria-hidden>📡</span> Live spine
@@ -374,7 +411,9 @@ export default function CommandCenter({
               </span>
             </div>
           </div>
+          ) : null}
         </div>
+        ) : null}
       </div>
     </div>
   );

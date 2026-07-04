@@ -1,3 +1,15 @@
+---
+id: adr_b8d5ddaa
+number: 0001
+title: Foreign-Key Policy: snapshot-by-reference, not referential joins
+status: Accepted
+category: Architecture
+owner: Architecture
+date: 2026-07-01
+supersedes: []
+related: []
+---
+
 # ADR-0001 — Foreign-Key Policy: snapshot-by-reference, not referential joins
 
 **Status:** Accepted · **Date:** 2026-07-01 · Closes TIER-2 #51.

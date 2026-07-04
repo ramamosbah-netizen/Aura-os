@@ -1,3 +1,15 @@
+---
+id: adr_32b65779
+number: 0011
+title: AURA Aggregate Contract & Platform Composition
+status: Accepted
+category: Architecture
+owner: Architecture
+date: 
+supersedes: []
+related: [0004, 0006, 0010, 0012]
+---
+
 # ADR-0011: AURA Aggregate Contract & Platform Composition
 
 **Status:** Accepted

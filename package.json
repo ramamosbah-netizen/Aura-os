@@ -18,7 +18,10 @@
     "test:coverage": "turbo run test -- --coverage",
     "audit": "pnpm audit --prod",
     "adr:new": "node scripts/adr-new.mjs",
-    "adr:check": "node scripts/adr-check.mjs"
+    "adr:check": "node scripts/adr-check.mjs",
+    "adr:migrate": "node scripts/adr-migrate.mjs",
+    "adr:list": "node scripts/adr-list.mjs",
+    "adr:graph": "node scripts/adr-graph.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

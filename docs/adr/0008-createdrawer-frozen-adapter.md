@@ -1,3 +1,15 @@
+---
+id: adr_570b1012
+number: 0008
+title: Freeze the CreateDrawer props API as an adapter over the form engine
+status: Accepted
+category: Platform
+owner: Architecture
+date: 
+supersedes: []
+related: [0006]
+---
+
 # ADR-0008: Freeze the CreateDrawer props API as an adapter over the form engine
 
 **Status:** Accepted (2026-07-03, form engine M2)

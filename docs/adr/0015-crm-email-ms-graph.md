@@ -1,3 +1,15 @@
+---
+id: adr_d76c06bf
+number: 0015
+title: CRM email integration via Microsoft Graph
+status: Accepted
+category: Domain
+owner: Architecture
+date: 2026-07-01
+supersedes: []
+related: []
+---
+
 # ADR-0015: CRM email integration via Microsoft Graph
 
 **Status:** Accepted (2026-07-01)

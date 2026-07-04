@@ -1,3 +1,15 @@
+---
+id: adr_88c56758
+number: 0016
+title: Metadata designer sequencing - forms, then list views, dashboards, custom entities
+status: Accepted
+category: Platform
+owner: Architecture
+date: 2026-07-03
+supersedes: []
+related: []
+---
+
 # ADR-0016: Metadata designer sequencing - forms, then list views, dashboards, custom entities
 
 **Status:** Accepted (2026-07-03)

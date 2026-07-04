@@ -1,3 +1,15 @@
+---
+id: adr_92f94b3c
+number: 0004
+title: No module-to-module imports; cross-module behavior via events only
+status: Accepted
+category: Architecture
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0004: No module-to-module imports; cross-module behavior via events only
 
 **Status:** Accepted

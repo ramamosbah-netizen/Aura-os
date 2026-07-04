@@ -1,81 +1,131 @@
-// Shared helpers for the ADR tooling (adr-new + adr-check). No dependencies —
-// the ADR folder is the source of truth; the registry (docs/adr/README.md) is
-// rendered from it, so the two can never drift.
+// Shared helpers for the ADR tooling (adr-new / adr-check / adr-list / adr-graph).
+// ADRs are DATA: each file carries a YAML frontmatter block (the authority),
+// followed by the human decision text. The folder is the source of truth; the
+// registry (docs/adr/README.md) is rendered from it, so the two cannot drift.
+// No dependencies — a tiny frontmatter parser covers our controlled format.
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const here = dirname(fileURLToPath(import.meta.url)); // scripts/
 export const ADR_DIR = join(here, '..', 'docs', 'adr');
 export const REGISTRY = join(ADR_DIR, 'README.md');
 
+export const STATUSES = ['Draft', 'Proposed', 'Accepted', 'Superseded', 'Deprecated'];
 const FILE_RE = /^(\d{4})-.+\.md$/;
-// Title line tolerates both separators used in the repo: "ADR-0001 — Title" and "ADR-0004: Title".
-const TITLE_RE = /^#\s*ADR-(\d{4})\s*[—:-]\s*(.+?)\s*$/m;
-const STATUS_RE = /\*\*Status:\*\*\s*([A-Za-z]+)/;
-const DATE_RE = /\*\*Date:\*\*\s*(\d{4}-\d{2}-\d{2})|\((\d{4}-\d{2}-\d{2})\)/;
 
-/** Read + parse every ADR file. Returns records sorted by number; `problems` lists parse errors. */
+/** A short, stable id independent of the number (which is a human ordinal). */
+export function newAdrId() {
+  return `adr_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+}
+
+/** Parse a leading `---\n…\n---` frontmatter block. Returns {data, body} or null. */
+function parseFrontmatter(text) {
+  const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!m) return null;
+  const data = {};
+  for (const line of m[1].split('\n')) {
+    const kv = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+    if (!kv) continue;
+    const [, key, raw] = kv;
+    const val = raw.trim();
+    if (val.startsWith('[') && val.endsWith(']')) {
+      data[key] = val
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else {
+      data[key] = val;
+    }
+  }
+  return { data, body: m[2] };
+}
+
+/** Render a frontmatter block from an ADR record (stable key order). */
+export function renderFrontmatter(a) {
+  const arr = (xs) => `[${(xs ?? []).join(', ')}]`;
+  return [
+    '---',
+    `id: ${a.id}`,
+    `number: ${a.num}`,
+    `title: ${a.title}`,
+    `status: ${a.status}`,
+    `category: ${a.category ?? ''}`,
+    `owner: ${a.owner ?? ''}`,
+    `date: ${a.date ?? ''}`,
+    `supersedes: ${arr(a.supersedes)}`,
+    `related: ${arr(a.related)}`,
+    '---',
+  ].join('\n');
+}
+
+/**
+ * Read + parse every ADR. Returns {adrs, problems}. Parsing is frontmatter-first;
+ * a file without frontmatter is a problem (run adr:migrate).
+ */
 export function readAdrs() {
-  const files = readdirSync(ADR_DIR)
-    .filter((f) => FILE_RE.test(f))
-    .sort();
+  const files = readdirSync(ADR_DIR).filter((f) => FILE_RE.test(f)).sort();
   const adrs = [];
   const problems = [];
   for (const file of files) {
     const fileNum = file.match(FILE_RE)[1];
     const text = readFileSync(join(ADR_DIR, file), 'utf8');
-    const title = text.match(TITLE_RE);
-    if (!title) {
-      problems.push(`${file}: missing/'# ADR-NNNN — Title' heading`);
+    const fm = parseFrontmatter(text);
+    if (!fm) {
+      problems.push(`${file}: missing YAML frontmatter (run \`pnpm adr:migrate\`)`);
       continue;
     }
-    if (title[1] !== fileNum) {
-      problems.push(`${file}: heading says ADR-${title[1]} but filename is ${fileNum}`);
+    const d = fm.data;
+    if (d.number !== fileNum) {
+      problems.push(`${file}: frontmatter number ${d.number} ≠ filename ${fileNum}`);
     }
-    const dateM = text.match(DATE_RE);
     adrs.push({
+      id: d.id ?? '',
       num: fileNum,
-      title: title[2].trim(),
-      status: (text.match(STATUS_RE)?.[1] ?? 'Unknown').trim(),
-      date: dateM ? dateM[1] ?? dateM[2] : '',
+      title: d.title ?? '',
+      status: d.status ?? '',
+      category: d.category ?? '',
+      owner: d.owner ?? '',
+      date: d.date ?? '',
+      supersedes: d.supersedes ?? [],
+      related: d.related ?? [],
       file,
+      body: fm.body,
     });
   }
   adrs.sort((a, b) => a.num.localeCompare(b.num));
   return { adrs, problems };
 }
 
-/** The next free number (max + 1), zero-padded to 4. */
 export function nextNumber(adrs) {
   const max = adrs.reduce((m, a) => Math.max(m, Number(a.num)), 0);
   return String(max + 1).padStart(4, '0');
 }
 
-/** kebab-case slug for a filename, from a free-text title. */
 export function slugify(title) {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
 
 /** Render the registry markdown from the ADR records (the single source of truth). */
 export function renderRegistry(adrs) {
   const rows = adrs
-    .map((a) => `| [${a.num}](${a.file}) | ${a.title} | ${a.status} | ${a.date || '—'} |`)
+    .map((a) => {
+      const rel = [...a.supersedes.map((n) => `↦${n}`), ...a.related].join(' ') || '—';
+      return `| [${a.num}](${a.file}) | ${a.title} | ${a.status} | ${a.category || '—'} | ${a.date || '—'} | ${rel} |`;
+    })
     .join('\n');
   return `# Architecture Decision Records — registry
 
 <!-- GENERATED by \`pnpm adr:new\` / \`pnpm adr:check --write\`. Do not edit by hand;
-     the ADR files in this folder are the source of truth. Run \`pnpm adr:new "<title>"\`
-     to reserve the next number safely (never pick a number manually). -->
+     the ADR files in this folder are the source of truth (YAML frontmatter). Run
+     \`pnpm adr:new "<title>"\` to reserve the next number safely — never pick one manually. -->
 
 ${adrs.length} decision${adrs.length === 1 ? '' : 's'}.
 
-| # | Decision | Status | Date |
-|--:|---|---|---|
+| # | Decision | Status | Category | Date | Links (↦ supersedes · related) |
+|--:|---|---|---|---|---|
 ${rows}
 `;
 }

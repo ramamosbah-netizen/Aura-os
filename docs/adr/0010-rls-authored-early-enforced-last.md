@@ -1,3 +1,15 @@
+---
+id: adr_8c07c1be
+number: 0010
+title: RLS policies authored with tables; enforcement is the final pre-production task
+status: Accepted
+category: Security
+owner: Architecture
+date: 
+supersedes: []
+related: []
+---
+
 # ADR-0010: RLS policies authored with tables; enforcement is the final pre-production task
 
 **Status:** Accepted (risk consciously carried; owner decision)

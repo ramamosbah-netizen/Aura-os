@@ -2,9 +2,14 @@
 
 [← Master index](README.md)
 
-**Honest status: ~20% built, in design (health score 3.0).** This volume documents every admin
+**Honest status: ~25% built, in design (health score 3.2).** This volume documents every admin
 page and setting that exists today, then specifies the full center — every page, every setting,
 every parameter — as the build contract.
+
+> **Update 2026-07-04 (branch `feat/command-center`, commit `2bbe72b`):** the first real
+> Administration surface shipped — **Workspace Access** at `/admin/workspace`. Admins assign users
+> to roles and configure, per role, exactly which workspace functions each person sees (Command
+> Center panels, quick actions, command perspectives, nav suites). See §1a below.
 
 ---
 
@@ -12,6 +17,7 @@ every parameter — as the build contract.
 
 | Surface | Path / mechanism | State |
 |---|---|---|
+| **Workspace access** | `/admin/workspace` + `apps/api/src/workspace` | ✅ **new** |
 | Audit viewer | `/admin/audit` | ✅ |
 | Intelligence admin | `/admin/intelligence` (calibrations, autonomy proposals) | ✅ |
 | Template management | `/admin/templates` + `apps/api/src/templates` | ✅ |
@@ -21,6 +27,30 @@ every parameter — as the build contract.
 | Event stream | `/events` (+dead-letter data) | ✅ |
 | Demo seeder | `DEMO_SEED=true` | ✅ |
 | Everything else below | — | ❌ [Planned] |
+
+## 1a. Workspace Access (shipped 2026-07-04)
+
+The first working Administration Center module: an admin configures each user's workspace, and
+every user sees only what their role allows.
+
+- **Model (framework-free, unit-tested — `shared/src/workspace/`):** 8 roles
+  (admin/executive/finance/procurement/projects/operations/hr/viewer) and a catalog of 25
+  toggleable **functions** across four categories (Command Center panels, quick actions, command
+  perspectives, navigation suites). `WorkspaceConfig` maps users→roles and roles→allowed
+  functions; pure `resolveRole` / `visibleFunctionIds` / `resolveWorkspaceMe` are shared by API
+  and web so both filter identically. 6 unit tests.
+- **API (`apps/api/src/workspace/`):** `WorkspaceConfigService` (in-memory, seeded directory) +
+  `GET/PUT /workspace/config`, `GET /workspace/me` (the caller's effective role + functions),
+  `GET /workspace/users`.
+- **Admin UI (`/admin/workspace`):** role cards (user + function counts), per-role function
+  toggles grouped by category with a live "what this role sees" preview, member management, a full
+  user directory with role dropdowns, and Preview→. Non-admins get an access-required panel.
+- **Enforcement:** the Command Center reads `/workspace/me` and shows only the allowed panels,
+  quick actions and CEO/CFO/PM perspectives; an admin **"View workspace as [role]"** switch
+  previews any role's exact workspace. Falls back to full access if the workspace API is down.
+- **Note:** this is the UI/experience access layer; the kernel RBAC grants (Vol 7) still gate the
+  API. Persisting the config to Postgres and driving role from a real identity claim are the
+  next steps. Reference: `docs/reports/2026-07-04-role-based-workspace-admin.md`.
 
 ## 2. The Administration Center specification (build contract)
 

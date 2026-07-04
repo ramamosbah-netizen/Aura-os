@@ -22,6 +22,7 @@ print-formatted document view.
 | `/events` | Event-stream inspector — the outbox made visible; per-event payloads; ops/debug surface. |
 | `/documents` | Kernel DMS browser — uploaded documents with metadata. |
 | `/intelligence` | AI insights/briefings feed; pipeline commentary; proposal review. |
+| `/admin/workspace` | **Administrator Center — Workspace Access**: assign users to roles and configure, per role, which workspace functions each person sees (Command Center panels, quick actions, perspectives, nav suites). Role cards, per-role toggles with live preview, user directory, Preview→. Admins see/preview every user's workspace; each user sees only their role's. `apps/api/src/workspace` + `shared/src/workspace`. |
 | `/admin/audit` · `/admin/intelligence` · `/admin/templates` | Admin: immutable audit trail viewer · calibrations/autonomy proposals (execute/reject) · document template management. |
 
 ## CRM (5)

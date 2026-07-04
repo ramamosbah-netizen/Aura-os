@@ -11,19 +11,26 @@ or **[Gap]**.
 > Financial/Risk snapshots. Scoring/health core is framework-free + unit-tested in
 > `shared/src/command-center/`. See [Volume 10 §16](vol-10-ui-ux.md) and
 > `docs/reports/2026-07-03-enterprise-command-center.md`.
+>
+> **Update 2026-07-04 (branch `feat/command-center`, commit `2bbe72b`):** **role-based workspaces
+> + Administrator Center** (`/admin/workspace`). Admins assign users to roles and configure, per
+> role, which workspace functions each user sees; the Command Center enforces it and admins can
+> "view as" any role. Framework-free model + config in `shared/src/workspace/`; API in
+> `apps/api/src/workspace`. See [Volume 15 §1a](vol-15-administration.md) and
+> `docs/reports/2026-07-04-role-based-workspace-admin.md`.
 
-**Verified platform counts (2026-07-03):**
+**Verified platform counts (2026-07-04):**
 
 | Metric | Count |
 |---|--:|
 | Business modules | 17 (+ Intelligence platform) |
-| API route handlers | 551 across 32 controller areas |
-| Web pages | 93 |
-| Web BFF routes | 204 |
-| Web components | 85 |
+| API route handlers | 555 across 33 controller areas |
+| Web pages | 94 |
+| Web BFF routes | 207 |
+| Web components | 86 |
 | SQL migrations | 126 (sequential, duplicate-guarded) |
 | Domain events in catalog | 71 |
-| Test files | 133 (vitest) + Playwright smoke e2e |
+| Test files | 134 (vitest) + Playwright smoke e2e |
 | Kernel services | 21 core service areas |
 
 ---
@@ -83,7 +90,7 @@ against the 2026-07-01 due-diligence audit and re-verified 2026-07-03.
 | Reporting / BI | 40% | Fair | Not yet | **5.0/10** |
 | Security (designed ✔, enforcement gated) | 45% | Good design | **No — P0s open** | **4.5/10** |
 | Deployment / Operations | 25% | Early | No | **3.5/10** |
-| Administration Center | 20% | In design | No | **3.0/10** |
+| Administration Center (workspace access shipped; rest in design) | 25% | In design | Partially | **3.2/10** |
 | Mobile / Offline | 5% | Not started | No | **1.5/10** |
 
 ### Business modules

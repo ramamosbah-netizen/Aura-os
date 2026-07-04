@@ -20,3 +20,4 @@ export * from './pagination';
 export * from './forms';
 export * from './command-center';
 export * from './workspace';
+export * from './comms';

@@ -18,10 +18,12 @@ export const NAV: NavGroup[] = [
     title: 'Workspace',
     items: [
       { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' },
-      { label: 'Inbox', href: '/inbox', glyph: '◉', desc: 'All approvals & pending decisions, one queue' },
-      { label: 'Search', href: '/search', glyph: '⌕', desc: 'Search every module' },
-      { label: 'Saved Views', href: '/views', glyph: '★', desc: 'Saved list filters' },
-      { label: 'Notifications', href: '/notifications', glyph: '🔔', desc: 'In-app notification center (event-driven)' },
+      {
+        label: 'My Workspace',
+        href: '/workspace',
+        glyph: '◉',
+        desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page',
+      },
     ],
   },
   {

@@ -23,23 +23,49 @@ export type DocType =
 export type OwnerModule = 'engineering' | 'hse';
 export type DocumentStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 
-/** docType → its human label, owning module, and the form-engine schema id that drives its fields. */
-export const DOC_TYPES: Record<DocType, { label: string; ownerModule: OwnerModule; formSchemaId: string }> = {
-  method_statement: { label: 'Method Statement', ownerModule: 'engineering', formSchemaId: 'engineering.method_statement' },
-  risk_assessment: { label: 'Risk Assessment', ownerModule: 'hse', formSchemaId: 'engineering.risk_assessment' },
-  specification: { label: 'Specification', ownerModule: 'engineering', formSchemaId: 'engineering.specification' },
-  calc_sheet: { label: 'Calculation Sheet', ownerModule: 'engineering', formSchemaId: 'engineering.calc_sheet' },
-  test_report: { label: 'Test Report', ownerModule: 'engineering', formSchemaId: 'engineering.test_report' },
-  work_procedure: { label: 'Work Procedure', ownerModule: 'engineering', formSchemaId: 'engineering.work_procedure' },
+/**
+ * A document type's **Definition** (ADR-0017, metadata-driven definitions): the metadata each
+ * capability needs, bound to the type in one place. Capabilities read `getDocumentDefinition(type)
+ * .<slice>` and stay type-agnostic — no capability branches on the docType literal. A definition is
+ * *data, not behaviour*: it names ids (form schema, workflow) the platform capability resolves.
+ * Adding a document type = adding a definition here + a form schema — no capability code changes.
+ */
+export interface DocumentDefinition {
+  docType: DocType;
+  label: string;
+  /** module that owns the type's process (HSE for risk assessments, else Engineering). */
+  ownerModule: OwnerModule;
+  /** form-engine schema id driving the type-specific fields (ADR-0006). */
+  formSchemaId: string;
+  /** workflow the document runs through — the genuinely per-type behaviour hook. */
+  workflow: string;
+}
+
+const def = (docType: DocType, label: string, ownerModule: OwnerModule, workflow: string): DocumentDefinition => ({
+  docType, label, ownerModule, formSchemaId: `engineering.${docType}`, workflow,
+});
+
+export const DOCUMENT_DEFINITIONS: Record<DocType, DocumentDefinition> = {
+  method_statement: def('method_statement', 'Method Statement', 'engineering', 'engineering-review'),
+  risk_assessment: def('risk_assessment', 'Risk Assessment', 'hse', 'hse-review'),
+  specification: def('specification', 'Specification', 'engineering', 'engineering-review'),
+  calc_sheet: def('calc_sheet', 'Calculation Sheet', 'engineering', 'engineering-review'),
+  test_report: def('test_report', 'Test Report', 'engineering', 'engineering-review'),
+  work_procedure: def('work_procedure', 'Work Procedure', 'engineering', 'engineering-review'),
 };
 
 export function isDocType(v: string | null | undefined): v is DocType {
-  return !!v && Object.prototype.hasOwnProperty.call(DOC_TYPES, v);
+  return !!v && Object.prototype.hasOwnProperty.call(DOCUMENT_DEFINITIONS, v);
 }
 
-/** The module that owns a doc type's process (HSE for risk assessments, else Engineering). */
+/** The single source of behaviour metadata for a document type. */
+export function getDocumentDefinition(docType: DocType): DocumentDefinition {
+  return DOCUMENT_DEFINITIONS[docType];
+}
+
+/** The module that owns a doc type's process (reads the definition — never a switch). */
 export function ownerModuleOf(docType: DocType): OwnerModule {
-  return DOC_TYPES[docType].ownerModule;
+  return getDocumentDefinition(docType).ownerModule;
 }
 
 export interface EngineeringDocument {

@@ -20,7 +20,7 @@ import { BIM_MODEL_STORE, type BimModelFilter, type BimModelStore } from './bim-
 import { type DesignChange, type NewDesignChange, type DesignChangeStatus, makeDesignChange, decideDesignChange, triggersVariation, DESIGN_CHANGE_EVENT } from './domain/design-change';
 import { DESIGN_CHANGE_STORE, type DesignChangeFilter, type DesignChangeStore } from './design-change-store';
 
-import { type EngineeringDocument, type NewEngineeringDocument, type DocumentStatus, makeEngineeringDocument, transitionDocument, ENGINEERING_DOCUMENT_EVENT } from './domain/engineering-document';
+import { type EngineeringDocument, type NewEngineeringDocument, type DocumentStatus, makeEngineeringDocument, transitionDocument, getDocumentDefinition, ENGINEERING_DOCUMENT_EVENT } from './domain/engineering-document';
 import { ENGINEERING_DOCUMENT_STORE, type EngineeringDocumentFilter, type EngineeringDocumentStore } from './engineering-document-store';
 
 @Injectable()
@@ -506,11 +506,14 @@ export class EngineeringService {
       : status === 'approved' ? ENGINEERING_DOCUMENT_EVENT.approved
       : status === 'rejected' ? ENGINEERING_DOCUMENT_EVENT.rejected
       : ENGINEERING_DOCUMENT_EVENT.created;
+    // The reactor/HSE-review routing reads the workflow from the type's Definition (ADR-0017),
+    // not a switch on docType — behaviour is configured by metadata.
+    const definition = getDocumentDefinition(updated.docType);
     const event = makeEvent({
       type,
       tenantId: updated.tenantId, companyId: updated.companyId, actorId,
       aggregateType: 'engineering.document', aggregateId: updated.id,
-      payload: { code: updated.code, docType: updated.docType, ownerModule: updated.ownerModule, status: updated.status, projectId: updated.projectId },
+      payload: { code: updated.code, docType: updated.docType, ownerModule: updated.ownerModule, workflow: definition.workflow, status: updated.status, projectId: updated.projectId },
     });
     await this.tx.run(async (handle) => {
       await this.docStore.updateWithClient(handle, updated);

@@ -23,7 +23,7 @@ import {
   type EngineeringDocument,
   type DocType,
   type DocumentStatus,
-  DOC_TYPES,
+  DOCUMENT_DEFINITIONS,
   EngineeringService
 } from '@aura/engineering';
 
@@ -386,10 +386,10 @@ export class EngineeringController {
 
   // ── Engineering Documents (one aggregate, many docTypes) ─────────────────────
 
-  /** The docType catalog — label, owning module and form-schema id per type. */
+  /** The docType catalog — each type's Definition (label, owning module, form schema, workflow). */
   @Get('document-types')
   documentTypes() {
-    return Object.entries(DOC_TYPES).map(([docType, meta]) => ({ docType, ...meta }));
+    return Object.values(DOCUMENT_DEFINITIONS);
   }
 
   @Post('documents')
@@ -397,7 +397,7 @@ export class EngineeringController {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.code?.trim()) throw new BadRequestException('code is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
-    if (!dto?.docType || !DOC_TYPES[dto.docType]) throw new BadRequestException('a valid docType is required');
+    if (!dto?.docType || !DOCUMENT_DEFINITIONS[dto.docType]) throw new BadRequestException('a valid docType is required');
 
     const ctx = this.tenant.get();
     return this.engineeringService.createDocument({

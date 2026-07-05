@@ -15,8 +15,8 @@ export default async function DocumentsPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Documents</h1>
       <p style={st.sub}>
-        Versioned documents in the DMS — each linked to an aggregate, every change emitted on the
-        event spine.
+        Versioned documents — each linked to the record it belongs to, with a full change
+        history.
       </p>
       <section style={st.panel}>
         {docs === null ? (

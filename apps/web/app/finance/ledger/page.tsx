@@ -41,9 +41,9 @@ export default async function LedgerPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Finance · General Ledger</h1>
       <p style={st.sub}>
-        Double-entry bookkeeping — visualizes the Chart of Accounts (COA) with live balances rolled up
-        from balanced journal entries. Recording payments automatically emits postings debiting accounts
-        payable and crediting bank assets.
+        Double-entry bookkeeping — the Chart of Accounts (COA) with live balances rolled up from
+        balanced journal entries. Recording a payment posts its debit and credit entries
+        automatically.
       </p>
 
       <section style={{ marginTop: 10 }}>

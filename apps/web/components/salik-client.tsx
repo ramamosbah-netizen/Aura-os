@@ -126,7 +126,7 @@ export default function SalikClient({ initialCharges, vehicles }: { initialCharg
                 <td style={s.td}>{plate(c.vehicleId)}</td>
                 <td style={s.td}>{c.gate}</td>
                 <td style={s.tdR}>{c.amount.toFixed(2)}</td>
-                <td style={s.td}><span style={{ ...s.tag, color: STATUS_COLOR[c.status] ?? 'var(--text)', borderColor: STATUS_COLOR[c.status] ?? 'var(--border)' }}>{c.status}</span></td>
+                <td style={s.td}><span style={{ ...s.tag, color: STATUS_COLOR[c.status] ?? 'var(--text)', border: `1px solid ${STATUS_COLOR[c.status] ?? 'var(--border)'}` }}>{c.status}</span></td>
                 <td style={s.tdMuted}>{c.allocatedTo || '—'}</td>
                 <td style={s.tdR}>
                   {c.status === 'recorded' && (

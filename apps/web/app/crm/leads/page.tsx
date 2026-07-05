@@ -44,9 +44,8 @@ export default async function CrmLeadsPage() {
     <div style={st.page}>
       <h1 style={st.h1}>CRM · Sales Pipeline</h1>
       <p style={st.sub}>
-        Leads, Opportunities, and AI-powered forecasting — the full deal chain starts here.
-        Stage changes on opportunities emit <code style={st.code}>crm.opportunity.stage_changed</code> on
-        the spine. When an opportunity is won, a Tender is automatically created downstream.
+        Leads, opportunities, and AI-powered forecasting — the full deal chain starts here.
+        When an opportunity is won, a tender is created for it automatically.
       </p>
 
       <CrmPipelineClient

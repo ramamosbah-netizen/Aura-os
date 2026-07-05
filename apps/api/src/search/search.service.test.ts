@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { AccountService, OpportunityService, QuotationService } from '@aura/crm';
+import type { AccountService, LeadService, OpportunityService, QuotationService } from '@aura/crm';
 import type { TenderService } from '@aura/tendering';
 import type { ContractService } from '@aura/contracts';
 import type { ProjectService } from '@aura/projects';
@@ -26,6 +26,7 @@ function build(over: Partial<Record<string, unknown[]>> = {}) {
     { listSubcontracts: async () => over.subcontracts ?? [] } as unknown as SubcontractsService,
     { listEmployees: async () => over.employees ?? [] } as unknown as HrService,
     { listAssets: async () => over.assets ?? [] } as unknown as AssetsService,
+    svc(over.leads ?? []) as LeadService,
   );
 }
 
@@ -57,6 +58,13 @@ describe('SearchService', () => {
     const many = Array.from({ length: 40 }, (_, i) => ({ id: `a${i}`, name: `Acme ${i}`, status: 'active' }));
     const hits = await build({ accounts: many }).search('t1', 'acme', 20);
     expect(hits).toHaveLength(20);
+  });
+
+  it('matches a lead by name', async () => {
+    const s = build({ leads: [{ id: 'l1', name: 'Ahmed Al Mansouri', companyName: 'Emaar', email: 'a@e.com', status: 'new' }] });
+    const hits = await s.search('t1', 'ahmed');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].type).toBe('Lead');
   });
 
   it('matches extended entities — employees, suppliers, assets', async () => {

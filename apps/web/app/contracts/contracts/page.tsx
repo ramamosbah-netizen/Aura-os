@@ -44,8 +44,7 @@ export default async function ContractsPage() {
       <h1 style={st.h1}>Contracts</h1>
       <p style={st.sub}>
         Awarded engagements — the third link in the deal chain. A contract is raised from a{' '}
-        <strong>won tender</strong>, inheriting its account + value, and emits{' '}
-        <code style={st.code}>contracts.contract.created</code> on the spine.
+        <strong>won tender</strong> and inherits its account and value automatically.
       </p>
 
       <ContractCreate

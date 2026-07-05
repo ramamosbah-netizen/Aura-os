@@ -24,8 +24,8 @@ export default async function AccountsPage() {
     <div style={st.page}>
       <h1 style={st.h1}>CRM · Accounts</h1>
       <p style={st.sub}>
-        Customers and prospects — the head of the deal chain (CRM → Tender → Contract → Project).
-        Creating one emits <code style={st.code}>crm.account.created</code> on the spine.
+        Customers and prospects — where every deal begins. Accounts flow through the full
+        deal chain: CRM → Tender → Contract → Project.
       </p>
 
       <AccountCreate />

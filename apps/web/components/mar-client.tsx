@@ -116,7 +116,7 @@ export default function MarClient({ initialMars }: { initialMars: MaterialApprov
                 <td style={s.tdCode}>{m.reference}</td>
                 <td style={s.td}>{m.materialName}{m.reviewComments && <div style={s.note}>“{m.reviewComments}”</div>}</td>
                 <td style={s.tdMuted}>{m.manufacturer || '—'}</td>
-                <td style={s.td}><span style={{ ...s.tag, color: STATUS_COLOR[m.status] ?? 'var(--text)', borderColor: STATUS_COLOR[m.status] ?? 'var(--border)' }}>{m.status.replace(/_/g, ' ')}</span></td>
+                <td style={s.td}><span style={{ ...s.tag, color: STATUS_COLOR[m.status] ?? 'var(--text)', border: `1px solid ${STATUS_COLOR[m.status] ?? 'var(--border)'}` }}>{m.status.replace(/_/g, ' ')}</span></td>
                 <td style={s.tdR}>{m.revision}</td>
                 <td style={s.tdR}>
                   {m.status === 'draft' && <button type="button" style={s.btn} onClick={() => act(m.id, 'submit')}>Submit</button>}

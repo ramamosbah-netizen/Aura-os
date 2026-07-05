@@ -22,7 +22,7 @@ interface ApAgingReport {
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function ApAgingPage() {
-  const report = await getJson<ApAgingReport>('/api/finance/ap-aging');
+  const report = await getJson<ApAgingReport>('/api/finance/invoices/aging');
 
   return (
     <div style={st.page}>

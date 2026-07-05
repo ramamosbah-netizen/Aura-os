@@ -111,8 +111,8 @@ export default async function WorkspacePage() {
         </div>
       </div>
       <p style={s.sub}>
-        Your live view across the platform — fed by the event spine. Everything below is real data
-        from the kernel.
+        Everything happening across your business — approvals, deadlines and live activity,
+        all in one place.
       </p>
 
       {!online ? (
@@ -128,7 +128,6 @@ export default async function WorkspacePage() {
       ) : (
         <RoleDashboardShell
           events={events}
-          documents={documents}
           purchaseRequests={purchaseRequests ?? []}
           invoices={invoices ?? []}
           subcontracts={subcontracts ?? []}
@@ -144,20 +143,6 @@ export default async function WorkspacePage() {
       <footer style={s.footer}>AURA OS · Phase 0c — the experience shell (Workspace v1)</footer>
     </div>
   );
-}
-
-function Stat({ label, value, hint }: { label: string; value: number; hint: string }) {
-  return (
-    <div style={s.card}>
-      <div style={s.cardValue}>{value}</div>
-      <div style={s.cardLabel}>{label}</div>
-      <div style={s.cardHint}>{hint}</div>
-    </div>
-  );
-}
-
-function Empty({ text }: { text: string }) {
-  return <p style={{ color: 'var(--muted)', margin: '6px 0 0' }}>{text}</p>;
 }
 
 const s = {

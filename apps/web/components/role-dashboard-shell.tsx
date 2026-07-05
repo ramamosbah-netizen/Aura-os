@@ -1,11 +1,13 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import Link from 'next/link';
 import CeoCommandCenter from './ceo-command-center';
 import CfoPortal from './cfo-portal';
 import PmDashboard from './pm-dashboard';
 import WorkCenter from './work-center';
-import type { DomainEvent, Document } from '@aura/shared';
+import ActivityFeed from './activity-feed';
+import type { DomainEvent } from '@aura/shared';
 
 interface PurchaseRequest {
   id: string;
@@ -76,17 +78,8 @@ interface ProjectLedger {
 
 type RoleType = 'general' | 'ceo' | 'cfo' | 'pm';
 
-function timeAgo(iso: string): string {
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return `${Math.floor(s)}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-
 export default function RoleDashboardShell({
   events,
-  documents,
   purchaseRequests,
   invoices,
   subcontracts,
@@ -98,7 +91,6 @@ export default function RoleDashboardShell({
   ledgers,
 }: {
   events: DomainEvent[] | null;
-  documents: Document[] | null;
   purchaseRequests: PurchaseRequest[];
   invoices: Invoice[];
   subcontracts: Subcontract[];
@@ -119,7 +111,18 @@ export default function RoleDashboardShell({
   }
   const areas = [...byArea.entries()].sort((a, b) => b[1] - a[1]);
   const maxArea = areas.length ? areas[0][1] : 1;
-  const recent = [...(events ?? [])].slice(0, 12);
+
+  // ── "Today" hub metrics ──────────────────────────────────────────────────
+  const pendingApprovals =
+    purchaseRequests.filter((p) => p.status === 'draft').length +
+    invoices.filter((i) => i.status === 'draft' || i.status === 'approved').length +
+    subcontracts.filter((s) => s.status === 'draft').length +
+    claims.filter((c) => c.status === 'draft' || c.status === 'certified').length;
+  const invoicesToPay = invoices.filter((i) => i.status === 'draft' || i.status === 'approved');
+  const invoicesDueValue = invoicesToPay.reduce((sum, i) => sum + (i.value ?? 0), 0);
+  const openTenders = funnel?.tenders ?? 0;
+  const activeProjects = funnel?.projects ?? projects.length;
+  const money0 = (n: number) => 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
   return (
     <div>
@@ -162,10 +165,32 @@ export default function RoleDashboardShell({
       <div style={s.contentArea}>
         {selectedRole === 'general' && (
           <>
-            <section style={s.cards}>
-              <Stat label="Recent events" value={events?.length ?? 0} hint="on the spine" />
-              <Stat label="Documents" value={documents?.length ?? 0} hint="in the DMS" />
-              <Stat label="Active areas" value={areas.length} hint="modules emitting" />
+            <section style={s.today}>
+              <TodayCard
+                href="/inbox"
+                value={pendingApprovals}
+                label="Pending approvals"
+                hint="awaiting your action"
+                accent
+              />
+              <TodayCard
+                href="/finance/invoices"
+                value={invoicesToPay.length}
+                label="Invoices to pay"
+                hint={invoicesDueValue > 0 ? money0(invoicesDueValue) : 'none due'}
+              />
+              <TodayCard
+                href="/tendering/tenders"
+                value={openTenders}
+                label="Open tenders"
+                hint="in the pipeline"
+              />
+              <TodayCard
+                href="/projects/projects"
+                value={activeProjects}
+                label="Active projects"
+                hint="in delivery"
+              />
             </section>
 
             {/* Unified Approvals / Tasks Inbox */}
@@ -199,7 +224,7 @@ export default function RoleDashboardShell({
                 <h2 style={s.panelTitle}>Activity by area</h2>
                 {areas.length === 0 ? (
                   <p style={{ color: 'var(--muted)', margin: '6px 0 0' }}>
-                    No events yet — emit one via the API to see it here.
+                    No activity yet — it will appear here as your team works.
                   </p>
                 ) : (
                   <ul style={s.list}>
@@ -216,24 +241,7 @@ export default function RoleDashboardShell({
                 )}
               </div>
 
-              <div style={s.panel}>
-                <h2 style={s.panelTitle}>Recent activity</h2>
-                {recent.length === 0 ? (
-                  <p style={{ color: 'var(--muted)', margin: '6px 0 0' }}>Nothing yet.</p>
-                ) : (
-                  <ul style={s.list}>
-                    {recent.map((e) => (
-                      <li key={e.id} style={s.eventRow}>
-                        <code style={s.eventType}>{e.type}</code>
-                        <span style={s.eventTarget}>
-                          {e.aggregateType}:{e.aggregateId}
-                        </span>
-                        <span style={s.eventTime}>{timeAgo(e.occurredAt)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <ActivityFeed events={events ?? []} />
             </section>
           </>
         )}
@@ -260,13 +268,26 @@ export default function RoleDashboardShell({
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: number; hint: string }) {
+function TodayCard({
+  href,
+  value,
+  label,
+  hint,
+  accent,
+}: {
+  href: string;
+  value: number;
+  label: string;
+  hint: string;
+  accent?: boolean;
+}) {
   return (
-    <div style={s.card}>
-      <div style={s.cardValue}>{value}</div>
+    <Link href={href} style={{ ...s.todayCard, ...(accent && value > 0 ? s.todayCardAccent : {}) }}>
+      <div style={{ ...s.cardValue, ...(accent && value > 0 ? { color: 'var(--accent)' } : {}) }}>{value}</div>
       <div style={s.cardLabel}>{label}</div>
       <div style={s.cardHint}>{hint}</div>
-    </div>
+      <span style={s.todayArrow}>→</span>
+    </Link>
   );
 }
 
@@ -308,6 +329,18 @@ const s = {
     minHeight: 300,
   } as CSSProperties,
   cards: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 } as CSSProperties,
+  today: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 } as CSSProperties,
+  todayCard: {
+    position: 'relative',
+    display: 'block',
+    background: 'var(--panel)',
+    border: '1px solid var(--border)',
+    borderRadius: 14,
+    padding: '16px 18px',
+    color: 'var(--text)',
+  } as CSSProperties,
+  todayCardAccent: { border: '1px solid var(--accent)', background: 'var(--panel-2)' } as CSSProperties,
+  todayArrow: { position: 'absolute', top: 14, right: 14, color: 'var(--muted)', fontSize: 14 } as CSSProperties,
   card: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',
@@ -331,8 +364,4 @@ const s = {
   barTrack: { height: 8, background: 'var(--panel-2)', borderRadius: 999, overflow: 'hidden' } as CSSProperties,
   barFill: { display: 'block', height: '100%', background: 'var(--accent)', borderRadius: 999 } as CSSProperties,
   areaCount: { fontSize: 13, color: 'var(--muted)', textAlign: 'right' } as CSSProperties,
-  eventRow: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } as CSSProperties,
-  eventType: { fontSize: 12.5, color: 'var(--accent)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
-  eventTarget: { fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
-  eventTime: { fontSize: 12, color: 'var(--muted)', marginLeft: 'auto' } as CSSProperties,
 };

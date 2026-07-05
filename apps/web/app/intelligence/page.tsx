@@ -53,8 +53,8 @@ export default async function IntelligencePage() {
     <div style={st.page}>
       <h1 style={st.h1}>Intelligence</h1>
       <p style={st.sub}>
-        A read-only view derived from the event spine — the deal-chain funnel and per-project
-        profitability, rebuilt from <code style={st.code}>*.created</code> events, plus an AI briefing.
+        A live view across the business — the deal-chain funnel and per-project profitability,
+        plus an AI briefing.
       </p>
 
       {data === null ? (

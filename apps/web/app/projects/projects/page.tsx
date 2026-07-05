@@ -92,8 +92,7 @@ export default async function ProjectsPage({
       <h1 style={st.h1}>Projects</h1>
       <p style={st.sub}>
         Delivery & execution — the final link in the deal chain. A project is started from an{' '}
-        <strong>active contract</strong>, inheriting its account + value, and emits{' '}
-        <code style={st.code}>projects.project.created</code> on the spine.
+        <strong>active contract</strong> and inherits its account and value automatically.
       </p>
 
       <ProjectCreate

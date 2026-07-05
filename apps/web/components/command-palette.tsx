@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { ALL_ITEMS } from './nav';
+import { getRecents } from '@/lib/recent-items';
 
 interface SearchHit {
   type: string;
@@ -27,6 +28,19 @@ interface Row {
   group: string;
 }
 
+// Quick actions (Linear-style) — verbs, not just navigation. Each takes the user
+// to where the action happens (creates are inline forms on the list pages).
+const ACTIONS: Row[] = [
+  { href: '/crm/leads', label: 'Create Lead', sub: 'CRM', glyph: '＋', group: 'Actions' },
+  { href: '/crm/accounts', label: 'Create Account', sub: 'CRM', glyph: '＋', group: 'Actions' },
+  { href: '/crm/quotations', label: 'Create Quotation', sub: 'CRM', glyph: '＋', group: 'Actions' },
+  { href: '/tendering/tenders', label: 'Create Tender', sub: 'Tendering', glyph: '＋', group: 'Actions' },
+  { href: '/procurement/purchase-orders', label: 'Create Purchase Order', sub: 'Procurement', glyph: '＋', group: 'Actions' },
+  { href: '/finance/invoices', label: 'Create Supplier Invoice', sub: 'Finance', glyph: '＋', group: 'Actions' },
+  { href: '/projects/projects', label: 'Create Project', sub: 'Projects', glyph: '＋', group: 'Actions' },
+  { href: '/inbox', label: 'Open Inbox — approvals', sub: 'Workspace', glyph: '📥', group: 'Actions' },
+];
+
 /**
  * ⌘K command palette — fuzzy-jump across the platform AND global search over records.
  * Nav items match client-side; entity records come from the Nest global-search API
@@ -39,13 +53,27 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
   const [hits, setHits] = useState<SearchHit[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [recents, setRecents] = useState<Row[]>([]);
+
+  const q = query.trim().toLowerCase();
+
+  // Token match: every whitespace-separated word in the query must appear somewhere
+  // in the haystack (order-independent) — so "create invoice" matches "Create
+  // Supplier Invoice".
+  const matches = (haystack: string): boolean => {
+    const hay = haystack.toLowerCase();
+    return q.split(/\s+/).every((w) => hay.includes(w));
+  };
+
+  const actionRows = useMemo<Row[]>(() => {
+    if (!q) return ACTIONS;
+    return ACTIONS.filter((a) => matches(`${a.label} ${a.sub}`));
+  }, [q]);
+
   const navRows = useMemo<Row[]>(() => {
-    const q = query.trim().toLowerCase();
-    const items = !q
-      ? ALL_ITEMS
-      : ALL_ITEMS.filter((i) => `${i.label} ${i.desc} ${i.href}`.toLowerCase().includes(q));
+    const items = !q ? ALL_ITEMS : ALL_ITEMS.filter((i) => matches(`${i.label} ${i.desc} ${i.href}`));
     return items.map((i) => ({ href: i.href, label: i.label, sub: i.desc, glyph: i.glyph, group: 'Navigate' }));
-  }, [query]);
+  }, [q]);
 
   const rows = useMemo<Row[]>(() => {
     const recordRows: Row[] = hits.map((h) => ({
@@ -55,14 +83,21 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
       glyph: '◍',
       group: 'Records',
     }));
-    return [...recordRows, ...navRows];
-  }, [hits, navRows]);
+    // Empty query: recents first (fast return), then actions, then nav.
+    // With a query: records + actions + nav (records ranked top).
+    return q
+      ? [...recordRows, ...actionRows, ...navRows]
+      : [...recents, ...actionRows, ...navRows];
+  }, [hits, actionRows, navRows, recents, q]);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setSel(0);
       setHits([]);
+      setRecents(
+        getRecents().map((r) => ({ href: r.href, label: r.label, sub: r.type, glyph: '🕘', group: 'Recent' })),
+      );
       const t = setTimeout(() => inputRef.current?.focus(), 0);
       return () => clearTimeout(t);
     }

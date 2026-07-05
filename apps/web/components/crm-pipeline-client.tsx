@@ -238,7 +238,7 @@ const s = {
   kpiVal: { fontSize: 22, fontWeight: 700 } as CSSProperties,
   tabBar: { display: 'flex', gap: 4, alignItems: 'center' } as CSSProperties,
   tab: { ...field, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
-  tabActive: { ...field, cursor: 'pointer', fontWeight: 700, borderColor: 'var(--accent)', color: 'var(--accent)' } as CSSProperties,
+  tabActive: { ...field, cursor: 'pointer', fontWeight: 700, border: '1px solid var(--accent)', color: 'var(--accent)' } as CSSProperties,
   btnAccent: { background: 'var(--accent)', color: '#0b0e14', fontWeight: 600, border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   btnSec: { ...field, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
   formPanel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' } as CSSProperties,

@@ -30,8 +30,8 @@ export default async function PurchaseOrdersPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Procurement · Purchase orders</h1>
       <p style={st.sub}>
-        Operate-side spend — a PO is raised against a delivery project and a supplier, and emits{' '}
-        <code style={st.code}>procurement.po.created</code> on the spine.
+        Purchase orders are raised against a delivery project and a supplier — the first step of
+        the spend → receive → pay loop.
       </p>
 
       <PoCreate projects={(projects ?? []).map((p) => ({ id: p.id, title: p.title }))} />

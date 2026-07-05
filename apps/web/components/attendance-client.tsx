@@ -136,7 +136,7 @@ export default function AttendanceClient({ initialRecords }: { initialRecords: A
               <tr key={r.id} style={s.row}>
                 <td style={s.td}>{r.date}</td>
                 <td style={s.td}>{r.employeeName}</td>
-                <td style={s.td}><span style={{ ...s.tag, color: STATUS_COLOR[r.status] ?? 'var(--text)', borderColor: STATUS_COLOR[r.status] ?? 'var(--border)' }}>{r.status.replace('_', '-')}</span></td>
+                <td style={s.td}><span style={{ ...s.tag, color: STATUS_COLOR[r.status] ?? 'var(--text)', border: `1px solid ${STATUS_COLOR[r.status] ?? 'var(--border)'}` }}>{r.status.replace('_', '-')}</span></td>
                 <td style={s.tdR}>{r.checkIn ?? '—'}</td>
                 <td style={s.tdR}>{r.checkOut ?? '—'}</td>
                 <td style={s.tdR}>{r.workedHours}</td>

@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, type FormEvent, useState, useRef, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -9,19 +10,106 @@ interface Msg {
   model?: string;
 }
 
-const SUGGESTIONS = [
+const DEFAULT_SUGGESTIONS = [
   'Summarize active project performance',
   'Are there any budget variances?',
   'Show tender-to-contract win rate',
   'Analyze the ERP pipeline status',
 ];
 
+// Context-aware quick prompts: the dock reads the current route and offers
+// actions that make sense on this page, not a generic chat opener.
+const CONTEXT_SUGGESTIONS: { prefix: string; suggestions: string[] }[] = [
+  {
+    prefix: '/tendering',
+    suggestions: [
+      'Analyze the open tenders and flag the riskiest one',
+      'Estimate the margin on our latest tender',
+      'Generate a risk summary for active bids',
+      'Which tenders have deadlines this month?',
+    ],
+  },
+  {
+    prefix: '/crm',
+    suggestions: [
+      'Summarize the sales pipeline',
+      'Which opportunities are most likely to close?',
+      'Draft a follow-up plan for stale leads',
+      'Show the weighted forecast by stage',
+    ],
+  },
+  {
+    prefix: '/finance',
+    suggestions: [
+      'Summarize AR and AP aging',
+      'Are there any budget variances?',
+      'What is our current cash position?',
+      'Which invoices are overdue?',
+    ],
+  },
+  {
+    prefix: '/projects',
+    suggestions: [
+      'Summarize active project performance',
+      'Which projects are over budget?',
+      'List projects behind schedule',
+      'Summarize open variations and their value',
+    ],
+  },
+  {
+    prefix: '/procurement',
+    suggestions: [
+      'Summarize open purchase orders',
+      'Which RFQs are waiting on vendor quotes?',
+      'Top suppliers by spend',
+    ],
+  },
+  {
+    prefix: '/inventory',
+    suggestions: [
+      'Summarize stock value by warehouse',
+      'Any items below reorder level?',
+      'Recent goods receipts summary',
+    ],
+  },
+  {
+    prefix: '/hr',
+    suggestions: [
+      'Summarize headcount by department',
+      'Which employee documents expire soon?',
+      'Summarize pending leave and expense claims',
+    ],
+  },
+  {
+    prefix: '/subcontracts',
+    suggestions: [
+      'Summarize subcontractor exposure',
+      'Any claims awaiting certification?',
+      'Open back-charges summary',
+    ],
+  },
+  {
+    prefix: '/inbox',
+    suggestions: [
+      'Summarize my pending approvals',
+      'Which approvals are most urgent?',
+    ],
+  },
+];
+
+function suggestionsFor(pathname: string): string[] {
+  const match = CONTEXT_SUGGESTIONS.find((c) => pathname.startsWith(c.prefix));
+  return match?.suggestions ?? DEFAULT_SUGGESTIONS;
+}
+
 export default function AiDock() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const suggestions = suggestionsFor(pathname);
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -83,6 +171,9 @@ export default function AiDock() {
     executePrompt(prompt);
   }
 
+  // No dock on the sign-in screen.
+  if (pathname === '/login') return null;
+
   if (!open) {
     return (
       <button type="button" style={s.fab} onClick={() => setOpen(true)} aria-label="Open AURA AI">
@@ -106,12 +197,12 @@ export default function AiDock() {
         {msgs.length === 0 ? (
           <div style={s.welcome}>
             <p style={s.hint}>
-              Ask anything about active project budgets, the tendering pipeline, or financial status. 
-              The copilot compiles live context directly from the event spine.
+              Ask anything about active project budgets, the tendering pipeline, or financial
+              status. The copilot answers from your live business data.
             </p>
             <div style={s.suggestions}>
               <div style={s.suggestionLabel}>Suggested Queries</div>
-              {SUGGESTIONS.map((sug) => (
+              {suggestions.map((sug) => (
                 <button
                   key={sug}
                   type="button"

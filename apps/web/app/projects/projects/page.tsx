@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import ProjectCreate from '../../../components/project-create';
+import ProjectCreate, { ProjectEdit } from '../../../components/project-create';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,8 +114,8 @@ export default async function ProjectsPage({
           <table style={st.table}>
             <thead>
               <tr>
-                {['Title', 'From contract', 'Account', 'Status', 'Value', 'Created'].map((h) => (
-                  <th key={h} style={st.th}>
+                {['Title', 'From contract', 'Account', 'Status', 'Value', 'Created', ''].map((h, i) => (
+                  <th key={i} style={st.th}>
                     {h}
                   </th>
                 ))}
@@ -136,6 +136,9 @@ export default async function ProjectsPage({
                   </td>
                   <td style={st.td}>{money(p.value)}</td>
                   <td style={st.tdMuted}>{fmt(p.createdAt)}</td>
+                  <td style={st.td}>
+                    <ProjectEdit project={p} />
+                  </td>
                 </tr>
               ))}
             </tbody>

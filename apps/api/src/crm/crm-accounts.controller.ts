@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -6,6 +6,13 @@ import { type Account, type AccountStatus, AccountService } from '@aura/crm';
 
 class CreateAccountDto {
   @IsString() name!: string;
+  @IsOptional() @IsString() status?: AccountStatus;
+  @IsOptional() @IsString() industry?: string;
+  @IsOptional() @IsString() website?: string;
+}
+
+class UpdateAccountDto {
+  @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() status?: AccountStatus;
   @IsOptional() @IsString() industry?: string;
   @IsOptional() @IsString() website?: string;
@@ -60,5 +67,21 @@ export class CrmAccountsController {
     const found = await this.accounts.get(id);
     if (!found) throw new NotFoundException(`account ${id} not found`);
     return found;
+  }
+
+  @Patch(':id')
+  async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateAccountDto): Promise<Account> {
+    try {
+      return await this.accounts.update(id, {
+        name: dto.name,
+        status: dto.status,
+        industry: dto.industry,
+        website: dto.website,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
   }
 }

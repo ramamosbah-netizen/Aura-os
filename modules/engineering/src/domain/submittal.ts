@@ -1,4 +1,5 @@
 import { type Id, newId } from '@aura/shared';
+import { type Discipline, toDiscipline } from './discipline';
 
 export type SubmittalType = 'material' | 'technical' | 'sample' | 'drawing';
 export type SubmittalStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
@@ -11,6 +12,7 @@ export interface Submittal {
   title: string;
   submittalType: SubmittalType;
   status: SubmittalStatus;
+  discipline: Discipline;
   projectId: Id;
   projectName: string | null;
   ownerId: Id | null;
@@ -26,6 +28,7 @@ export interface NewSubmittal {
   title: string;
   submittalType: SubmittalType;
   status?: SubmittalStatus;
+  discipline?: Discipline;
   projectId: Id;
   projectName?: string | null;
   ownerId?: Id | null;
@@ -42,6 +45,7 @@ export function makeSubmittal(input: NewSubmittal): Submittal {
     title: input.title.trim(),
     submittalType: input.submittalType,
     status: input.status ?? 'draft',
+    discipline: toDiscipline(input.discipline),
     projectId: input.projectId,
     projectName: input.projectName ?? null,
     ownerId: input.ownerId ?? null,

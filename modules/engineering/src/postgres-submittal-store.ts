@@ -13,6 +13,7 @@ interface Row {
   title: string;
   submittal_type: string;
   status: string;
+  discipline: string;
   project_id: string;
   project_name: string | null;
   owner_id: string | null;
@@ -21,7 +22,7 @@ interface Row {
   updated_at: Date | string;
 }
 
-const COLS = 'id, tenant_id, company_id, code, title, submittal_type, status, project_id, project_name, owner_id, created_by, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, code, title, submittal_type, status, discipline, project_id, project_name, owner_id, created_by, created_at, updated_at';
 
 function rowToSubmittal(r: Row): Submittal {
   return {
@@ -32,6 +33,7 @@ function rowToSubmittal(r: Row): Submittal {
     title: r.title,
     submittalType: r.submittal_type as Submittal['submittalType'],
     status: r.status as Submittal['status'],
+    discipline: r.discipline as Submittal['discipline'],
     projectId: r.project_id,
     projectName: r.project_name,
     ownerId: r.owner_id,
@@ -55,9 +57,9 @@ export class PostgresSubmittalStore implements SubmittalStore {
 
   private insert(executor: Pool | PoolClient, s: Submittal): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_engineering_submittals (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      `INSERT INTO public.aura_engineering_submittals (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [
-        s.id, s.tenantId, s.companyId, s.code, s.title, s.submittalType, s.status,
+        s.id, s.tenantId, s.companyId, s.code, s.title, s.submittalType, s.status, s.discipline,
         s.projectId, s.projectName, s.ownerId, s.createdBy, s.createdAt, s.updatedAt
       ],
     );
@@ -74,10 +76,10 @@ export class PostgresSubmittalStore implements SubmittalStore {
 
   private modify(executor: Pool | PoolClient, s: Submittal): Promise<unknown> {
     return executor.query(
-      `UPDATE public.aura_engineering_submittals 
-       SET title=$2, submittal_type=$3, status=$4, owner_id=$5, updated_at=now()
+      `UPDATE public.aura_engineering_submittals
+       SET title=$2, submittal_type=$3, status=$4, discipline=$5, owner_id=$6, updated_at=now()
        WHERE id=$1`,
-      [s.id, s.title, s.submittalType, s.status, s.ownerId],
+      [s.id, s.title, s.submittalType, s.status, s.discipline, s.ownerId],
     );
   }
 

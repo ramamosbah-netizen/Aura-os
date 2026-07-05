@@ -1,3 +1,4 @@
+export * from './domain/discipline';
 export * from './domain/drawing';
 export * from './domain/rfi';
 export * from './domain/submittal';
@@ -23,6 +24,16 @@ export * from './domain/bim-model';
 export * from './bim-model-store';
 export * from './in-memory-bim-model-store';
 export * from './postgres-bim-model-store';
+
+export * from './domain/design-change';
+export * from './design-change-store';
+export * from './in-memory-design-change-store';
+export * from './postgres-design-change-store';
+
+export * from './domain/engineering-document';
+export * from './engineering-document-store';
+export * from './in-memory-engineering-document-store';
+export * from './postgres-engineering-document-store';
 
 export * from './engineering.service';
 export * from './engineering.module';

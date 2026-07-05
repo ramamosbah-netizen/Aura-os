@@ -17,6 +17,9 @@ export interface ProjectStore {
   create(project: Project): Promise<void>;
   /** Insert on a caller-owned transaction (atomic with its event); null tx falls back to create. */
   createWithClient(tx: TxHandle | null, project: Project): Promise<void>;
+  update(project: Project): Promise<void>;
+  /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
+  updateWithClient(tx: TxHandle | null, project: Project): Promise<void>;
   get(id: Id): Promise<Project | null>;
   list(filter?: ProjectFilter): Promise<Project[]>;
   listPaged(filter: ProjectFilter, page: PageParams): Promise<Page<Project>>;

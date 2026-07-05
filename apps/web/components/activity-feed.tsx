@@ -2,7 +2,19 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import type { DomainEvent } from '@aura/shared';
-import { eventLabel, moduleGlyph, moduleLabel, moduleOf } from '@/lib/event-labels';
+import { areaLabel, humanizeEventType } from '@/lib/event-labels';
+
+function moduleOf(type: string): string {
+  return type.split('.')[0] ?? '';
+}
+
+// Small glyph map per module — falls back to a dot. Purely decorative.
+const GLYPH: Record<string, string> = {
+  crm: '◎', tendering: '◳', contracts: '▦', projects: '▥', subcontracts: '▧',
+  procurement: '▣', inventory: '▦', finance: '◰', hr: '👤', hse: '🛡',
+  quality: '✓', fleet: '🚚', assets: '🔧', amc: '♺', engineering: '⚙',
+  site: '▤', doccontrol: '▤', documents: '▤', intelligence: '✶', workflow: '⚡',
+};
 
 function timeAgo(iso: string): string {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -21,13 +33,12 @@ const PERIODS: { key: string; label: string; ms: number | null }[] = [
 
 /**
  * Activity feed with module + period filters. Renders human-readable event labels
- * instead of raw event types. Feeds off the same events the workspace already loads.
+ * (via the shared product-language layer) instead of raw event types.
  */
 export default function ActivityFeed({ events }: { events: DomainEvent[] }) {
   const [module, setModule] = useState<string>('all');
   const [period, setPeriod] = useState<string>('all');
 
-  // Modules present in the data, for the filter chips.
   const modules = useMemo(() => {
     const set = new Map<string, number>();
     for (const e of events) {
@@ -72,7 +83,7 @@ export default function ActivityFeed({ events }: { events: DomainEvent[] }) {
             style={module === m ? { ...s.chip, ...s.chipActive } : s.chip}
             onClick={() => setModule(m)}
           >
-            {moduleLabel(`${m}.x`)} <span style={s.chipCount}>{n}</span>
+            {areaLabel(m)} <span style={s.chipCount}>{n}</span>
           </button>
         ))}
       </div>
@@ -83,9 +94,9 @@ export default function ActivityFeed({ events }: { events: DomainEvent[] }) {
         <ul style={s.list}>
           {filtered.map((e) => (
             <li key={e.id} style={s.row}>
-              <span style={s.glyph}>{moduleGlyph(e.type)}</span>
-              <span style={s.label}>{eventLabel(e.type)}</span>
-              <span style={s.mod}>{moduleLabel(e.type)}</span>
+              <span style={s.glyph}>{GLYPH[moduleOf(e.type)] ?? '•'}</span>
+              <span style={s.label}>{humanizeEventType(e.type).label}</span>
+              <span style={s.mod}>{areaLabel(moduleOf(e.type))}</span>
               <span style={s.time}>{timeAgo(e.occurredAt)}</span>
             </li>
           ))}
@@ -101,6 +112,7 @@ const s = {
     border: '1px solid var(--border)',
     borderRadius: 14,
     padding: '18px 20px',
+    marginTop: 16,
   } as CSSProperties,
   head: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 } as CSSProperties,
   title: { fontSize: 15, margin: 0, color: 'var(--text)' } as CSSProperties,

@@ -1,4 +1,5 @@
 import { type Id, newId } from '@aura/shared';
+import { type Discipline, toDiscipline } from './discipline';
 
 // Engineering domain — framework-free. A Technical Query (TQ) is raised by the contractor to
 // the consultant/designer seeking a design clarification or decision. Distinct from an RFI
@@ -7,7 +8,8 @@ import { type Id, newId } from '@aura/shared';
 
 export type TqStatus = 'open' | 'responded' | 'closed';
 export type TqPriority = 'low' | 'medium' | 'high';
-export type TqDiscipline = 'architectural' | 'structural' | 'mep' | 'elv' | 'civil' | 'other';
+/** @deprecated use the canonical {@link Discipline} (ADR-0012); kept as an alias for callers. */
+export type TqDiscipline = Discipline;
 
 export interface TechnicalQuery {
   id: Id;
@@ -62,7 +64,7 @@ export function makeTechnicalQuery(input: NewTechnicalQuery): TechnicalQuery {
     response: null,
     status: input.status ?? 'open',
     priority: input.priority ?? 'medium',
-    discipline: input.discipline ?? 'other',
+    discipline: toDiscipline(input.discipline),
     drawingReference: input.drawingReference?.trim() || null,
     costImpact: input.costImpact ?? false,
     timeImpact: input.timeImpact ?? false,

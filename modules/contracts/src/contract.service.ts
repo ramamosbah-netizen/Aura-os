@@ -75,6 +75,29 @@ export class ContractService implements OnModuleInit {
     });
   }
 
+  /** Update mutable fields on a contract (title, reference, value, account snapshot). */
+  async update(id: Id, patch: Partial<Pick<Contract, 'title' | 'reference' | 'value' | 'accountId' | 'accountName'>>): Promise<Contract> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`contract ${id} not found`);
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const updated: Contract = { ...existing, ...defined };
+    const event = makeEvent({
+      type: CONTRACT_EVENT.updated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'contracts.contract',
+      aggregateId: updated.id,
+      payload: { title: updated.title, value: updated.value },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Contract updated: ${updated.title} (${updated.id})`);
+    return updated;
+  }
+
   /**
    * Transition a contract's status. Emits specific events like `contract.signed`
    * that trigger cross-module automation (e.g. auto-create a Project).

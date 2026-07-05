@@ -31,6 +31,9 @@ jobs:
       - name: Lint (ESLint — TIER-2 #50)
         run: pnpm lint
 
+      - name: ADR registry integrity (no number collisions / registry drift)
+        run: pnpm adr:check
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -62,6 +65,11 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      # The web app imports @aura/shared (form engine core), whose package
+      # entry points at dist/ — build workspace deps before the dev server.
+      - name: Build workspace dependencies
+        run: pnpm --filter @aura/web^... build
 
       - name: Install Chromium
         run: pnpm --filter @aura/web exec playwright install --with-deps chromium

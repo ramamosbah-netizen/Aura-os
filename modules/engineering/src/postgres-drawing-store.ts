@@ -13,6 +13,7 @@ interface Row {
   title: string;
   revision: string;
   status: string;
+  discipline: string;
   project_id: string;
   project_name: string | null;
   owner_id: string | null;
@@ -21,7 +22,7 @@ interface Row {
   updated_at: Date | string;
 }
 
-const COLS = 'id, tenant_id, company_id, code, title, revision, status, project_id, project_name, owner_id, created_by, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, code, title, revision, status, discipline, project_id, project_name, owner_id, created_by, created_at, updated_at';
 
 function rowToDrawing(r: Row): Drawing {
   return {
@@ -32,6 +33,7 @@ function rowToDrawing(r: Row): Drawing {
     title: r.title,
     revision: r.revision,
     status: r.status as Drawing['status'],
+    discipline: r.discipline as Drawing['discipline'],
     projectId: r.project_id,
     projectName: r.project_name,
     ownerId: r.owner_id,
@@ -55,8 +57,8 @@ export class PostgresDrawingStore implements DrawingStore {
 
   private insert(executor: Pool | PoolClient, d: Drawing): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_engineering_drawings (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [d.id, d.tenantId, d.companyId, d.code, d.title, d.revision, d.status, d.projectId, d.projectName, d.ownerId, d.createdBy, d.createdAt, d.updatedAt],
+      `INSERT INTO public.aura_engineering_drawings (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [d.id, d.tenantId, d.companyId, d.code, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName, d.ownerId, d.createdBy, d.createdAt, d.updatedAt],
     );
   }
 
@@ -71,10 +73,10 @@ export class PostgresDrawingStore implements DrawingStore {
 
   private modify(executor: Pool | PoolClient, d: Drawing): Promise<unknown> {
     return executor.query(
-      `UPDATE public.aura_engineering_drawings 
-       SET title=$2, revision=$3, status=$4, project_id=$5, project_name=$6, owner_id=$7, updated_at=now()
+      `UPDATE public.aura_engineering_drawings
+       SET title=$2, revision=$3, status=$4, discipline=$5, project_id=$6, project_name=$7, owner_id=$8, updated_at=now()
        WHERE id=$1`,
-      [d.id, d.title, d.revision, d.status, d.projectId, d.projectName, d.ownerId],
+      [d.id, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName, d.ownerId],
     );
   }
 

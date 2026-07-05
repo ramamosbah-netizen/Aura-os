@@ -15,6 +15,14 @@ class CreateContractDto {
   @IsOptional() @IsNumber() value?: number;
 }
 
+class UpdateContractDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() accountName?: string;
+  @IsOptional() @IsNumber() value?: number;
+}
+
 /** Contracts API — stamps tenant/actor from context, delegates to ContractService. */
 @Controller('contracts/contracts')
 export class ContractsController {
@@ -41,6 +49,24 @@ export class ContractsController {
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
+  }
+
+  /** PATCH /api/contracts/contracts/:id — update mutable fields (title, reference, value, account). */
+  @Patch(':id')
+  async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateContractDto): Promise<Contract> {
+    try {
+      return await this.contracts.update(id, {
+        title: dto.title,
+        reference: dto.reference,
+        value: dto.value,
+        accountId: dto.accountId,
+        accountName: dto.accountName,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
   }
 
   /**

@@ -14,6 +14,7 @@ interface Row {
   question: string;
   answer: string | null;
   status: string;
+  discipline: string;
   project_id: string;
   project_name: string | null;
   assigned_to: string | null;
@@ -23,7 +24,7 @@ interface Row {
   updated_at: Date | string;
 }
 
-const COLS = 'id, tenant_id, company_id, code, title, question, answer, status, project_id, project_name, assigned_to, owner_id, created_by, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, code, title, question, answer, status, discipline, project_id, project_name, assigned_to, owner_id, created_by, created_at, updated_at';
 
 function rowToRfi(r: Row): Rfi {
   return {
@@ -35,6 +36,7 @@ function rowToRfi(r: Row): Rfi {
     question: r.question,
     answer: r.answer,
     status: r.status as Rfi['status'],
+    discipline: r.discipline as Rfi['discipline'],
     projectId: r.project_id,
     projectName: r.project_name,
     assignedTo: r.assigned_to,
@@ -59,9 +61,9 @@ export class PostgresRfiStore implements RfiStore {
 
   private insert(executor: Pool | PoolClient, r: Rfi): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_engineering_rfis (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      `INSERT INTO public.aura_engineering_rfis (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [
-        r.id, r.tenantId, r.companyId, r.code, r.title, r.question, r.answer, r.status,
+        r.id, r.tenantId, r.companyId, r.code, r.title, r.question, r.answer, r.status, r.discipline,
         r.projectId, r.projectName, r.assignedTo, r.ownerId, r.createdBy, r.createdAt, r.updatedAt
       ],
     );
@@ -78,10 +80,10 @@ export class PostgresRfiStore implements RfiStore {
 
   private modify(executor: Pool | PoolClient, r: Rfi): Promise<unknown> {
     return executor.query(
-      `UPDATE public.aura_engineering_rfis 
-       SET title=$2, question=$3, answer=$4, status=$5, assigned_to=$6, owner_id=$7, updated_at=now()
+      `UPDATE public.aura_engineering_rfis
+       SET title=$2, question=$3, answer=$4, status=$5, discipline=$6, assigned_to=$7, owner_id=$8, updated_at=now()
        WHERE id=$1`,
-      [r.id, r.title, r.question, r.answer, r.status, r.assignedTo, r.ownerId],
+      [r.id, r.title, r.question, r.answer, r.status, r.discipline, r.assignedTo, r.ownerId],
     );
   }
 

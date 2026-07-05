@@ -101,7 +101,8 @@ export class TenderService implements OnModuleInit {
   async update(id: Id, patch: Partial<Pick<Tender, 'title' | 'reference' | 'value' | 'accountId' | 'accountName' | 'ownerId'>>): Promise<Tender> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`tender ${id} not found`);
-    const updated: Tender = { ...existing, ...patch };
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const updated: Tender = { ...existing, ...defined };
     const event = makeEvent({
       type: TENDER_EVENT.updated,
       tenantId: updated.tenantId,

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { DomainEvent } from '@aura/shared';
 import { getJson } from '@/lib/api';
+import { humanizeEventType } from '@/lib/event-labels';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,15 +26,17 @@ export default async function EventsPage() {
           <p style={st.muted}>No events yet.</p>
         ) : (
           <ul style={st.list}>
-            {events.map((e) => (
-              <li key={e.id} style={st.row}>
-                <code style={st.type}>{e.type}</code>
-                <span style={st.target}>
-                  {e.aggregateType}:{e.aggregateId}
-                </span>
-                <span style={st.time}>{fmt(e.occurredAt)}</span>
-              </li>
-            ))}
+            {events.map((e) => {
+              const h = humanizeEventType(e.type);
+              return (
+                <li key={e.id} style={st.row}>
+                  <span style={st.area}>{h.area}</span>
+                  <span style={st.label}>{h.label}</span>
+                  <code style={st.type}>{e.type}</code>
+                  <span style={st.time}>{fmt(e.occurredAt)}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
@@ -61,7 +64,18 @@ const st = {
     borderBottom: '1px solid var(--border)',
     flexWrap: 'wrap',
   } as CSSProperties,
-  type: { fontSize: 13, color: 'var(--accent)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
+  area: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--accent)',
+    background: 'var(--panel-2)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '1px 7px',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  label: { fontSize: 13.5, color: 'var(--text)' } as CSSProperties,
+  type: { fontSize: 12, color: 'var(--muted)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
   target: { fontSize: 13, color: 'var(--muted)' } as CSSProperties,
   time: { fontSize: 12, color: 'var(--muted)', marginLeft: 'auto' } as CSSProperties,
 };

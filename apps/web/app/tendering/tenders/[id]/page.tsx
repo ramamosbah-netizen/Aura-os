@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import RecordChrome from '../../../../components/record-chrome';
 import TenderDetail from '../../../../components/tender-detail';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ export default async function TenderDetailPage({
 
   return (
     <div style={st.container}>
+      <RecordChrome type="Tender" title={tender.title} />
       <div style={st.navRow}>
         <a href="/tendering/tenders" style={st.link}>← Back to Tenders</a>
       </div>

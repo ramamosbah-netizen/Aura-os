@@ -2,6 +2,8 @@
 
 import { type CSSProperties, type FormEvent, useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { findNavMatch } from './nav';
+import { RECORD_TITLE_EVENT } from './record-chrome';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -17,89 +19,29 @@ const DEFAULT_SUGGESTIONS = [
   'Analyze the ERP pipeline status',
 ];
 
-// Context-aware quick prompts: the dock reads the current route and offers
-// actions that make sense on this page, not a generic chat opener.
-const CONTEXT_SUGGESTIONS: { prefix: string; suggestions: string[] }[] = [
-  {
-    prefix: '/tendering',
-    suggestions: [
-      'Analyze the open tenders and flag the riskiest one',
-      'Estimate the margin on our latest tender',
-      'Generate a risk summary for active bids',
-      'Which tenders have deadlines this month?',
-    ],
-  },
-  {
-    prefix: '/crm',
-    suggestions: [
-      'Summarize the sales pipeline',
-      'Which opportunities are most likely to close?',
-      'Draft a follow-up plan for stale leads',
-      'Show the weighted forecast by stage',
-    ],
-  },
-  {
-    prefix: '/finance',
-    suggestions: [
-      'Summarize AR and AP aging',
-      'Are there any budget variances?',
-      'What is our current cash position?',
-      'Which invoices are overdue?',
-    ],
-  },
-  {
-    prefix: '/projects',
-    suggestions: [
-      'Summarize active project performance',
-      'Which projects are over budget?',
-      'List projects behind schedule',
-      'Summarize open variations and their value',
-    ],
-  },
-  {
-    prefix: '/procurement',
-    suggestions: [
-      'Summarize open purchase orders',
-      'Which RFQs are waiting on vendor quotes?',
-      'Top suppliers by spend',
-    ],
-  },
-  {
-    prefix: '/inventory',
-    suggestions: [
-      'Summarize stock value by warehouse',
-      'Any items below reorder level?',
-      'Recent goods receipts summary',
-    ],
-  },
-  {
-    prefix: '/hr',
-    suggestions: [
-      'Summarize headcount by department',
-      'Which employee documents expire soon?',
-      'Summarize pending leave and expense claims',
-    ],
-  },
-  {
-    prefix: '/subcontracts',
-    suggestions: [
-      'Summarize subcontractor exposure',
-      'Any claims awaiting certification?',
-      'Open back-charges summary',
-    ],
-  },
-  {
-    prefix: '/inbox',
-    suggestions: [
-      'Summarize my pending approvals',
-      'Which approvals are most urgent?',
-    ],
-  },
-];
+/** Page-aware prompt starters — keyed by the pathname's first segment. `{r}` becomes the
+ * open record's title when one is announced, so a Tender page suggests analysing THAT tender. */
+const AREA_SUGGESTIONS: Record<string, string[]> = {
+  tendering: ['Analyze this tender: {r}', 'Estimate the margin on {r}', 'What are the risks on {r}?', 'Suggest vendors for {r}'],
+  crm: ['Summarize the sales pipeline', 'Which opportunities need attention?', 'What is our win rate trend?'],
+  contracts: ['Summarize contract {r}', 'What obligations are coming due?', 'Compare contract value vs project spend'],
+  projects: ['Is {r} on budget?', 'Summarize project variances', 'Which projects have negative variance?'],
+  procurement: ['Summarize open POs and spend', 'Which suppliers dominate our spend?', 'Any POs waiting on approval?'],
+  finance: ['Summarize cash position and AP/AR', 'Any invoices overdue for payment?', 'Explain the budget variances'],
+  inventory: ['Summarize stock value by warehouse', 'Which items are below reorder level?'],
+  hr: ['Summarize headcount and pending HR approvals', 'Any visa/permit expiries coming up?'],
+  subcontracts: ['Summarize subcontractor exposure', 'Which claims await certification?'],
+  inbox: ['Prioritize my pending approvals', 'What is the highest-value item waiting on me?'],
+};
 
-function suggestionsFor(pathname: string): string[] {
-  const match = CONTEXT_SUGGESTIONS.find((c) => pathname.startsWith(c.prefix));
-  return match?.suggestions ?? DEFAULT_SUGGESTIONS;
+function suggestionsFor(pathname: string, record: string | null): string[] {
+  const area = pathname.split('/')[1] ?? '';
+  const base = AREA_SUGGESTIONS[area];
+  if (!base) return DEFAULT_SUGGESTIONS;
+  return base
+    .filter((s) => record || !s.includes('{r}'))
+    .map((s) => s.replace(/\{r\}/g, record ?? ''))
+    .concat(base.every((s) => s.includes('{r}')) && !record ? DEFAULT_SUGGESTIONS.slice(0, 2) : []);
 }
 
 export default function AiDock() {
@@ -108,8 +50,22 @@ export default function AiDock() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [record, setRecord] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
-  const suggestions = suggestionsFor(pathname);
+
+  // Track the open record so suggestions and chat context name it.
+  useEffect(() => setRecord(null), [pathname]);
+  useEffect(() => {
+    function onTitle(e: Event) {
+      const detail = (e as CustomEvent<{ title?: string }>).detail;
+      if (detail?.title) setRecord(detail.title);
+    }
+    window.addEventListener(RECORD_TITLE_EVENT, onTitle);
+    return () => window.removeEventListener(RECORD_TITLE_EVENT, onTitle);
+  }, []);
+
+  const navMatch = findNavMatch(pathname);
+  const suggestions = suggestionsFor(pathname, record);
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -137,6 +93,11 @@ export default function AiDock() {
         body: JSON.stringify({
           message: promptText,
           history: historyPayload,
+          page: {
+            path: pathname,
+            module: navMatch ? `${navMatch.group} · ${navMatch.label}` : null,
+            record,
+          },
         }),
       });
 
@@ -171,9 +132,6 @@ export default function AiDock() {
     executePrompt(prompt);
   }
 
-  // No dock on the sign-in screen.
-  if (pathname === '/login') return null;
-
   if (!open) {
     return (
       <button type="button" style={s.fab} onClick={() => setOpen(true)} aria-label="Open AURA AI">
@@ -197,11 +155,13 @@ export default function AiDock() {
         {msgs.length === 0 ? (
           <div style={s.welcome}>
             <p style={s.hint}>
-              Ask anything about active project budgets, the tendering pipeline, or financial
-              status. The copilot answers from your live business data.
+              Ask anything about active project budgets, the tendering pipeline, or financial status. 
+              The copilot compiles live context directly from the event spine.
             </p>
             <div style={s.suggestions}>
-              <div style={s.suggestionLabel}>Suggested Queries</div>
+              <div style={s.suggestionLabel}>
+                {navMatch ? `Suggestions for ${navMatch.label}` : 'Suggested Queries'}
+              </div>
               {suggestions.map((sug) => (
                 <button
                   key={sug}

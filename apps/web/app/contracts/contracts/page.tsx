@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import ContractCreate from '../../../components/contract-create';
+import ContractCreate, { ContractEdit } from '../../../components/contract-create';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,8 +66,8 @@ export default async function ContractsPage() {
           <table style={st.table}>
             <thead>
               <tr>
-                {['Title', 'From tender', 'Account', 'Status', 'Value', 'Created'].map((h) => (
-                  <th key={h} style={st.th}>
+                {['Title', 'From tender', 'Account', 'Status', 'Value', 'Created', ''].map((h, i) => (
+                  <th key={i} style={st.th}>
                     {h}
                   </th>
                 ))}
@@ -76,7 +76,14 @@ export default async function ContractsPage() {
             <tbody>
               {contracts.map((c) => (
                 <tr key={c.id}>
-                  <td style={st.td}>{c.title}</td>
+                  <td style={st.td}>
+                    <a
+                      href={`/contracts/contracts/${c.id}`}
+                      style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      {c.title}
+                    </a>
+                  </td>
                   <td style={st.tdMuted}>{c.tenderTitle ?? '—'}</td>
                   <td style={st.tdMuted}>{c.accountName ?? '—'}</td>
                   <td style={st.td}>
@@ -84,6 +91,9 @@ export default async function ContractsPage() {
                   </td>
                   <td style={st.td}>{money(c.value)}</td>
                   <td style={st.tdMuted}>{fmt(c.createdAt)}</td>
+                  <td style={st.td}>
+                    <ContractEdit contract={c} />
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -16,6 +16,14 @@ import {
   type ModelDiscipline,
   type ModelFormat,
   type ModelStatus,
+  type Discipline,
+  type DesignChange,
+  type DesignChangeStatus,
+  type DesignChangeType,
+  type EngineeringDocument,
+  type DocType,
+  type DocumentStatus,
+  DOC_TYPES,
   EngineeringService
 } from '@aura/engineering';
 
@@ -27,6 +35,7 @@ class CreateDrawingDto {
   @IsString() title!: string;
   @IsOptional() @IsString() revision?: string;
   @IsOptional() @IsString() status?: DrawingStatus;
+  @IsOptional() @IsString() discipline?: Discipline;
 }
 
 class ReviseDrawingDto {
@@ -42,6 +51,7 @@ class CreateRfiDto {
   @IsString() title!: string;
   @IsString() question!: string;
   @IsOptional() @IsString() assignedTo?: string;
+  @IsOptional() @IsString() discipline?: Discipline;
 }
 
 class AnswerRfiDto {
@@ -56,10 +66,44 @@ class CreateSubmittalDto {
   @IsString() title!: string;
   @IsString() submittalType!: SubmittalType;
   @IsOptional() @IsString() status?: SubmittalStatus;
+  @IsOptional() @IsString() discipline?: Discipline;
 }
 
 class UpdateSubmittalStatusDto {
   @IsString() status!: SubmittalStatus;
+}
+
+// Design Change DTOs
+class CreateDesignChangeDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() discipline?: Discipline;
+  @IsOptional() @IsString() changeType?: DesignChangeType;
+  @IsOptional() costImpact?: boolean;
+  @IsOptional() estimatedValue?: number;
+}
+
+class DecideDesignChangeDto {
+  @IsString() status!: DesignChangeStatus;
+}
+
+// Engineering Document DTOs (one aggregate, many docTypes)
+class CreateDocumentDto {
+  @IsString() projectId!: string;
+  @IsOptional() @IsString() projectName?: string;
+  @IsString() code!: string;
+  @IsString() title!: string;
+  @IsString() docType!: DocType;
+  @IsOptional() @IsString() discipline?: Discipline;
+  @IsOptional() @IsString() revision?: string;
+  @IsOptional() fields?: Record<string, unknown>;
+}
+
+class TransitionDocumentDto {
+  @IsString() status!: DocumentStatus;
 }
 
 @Controller('engineering')
@@ -87,6 +131,7 @@ export class EngineeringController {
       title: dto.title,
       revision: dto.revision,
       status: dto.status,
+      discipline: dto.discipline,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });
@@ -161,6 +206,7 @@ export class EngineeringController {
       title: dto.title,
       question: dto.question,
       assignedTo: dto.assignedTo,
+      discipline: dto.discipline,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });
@@ -226,6 +272,7 @@ export class EngineeringController {
       title: dto.title,
       submittalType: dto.submittalType,
       status: dto.status,
+      discipline: dto.discipline,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });
@@ -272,6 +319,138 @@ export class EngineeringController {
   async getSubmittal(@Param('id') id: string): Promise<Submittal> {
     const found = await this.engineeringService.getSubmittal(id);
     if (!found) throw new NotFoundException(`Submittal ${id} not found`);
+    return found;
+  }
+
+  // ── Design Changes ───────────────────────────────────────────────────────────
+
+  @Post('design-changes')
+  createDesignChange(@Body() dto: CreateDesignChangeDto): Promise<DesignChange> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+
+    const ctx = this.tenant.get();
+    return this.engineeringService.createDesignChange({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      code: dto.code,
+      title: dto.title,
+      description: dto.description,
+      discipline: dto.discipline,
+      changeType: dto.changeType,
+      costImpact: dto.costImpact,
+      estimatedValue: dto.estimatedValue,
+      ownerId: ctx.actorId,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Put('design-changes/:id/decision')
+  decideDesignChange(@Param('id') id: string, @Body() dto: DecideDesignChangeDto): Promise<DesignChange> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.decideDesignChange(ctx.tenantId, ctx.actorId, id, dto.status);
+  }
+
+  @Get('design-changes')
+  listDesignChanges(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: DesignChange['status'],
+  ): Promise<DesignChange[]> {
+    const ctx = this.tenant.get();
+    return this.engineeringService.listDesignChanges({ tenantId: ctx.tenantId, projectId, status, limit: 100 });
+  }
+
+  @Get('design-changes/paged')
+  pagedDesignChanges(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: DesignChange['status'],
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listDesignChangesPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
+  @Get('design-changes/:id')
+  async getDesignChange(@Param('id') id: string): Promise<DesignChange> {
+    const found = await this.engineeringService.getDesignChange(id);
+    if (!found) throw new NotFoundException(`Design change ${id} not found`);
+    return found;
+  }
+
+  // ── Engineering Documents (one aggregate, many docTypes) ─────────────────────
+
+  /** The docType catalog — label, owning module and form-schema id per type. */
+  @Get('document-types')
+  documentTypes() {
+    return Object.entries(DOC_TYPES).map(([docType, meta]) => ({ docType, ...meta }));
+  }
+
+  @Post('documents')
+  createDocument(@Body() dto: CreateDocumentDto): Promise<EngineeringDocument> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    if (!dto?.docType || !DOC_TYPES[dto.docType]) throw new BadRequestException('a valid docType is required');
+
+    const ctx = this.tenant.get();
+    return this.engineeringService.createDocument({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      code: dto.code,
+      title: dto.title,
+      docType: dto.docType,
+      discipline: dto.discipline,
+      revision: dto.revision,
+      fields: dto.fields,
+      ownerId: ctx.actorId,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Put('documents/:id/transition')
+  transitionDocument(@Param('id') id: string, @Body() dto: TransitionDocumentDto): Promise<EngineeringDocument> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.transitionDocument(ctx.tenantId, ctx.actorId, id, dto.status);
+  }
+
+  @Get('documents')
+  listDocuments(
+    @Query('projectId') projectId?: string,
+    @Query('docType') docType?: DocType,
+    @Query('status') status?: EngineeringDocument['status'],
+  ): Promise<EngineeringDocument[]> {
+    const ctx = this.tenant.get();
+    return this.engineeringService.listDocuments({ tenantId: ctx.tenantId, projectId, docType, status, limit: 100 });
+  }
+
+  @Get('documents/paged')
+  pagedDocuments(
+    @Query('projectId') projectId?: string,
+    @Query('docType') docType?: DocType,
+    @Query('status') status?: EngineeringDocument['status'],
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.engineeringService.listDocumentsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, docType, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
+  @Get('documents/:id')
+  async getDocument(@Param('id') id: string): Promise<EngineeringDocument> {
+    const found = await this.engineeringService.getDocument(id);
+    if (!found) throw new NotFoundException(`Engineering document ${id} not found`);
     return found;
   }
 

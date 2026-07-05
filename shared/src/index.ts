@@ -2,6 +2,7 @@
 export * from './domain/id';
 export * from './domain/money';
 export * from './domain/cdm';
+export * from './aggregate/aggregate';
 export * from './events/event';
 
 export * from './events/catalog';
@@ -17,3 +18,7 @@ export * from './integration/webhook';
 export * from './integration/csv';
 export * from './domain/crm';
 export * from './pagination';
+export * from './forms';
+export * from './command-center';
+export * from './workspace';
+export * from './comms';

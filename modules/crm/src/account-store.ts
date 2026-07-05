@@ -16,6 +16,9 @@ export interface AccountStore {
   create(account: Account): Promise<void>;
   /** Insert on a caller-owned transaction (atomic with its event); null tx falls back to create. */
   createWithClient(tx: TxHandle | null, account: Account): Promise<void>;
+  update(account: Account): Promise<void>;
+  /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
+  updateWithClient(tx: TxHandle | null, account: Account): Promise<void>;
   get(id: Id): Promise<Account | null>;
   list(filter?: AccountFilter): Promise<Account[]>;
   listPaged(filter: AccountFilter, page: PageParams): Promise<Page<Account>>;

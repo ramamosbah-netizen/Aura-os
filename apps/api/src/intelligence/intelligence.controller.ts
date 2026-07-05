@@ -21,6 +21,12 @@ interface ChatMessage {
 interface ChatDto {
   message: string;
   history?: ChatMessage[];
+  /** Where the user is in the app — makes the copilot answer about THIS page/record. */
+  page?: {
+    path?: string | null;
+    module?: string | null;
+    record?: string | null;
+  };
 }
 
 /**
@@ -159,7 +165,16 @@ ${ledgers.length === 0 ? 'No projects registered.' : ledgers.map(l => `- Project
 - Keep answers concise, highly structured (use lists and markdown tables where appropriate), and practical.
 - Highlight negative variances, schedule issues, or low conversion rates immediately.
 - If the user asks general questions, frame them within this company context.
-- Your response will be displayed in the executive AI drawer.`;
+- Your response will be displayed in the executive AI drawer.${
+      dto.page?.module || dto.page?.record
+        ? `
+
+=== USER'S CURRENT CONTEXT ===
+The user is currently viewing: ${dto.page?.module ?? dto.page?.path ?? 'the app'}${
+            dto.page?.record ? ` — record "${dto.page.record}"` : ''
+          }. When they say "this", they mean that page/record; anchor your answer to it.`
+        : ''
+    }`;
 
     const response = await this.ai.complete({
       system: systemPrompt,

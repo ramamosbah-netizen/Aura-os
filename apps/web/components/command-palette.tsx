@@ -9,14 +9,23 @@ import {
   useState,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { ALL_ITEMS } from './nav';
-import { getRecents } from '@/lib/recent-items';
+import { ALL_ITEMS, CREATE_ACTIONS } from './nav';
+import { readRecentItems, type RecentItem } from '@/lib/recent-items';
 
 interface SearchHit {
   type: string;
   id: string;
   title: string;
   subtitle: string;
+  href: string;
+}
+
+interface InboxItem {
+  id: string;
+  module: string;
+  kind: string;
+  title: string;
+  action: string;
   href: string;
 }
 
@@ -28,19 +37,6 @@ interface Row {
   group: string;
 }
 
-// Quick actions (Linear-style) — verbs, not just navigation. Each takes the user
-// to where the action happens (creates are inline forms on the list pages).
-const ACTIONS: Row[] = [
-  { href: '/crm/leads', label: 'Create Lead', sub: 'CRM', glyph: '＋', group: 'Actions' },
-  { href: '/crm/accounts', label: 'Create Account', sub: 'CRM', glyph: '＋', group: 'Actions' },
-  { href: '/crm/quotations', label: 'Create Quotation', sub: 'CRM', glyph: '＋', group: 'Actions' },
-  { href: '/tendering/tenders', label: 'Create Tender', sub: 'Tendering', glyph: '＋', group: 'Actions' },
-  { href: '/procurement/purchase-orders', label: 'Create Purchase Order', sub: 'Procurement', glyph: '＋', group: 'Actions' },
-  { href: '/finance/invoices', label: 'Create Supplier Invoice', sub: 'Finance', glyph: '＋', group: 'Actions' },
-  { href: '/projects/projects', label: 'Create Project', sub: 'Projects', glyph: '＋', group: 'Actions' },
-  { href: '/inbox', label: 'Open Inbox — approvals', sub: 'Workspace', glyph: '📥', group: 'Actions' },
-];
-
 /**
  * ⌘K command palette — fuzzy-jump across the platform AND global search over records.
  * Nav items match client-side; entity records come from the Nest global-search API
@@ -51,31 +47,20 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState(0);
   const [hits, setHits] = useState<SearchHit[]>([]);
+  const [recents, setRecents] = useState<RecentItem[]>([]);
+  const [pending, setPending] = useState<InboxItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [recents, setRecents] = useState<Row[]>([]);
-
-  const q = query.trim().toLowerCase();
-
-  // Token match: every whitespace-separated word in the query must appear somewhere
-  // in the haystack (order-independent) — so "create invoice" matches "Create
-  // Supplier Invoice".
-  const matches = (haystack: string): boolean => {
-    const hay = haystack.toLowerCase();
-    return q.split(/\s+/).every((w) => hay.includes(w));
-  };
-
-  const actionRows = useMemo<Row[]>(() => {
-    if (!q) return ACTIONS;
-    return ACTIONS.filter((a) => matches(`${a.label} ${a.sub}`));
-  }, [q]);
-
   const navRows = useMemo<Row[]>(() => {
-    const items = !q ? ALL_ITEMS : ALL_ITEMS.filter((i) => matches(`${i.label} ${i.desc} ${i.href}`));
+    const q = query.trim().toLowerCase();
+    const items = !q
+      ? ALL_ITEMS
+      : ALL_ITEMS.filter((i) => `${i.label} ${i.desc} ${i.href}`.toLowerCase().includes(q));
     return items.map((i) => ({ href: i.href, label: i.label, sub: i.desc, glyph: i.glyph, group: 'Navigate' }));
-  }, [q]);
+  }, [query]);
 
   const rows = useMemo<Row[]>(() => {
+    const q = query.trim().toLowerCase();
     const recordRows: Row[] = hits.map((h) => ({
       href: h.href,
       label: h.title,
@@ -83,21 +68,37 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
       glyph: '◍',
       group: 'Records',
     }));
-    // Empty query: recents first (fast return), then actions, then nav.
-    // With a query: records + actions + nav (records ranked top).
-    return q
-      ? [...recordRows, ...actionRows, ...navRows]
-      : [...recents, ...actionRows, ...navRows];
-  }, [hits, actionRows, navRows, recents, q]);
+    // Recently opened records surface before anything else when the query is empty.
+    const recentRows: Row[] = !q
+      ? recents.map((r) => ({ href: r.href, label: r.title, sub: r.type, glyph: '⟲', group: 'Recent' }))
+      : [];
+    // Pending decisions from the universal inbox — actionable verbs, not just navigation.
+    const pendingRows: Row[] = pending
+      .filter((p) => !q || `${p.action} ${p.title} ${p.kind} ${p.module}`.toLowerCase().includes(q))
+      .slice(0, q ? 6 : 4)
+      .map((p) => ({ href: p.href, label: `${p.action}: ${p.title}`, sub: `${p.module} · ${p.kind}`, glyph: '◉', group: 'Pending' }));
+    // Create/command verbs.
+    const actionRows: Row[] = CREATE_ACTIONS.filter(
+      (a) => !q || `${a.label} ${a.desc}`.toLowerCase().includes(q),
+    ).map((a) => ({ href: a.href, label: a.label, sub: a.desc, glyph: '＋', group: 'Actions' }));
+    // A queried palette always offers the full results page as the escape hatch.
+    const seeAll: Row[] = q.length >= 2
+      ? [{ href: `/search?q=${encodeURIComponent(query.trim())}`, label: `See all results for “${query.trim()}”`, sub: 'Search page', glyph: '⌕', group: 'Search' }]
+      : [];
+    return [...recentRows, ...pendingRows, ...recordRows, ...(q ? actionRows : []), ...seeAll, ...navRows, ...(q ? [] : actionRows)];
+  }, [hits, navRows, recents, pending, query]);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setSel(0);
       setHits([]);
-      setRecents(
-        getRecents().map((r) => ({ href: r.href, label: r.label, sub: r.type, glyph: '🕘', group: 'Recent' })),
-      );
+      setRecents(readRecentItems());
+      // Live pending decisions for the "Pending" group (best-effort).
+      fetch('/api/inbox')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data: InboxItem[]) => setPending(Array.isArray(data) ? data : []))
+        .catch(() => undefined);
       const t = setTimeout(() => inputRef.current?.focus(), 0);
       return () => clearTimeout(t);
     }

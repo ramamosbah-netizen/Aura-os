@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
+import { EntityForm } from './form-engine';
 
 interface Employee {
   id: string;
@@ -64,38 +67,15 @@ export default function HrControlClient({
   initialLeaves,
   initialPayrollRuns,
 }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'employees' | 'leaves' | 'payroll'>('employees');
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [leaves, setLeaves] = useState<Leave[]>(initialLeaves);
-  const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(initialPayrollRuns);
+  const employees = initialEmployees;
+  const leaves = initialLeaves;
+  const payrollRuns = initialPayrollRuns;
   const [error, setError] = useState<string | null>(null);
 
-  // Employee Form State
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('');
-  const [department, setDepartment] = useState('');
-  const [joinedDate, setJoinedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [visaExpiry, setVisaExpiry] = useState('');
-  const [permitExpiry, setPermitExpiry] = useState('');
-  const [laborCamp, setLaborCamp] = useState('');
-
-  // Leave Form State
-  const [leaveEmployeeId, setLeaveEmployeeId] = useState(employees[0]?.id || '');
-  const [leaveType, setLeaveType] = useState('annual');
-  const [leaveStartDate, setLeaveStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [leaveEndDate, setLeaveEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [leaveReason, setLeaveReason] = useState('');
-
-  // Payroll Form State
-  const [payEmployeeId, setPayEmployeeId] = useState(employees[0]?.id || '');
-  const [payPeriodStart, setPayPeriodStart] = useState('');
-  const [payPeriodEnd, setPayPeriodEnd] = useState('');
-  const [payBasic, setPayBasic] = useState<number>(0);
-  const [payAllowances, setPayAllowances] = useState<number>(0);
-  const [payDeductions, setPayDeductions] = useState<number>(0);
+  const today = new Date().toISOString().split('T')[0];
+  const employeeOptions = employees.map((p) => ({ value: p.id, label: `${p.firstName} ${p.lastName} (${p.role})` }));
 
   // Helper: check if a date is within 30 days or passed
   const getVisaExpiryStatus = (dateStr: string | null) => {
@@ -108,47 +88,6 @@ export default function HrControlClient({
     return { level: 'ok', label: `${dateStr} (${days}d left)` };
   };
 
-  const handleCreateEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      const res = await fetch('/api/hr/employees', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          email: email || null,
-          phone: phone || null,
-          role,
-          department,
-          joinedDate,
-          visaExpiry: visaExpiry || null,
-          permitExpiry: permitExpiry || null,
-          laborCamp: laborCamp || null,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newEmp = await res.json();
-      setEmployees([newEmp, ...employees]);
-      if (!leaveEmployeeId) setLeaveEmployeeId(newEmp.id);
-      if (!payEmployeeId) setPayEmployeeId(newEmp.id);
-      
-      // Reset form
-      setFirstName('');
-      setLastName('');
-      setEmail('');
-      setPhone('');
-      setRole('');
-      setDepartment('');
-      setVisaExpiry('');
-      setPermitExpiry('');
-      setLaborCamp('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create employee profile');
-    }
-  };
-
   const handleDeleteEmployee = async (id: string) => {
     setError(null);
     if (!confirm('Are you sure you want to delete this employee profile?')) return;
@@ -157,38 +96,9 @@ export default function HrControlClient({
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(await res.text());
-      setEmployees(employees.filter((emp) => emp.id !== id));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to delete employee profile');
-    }
-  };
-
-  const handleRequestLeave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetEmpId = leaveEmployeeId || employees[0]?.id;
-    if (!targetEmpId) {
-      setError('Please create at least one employee first.');
-      return;
-    }
-    setError(null);
-    try {
-      const res = await fetch('/api/hr/leaves', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          employeeId: targetEmpId,
-          leaveType,
-          startDate: leaveStartDate,
-          endDate: leaveEndDate,
-          reason: leaveReason || null,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newLeave = await res.json();
-      setLeaves([newLeave, ...leaves]);
-      setLeaveReason('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit leave request');
     }
   };
 
@@ -201,46 +111,9 @@ export default function HrControlClient({
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setLeaves(leaves.map((l) => (l.id === id ? updated : l)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to resolve leave request');
-    }
-  };
-
-  const handleRunPayroll = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetEmpId = payEmployeeId || employees[0]?.id;
-    if (!targetEmpId) {
-      setError('Please create at least one employee first.');
-      return;
-    }
-    if (!payPeriodStart || !payPeriodEnd) {
-      setError('Please specify the pay period.');
-      return;
-    }
-    setError(null);
-    try {
-      const res = await fetch('/api/hr/payroll', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          employeeId: targetEmpId,
-          periodStart: payPeriodStart,
-          periodEnd: payPeriodEnd,
-          basicSalary: Number(payBasic),
-          allowances: Number(payAllowances),
-          deductions: Number(payDeductions),
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const newRun = await res.json();
-      setPayrollRuns([newRun, ...payrollRuns]);
-      setPayBasic(0);
-      setPayAllowances(0);
-      setPayDeductions(0);
-    } catch (err: any) {
-      setError(err.message || 'Failed to process payroll run');
     }
   };
 
@@ -251,8 +124,7 @@ export default function HrControlClient({
         method: 'PUT',
       });
       if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setPayrollRuns(payrollRuns.map((r) => (r.id === id ? updated : r)));
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to pay payroll run');
     }
@@ -292,115 +164,9 @@ export default function HrControlClient({
       {/* Tab Contents */}
       {activeTab === 'employees' && (
         <div>
-          {/* Create Employee Form */}
-          <form onSubmit={handleCreateEmployee} style={st.formCard}>
-            <h3 style={st.formTitle}>Add New Employee Profile</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>First Name</label>
-                <input
-                  type="text"
-                  placeholder="John"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Last Name</label>
-                <input
-                  type="text"
-                  placeholder="Doe"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Job Title / Role</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Pipefitter, Site Engineer"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Department</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Operations, Corporate"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Joined Date</label>
-                <input
-                  type="date"
-                  value={joinedDate}
-                  onChange={(e) => setJoinedDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>UAE Visa Expiry (Optional)</label>
-                <input
-                  type="date"
-                  value={visaExpiry}
-                  onChange={(e) => setVisaExpiry(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Work Permit Expiry (Optional)</label>
-                <input
-                  type="date"
-                  value={permitExpiry}
-                  onChange={(e) => setPermitExpiry(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Labor Camp Designation</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Sonapur Block C, Al Quoz 2"
-                  value={laborCamp}
-                  onChange={(e) => setLaborCamp(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Email Address</label>
-                <input
-                  type="email"
-                  placeholder="john.doe@aura.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Phone Number</label>
-                <input
-                  type="text"
-                  placeholder="+971 50..."
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Register Employee</button>
-          </form>
+          <div style={st.tabHeader}>
+            <EntityForm id="hr.employee" buttonLabel="Register Employee" />
+          </div>
 
           {/* List panel */}
           <section style={st.panel}>
@@ -448,12 +214,30 @@ export default function HrControlClient({
                             </span>
                           </td>
                           <td style={st.td}>
-                            <button
-                              onClick={() => handleDeleteEmployee(emp.id)}
-                              style={st.btnReject}
-                            >
-                              Delete
-                            </button>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <EntityForm
+                                id="hr.employee"
+                                mode="view"
+                                initialValues={{
+                                  firstName: emp.firstName,
+                                  lastName: emp.lastName,
+                                  role: emp.role,
+                                  department: emp.department,
+                                  joinedDate: emp.joinedDate,
+                                  visaExpiry: emp.visaExpiry ?? '',
+                                  permitExpiry: emp.permitExpiry ?? '',
+                                  laborCamp: emp.laborCamp ?? '',
+                                  email: emp.email ?? '',
+                                  phone: emp.phone ?? '',
+                                }}
+                              />
+                              <button
+                                onClick={() => handleDeleteEmployee(emp.id)}
+                                style={st.btnReject}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -468,72 +252,33 @@ export default function HrControlClient({
 
       {activeTab === 'leaves' && (
         <div>
-          {/* Leave Request Form */}
-          <form onSubmit={handleRequestLeave} style={st.formCard}>
-            <h3 style={st.formTitle}>Submit Leave Request</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Employee</label>
-                <select
-                  value={leaveEmployeeId}
-                  onChange={(e) => setLeaveEmployeeId(e.target.value)}
-                  style={st.select}
-                  required
-                >
-                  <option value="">-- Select Employee --</option>
-                  {employees.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.firstName} {p.lastName} ({p.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Leave Type</label>
-                <select
-                  value={leaveType}
-                  onChange={(e) => setLeaveType(e.target.value)}
-                  style={st.select}
-                >
-                  <option value="annual">Annual Leave</option>
-                  <option value="sick">Sick Leave</option>
-                  <option value="unpaid">Unpaid Leave</option>
-                  <option value="emergency">Emergency / Compassionate</option>
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Start Date</label>
-                <input
-                  type="date"
-                  value={leaveStartDate}
-                  onChange={(e) => setLeaveStartDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>End Date</label>
-                <input
-                  type="date"
-                  value={leaveEndDate}
-                  onChange={(e) => setLeaveEndDate(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={{ ...st.field, gridColumn: 'span 2' }}>
-                <label style={st.label}>Reason / Comments</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Annual travel back home, medical checkup"
-                  value={leaveReason}
-                  onChange={(e) => setLeaveReason(e.target.value)}
-                  style={st.input}
-                />
-              </div>
-            </div>
-            <button type="submit" style={st.btn}>Submit Leave Request</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Leave Request"
+              buttonLabel="Submit Leave Request"
+              subtitle="Submit a leave or absence request. It stays pending until HR approves or rejects it."
+              endpoint="/api/hr/leaves"
+              fields={[
+                { name: 'employeeId', label: 'Employee', kind: 'select', required: true, options: employeeOptions, span: 2 },
+                {
+                  name: 'leaveType',
+                  label: 'Leave type',
+                  kind: 'select',
+                  defaultValue: 'annual',
+                  span: 2,
+                  options: [
+                    { value: 'annual', label: 'Annual Leave' },
+                    { value: 'sick', label: 'Sick Leave' },
+                    { value: 'unpaid', label: 'Unpaid Leave' },
+                    { value: 'emergency', label: 'Emergency / Compassionate' },
+                  ],
+                },
+                { name: 'startDate', label: 'Start date', kind: 'date', required: true, defaultValue: today },
+                { name: 'endDate', label: 'End date', kind: 'date', required: true, defaultValue: today },
+                { name: 'reason', label: 'Reason / comments', kind: 'text', placeholder: 'e.g. Annual travel back home, medical checkup', span: 2 },
+              ]}
+            />
+          </div>
 
           {/* Leave Log Registry */}
           <section style={st.panel}>
@@ -593,85 +338,22 @@ export default function HrControlClient({
 
       {activeTab === 'payroll' && (
         <div>
-          {/* Run Payroll Form */}
-          <form onSubmit={handleRunPayroll} style={st.formCard}>
-            <h3 style={st.formTitle}>Generate Payroll Run</h3>
-            <div style={st.formGrid}>
-              <div style={st.field}>
-                <label style={st.label}>Employee</label>
-                <select
-                  value={payEmployeeId}
-                  onChange={(e) => setPayEmployeeId(e.target.value)}
-                  style={st.select}
-                  required
-                >
-                  <option value="">-- Select Employee --</option>
-                  {employees.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.firstName} {p.lastName} ({p.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Period Start</label>
-                <input
-                  type="date"
-                  value={payPeriodStart}
-                  onChange={(e) => setPayPeriodStart(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Period End</label>
-                <input
-                  type="date"
-                  value={payPeriodEnd}
-                  onChange={(e) => setPayPeriodEnd(e.target.value)}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Basic Salary (AED)</label>
-                <input
-                  type="number"
-                  placeholder="5000"
-                  value={payBasic}
-                  onChange={(e) => setPayBasic(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Allowances (AED)</label>
-                <input
-                  type="number"
-                  placeholder="1000"
-                  value={payAllowances}
-                  onChange={(e) => setPayAllowances(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-              <div style={st.field}>
-                <label style={st.label}>Deductions (AED)</label>
-                <input
-                  type="number"
-                  placeholder="200"
-                  value={payDeductions}
-                  onChange={(e) => setPayDeductions(Number(e.target.value))}
-                  style={st.input}
-                  required
-                />
-              </div>
-            </div>
-            <div style={{ marginTop: 12, fontSize: 13, color: 'var(--muted)' }}>
-              Net Salary: <strong style={{ color: '#fff' }}>AED {(payBasic + payAllowances - payDeductions).toLocaleString()}</strong>
-            </div>
-            <button type="submit" style={st.btn}>Calculate & Run Payroll</button>
-          </form>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Payroll Run"
+              buttonLabel="Generate Payroll Run"
+              subtitle="Generate a payroll run for one employee and pay period. Net salary = basic + allowances − deductions, computed by the API."
+              endpoint="/api/hr/payroll"
+              fields={[
+                { name: 'employeeId', label: 'Employee', kind: 'select', required: true, options: employeeOptions, span: 2 },
+                { name: 'periodStart', label: 'Period start', kind: 'date', required: true },
+                { name: 'periodEnd', label: 'Period end', kind: 'date', required: true },
+                { name: 'basicSalary', label: 'Basic salary (AED)', kind: 'number', required: true, placeholder: '5000' },
+                { name: 'allowances', label: 'Allowances (AED)', kind: 'number', defaultValue: '0', placeholder: '1000' },
+                { name: 'deductions', label: 'Deductions (AED)', kind: 'number', defaultValue: '0', placeholder: '200' },
+              ]}
+            />
+          </div>
 
           {/* Payroll Registry */}
           <section style={st.panel}>
@@ -759,45 +441,7 @@ const st = {
     fontWeight: 600,
     fontSize: 14,
   } as CSSProperties,
-  formCard: {
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 14,
-    padding: 20,
-    margin: '0 0 24px',
-  } as CSSProperties,
-  formTitle: { margin: '0 0 16px', fontSize: 16, fontWeight: 600 } as CSSProperties,
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 } as CSSProperties,
-  field: { display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
-  label: { fontSize: 12, color: 'var(--muted)', fontWeight: 500 } as CSSProperties,
-  input: {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'var(--panel-2)',
-    color: '#fff',
-    fontSize: 13.5,
-  } as CSSProperties,
-  select: {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'var(--panel-2)',
-    color: '#fff',
-    fontSize: 13.5,
-    cursor: 'pointer',
-  } as CSSProperties,
-  btn: {
-    padding: '9px 16px',
-    borderRadius: 8,
-    background: '#fff',
-    color: '#000',
-    border: 'none',
-    fontWeight: 600,
-    fontSize: 13.5,
-    cursor: 'pointer',
-    marginTop: 16,
-  } as CSSProperties,
+  tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   panel: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',

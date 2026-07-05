@@ -43,26 +43,68 @@ interface Submittal {
   createdAt: string;
 }
 
+interface DesignChange {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  title: string;
+  discipline: string;
+  changeType: 'addition' | 'omission';
+  costImpact: boolean;
+  estimatedValue: number;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+interface EngineeringDocument {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  title: string;
+  docType: string;
+  ownerModule: 'engineering' | 'hse';
+  discipline: string;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  revision: string;
+  createdAt: string;
+}
+
+interface DocTypeMeta {
+  docType: string;
+  label: string;
+  ownerModule: 'engineering' | 'hse';
+  formSchemaId: string;
+}
+
 export default async function EngineeringPage() {
-  const [drawings, rfis, submittals, projects] = await Promise.all([
+  const [drawings, rfis, submittals, designChanges, documents, docTypes, projects] = await Promise.all([
     getJson<Drawing[]>('/api/engineering/drawings'),
     getJson<Rfi[]>('/api/engineering/rfis'),
     getJson<Submittal[]>('/api/engineering/submittals'),
+    getJson<DesignChange[]>('/api/engineering/design-changes'),
+    getJson<EngineeringDocument[]>('/api/engineering/documents'),
+    getJson<DocTypeMeta[]>('/api/engineering/document-types'),
     getJson<Project[]>('/api/projects/projects'),
   ]);
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Engineering</h1>
+      <h1 style={st.h1}>Engineering Management</h1>
       <p style={st.sub}>
-        Technical controls, compliance, and design document management. Register shop drawings,
-        raise technical queries (RFIs), and process material/technical submittals.
+        The engineering lifecycle in one place: shop drawings, RFIs and submittals, engineering
+        design changes (which raise commercial variations on approval), and controlled documents
+        (method statements, risk assessments, specs) — every record tagged by discipline.
       </p>
 
       <EngineeringClient
         initialDrawings={drawings ?? []}
         initialRfis={rfis ?? []}
         initialSubmittals={submittals ?? []}
+        initialDesignChanges={designChanges ?? []}
+        initialDocuments={documents ?? []}
+        docTypes={docTypes ?? []}
         projects={projects ?? []}
       />
     </div>

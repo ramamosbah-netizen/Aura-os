@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import CreateDrawer from './ui/create-drawer';
 
 interface Lead {
   id: string; name: string; companyName: string | null; email: string | null;
@@ -29,46 +30,8 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Lead form
-  const [showLeadForm, setShowLeadForm] = useState(false);
-  const [lName, setLName] = useState(''); const [lCompany, setLCompany] = useState('');
-  const [lEmail, setLEmail] = useState(''); const [lPhone, setLPhone] = useState('');
-  const [lSource, setLSource] = useState('website');
-
-  // Opp form
-  const [showOppForm, setShowOppForm] = useState(false);
-  const [oTitle, setOTitle] = useState(''); const [oValue, setOValue] = useState('');
-  const [oStage, setOStage] = useState('qualification'); const [oLeadId, setOLeadId] = useState('');
-  const [oAccountId, setOAccountId] = useState('');
-
   // Forecast
   const [forecast, setForecast] = useState<{ id: string; prob: number; reason: string } | null>(null);
-
-  async function createLead() {
-    if (!lName.trim()) { setErr('Lead name required'); return; }
-    setBusy(true); setErr(null);
-    try {
-      const res = await fetch('/api/crm/leads', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: lName, companyName: lCompany || undefined, email: lEmail || undefined, phone: lPhone || undefined, source: lSource }) });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error ?? 'Error'); }
-      else { setShowLeadForm(false); setLName(''); setLCompany(''); setLEmail(''); setLPhone(''); router.refresh(); }
-    } catch { setErr('API unreachable'); } finally { setBusy(false); }
-  }
-
-  async function createOpportunity() {
-    if (!oTitle.trim()) { setErr('Opportunity title required'); return; }
-    setBusy(true); setErr(null);
-    try {
-      const account = initialAccounts.find(a => a.id === oAccountId);
-      const res = await fetch('/api/crm/opportunities', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          title: oTitle, value: Number(oValue) || 0, stage: oStage, leadId: oLeadId || undefined,
-          accountId: oAccountId || undefined, accountName: account?.name || undefined,
-        }) });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error ?? 'Error'); }
-      else { setShowOppForm(false); setOTitle(''); setOValue(''); setOAccountId(''); router.refresh(); }
-    } catch { setErr('API unreachable'); } finally { setBusy(false); }
-  }
 
   async function changeStage(id: string, stage: string) {
     setBusy(true); setErr(null);
@@ -111,49 +74,60 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
         <button type="button" style={tab === 'leads' ? s.tabActive : s.tab} onClick={() => setTab('leads')}>Leads</button>
         <button type="button" style={tab === 'pipeline' ? s.tabActive : s.tab} onClick={() => setTab('pipeline')}>Pipeline</button>
         <div style={{ flex: 1 }} />
-        {tab === 'leads' && <button type="button" style={s.btnAccent} onClick={() => setShowLeadForm(!showLeadForm)}>+ New Lead</button>}
-        {tab === 'pipeline' && <button type="button" style={s.btnAccent} onClick={() => setShowOppForm(!showOppForm)}>+ New Opportunity</button>}
+        {tab === 'leads' && (
+          <CreateDrawer
+            entity="Lead"
+            subtitle="A new sales lead. Qualify it to move it into the opportunity pipeline."
+            endpoint="/api/crm/leads"
+            fields={[
+              { name: 'name', label: 'Contact name', kind: 'text', required: true, placeholder: 'e.g. Fatima Al Zaabi', span: 2 },
+              { name: 'companyName', label: 'Company', kind: 'text', placeholder: 'e.g. Nakheel' },
+              {
+                name: 'source',
+                label: 'Source',
+                kind: 'select',
+                defaultValue: 'website',
+                options: SOURCES.map(src => ({ value: src, label: src.replace('_', ' ') })),
+              },
+              { name: 'email', label: 'Email', kind: 'text', placeholder: 'name@company.com' },
+              { name: 'phone', label: 'Phone', kind: 'text', placeholder: '+971 …' },
+            ]}
+          />
+        )}
+        {tab === 'pipeline' && (
+          <CreateDrawer
+            entity="Opportunity"
+            subtitle="A qualified deal in the pipeline. Link it to an account and lead for full traceability."
+            endpoint="/api/crm/opportunities"
+            fields={[
+              { name: 'title', label: 'Opportunity title', kind: 'text', required: true, placeholder: 'e.g. Downtown HQ — security systems', span: 2 },
+              { name: 'value', label: 'Value ($)', kind: 'number', placeholder: '0' },
+              {
+                name: 'stage',
+                label: 'Stage',
+                kind: 'select',
+                defaultValue: 'qualification',
+                options: OPP_STAGES.filter(st => st !== 'won' && st !== 'lost').map(st => ({ value: st, label: st })),
+              },
+              {
+                name: 'accountId',
+                label: 'Account',
+                kind: 'select',
+                labelField: 'accountName',
+                placeholder: 'No linked account',
+                options: initialAccounts.map(a => ({ value: a.id, label: a.name })),
+              },
+              {
+                name: 'leadId',
+                label: 'Lead',
+                kind: 'select',
+                placeholder: 'No linked lead',
+                options: initialLeads.map(l => ({ value: l.id, label: l.name })),
+              },
+            ]}
+          />
+        )}
       </div>
-
-      {/* Lead creation form */}
-      {showLeadForm && (
-        <div style={s.formPanel}>
-          <div style={s.formRow}>
-            <input style={s.input} placeholder="Contact Name *" value={lName} onChange={e => setLName(e.target.value)} />
-            <input style={s.input} placeholder="Company" value={lCompany} onChange={e => setLCompany(e.target.value)} />
-            <input style={s.input} placeholder="Email" value={lEmail} onChange={e => setLEmail(e.target.value)} />
-            <input style={s.input} placeholder="Phone" value={lPhone} onChange={e => setLPhone(e.target.value)} />
-            <select style={s.select} value={lSource} onChange={e => setLSource(e.target.value)}>
-              {SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
-            </select>
-            <button type="button" style={s.btnAccent} onClick={createLead} disabled={busy}>Create</button>
-            <button type="button" style={s.btnSec} onClick={() => setShowLeadForm(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {/* Opp creation form */}
-      {showOppForm && (
-        <div style={s.formPanel}>
-          <div style={s.formRow}>
-            <input style={s.input} placeholder="Opportunity Title *" value={oTitle} onChange={e => setOTitle(e.target.value)} />
-            <input style={{ ...s.input, width: 120 }} placeholder="Value ($)" value={oValue} onChange={e => setOValue(e.target.value)} inputMode="numeric" />
-            <select style={s.select} value={oStage} onChange={e => setOStage(e.target.value)}>
-              {OPP_STAGES.filter(st => st !== 'won' && st !== 'lost').map(st => <option key={st} value={st}>{st}</option>)}
-            </select>
-            <select style={s.select} value={oAccountId} onChange={e => setOAccountId(e.target.value)}>
-              <option value="">No linked account</option>
-              {initialAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            <select style={s.select} value={oLeadId} onChange={e => setOLeadId(e.target.value)}>
-              <option value="">No linked lead</option>
-              {initialLeads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            <button type="button" style={s.btnAccent} onClick={createOpportunity} disabled={busy}>Create</button>
-            <button type="button" style={s.btnSec} onClick={() => setShowOppForm(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
 
       {/* ─── LEADS TAB ─── */}
       {tab === 'leads' && (

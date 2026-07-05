@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import AccountCreate from '../../../components/account-create';
+import AccountCreate, { AccountEdit } from '../../../components/account-create';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,8 +39,8 @@ export default async function AccountsPage() {
           <table style={st.table}>
             <thead>
               <tr>
-                {['Name', 'Status', 'Industry', 'Created'].map((h) => (
-                  <th key={h} style={st.th}>
+                {['Name', 'Status', 'Industry', 'Created', ''].map((h, i) => (
+                  <th key={i} style={st.th}>
                     {h}
                   </th>
                 ))}
@@ -49,12 +49,22 @@ export default async function AccountsPage() {
             <tbody>
               {accounts.map((a) => (
                 <tr key={a.id}>
-                  <td style={st.td}>{a.name}</td>
+                  <td style={st.td}>
+                    <a
+                      href={`/crm/accounts/${a.id}`}
+                      style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      {a.name}
+                    </a>
+                  </td>
                   <td style={st.td}>
                     <span style={st.tag}>{a.status}</span>
                   </td>
                   <td style={st.tdMuted}>{a.industry ?? '—'}</td>
                   <td style={st.tdMuted}>{fmt(a.createdAt)}</td>
+                  <td style={st.td}>
+                    <AccountEdit account={a} />
+                  </td>
                 </tr>
               ))}
             </tbody>

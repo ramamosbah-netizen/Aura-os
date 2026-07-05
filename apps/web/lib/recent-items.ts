@@ -1,37 +1,46 @@
-'use client';
-
-// Recently-visited records/pages, persisted in localStorage so users can jump back
-// to what they were working on. Purely client-side — no server round-trip.
+// Recently-opened records — client-side only (localStorage), per browser profile.
+// Written by <RecordChrome> on every record-page visit; read by the command palette.
+// The custom event lets already-mounted UI (palette, breadcrumb) react without polling.
 
 export interface RecentItem {
   href: string;
-  label: string;
-  type: string; // e.g. "Account", "Tender", or "Page"
-  at: number; // epoch ms
+  title: string;
+  /** Record kind for display, e.g. "Account", "Invoice". */
+  type: string;
+  /** Epoch ms of the last visit. */
+  at: number;
 }
 
-const KEY = 'aura.recent';
+const KEY = 'aura.recent-items';
 const MAX = 12;
 
-export function getRecents(): RecentItem[] {
+export const RECORD_VISIT_EVENT = 'aura:record-visit';
+
+export function readRecentItems(): RecentItem[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(KEY);
-    const list = raw ? (JSON.parse(raw) as RecentItem[]) : [];
-    return Array.isArray(list) ? list : [];
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (x): x is RecentItem =>
+        !!x && typeof x === 'object' && typeof (x as RecentItem).href === 'string' && typeof (x as RecentItem).title === 'string',
+    );
   } catch {
     return [];
   }
 }
 
-export function pushRecent(item: Omit<RecentItem, 'at'>): void {
+export function recordVisit(item: Omit<RecentItem, 'at'>): void {
   if (typeof window === 'undefined') return;
+  const next: RecentItem[] = [
+    { ...item, at: Date.now() },
+    ...readRecentItems().filter((x) => x.href !== item.href),
+  ].slice(0, MAX);
   try {
-    const now = Date.now();
-    const existing = getRecents().filter((r) => r.href !== item.href);
-    const next = [{ ...item, at: now }, ...existing].slice(0, MAX);
     window.localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
-    // storage full / disabled — ignore
+    // storage full/blocked — recents are best-effort
   }
+  window.dispatchEvent(new CustomEvent(RECORD_VISIT_EVENT, { detail: next[0] }));
 }

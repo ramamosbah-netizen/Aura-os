@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { InvoiceEdit } from './invoice-create';
 
 interface Invoice {
   id: string;
@@ -168,7 +169,14 @@ export default function InvoicesList({
               return (
                 <>
                   <tr key={inv.id} style={isPaying ? s.rowSelected : s.row}>
-                    <td style={s.td}><strong>{inv.title}</strong></td>
+                    <td style={s.td}>
+                      <a
+                        href={`/finance/invoices/${inv.id}`}
+                        style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        {inv.title}
+                      </a>
+                    </td>
                     <td style={s.tdMuted}>{inv.poTitle ?? '—'}</td>
                     <td style={s.tdMuted}>{inv.supplierName ?? '—'}</td>
                     <td style={s.tdMuted}>{inv.projectName ?? '—'}</td>
@@ -215,6 +223,7 @@ export default function InvoicesList({
                         {inv.status === 'paid' && (
                           <span style={{ color: 'var(--good)', fontSize: 13 }}>✓ Paid</span>
                         )}
+                        <InvoiceEdit invoice={inv} />
                       </div>
                     </td>
                   </tr>

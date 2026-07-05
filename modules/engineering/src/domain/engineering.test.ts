@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { makeDrawing } from './drawing';
 import { makeRfi } from './rfi';
 import { makeSubmittal } from './submittal';
+import { makeTechnicalQuery } from './technical-query';
+import { toDiscipline } from './discipline';
+import { makeDesignChange, decideDesignChange, triggersVariation } from './design-change';
+import { makeEngineeringDocument, transitionDocument, ownerModuleOf, isDocType } from './engineering-document';
 import { InMemoryDrawingStore } from '../in-memory-drawing-store';
 import { InMemoryRfiStore } from '../in-memory-rfi-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryTechnicalQueryStore } from '../in-memory-technical-query-store';
 import { InMemoryBimModelStore } from '../in-memory-bim-model-store';
+import { InMemoryDesignChangeStore } from '../in-memory-design-change-store';
+import { InMemoryEngineeringDocumentStore } from '../in-memory-engineering-document-store';
 import { EngineeringService } from '../engineering.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -21,6 +27,104 @@ const mockEvents = {
 const mockTx: TxRunner = {
   run: (fn) => fn(null),
 };
+
+describe('Discipline dimension (ADR-0012 shared dimension)', () => {
+  it('defaults every engineering aggregate to "other" when unset', () => {
+    const base = { tenantId: 't1', projectId: 'p1', code: 'X', title: 'T' };
+    expect(makeDrawing(base).discipline).toBe('other');
+    expect(makeRfi({ ...base, question: 'q' }).discipline).toBe('other');
+    expect(makeSubmittal({ ...base, submittalType: 'material' }).discipline).toBe('other');
+    expect(makeTechnicalQuery({ ...base, query: 'q' }).discipline).toBe('other');
+  });
+
+  it('carries a fine-grained discipline through creation', () => {
+    const d = makeDrawing({ tenantId: 't1', projectId: 'p1', code: 'E-101', title: 'Power', discipline: 'electrical' });
+    expect(d.discipline).toBe('electrical');
+  });
+
+  it('normalises casing/whitespace and falls back to "other" for unknown values', () => {
+    expect(toDiscipline('  ELV ')).toBe('elv');
+    expect(toDiscipline('Fire_Alarm')).toBe('fire_alarm');
+    expect(toDiscipline('plumbing')).toBe('plumbing');
+    expect(toDiscipline('nonsense')).toBe('other');
+    expect(toDiscipline(null)).toBe('other');
+  });
+
+  it('keeps legacy coarse values (mep/coordination) valid for existing TQ/BIM data', () => {
+    expect(toDiscipline('mep')).toBe('mep');
+    expect(toDiscipline('coordination')).toBe('coordination');
+  });
+});
+
+describe('Design Change → Variation trigger (ADR-0011 event composition)', () => {
+  const base = { tenantId: 't1', projectId: 'p1', code: 'DC-1', title: 'Revised riser', discipline: 'electrical' as const };
+
+  it('defaults to draft/addition, no cost impact, zero value', () => {
+    const dc = makeDesignChange(base);
+    expect(dc.status).toBe('draft');
+    expect(dc.changeType).toBe('addition');
+    expect(dc.costImpact).toBe(false);
+    expect(dc.estimatedValue).toBe(0);
+    expect(triggersVariation(dc)).toBe(false);
+  });
+
+  it('triggers a variation only when approved AND cost-impacting AND value > 0', () => {
+    const withImpact = makeDesignChange({ ...base, costImpact: true, estimatedValue: 12000 });
+    expect(triggersVariation(withImpact)).toBe(false); // still draft
+    const approved = decideDesignChange(withImpact, 'approved', 'u-qs');
+    expect(approved.status).toBe('approved');
+    expect(approved.decidedBy).toBe('u-qs');
+    expect(triggersVariation(approved)).toBe(true);
+  });
+
+  it('does NOT trigger when approved but no cost impact', () => {
+    const noImpact = makeDesignChange({ ...base, costImpact: false, estimatedValue: 5000 });
+    expect(triggersVariation(decideDesignChange(noImpact, 'approved', 'u-qs'))).toBe(false);
+  });
+
+  it('does NOT trigger when rejected', () => {
+    const dc = makeDesignChange({ ...base, costImpact: true, estimatedValue: 9000 });
+    expect(triggersVariation(decideDesignChange(dc, 'rejected', 'u-qs'))).toBe(false);
+  });
+
+  it('clamps a negative estimated value to zero', () => {
+    expect(makeDesignChange({ ...base, estimatedValue: -500 }).estimatedValue).toBe(0);
+  });
+});
+
+describe('Engineering Document — one aggregate, many docTypes (ADR-0011 point-6)', () => {
+  const base = { tenantId: 't1', projectId: 'p1', code: 'MS-1', title: 'Concrete pour', discipline: 'structural' as const };
+
+  it('is a single aggregate discriminated by docType, sharing one lifecycle + revision + discipline', () => {
+    const ms = makeEngineeringDocument({ ...base, docType: 'method_statement' });
+    expect(ms.docType).toBe('method_statement');
+    expect(ms.status).toBe('draft');
+    expect(ms.revision).toBe('A');
+    expect(ms.discipline).toBe('structural');
+    expect(ms.fields).toEqual({});
+    const approved = transitionDocument(ms, 'approved', 'u-eng');
+    expect(approved.status).toBe('approved');
+    expect(approved.decidedBy).toBe('u-eng');
+  });
+
+  it('owns a Risk Assessment under HSE, everything else under Engineering (per decision)', () => {
+    expect(ownerModuleOf('risk_assessment')).toBe('hse');
+    expect(makeEngineeringDocument({ ...base, docType: 'risk_assessment' }).ownerModule).toBe('hse');
+    expect(ownerModuleOf('method_statement')).toBe('engineering');
+    expect(ownerModuleOf('calc_sheet')).toBe('engineering');
+  });
+
+  it('carries type-specific data in the form-engine fields payload', () => {
+    const ra = makeEngineeringDocument({ ...base, docType: 'risk_assessment', fields: { hazard: 'fall', likelihood: 3, severity: 4 } });
+    expect(ra.fields).toEqual({ hazard: 'fall', likelihood: 3, severity: 4 });
+  });
+
+  it('validates docType', () => {
+    expect(isDocType('method_statement')).toBe(true);
+    expect(isDocType('nonsense')).toBe(false);
+    expect(() => makeEngineeringDocument({ ...base, docType: 'nonsense' as never })).toThrow();
+  });
+});
 
 describe('Engineering Module Bounded Context', () => {
   describe('Drawings', () => {
@@ -48,6 +152,8 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -87,6 +193,8 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -121,6 +229,8 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -152,6 +262,8 @@ describe('Engineering Module Bounded Context', () => {
         new InMemorySubmittalStore(),
         new InMemoryTechnicalQueryStore(),
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess
@@ -205,6 +317,8 @@ describe('Engineering Module Bounded Context', () => {
         submittalStore,
         tqStore,
         new InMemoryBimModelStore(),
+        new InMemoryDesignChangeStore(),
+        new InMemoryEngineeringDocumentStore(),
         mockEvents,
         mockTx,
         mockAccess

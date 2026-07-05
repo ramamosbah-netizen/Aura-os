@@ -35,10 +35,12 @@ describe('Architecture fitness — ADR-0004: modules do not import each other', 
   // enforced *going forward*; each edge should be paid down to events (ADR-0004) over time.
   // DO NOT add to this list — a new cross-module import is a design regression.
   const KNOWN_DEBT = new Set([
+    // finance's 3-way match reads PO value + received GRN value synchronously; decoupling needs an
+    // event-fed projection (a deliberate consistency tradeoff) — tracked, not yet paid down.
     'finance->procurement',
     'finance->inventory',
-    'procurement->quality',
-    'projects->quality',
+    // procurement->quality and projects->quality were PAID DOWN: their gate ports (QUALITY_GATE /
+    // ITP_GATE) are now bound at the app layer (GatesModule), not by importing @aura/quality.
   ]);
 
   it('introduces no new module-to-module import beyond the documented baseline', () => {

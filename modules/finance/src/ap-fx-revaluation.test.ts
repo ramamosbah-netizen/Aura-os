@@ -9,8 +9,6 @@ import {
   type NumberingService,
   type AuditService,
 } from '@aura/core';
-import type { PurchaseOrderService } from '@aura/procurement';
-import type { GoodsReceiptService } from '@aura/inventory';
 import { InvoiceService } from './invoice.service';
 import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
@@ -34,8 +32,6 @@ describe('AP FX revaluation', () => {
     const numbering = { generateNextNumber: vi.fn().mockResolvedValue('AP-2026-0001') } as unknown as NumberingService;
     const audit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
     const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
-    const mockPO = { get: async () => null } as unknown as PurchaseOrderService;
-    const mockGRN = { list: async () => [] } as unknown as GoodsReceiptService;
 
     // First getRate call (create) returns the booked rate; later calls (reval) the period-end rate.
     let calls = 0;
@@ -44,7 +40,7 @@ describe('AP FX revaluation', () => {
     const accounts = new AccountService(new InMemoryAccountStore(), access);
     const journals = new JournalService(new InMemoryJournalStore(), events, new InMemoryPeriodCloseStore(), access);
     const invoices = new InvoiceService(
-      new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, mockPO, mockGRN, numbering, audit,
+      new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
       fx, journals, accounts,
     );
     invoices.onModuleInit();

@@ -137,6 +137,16 @@ function buildHarness() {
     },
   } as any;
 
+  const createdRas: any[] = [];
+  const mockHse = {
+    listRiskAssessments: async () => createdRas,
+    createRiskAssessment: async (input: any) => {
+      const ra = { id: `ra-${createdRas.length + 1}`, ...input };
+      createdRas.push(ra);
+      return ra;
+    },
+  } as any;
+
   const subscriber = new CrossModuleSubscriber(
     bus,
     contracts,
@@ -153,10 +163,11 @@ function buildHarness() {
     mockSupplierInvoices, // InvoiceService (AP)
     mockFinanceAccounts, // AccountService (Finance) — GL account resolver
     mockJournals, // JournalService
+    mockHse, // HseService
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs, createdVariations };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas };
 }
 
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
@@ -257,6 +268,35 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
         payload: { triggersVariation: false, projectId: 'proj-9', changeType: 'addition', estimatedValue: 0, code: 'DC-2' } }),
     ]);
     expect(h.createdVariations).toHaveLength(1);
+  });
+
+  it('routes a submitted HSE-owned engineering document into HSE as a risk assessment (Engineering → HSE, idempotent)', async () => {
+    const submit = (aggregateId: string, payload: Record<string, unknown>) =>
+      h.events.append([
+        makeEvent({
+          type: 'engineering.document.submitted',
+          tenantId,
+          companyId: null,
+          actorId: 'u-eng',
+          aggregateType: 'engineering.document',
+          aggregateId,
+          payload,
+        }),
+      ]);
+
+    // Engineering originates, HSE owns → one HSE risk assessment lands in the queue.
+    await submit('doc-1', { code: 'ED-100', docType: 'risk_assessment', ownerModule: 'hse', status: 'submitted', projectId: 'proj-9' });
+    expect(h.createdRas).toHaveLength(1);
+    expect(h.createdRas[0].reference).toBe('RA-ED-100');
+    expect(h.createdRas[0].projectId).toBe('proj-9');
+
+    // Re-delivery of the same submit must not duplicate (deterministic reference guard).
+    await submit('doc-1', { code: 'ED-100', docType: 'risk_assessment', ownerModule: 'hse', status: 'submitted', projectId: 'proj-9' });
+    expect(h.createdRas).toHaveLength(1);
+
+    // An Engineering-owned docType (method statement) must NOT hand off to HSE.
+    await submit('doc-2', { code: 'ED-101', docType: 'method_statement', ownerModule: 'engineering', status: 'submitted', projectId: 'proj-9' });
+    expect(h.createdRas).toHaveLength(1);
   });
 
   it('seeds the auto-created project with a root WBS node + CBS from the tender BOQ', async () => {

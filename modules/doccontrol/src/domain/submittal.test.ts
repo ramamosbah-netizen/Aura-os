@@ -17,8 +17,12 @@ describe('makeSubmittal', () => {
     expect(() => makeSubmittal({ ...base, title: ' ' })).toThrow('title is required');
   });
 
-  it('rejects an unknown discipline', () => {
-    expect(() => makeSubmittal({ ...base, discipline: 'plumbing' as never })).toThrow('discipline must be one of');
+  it('accepts a fine-grained shared discipline (e.g. plumbing) now that discipline is the shared vocabulary', () => {
+    expect(makeSubmittal({ ...base, discipline: 'plumbing' }).discipline).toBe('plumbing');
+  });
+
+  it('normalises an unknown discipline to "other" (shared toDiscipline, no throw)', () => {
+    expect(makeSubmittal({ ...base, discipline: 'nonsense' as never }).discipline).toBe('other');
   });
 });
 

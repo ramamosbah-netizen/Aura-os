@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { CoreModule, PG_POOL } from '@aura/core';
-import { QualityModule, QualityService } from '@aura/quality';
 import { PURCHASE_ORDER_STORE } from './purchase-order-store';
 import { InMemoryPurchaseOrderStore } from './in-memory-purchase-order-store';
 import { PostgresPurchaseOrderStore } from './postgres-purchase-order-store';
@@ -22,8 +21,6 @@ import { InMemorySupplierStore } from './in-memory-supplier-store';
 import { PostgresSupplierStore } from './postgres-supplier-store';
 import { SupplierService } from './supplier.service';
 
-import { QUALITY_GATE } from './purchase-order.service';
-
 import { FRAMEWORK_AGREEMENT_STORE } from './framework-agreement-store';
 import { InMemoryFrameworkAgreementStore } from './in-memory-framework-agreement-store';
 import { PostgresFrameworkAgreementStore } from './postgres-framework-agreement-store';
@@ -31,7 +28,7 @@ import { FrameworkAgreementService } from './framework-agreement.service';
 
 /** The Procurement business module — same shape as the deal-chain modules. */
 @Module({
-  imports: [CoreModule, QualityModule],
+  imports: [CoreModule],
   providers: [
     {
       provide: PURCHASE_ORDER_STORE,
@@ -68,10 +65,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     RfqService,
     SupplierService,
     FrameworkAgreementService,
-    {
-      provide: QUALITY_GATE,
-      useExisting: QualityService,
-    },
   ],
   exports: [PurchaseOrderService, PurchaseRequestService, RfqService, SupplierService, FrameworkAgreementService],
 })

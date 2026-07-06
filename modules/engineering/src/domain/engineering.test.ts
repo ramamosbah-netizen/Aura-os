@@ -5,7 +5,7 @@ import { makeSubmittal } from './submittal';
 import { makeTechnicalQuery } from './technical-query';
 import { toDiscipline } from './discipline';
 import { makeDesignChange, decideDesignChange, triggersVariation } from './design-change';
-import { makeEngineeringDocument, transitionDocument, ownerModuleOf, isDocType } from './engineering-document';
+import { makeEngineeringDocument, transitionDocument, ownerModuleOf, isDocType, getDocumentDefinition } from './engineering-document';
 import { InMemoryDrawingStore } from '../in-memory-drawing-store';
 import { InMemoryRfiStore } from '../in-memory-rfi-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
@@ -123,6 +123,15 @@ describe('Engineering Document — one aggregate, many docTypes (ADR-0011 point-
     expect(isDocType('method_statement')).toBe(true);
     expect(isDocType('nonsense')).toBe(false);
     expect(() => makeEngineeringDocument({ ...base, docType: 'nonsense' as never })).toThrow();
+  });
+
+  it('exposes each type as a Definition — behaviour read from metadata, not a switch (ADR-0017)', () => {
+    const ra = getDocumentDefinition('risk_assessment');
+    expect(ra).toMatchObject({ ownerModule: 'hse', workflow: 'hse-review', formSchemaId: 'engineering.risk_assessment' });
+    const ms = getDocumentDefinition('method_statement');
+    expect(ms).toMatchObject({ ownerModule: 'engineering', workflow: 'engineering-review' });
+    // ownerModuleOf delegates to the definition (no parallel source of truth)
+    expect(ownerModuleOf('risk_assessment')).toBe(ra.ownerModule);
   });
 });
 

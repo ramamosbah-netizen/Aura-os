@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, type Discipline, newId, toDiscipline } from '@aura/shared';
 
 // Procurement domain — framework-free. A Purchase Order is raised (usually against a
 // project) to buy from a supplier — the operate-side spend. It REFERENCES a project by
@@ -20,6 +20,8 @@ export interface PurchaseOrder {
   /** The project this PO is spent against — reference + snapshot, not a join. */
   projectId: Id | null;
   projectName: string | null;
+  /** Shared dimension (ADR-0012) — the trade/discipline this spend belongs to. */
+  discipline: Discipline;
   status: PurchaseOrderStatus;
   value: number;
   ownerId: Id | null;
@@ -36,6 +38,7 @@ export interface NewPurchaseOrder {
   supplierName?: string | null;
   projectId?: Id | null;
   projectName?: string | null;
+  discipline?: Discipline;
   status?: PurchaseOrderStatus;
   value?: number;
   ownerId?: Id | null;
@@ -53,6 +56,7 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     supplierName: input.supplierName?.trim() || null,
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,
+    discipline: toDiscipline(input.discipline),
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     ownerId: input.ownerId ?? null,

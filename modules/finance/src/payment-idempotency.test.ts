@@ -9,8 +9,6 @@ import {
   type NumberingService,
   type AuditService,
 } from '@aura/core';
-import type { PurchaseOrderService } from '@aura/procurement';
-import type { GoodsReceiptService } from '@aura/inventory';
 import { InvoiceService } from './invoice.service';
 import { PaymentService } from './payment.service';
 import { JournalService } from './journal.service';
@@ -38,11 +36,8 @@ describe('Payment recording idempotency', () => {
     const audit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
     const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
 
-    const mockPO = { get: async () => null } as unknown as PurchaseOrderService;
-    const mockGRN = { list: async () => [] } as unknown as GoodsReceiptService;
-
     const invoices = new InvoiceService(
-      new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, mockPO, mockGRN, numbering, audit,
+      new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
       { getRate: async () => 1 } as any, {} as any, {} as any,
     );
     invoices.onModuleInit();
@@ -72,11 +67,9 @@ describe('Payment recording idempotency', () => {
     const numbering = { generateNextNumber: vi.fn().mockResolvedValue('INV-2026-0002') } as unknown as NumberingService;
     const audit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
     const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
-    const mockPO = { get: async () => null } as unknown as PurchaseOrderService;
-    const mockGRN = { list: async () => [] } as unknown as GoodsReceiptService;
 
     const invoices = new InvoiceService(
-      new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, mockPO, mockGRN, numbering, audit,
+      new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
       { getRate: async () => 1 } as any, {} as any, {} as any,
     );
     invoices.onModuleInit();

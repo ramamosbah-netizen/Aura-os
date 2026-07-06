@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { type Discipline, toDiscipline } from '@aura/shared';
 
 /**
  * Document Submittal — a controlled document (shop drawing, material data, method statement, etc.)
@@ -9,7 +10,8 @@ import { randomUUID } from 'node:crypto';
  */
 export type SubmittalStatus = 'draft' | 'submitted' | 'returned';
 export type ReviewCode = 'A' | 'B' | 'C' | 'D';
-export type SubmittalDiscipline = 'architectural' | 'structural' | 'mep' | 'elv' | 'civil' | 'other';
+/** @deprecated use the shared {@link Discipline} (ADR-0012); kept as an alias for callers. */
+export type SubmittalDiscipline = Discipline;
 
 export interface Submittal {
   id: string;
@@ -43,14 +45,11 @@ export interface NewSubmittal {
   createdBy?: string | null;
 }
 
-const DISCIPLINES: SubmittalDiscipline[] = ['architectural', 'structural', 'mep', 'elv', 'civil', 'other'];
-
 export function makeSubmittal(input: NewSubmittal): Submittal {
   if (!input.projectId) throw new Error('projectId is required');
   if (!input.reference?.trim()) throw new Error('reference is required');
   if (!input.title?.trim()) throw new Error('title is required');
-  const discipline = input.discipline ?? 'other';
-  if (!DISCIPLINES.includes(discipline)) throw new Error(`discipline must be one of: ${DISCIPLINES.join(', ')}`);
+  const discipline = toDiscipline(input.discipline);
   const revision = input.revision === undefined ? 0 : Number(input.revision);
   if (!Number.isInteger(revision) || revision < 0) throw new Error('revision must be a non-negative integer');
   const now = new Date().toISOString();

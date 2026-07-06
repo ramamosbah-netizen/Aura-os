@@ -73,13 +73,13 @@ import { InMemoryProfitCenterStore } from './in-memory-profit-center-store';
 import { PostgresProfitCenterStore } from './postgres-profit-center-store';
 import { ProfitCenterService } from './profit-center.service';
 
-import { ProcurementModule } from '@aura/procurement';
-import { InventoryModule } from '@aura/inventory';
 import { ProfitLossProjection } from './projections/profit-loss.projection';
 
-/** The Finance business module — same shape as Procurement / Inventory / the deal chain. */
+/** The Finance business module. Cross-context data for the 3-way match arrives via the
+ *  Finance-owned PO_MATCH_PORT, bound at the app layer (ADR-0004) — no @aura/procurement or
+ *  @aura/inventory import here. */
 @Module({
-  imports: [CoreModule, ProcurementModule, InventoryModule],
+  imports: [CoreModule],
   providers: [
     {
       provide: INVOICE_STORE,

@@ -20,6 +20,7 @@ graph LR
   0014["0014<br/>Design system on CSS custom prop…"]
   0015["0015<br/>CRM email integration via Micros…"]
   0016["0016<br/>Metadata designer sequencing - f…"]
+  0017["0017<br/>Metadata-Driven Definitions"]
   0008 -.-> 0006
   0011 -.-> 0004
   0011 -.-> 0006
@@ -28,6 +29,10 @@ graph LR
   0012 -.-> 0011
   0012 -.-> 0002
   0012 -.-> 0010
+  0017 -.-> 0006
+  0017 -.-> 0011
+  0017 -.-> 0012
+  0017 -.-> 0016
   classDef accepted fill:#e8f5e9,stroke:#2e7d32;
-  class 0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016 accepted;
+  class 0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017 accepted;
 ```

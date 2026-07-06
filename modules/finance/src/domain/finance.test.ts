@@ -16,6 +16,20 @@ import { AccessService, type EventStore, NumberingService, AuditService, type Tx
 import { PurchaseOrderService, InMemoryPurchaseOrderStore, InMemorySupplierStore } from '@aura/procurement';
 import { GoodsReceiptService, InMemoryGoodsReceiptStore } from '@aura/inventory';
 
+/** Test double for the app-layer PO-match adapter — builds the snapshot from real po/grn services
+ *  (the 3-way match rule stays in InvoiceService; this only supplies the cross-context data). */
+function poMatchFrom(poService: PurchaseOrderService, grnService: GoodsReceiptService) {
+  return {
+    getSnapshot: async (_tenantId: string, poId: string) => {
+      const po = await poService.get(poId);
+      if (!po) return { poExists: false, poValue: 0, receivedValue: 0 };
+      const grns = await grnService.list({ poId });
+      const receivedValue = grns.filter((g) => g.status === 'received').reduce((s, g) => s + g.value, 0);
+      return { poExists: true, poValue: po.value, receivedValue };
+    },
+  };
+}
+
 /** Minimal in-process CommandBus stand-in: runs validate + handler directly (no DB/authz). */
 function fakeBus(): CommandBus {
   const handlers = new Map<string, CommandDefinition>();
@@ -124,21 +138,11 @@ describe('Finance depth features', () => {
       const journalStore = new InMemoryJournalStore();
       const paymentStore = new InMemoryPaymentStore();
 
-      const mockPurchaseOrders = {
-        get: async () => null,
-      } as unknown as PurchaseOrderService;
-
-      const mockGoodsReceipts = {
-        list: async () => [],
-      } as unknown as GoodsReceiptService;
-
       const invoiceService = new InvoiceService(
         invoiceStore,
         mockEvents,
         mockTx,
         fakeBus(),
-        mockPurchaseOrders,
-        mockGoodsReceipts,
         mockNumbering,
         mockAudit,
         { getRate: async () => 1 } as any,
@@ -220,21 +224,17 @@ describe('Finance depth features', () => {
       const grnService = new GoodsReceiptService(grnStore, mockEvents, fakeBus());
       grnService.onModuleInit();
 
-      const mockPurchaseOrders = poService;
-      const mockGoodsReceipts = grnService;
-
       const invoiceService = new InvoiceService(
         invoiceStore,
         mockEvents,
         mockTx,
         fakeBus(),
-        mockPurchaseOrders,
-        mockGoodsReceipts,
         mockNumbering,
         mockAudit,
         { getRate: async () => 1 } as any,
         {} as any,
         {} as any,
+        poMatchFrom(poService, grnService),
       );
       invoiceService.onModuleInit();
 
@@ -294,13 +294,12 @@ describe('Finance depth features', () => {
         mockEvents,
         mockTx,
         fakeBus(),
-        poService,
-        grnService,
         mockNumbering,
         mockAudit,
         { getRate: async () => 1 } as any,
         {} as any,
         {} as any,
+        poMatchFrom(poService, grnService),
       );
       invoiceService.onModuleInit();
 

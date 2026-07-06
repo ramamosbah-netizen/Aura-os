@@ -6,6 +6,7 @@ import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement'
 import { TenderService } from '@aura/tendering';
 import { AccountService } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
+import { HseService } from '@aura/hse';
 import type { DomainEvent } from '@aura/shared';
 
 /**
@@ -50,6 +51,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly supplierInvoices: InvoiceService,
     private readonly financeAccounts: FinanceAccountService,
     private readonly journals: JournalService,
+    private readonly hse: HseService,
   ) {}
 
   /** Resolve a GL account by well-known code, creating it on first use (mirrors payment.service). */
@@ -214,6 +216,40 @@ export class CrossModuleSubscriber implements OnModuleInit {
         );
       } catch (err) {
         this.logger.error(`Failed to auto-draft variation from design_change.approved: ${err}`);
+      }
+    });
+
+    // ── Engineering → HSE: submitted Risk Assessment routed into HSE's queue ──
+    // ADR-0011/0012 in action: Engineering *originates* a Risk Assessment (a docType whose
+    // drafting it owns) but HSE *owns the process* (ownerModule='hse'). On submit, the
+    // engineering document emits an event carrying ownerModule; here we create the HSE Risk
+    // Assessment so it lands in HSE's review queue. Engineering never calls HSE directly.
+    this.bus.subscribe('engineering.document.submitted', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        if (p.ownerModule !== 'hse') return; // only HSE-owned docs (risk assessments) hand off
+        const projectId = p.projectId as string | undefined;
+        if (!projectId) return; //         an HSE risk assessment is scoped to a project
+        const code = (p.code as string) ?? 'RA';
+        const reference = `RA-${code}`;
+        // Idempotency: createRiskAssessment has no command-bus cache, so guard on the
+        // deterministic reference — an outbox retry (or re-submit) won't queue a duplicate.
+        const existing = await this.hse.listRiskAssessments(e.tenantId);
+        if (existing.some((r) => r.reference === reference)) {
+          this.logger.log(`↩ engineering.document.submitted → risk assessment ${reference} already in HSE queue, skipping`);
+          return;
+        }
+        await this.hse.createRiskAssessment({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          projectId,
+          reference,
+          activity: `Risk assessment for engineering document ${code}`,
+          hazards: [],
+        });
+        this.logger.log(`⚡ engineering.document.submitted → routed Risk Assessment ${reference} into HSE queue (project ${projectId})`);
+      } catch (err) {
+        this.logger.error(`Failed to route risk assessment to HSE from engineering.document.submitted: ${err}`);
       }
     });
 

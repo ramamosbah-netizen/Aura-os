@@ -7,6 +7,7 @@ export interface PurchaseRequestFilter {
   tenantId?: string;
   status?: string;
   projectId?: string;
+  discipline?: string;
   limit?: number;
 }
 

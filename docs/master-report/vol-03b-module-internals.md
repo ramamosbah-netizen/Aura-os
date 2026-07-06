@@ -2,7 +2,7 @@
 
 [← Volume 3](vol-03-module-catalog.md) · [← Master index](README.md)
 
-Generated from `modules/*/src` on 2026-07-05 (regenerate:
+Generated from `modules/*/src` on 2026-07-06 (regenerate:
 `node docs/master-report/tools/gen-internals.mjs <repo-root>`). For each module: **services**
 (public methods = the module's use-cases), **store ports** (persistence contract), and
 **domain exports** (pure functions ~types in tildes~). This is the engineering map — Volume 3
@@ -131,14 +131,16 @@ is the business view of the same modules.
 
 | Service | Public methods |
 |---|---|
-| `EngineeringService` | `createDrawing` · `reviseDrawing` · `approveDrawing` · `getDrawing` · `listDrawings` · `listDrawingsPaged` · `createRfi` · `answerRfi` · `getRfi` · `listRfis` · `listRfisPaged` · `createSubmittal` · `updateSubmittalStatus` · `getSubmittal` · `listSubmittals` · `listSubmittalsPaged` · `createTechnicalQuery` · `respondTechnicalQuery` · `getTechnicalQuery` · `listTechnicalQueries` · `listTechnicalQueriesPaged` · `registerBimModel` · `newBimModelVersion` · `getBimModel` · `listBimModels` · `listBimModelsPaged` |
+| `EngineeringService` | `createDrawing` · `reviseDrawing` · `approveDrawing` · `getDrawing` · `listDrawings` · `listDrawingsPaged` · `createRfi` · `answerRfi` · `getRfi` · `listRfis` · `listRfisPaged` · `createSubmittal` · `updateSubmittalStatus` · `getSubmittal` · `listSubmittals` · `listSubmittalsPaged` · `createTechnicalQuery` · `respondTechnicalQuery` · `getTechnicalQuery` · `listTechnicalQueries` · `listTechnicalQueriesPaged` · `createDesignChange` · `decideDesignChange` · `getDesignChange` · `listDesignChanges` · `listDesignChangesPaged` · `createDocument` · `transitionDocument` · `getDocument` · `listDocuments` · `listDocumentsPaged` · `registerBimModel` · `newBimModelVersion` · `getBimModel` · `listBimModels` · `listBimModelsPaged` |
 
 ### Store ports
 
 | Port | Methods |
 |---|---|
 | `BimModelStore` | `save` · `get` · `list` · `listPaged` |
+| `DesignChangeStore` | `create` · `createWithClient` · `update` · `updateWithClient` · `get` · `list` · `listPaged` |
 | `DrawingStore` | `create` · `createWithClient` · `update` · `updateWithClient` · `get` · `getByCode` · `getLatestByCode` · `list` · `listPaged` |
+| `EngineeringDocumentStore` | `create` · `createWithClient` · `update` · `updateWithClient` · `get` · `list` · `listPaged` |
 | `RfiStore` | `create` · `createWithClient` · `update` · `updateWithClient` · `get` · `getByCode` · `list` · `listPaged` |
 | `SubmittalStore` | `create` · `createWithClient` · `update` · `updateWithClient` · `get` · `getByCode` · `list` · `listPaged` |
 | `TechnicalQueryStore` | `create` · `createWithClient` · `update` · `updateWithClient` · `get` · `list` · `listPaged` |
@@ -148,7 +150,9 @@ is the business view of the same modules.
 | File | Exports |
 |---|---|
 | `domain/bim-model.ts` | `makeBimModel` · `bumpModelVersion` · `BIM_MODEL_EVENT` · *ModelFormat* · *ModelStatus* · *ModelDiscipline* · *BimModel* · *NewBimModel* |
+| `domain/design-change.ts` | `makeDesignChange` · `decideDesignChange` · `triggersVariation` · `DESIGN_CHANGE_EVENT` · *DesignChangeStatus* · *DesignChangeType* · *DesignChange* · *NewDesignChange* |
 | `domain/drawing.ts` | `makeDrawing` · `ENGINEERING_EVENT` · *DrawingStatus* · *Drawing* · *NewDrawing* |
+| `domain/engineering-document.ts` | `DOCUMENT_DEFINITIONS` · `isDocType` · `getDocumentDefinition` · `ownerModuleOf` · `makeEngineeringDocument` · `transitionDocument` · `ENGINEERING_DOCUMENT_EVENT` · *DocType* · *OwnerModule* · *DocumentStatus* · *DocumentDefinition* · *EngineeringDocument* · *NewEngineeringDocument* |
 | `domain/rfi.ts` | `makeRfi` · *RfiStatus* · *Rfi* · *NewRfi* |
 | `domain/submittal.ts` | `makeSubmittal` · *SubmittalType* · *SubmittalStatus* · *Submittal* · *NewSubmittal* |
 | `domain/technical-query.ts` | `makeTechnicalQuery` · `respondToQuery` · *TqStatus* · *TqPriority* · *TqDiscipline* · *TechnicalQuery* · *NewTechnicalQuery* |

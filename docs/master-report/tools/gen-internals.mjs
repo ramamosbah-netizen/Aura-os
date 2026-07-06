@@ -7,10 +7,10 @@ const ROOT = process.argv[2];
 const OUT = join(ROOT, 'docs/master-report/vol-03b-module-internals.md');
 const MODULES = join(ROOT, 'modules');
 
-const publicMethods = (src, className) => {
+const publicMethods = (src) => {
   // methods inside the class body: `async name(` or `name(` at 2-space indent, not private/constructor
   const out = [];
-  const re = /^  (?:async\s+)?([a-zA-Z][a-zA-Z0-9_]*)\s*(?:<[^>]*>)?\(/gm;
+  const re = /^ {2}(?:async\s+)?([a-zA-Z][a-zA-Z0-9_]*)\s*(?:<[^>]*>)?\(/gm;
   let m;
   while ((m = re.exec(src)) !== null) {
     const name = m[1];

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService } from '@aura/core';
 import type { Currency } from '@aura/shared';
@@ -9,8 +9,7 @@ import { INVOICE_STORE, type InvoiceFilter, type InvoiceStore } from './invoice-
 import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
 import type { AccountType } from './domain/account';
-import { PurchaseOrderService } from '@aura/procurement';
-import { GoodsReceiptService, type GoodsReceipt } from '@aura/inventory';
+import { PO_MATCH_PORT, type PoMatchPort } from './po-match.port';
 
 /** AP invoices are "open" (revaluable) when approved-but-unpaid. */
 const AP_OPEN = ['approved'];
@@ -36,13 +35,14 @@ export class InvoiceService implements OnModuleInit {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
-    private readonly purchaseOrders: PurchaseOrderService,
-    private readonly goodsReceipts: GoodsReceiptService,
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
     private readonly fx: ExchangeRateService,
     private readonly journals: JournalService,
     private readonly accounts: AccountService,
+    // Cross-context data for the 3-way match — bound by the app layer (ADR-0004). Optional so the
+    // module is self-contained; when unbound the match is skipped (mirrors procurement's gate).
+    @Optional() @Inject(PO_MATCH_PORT) private readonly poMatch?: PoMatchPort,
   ) {}
 
   onModuleInit(): void {
@@ -119,26 +119,24 @@ export class InvoiceService implements OnModuleInit {
     const invoice = await this.store.get(id);
     if (!invoice) return { matched: false, reason: 'Invoice not found' };
     if (!invoice.poId) return { matched: true }; // non-PO invoice passes match
+    if (!this.poMatch) return { matched: true }; // no data source bound → skip (mirrors gate pattern)
 
-    const po = await this.purchaseOrders.get(invoice.poId);
-    if (!po) return { matched: false, reason: `PO ${invoice.poId} not found` };
+    // The cross-context data (PO value + received-GRN value) comes through the Finance-owned port;
+    // the match *rule* below stays Finance's.
+    const snap = await this.poMatch.getSnapshot(invoice.tenantId, invoice.poId);
+    if (!snap.poExists) return { matched: false, reason: `PO ${invoice.poId} not found` };
 
-    if (invoice.value > po.value) {
+    if (invoice.value > snap.poValue) {
       return {
         matched: false,
-        reason: `Invoice value (${invoice.value}) exceeds PO value (${po.value})`,
+        reason: `Invoice value (${invoice.value}) exceeds PO value (${snap.poValue})`,
       };
     }
 
-    const grns: GoodsReceipt[] = await this.goodsReceipts.list({ poId: invoice.poId });
-    const receivedValue = grns
-      .filter((g: GoodsReceipt) => g.status === 'received')
-      .reduce((sum: number, g: GoodsReceipt) => sum + g.value, 0);
-
-    if (invoice.value > receivedValue) {
+    if (invoice.value > snap.receivedValue) {
       return {
         matched: false,
-        reason: `Invoice value (${invoice.value}) exceeds total received GRN value (${receivedValue})`,
+        reason: `Invoice value (${invoice.value}) exceeds total received GRN value (${snap.receivedValue})`,
       };
     }
 

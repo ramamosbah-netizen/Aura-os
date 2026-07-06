@@ -225,7 +225,13 @@ export class FinanceController {
     if (!dto?.status) throw new BadRequestException('status is required');
     const found = await this.invoices.get(id);
     if (!found) throw new NotFoundException(`invoice ${id} not found`);
-    return this.invoices.changeStatus(id, dto.status);
+    try {
+      // A failed 3-way match (e.g. invoice exceeds PO value) is a client error, not a server
+      // fault — surface it as 400 like the other finance mutations, not an unhandled 500.
+      return await this.invoices.changeStatus(id, dto.status);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'invoice status change failed');
+    }
   }
 
   // ── CHART OF ACCOUNTS ───────────────────────────────────────────────────

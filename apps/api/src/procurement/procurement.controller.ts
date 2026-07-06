@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ApprovalMatrixService, type ApprovalRule } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, type Discipline } from '@aura/shared';
 import {
   type PurchaseOrder,
   type PurchaseOrderStatus,
@@ -24,6 +24,7 @@ class CreatePurchaseOrderDto {
   @IsOptional() @IsString() supplierName?: string | null;
   @IsOptional() @IsString() projectId?: string | null;
   @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsString() discipline?: Discipline;
   @IsOptional() @IsString() status?: PurchaseOrderStatus;
   @IsOptional() @IsNumber() value?: number;
 }
@@ -40,6 +41,7 @@ class CreatePurchaseRequestDto {
   @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsString() projectId?: string | null;
   @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsString() discipline?: Discipline;
   @IsOptional() @IsString() status?: PurchaseRequestStatus;
   @IsOptional() @IsNumber() value?: number;
 }
@@ -97,6 +99,7 @@ export class ProcurementController {
         supplierName: dto.supplierName ?? null,
         projectId: dto.projectId ?? null,
         projectName: dto.projectName ?? null,
+        discipline: dto.discipline,
         status: dto.status,
         value: dto.value,
         ownerId: ctx.actorId,
@@ -196,6 +199,7 @@ export class ProcurementController {
       reference: dto.reference,
       projectId: dto.projectId ?? null,
       projectName: dto.projectName ?? null,
+      discipline: dto.discipline,
       status: dto.status,
       value: dto.value,
       ownerId: ctx.actorId,

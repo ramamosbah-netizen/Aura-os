@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, type Discipline, newId, toDiscipline } from '@aura/shared';
 
 export type PurchaseRequestStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 
@@ -10,6 +10,8 @@ export interface PurchaseRequest {
   title: string;
   projectId: Id | null;
   projectName: string | null;
+  /** Shared dimension (ADR-0012) — the trade/discipline this request belongs to. */
+  discipline: Discipline;
   status: PurchaseRequestStatus;
   value: number;
   ownerId: Id | null;
@@ -24,6 +26,7 @@ export interface NewPurchaseRequest {
   title: string;
   projectId?: Id | null;
   projectName?: string | null;
+  discipline?: Discipline;
   status?: PurchaseRequestStatus;
   value?: number;
   ownerId?: Id | null;
@@ -39,6 +42,7 @@ export function makePurchaseRequest(input: NewPurchaseRequest): PurchaseRequest 
     title: input.title.trim(),
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,
+    discipline: toDiscipline(input.discipline),
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     ownerId: input.ownerId ?? null,

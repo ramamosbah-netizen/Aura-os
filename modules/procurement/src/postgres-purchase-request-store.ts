@@ -12,6 +12,7 @@ interface Row {
   title: string;
   project_id: string | null;
   project_name: string | null;
+  discipline: string;
   status: string;
   value: string | number;
   owner_id: string | null;
@@ -19,7 +20,7 @@ interface Row {
   created_at: Date | string;
 }
 
-const COLS = 'id, tenant_id, company_id, reference, title, project_id, project_name, status, value, owner_id, created_by, created_at';
+const COLS = 'id, tenant_id, company_id, reference, title, project_id, project_name, discipline, status, value, owner_id, created_by, created_at';
 
 function rowToPr(r: Row): PurchaseRequest {
   return {
@@ -30,6 +31,7 @@ function rowToPr(r: Row): PurchaseRequest {
     title: r.title,
     projectId: r.project_id,
     projectName: r.project_name,
+    discipline: r.discipline as PurchaseRequest['discipline'],
     status: r.status as PurchaseRequest['status'],
     value: Number(r.value),
     ownerId: r.owner_id,
@@ -43,7 +45,7 @@ export class PostgresPurchaseRequestStore implements PurchaseRequestStore {
 
   async create(pr: PurchaseRequest): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_procurement_purchase_requests (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      `INSERT INTO public.aura_procurement_purchase_requests (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         pr.id,
         pr.tenantId,
@@ -52,6 +54,7 @@ export class PostgresPurchaseRequestStore implements PurchaseRequestStore {
         pr.title,
         pr.projectId,
         pr.projectName,
+        pr.discipline,
         pr.status,
         pr.value,
         pr.ownerId,
@@ -63,8 +66,8 @@ export class PostgresPurchaseRequestStore implements PurchaseRequestStore {
 
   async update(pr: PurchaseRequest): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_procurement_purchase_requests SET reference=$2, title=$3, status=$4, value=$5, owner_id=$6 WHERE id=$1`,
-      [pr.id, pr.reference, pr.title, pr.status, pr.value, pr.ownerId],
+      `UPDATE public.aura_procurement_purchase_requests SET reference=$2, title=$3, discipline=$4, status=$5, value=$6, owner_id=$7 WHERE id=$1`,
+      [pr.id, pr.reference, pr.title, pr.discipline, pr.status, pr.value, pr.ownerId],
     );
   }
 

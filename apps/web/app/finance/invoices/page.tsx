@@ -56,9 +56,8 @@ export default async function InvoicesPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Finance · Invoices</h1>
       <p style={st.sub}>
-        The pay step — a supplier invoice bills against a <strong>received PO</strong>, inheriting its
-        supplier + project, and emits <code style={st.code}>finance.invoice.created</code> on the spine.
-        Closes the operate loop: spend → receive → pay.
+        The pay step — a supplier invoice bills against a <strong>received PO</strong> and inherits
+        its supplier and project. Closes the loop: spend → receive → pay.
       </p>
 
       <InvoiceCreate

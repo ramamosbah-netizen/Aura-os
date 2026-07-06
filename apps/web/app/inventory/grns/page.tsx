@@ -45,8 +45,8 @@ export default async function GoodsReceiptsPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Inventory · Goods receipts</h1>
       <p style={st.sub}>
-        Operate-side receiving — a GRN records goods received against an <strong>issued PO</strong>,
-        inheriting its supplier + project, and emits <code style={st.code}>inventory.grn.created</code> on the spine.
+        A goods receipt note records deliveries against an <strong>issued PO</strong> and inherits
+        its supplier and project automatically.
       </p>
 
       <GrnCreate

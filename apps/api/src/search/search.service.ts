@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AccountService, OpportunityService, QuotationService } from '@aura/crm';
+import { AccountService, LeadService, OpportunityService, QuotationService } from '@aura/crm';
 import { TenderService } from '@aura/tendering';
 import { ContractService } from '@aura/contracts';
 import { ProjectService } from '@aura/projects';
@@ -39,6 +39,7 @@ export class SearchService {
     private readonly subcontracts: SubcontractsService,
     private readonly hr: HrService,
     private readonly assets: AssetsService,
+    private readonly leads: LeadService,
   ) {}
 
   async search(tenantId: string, q: string, limit = 20): Promise<SearchHit[]> {
@@ -60,6 +61,7 @@ export class SearchService {
       subcontracts,
       employees,
       assets,
+      leads,
     ] = await Promise.all([
       this.accounts.list({ tenantId, limit: 50 }),
       this.tenders.list({ tenantId, limit: 50 }),
@@ -73,6 +75,7 @@ export class SearchService {
       this.subcontracts.listSubcontracts({ tenantId }),
       this.hr.listEmployees(tenantId),
       this.assets.listAssets(tenantId),
+      this.leads.list({ tenantId, limit: 50 }),
     ]);
 
     const hits: SearchHit[] = [];
@@ -88,6 +91,8 @@ export class SearchService {
       if (has(o.title, o.reference, o.supplierName)) hits.push({ type: 'Purchase Order', id: o.id, title: o.title, subtitle: o.reference ?? o.supplierName ?? o.status, href: `/procurement/purchase-orders/${o.id}` });
     for (const i of invoices)
       if (has(i.title, i.reference, i.supplierName)) hits.push({ type: 'Invoice', id: i.id, title: i.title, subtitle: i.reference ?? i.supplierName ?? i.status, href: `/finance/invoices/${i.id}` });
+    for (const l of leads)
+      if (has(l.name, l.companyName, l.email)) hits.push({ type: 'Lead', id: l.id, title: l.name, subtitle: l.companyName ?? l.status, href: '/crm/leads' });
     for (const o of opportunities)
       if (has(o.title, o.accountName)) hits.push({ type: 'Opportunity', id: o.id, title: o.title, subtitle: o.accountName ?? o.stage, href: '/crm/leads' });
     for (const qu of quotations)

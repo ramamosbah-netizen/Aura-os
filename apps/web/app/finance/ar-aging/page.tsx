@@ -22,7 +22,7 @@ interface ArAgingReport {
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function ArAgingPage() {
-  const report = await getJson<ArAgingReport>('/api/finance/ar-aging');
+  const report = await getJson<ArAgingReport>('/api/finance/customer-invoices/aging');
 
   return (
     <div style={st.page}>

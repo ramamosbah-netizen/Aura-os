@@ -36,8 +36,8 @@ export default async function TendersPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Tendering · Tenders</h1>
       <p style={st.sub}>
-        Bids and proposals — the second link in the deal chain. Each can reference a CRM account
-        (by id + snapshot) and emits <code style={st.code}>tendering.tender.created</code> on the spine.
+        Bids and proposals — the second link in the deal chain. Each tender can be linked to a
+        CRM account, and an awarded tender carries its details into the contract.
       </p>
 
       <TenderCreate accounts={(accounts ?? []).map((a) => ({ id: a.id, name: a.name }))} />

@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import CommandCenter from './command-center';
+import ActivityFeed from './activity-feed';
 import CeoCommandCenter from './ceo-command-center';
 import CfoPortal from './cfo-portal';
 import PmDashboard from './pm-dashboard';
@@ -207,6 +208,8 @@ export default function RoleDashboardShell({
             roleLabel={viewAs ? previewRoleLabel : me?.roleLabel ?? null}
           />
         )}
+
+        {activeRole === 'command' && <ActivityFeed events={events ?? []} />}
 
         {activeRole === 'ceo' && (
           <CeoCommandCenter funnel={funnel} winRate={winRate} ledgers={ledgers} bankAccounts={bankAccounts} invoices={invoices} />

@@ -107,6 +107,22 @@ describe('Architecture fitness — ADR-0011: aggregates are addressable + tenant
   });
 });
 
+describe('Architecture fitness — ADR-0012: shared dimensions have a single source', () => {
+  it('no business module redefines the `discipline` vocabulary (it lives in @aura/shared)', () => {
+    // Engineering re-exports it (`export { Discipline } from '@aura/shared'`) — that's fine. What is
+    // forbidden is a second *definition* of the enum/list in any module (the duplication ADR-0012
+    // exists to prevent). Detect a literal definition, not a re-export.
+    const definesDiscipline = /const DISCIPLINES\b|type Discipline\s*=\s*\r?\n?\s*\|/;
+    const offenders: string[] = [];
+    for (const mod of MODULES) {
+      for (const file of tsFiles(join(REPO, 'modules', mod, 'src'))) {
+        if (definesDiscipline.test(readFileSync(file, 'utf8'))) offenders.push(file.replace(REPO, ''));
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('Architecture fitness — Rule of Three: platform Definition Registry stays unextracted', () => {
   it('DocumentDefinition lives in its owning module, not @aura/shared (one consumer today)', () => {
     // When a 2nd and 3rd module grow their own definition registries, extracting a shared one is a

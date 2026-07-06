@@ -9,6 +9,7 @@ export interface PurchaseOrderFilter {
   tenantId?: string;
   status?: string;
   projectId?: string;
+  discipline?: string;
   limit?: number;
 }
 

@@ -34,6 +34,7 @@ export class InMemoryPurchaseOrderStore implements PurchaseOrderStore {
     if (filter.tenantId) out = out.filter((p) => p.tenantId === filter.tenantId);
     if (filter.status) out = out.filter((p) => p.status === filter.status);
     if (filter.projectId) out = out.filter((p) => p.projectId === filter.projectId);
+    if (filter.discipline) out = out.filter((p) => p.discipline === filter.discipline);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

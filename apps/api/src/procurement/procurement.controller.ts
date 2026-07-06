@@ -111,8 +111,12 @@ export class ProcurementController {
   }
 
   @Get('purchase-orders')
-  listPos(@Query('status') status?: string, @Query('projectId') projectId?: string): Promise<PurchaseOrder[]> {
-    return this.pos.list({ status, projectId, limit: 100 });
+  listPos(
+    @Query('status') status?: string,
+    @Query('projectId') projectId?: string,
+    @Query('discipline') discipline?: string,
+  ): Promise<PurchaseOrder[]> {
+    return this.pos.list({ status, projectId, discipline, limit: 100 });
   }
 
   @Get('purchase-orders/paged')
@@ -208,9 +212,13 @@ export class ProcurementController {
   }
 
   @Get('purchase-requests')
-  listPrs(@Query('status') status?: string, @Query('projectId') projectId?: string): Promise<PurchaseRequest[]> {
+  listPrs(
+    @Query('status') status?: string,
+    @Query('projectId') projectId?: string,
+    @Query('discipline') discipline?: string,
+  ): Promise<PurchaseRequest[]> {
     const ctx = this.tenant.get();
-    return this.prs.list({ tenantId: ctx.tenantId, status, projectId, limit: 100 });
+    return this.prs.list({ tenantId: ctx.tenantId, status, projectId, discipline, limit: 100 });
   }
 
   @Get('purchase-requests/paged')

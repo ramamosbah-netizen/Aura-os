@@ -38,7 +38,7 @@ event (ADR-0002) so dependent contexts react; ABAC policies read dimensions as a
 | `tenantId` | Mandatory (all) | Platform / Identity | Immutable |
 | `companyId` | Mandatory (nullable only at tenant scope) | Org / Identity | Immutable after set (transfer = explicit, audited) |
 | `projectId` | Optional (mandatory for delivery aggregates) | Projects | Mutable via reassignment → emits event |
-| `discipline` | Optional (mandatory for Engineering aggregates) | Engineering | Mutable until first approval, then frozen |
+| `discipline` | Optional (mandatory for Engineering aggregates) | Platform (`@aura/shared`) — promoted from Engineering on its 2nd consumer (Procurement) per the Rule of Three | Mutable until first approval, then frozen |
 | `costCenter` | Optional | Finance | Mutable → emits event |
 | `currency` | Optional (see multi-currency) | Finance | Immutable after first posting |
 | `businessUnit` | Optional | Org | Mutable |

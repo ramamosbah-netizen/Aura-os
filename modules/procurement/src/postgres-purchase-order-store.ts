@@ -102,6 +102,7 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('project_id', filter.projectId);
+    add('discipline', filter.discipline);
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 

@@ -18,6 +18,17 @@ or **[Gap]**.
 > "view as" any role. Framework-free model + config in `shared/src/workspace/`; API in
 > `apps/api/src/workspace`. See [Volume 15 §1a](vol-15-administration.md) and
 > `docs/reports/2026-07-04-role-based-workspace-admin.md`.
+>
+> **Update 2026-07-06 (PRs #26/#27/#29/#30 merged; #31 open):** the **aggregate-contract arc**
+> landed and is now *enforced*: `BusinessAggregate` contract + shared `discipline` dimension
+> (ADR-0011/0012), metadata-driven document Definitions (ADR-0017), Design-Change→Variation and
+> RA→HSE event composition, **ADR-0004 debt paid to zero** (all 17 modules import only
+> core+shared; cross-context gate/query deps go through module-owned ports bound at the app
+> layer), and **architecture + error-taxonomy fitness tests** that fail CI on drift (module
+> imports, docType literals, dimension redefinition, any domain error escaping as a 500 — audit
+> found 57/389 escaping, now 0). Migrations now 131; test files 137. See
+> [Volume 23 #8](vol-23-gap-analysis.md) and
+> `docs/reports/2026-07-06-architecture-enforcement-and-error-taxonomy.md`.
 
 **Verified platform counts (2026-07-04):**
 

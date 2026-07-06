@@ -157,6 +157,11 @@ export default function EngineeringClient({
   const [docFields, setDocFields] = useState<Record<string, string>>({});
   const [docNonce, setDocNonce] = useState(0);
 
+  // Shared discipline filter for the discipline-tagged lists (design changes + documents).
+  const [disciplineFilter, setDisciplineFilter] = useState('all');
+  const byDisciplineFilter = <T extends { discipline: string }>(list: T[]) =>
+    disciplineFilter === 'all' ? list : list.filter((x) => x.discipline === disciplineFilter);
+
   // Inline action states
   const [rfiAnswers, setRfiAnswers] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
@@ -867,16 +872,22 @@ export default function EngineeringClient({
           </form>
 
           <section style={st.panel}>
-            <h3 style={st.panelTitle}>Design Changes</h3>
-            {designChanges.length === 0 ? (
-              <p style={st.muted}>No design changes raised yet.</p>
+            <div style={st.panelHead}>
+              <h3 style={st.panelTitle}>Design Changes</h3>
+              <select value={disciplineFilter} onChange={(e) => setDisciplineFilter(e.target.value)} style={st.filterSelect}>
+                <option value="all">All disciplines</option>
+                {DISCIPLINES.map((d) => (<option key={d} value={d}>{d.replace('_', ' ')}</option>))}
+              </select>
+            </div>
+            {byDisciplineFilter(designChanges).length === 0 ? (
+              <p style={st.muted}>No design changes{disciplineFilter !== 'all' ? ` for ${disciplineFilter.replace('_', ' ')}` : ' raised yet'}.</p>
             ) : (
               <table style={st.table}>
                 <thead>
                   <tr>{['Code', 'Title', 'Discipline', 'Type', 'Value', 'Status', 'Actions'].map((h) => (<th key={h} style={st.th}>{h}</th>))}</tr>
                 </thead>
                 <tbody>
-                  {designChanges.map((d) => (
+                  {byDisciplineFilter(designChanges).map((d) => (
                     <tr key={d.id}>
                       <td style={st.tdCode}>{d.code}</td>
                       <td style={st.td}>{d.title}</td>
@@ -945,16 +956,22 @@ export default function EngineeringClient({
           </form>
 
           <section style={st.panel}>
-            <h3 style={st.panelTitle}>Controlled Documents</h3>
-            {documents.length === 0 ? (
-              <p style={st.muted}>No documents created yet.</p>
+            <div style={st.panelHead}>
+              <h3 style={st.panelTitle}>Controlled Documents</h3>
+              <select value={disciplineFilter} onChange={(e) => setDisciplineFilter(e.target.value)} style={st.filterSelect}>
+                <option value="all">All disciplines</option>
+                {DISCIPLINES.map((d) => (<option key={d} value={d}>{d.replace('_', ' ')}</option>))}
+              </select>
+            </div>
+            {byDisciplineFilter(documents).length === 0 ? (
+              <p style={st.muted}>No documents{disciplineFilter !== 'all' ? ` for ${disciplineFilter.replace('_', ' ')}` : ' created yet'}.</p>
             ) : (
               <table style={st.table}>
                 <thead>
                   <tr>{['Code', 'Title', 'Type', 'Owner', 'Discipline', 'Rev', 'Status'].map((h) => (<th key={h} style={st.th}>{h}</th>))}</tr>
                 </thead>
                 <tbody>
-                  {documents.map((d) => (
+                  {byDisciplineFilter(documents).map((d) => (
                     <tr key={d.id}>
                       <td style={st.tdCode}>{d.code}</td>
                       <td style={st.td}>{d.title}</td>
@@ -1088,6 +1105,8 @@ const st = {
     padding: '16px 20px',
   } as CSSProperties,
   panelTitle: { margin: '0 0 16px', fontSize: 16, fontWeight: 600 } as CSSProperties,
+  panelHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 } as CSSProperties,
+  filterSelect: { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'inherit', fontSize: 13, textTransform: 'capitalize' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 13.5 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
   th: {

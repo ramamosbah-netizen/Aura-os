@@ -1,6 +1,8 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import type { Correspondence } from './domain/correspondence';
-import type { CorrespondenceStore } from './store.interface';
+import type { CorrespondenceStore, DocListFilter } from './store.interface';
+import { pageDocs } from './paged-query';
 
 export class InMemoryCorrespondenceStore implements CorrespondenceStore {
   private items = new Map<string, Correspondence>();
@@ -25,5 +27,9 @@ export class InMemoryCorrespondenceStore implements CorrespondenceStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId)
       .map((item) => ({ ...item }));
+  }
+
+  async listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Correspondence>> {
+    return pageDocs(this.items.values(), filter, page, (a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 }

@@ -1,6 +1,8 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import type { Submittal } from './domain/submittal';
-import type { SubmittalStore } from './store.interface';
+import type { SubmittalStore, DocListFilter } from './store.interface';
+import { pageDocs } from './paged-query';
 
 export class InMemorySubmittalStore implements SubmittalStore {
   private items = new Map<string, Submittal>();
@@ -25,5 +27,9 @@ export class InMemorySubmittalStore implements SubmittalStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Submittal>> {
+    return pageDocs(this.items.values(), filter, page, (a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 }

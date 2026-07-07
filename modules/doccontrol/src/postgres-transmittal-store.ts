@@ -1,7 +1,9 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
+import { type Page, type PageParams } from '@aura/shared';
 import type { Transmittal } from './domain/transmittal';
-import type { TransmittalStore } from './store.interface';
+import type { TransmittalStore, DocListFilter } from './store.interface';
+import { pagePostgres, docWhere } from './paged-query';
 
 export class PostgresTransmittalStore implements TransmittalStore {
   constructor(private readonly pool: Pool) {}
@@ -65,6 +67,11 @@ export class PostgresTransmittalStore implements TransmittalStore {
       [tenantId],
     );
     return res.rows.map(this.mapRow);
+  }
+
+  async listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Transmittal>> {
+    const { where, params } = docWhere(filter);
+    return pagePostgres(this.pool, { table: 'aura_doccontrol_transmittals', where, params, orderBy: 'created_at DESC', map: (r) => this.mapRow(r) }, page);
   }
 
   private mapRow(row: QueryResultRow): Transmittal {

@@ -118,12 +118,9 @@ export class HrController {
   }
 
   @Post('employees/:id/restore')
-  async restoreEmployee(@Param('id') id: string): Promise<Employee> {
-    try {
-      return await this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new NotFoundException((e as Error).message);
-    }
+  restoreEmployee(@Param('id') id: string): Promise<Employee> {
+    // "employee profile not found" is classified to 404 by the global error taxonomy.
+    return this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
   }
 
   @Get('employees')

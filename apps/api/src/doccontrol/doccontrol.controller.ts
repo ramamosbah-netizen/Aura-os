@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -238,11 +238,8 @@ export class DocControlController {
   }
 
   @Get('register/:id/history')
-  async registerEntryHistory(@Param('id') id: string) {
-    try {
-      return await this.docControlService.registerEntryHistory(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new NotFoundException((e as Error).message);
-    }
+  registerEntryHistory(@Param('id') id: string) {
+    // "register entry not found" is classified to 404 by the global error taxonomy.
+    return this.docControlService.registerEntryHistory(this.tenant.get().tenantId, id);
   }
 }

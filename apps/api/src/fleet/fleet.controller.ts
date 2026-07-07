@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Vehicle,
   type FuelLog,
@@ -93,6 +94,20 @@ export class FleetController {
     return this.fleetService.listVehicles(ctx.tenantId);
   }
 
+  @Get('vehicles/paged')
+  listVehiclesPaged(
+    @Query('status') status?: string,
+    @Query('make') make?: string,
+    @Query('model') model?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.fleetService.listVehiclesPaged(
+      { tenantId: this.tenant.get().tenantId, status, make, model },
+      parsePageParams(limit, offset),
+    );
+  }
+
   // ── Fuel Logs ─────────────────────────────────────────────────────────────
 
   @Post('fuel')
@@ -119,6 +134,18 @@ export class FleetController {
   listFuelLogs(): Promise<FuelLog[]> {
     const ctx = this.tenant.get();
     return this.fleetService.listFuelLogs(ctx.tenantId);
+  }
+
+  @Get('fuel/paged')
+  listFuelLogsPaged(
+    @Query('vehicleId') vehicleId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.fleetService.listFuelLogsPaged(
+      { tenantId: this.tenant.get().tenantId, vehicleId },
+      parsePageParams(limit, offset),
+    );
   }
 
   // ── Maintenance ───────────────────────────────────────────────────────────
@@ -159,6 +186,19 @@ export class FleetController {
     return this.fleetService.listMaintenance(ctx.tenantId);
   }
 
+  @Get('maintenance/paged')
+  listMaintenancePaged(
+    @Query('vehicleId') vehicleId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.fleetService.listMaintenancePaged(
+      { tenantId: this.tenant.get().tenantId, vehicleId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
   // ── Traffic Fines ─────────────────────────────────────────────────────────
 
   @Post('fines')
@@ -184,6 +224,19 @@ export class FleetController {
   @Get('fines')
   listFines(): Promise<TrafficFine[]> {
     return this.fleetService.listFines(this.tenant.get().tenantId);
+  }
+
+  @Get('fines/paged')
+  listFinesPaged(
+    @Query('vehicleId') vehicleId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.fleetService.listFinesPaged(
+      { tenantId: this.tenant.get().tenantId, vehicleId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Put('fines/:id/assign')
@@ -226,6 +279,19 @@ export class FleetController {
   @Get('salik')
   listSalik(): Promise<SalikCharge[]> {
     return this.fleetService.listSalik(this.tenant.get().tenantId);
+  }
+
+  @Get('salik/paged')
+  listSalikPaged(
+    @Query('vehicleId') vehicleId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.fleetService.listSalikPaged(
+      { tenantId: this.tenant.get().tenantId, vehicleId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('salik/summary')

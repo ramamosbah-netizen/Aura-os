@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Transmittal, makeTransmittal } from './domain/transmittal';
-import { TRANSMITTAL_STORE, type TransmittalStore } from './store.interface';
+import { TRANSMITTAL_STORE, type TransmittalStore, type DocListFilter } from './store.interface';
 
 import { type Correspondence, makeCorrespondence } from './domain/correspondence';
 import { CORRESPONDENCE_STORE, type CorrespondenceStore } from './store.interface';
@@ -102,6 +102,10 @@ export class DocControlService {
 
   listTransmittals(tenantId: Id): Promise<Transmittal[]> {
     return this.transmittalStore.findAll(tenantId);
+  }
+
+  listTransmittalsPaged(filter: DocListFilter, page: PageParams): Promise<Page<Transmittal>> {
+    return this.transmittalStore.listPaged(filter, page);
   }
 
   // ── Transmittal items (transmittal ↔ register revision linkage) ────────────
@@ -251,6 +255,10 @@ export class DocControlService {
     return this.correspondenceStore.findAll(tenantId);
   }
 
+  listCorrespondencePaged(filter: DocListFilter, page: PageParams): Promise<Page<Correspondence>> {
+    return this.correspondenceStore.listPaged(filter, page);
+  }
+
   // ── Submittals (document review register) ──────────────────────────────────
 
   async createSubmittal(input: {
@@ -315,6 +323,10 @@ export class DocControlService {
     return this.submittalStore.findAll(tenantId);
   }
 
+  listSubmittalsPaged(filter: DocListFilter, page: PageParams): Promise<Page<Submittal>> {
+    return this.submittalStore.listPaged(filter, page);
+  }
+
   // ── Drawing / Document Register (distribution matrix) ───────────────────────
 
   async createRegisterEntry(input: NewDrawingRegisterEntry): Promise<DrawingRegisterEntry> {
@@ -339,6 +351,10 @@ export class DocControlService {
 
   listRegister(tenantId: Id): Promise<DrawingRegisterEntry[]> {
     return this.registerStore.findAll(tenantId);
+  }
+
+  listRegisterPaged(filter: DocListFilter, page: PageParams): Promise<Page<DrawingRegisterEntry>> {
+    return this.registerStore.listPaged(filter, page);
   }
 
   listRegisterByProject(tenantId: Id, projectId: Id): Promise<DrawingRegisterEntry[]> {

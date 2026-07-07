@@ -14,6 +14,29 @@ export interface VehicleFilter {
   model?: string;
 }
 
+export interface FuelLogFilter {
+  tenantId?: string;
+  vehicleId?: string;
+}
+
+export interface MaintenanceFilter {
+  tenantId?: string;
+  vehicleId?: string;
+  status?: string;
+}
+
+export interface TrafficFineFilter {
+  tenantId?: string;
+  vehicleId?: string;
+  status?: string;
+}
+
+export interface SalikChargeFilter {
+  tenantId?: string;
+  vehicleId?: string;
+  status?: string;
+}
+
 export interface VehicleStore {
   save(vehicle: Vehicle, tx?: TxHandle): Promise<Vehicle>;
   findById(tenantId: string, id: string): Promise<Vehicle | null>;
@@ -28,6 +51,7 @@ export interface FuelLogStore {
   findById(tenantId: string, id: string): Promise<FuelLog | null>;
   findByTenant(tenantId: string): Promise<FuelLog[]>;
   findByVehicle(tenantId: string, vehicleId: string): Promise<FuelLog[]>;
+  listPaged(filter: FuelLogFilter, page: PageParams): Promise<Page<FuelLog>>;
   delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
 }
 
@@ -36,6 +60,7 @@ export interface MaintenanceStore {
   findById(tenantId: string, id: string): Promise<MaintenanceRecord | null>;
   findByTenant(tenantId: string): Promise<MaintenanceRecord[]>;
   findByVehicle(tenantId: string, vehicleId: string): Promise<MaintenanceRecord[]>;
+  listPaged(filter: MaintenanceFilter, page: PageParams): Promise<Page<MaintenanceRecord>>;
   delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
 }
 
@@ -44,6 +69,7 @@ export interface TrafficFineStore {
   findById(tenantId: string, id: string): Promise<TrafficFine | null>;
   findByTenant(tenantId: string): Promise<TrafficFine[]>;
   findByVehicle(tenantId: string, vehicleId: string): Promise<TrafficFine[]>;
+  listPaged(filter: TrafficFineFilter, page: PageParams): Promise<Page<TrafficFine>>;
 }
 
 export interface SalikChargeStore {
@@ -51,6 +77,7 @@ export interface SalikChargeStore {
   findById(tenantId: string, id: string): Promise<SalikCharge | null>;
   findByTenant(tenantId: string): Promise<SalikCharge[]>;
   findByVehicle(tenantId: string, vehicleId: string): Promise<SalikCharge[]>;
+  listPaged(filter: SalikChargeFilter, page: PageParams): Promise<Page<SalikCharge>>;
 }
 
 export interface TelemetryStore {

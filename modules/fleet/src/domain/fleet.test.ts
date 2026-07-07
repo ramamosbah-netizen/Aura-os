@@ -135,6 +135,28 @@ describe('Fleet Bounded Context', () => {
       expect(list.length).toBe(1);
       expect(list[0].id).toBe(log.id);
     });
+
+    it('paginates fuel logs and filters by vehicle', async () => {
+      const service = new FleetService(
+        new InMemoryVehicleStore(), new InMemoryFuelLogStore(), new InMemoryMaintenanceStore(),
+        new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), new InMemoryTelemetryStore(),
+        mockEvents, mockTx, mockAccess,
+      );
+
+      for (let i = 0; i < 3; i++) {
+        await service.logFuel(null, { tenantId: 't1', vehicleId: 'v-a', date: '2026-06-25', liters: 10, cost: 40, odometer: 1000 + i });
+      }
+      await service.logFuel(null, { tenantId: 't1', vehicleId: 'v-b', date: '2026-06-25', liters: 10, cost: 40, odometer: 5000 });
+
+      const page1 = await service.listFuelLogsPaged({ tenantId: 't1' }, { limit: 2, offset: 0 });
+      expect(page1.items.length).toBe(2);
+      expect(page1.total).toBe(4);
+      expect(page1.hasMore).toBe(true);
+
+      const byVehicle = await service.listFuelLogsPaged({ tenantId: 't1', vehicleId: 'v-a' }, { limit: 10, offset: 0 });
+      expect(byVehicle.total).toBe(3);
+      expect(byVehicle.items.every((l) => l.vehicleId === 'v-a')).toBe(true);
+    });
   });
 
   describe('Maintenance Records', () => {
@@ -159,6 +181,25 @@ describe('Fleet Bounded Context', () => {
       const completed = await service.completeMaintenance('t1', null, record.id, 650);
       expect(completed.status).toBe('completed');
       expect(completed.cost).toBe(650);
+    });
+
+    it('paginates maintenance records and filters by status', async () => {
+      const service = new FleetService(
+        new InMemoryVehicleStore(), new InMemoryFuelLogStore(), new InMemoryMaintenanceStore(),
+        new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), new InMemoryTelemetryStore(),
+        mockEvents, mockTx, mockAccess,
+      );
+
+      const r1 = await service.scheduleMaintenance(null, { tenantId: 't1', vehicleId: 'v-1', date: '2026-07-05', description: 'Oil change service' });
+      await service.scheduleMaintenance(null, { tenantId: 't1', vehicleId: 'v-2', date: '2026-07-06', description: 'Tyre rotation service' });
+      await service.completeMaintenance('t1', null, r1.id, 300);
+
+      const all = await service.listMaintenancePaged({ tenantId: 't1' }, { limit: 10, offset: 0 });
+      expect(all.total).toBe(2);
+
+      const scheduled = await service.listMaintenancePaged({ tenantId: 't1', status: 'scheduled' }, { limit: 10, offset: 0 });
+      expect(scheduled.total).toBe(1);
+      expect(scheduled.items[0].status).toBe('scheduled');
     });
   });
 

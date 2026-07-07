@@ -29,6 +29,13 @@ or **[Gap]**.
 > found 57/389 escaping, now 0). Migrations now 131; test files 137. See
 > [Volume 23 #8](vol-23-gap-analysis.md) and
 > `docs/reports/2026-07-06-architecture-enforcement-and-error-taxonomy.md`.
+>
+> **Update 2026-07-07 (PR #31 cont.):** the enforced taxonomy's first payoff — **98
+> per-controller `try/catch→400` wrappers retired** across 21 controllers (−392 net lines);
+> domain errors now reach the global filter directly, so state guards correctly surface as
+> **409** (procurement PO approval gates, insufficient stock) instead of a forced 400. 29 unit
+> + 6 e2e + taxonomy-fitness green. See
+> `docs/reports/2026-07-07-controller-wrapper-retirement.md`.
 
 **Verified platform counts (2026-07-04):**
 

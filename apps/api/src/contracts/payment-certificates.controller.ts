@@ -31,24 +31,20 @@ export class PaymentCertificatesController {
     if (!dto?.contractId) throw new BadRequestException('contractId is required');
     if (!(Number(dto.cumulativeWorkDone) >= 0)) throw new BadRequestException('cumulativeWorkDone must be zero or positive');
     const ctx = this.tenant.get();
-    try {
-      return this.certificates.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        contractId: dto.contractId,
-        periodStart: dto.periodStart ?? null,
-        periodEnd: dto.periodEnd ?? null,
-        cumulativeWorkDone: Number(dto.cumulativeWorkDone),
-        materialsOnSite: dto.materialsOnSite,
-        retentionPercent: dto.retentionPercent,
-        retentionCapPercent: dto.retentionCapPercent,
-        advanceRecoveredToDate: dto.advanceRecoveredToDate,
-        reference: dto.reference ?? null,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return this.certificates.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      contractId: dto.contractId,
+      periodStart: dto.periodStart ?? null,
+      periodEnd: dto.periodEnd ?? null,
+      cumulativeWorkDone: Number(dto.cumulativeWorkDone),
+      materialsOnSite: dto.materialsOnSite,
+      retentionPercent: dto.retentionPercent,
+      retentionCapPercent: dto.retentionCapPercent,
+      advanceRecoveredToDate: dto.advanceRecoveredToDate,
+      reference: dto.reference ?? null,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get()

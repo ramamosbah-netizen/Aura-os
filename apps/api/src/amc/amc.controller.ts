@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, Logger } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Logger } from '@nestjs/common';
 import { AmcService, SupportTicket, type PpmFrequency } from '@aura/amc';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -206,18 +206,14 @@ export class AmcController {
 
   @Post('ppm-schedules')
   async createPpm(@Body() body: { contractId: string; assetId?: string; taskDescription: string; frequency: PpmFrequency; startDate?: string }) {
-    try {
-      return await this.service.createPpmSchedule({
-        tenantId: this.tenantId(),
-        contractId: body.contractId,
-        assetId: body.assetId,
-        taskDescription: body.taskDescription,
-        frequency: body.frequency,
-        startDate: body.startDate ? new Date(body.startDate) : new Date(),
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.service.createPpmSchedule({
+      tenantId: this.tenantId(),
+      contractId: body.contractId,
+      assetId: body.assetId,
+      taskDescription: body.taskDescription,
+      frequency: body.frequency,
+      startDate: body.startDate ? new Date(body.startDate) : new Date(),
+    });
   }
 
   @Get('ppm-schedules')

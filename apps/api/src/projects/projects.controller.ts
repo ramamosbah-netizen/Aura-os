@@ -364,22 +364,18 @@ export class ProjectsController {
     if (dto?.type !== 'addition' && dto?.type !== 'omission') throw new BadRequestException("type must be 'addition' or 'omission'");
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
     const ctx = this.tenant.get();
-    try {
-      return this.variations.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        projectId: dto.projectId,
-        projectTitle: dto.projectTitle ?? null,
-        title: dto.title,
-        description: dto.description ?? null,
-        type: dto.type,
-        amount: dto.amount,
-        reference: dto.reference ?? null,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return this.variations.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      projectTitle: dto.projectTitle ?? null,
+      title: dto.title,
+      description: dto.description ?? null,
+      type: dto.type,
+      amount: dto.amount,
+      reference: dto.reference ?? null,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get('variations')
@@ -438,11 +434,7 @@ export class ProjectsController {
   async startCloseout(@Body() dto: { projectId: string; projectName?: string; items?: string[]; notes?: string }): Promise<ProjectCloseout> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.closeouts.start({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, items: dto.items, notes: dto.notes, createdBy: ctx.actorId });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.closeouts.start({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, items: dto.items, notes: dto.notes, createdBy: ctx.actorId });
   }
 
   @Get('closeouts')
@@ -466,21 +458,13 @@ export class ProjectsController {
 
   @Patch('closeouts/:id/items/:index')
   async setCloseoutItem(@Param('id') id: string, @Param('index') index: string, @Body() dto: { done: boolean }): Promise<ProjectCloseout> {
-    try {
-      return await this.closeouts.setItem(this.tenant.get().tenantId, id, Number(index), dto?.done ?? false);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.closeouts.setItem(this.tenant.get().tenantId, id, Number(index), dto?.done ?? false);
   }
 
   @Post('closeouts/:id/finalize')
   async finalizeCloseout(@Param('id') id: string, @Body() dto: { handoverDate: string; dlpMonths?: number }): Promise<ProjectCloseout> {
     if (!dto?.handoverDate) throw new BadRequestException('handoverDate is required');
-    try {
-      return await this.closeouts.finalize(this.tenant.get().tenantId, id, dto.handoverDate, dto.dlpMonths);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.closeouts.finalize(this.tenant.get().tenantId, id, dto.handoverDate, dto.dlpMonths);
   }
 
   // ── Cash-flow forecast ───────────────────────────────────────────────────────
@@ -489,11 +473,7 @@ export class ProjectsController {
   async saveCashflow(@Body() dto: { projectId: string; projectName?: string; periods?: NewCashflowPeriod[]; notes?: string }): Promise<ProjectCashflowForecast> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.cashflow.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, periods: dto.periods, notes: dto.notes, createdBy: ctx.actorId });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.cashflow.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, periods: dto.periods, notes: dto.notes, createdBy: ctx.actorId });
   }
 
   @Get('cashflow-forecasts')
@@ -514,11 +494,7 @@ export class ProjectsController {
   async saveSchedule(@Body() dto: { projectId: string; projectName?: string; tasks?: NewScheduleTask[] }): Promise<ProjectSchedule> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.schedule.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, tasks: dto.tasks, createdBy: ctx.actorId });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.schedule.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, tasks: dto.tasks, createdBy: ctx.actorId });
   }
 
   @Get('schedules')
@@ -533,20 +509,12 @@ export class ProjectsController {
   ): SchedulePlan {
     if (!dto?.projectStart) throw new BadRequestException('projectStart (YYYY-MM-DD) is required');
     if (!Array.isArray(dto?.tasks) || dto.tasks.length === 0) throw new BadRequestException('at least one task is required');
-    try {
-      return this.schedule.plan(dto.tasks, dto.projectStart, dto.capacity);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return this.schedule.plan(dto.tasks, dto.projectStart, dto.capacity);
   }
 
   @Post('schedules/:projectId/baseline')
   async setBaseline(@Param('projectId') projectId: string): Promise<ProjectSchedule> {
-    try {
-      return await this.schedule.setBaseline(this.tenant.get().tenantId, projectId);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.schedule.setBaseline(this.tenant.get().tenantId, projectId);
   }
 
   @Get('schedules/summary/:projectId')

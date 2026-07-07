@@ -72,10 +72,6 @@ export class ObligationsController {
   @Patch(':id/status')
   async changeStatus(@Param('id') id: string, @Body() dto: { status: ObligationStatus; on?: string }): Promise<ContractObligation> {
     if (!dto?.status) throw new BadRequestException('status is required');
-    try {
-      return await this.obligations.changeStatus(id, dto.status, dto.on);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.obligations.changeStatus(id, dto.status, dto.on);
   }
 }

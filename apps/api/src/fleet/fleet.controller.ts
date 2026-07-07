@@ -168,21 +168,17 @@ export class FleetController {
     if (!dto?.violation?.trim()) throw new BadRequestException('violation is required');
     if (!dto?.fineDate?.trim()) throw new BadRequestException('fineDate is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.fleetService.recordFine(ctx.actorId, {
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        vehicleId: dto.vehicleId,
-        fineNumber: dto.fineNumber,
-        violation: dto.violation,
-        location: dto.location,
-        amount: Number(dto.amount),
-        blackPoints: dto.blackPoints !== undefined ? Number(dto.blackPoints) : undefined,
-        fineDate: dto.fineDate,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.recordFine(ctx.actorId, {
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      vehicleId: dto.vehicleId,
+      fineNumber: dto.fineNumber,
+      violation: dto.violation,
+      location: dto.location,
+      amount: Number(dto.amount),
+      blackPoints: dto.blackPoints !== undefined ? Number(dto.blackPoints) : undefined,
+      fineDate: dto.fineDate,
+    });
   }
 
   @Get('fines')
@@ -193,29 +189,17 @@ export class FleetController {
   @Put('fines/:id/assign')
   async assignFine(@Param('id') id: string, @Body() dto: { driverEmployeeId: string }): Promise<TrafficFine> {
     if (!dto?.driverEmployeeId) throw new BadRequestException('driverEmployeeId is required');
-    try {
-      return await this.fleetService.assignFineToDriver(this.tenant.get().tenantId, id, dto.driverEmployeeId);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.assignFineToDriver(this.tenant.get().tenantId, id, dto.driverEmployeeId);
   }
 
   @Put('fines/:id/dispute')
   async disputeFine(@Param('id') id: string): Promise<TrafficFine> {
-    try {
-      return await this.fleetService.disputeFine(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.disputeFine(this.tenant.get().tenantId, id);
   }
 
   @Put('fines/:id/pay')
   async payFine(@Param('id') id: string, @Body() dto: { paidDate?: string }): Promise<TrafficFine> {
-    try {
-      return await this.fleetService.payFine(this.tenant.get().tenantId, id, dto?.paidDate);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.payFine(this.tenant.get().tenantId, id, dto?.paidDate);
   }
 
   // ── Salik (toll charges) ──────────────────────────────────────────────────
@@ -226,21 +210,17 @@ export class FleetController {
     if (!dto?.gate?.trim()) throw new BadRequestException('gate is required');
     if (!dto?.chargeDate?.trim()) throw new BadRequestException('chargeDate is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.fleetService.recordSalik({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        vehicleId: dto.vehicleId,
-        plateNumber: dto.plateNumber,
-        gate: dto.gate,
-        chargeDate: dto.chargeDate,
-        chargeTime: dto.chargeTime,
-        amount: dto.amount !== undefined ? Number(dto.amount) : undefined,
-        notes: dto.notes,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.recordSalik({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      vehicleId: dto.vehicleId,
+      plateNumber: dto.plateNumber,
+      gate: dto.gate,
+      chargeDate: dto.chargeDate,
+      chargeTime: dto.chargeTime,
+      amount: dto.amount !== undefined ? Number(dto.amount) : undefined,
+      notes: dto.notes,
+    });
   }
 
   @Get('salik')
@@ -256,20 +236,12 @@ export class FleetController {
   @Put('salik/:id/allocate')
   async allocateSalik(@Param('id') id: string, @Body() dto: { allocatedTo: string }): Promise<SalikCharge> {
     if (!dto?.allocatedTo?.trim()) throw new BadRequestException('allocatedTo is required');
-    try {
-      return await this.fleetService.allocateSalik(this.tenant.get().tenantId, id, dto.allocatedTo);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.allocateSalik(this.tenant.get().tenantId, id, dto.allocatedTo);
   }
 
   @Put('salik/:id/dispute')
   async disputeSalik(@Param('id') id: string): Promise<SalikCharge> {
-    try {
-      return await this.fleetService.disputeSalik(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.disputeSalik(this.tenant.get().tenantId, id);
   }
 
   // ── GPS Telematics & Expiry Triggers ───────────────────────────────────────
@@ -282,18 +254,14 @@ export class FleetController {
     if (dto?.speed === undefined) throw new BadRequestException('speed is required');
 
     const ctx = this.tenant.get();
-    try {
-      return await this.fleetService.recordTelemetry(ctx.tenantId, {
-        vehicleId: dto.vehicleId,
-        latitude: Number(dto.latitude),
-        longitude: Number(dto.longitude),
-        speed: Number(dto.speed),
-        odometer: dto.odometer !== undefined ? Number(dto.odometer) : undefined,
-        recordedAt: dto.recordedAt,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.fleetService.recordTelemetry(ctx.tenantId, {
+      vehicleId: dto.vehicleId,
+      latitude: Number(dto.latitude),
+      longitude: Number(dto.longitude),
+      speed: Number(dto.speed),
+      odometer: dto.odometer !== undefined ? Number(dto.odometer) : undefined,
+      recordedAt: dto.recordedAt,
+    });
   }
 
   @Get('vehicles/:id/telemetry')

@@ -70,10 +70,6 @@ export class ClausesController {
     @Param('id') id: string,
     @Body() dto: { title?: string; body?: string; category?: ClauseCategory; tags?: string[]; active?: boolean },
   ): Promise<ContractClause> {
-    try {
-      return await this.clauses.revise(id, dto ?? {});
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.clauses.revise(id, dto ?? {});
   }
 }

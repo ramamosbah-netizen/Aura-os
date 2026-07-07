@@ -164,23 +164,19 @@ export class SiteController {
     if (!dto?.instruction?.trim()) throw new BadRequestException('instruction is required');
     if (!dto?.date?.trim()) throw new BadRequestException('date is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.siteService.issueSiteInstruction({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        projectId: dto.projectId,
-        projectName: dto.projectName,
-        reference: dto.reference,
-        issuedBy: dto.issuedBy,
-        date: dto.date,
-        instruction: dto.instruction,
-        costImplication: dto.costImplication,
-        timeImplication: dto.timeImplication,
-        createdBy: ctx.actorId || null,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.siteService.issueSiteInstruction({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      reference: dto.reference,
+      issuedBy: dto.issuedBy,
+      date: dto.date,
+      instruction: dto.instruction,
+      costImplication: dto.costImplication,
+      timeImplication: dto.timeImplication,
+      createdBy: ctx.actorId || null,
+    });
   }
 
   @Get('instructions')
@@ -190,20 +186,12 @@ export class SiteController {
 
   @Put('instructions/:id/acknowledge')
   async acknowledgeInstruction(@Param('id') id: string): Promise<SiteInstruction> {
-    try {
-      return await this.siteService.acknowledgeSiteInstruction(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.siteService.acknowledgeSiteInstruction(this.tenant.get().tenantId, id);
   }
 
   @Put('instructions/:id/close')
   async closeInstruction(@Param('id') id: string): Promise<SiteInstruction> {
-    try {
-      return await this.siteService.closeSiteInstruction(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.siteService.closeSiteInstruction(this.tenant.get().tenantId, id);
   }
 
   // ── Labour allocation (manpower by trade) ───────────────────────────────────

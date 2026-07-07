@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Asset,
   type AssetMaintenance,
@@ -89,6 +90,19 @@ export class AssetsController {
     } catch (e) {
       throw new NotFoundException((e as Error).message);
     }
+  }
+
+  @Get('paged')
+  listAssetsPaged(
+    @Query('category') category?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.assetsService.listAssetsPaged(
+      { tenantId: this.tenant.get().tenantId, category, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get()

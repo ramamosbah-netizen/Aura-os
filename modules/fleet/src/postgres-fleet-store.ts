@@ -7,7 +7,21 @@ import type { MaintenanceRecord } from './domain/maintenance';
 import type { TrafficFine } from './domain/traffic-fine';
 import type { SalikCharge } from './domain/salik-charge';
 import type { VehicleTelemetry } from './domain/telemetry';
-import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore, TelemetryStore, VehicleFilter } from './store.interface';
+import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore, TelemetryStore, VehicleFilter, FuelLogFilter, MaintenanceFilter, TrafficFineFilter, SalikChargeFilter } from './store.interface';
+
+/** Build a parameterised WHERE from a flat {col: val} map (skips undefined). Fleet child
+ *  tables have no soft-delete, so callers pass only present filters. */
+function buildChildWhere(cols: Record<string, string | undefined>): { whereSql: string; params: unknown[] } {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  for (const [col, val] of Object.entries(cols)) {
+    if (val !== undefined && val !== null && val !== '') {
+      params.push(val);
+      where.push(`${col} = $${params.length}`);
+    }
+  }
+  return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+}
 
 // pg returns `date` columns as a JS Date constructed in the server's local TZ.
 // Extract the calendar date via LOCAL components so we get the date that was actually stored.
@@ -205,6 +219,21 @@ export class PostgresFuelLogStore implements FuelLogStore {
     return res.rows.map(this.mapFuelLog);
   }
 
+  async listPaged(filter: FuelLogFilter, page: PageParams): Promise<Page<FuelLog>> {
+    const { whereSql, params } = buildChildWhere({ tenant_id: filter.tenantId, vehicle_id: filter.vehicleId });
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_fleet_fuel_logs ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query(
+      `SELECT * FROM public.aura_fleet_fuel_logs ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(this.mapFuelLog), total, page);
+  }
+
   async delete(tenantId: string, id: string): Promise<boolean> {
     const res = await this.pool.query(
       `delete from public.aura_fleet_fuel_logs where id = $1 and tenant_id = $2`,
@@ -284,6 +313,21 @@ export class PostgresMaintenanceStore implements MaintenanceStore {
     return res.rows.map(this.mapMaintenance);
   }
 
+  async listPaged(filter: MaintenanceFilter, page: PageParams): Promise<Page<MaintenanceRecord>> {
+    const { whereSql, params } = buildChildWhere({ tenant_id: filter.tenantId, vehicle_id: filter.vehicleId, status: filter.status });
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_fleet_maintenance ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query(
+      `SELECT * FROM public.aura_fleet_maintenance ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(this.mapMaintenance), total, page);
+  }
+
   async delete(tenantId: string, id: string): Promise<boolean> {
     const res = await this.pool.query(
       `delete from public.aura_fleet_maintenance where id = $1 and tenant_id = $2`,
@@ -347,6 +391,21 @@ export class PostgresTrafficFineStore implements TrafficFineStore {
     return res.rows.map(this.mapFine);
   }
 
+  async listPaged(filter: TrafficFineFilter, page: PageParams): Promise<Page<TrafficFine>> {
+    const { whereSql, params } = buildChildWhere({ tenant_id: filter.tenantId, vehicle_id: filter.vehicleId, status: filter.status });
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_fleet_traffic_fines ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query(
+      `SELECT * FROM public.aura_fleet_traffic_fines ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(this.mapFine), total, page);
+  }
+
   private mapFine(row: QueryResultRow): TrafficFine {
     return {
       id: row.id,
@@ -404,6 +463,21 @@ export class PostgresSalikChargeStore implements SalikChargeStore {
   async findByVehicle(tenantId: string, vehicleId: string): Promise<SalikCharge[]> {
     const res = await this.pool.query(`select * from public.aura_fleet_salik_charges where tenant_id = $1 and vehicle_id = $2 order by created_at desc`, [tenantId, vehicleId]);
     return res.rows.map(this.mapSalik);
+  }
+
+  async listPaged(filter: SalikChargeFilter, page: PageParams): Promise<Page<SalikCharge>> {
+    const { whereSql, params } = buildChildWhere({ tenant_id: filter.tenantId, vehicle_id: filter.vehicleId, status: filter.status });
+    const countRes = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM public.aura_fleet_salik_charges ${whereSql}`,
+      params,
+    );
+    const total = Number(countRes.rows[0]?.count ?? 0);
+    const winParams = [...params, page.limit, page.offset];
+    const res = await this.pool.query(
+      `SELECT * FROM public.aura_fleet_salik_charges ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      winParams,
+    );
+    return makePage(res.rows.map(this.mapSalik), total, page);
   }
 
   private mapSalik(row: QueryResultRow): SalikCharge {

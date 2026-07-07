@@ -42,7 +42,7 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 | 10 | Charts/BI floor (dashboard charts + Power BI export) | Vol 16 | S–M | lost exec demos (competitive vulnerability #2) |
 | 11 | Notification delivery channels — **verified already delivered** (config-gated relay per channel: `SMTP_RELAY_URL`/`SMS_RELAY_URL`/`SLACK`/`TEAMS`, `NOTIFY_CHANNELS`+`NOTIFY_FALLBACK_RECIPIENT`, logged dev fallback; event→notification wiring for 6 event types; full test suite in `notification.service.test.ts`). Remaining: per-user recipient resolution (currently a tenant fallback address) + optional built-in SMTP transport (vs external relay) | Vol 4 §9 | XS (was S) | "system that doesn't tell you anything" |
 | 12 | Admin center phase 1 (settings service, users/roles, numbering/approval/webhook UIs) | Vol 15 §3 | M | every config change = engineering ticket |
-| 13 | MFA + SSO (OIDC/Entra) | Vol 7 §7–8 | M | enterprise IT checklist failure |
+| 13 | MFA + SSO — **Entra OIDC already accepted** (AuthService verifies IdP JWKS via `AUTH_JWKS_URL`) + **TOTP MFA landed 2026-07-07** (RFC 6238 in shared, enroll/verify endpoints; 7 tests incl. RFC vectors). Remaining: persist per-user MFA secret + gate login; map Entra groups→AURA roles | Vol 7 §7–8 | S (was M) | enterprise IT checklist failure |
 | 14 | Field-level PII encryption | Vol 7 §4 | M | PDPL exposure (salaries, IDs) |
 | 15 | Performance baseline + budgets | Vol 21 §3 | S | unknown ceilings before first big tenant |
 

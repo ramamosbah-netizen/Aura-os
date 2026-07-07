@@ -1,5 +1,6 @@
-import { Body, Controller, ForbiddenException, Get, Post, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from '@aura/core';
+import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
 
 interface DevTokenDto {
   sub?: string;
@@ -43,6 +44,26 @@ export class AuthController {
       token: this.auth.mint({ sub: username, tenantId, companyId: null }),
       user: { sub: username, tenantId },
     };
+  }
+
+  /**
+   * MFA enrolment (RFC 6238 TOTP). Returns a fresh secret + the otpauth URI an authenticator
+   * app scans; the caller persists the secret against the user (Entra SSO users get MFA from
+   * Entra, so this is the local-account path). Stateless — no secret is stored server-side here.
+   */
+  @Post('mfa/enroll')
+  mfaEnroll(@Body() dto: { account?: string }): { secret: string; otpauthUri: string } {
+    const secret = generateTotpSecret();
+    const account = (dto?.account ?? '').trim() || 'user';
+    return { secret, otpauthUri: totpAuthUri(secret, { label: account, issuer: process.env.MFA_ISSUER?.trim() || 'AURA' }) };
+  }
+
+  /** Verify a TOTP code against a (caller-supplied) secret — the check the login step calls. */
+  @Post('mfa/verify')
+  mfaVerify(@Body() dto: { secret?: string; code?: string }): { valid: boolean } {
+    if (!dto?.secret?.trim()) throw new BadRequestException('secret is required');
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    return { valid: verifyTotp(dto.secret.trim(), dto.code.trim()) };
   }
 
   @Post('dev-token')

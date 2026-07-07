@@ -1,4 +1,5 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import { Employee } from './domain/employee';
 import { Leave } from './domain/leave';
 import { PayrollRun } from './domain/payroll-run';
@@ -8,17 +9,30 @@ import { StaffAdvance } from './domain/staff-advance';
 import { AttendanceRecord } from './domain/attendance';
 import { PerformanceAppraisal } from './domain/appraisal';
 
+/** Tenant-wide list filter (employees are the only top-level HR aggregate). */
+export interface EmployeeFilter {
+  tenantId?: string;
+}
+
+/** Filter for the employee-scoped child records (leave, payroll, timesheets, …). */
+export interface EmployeeScopedFilter {
+  tenantId?: string;
+  employeeId?: string;
+}
+
 export interface AppraisalStore {
   save(appraisal: PerformanceAppraisal, tx?: TxHandle): Promise<PerformanceAppraisal>;
   findById(tenantId: string, id: string): Promise<PerformanceAppraisal | null>;
   findByTenant(tenantId: string): Promise<PerformanceAppraisal[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<PerformanceAppraisal[]>;
+  listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PerformanceAppraisal>>;
 }
 
 export interface EmployeeStore {
   save(employee: Employee, tx?: TxHandle): Promise<Employee>;
   findById(tenantId: string, id: string): Promise<Employee | null>;
   findByTenant(tenantId: string): Promise<Employee[]>;
+  listPaged(filter: EmployeeFilter, page: PageParams): Promise<Page<Employee>>;
   /** Soft-delete flag: true hides the employee from finds; false restores. */
   setDeleted(tenantId: string, id: string, deleted: boolean, tx?: TxHandle): Promise<boolean>;
 }
@@ -28,6 +42,7 @@ export interface LeaveStore {
   findById(tenantId: string, id: string): Promise<Leave | null>;
   findByTenant(tenantId: string): Promise<Leave[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<Leave[]>;
+  listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<Leave>>;
   delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
 }
 
@@ -36,6 +51,7 @@ export interface PayrollRunStore {
   findById(tenantId: string, id: string): Promise<PayrollRun | null>;
   findByTenant(tenantId: string): Promise<PayrollRun[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<PayrollRun[]>;
+  listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PayrollRun>>;
   delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean>;
 }
 
@@ -45,6 +61,7 @@ export interface TimesheetStore {
   findByTenant(tenantId: string): Promise<TimesheetEntry[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]>;
   findByDateRange(tenantId: string, employeeId: string, from: string, to: string): Promise<TimesheetEntry[]>;
+  listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<TimesheetEntry>>;
 }
 
 export interface ExpenseClaimStore {
@@ -52,6 +69,7 @@ export interface ExpenseClaimStore {
   findById(tenantId: string, id: string): Promise<ExpenseClaim | null>;
   findByTenant(tenantId: string): Promise<ExpenseClaim[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<ExpenseClaim[]>;
+  listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<ExpenseClaim>>;
 }
 
 export interface StaffAdvanceStore {
@@ -59,6 +77,7 @@ export interface StaffAdvanceStore {
   findById(tenantId: string, id: string): Promise<StaffAdvance | null>;
   findByTenant(tenantId: string): Promise<StaffAdvance[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<StaffAdvance[]>;
+  listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<StaffAdvance>>;
 }
 
 export interface AttendanceStore {
@@ -67,4 +86,5 @@ export interface AttendanceStore {
   findByTenant(tenantId: string): Promise<AttendanceRecord[]>;
   findByEmployee(tenantId: string, employeeId: string): Promise<AttendanceRecord[]>;
   findByDateRange(tenantId: string, from: string, to: string, employeeId?: string): Promise<AttendanceRecord[]>;
+  listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<AttendanceRecord>>;
 }

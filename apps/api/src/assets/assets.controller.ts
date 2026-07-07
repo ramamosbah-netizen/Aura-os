@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Param, Post, Put, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -84,12 +84,9 @@ export class AssetsController {
   }
 
   @Post(':id/restore')
-  async restoreAsset(@Param('id') id: string): Promise<Asset> {
-    try {
-      return await this.assetsService.restoreAsset(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new NotFoundException((e as Error).message);
-    }
+  restoreAsset(@Param('id') id: string): Promise<Asset> {
+    // "asset not found" is classified to 404 by the global error taxonomy.
+    return this.assetsService.restoreAsset(this.tenant.get().tenantId, id);
   }
 
   @Get('paged')
@@ -139,24 +136,18 @@ export class AssetsController {
   }
 
   @Get(':id/qr-tag')
-  async qrTag(@Param('id') id: string) {
-    try {
-      return await this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new NotFoundException((e as Error).message);
-    }
+  qrTag(@Param('id') id: string) {
+    // "asset not found" is classified to 404 by the global error taxonomy.
+    return this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
   }
 
   /** Raw SVG for direct printing / <img src>. */
   @Get(':id/qr-tag/svg')
   @Header('Content-Type', 'image/svg+xml')
   async qrTagSvg(@Param('id') id: string): Promise<string> {
-    try {
-      const { svg } = await this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
-      return svg;
-    } catch (e) {
-      throw new NotFoundException((e as Error).message);
-    }
+    // "asset not found" is classified to 404 by the global error taxonomy.
+    const { svg } = await this.assetsService.getAssetQrTag(this.tenant.get().tenantId, id);
+    return svg;
   }
 
   // ── Maintenance ────────────────────────────────────────────────────────────

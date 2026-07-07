@@ -53,22 +53,18 @@ export class CrmQuotationsController {
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.quotations.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        quoteNumber: dto.quoteNumber,
-        customerName: dto.customerName,
-        accountId: dto.accountId ?? null,
-        contactName: dto.contactName ?? null,
-        issueDate: dto.issueDate,
-        validUntil: dto.validUntil ?? null,
-        lines: dto.lines,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.quotations.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      quoteNumber: dto.quoteNumber,
+      customerName: dto.customerName,
+      accountId: dto.accountId ?? null,
+      contactName: dto.contactName ?? null,
+      issueDate: dto.issueDate,
+      validUntil: dto.validUntil ?? null,
+      lines: dto.lines,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get()
@@ -101,10 +97,6 @@ export class CrmQuotationsController {
     if (!['send', 'accept', 'reject', 'expire'].includes(dto?.action)) {
       throw new BadRequestException("action must be 'send', 'accept', 'reject', or 'expire'");
     }
-    try {
-      return await this.quotations.changeStatus(id, dto.action);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.quotations.changeStatus(id, dto.action);
   }
 }

@@ -157,19 +157,15 @@ export class SubcontractsController {
     if (dto?.type !== 'addition' && dto?.type !== 'omission') throw new BadRequestException("type must be 'addition' or 'omission'");
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
     const ctx = this.tenant.get();
-    try {
-      return await this.subcontracts.createVariation({
-        tenantId: ctx.tenantId,
-        subcontractId: dto.subcontractId,
-        reference: dto.reference,
-        type: dto.type,
-        amount: Number(dto.amount),
-        description: dto.description,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.subcontracts.createVariation({
+      tenantId: ctx.tenantId,
+      subcontractId: dto.subcontractId,
+      reference: dto.reference,
+      type: dto.type,
+      amount: Number(dto.amount),
+      description: dto.description,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get('variations')
@@ -179,20 +175,12 @@ export class SubcontractsController {
 
   @Patch('variations/:id/approve')
   async approveVariation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<SubcontractVariation> {
-    try {
-      return await this.subcontracts.approveVariation(id, this.tenant.get().actorId ?? undefined);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.subcontracts.approveVariation(id, this.tenant.get().actorId ?? undefined);
   }
 
   @Patch('variations/:id/reject')
   async rejectVariation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<SubcontractVariation> {
-    try {
-      return await this.subcontracts.rejectVariation(id, this.tenant.get().actorId ?? undefined);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.subcontracts.rejectVariation(id, this.tenant.get().actorId ?? undefined);
   }
 
   // ── BACK-CHARGES (literal routes before :id to avoid route-order capture) ─

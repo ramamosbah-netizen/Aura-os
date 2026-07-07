@@ -200,22 +200,18 @@ export class HseController {
     if (!dto?.conductedBy?.trim()) throw new BadRequestException('conductedBy is required');
     if (!dto?.talkDate?.trim()) throw new BadRequestException('talkDate is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.hseService.recordToolboxTalk({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        projectId: dto.projectId,
-        projectName: dto.projectName,
-        topic: dto.topic,
-        conductedBy: dto.conductedBy,
-        talkDate: dto.talkDate,
-        attendeeCount: Number(dto.attendeeCount),
-        notes: dto.notes,
-        createdBy: ctx.actorId || null,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hseService.recordToolboxTalk({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      topic: dto.topic,
+      conductedBy: dto.conductedBy,
+      talkDate: dto.talkDate,
+      attendeeCount: Number(dto.attendeeCount),
+      notes: dto.notes,
+      createdBy: ctx.actorId || null,
+    });
   }
 
   @Get('toolbox-talks')
@@ -257,11 +253,7 @@ export class HseController {
 
   @Put('risk-assessments/:id/approve')
   async approveRiskAssessment(@Param('id') id: string): Promise<RiskAssessment> {
-    try {
-      return await this.hseService.approveRiskAssessment(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hseService.approveRiskAssessment(this.tenant.get().tenantId, id);
   }
 
   // ── Safety Training Matrix ──────────────────────────────────────────────────
@@ -273,21 +265,17 @@ export class HseController {
     if (!dto?.inductionDate?.trim()) throw new BadRequestException('inductionDate is required');
 
     const ctx = this.tenant.get();
-    try {
-      return await this.hseService.recordSafetyTraining({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        workerName: dto.workerName,
-        workerId: dto.workerId,
-        inductionDate: dto.inductionDate,
-        cardNumber: dto.cardNumber,
-        cardExpiry: dto.cardExpiry,
-        certifications: dto.certifications,
-        createdBy: ctx.actorId || null,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hseService.recordSafetyTraining({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      workerName: dto.workerName,
+      workerId: dto.workerId,
+      inductionDate: dto.inductionDate,
+      cardNumber: dto.cardNumber,
+      cardExpiry: dto.cardExpiry,
+      certifications: dto.certifications,
+      createdBy: ctx.actorId || null,
+    });
   }
 
   @Get('training')

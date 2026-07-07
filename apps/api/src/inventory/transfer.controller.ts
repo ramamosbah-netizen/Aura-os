@@ -23,17 +23,13 @@ export class TransferController {
     if (!dto?.sourceItemId || !dto?.destItemId) throw new BadRequestException('sourceItemId and destItemId required');
     if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
     const ctx = this.tenant.get();
-    try {
-      return await this.transfers.execute({
-        tenantId: ctx.tenantId,
-        sourceItemId: dto.sourceItemId,
-        destItemId: dto.destItemId,
-        quantity: dto.quantity,
-        reason: dto.reason,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.transfers.execute({
+      tenantId: ctx.tenantId,
+      sourceItemId: dto.sourceItemId,
+      destItemId: dto.destItemId,
+      quantity: dto.quantity,
+      reason: dto.reason,
+    });
   }
 
   @Get()

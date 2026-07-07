@@ -514,11 +514,7 @@ export class EngineeringController {
   async respondTq(@Param('id') id: string, @Body() dto: { response: string }): Promise<TechnicalQuery> {
     if (!dto?.response?.trim()) throw new BadRequestException('response is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.engineeringService.respondTechnicalQuery(ctx.tenantId, ctx.actorId, id, dto.response);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.engineeringService.respondTechnicalQuery(ctx.tenantId, ctx.actorId, id, dto.response);
   }
 
   // ── BIM / model registry (viewer backbone) ──────────────────────────────────
@@ -587,10 +583,6 @@ export class EngineeringController {
     @Body() dto: { revision: string; storageKey?: string; fileUrl?: string; fileSizeBytes?: number; status?: ModelStatus },
   ): Promise<BimModel> {
     if (!dto?.revision?.trim()) throw new BadRequestException('revision is required');
-    try {
-      return await this.engineeringService.newBimModelVersion(this.tenant.get().tenantId, id, dto);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.engineeringService.newBimModelVersion(this.tenant.get().tenantId, id, dto);
   }
 }

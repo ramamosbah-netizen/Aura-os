@@ -53,4 +53,7 @@ were 500s.
 1. Server-side `evaluateForm` (other half of #8) — needs schema↔endpoint mapping decision.
 2. Delete remaining per-controller try/catch→400 boilerplate (~20 controllers) now the taxonomy
    is enforced — mechanical, but changes some 400s to more-correct 404/409; do with e2e watch.
+   **DONE 2026-07-07** — 98 trivial 400-wrappers removed across 21 controllers (−392 net lines),
+   procurement/stock now correctly 409; see `docs/reports/2026-07-07-controller-wrapper-retirement.md`.
+   (6 NotFound wrappers left as a case-by-case follow-up.)
 3. Platform Definition Registry: extract only when a 3rd module grows its own (ADR-0017 rule).

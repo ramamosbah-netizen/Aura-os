@@ -341,11 +341,7 @@ export class FinanceController {
   async createCostCenter(@Body() dto: { code: string; name: string }): Promise<CostCenter> {
     if (!dto?.code?.trim() || !dto?.name?.trim()) throw new BadRequestException('code and name are required');
     const ctx = this.tenant.get();
-    try {
-      return await this.costCenters.create({ tenantId: ctx.tenantId, companyId: ctx.companyId, code: dto.code, name: dto.name, createdBy: ctx.actorId });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.costCenters.create({ tenantId: ctx.tenantId, companyId: ctx.companyId, code: dto.code, name: dto.name, createdBy: ctx.actorId });
   }
 
   @Get('cost-centers')
@@ -364,11 +360,7 @@ export class FinanceController {
   async createProfitCenter(@Body() dto: { code: string; name: string }): Promise<ProfitCenter> {
     if (!dto?.code?.trim() || !dto?.name?.trim()) throw new BadRequestException('code and name are required');
     const ctx = this.tenant.get();
-    try {
-      return await this.profitCenters.create({ tenantId: ctx.tenantId, companyId: ctx.companyId, code: dto.code, name: dto.name, createdBy: ctx.actorId });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.profitCenters.create({ tenantId: ctx.tenantId, companyId: ctx.companyId, code: dto.code, name: dto.name, createdBy: ctx.actorId });
   }
 
   @Get('profit-centers')
@@ -566,22 +558,14 @@ export class FinanceController {
   async generateVatReturn(@Body() dto: { periodStart: string; periodEnd: string }): Promise<TaxReturn> {
     if (!dto?.periodStart || !dto?.periodEnd) throw new BadRequestException('periodStart and periodEnd are required');
     const ctx = this.tenant.get();
-    try {
-      return await this.tax.generateReturn(ctx.tenantId, dto.periodStart, dto.periodEnd);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.tax.generateReturn(ctx.tenantId, dto.periodStart, dto.periodEnd);
   }
 
   @Patch('vat-returns/:id/status')
   async setVatReturnStatus(@Param('id') id: string, @Body() dto: { status: 'filed' | 'paid' }): Promise<TaxReturn> {
     if (dto?.status !== 'filed' && dto?.status !== 'paid') throw new BadRequestException("status must be 'filed' or 'paid'");
     const ctx = this.tenant.get();
-    try {
-      return await this.tax.setReturnStatus(id, dto.status, ctx.actorId);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.tax.setReturnStatus(id, dto.status, ctx.actorId);
   }
 
   // ── PETTY CASH (imprest floats) ──────────────────────────────────────────
@@ -590,18 +574,14 @@ export class FinanceController {
   createPettyCashFund(@Body() dto: { name: string; custodianEmployeeId?: string; openingFloat?: number }): Promise<PettyCashFund> {
     if (!dto?.name?.trim()) throw new BadRequestException('name is required');
     const ctx = this.tenant.get();
-    try {
-      return this.pettyCash.createFund({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        name: dto.name,
-        custodianEmployeeId: dto.custodianEmployeeId ?? null,
-        openingFloat: dto.openingFloat !== undefined ? Number(dto.openingFloat) : undefined,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return this.pettyCash.createFund({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      name: dto.name,
+      custodianEmployeeId: dto.custodianEmployeeId ?? null,
+      openingFloat: dto.openingFloat !== undefined ? Number(dto.openingFloat) : undefined,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get('petty-cash')
@@ -629,11 +609,7 @@ export class FinanceController {
     if (dto?.type !== 'topup' && dto?.type !== 'expense') throw new BadRequestException("type must be 'topup' or 'expense'");
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
     if (!dto?.transactionDate) throw new BadRequestException('transactionDate is required');
-    try {
-      return await this.pettyCash.recordTransaction(id, dto.type, Number(dto.amount), dto.transactionDate, dto.category, dto.description);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.pettyCash.recordTransaction(id, dto.type, Number(dto.amount), dto.transactionDate, dto.category, dto.description);
   }
 
   // ── CUSTOMER INVOICES (AR / sales) ───────────────────────────────────────
@@ -647,25 +623,21 @@ export class FinanceController {
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.customerInvoices.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        invoiceNumber: dto.invoiceNumber,
-        customerName: dto.customerName,
-        projectId: dto.projectId ?? null,
-        projectName: dto.projectName ?? null,
-        contractRef: dto.contractRef ?? null,
-        issueDate: dto.issueDate,
-        dueDate: dto.dueDate ?? null,
-        lines: dto.lines,
-        currency: dto.currency,
-        exchangeRate: dto.exchangeRate,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.customerInvoices.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      invoiceNumber: dto.invoiceNumber,
+      customerName: dto.customerName,
+      projectId: dto.projectId ?? null,
+      projectName: dto.projectName ?? null,
+      contractRef: dto.contractRef ?? null,
+      issueDate: dto.issueDate,
+      dueDate: dto.dueDate ?? null,
+      lines: dto.lines,
+      currency: dto.currency,
+      exchangeRate: dto.exchangeRate,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get('customer-invoices')
@@ -713,30 +685,18 @@ export class FinanceController {
 
   @Post('customer-invoices/:id/issue')
   async issueCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
-    try {
-      return await this.customerInvoices.issue(id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.customerInvoices.issue(id);
   }
 
   @Post('customer-invoices/:id/receipts')
   async recordReceipt(@Param('id') id: string, @Body() dto: { amount: number }): Promise<CustomerInvoice> {
     if (!(Number(dto?.amount) > 0)) throw new BadRequestException('amount must be positive');
-    try {
-      return await this.customerInvoices.recordReceipt(id, Number(dto.amount));
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.customerInvoices.recordReceipt(id, Number(dto.amount));
   }
 
   @Post('customer-invoices/:id/cancel')
   async cancelCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
-    try {
-      return await this.customerInvoices.cancel(id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.customerInvoices.cancel(id);
   }
 
   // Bulk operation (reference): soft-delete or restore many invoices in one call.
@@ -775,26 +735,22 @@ export class FinanceController {
     if (!dto?.bankName?.trim()) throw new BadRequestException('bankName is required');
     if (!dto?.issueDate || !dto?.expiryDate) throw new BadRequestException('issueDate and expiryDate are required');
     const ctx = this.tenant.get();
-    try {
-      return await this.bankGuarantees.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        reference: dto.reference,
-        type: dto.type,
-        beneficiary: dto.beneficiary,
-        bankName: dto.bankName,
-        projectId: dto.projectId ?? null,
-        projectName: dto.projectName ?? null,
-        amount: Number(dto.amount),
-        currency: dto.currency,
-        issueDate: dto.issueDate,
-        expiryDate: dto.expiryDate,
-        notes: dto.notes,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.bankGuarantees.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      reference: dto.reference,
+      type: dto.type,
+      beneficiary: dto.beneficiary,
+      bankName: dto.bankName,
+      projectId: dto.projectId ?? null,
+      projectName: dto.projectName ?? null,
+      amount: Number(dto.amount),
+      currency: dto.currency,
+      issueDate: dto.issueDate,
+      expiryDate: dto.expiryDate,
+      notes: dto.notes,
+      createdBy: ctx.actorId,
+    });
   }
 
   // literal route before :id
@@ -832,11 +788,7 @@ export class FinanceController {
   @Patch('bank-guarantees/:id/status')
   async changeBankGuaranteeStatus(@Param('id') id: string, @Body() dto: { action: 'release' | 'claim' | 'expire' }): Promise<BankGuarantee> {
     if (!['release', 'claim', 'expire'].includes(dto?.action)) throw new BadRequestException("action must be 'release', 'claim', or 'expire'");
-    try {
-      return await this.bankGuarantees.changeStatus(id, dto.action);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.bankGuarantees.changeStatus(id, dto.action);
   }
 
   // ── POST-DATED CHEQUES (PDC) ─────────────────────────────────────────────
@@ -850,25 +802,21 @@ export class FinanceController {
     if (!dto?.bankName?.trim()) throw new BadRequestException('bankName is required');
     if (!dto?.issueDate || !dto?.maturityDate) throw new BadRequestException('issueDate and maturityDate are required');
     const ctx = this.tenant.get();
-    try {
-      return await this.postDatedCheques.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        chequeNumber: dto.chequeNumber,
-        direction: dto.direction,
-        partyName: dto.partyName,
-        bankName: dto.bankName,
-        amount: Number(dto.amount),
-        currency: dto.currency,
-        issueDate: dto.issueDate,
-        maturityDate: dto.maturityDate,
-        reference: dto.reference ?? null,
-        notes: dto.notes,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.postDatedCheques.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      chequeNumber: dto.chequeNumber,
+      direction: dto.direction,
+      partyName: dto.partyName,
+      bankName: dto.bankName,
+      amount: Number(dto.amount),
+      currency: dto.currency,
+      issueDate: dto.issueDate,
+      maturityDate: dto.maturityDate,
+      reference: dto.reference ?? null,
+      notes: dto.notes,
+      createdBy: ctx.actorId,
+    });
   }
 
   // literal routes before :id
@@ -914,10 +862,6 @@ export class FinanceController {
     if (!['deposit', 'clear', 'bounce', 'represent', 'cancel'].includes(dto?.action)) {
       throw new BadRequestException("action must be 'deposit', 'clear', 'bounce', 'represent', or 'cancel'");
     }
-    try {
-      return await this.postDatedCheques.changeStatus(id, dto.action);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.postDatedCheques.changeStatus(id, dto.action);
   }
 }

@@ -108,16 +108,12 @@ export class AssetsController {
     const life = Number(usefulLifeMonths);
     if (!(life > 0)) throw new BadRequestException('usefulLifeMonths must be a positive integer');
     const ctx = this.tenant.get();
-    try {
-      return await this.assetsService.depreciation(ctx.tenantId, id, {
-        usefulLifeMonths: life,
-        salvageValue: salvageValue !== undefined ? Number(salvageValue) : undefined,
-        method: method === 'declining_balance' ? 'declining_balance' : 'straight_line',
-        asOf,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.assetsService.depreciation(ctx.tenantId, id, {
+      usefulLifeMonths: life,
+      salvageValue: salvageValue !== undefined ? Number(salvageValue) : undefined,
+      method: method === 'declining_balance' ? 'declining_balance' : 'straight_line',
+      asOf,
+    });
   }
 
   // ── QR tags ────────────────────────────────────────────────────────────────
@@ -226,20 +222,16 @@ export class AssetsController {
     if (!dto?.disposalDate) throw new BadRequestException('disposalDate is required');
     if (!dto?.method) throw new BadRequestException('method is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.assetsService.disposeAsset(ctx.actorId, {
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        assetId: dto.assetId,
-        disposalDate: dto.disposalDate,
-        method: dto.method,
-        proceeds: dto.proceeds,
-        bookValue: dto.bookValue,
-        notes: dto.notes ?? null,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.assetsService.disposeAsset(ctx.actorId, {
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      assetId: dto.assetId,
+      disposalDate: dto.disposalDate,
+      method: dto.method,
+      proceeds: dto.proceeds,
+      bookValue: dto.bookValue,
+      notes: dto.notes ?? null,
+    });
   }
 
   @Get('disposals')

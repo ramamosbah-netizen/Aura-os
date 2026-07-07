@@ -89,25 +89,21 @@ export class ProcurementController {
   async createPo(@Body() dto: CreatePurchaseOrderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<PurchaseOrder> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.pos.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        title: dto.title,
-        reference: dto.reference,
-        supplierId: dto.supplierId ?? null,
-        supplierName: dto.supplierName ?? null,
-        projectId: dto.projectId ?? null,
-        projectName: dto.projectName ?? null,
-        discipline: dto.discipline,
-        status: dto.status,
-        value: dto.value,
-        ownerId: ctx.actorId,
-        createdBy: ctx.actorId,
-      }, idempotencyKey);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.pos.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      title: dto.title,
+      reference: dto.reference,
+      supplierId: dto.supplierId ?? null,
+      supplierName: dto.supplierName ?? null,
+      projectId: dto.projectId ?? null,
+      projectName: dto.projectName ?? null,
+      discipline: dto.discipline,
+      status: dto.status,
+      value: dto.value,
+      ownerId: ctx.actorId,
+      createdBy: ctx.actorId,
+    }, idempotencyKey);
   }
 
   @Get('purchase-orders')
@@ -164,30 +160,18 @@ export class ProcurementController {
     if (!dto?.status) throw new BadRequestException('status is required');
     const found = await this.pos.get(id);
     if (!found) throw new NotFoundException(`purchase order ${id} not found`);
-    try {
-      return await this.pos.changeStatus(id, dto.status);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message); // e.g. approval gate
-    }
+    return this.pos.changeStatus(id, dto.status);
   }
 
   @Post('purchase-orders/:id/submit')
   async submitPo(@Param('id') id: string): Promise<PurchaseOrder> {
-    try {
-      return await this.pos.submitForApproval(id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.pos.submitForApproval(id);
   }
 
   @Post('purchase-orders/:id/approve')
   async approvePo(@Param('id') id: string, @Body() dto: { approverLevel?: number }): Promise<PurchaseOrder> {
     if (!(Number(dto?.approverLevel) >= 1)) throw new BadRequestException('approverLevel (>=1) is required');
-    try {
-      return await this.pos.approve(id, Number(dto.approverLevel));
-    } catch (e) {
-      throw new BadRequestException((e as Error).message); // under-level approval
-    }
+    return this.pos.approve(id, Number(dto.approverLevel));
   }
 
   // ── PURCHASE REQUESTS ────────────────────────────────────────────────────
@@ -250,11 +234,7 @@ export class ProcurementController {
     const found = await this.prs.get(id);
     if (!found) throw new NotFoundException(`purchase request ${id} not found`);
     const ctx = this.tenant.get();
-    try {
-      return await this.prs.changeStatus(id, dto.status, ctx.actorId ?? undefined);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.prs.changeStatus(id, dto.status, ctx.actorId ?? undefined);
   }
 
   // ── RFQ (Request for Quotation) ──────────────────────────────────────────
@@ -342,23 +322,19 @@ export class ProcurementController {
     if (!dto?.code?.trim()) throw new BadRequestException('code is required');
     if (!dto?.name?.trim()) throw new BadRequestException('name is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.suppliers.create({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        code: dto.code,
-        name: dto.name,
-        category: dto.category,
-        tradeLicense: dto.tradeLicense ?? null,
-        trn: dto.trn ?? null,
-        contactName: dto.contactName ?? null,
-        email: dto.email ?? null,
-        phone: dto.phone ?? null,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.suppliers.create({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      code: dto.code,
+      name: dto.name,
+      category: dto.category,
+      tradeLicense: dto.tradeLicense ?? null,
+      trn: dto.trn ?? null,
+      contactName: dto.contactName ?? null,
+      email: dto.email ?? null,
+      phone: dto.phone ?? null,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get('suppliers')
@@ -389,10 +365,6 @@ export class ProcurementController {
   @Patch('suppliers/:id/status')
   async changeSupplierStatus(@Param('id') id: string, @Body() dto: { action: 'approve' | 'suspend' }): Promise<Supplier> {
     if (dto?.action !== 'approve' && dto?.action !== 'suspend') throw new BadRequestException("action must be 'approve' or 'suspend'");
-    try {
-      return await this.suppliers.changeStatus(id, dto.action);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.suppliers.changeStatus(id, dto.action);
   }
 }

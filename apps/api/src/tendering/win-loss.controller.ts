@@ -26,22 +26,18 @@ export class WinLossController {
     if (!dto?.tenderId) throw new BadRequestException('tenderId is required');
     if (dto?.result !== 'won' && dto?.result !== 'lost') throw new BadRequestException("result must be 'won' or 'lost'");
     const ctx = this.tenant.get();
-    try {
-      return await this.winLoss.record({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        tenderId: dto.tenderId,
-        tenderTitle: dto.tenderTitle ?? null,
-        result: dto.result,
-        ourBidValue: dto.ourBidValue,
-        competitors: dto.competitors,
-        reason: dto.reason ?? null,
-        decidedAt: dto.decidedAt,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.winLoss.record({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      tenderId: dto.tenderId,
+      tenderTitle: dto.tenderTitle ?? null,
+      result: dto.result,
+      ourBidValue: dto.ourBidValue,
+      competitors: dto.competitors,
+      reason: dto.reason ?? null,
+      decidedAt: dto.decidedAt,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get()

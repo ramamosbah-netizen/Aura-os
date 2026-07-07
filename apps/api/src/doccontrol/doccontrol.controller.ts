@@ -144,21 +144,17 @@ export class DocControlController {
     if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.docControlService.createSubmittal({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        projectId: dto.projectId,
-        projectName: dto.projectName,
-        reference: dto.reference,
-        title: dto.title,
-        discipline: dto.discipline,
-        revision: dto.revision,
-        createdBy: ctx.actorId || null,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.docControlService.createSubmittal({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      reference: dto.reference,
+      title: dto.title,
+      discipline: dto.discipline,
+      revision: dto.revision,
+      createdBy: ctx.actorId || null,
+    });
   }
 
   @Get('submittals')
@@ -168,21 +164,13 @@ export class DocControlController {
 
   @Put('submittals/:id/submit')
   async submitSubmittal(@Param('id') id: string): Promise<Submittal> {
-    try {
-      return await this.docControlService.submitSubmittal(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.docControlService.submitSubmittal(this.tenant.get().tenantId, id);
   }
 
   @Put('submittals/:id/return')
   async returnSubmittal(@Param('id') id: string, @Body() dto: { reviewCode: ReviewCode; reviewComments?: string }): Promise<Submittal> {
     if (!['A', 'B', 'C', 'D'].includes(dto?.reviewCode)) throw new BadRequestException('reviewCode must be A, B, C, or D');
-    try {
-      return await this.docControlService.returnSubmittal(this.tenant.get().tenantId, id, dto.reviewCode, dto.reviewComments);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.docControlService.returnSubmittal(this.tenant.get().tenantId, id, dto.reviewCode, dto.reviewComments);
   }
 
   // ── Drawing / Document Register ─────────────────────────────────────────────
@@ -225,11 +213,7 @@ export class DocControlController {
   ): Promise<DrawingRegisterEntry> {
     if (!dto?.revision?.trim()) throw new BadRequestException('revision is required');
     if (!dto?.status) throw new BadRequestException('status is required');
-    try {
-      return await this.docControlService.reviseRegisterEntry(this.tenant.get().tenantId, id, dto.revision, dto.status, dto.revisionDate);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.docControlService.reviseRegisterEntry(this.tenant.get().tenantId, id, dto.revision, dto.status, dto.revisionDate);
   }
 
   @Get('register/:id/history')

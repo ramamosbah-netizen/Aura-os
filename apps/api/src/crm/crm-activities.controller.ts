@@ -80,10 +80,6 @@ export class CrmActivitiesController {
 
   @Post(':id/complete')
   async complete(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
-    try {
-      return await this.activities.complete(id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.activities.complete(id);
   }
 }

@@ -250,21 +250,17 @@ export class QualityController {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     if (!Array.isArray(dto?.points) || dto.points.length === 0) throw new BadRequestException('at least one inspection point is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.qualityService.createItp({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        projectId: dto.projectId,
-        projectName: dto.projectName,
-        reference: dto.reference,
-        title: dto.title,
-        discipline: dto.discipline,
-        points: dto.points,
-        createdBy: ctx.actorId || null,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.createItp({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      reference: dto.reference,
+      title: dto.title,
+      discipline: dto.discipline,
+      points: dto.points,
+      createdBy: ctx.actorId || null,
+    });
   }
 
   @Get('itps')
@@ -279,30 +275,18 @@ export class QualityController {
 
   @Put('itps/:id/activate')
   async activateItp(@Param('id') id: string): Promise<Itp> {
-    try {
-      return await this.qualityService.activateItp(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.activateItp(this.tenant.get().tenantId, id);
   }
 
   @Put('itps/:id/points/:index')
   async recordItpPoint(@Param('id') id: string, @Param('index') index: string, @Body() dto: { result: PointResult }): Promise<Itp> {
     if (dto?.result !== 'passed' && dto?.result !== 'failed') throw new BadRequestException("result must be 'passed' or 'failed'");
-    try {
-      return await this.qualityService.recordItpPoint(this.tenant.get().tenantId, id, Number(index), dto.result);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.recordItpPoint(this.tenant.get().tenantId, id, Number(index), dto.result);
   }
 
   @Put('itps/:id/close')
   async closeItp(@Param('id') id: string): Promise<Itp> {
-    try {
-      return await this.qualityService.closeItp(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.closeItp(this.tenant.get().tenantId, id);
   }
 
   // ── Material Approval Requests (MAR) ───────────────────────────────────────
@@ -313,23 +297,19 @@ export class QualityController {
     if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
     if (!dto?.materialName?.trim()) throw new BadRequestException('materialName is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.qualityService.createMaterialApproval({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId || null,
-        projectId: dto.projectId,
-        projectName: dto.projectName,
-        reference: dto.reference,
-        materialName: dto.materialName,
-        manufacturer: dto.manufacturer,
-        supplier: dto.supplier,
-        specification: dto.specification,
-        discipline: dto.discipline,
-        createdBy: ctx.actorId || null,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.createMaterialApproval({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId || null,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      reference: dto.reference,
+      materialName: dto.materialName,
+      manufacturer: dto.manufacturer,
+      supplier: dto.supplier,
+      specification: dto.specification,
+      discipline: dto.discipline,
+      createdBy: ctx.actorId || null,
+    });
   }
 
   @Get('material-approvals')
@@ -352,30 +332,18 @@ export class QualityController {
 
   @Put('material-approvals/:id/submit')
   async submitMar(@Param('id') id: string): Promise<MaterialApproval> {
-    try {
-      return await this.qualityService.submitMaterialApproval(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.submitMaterialApproval(this.tenant.get().tenantId, id);
   }
 
   @Put('material-approvals/:id/review')
   async reviewMar(@Param('id') id: string, @Body() dto: { decision: MarDecision; comments?: string }): Promise<MaterialApproval> {
     const ctx = this.tenant.get();
-    try {
-      return await this.qualityService.reviewMaterialApproval(ctx.tenantId, id, dto?.decision, ctx.actorId || null, dto?.comments);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.reviewMaterialApproval(ctx.tenantId, id, dto?.decision, ctx.actorId || null, dto?.comments);
   }
 
   @Put('material-approvals/:id/revise')
   async reviseMar(@Param('id') id: string): Promise<MaterialApproval> {
-    try {
-      return await this.qualityService.reviseMaterialApproval(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.reviseMaterialApproval(this.tenant.get().tenantId, id);
   }
 
   // ── Equipment calibration ──────────────────────────────────────────────────
@@ -388,25 +356,21 @@ export class QualityController {
     if (!dto?.equipmentSerial?.trim()) throw new BadRequestException('equipmentSerial is required');
     if (!dto?.calibrationDate || !dto?.dueDate) throw new BadRequestException('calibrationDate and dueDate are required');
     const ctx = this.tenant.get();
-    try {
-      return await this.qualityService.recordCalibration({
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        projectId: dto.projectId ?? null,
-        projectName: dto.projectName ?? null,
-        equipmentName: dto.equipmentName,
-        equipmentSerial: dto.equipmentSerial,
-        instrumentType: dto.instrumentType ?? null,
-        calibrationDate: dto.calibrationDate,
-        dueDate: dto.dueDate,
-        certificateNumber: dto.certificateNumber ?? null,
-        calibratedBy: dto.calibratedBy ?? null,
-        notes: dto.notes ?? null,
-        createdBy: ctx.actorId,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.recordCalibration({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId ?? null,
+      projectName: dto.projectName ?? null,
+      equipmentName: dto.equipmentName,
+      equipmentSerial: dto.equipmentSerial,
+      instrumentType: dto.instrumentType ?? null,
+      calibrationDate: dto.calibrationDate,
+      dueDate: dto.dueDate,
+      certificateNumber: dto.certificateNumber ?? null,
+      calibratedBy: dto.calibratedBy ?? null,
+      notes: dto.notes ?? null,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Get('calibrations')
@@ -443,21 +407,17 @@ export class QualityController {
     if (!dto?.auditorName?.trim()) throw new BadRequestException('auditorName is required');
 
     const ctx = this.tenant.get();
-    try {
-      return await this.qualityService.scheduleAudit(ctx.actorId, {
-        tenantId: ctx.tenantId,
-        companyId: ctx.companyId,
-        projectId: dto.projectId,
-        projectName: dto.projectName,
-        auditNumber: dto.auditNumber,
-        auditType: dto.auditType,
-        scheduledDate: dto.scheduledDate,
-        auditorName: dto.auditorName,
-        checklist: dto.checklist,
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.scheduleAudit(ctx.actorId, {
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      auditNumber: dto.auditNumber,
+      auditType: dto.auditType,
+      scheduledDate: dto.scheduledDate,
+      auditorName: dto.auditorName,
+      checklist: dto.checklist,
+    });
   }
 
   @Get('audits')
@@ -478,16 +438,12 @@ export class QualityController {
     @Body() dto: { checklist: ChecklistItem[]; status?: AuditSchedule['status'] },
   ): Promise<AuditSchedule> {
     if (!Array.isArray(dto?.checklist)) throw new BadRequestException('checklist must be an array');
-    try {
-      return await this.qualityService.updateAuditChecklist(
-        this.tenant.get().tenantId,
-        id,
-        dto.checklist,
-        dto.status,
-      );
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.updateAuditChecklist(
+      this.tenant.get().tenantId,
+      id,
+      dto.checklist,
+      dto.status,
+    );
   }
 
   @Post('audits/:id/checklist/:itemIndex/ncr')
@@ -496,15 +452,11 @@ export class QualityController {
     @Param('itemIndex') itemIndex: string,
   ): Promise<Ncr> {
     const ctx = this.tenant.get();
-    try {
-      return await this.qualityService.generateNcrFromFailedCheck(
-        ctx.tenantId,
-        ctx.actorId,
-        id,
-        Number(itemIndex),
-      );
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.qualityService.generateNcrFromFailedCheck(
+      ctx.tenantId,
+      ctx.actorId,
+      id,
+      Number(itemIndex),
+    );
   }
 }

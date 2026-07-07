@@ -101,11 +101,7 @@ export class HrController {
   async generateWps(@Body() dto: { periodStart: string; periodEnd: string; establishmentId: string; bankCode: string }): Promise<import('@aura/hr').SifResult> {
     if (!dto?.periodStart || !dto?.periodEnd) throw new BadRequestException('periodStart and periodEnd are required');
     if (!dto?.establishmentId?.trim() || !dto?.bankCode?.trim()) throw new BadRequestException('establishmentId and bankCode are required');
-    try {
-      return await this.hrService.generateWps(this.tenant.get().tenantId, dto);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.generateWps(this.tenant.get().tenantId, dto);
   }
 
   @Delete('employees/:id')
@@ -235,16 +231,12 @@ export class HrController {
   ): EosbResult {
     if (!(Number(dto?.basicSalary) > 0)) throw new BadRequestException('basicSalary must be positive');
     if (!dto?.joinedDate || !dto?.lastWorkingDay) throw new BadRequestException('joinedDate and lastWorkingDay are required');
-    try {
-      return calculateEosb({
-        basicSalary: Number(dto.basicSalary),
-        joinedDate: dto.joinedDate,
-        lastWorkingDay: dto.lastWorkingDay,
-        terminationType: dto.terminationType === 'resignation' ? 'resignation' : 'termination',
-      });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return calculateEosb({
+      basicSalary: Number(dto.basicSalary),
+      joinedDate: dto.joinedDate,
+      lastWorkingDay: dto.lastWorkingDay,
+      terminationType: dto.terminationType === 'resignation' ? 'resignation' : 'termination',
+    });
   }
 
   // ── Timesheets ─────────────────────────────────────────────────────────────
@@ -253,11 +245,7 @@ export class HrController {
   async createTimesheet(@Body() dto: { employeeId: string; projectId?: string; wbsNodeId?: string; date: string; hours: number; overtime?: number; description?: string }): Promise<TimesheetEntry> {
     if (!dto?.employeeId || !dto?.date) throw new BadRequestException('employeeId and date required');
     const ctx = this.tenant.get();
-    try {
-      return await this.hrService.createTimesheetEntry({ tenantId: ctx.tenantId, ...dto });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.createTimesheetEntry({ tenantId: ctx.tenantId, ...dto });
   }
 
   @Get('timesheets')
@@ -267,30 +255,18 @@ export class HrController {
 
   @Post('timesheets/:id/submit')
   async submitTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
-    try {
-      return await this.hrService.submitTimesheetEntry(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.submitTimesheetEntry(this.tenant.get().tenantId, id);
   }
 
   @Post('timesheets/:id/approve')
   async approveTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
     const ctx = this.tenant.get();
-    try {
-      return await this.hrService.approveTimesheetEntry(ctx.tenantId, id, ctx.actorId ?? 'system');
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.approveTimesheetEntry(ctx.tenantId, id, ctx.actorId ?? 'system');
   }
 
   @Post('timesheets/:id/reject')
   async rejectTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
-    try {
-      return await this.hrService.rejectTimesheetEntry(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.rejectTimesheetEntry(this.tenant.get().tenantId, id);
   }
 
   // ── Attendance ───────────────────────────────────────────────────────────
@@ -299,11 +275,7 @@ export class HrController {
   async recordAttendance(@Body() dto: { employeeId: string; employeeName?: string; date: string; checkIn?: string; checkOut?: string; status?: AttendanceStatus; notes?: string }): Promise<AttendanceRecord> {
     if (!dto?.employeeId || !dto?.date) throw new BadRequestException('employeeId and date required');
     const ctx = this.tenant.get();
-    try {
-      return await this.hrService.recordAttendance({ tenantId: ctx.tenantId, companyId: ctx.companyId, createdBy: ctx.actorId, ...dto });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.recordAttendance({ tenantId: ctx.tenantId, companyId: ctx.companyId, createdBy: ctx.actorId, ...dto });
   }
 
   @Get('attendance')
@@ -324,11 +296,7 @@ export class HrController {
   @Put('attendance/:id/checkout')
   async checkOutAttendance(@Param('id') id: string, @Body() dto: { checkOut: string }): Promise<AttendanceRecord> {
     if (!dto?.checkOut) throw new BadRequestException('checkOut (HH:MM) is required');
-    try {
-      return await this.hrService.checkOutAttendance(this.tenant.get().tenantId, id, dto.checkOut);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.checkOutAttendance(this.tenant.get().tenantId, id, dto.checkOut);
   }
 
   // ── Expense Claims ───────────────────────────────────────────────────────
@@ -338,11 +306,7 @@ export class HrController {
     if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
     if (!dto?.expenseDate) throw new BadRequestException('expenseDate is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.hrService.createExpenseClaim({ tenantId: ctx.tenantId, ...dto, amount: Number(dto.amount) });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.createExpenseClaim({ tenantId: ctx.tenantId, ...dto, amount: Number(dto.amount) });
   }
 
   @Get('expense-claims')
@@ -352,11 +316,7 @@ export class HrController {
 
   @Post('expense-claims/:id/submit')
   async submitExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
-    try {
-      return await this.hrService.submitExpenseClaim(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.submitExpenseClaim(this.tenant.get().tenantId, id);
   }
 
   @Post('expense-claims/:id/approve')
@@ -364,29 +324,17 @@ export class HrController {
     const ctx = this.tenant.get();
     // approved_by is a uuid column; fall back to the nil-uuid system actor when unauthenticated (dev)
     const approverId = ctx.actorId ?? '00000000-0000-0000-0000-000000000000';
-    try {
-      return await this.hrService.approveExpenseClaim(ctx.tenantId, id, approverId);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.approveExpenseClaim(ctx.tenantId, id, approverId);
   }
 
   @Post('expense-claims/:id/reject')
   async rejectExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
-    try {
-      return await this.hrService.rejectExpenseClaim(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.rejectExpenseClaim(this.tenant.get().tenantId, id);
   }
 
   @Post('expense-claims/:id/reimburse')
   async reimburseExpenseClaim(@Param('id') id: string, @Body() dto: { reimbursedDate?: string }): Promise<ExpenseClaim> {
-    try {
-      return await this.hrService.reimburseExpenseClaim(this.tenant.get().tenantId, id, dto?.reimbursedDate);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.reimburseExpenseClaim(this.tenant.get().tenantId, id, dto?.reimbursedDate);
   }
 
   // ── Staff Advances / Loans ────────────────────────────────────────────────
@@ -396,11 +344,7 @@ export class HrController {
     if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
     if (!dto?.requestDate) throw new BadRequestException('requestDate is required');
     const ctx = this.tenant.get();
-    try {
-      return await this.hrService.createStaffAdvance({ tenantId: ctx.tenantId, ...dto, amount: Number(dto.amount) });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.createStaffAdvance({ tenantId: ctx.tenantId, ...dto, amount: Number(dto.amount) });
   }
 
   @Get('staff-advances')
@@ -412,39 +356,23 @@ export class HrController {
   async approveStaffAdvance(@Param('id') id: string): Promise<StaffAdvance> {
     const ctx = this.tenant.get();
     const approverId = ctx.actorId ?? '00000000-0000-0000-0000-000000000000';
-    try {
-      return await this.hrService.approveStaffAdvance(ctx.tenantId, id, approverId);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.approveStaffAdvance(ctx.tenantId, id, approverId);
   }
 
   @Post('staff-advances/:id/reject')
   async rejectStaffAdvance(@Param('id') id: string): Promise<StaffAdvance> {
-    try {
-      return await this.hrService.rejectStaffAdvance(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.rejectStaffAdvance(this.tenant.get().tenantId, id);
   }
 
   @Post('staff-advances/:id/disburse')
   async disburseStaffAdvance(@Param('id') id: string, @Body() dto: { disbursedDate?: string }): Promise<StaffAdvance> {
-    try {
-      return await this.hrService.disburseStaffAdvance(this.tenant.get().tenantId, id, dto?.disbursedDate);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.disburseStaffAdvance(this.tenant.get().tenantId, id, dto?.disbursedDate);
   }
 
   @Post('staff-advances/:id/repay')
   async repayStaffAdvance(@Param('id') id: string, @Body() dto: { amount: number }): Promise<StaffAdvance> {
     if (!(Number(dto?.amount) > 0)) throw new BadRequestException('amount must be positive');
-    try {
-      return await this.hrService.repayStaffAdvance(this.tenant.get().tenantId, id, Number(dto.amount));
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.repayStaffAdvance(this.tenant.get().tenantId, id, Number(dto.amount));
   }
 
   // ── Performance appraisals ──────────────────────────────────────────────────
@@ -479,20 +407,12 @@ export class HrController {
 
   @Put('appraisals/:id/submit')
   async submitAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
-    try {
-      return await this.hrService.submitAppraisal(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.submitAppraisal(this.tenant.get().tenantId, id);
   }
 
   @Put('appraisals/:id/acknowledge')
   async acknowledgeAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
-    try {
-      return await this.hrService.acknowledgeAppraisal(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.hrService.acknowledgeAppraisal(this.tenant.get().tenantId, id);
   }
 
   // ── Org chart ──────────────────────────────────────────────────────────────

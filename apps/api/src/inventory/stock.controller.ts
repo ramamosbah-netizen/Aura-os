@@ -124,12 +124,8 @@ export class StockController {
   ): Promise<{ item: StockItem; movement: StockMovement }> {
     if (dto?.direction !== 'in' && dto?.direction !== 'out') throw new BadRequestException("direction must be 'in' or 'out'");
     if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
-    try {
-      return await this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost, dto.unit);
-    } catch (e) {
-      // surface domain rejections (e.g. insufficient stock) as a 400 with the real reason
-      throw new BadRequestException((e as Error).message);
-    }
+    // Domain rejections (e.g. insufficient stock → 409) are classified by the global taxonomy filter.
+    return this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost, dto.unit);
   }
 
   @Patch(':id/uom')
@@ -137,20 +133,12 @@ export class StockController {
     if (dto?.barcode === undefined && dto?.altUnits === undefined) {
       throw new BadRequestException('barcode or altUnits is required');
     }
-    try {
-      return await this.stock.setItemUom(id, { barcode: dto.barcode, altUnits: dto.altUnits });
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.stock.setItemUom(id, { barcode: dto.barcode, altUnits: dto.altUnits });
   }
 
   @Patch(':id/reorder')
   async setReorder(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: ReorderDto): Promise<StockItem> {
     if (!(Number(dto?.reorderLevel) >= 0)) throw new BadRequestException('reorderLevel must be zero or positive');
-    try {
-      return await this.stock.setReorderPolicy(id, dto.reorderLevel, dto.reorderQty ?? 0);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
+    return await this.stock.setReorderPolicy(id, dto.reorderLevel, dto.reorderQty ?? 0);
   }
 }

@@ -38,7 +38,7 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 | 6 | Observability (OTel + outbox-lag/dead-letter/webhook/job gauges + alerts) | Vol 19 §6 | M | blind operations; SLA impossible |
 | 7 | Permission taxonomy on 551 handlers + DB roles + roles UI | Vol 7 §2 | M | coarse authz blocks enterprise security review |
 | 8 | Global validation layer — **error half done 2026-07-06/07** (enforced error taxonomy: pure `classifyDomainMessage` + fitness test failing CI on any 500-escape, PR #31; audit: 57/389 domain throws escaped → 0; **98 per-controller try/catch→400 wrappers retired 2026-07-07** across 21 controllers so the taxonomy's 404/409 now surface). Remaining: server-side `evaluateForm` | Vol 9 §7 | S (was M) | metadata rules still bypassable via API |
-| 9 | Universal pagination | Vol 9 §1 | S–M | large-tenant performance cliffs |
+| 9 | Universal pagination — **tail closed 2026-07-07** (fleet, HR all-8, doc-control paginated + dormant assets/site wirings exposed; additive `/paged` `Page<T>` routes, non-breaking; ~5 new tests). Remaining: low-growth site child lists + frontend opt-in | Vol 9 §1 | XS (was S–M) | large-tenant performance cliffs |
 | 10 | Charts/BI floor (dashboard charts + Power BI export) | Vol 16 | S–M | lost exec demos (competitive vulnerability #2) |
 | 11 | Notification delivery channels (email first) | Vol 4 §9 | S | "system that doesn't tell you anything" |
 | 12 | Admin center phase 1 (settings service, users/roles, numbering/approval/webhook UIs) | Vol 15 §3 | M | every config change = engineering ticket |

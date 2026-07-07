@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ApprovalMatrixService, type ApprovalRule } from '@aura/core';
+import { TenantContext, ApprovalMatrixService, Permissions, type ApprovalRule } from '@aura/core';
 import { parsePageParams, type Discipline } from '@aura/shared';
 import {
   type PurchaseOrder,
@@ -75,6 +75,7 @@ export class ProcurementController {
 
   // ── APPROVAL MATRIX ──────────────────────────────────────────────────────
 
+  @Permissions('procurement.config.manage')
   @Post('approval-matrix')
   async configureApprovalMatrix(@Body() dto: { entityType?: string; rules: ApprovalRule[] }): Promise<{ ok: true }> {
     if (!Array.isArray(dto?.rules)) throw new BadRequestException('rules array is required');
@@ -85,6 +86,7 @@ export class ProcurementController {
 
   // ── PURCHASE ORDERS ──────────────────────────────────────────────────────
 
+  @Permissions('procurement.po.create')
   @Post('purchase-orders')
   async createPo(@Body() dto: CreatePurchaseOrderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<PurchaseOrder> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
@@ -106,6 +108,7 @@ export class ProcurementController {
     }, idempotencyKey);
   }
 
+  @Permissions('procurement.po.view')
   @Get('purchase-orders')
   listPos(
     @Query('status') status?: string,
@@ -115,6 +118,7 @@ export class ProcurementController {
     return this.pos.list({ status, projectId, discipline, limit: 100 });
   }
 
+  @Permissions('procurement.po.view')
   @Get('purchase-orders/paged')
   pagedPos(
     @Query('status') status?: string,
@@ -129,6 +133,7 @@ export class ProcurementController {
   }
 
   /** PATCH /purchase-orders/:id — update descriptive fields (value is fixed after creation). */
+  @Permissions('procurement.po.update')
   @Patch('purchase-orders/:id')
   async updatePo(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto): Promise<PurchaseOrder> {
     try {
@@ -145,6 +150,7 @@ export class ProcurementController {
     }
   }
 
+  @Permissions('procurement.po.view')
   @Get('purchase-orders/:id')
   async getPo(@Param('id') id: string): Promise<PurchaseOrder> {
     const found = await this.pos.get(id);
@@ -152,6 +158,7 @@ export class ProcurementController {
     return found;
   }
 
+  @Permissions('procurement.po.update')
   @Patch('purchase-orders/:id/status')
   async changePoStatus(
     @Param('id') id: string,
@@ -163,11 +170,13 @@ export class ProcurementController {
     return this.pos.changeStatus(id, dto.status);
   }
 
+  @Permissions('procurement.po.submit')
   @Post('purchase-orders/:id/submit')
   async submitPo(@Param('id') id: string): Promise<PurchaseOrder> {
     return await this.pos.submitForApproval(id);
   }
 
+  @Permissions('procurement.po.approve')
   @Post('purchase-orders/:id/approve')
   async approvePo(@Param('id') id: string, @Body() dto: { approverLevel?: number }): Promise<PurchaseOrder> {
     if (!(Number(dto?.approverLevel) >= 1)) throw new BadRequestException('approverLevel (>=1) is required');

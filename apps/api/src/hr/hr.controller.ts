@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, assertFormValid, employeeFormSchema } from '@aura/shared';
 import {
   type Employee,
   type Leave,
@@ -76,6 +76,11 @@ export class HrController {
     if (!dto?.role?.trim()) throw new BadRequestException('role is required');
     if (!dto?.department?.trim()) throw new BadRequestException('department is required');
     if (!dto?.joinedDate?.trim()) throw new BadRequestException('joinedDate is required');
+
+    // Enforce the shared metadata schema server-side (email/phone format, the
+    // camp→visa-tracking rule) so the same rules the renderer shows can't be
+    // bypassed by calling the endpoint directly.
+    assertFormValid(employeeFormSchema, dto);
 
     const ctx = this.tenant.get();
     return this.hrService.createEmployee(ctx.actorId, {

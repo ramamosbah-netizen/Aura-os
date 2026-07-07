@@ -35,14 +35,14 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 
 | # | Gap | Home | Effort | Risk |
 |--:|---|---|---|---|
-| 6 | Observability (OTel + outbox-lag/dead-letter/webhook/job gauges + alerts) | Vol 19 §6 | M | blind operations; SLA impossible |
+| 6 | Observability — **foundation landed 2026-07-07** (dependency-free metrics registry with Prometheus exposition; `jobs_processed_total` + `webhook_deliveries_total` counters instrumented; `GET /metrics` refreshes `outbox_pending`/`outbox_dead_letter` gauges at scrape time, gated by `METRICS_ENABLED`; 5 tests). Remaining: OTLP exporter option + alert rules + more gauges | Vol 19 §6 | S (was M) | blind operations; SLA impossible |
 | 7 | Permission taxonomy on 551 handlers + DB roles + roles UI | Vol 7 §2 | M | coarse authz blocks enterprise security review |
 | 8 | Global validation layer — **error half done 2026-07-06/07** (enforced error taxonomy: pure `classifyDomainMessage` + fitness test failing CI on any 500-escape, PR #31; audit: 57/389 domain throws escaped → 0; **98 per-controller try/catch→400 wrappers retired 2026-07-07** across 21 controllers so the taxonomy's 404/409 now surface). **form half mechanism landed 2026-07-07** (`assertFormValid` in shared runs the same `evaluateForm` server-side → 400 VALIDATION via the taxonomy; schemas relocate to shared keyed by their own id/endpoint; first enforced on `POST /hr/employees`). Remaining: apply `assertFormValid` to the other create/update endpoints (mechanical, per-schema) | Vol 9 §7 | S | metadata rules bypassable on not-yet-wired endpoints |
 | 9 | Universal pagination — **tail closed 2026-07-07** (fleet, HR all-8, doc-control paginated + dormant assets/site wirings exposed; additive `/paged` `Page<T>` routes, non-breaking; ~5 new tests). Remaining: low-growth site child lists + frontend opt-in | Vol 9 §1 | XS (was S–M) | large-tenant performance cliffs |
 | 10 | Charts/BI floor (dashboard charts + Power BI export) | Vol 16 | S–M | lost exec demos (competitive vulnerability #2) |
-| 11 | Notification delivery channels (email first) | Vol 4 §9 | S | "system that doesn't tell you anything" |
+| 11 | Notification delivery channels — **verified already delivered** (config-gated relay per channel: `SMTP_RELAY_URL`/`SMS_RELAY_URL`/`SLACK`/`TEAMS`, `NOTIFY_CHANNELS`+`NOTIFY_FALLBACK_RECIPIENT`, logged dev fallback; event→notification wiring for 6 event types; full test suite in `notification.service.test.ts`). Remaining: per-user recipient resolution (currently a tenant fallback address) + optional built-in SMTP transport (vs external relay) | Vol 4 §9 | XS (was S) | "system that doesn't tell you anything" |
 | 12 | Admin center phase 1 (settings service, users/roles, numbering/approval/webhook UIs) | Vol 15 §3 | M | every config change = engineering ticket |
-| 13 | MFA + SSO (OIDC/Entra) | Vol 7 §7–8 | M | enterprise IT checklist failure |
+| 13 | MFA + SSO — **Entra OIDC already accepted** (AuthService verifies IdP JWKS via `AUTH_JWKS_URL`) + **TOTP MFA landed 2026-07-07** (RFC 6238 in shared, enroll/verify endpoints; 7 tests incl. RFC vectors). Remaining: persist per-user MFA secret + gate login; map Entra groups→AURA roles | Vol 7 §7–8 | S (was M) | enterprise IT checklist failure |
 | 14 | Field-level PII encryption | Vol 7 §4 | M | PDPL exposure (salaries, IDs) |
 | 15 | Performance baseline + budgets | Vol 21 §3 | S | unknown ceilings before first big tenant |
 

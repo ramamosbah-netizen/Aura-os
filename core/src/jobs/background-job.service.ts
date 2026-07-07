@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 import { PG_POOL } from '../events/pg-pool';
+import { metrics } from '../observability/metrics';
 
 export interface BackgroundJob {
   id: string;
@@ -71,12 +72,15 @@ export class BackgroundJobService {
         try {
           await processor(job.payload, job.tenantId);
           job.status = 'completed';
+          metrics.inc('jobs_processed_total', { queue: queueName, status: 'completed' });
         } catch (error: any) {
           job.errorMessage = error.message;
           if (job.attempts >= job.maxAttempts) {
             job.status = 'failed';
+            metrics.inc('jobs_processed_total', { queue: queueName, status: 'failed' });
           } else {
             job.status = 'pending';
+            metrics.inc('jobs_processed_total', { queue: queueName, status: 'retried' });
           }
         }
       }
@@ -108,7 +112,7 @@ export class BackgroundJobService {
     for (const job of rows) {
       try {
         await processor(job.payload, job.tenantId);
-        
+
         await this.pool.query(
           `UPDATE public.aura_background_jobs
               SET status = 'completed', updated_at = now()
@@ -116,10 +120,12 @@ export class BackgroundJobService {
           [job.id]
         );
         processedCount++;
+        metrics.inc('jobs_processed_total', { queue: queueName, status: 'completed' });
       } catch (err: any) {
         this.logger.error(`Job ${job.id} failed: ${err.message}`);
         const status = job.attempts >= job.maxAttempts ? 'failed' : 'pending';
-        
+        metrics.inc('jobs_processed_total', { queue: queueName, status: status === 'failed' ? 'failed' : 'retried' });
+
         await this.pool.query(
           `UPDATE public.aura_background_jobs
               SET status = $1, error_message = $2, updated_at = now()

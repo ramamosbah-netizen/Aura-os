@@ -43,6 +43,7 @@ export * from './commands/command.bus';
 export * from './commands/idempotency.interceptor';
 export * from './identity/permissions.decorator';
 export * from './identity/permissions.guard';
+export * from './identity/login-throttle';
 export * from './projections/projection.types';
 export * from './projections/projection.engine';
 export * from './projections/snapshot.engine';

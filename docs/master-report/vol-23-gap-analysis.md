@@ -28,7 +28,7 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 | 1 | RLS enforcement bundle (least-priv role, tenant GUC, FORCE RLS, isolation test) | Vol 7 §3 | M | cross-tenant data exposure — existential |
 | 2 | Auth ON + refresh/revocation + lockout — **DONE 2026-07-07**: `AUTH_REQUIRED=true` fail-closed 401 (main.ts, public allowlist) · brute-force `LoginThrottle` (429 after N, `AUTH_LOCKOUT_*`) · JWT `jti` + `TokenRevocationStore` denylist checked on verify · `POST /auth/refresh` (sliding session) + `POST /auth/logout` (revoke). ~19 new tests. *Turning auth on also makes the #7 permission guard enforce.* | Vol 7 §1 | ✅ | open API in any misconfig |
 | 3 | Secrets vault + rotation + revoke exposed keys | Vol 7 §10 | S | credential compromise (keys have touched dev trees) |
-| 4 | Docker + deploy target + migration gate in CI | Vol 19 §2–3 | M | cannot ship, cannot upgrade customers |
+| 4 | Docker + deploy target + migration gate in CI — **started 2026-07-08**: CI migration-gate job (postgres:16, applies all 131 migrations onto a fresh DB + idempotency re-run) + production multi-stage Dockerfile + docker-build CI job (both self-verifying on CI). Remaining: registry push + Azure deploy target | Vol 19 §2–3 | S (was M) | cannot ship, cannot upgrade customers |
 | 5 | Backups/DR documented + restore drill | Vol 19 §8–9 | S | unrecoverable data loss |
 
 ### P1 — enterprise-credibility (V1 → early V2)

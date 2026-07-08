@@ -56,6 +56,7 @@ export * from './views/saved-view-store';
 export * from './views/saved-view.service';
 export * from './notifications/notification-store';
 export * from './config/feature-flag.service';
+export * from './config/settings.service';
 export * from './jobs/background-job.service';
 export * from './observability/metrics';
 export * from './integration/connector.service';

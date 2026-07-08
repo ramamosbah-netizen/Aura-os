@@ -121,6 +121,7 @@ export const NAV: NavGroup[] = [
       { label: 'Feature Flags', href: '/admin/feature-flags', glyph: '🚩', desc: 'Toggle staged capabilities + per-tenant overrides' },
       { label: 'Connectors', href: '/admin/connectors', glyph: '🔌', desc: 'External-system integration connectors' },
       { label: 'Numbering', href: '/admin/numbering', glyph: '#️⃣', desc: 'Document numbering sequences & counters' },
+      { label: 'Settings', href: '/admin/settings', glyph: '⚙', desc: 'Organisation-level key/value configuration' },
       { label: 'Audit Trail', href: '/admin/audit', glyph: '🔍', desc: 'Immutable audit log browser' },
       { label: 'Events', href: '/events', glyph: '⚡', desc: 'The event stream' },
     ],

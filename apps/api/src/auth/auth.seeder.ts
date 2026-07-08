@@ -14,9 +14,11 @@ export class AuthSeeder implements OnModuleInit {
 
   onModuleInit(): void {
     this.access.registerRole({
+      // Dev super-admin: full wildcard so u-admin can exercise every module's handlers once
+      // auth is turned on (the per-module @Permissions guard is now enforced platform-wide).
       id: 'dealChainAdmin',
-      name: 'Deal Chain Admin',
-      permissions: ['crm.*', 'tendering.*', 'contracts.*', 'projects.*', 'procurement.*', 'inventory.*', 'finance.*', 'engineering.*'],
+      name: 'Platform Admin (dev)',
+      permissions: ['*'],
     });
     this.access.grant({
       userId: 'u-admin',

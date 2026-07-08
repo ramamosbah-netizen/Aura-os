@@ -88,7 +88,8 @@ import {
   InMemoryWorkspaceConfigStore,
   PostgresWorkspaceConfigStore,
 } from './workspace/workspace-config-store';
-import { PG_POOL } from '@aura/core';
+import { PG_POOL, PermissionsGuard } from '@aura/core';
+import { APP_GUARD } from '@nestjs/core';
 import type { Pool } from 'pg';
 import { CommsController } from './comms/comms.controller';
 import { CommsService } from './comms/comms.service';
@@ -101,6 +102,9 @@ import { CommsService } from './comms/comms.service';
   imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
   controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmContactsController, CrmActivitiesController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, WinLossController, ContractsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController],
   providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService,
+    // Global permission guard — enforces @Permissions(...) on any handler. No-op until auth
+    // is turned on (staged pass-through); undeclared handlers always pass.
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     {
       // Postgres-backed when a pool is configured; in-memory otherwise (dev/CI).
       provide: WORKSPACE_CONFIG_STORE,

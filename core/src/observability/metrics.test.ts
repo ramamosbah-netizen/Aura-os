@@ -47,4 +47,15 @@ describe('MetricsRegistry', () => {
     m.counter('never_incremented_total');
     expect(m.render()).toContain('never_incremented_total 0');
   });
+
+  it('snapshot() returns structured series incl. lazily-collected gauges', () => {
+    m.inc('jobs_processed_total', { status: 'completed' }, 3);
+    m.gauge('outbox_pending', 'lag', () => 5);
+    const snap = m.snapshot();
+    const jobs = snap.find((s) => s.name === 'jobs_processed_total')!;
+    expect(jobs.type).toBe('counter');
+    expect(jobs.series).toEqual([{ labels: { status: 'completed' }, value: 3 }]);
+    const outbox = snap.find((s) => s.name === 'outbox_pending')!;
+    expect(outbox.series).toEqual([{ labels: {}, value: 5 }]);
+  });
 });

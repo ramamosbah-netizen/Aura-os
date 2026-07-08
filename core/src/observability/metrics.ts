@@ -92,6 +92,21 @@ export class MetricsRegistry {
   }
 
   /** Test helper — clear all metrics. */
+  /** Structured view of the registry (for the admin ops dashboard / JSON consumers). */
+  snapshot(): Array<{ name: string; type: 'counter' | 'gauge'; help: string; series: Array<{ labels: Labels; value: number }> }> {
+    const out: Array<{ name: string; type: 'counter' | 'gauge'; help: string; series: Array<{ labels: Labels; value: number }> }> = [];
+    for (const [name, m] of this.metrics) {
+      const series: Array<{ labels: Labels; value: number }> = [];
+      if (m.type === 'gauge' && m.collect && m.series.size === 0) {
+        series.push({ labels: {}, value: m.collect() });
+      } else {
+        for (const s of m.series.values()) series.push({ labels: s.labels, value: s.value });
+      }
+      out.push({ name, type: m.type, help: m.help, series });
+    }
+    return out;
+  }
+
   reset(): void {
     this.metrics.clear();
   }

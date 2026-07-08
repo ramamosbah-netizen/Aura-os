@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, UnauthorizedException } from '@nestjs/common';
-import { AuthService } from '@aura/core';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpException, HttpStatus, Post, UnauthorizedException } from '@nestjs/common';
+import { AuthService, throttleFromEnv } from '@aura/core';
 import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
 
 interface DevTokenDto {
@@ -20,6 +20,9 @@ interface LoginDto {
  */
 @Controller('auth')
 export class AuthController {
+  /** Per-node brute-force lockout for the login endpoint (config via AUTH_LOCKOUT_*). */
+  private readonly throttle = throttleFromEnv();
+
   constructor(private readonly auth: AuthService) {}
 
   @Get('status')
@@ -33,12 +36,27 @@ export class AuthController {
       throw new ForbiddenException('login (dev token mint) requires AUTH_JWT_SECRET');
     }
     const username = (dto.username ?? '').trim() || 'u-admin';
+
+    // Brute-force lockout: refuse while locked, count failures, clear on success.
+    const lock = this.throttle.status(username);
+    if (lock.locked) {
+      throw new HttpException(
+        `account temporarily locked — retry in ${Math.ceil(lock.retryAfterMs / 1000)}s`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     // Dev credential policy: require AUTH_DEV_PASSWORD when set, otherwise accept any.
     // This is the stand-in for the hosted-IdP login that will issue the real token.
     const expected = process.env.AUTH_DEV_PASSWORD?.trim();
     if (expected && dto.password !== expected) {
+      const after = this.throttle.recordFailure(username);
+      if (after.locked) {
+        throw new HttpException('account locked after too many failed attempts', HttpStatus.TOO_MANY_REQUESTS);
+      }
       throw new UnauthorizedException('invalid credentials');
     }
+    this.throttle.reset(username);
     const tenantId = 'dev-tenant';
     return {
       token: this.auth.mint({ sub: username, tenantId, companyId: null }),

@@ -26,7 +26,7 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 | # | Gap | Home | Effort | Risk if ignored |
 |--:|---|---|---|---|
 | 1 | RLS enforcement bundle (least-priv role, tenant GUC, FORCE RLS, isolation test) | Vol 7 §3 | M | cross-tenant data exposure — existential |
-| 2 | Auth ON by default + refresh/revocation + lockout | Vol 7 §1 | S–M | open API in any misconfig |
+| 2 | Auth ON + refresh/revocation + lockout — **fail-closed + lockout done** (`AUTH_REQUIRED=true` rejects anonymous requests 401 in main.ts w/ public allowlist; **brute-force login lockout** added 2026-07-07 — `LoginThrottle`, 429 after N failures, config via `AUTH_LOCKOUT_*`, 6 tests). Remaining: token refresh + jti-based revocation (needs jti in the JWT) | Vol 7 §1 | S | open API in any misconfig |
 | 3 | Secrets vault + rotation + revoke exposed keys | Vol 7 §10 | S | credential compromise (keys have touched dev trees) |
 | 4 | Docker + deploy target + migration gate in CI | Vol 19 §2–3 | M | cannot ship, cannot upgrade customers |
 | 5 | Backups/DR documented + restore drill | Vol 19 §8–9 | S | unrecoverable data loss |

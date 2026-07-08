@@ -117,6 +117,7 @@ export const NAV: NavGroup[] = [
       { label: 'Administrator', href: '/admin/workspace', glyph: '🛠', desc: 'Workspace access — roles, functions & who sees what' },
       { label: 'Roles & Access', href: '/admin/access', glyph: '🔑', desc: 'Roles & permission grants — what the API guard enforces' },
       { label: 'Webhooks', href: '/admin/webhooks', glyph: '🪝', desc: 'Outbound webhook subscriptions & delivery log' },
+      { label: 'Approval Matrix', href: '/admin/approval-matrix', glyph: '✔', desc: 'Ordered approval rules per entity type' },
       { label: 'Audit Trail', href: '/admin/audit', glyph: '🔍', desc: 'Immutable audit log browser' },
       { label: 'Events', href: '/events', glyph: '⚡', desc: 'The event stream' },
     ],

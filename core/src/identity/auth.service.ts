@@ -9,6 +9,7 @@ import {
   verifyJwtWithJwks,
 } from '@aura/shared';
 import type { TenantInfo } from '../tenancy/tenant-context';
+import { TokenRevocationStore } from './token-revocation';
 
 /** Caches a hosted IdP's JWKS (public keys), refreshed on TTL or a key-miss (rotation). */
 class JwksCache {
@@ -50,7 +51,7 @@ export class AuthService {
   private readonly jwksCache = this.jwksUrl ? new JwksCache(this.jwksUrl) : null;
   private readonly defaultTenant = process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
 
-  constructor() {
+  constructor(private readonly revocation: TokenRevocationStore) {
     const modes = [this.jwksCache ? 'JWKS (IdP)' : null, this.secret ? 'HS256 (self-issued)' : null].filter(Boolean);
     if (modes.length > 0) {
       this.logger.log(`Auth ON — verifying ${modes.join(' + ')}.`);
@@ -83,17 +84,46 @@ export class AuthService {
         jwks = await this.jwksCache.get(true);
         claims = jwks ? verifyJwtWithJwks(token, jwks) : null;
       }
-      if (claims?.sub) return this.toContext(claims);
+      if (claims?.sub && !this.revocation.isRevoked(claims.jti as string | undefined)) return this.toContext(claims);
     }
 
     // 2. Self-issued HS256 (dev) token.
     if (this.secret) {
       const claims = verifyJwt(token, this.secret);
-      if (claims?.sub && claims.tenantId) {
+      if (claims?.sub && claims.tenantId && !this.revocation.isRevoked(claims.jti)) {
         return { tenantId: claims.tenantId, companyId: (claims.companyId ?? null) as Id | null, actorId: claims.sub };
       }
     }
     return null;
+  }
+
+  private tokenOf(authorization: string | undefined): string | null {
+    return authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : null;
+  }
+
+  /** Sliding-session refresh: re-mint a fresh token from a still-valid, non-revoked self-issued one. */
+  refresh(authorization: string | undefined, ttlSeconds = 3600): string | null {
+    if (!this.secret) return null;
+    const token = this.tokenOf(authorization);
+    if (!token) return null;
+    const claims = verifyJwt(token, this.secret);
+    if (!claims?.sub || !claims.tenantId || this.revocation.isRevoked(claims.jti)) return null;
+    return signJwt(
+      { sub: claims.sub, tenantId: claims.tenantId, companyId: (claims.companyId ?? null) as Id | null },
+      this.secret,
+      ttlSeconds,
+    );
+  }
+
+  /** Revoke the presented token (logout / compromise response). True if a jti was denylisted. */
+  revoke(authorization: string | undefined): boolean {
+    if (!this.secret) return false;
+    const token = this.tokenOf(authorization);
+    if (!token) return false;
+    const claims = verifyJwt(token, this.secret);
+    if (!claims?.jti || typeof claims.exp !== 'number') return false;
+    this.revocation.revoke(claims.jti, claims.exp);
+    return true;
   }
 
   /**

@@ -10,6 +10,7 @@ import { TX_RUNNER, PostgresTxRunner, NullTxRunner } from './events/tx';
 import { TenantContext } from './tenancy/tenant-context';
 import { AccessService } from './identity/access.service';
 import { AuthService } from './identity/auth.service';
+import { TokenRevocationStore } from './identity/token-revocation';
 import { OrgService } from './identity/org.service';
 import { AiService } from './ai/ai.service';
 import { DmsService } from './dms/dms.service';
@@ -75,6 +76,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     OrgService,
     AccessService,
     AuthService,
+    TokenRevocationStore,
     AiService,
     NumberingService,
     AuditService,
@@ -168,6 +170,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     OrgService,
     AccessService,
     AuthService,
+    TokenRevocationStore,
     AiService,
     DmsService,
     WorkflowService,

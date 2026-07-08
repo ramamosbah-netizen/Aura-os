@@ -115,6 +115,7 @@ export const NAV: NavGroup[] = [
       { label: 'Submittals', href: '/doccontrol/submittals', glyph: '⊟', desc: 'Document submittal register (Code A/B/C/D review)' },
       { label: 'Templates', href: '/admin/templates', glyph: '⧇', desc: 'DMS — visual print templates' },
       { label: 'Administrator', href: '/admin/workspace', glyph: '🛠', desc: 'Workspace access — roles, functions & who sees what' },
+      { label: 'Roles & Access', href: '/admin/access', glyph: '🔑', desc: 'Roles & permission grants — what the API guard enforces' },
       { label: 'Audit Trail', href: '/admin/audit', glyph: '🔍', desc: 'Immutable audit log browser' },
       { label: 'Events', href: '/events', glyph: '⚡', desc: 'The event stream' },
     ],

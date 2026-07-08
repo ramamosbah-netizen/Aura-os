@@ -9,6 +9,13 @@ import {
   evaluateAccess,
 } from '@aura/shared';
 
+/** Structural equality for a grant scope (used to de-dupe grants and target a revoke). */
+function sameScope(a: Grant['scope'], b: Grant['scope']): boolean {
+  if (a.kind === 'org' && b.kind === 'org') return a.level === b.level && a.id === b.id;
+  if (a.kind === 'resource' && b.kind === 'resource') return a.resourceType === b.resourceType && a.resourceId === b.resourceId;
+  return false;
+}
+
 /**
  * The single authorization entry point. Every module asks `can()` — no module
  * implements its own access logic. Phase 0b holds roles/grants in memory; the
@@ -25,8 +32,29 @@ export class AccessService {
 
   grant(grant: Grant): void {
     const list = this.grantsByUser.get(grant.userId) ?? [];
-    list.push(grant);
+    // De-dupe: same user+role+scope is idempotent (re-granting doesn't stack).
+    const exists = list.some((g) => g.roleId === grant.roleId && sameScope(g.scope, grant.scope));
+    if (!exists) list.push(grant);
     this.grantsByUser.set(grant.userId, list);
+  }
+
+  /** All registered roles (for the admin roles screen). */
+  listRoles(): Role[] {
+    return [...this.roles.values()];
+  }
+
+  /** All grants across users (for the admin access screen). */
+  listGrants(): Grant[] {
+    return [...this.grantsByUser.values()].flat();
+  }
+
+  /** Revoke a user's role grant (optionally within a specific scope). Returns true if removed. */
+  revoke(userId: Id, roleId: Id, scope?: Grant['scope']): boolean {
+    const list = this.grantsByUser.get(userId);
+    if (!list) return false;
+    const next = list.filter((g) => !(g.roleId === roleId && (!scope || sameScope(g.scope, scope))));
+    this.grantsByUser.set(userId, next);
+    return next.length < list.length;
   }
 
   can(userId: Id, target: AccessTarget): AccessDecision {

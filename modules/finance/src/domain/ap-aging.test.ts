@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildApAging } from './ap-aging';
+import { buildApAging, apAgingCsvRows, AP_AGING_CSV_COLUMNS } from './ap-aging';
+import { toCsv } from '@aura/shared';
 import type { Invoice } from './invoice';
 
 function inv(over: Partial<Invoice>): Invoice {
@@ -66,5 +67,30 @@ describe('buildApAging', () => {
       '2026-07-10',
     );
     expect(r.bySupplier[0].supplierName).toBe('Big');
+  });
+});
+
+describe('apAgingCsvRows (BI export)', () => {
+  it('flattens per-supplier rows and appends a TOTAL row', () => {
+    const r = buildApAging(
+      [
+        inv({ supplierName: 'BuildCo', createdAt: '2026-06-30T10:00:00Z', value: 1000 }),
+        inv({ supplierName: 'Steel Ltd', createdAt: '2026-04-01T10:00:00Z', value: 3000 }),
+      ],
+      '2026-07-10',
+    );
+    const rows = apAgingCsvRows(r);
+    expect(rows).toHaveLength(3); // 2 suppliers + TOTAL
+    const total = rows[rows.length - 1];
+    expect(total.supplier).toBe('TOTAL');
+    expect(total.total).toBe(4000);
+  });
+
+  it('serialises to CSV with the fixed column order + header', () => {
+    const r = buildApAging([inv({ supplierName: 'BuildCo', value: 1000, createdAt: '2026-07-09T00:00:00Z' })], '2026-07-10');
+    const csv = toCsv(apAgingCsvRows(r), [...AP_AGING_CSV_COLUMNS]);
+    const lines = csv.split('\n');
+    expect(lines[0]).toBe('supplier,current,d1_30,d31_60,d61_90,d90_plus,total');
+    expect(lines).toContain('TOTAL,0,1000,0,0,0,1000');
   });
 });

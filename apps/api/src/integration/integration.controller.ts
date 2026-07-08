@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import type { WebhookSubscription } from '@aura/shared';
 import { TenantContext, type WebhookDelivery, WebhookService } from '@aura/core';
 
@@ -39,5 +39,13 @@ export class IntegrationController {
   @Get('deliveries')
   deliveries(@Query('subscriptionId') subscriptionId?: string): Promise<WebhookDelivery[]> {
     return this.webhooks.listDeliveries(subscriptionId, 50);
+  }
+
+  /** Enable/disable a subscription (admin webhooks screen). */
+  @Patch(':id')
+  async setActive(@Param('id') id: string, @Body() dto: { active?: boolean }): Promise<WebhookSubscription> {
+    const updated = await this.webhooks.setActive(id, dto?.active !== false);
+    if (!updated) throw new NotFoundException(`webhook ${id} not found`);
+    return updated;
   }
 }

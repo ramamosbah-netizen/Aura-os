@@ -12,6 +12,14 @@ export interface IntegrationConnector {
   enabled: boolean;
 }
 
+/** Connector view for the admin screen — WITHOUT authConfig, which holds secrets. */
+export interface ConnectorSummary {
+  id: string;
+  systemName: string;
+  enabled: boolean;
+  mappingRules: Record<string, string>;
+}
+
 @Injectable()
 export class ConnectorService {
   private readonly logger = new Logger('ConnectorService');
@@ -43,6 +51,40 @@ export class ConnectorService {
     );
 
     return id;
+  }
+
+  /** List a tenant's connectors for the admin screen — auth secrets are never returned. */
+  async listConnectors(tenantId: string): Promise<ConnectorSummary[]> {
+    if (!this.pool) {
+      return [...this.localConnectors.values()]
+        .filter((c) => c.tenantId === tenantId)
+        .map(({ id, systemName, enabled, mappingRules }) => ({ id, systemName, enabled, mappingRules }));
+    }
+    const { rows } = await this.pool.query<{ id: string; system_name: string; enabled: boolean; mapping_rules: any }>(
+      `SELECT id, system_name, enabled, mapping_rules FROM public.aura_integration_connectors WHERE tenant_id = $1 ORDER BY system_name`,
+      [tenantId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      systemName: r.system_name,
+      enabled: r.enabled,
+      mappingRules: (r.mapping_rules ?? {}) as Record<string, string>,
+    }));
+  }
+
+  /** Enable/disable a connector (an inactive one is skipped by syncEvent). */
+  async setEnabled(tenantId: string, id: string, enabled: boolean): Promise<boolean> {
+    if (!this.pool) {
+      const c = this.localConnectors.get(id);
+      if (!c || c.tenantId !== tenantId) return false;
+      this.localConnectors.set(id, { ...c, enabled });
+      return true;
+    }
+    const res = await this.pool.query(
+      `UPDATE public.aura_integration_connectors SET enabled = $3, updated_at = now() WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId, enabled],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   async syncEvent(tenantId: string, systemName: string, eventType: string, payload: any): Promise<any> {

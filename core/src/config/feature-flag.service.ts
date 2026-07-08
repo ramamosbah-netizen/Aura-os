@@ -7,10 +7,17 @@ export interface FlagRule {
   enabled: boolean;
 }
 
+export interface FeatureFlag {
+  flagKey: string;
+  description: string;
+  enabledDefault: boolean;
+  rules: FlagRule[];
+}
+
 @Injectable()
 export class FeatureFlagService {
   private readonly logger = new Logger('FeatureFlagService');
-  private readonly localCache = new Map<string, { enabledDefault: boolean; rules: FlagRule[] }>();
+  private readonly localCache = new Map<string, { description: string; enabledDefault: boolean; rules: FlagRule[] }>();
 
   constructor(@Inject(PG_POOL) private readonly pool: Pool | null) {}
 
@@ -48,7 +55,7 @@ export class FeatureFlagService {
     description?: string
   ): Promise<void> {
     if (!this.pool) {
-      this.localCache.set(flagKey, { enabledDefault, rules });
+      this.localCache.set(flagKey, { description: description || '', enabledDefault, rules });
       return;
     }
 
@@ -60,5 +67,26 @@ export class FeatureFlagService {
       [flagKey, description || '', enabledDefault, JSON.stringify(rules)]
     );
     this.logger.log(`Feature flag "${flagKey}" set. Default: ${enabledDefault}. Overrides: ${rules.length}`);
+  }
+
+  /** All known flags (for the admin screen). In-memory in dev; from Postgres when configured. */
+  async listFlags(): Promise<FeatureFlag[]> {
+    if (!this.pool) {
+      return [...this.localCache.entries()].map(([flagKey, v]) => ({
+        flagKey,
+        description: v.description,
+        enabledDefault: v.enabledDefault,
+        rules: v.rules,
+      }));
+    }
+    const { rows } = await this.pool.query<{ flag_key: string; description: string; enabled_default: boolean; rules: any }>(
+      `SELECT flag_key, description, enabled_default, rules FROM public.aura_feature_flags ORDER BY flag_key`,
+    );
+    return rows.map((r) => ({
+      flagKey: r.flag_key,
+      description: r.description ?? '',
+      enabledDefault: r.enabled_default,
+      rules: Array.isArray(r.rules) ? (r.rules as FlagRule[]) : [],
+    }));
   }
 }

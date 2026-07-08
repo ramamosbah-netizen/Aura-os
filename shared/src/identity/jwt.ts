@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import type { Id } from '../domain/id';
 
 // Minimal HS256 JWT — the same node:crypto dependency the webhook signer already uses.
@@ -11,6 +11,8 @@ export interface AuthClaims {
   sub: Id;
   tenantId: Id;
   companyId?: Id | null;
+  /** JWT ID — unique per token; the handle used to revoke a specific token. */
+  jti?: string;
   /** Seconds since epoch (stamped by signJwt). */
   iat?: number;
   exp?: number;
@@ -28,7 +30,7 @@ function sign(data: string, secret: string): string {
 /** Encode + sign an HS256 JWT. `ttlSeconds` sets `exp` (default 1h; negative = already expired). */
 export function signJwt(claims: AuthClaims, secret: string, ttlSeconds = 3600): string {
   const iat = Math.floor(Date.now() / 1000);
-  const body: AuthClaims = { ...claims, iat, exp: iat + ttlSeconds };
+  const body: AuthClaims = { ...claims, jti: claims.jti ?? randomUUID(), iat, exp: iat + ttlSeconds };
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = b64url(JSON.stringify(body));
   return `${header}.${payload}.${sign(`${header}.${payload}`, secret)}`;

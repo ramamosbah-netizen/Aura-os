@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpException, HttpStatus, Post, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Headers, HttpException, HttpStatus, Post, UnauthorizedException } from '@nestjs/common';
 import { AuthService, throttleFromEnv } from '@aura/core';
 import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
 
@@ -62,6 +62,20 @@ export class AuthController {
       token: this.auth.mint({ sub: username, tenantId, companyId: null }),
       user: { sub: username, tenantId },
     };
+  }
+
+  /** Sliding-session refresh — exchange a still-valid token for a fresh one. */
+  @Post('refresh')
+  refresh(@Headers('authorization') authorization?: string): { token: string } {
+    const token = this.auth.refresh(authorization);
+    if (!token) throw new UnauthorizedException('cannot refresh — token missing, invalid, or revoked');
+    return { token };
+  }
+
+  /** Logout — revoke the presented token by its jti so it can no longer authenticate. */
+  @Post('logout')
+  logout(@Headers('authorization') authorization?: string): { revoked: boolean } {
+    return { revoked: this.auth.revoke(authorization) };
   }
 
   /**

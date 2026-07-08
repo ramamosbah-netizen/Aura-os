@@ -1,0 +1,13 @@
+# Keep the build context small + force a clean install/build inside the image.
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/playwright-report
+**/test-results
+.git
+.github
+**/.env
+**/.env.*
+**/*.log
+.claude

@@ -48,6 +48,49 @@ jobs:
       - name: Dependency audit (TIER-2 #43)
         run: pnpm audit --prod || true
 
+  migration-gate:
+    name: migration gate (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aura_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/aura_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Gate: every migration in infrastructure/migrations/ must apply cleanly onto a fresh DB.
+      # A broken or out-of-order migration fails the PR — you cannot ship a schema that won't build.
+      - name: Apply migrations (fresh DB)
+        run: pnpm --filter @aura/api db:migrate
+
+      # Idempotency: re-running must be a no-op (the migrate runner records applied files).
+      - name: Re-apply migrations (must be a no-op)
+        run: pnpm --filter @aura/api db:migrate
+
   web-smoke:
     name: web smoke (Playwright — TIER-2 #41)
     runs-on: ubuntu-latest
@@ -78,3 +121,13 @@ jobs:
         run: pnpm --filter @aura/web e2e
         env:
           CI: 'true'
+
+  docker-build:
+    name: docker build (API image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Verifies the production Dockerfile builds (gap #4) — a broken image fails the PR.
+      - name: Build API image
+        run: docker build -t aura-api:ci .

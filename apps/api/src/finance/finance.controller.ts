@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
-import { parsePageParams, parseCsv } from '@aura/shared';
+import { parsePageParams, parseCsv, toCsv } from '@aura/shared';
 import {
   type Invoice,
   type InvoiceStatus,
@@ -30,6 +30,8 @@ import {
   type NewCustomerInvoiceLine,
   type ArAgingReport,
   type ApAgingReport,
+  apAgingCsvRows,
+  AP_AGING_CSV_COLUMNS,
   CustomerInvoiceService,
   type BankGuarantee,
   type GuaranteeType,
@@ -167,6 +169,15 @@ export class FinanceController {
   @Get('invoices/aging')
   apAging(@Query('asOf') asOf?: string): Promise<ApAgingReport> {
     return this.invoices.aging(this.tenant.get().tenantId, asOf);
+  }
+
+  /** AP aging as CSV — the payables exec report for Power BI / Excel (gap #10). */
+  @Get('invoices/aging.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="ap-aging.csv"')
+  async apAgingCsv(@Query('asOf') asOf?: string): Promise<string> {
+    const report = await this.invoices.aging(this.tenant.get().tenantId, asOf);
+    return toCsv(apAgingCsvRows(report), [...AP_AGING_CSV_COLUMNS]);
   }
 
   @Get('invoices/fx-revaluation')

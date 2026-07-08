@@ -62,6 +62,33 @@ describe('Document Control Module Bounded Context', () => {
       const acknowledged = await service.acknowledgeTransmittal('t1', null, t.id);
       expect(acknowledged.status).toBe('acknowledged');
     });
+
+    it('paginates transmittals and filters by project', async () => {
+      const service = new DocControlService(
+        new InMemoryTransmittalStore(),
+        new InMemoryTransmittalItemStore(),
+        new InMemoryCorrespondenceStore(),
+        new InMemorySubmittalStore(),
+        new InMemoryDrawingRegisterStore(),
+        mockEvents,
+        mockTx,
+        mockAccess,
+      );
+
+      for (let i = 0; i < 3; i++) {
+        await service.createTransmittal({ tenantId: 't1', projectId: 'p1', code: `TRA-2${i}`, title: `Package ${i}` });
+      }
+      await service.createTransmittal({ tenantId: 't1', projectId: 'p2', code: 'TRA-30', title: 'Other project' });
+
+      const page1 = await service.listTransmittalsPaged({ tenantId: 't1' }, { limit: 2, offset: 0 });
+      expect(page1.items.length).toBe(2);
+      expect(page1.total).toBe(4);
+      expect(page1.hasMore).toBe(true);
+
+      const byProject = await service.listTransmittalsPaged({ tenantId: 't1', projectId: 'p1' }, { limit: 10, offset: 0 });
+      expect(byProject.total).toBe(3);
+      expect(byProject.items.every((t) => t.projectId === 'p1')).toBe(true);
+    });
   });
 
   describe('Correspondence Log', () => {

@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type Transmittal,
   type Correspondence,
@@ -75,6 +76,11 @@ export class DocControlController {
     return this.docControlService.listTransmittals(ctx.tenantId);
   }
 
+  @Get('transmittals/paged')
+  listTransmittalsPaged(@Query('projectId') projectId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.docControlService.listTransmittalsPaged({ tenantId: this.tenant.get().tenantId, projectId }, parsePageParams(limit, offset));
+  }
+
   @Post('transmittals/:id/items')
   async addTransmittalItems(
     @Param('id') id: string,
@@ -136,6 +142,11 @@ export class DocControlController {
     return this.docControlService.listCorrespondence(ctx.tenantId);
   }
 
+  @Get('correspondence/paged')
+  listCorrespondencePaged(@Query('projectId') projectId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.docControlService.listCorrespondencePaged({ tenantId: this.tenant.get().tenantId, projectId }, parsePageParams(limit, offset));
+  }
+
   // ── Submittals (document review register) ──────────────────────────────────
 
   @Post('submittals')
@@ -160,6 +171,11 @@ export class DocControlController {
   @Get('submittals')
   listSubmittals(): Promise<Submittal[]> {
     return this.docControlService.listSubmittals(this.tenant.get().tenantId);
+  }
+
+  @Get('submittals/paged')
+  listSubmittalsPaged(@Query('projectId') projectId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.docControlService.listSubmittalsPaged({ tenantId: this.tenant.get().tenantId, projectId }, parsePageParams(limit, offset));
   }
 
   @Put('submittals/:id/submit')
@@ -206,6 +222,11 @@ export class DocControlController {
     return this.docControlService.listRegister(this.tenant.get().tenantId);
   }
 
+  @Get('register/paged')
+  listRegisterPaged(@Query('projectId') projectId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.docControlService.listRegisterPaged({ tenantId: this.tenant.get().tenantId, projectId }, parsePageParams(limit, offset));
+  }
+
   @Put('register/:id/revise')
   async reviseRegisterEntry(
     @Param('id') id: string,
@@ -217,11 +238,8 @@ export class DocControlController {
   }
 
   @Get('register/:id/history')
-  async registerEntryHistory(@Param('id') id: string) {
-    try {
-      return await this.docControlService.registerEntryHistory(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new NotFoundException((e as Error).message);
-    }
+  registerEntryHistory(@Param('id') id: string) {
+    // "register entry not found" is classified to 404 by the global error taxonomy.
+    return this.docControlService.registerEntryHistory(this.tenant.get().tenantId, id);
   }
 }

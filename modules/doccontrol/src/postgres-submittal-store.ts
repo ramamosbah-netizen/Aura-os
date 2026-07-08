@@ -1,7 +1,9 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
+import { type Page, type PageParams } from '@aura/shared';
 import type { Submittal } from './domain/submittal';
-import type { SubmittalStore } from './store.interface';
+import type { SubmittalStore, DocListFilter } from './store.interface';
+import { pagePostgres, docWhere } from './paged-query';
 
 export class PostgresSubmittalStore implements SubmittalStore {
   constructor(private readonly pool: Pool) {}
@@ -36,6 +38,11 @@ export class PostgresSubmittalStore implements SubmittalStore {
   async findAll(tenantId: string): Promise<Submittal[]> {
     const res = await this.pool.query(`select * from public.aura_doccontrol_submittals where tenant_id = $1 order by created_at desc`, [tenantId]);
     return res.rows.map(this.mapRow);
+  }
+
+  async listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Submittal>> {
+    const { where, params } = docWhere(filter);
+    return pagePostgres(this.pool, { table: 'aura_doccontrol_submittals', where, params, orderBy: 'created_at DESC', map: (r) => this.mapRow(r) }, page);
   }
 
   private mapRow(row: QueryResultRow): Submittal {

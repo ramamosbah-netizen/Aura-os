@@ -1,6 +1,8 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import type { DrawingRegisterEntry } from './domain/drawing-register';
-import type { DrawingRegisterStore } from './store.interface';
+import type { DrawingRegisterStore, DocListFilter } from './store.interface';
+import { pageDocs } from './paged-query';
 
 export class InMemoryDrawingRegisterStore implements DrawingRegisterStore {
   private items = new Map<string, DrawingRegisterEntry>();
@@ -25,5 +27,9 @@ export class InMemoryDrawingRegisterStore implements DrawingRegisterStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId)
       .sort((a, b) => a.documentNumber.localeCompare(b.documentNumber));
+  }
+
+  async listPaged(filter: DocListFilter, page: PageParams): Promise<Page<DrawingRegisterEntry>> {
+    return pageDocs(this.items.values(), filter, page, (a, b) => a.documentNumber.localeCompare(b.documentNumber));
   }
 }

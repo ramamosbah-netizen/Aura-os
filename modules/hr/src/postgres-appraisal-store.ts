@@ -9,7 +9,9 @@ import type { ExpenseClaim } from './domain/expense-claim';
 import type { StaffAdvance } from './domain/staff-advance';
 import type { AttendanceRecord } from './domain/attendance';
 import type { PerformanceAppraisal, AppraisalCriterion } from './domain/appraisal';
-import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore } from './store.interface';
+import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, EmployeeScopedFilter } from './store.interface';
+import { type Page, type PageParams } from '@aura/shared';
+import { pagePostgres, scopedWhere } from './paged-query';
 
 /**
  * Format a `date` column as YYYY-MM-DD using LOCAL parts. node-pg parses `date` to a Date at
@@ -59,6 +61,11 @@ export class PostgresAppraisalStore implements AppraisalStore {
   async findByEmployee(tenantId: string, employeeId: string): Promise<PerformanceAppraisal[]> {
     const res = await this.pool.query(`select * from public.aura_hr_appraisals where tenant_id = $1 and employee_id = $2 order by created_at desc`, [tenantId, employeeId]);
     return res.rows.map((r) => this.mapAppraisal(r));
+  }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PerformanceAppraisal>> {
+    const { where, params } = scopedWhere(filter);
+    return pagePostgres(this.pool, { table: 'aura_hr_appraisals', where, params, orderBy: 'created_at DESC', map: (r) => this.mapAppraisal(r) }, page);
   }
 
   private mapAppraisal(row: QueryResultRow): PerformanceAppraisal {

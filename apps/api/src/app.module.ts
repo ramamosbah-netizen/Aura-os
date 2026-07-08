@@ -65,6 +65,13 @@ import { SampleEventSubscriber } from './events/sample-subscriber';
 import { CrossModuleSubscriber } from './events/cross-module-subscriber';
 import { NotificationsSubscriber } from './events/notifications-subscriber';
 import { NotificationsController } from './notifications/notifications.controller';
+import { MetricsController } from './observability/metrics.controller';
+import { AccessAdminController } from './admin/access-admin.controller';
+import { ApprovalMatrixAdminController } from './admin/approval-matrix-admin.controller';
+import { FeatureFlagsAdminController } from './admin/feature-flags-admin.controller';
+import { ConnectorsAdminController } from './admin/connectors-admin.controller';
+import { NumberingAdminController } from './admin/numbering-admin.controller';
+import { SettingsAdminController } from './admin/settings-admin.controller';
 import { PoisonSubscriber } from './events/poison-subscriber';
 import { WorkflowSeeder } from './workflow/workflow.seeder';
 import { AuthSeeder } from './auth/auth.seeder';
@@ -87,7 +94,8 @@ import {
   InMemoryWorkspaceConfigStore,
   PostgresWorkspaceConfigStore,
 } from './workspace/workspace-config-store';
-import { PG_POOL } from '@aura/core';
+import { PG_POOL, PermissionsGuard } from '@aura/core';
+import { APP_GUARD } from '@nestjs/core';
 import type { Pool } from 'pg';
 import { CommsController } from './comms/comms.controller';
 import { CommsService } from './comms/comms.service';
@@ -98,8 +106,11 @@ import { CommsService } from './comms/comms.service';
  */
 @Module({
   imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmContactsController, CrmActivitiesController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, WinLossController, ContractsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController],
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, CrmAccountsController, CrmLeadsController, CrmContactsController, CrmActivitiesController, CrmOpportunitiesController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, WinLossController, ContractsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController],
   providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService,
+    // Global permission guard — enforces @Permissions(...) on any handler. No-op until auth
+    // is turned on (staged pass-through); undeclared handlers always pass.
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     {
       // Postgres-backed when a pool is configured; in-memory otherwise (dev/CI).
       provide: WORKSPACE_CONFIG_STORE,

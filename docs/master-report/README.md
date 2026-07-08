@@ -36,6 +36,19 @@ or **[Gap]**.
 > **409** (procurement PO approval gates, insufficient stock) instead of a forced 400. 29 unit
 > + 6 e2e + taxonomy-fitness green. See
 > `docs/reports/2026-07-07-controller-wrapper-retirement.md`.
+>
+> **Update 2026-07-07 (universal pagination, gap #9):** closed the pagination tail —
+> **fleet, all 8 HR lists, and doc-control** now expose additive `GET .../paged` `Page<T>`
+> routes (plus the dormant assets/site wirings). Non-breaking (bare routes stay); ~5 new
+> tests; API 29 unit + 6 e2e + turbo 22/22 green. See
+> `docs/reports/2026-07-07-universal-pagination-adoption.md`.
+>
+> **Update 2026-07-07 (server-side form enforcement, gap #8 form half):** `assertFormValid`
+> in shared runs the renderer's `evaluateForm` on the server so metadata rules
+> (required/validation/custom-validators/blocking-rules) can't be bypassed via the API —
+> 400 VALIDATION via the taxonomy; schemas relocate to shared keyed by their own id/endpoint;
+> first enforced on `POST /hr/employees`. See
+> `docs/reports/2026-07-07-server-side-form-enforcement.md`.
 
 **Verified platform counts (2026-07-04):**
 

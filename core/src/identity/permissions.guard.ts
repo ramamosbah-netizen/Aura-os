@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AccessService } from './access.service';
+import { AuthService } from './auth.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { PERMISSIONS_KEY } from './permissions.decorator';
 import { type AccessTarget, type OrgLevel, type Id, AccessDeniedError } from '@aura/shared';
@@ -16,6 +17,7 @@ export class PermissionsGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly access: AccessService,
     private readonly tenant: TenantContext,
+    private readonly auth: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -25,6 +27,14 @@ export class PermissionsGuard implements CanActivate {
     ]);
 
     if (!requiredPermissions || requiredPermissions.length === 0) {
+      return true;
+    }
+
+    // Staged pass-through: when auth is OFF (no verifier configured — the dev default) the
+    // whole access seam passes through, so requests run as the dev actor (actorId null).
+    // The permission guard mirrors that: annotations become no-ops until auth is turned on,
+    // exactly like the AI/DB/auth seams. Enforcement engages the moment a verifier is set.
+    if (!this.auth.enabled) {
       return true;
     }
 

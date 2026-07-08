@@ -8,7 +8,7 @@ import { type MaintenanceRecord, makeMaintenanceRecord } from './domain/maintena
 import { type TrafficFine, makeTrafficFine, assignFine, disputeFine, payFine } from './domain/traffic-fine';
 import { type SalikCharge, type NewSalikCharge, type SalikSummary, makeSalikCharge, allocateSalik, disputeSalik, summariseSalik } from './domain/salik-charge';
 import { type VehicleTelemetry, makeVehicleTelemetry, FLEET_TELEMETRY_EVENT } from './domain/telemetry';
-import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore, type SalikChargeStore, type TelemetryStore, type VehicleFilter } from './store.interface';
+import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore, type SalikChargeStore, type TelemetryStore, type VehicleFilter, type FuelLogFilter, type MaintenanceFilter, type TrafficFineFilter, type SalikChargeFilter } from './store.interface';
 
 export const VEHICLE_STORE = Symbol('VEHICLE_STORE');
 export const FUEL_LOG_STORE = Symbol('FUEL_LOG_STORE');
@@ -173,6 +173,10 @@ export class FleetService {
     return this.fuelLogStore.findByTenant(tenantId);
   }
 
+  listFuelLogsPaged(filter: FuelLogFilter, page: PageParams): Promise<Page<FuelLog>> {
+    return this.fuelLogStore.listPaged(filter, page);
+  }
+
   // ── Maintenance ───────────────────────────────────────────────────────────
 
   async scheduleMaintenance(
@@ -252,6 +256,10 @@ export class FleetService {
 
   listMaintenance(tenantId: string): Promise<MaintenanceRecord[]> {
     return this.maintenanceStore.findByTenant(tenantId);
+  }
+
+  listMaintenancePaged(filter: MaintenanceFilter, page: PageParams): Promise<Page<MaintenanceRecord>> {
+    return this.maintenanceStore.listPaged(filter, page);
   }
 
   // ── Traffic Fines ─────────────────────────────────────────────────────────
@@ -342,6 +350,10 @@ export class FleetService {
     return this.trafficFineStore.findByTenant(tenantId);
   }
 
+  listFinesPaged(filter: TrafficFineFilter, page: PageParams): Promise<Page<TrafficFine>> {
+    return this.trafficFineStore.listPaged(filter, page);
+  }
+
   // ── Salik (toll charges) ──────────────────────────────────────────────────
 
   async recordSalik(input: NewSalikCharge): Promise<SalikCharge> {
@@ -387,6 +399,10 @@ export class FleetService {
 
   listSalik(tenantId: string): Promise<SalikCharge[]> {
     return this.salikStore.findByTenant(tenantId);
+  }
+
+  listSalikPaged(filter: SalikChargeFilter, page: PageParams): Promise<Page<SalikCharge>> {
+    return this.salikStore.listPaged(filter, page);
   }
 
   async salikSummary(tenantId: string): Promise<SalikSummary> {

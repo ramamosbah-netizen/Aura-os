@@ -1,6 +1,8 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import type { Transmittal } from './domain/transmittal';
-import type { TransmittalStore } from './store.interface';
+import type { TransmittalStore, DocListFilter } from './store.interface';
+import { pageDocs } from './paged-query';
 
 export class InMemoryTransmittalStore implements TransmittalStore {
   private items = new Map<string, Transmittal>();
@@ -25,5 +27,9 @@ export class InMemoryTransmittalStore implements TransmittalStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId)
       .map((item) => ({ ...item }));
+  }
+
+  async listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Transmittal>> {
+    return pageDocs(this.items.values(), filter, page, (a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 }

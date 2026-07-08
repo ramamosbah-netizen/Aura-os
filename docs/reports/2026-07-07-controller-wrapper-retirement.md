@@ -45,6 +45,8 @@ literal through the real classifier and still passes (2-entry internal allowlist
 
 ## Remaining
 
-- The 6 `NotFoundException((e as Error).message)` wrappers — evaluate case-by-case under e2e
-  watch (each is a potential 404→4xx behavior change, not a mechanical strip).
-- Server-side `evaluateForm` — the other half of Vol 23 #8 (needs schema↔endpoint mapping).
+- ~~The 6 `NotFoundException` wrappers~~ **DONE (commit `445ac17`)** — verified every underlying
+  message contains "not found", so each classifies to the identical **404** through the taxonomy;
+  removed behaviour-preservingly. All 104 wrappers (98 BadRequest + 6 NotFound) are now retired.
+- ~~Server-side `evaluateForm`~~ **mechanism landed (commit `66d5e32`)** — `assertFormValid`; see
+  `docs/reports/2026-07-07-server-side-form-enforcement.md`. Rollout to remaining endpoints ongoing.

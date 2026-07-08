@@ -9,7 +9,9 @@ import type { ExpenseClaim } from './domain/expense-claim';
 import type { StaffAdvance } from './domain/staff-advance';
 import type { AttendanceRecord } from './domain/attendance';
 import type { PerformanceAppraisal, AppraisalCriterion } from './domain/appraisal';
-import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore } from './store.interface';
+import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, EmployeeFilter } from './store.interface';
+import { type Page, type PageParams } from '@aura/shared';
+import { pagePostgres } from './paged-query';
 
 /**
  * Format a `date` column as YYYY-MM-DD using LOCAL parts. node-pg parses `date` to a Date at
@@ -101,6 +103,16 @@ export class PostgresEmployeeStore implements EmployeeStore {
       [id, tenantId],
     );
     return (res.rowCount ?? 0) > 0;
+  }
+
+  async listPaged(filter: EmployeeFilter, page: PageParams): Promise<Page<Employee>> {
+    const where = ['deleted_at IS NULL'];
+    const params: unknown[] = [];
+    if (filter.tenantId) {
+      params.push(filter.tenantId);
+      where.push(`tenant_id = $${params.length}`);
+    }
+    return pagePostgres(this.pool, { table: 'aura_hr_employees', where, params, orderBy: 'created_at DESC', map: (r) => this.mapEmployee(r) }, page);
   }
 
   private mapEmployee(row: QueryResultRow): Employee {

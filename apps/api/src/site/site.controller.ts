@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type DailyReport,
   type DelayLog,
@@ -72,6 +73,19 @@ export class SiteController {
   submitDailyReport(@Param('id') id: string): Promise<DailyReport> {
     const ctx = this.tenant.get();
     return this.siteService.submitDailyReport(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Get('daily-reports/paged')
+  listDailyReportsPaged(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.siteService.listDailyReportsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
   }
 
   @Get('daily-reports')

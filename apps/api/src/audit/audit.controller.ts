@@ -1,7 +1,8 @@
-import { Controller, Get, Query, Logger } from '@nestjs/common';
+import { Controller, Get, Header, Query, Logger } from '@nestjs/common';
 import { AuditService, TenantContext } from '@aura/core';
 import { Inject } from '@nestjs/common';
 import { PG_POOL } from '@aura/core';
+import { toCsv } from '@aura/shared';
 import type { Pool } from 'pg';
 
 /**
@@ -110,6 +111,75 @@ export class AuditController {
       limit: lim,
       offset: off,
     };
+  }
+
+  /**
+   * Export the (filtered) audit trail as CSV — the Power BI / Excel feed for the compliance
+   * log (Vol 23 #10). Same filters as `list`, no page limit (capped for safety), jsonb
+   * `changes`/`metadata` flattened to JSON strings so every column is a scalar. Declared
+   * before `:id` so the literal route wins.
+   *
+   * GET /api/v1/audit/export.csv?module=finance&from=2026-01-01
+   */
+  @Get('export.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="audit-log.csv"')
+  async exportCsv(
+    @Query('module') module?: string,
+    @Query('entityType') entityType?: string,
+    @Query('entityId') entityId?: string,
+    @Query('action') action?: string,
+    @Query('actorId') actorId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<string> {
+    const tenantId = this.tenant.get().tenantId ?? 'default';
+    const COLS = ['id', 'tenant_id', 'company_id', 'actor_id', 'module', 'entity_type', 'entity_id', 'action', 'changes', 'metadata', 'created_at'];
+    const flatten = (rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> =>
+      rows.map((r) => ({
+        ...r,
+        changes: JSON.stringify(r.changes ?? {}),
+        metadata: JSON.stringify(r.metadata ?? {}),
+        created_at: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+      }));
+
+    if (!this.pool) {
+      return toCsv(flatten(generateMockEntries(tenantId, 50)), COLS);
+    }
+
+    const conditions: string[] = ['tenant_id = $1'];
+    const params: any[] = [tenantId];
+    let idx = 2;
+    const eq = (col: string, val?: string): void => {
+      if (val) {
+        conditions.push(`${col} = $${idx++}`);
+        params.push(val);
+      }
+    };
+    eq('module', module);
+    eq('entity_type', entityType);
+    eq('entity_id', entityId);
+    eq('action', action);
+    eq('actor_id', actorId);
+    if (from) {
+      conditions.push(`created_at >= $${idx++}`);
+      params.push(from);
+    }
+    if (to) {
+      conditions.push(`created_at <= $${idx++}`);
+      params.push(to);
+    }
+
+    const EXPORT_CAP = 50000;
+    const res = await this.pool.query(
+      `SELECT ${COLS.join(', ')}
+         FROM public.aura_audit_log
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY created_at DESC
+        LIMIT ${EXPORT_CAP}`,
+      params,
+    );
+    return toCsv(flatten(res.rows), COLS);
   }
 
   /**

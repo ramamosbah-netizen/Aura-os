@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
-import { parsePageParams, assertFormValid, employeeFormSchema } from '@aura/shared';
+import { FormOverridesService, TenantContext } from '@aura/core';
+import { applyFormOverrides, parsePageParams, assertFormValid, employeeFormSchema } from '@aura/shared';
 import {
   type Employee,
   type Leave,
@@ -65,12 +65,13 @@ export class HrController {
   constructor(
     private readonly hrService: HrService,
     private readonly tenant: TenantContext,
+    private readonly formOverrides: FormOverridesService,
   ) {}
 
   // ── Employees ──────────────────────────────────────────────────────────────
 
   @Post('employees')
-  createEmployee(@Body() dto: CreateEmployeeDto): Promise<Employee> {
+  async createEmployee(@Body() dto: CreateEmployeeDto): Promise<Employee> {
     if (!dto?.firstName?.trim()) throw new BadRequestException('firstName is required');
     if (!dto?.lastName?.trim()) throw new BadRequestException('lastName is required');
     if (!dto?.role?.trim()) throw new BadRequestException('role is required');
@@ -80,7 +81,11 @@ export class HrController {
     // Enforce the shared metadata schema server-side (email/phone format, the
     // camp→visa-tracking rule) so the same rules the renderer shows can't be
     // bypassed by calling the endpoint directly.
-    assertFormValid(employeeFormSchema, dto);
+    // Form Designer overrides (Vol 15 �2.4) merge over the code schema before enforcement.
+    assertFormValid(
+      applyFormOverrides(employeeFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, employeeFormSchema.id)),
+      dto,
+    );
 
     const ctx = this.tenant.get();
     return this.hrService.createEmployee(ctx.actorId, {

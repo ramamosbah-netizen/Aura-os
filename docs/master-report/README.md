@@ -111,6 +111,17 @@ or **[Gap]**.
 > and the autonomy-queue KPI with a deep link to the Intelligence Console. Verified
 > live: toggle off → readback `enabled:false` → restored; intelligence 27 tests green.
 > §2.7 remaining depth: durable PG rule registry, prompt-pack overrides, cost meters.
+>
+> **Update 2026-07-09 (Form Designer P1 — the §2.4 flagship, first slice):** admins tune
+> registered forms without code at `/admin/forms` — labels, placeholders, hints, required
+> flags, visibility, per tenant (`aura_form_overrides`, migration 0136). The override
+> patch is merged by shared `applyFormOverrides` in **both** the web renderer (FormDrawer
+> fetches `/forms/:id/overrides` before the engine inits, cached per page) **and** the
+> API's `assertFormValid` on all three enforced endpoints — designed = rendered =
+> enforced; hiding a field defuses its required check. Verified live end-to-end:
+> require+relabel laborCamp → employee create 400 "Camp / Accommodation is required" →
+> reset → 201. +4 shared tests (159). Remaining §2.4: add/reorder fields, layout & rule
+> editing, versioned publish. Board: Admin Center 8.1 → 8.4.
 
 **Verified platform counts (2026-07-04):**
 
@@ -184,7 +195,7 @@ row updated 2026-07-08 per the Vol 23 register re-verification).
 | Reporting / BI (charts + CSV/BI exports w/ web downloads) | 50% | Fair | Early | **5.5/10** |
 | Security (P1 closed: full permission taxonomy, MFA gate, PII crypto; RLS + vault P0s open) | 60% | Good design | **No — P0s open** | **5.5/10** |
 | Deployment / Operations (observability done: metrics+OTLP+alerts; docker/backups open) | 35% | Early | No | **4.2/10** |
-| Administration Center (hub + 13 screens; §2.1/§2.8/§2.9/§2.10 shipped; matrix UIs; all stores PG-backed) | 82% | Good | Yes (config self-serve) | **8.1/10** |
+| Administration Center (searchable hub + 18 screens; §2.1/§2.4-P1/§2.7/§2.8/§2.9/§2.10 shipped; matrix UIs; PG-backed) | 85% | Good | Yes (config self-serve) | **8.4/10** |
 | Mobile / Offline | 5% | Not started | No | **1.5/10** |
 
 ### Business modules

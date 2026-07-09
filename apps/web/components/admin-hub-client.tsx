@@ -28,6 +28,7 @@ const KEYWORDS: Record<string, string> = {
   audit: 'log compliance who did what history',
   intelligence: 'iec pricing insight proposal calibration',
   templates: 'print document layout builder',
+  forms: 'form field label required hidden placeholder hint designer customize rename',
 };
 
 export default function AdminHubClient({ counts }: { counts: Record<string, number | undefined> }) {

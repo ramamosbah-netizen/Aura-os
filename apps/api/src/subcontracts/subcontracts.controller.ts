@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { assertFormValid, parsePageParams, subcontractFormSchema } from '@aura/shared';
+import { FormOverridesService, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { applyFormOverrides, assertFormValid, parsePageParams, subcontractFormSchema } from '@aura/shared';
 import {
   type Subcontract,
   type SubcontractStatus,
@@ -45,14 +45,18 @@ export class SubcontractsController {
   constructor(
     private readonly subcontracts: SubcontractsService,
     private readonly tenant: TenantContext,
+    private readonly formOverrides: FormOverridesService,
   ) {}
 
   // ── SUBCONTRACTS ─────────────────────────────────────────────────────────
 
   @Post()
-  createSubcontract(@Body() dto: CreateSubcontractDto): Promise<Subcontract> {
+  async createSubcontract(@Body() dto: CreateSubcontractDto): Promise<Subcontract> {
     // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
-    assertFormValid(subcontractFormSchema(), dto);
+    assertFormValid(
+      applyFormOverrides(subcontractFormSchema(), await this.formOverrides.get(this.tenant.get().tenantId, 'subcontracts.subcontract')),
+      dto,
+    );
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     if (!dto?.subcontractorName?.trim()) throw new BadRequestException('subcontractorName is required');

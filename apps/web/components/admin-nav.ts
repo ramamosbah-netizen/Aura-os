@@ -77,6 +77,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     group: 'Configuration',
   },
   {
+    key: 'forms',
+    href: '/admin/forms',
+    glyph: '📝',
+    title: 'Form Designer',
+    desc: 'Rename, hide, and re-require form fields — enforced end to end.',
+    group: 'Configuration',
+  },
+  {
     key: 'templates',
     href: '/admin/templates',
     glyph: '⧇',

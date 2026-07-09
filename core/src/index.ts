@@ -13,6 +13,7 @@ export * from './identity/access.service';
 export * from './identity/auth.service';
 export * from './identity/mfa.service';
 export * from './identity/companies.service';
+export * from './forms/form-overrides.service';
 export * from './ai/ai.service';
 export * from './ai/claude-provider';
 export * from './ai/local-provider';

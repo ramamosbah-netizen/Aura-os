@@ -12,6 +12,7 @@ import { AccessService } from './identity/access.service';
 import { AuthService } from './identity/auth.service';
 import { MfaService } from './identity/mfa.service';
 import { CompaniesService } from './identity/companies.service';
+import { FormOverridesService } from './forms/form-overrides.service';
 import { TokenRevocationStore } from './identity/token-revocation';
 import { OrgService } from './identity/org.service';
 import { AiService } from './ai/ai.service';
@@ -81,6 +82,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     AuthService,
     MfaService,
     CompaniesService,
+    FormOverridesService,
     TokenRevocationStore,
     AiService,
     NumberingService,
@@ -178,6 +180,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     AuthService,
     MfaService,
     CompaniesService,
+    FormOverridesService,
     TokenRevocationStore,
     AiService,
     DmsService,

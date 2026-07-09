@@ -102,6 +102,14 @@ export class PermissionsGuard implements CanActivate {
       requiredPermissions = [derived];
     }
 
+    // Staged pass-through: when auth is OFF (no verifier configured — the dev default) the
+    // whole access seam passes through, so requests run as the dev actor (actorId null).
+    // The permission guard mirrors that: annotations become no-ops until auth is turned on,
+    // exactly like the AI/DB/auth seams. Enforcement engages the moment a verifier is set.
+    if (!this.auth.enabled) {
+      return true;
+    }
+
     const { tenantId, companyId, actorId } = this.tenant.get();
     if (!actorId) {
       throw new ForbiddenException('Actor identity is missing from context.');

@@ -14,13 +14,22 @@ const migrationsDir = join(apiRoot, '..', '..', 'infrastructure', 'migrations');
 
 config({ path: join(apiRoot, '.env.local') });
 
-const connectionString = process.env.DATABASE_URL?.trim();
+// Secret seam (`DATABASE_URL_FILE` for vault/secret mounts) — self-contained copy of
+// shared readSecret so the runner works before any workspace build.
+const envOrFile = (name) => {
+  const file = process.env[`${name}_FILE`]?.trim();
+  if (file) return readFileSync(file, 'utf8').trim() || null;
+  return process.env[name]?.trim() || null;
+};
+
+const connectionString = envOrFile('DATABASE_URL');
 if (!connectionString) {
-  console.error('✗ DATABASE_URL is not set in apps/api/.env.local — cannot run migrations.');
+  console.error('✗ DATABASE_URL is not set (env, _FILE, or apps/api/.env.local) — cannot run migrations.');
   process.exit(1);
 }
-const isLocal = /(@|\/\/)(localhost|127\.0\.0\.1)/.test(connectionString);
-const client = new pg.Client({ connectionString, ssl: isLocal ? false : { rejectUnauthorized: false } });
+const sslOff =
+  /(@|\/\/)(localhost|127\.0\.0\.1)/.test(connectionString) || /[?&]sslmode=disable/.test(connectionString);
+const client = new pg.Client({ connectionString, ssl: sslOff ? false : { rejectUnauthorized: false } });
 
 async function main() {
   await client.connect();

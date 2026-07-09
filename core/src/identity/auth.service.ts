@@ -4,6 +4,7 @@ import {
   type Id,
   type Jwks,
   type JwtClaims,
+  readSecret,
   signJwt,
   verifyJwt,
   verifyJwtWithJwks,
@@ -67,7 +68,7 @@ class JwksCache {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger('AuthService');
-  private readonly secret = process.env.AUTH_JWT_SECRET?.trim() || null;
+  private readonly secret = readSecret('AUTH_JWT_SECRET');
   private readonly jwksUrl = (process.env.AUTH_JWKS_URL ?? process.env.SUPABASE_JWKS_URL)?.trim() || null;
   private readonly jwksCache = this.jwksUrl ? new JwksCache(this.jwksUrl) : null;
   private readonly defaultTenant = process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';

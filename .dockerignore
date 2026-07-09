@@ -1,0 +1,16 @@
+.git
+.github
+.claude
+.vscode
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/playwright-report
+**/test-results
+**/.env
+**/.env.*
+docs
+*.md

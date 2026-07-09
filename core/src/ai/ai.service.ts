@@ -4,6 +4,7 @@ import {
   type AiCompletionResult,
   type AiProvider,
   DEFAULT_AI_MODEL,
+  readSecret,
   selectAiProviderName,
   lexicalEmbedding,
 } from '@aura/shared';
@@ -28,10 +29,10 @@ export class AiService implements AiProvider {
   private readonly embedder: Embedder;
 
   constructor() {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = readSecret('ANTHROPIC_API_KEY') ?? undefined;
     const model = process.env.AI_DEFAULT_MODEL?.trim() || DEFAULT_AI_MODEL;
     if (selectAiProviderName(apiKey) === 'claude') {
-      this.provider = new ClaudeProvider(apiKey!.trim(), model);
+      this.provider = new ClaudeProvider(apiKey!, model);
       this.logger.log(`AI provider: Claude (default model ${model}).`);
     } else {
       this.provider = new LocalProvider();

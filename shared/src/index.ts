@@ -13,6 +13,7 @@ export * from './identity/jwt';
 export * from './identity/jwks';
 export * from './identity/totp';
 export * from './security/field-crypto';
+export * from './security/secret-source';
 export * from './ai/ai-provider';
 export * from './dms/document';
 export * from './workflow/workflow';

@@ -1,0 +1,70 @@
+# AURA OS single-host evaluation stack (Vol 19 §2): postgres + migration gate + api + web.
+#   docker compose up --build
+# Then: web on http://localhost:3000, API on http://localhost:4000/api/v1/health.
+# Secrets: put real values in a local .env (AUTH_JWT_SECRET at minimum) — never commit it.
+name: aura-os
+
+services:
+  postgres:
+    # pgvector build of Postgres 16 — migration 0019 needs `create extension vector`.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: aura
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aura}
+      POSTGRES_DB: aura
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aura -d aura']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Migration gate: api and web only start after the full chain applies cleanly.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: aura-os/api:local
+    command: ['node', 'scripts/migrate.mjs']
+    environment:
+      DATABASE_URL: postgres://aura:${POSTGRES_PASSWORD:-aura}@postgres:5432/aura?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    image: aura-os/api:local
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://aura:${POSTGRES_PASSWORD:-aura}@postgres:5432/aura?sslmode=disable
+      AUTH_REQUIRED: 'true'
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in .env}
+      METRICS_ENABLED: 'true'
+    ports:
+      - '4000:4000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/api/v1/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: aura-os/web:local
+    environment:
+      AURA_API_URL: http://api:4000
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata: {}

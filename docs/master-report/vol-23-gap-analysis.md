@@ -60,20 +60,23 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 
 ### P2 — competitive depth (V2)
 
+> **P2 opened 2026-07-09 (wave 1 — the S–M rows):** #21, #25, #27 closed in one pass;
+> #16 had its P1 slice earlier the same day. Evidence: `docs/reports/2026-07-09-p2-wave1.md`.
+
 | # | Gap | Home | Effort |
 |--:|---|---|---|
-| 16 | Form designer (no-code phase 1, DB schemas) | Vol 5 §10 | L |
+| 16 | Form designer (no-code phase 1, DB schemas) — **P1 slice shipped 2026-07-09** (`/admin/forms`: per-tenant label/required/visibility overrides, designed = rendered = enforced, migration 0136). Remaining: add/reorder fields, layout & rule editing, versioned publish | Vol 5 §10 | L (remainder) |
 | 17 | Mobile field app (PWA + offline drafts) | Vol 20 V2 | L |
 | 18 | Customer + supplier portals | Vol 20 V2 | L |
 | 19 | Gantt/baselines + Primavera import | Vol 3 §4, Vol 17 | L |
 | 20 | AI wave 2 (risk scoring, recommendations, RAG-over-DMS, OCR) | Vol 6 | L |
-| 21 | OpenAPI + published SDK + API docs | Vol 9 §5 | S–M |
+| 21 | OpenAPI + published SDK + API docs — **DONE 2026-07-09**: `@aura/sdk` (`packages/sdk`) generated from the live OpenAPI doc (646 ops) over a hand-written core (error-taxonomy `AuraApiError`, idempotency, `Page<T>`); **CI drift gate** regenerates against the built API; verified live (login→create→paged→404 mapping). Swagger UI at `/api/docs` | Vol 9 §5 | ✅ |
 | 22 | M365 Graph email (CRM) + bank feeds + FTA e-filing | Vol 17 §4 | M each |
 | 23 | Metadata expansion (list views, dashboards, menus) | Vol 14 | L |
 | 24 | Module-depth completions (Vol 3 per-module roadmap rows: warranty workflow, batch/serial, org chart, calibration automation, CRM/quality/HSE/fleet/assets/AMC dashboards…) | Vol 3 | M–L cumulative |
-| 25 | Down-migration policy + orphan-scan + archiving | Vol 8 | S–M |
+| 25 | Down-migration policy + orphan-scan + archiving — **DONE 2026-07-09**: forward-only policy decided, `@DOWN` required from 0137 (CI gate `migration-policy-check.mjs`: naming/dupes/**gaps**/@DOWN) · orphan scan over the 11 spine references (**enforced in CI** post-seed; monthly prod cadence) · archiver for `aura_events` (processed only) + `aura_audit_log` → `*_archive`, dry-run default, CI smoke · `docs/runbooks/data-lifecycle.md` | Vol 8 | ✅ |
 | 26 | Golden-flow E2E + axe pass + coverage gate | Vol 21 | M |
-| 27 | Weak-module test depth (Engineering ×1 file, HSE/Site/Assets/DocControl ×2) | Vol 21 §1 | S–M |
+| 27 | Weak-module test depth — **DONE 2026-07-09**: all five weakest modules → ≥4 files (Engineering design-change→Variation seam w/ `triggersVariation` payload + real access grant; HSE PTW/incident/CAPA; Site diary/delays/consumption; Assets maintenance/inspection/disposal guards; DocControl correspondence + transmittal-item project guard). Service-level, recording EventStore, tenant isolation asserted | Vol 21 §1 | ✅ |
 
 ### P3 — platform era (V3)
 

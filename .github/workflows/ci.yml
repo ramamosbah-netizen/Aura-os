@@ -34,6 +34,9 @@ jobs:
       - name: ADR registry integrity (no number collisions / registry drift)
         run: pnpm adr:check
 
+      - name: Migration policy (sequential, gap-free, @DOWN on new files — Vol 23 #25)
+        run: node scripts/migration-policy-check.mjs
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -109,6 +112,11 @@ jobs:
           done
           curl -sf http://localhost:4300/api/v1/health || { echo '--- api.log'; cat api.log; exit 1; }
 
+      - name: SDK drift — regenerated client must match the committed one (Vol 23 #21)
+        run: |
+          SPEC_URL=http://localhost:4300/api/docs-json node scripts/generate-sdk.mjs
+          git diff --exit-code packages/sdk/src/generated.ts
+
       - name: Seed the demo dataset through the live API
         run: AURA_API_URL=http://localhost:4300 node apps/api/scripts/seed-demo.mjs
 
@@ -116,6 +124,12 @@ jobs:
         run: |
           kill "$(cat apps/api/api.pid)" || true
           sleep 3
+
+      - name: Orphan scan — seeded deal chain must have zero dangling references
+        run: node apps/api/scripts/orphan-scan.mjs --enforce
+
+      - name: Archiver smoke (dry-run — SQL must run; fresh data ⇒ 0 eligible)
+        run: node apps/api/scripts/archive-events.mjs
 
       - name: Backup — pg_dump custom format
         run: pg_dump -h localhost -U aura -d aura -Fc -f aura.dump

@@ -8,6 +8,8 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "db:migrate": "node scripts/migrate.mjs",
+    "db:orphan-scan": "node scripts/orphan-scan.mjs",
+    "db:archive": "node scripts/archive-events.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "perf": "node scripts/perf-baseline.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",

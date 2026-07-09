@@ -10,7 +10,7 @@ import type { StaffAdvance } from './domain/staff-advance';
 import type { AttendanceRecord } from './domain/attendance';
 import type { PerformanceAppraisal, AppraisalCriterion } from './domain/appraisal';
 import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, EmployeeFilter } from './store.interface';
-import { type Page, type PageParams } from '@aura/shared';
+import { type Page, type PageParams, decryptField, encryptField } from '@aura/shared';
 import { pagePostgres } from './paged-query';
 
 /**
@@ -70,8 +70,10 @@ export class PostgresEmployeeStore implements EmployeeStore {
         employee.visaExpiry,
         employee.permitExpiry,
         employee.laborCamp,
-        employee.iban,
-        employee.molEmployeeId,
+        // PII at rest (gap #14): bank + government identifiers encrypt at the storage
+        // boundary when PII_ENCRYPTION_KEY is set; domain/UI stay plaintext.
+        encryptField(employee.iban),
+        encryptField(employee.molEmployeeId),
         employee.bankRoutingCode,
         employee.createdAt,
         employee.updatedAt,
@@ -132,8 +134,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
       visaExpiry: dateOnly(row.visa_expiry),
       permitExpiry: dateOnly(row.permit_expiry),
       laborCamp: row.labor_camp,
-      iban: row.iban ?? null,
-      molEmployeeId: row.mol_employee_id ?? null,
+      // decryptField passes legacy plaintext rows through; tampered ciphertext → null.
+      iban: decryptField(row.iban ?? null),
+      molEmployeeId: decryptField(row.mol_employee_id ?? null),
       bankRoutingCode: row.bank_routing_code ?? null,
       deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),

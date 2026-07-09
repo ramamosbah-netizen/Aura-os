@@ -5,7 +5,8 @@ import { config } from 'dotenv';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import crypto from 'node:crypto';
-import { AuthService, TenantContext } from '@aura/core';
+import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, metrics } from '@aura/core';
+import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { AccessDeniedFilter } from './auth/access-denied.filter';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
@@ -59,6 +60,42 @@ async function bootstrap(): Promise<void> {
     '/api/v1/projects/projects', '/api/v1/procurement/purchase-orders', '/api/v1/inventory/grns',
     '/api/v1/finance/invoices', '/api/v1/finance/payments',
   ];
+  // HTTP request metrics (gap #6): counter + duration sum/count by method and status class,
+  // low-cardinality by design (no per-path labels). Rendered at /metrics, pushed via OTLP.
+  metrics.counter('http_requests_total', 'HTTP requests, by method and status class.');
+  metrics.counter('http_request_duration_ms_sum', 'Total HTTP handler time in ms, by status class.');
+  metrics.counter('http_request_duration_ms_count', 'HTTP requests measured, by status class.');
+  app.use((req: IncomingMessage, res: ServerResponse, next: () => void): void => {
+    const started = Date.now();
+    res.on('finish', () => {
+      const cls = `${Math.floor(res.statusCode / 100)}xx`;
+      metrics.inc('http_requests_total', { method: req.method ?? 'GET', status: cls });
+      metrics.inc('http_request_duration_ms_sum', { status: cls }, Date.now() - started);
+      metrics.inc('http_request_duration_ms_count', { status: cls });
+    });
+    next();
+  });
+
+  // OTLP metrics push (gap #6) — no-op unless OTLP_METRICS_URL is configured. Refreshes the
+  // outbox depth gauges right before each export (same queries the /metrics scrape runs).
+  const pool = app.get<Pool | null>(PG_POOL, { strict: false });
+  const otlp = new OtlpMetricsPusher(metrics, async () => {
+    if (!pool) return;
+    const count = async (where: string): Promise<number | null> => {
+      try {
+        const r = await pool.query<{ c: number }>(`SELECT COUNT(*)::int AS c FROM public.aura_events WHERE ${where}`);
+        return Number(r.rows[0]?.c ?? 0);
+      } catch {
+        return null;
+      }
+    };
+    const pending = await count('processed_at IS NULL');
+    if (pending !== null) metrics.set('outbox_pending', pending);
+    const dead = await count('processed_at IS NOT NULL AND processing_error IS NOT NULL');
+    if (dead !== null) metrics.set('outbox_dead_letter', dead);
+  });
+  otlp.start();
+
   app.use(async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
     // Idempotency-Key enforcement on spine creates (gated; default off — non-breaking).
     if (requireIdem && req.method === 'POST') {

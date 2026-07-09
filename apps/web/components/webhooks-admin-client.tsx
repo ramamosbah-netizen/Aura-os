@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
+import { ErrorBanner, Pill, Toggle } from './admin-ui';
 
 interface Webhook {
   id: string;
@@ -88,37 +89,38 @@ export default function WebhooksAdminClient({
     }
   };
 
-  const statusColor = (s: string): string =>
-    s === 'delivered' || s === 'success' ? '#22c55e' : s === 'pending' ? 'var(--muted)' : '#ef4444';
+  const statusTone = (s: string): 'good' | 'muted' | 'bad' =>
+    s === 'delivered' || s === 'success' ? 'good' : s === 'pending' ? 'muted' : 'bad';
 
   return (
     <div>
-      {err && <div style={st.err}>{err}</div>}
+      <ErrorBanner>{err}</ErrorBanner>
 
       <section style={st.card}>
         <h2 style={st.h2}>Subscriptions</h2>
         <table style={st.table}>
           <thead>
             <tr>
-              <th style={st.th}>URL</th>
+              <th style={st.th}>Endpoint</th>
               <th style={st.th}>Events</th>
-              <th style={st.th}>Active</th>
-              <th style={st.th}></th>
+              <th style={{ ...st.th, width: 90, textAlign: 'center' }}>Active</th>
             </tr>
           </thead>
           <tbody>
             {hooks.length === 0 ? (
-              <tr><td style={st.td} colSpan={4}>No webhooks registered.</td></tr>
+              <tr><td style={st.td} colSpan={3}>No webhooks registered.</td></tr>
             ) : (
               hooks.map((h) => (
                 <tr key={h.id}>
-                  <td style={st.tdMono}>{h.url}</td>
+                  <td style={st.tdMono}>
+                    {h.url}
+                    <div style={{ marginTop: 3 }}>
+                      <Pill tone={h.active ? 'good' : 'muted'}>{h.active ? 'delivering' : 'paused'}</Pill>
+                    </div>
+                  </td>
                   <td style={st.td}>{h.eventTypes.map((e) => <span key={e} style={st.chip}>{e}</span>)}</td>
-                  <td style={st.td}>{h.active ? <span style={{ color: '#22c55e' }}>● on</span> : <span style={{ color: 'var(--muted)' }}>○ off</span>}</td>
-                  <td style={st.td}>
-                    <button style={st.btnGhost} disabled={busy} onClick={() => toggle(h.id, !h.active)}>
-                      {h.active ? 'Disable' : 'Enable'}
-                    </button>
+                  <td style={{ ...st.td, textAlign: 'center' }}>
+                    <Toggle on={h.active} disabled={busy} onChange={(next) => void toggle(h.id, next)} title={h.active ? 'Pause delivery' : 'Resume delivery'} />
                   </td>
                 </tr>
               ))
@@ -127,10 +129,10 @@ export default function WebhooksAdminClient({
         </table>
 
         <form onSubmit={register} style={st.form}>
-          <input style={{ ...st.input, flex: 2 }} placeholder="https://your-endpoint/hook" value={url} onChange={(e) => setUrl(e.target.value)} required />
-          <input style={{ ...st.input, flex: 2 }} placeholder="events, comma-separated (e.g. finance.journal.posted, workflow.*)" value={events} onChange={(e) => setEvents(e.target.value)} required />
-          <input style={st.input} placeholder="signing secret (optional)" value={secret} onChange={(e) => setSecret(e.target.value)} />
-          <button style={st.btn} disabled={busy} type="submit">Register</button>
+          <input className="input" style={{ ...st.input, flex: 2 }} placeholder="https://your-endpoint/hook" value={url} onChange={(e) => setUrl(e.target.value)} required />
+          <input className="input" style={{ ...st.input, flex: 2 }} placeholder="events, comma-separated (e.g. finance.journal.posted, workflow.*)" value={events} onChange={(e) => setEvents(e.target.value)} required />
+          <input className="input" style={st.input} placeholder="signing secret (optional)" value={secret} onChange={(e) => setSecret(e.target.value)} />
+          <button className="btn btn-primary" disabled={busy} type="submit">Register</button>
         </form>
       </section>
 
@@ -152,7 +154,7 @@ export default function WebhooksAdminClient({
               deliveries.map((d) => (
                 <tr key={d.id}>
                   <td style={st.tdMono}>{d.eventType}</td>
-                  <td style={{ ...st.td, color: statusColor(d.status) }}>{d.status}</td>
+                  <td style={st.td}><Pill tone={statusTone(d.status)}>{d.status}</Pill></td>
                   <td style={st.td}>{d.attempts}</td>
                   <td style={{ ...st.td, color: 'var(--muted)' }}>{d.lastError ?? ''}</td>
                 </tr>
@@ -175,7 +177,7 @@ const st = {
   chip: { display: 'inline-block', fontFamily: 'ui-monospace, monospace', fontSize: 11.5, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 5, padding: '1px 6px', margin: '2px 4px 2px 0' } as CSSProperties,
   form: { display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' } as CSSProperties,
   input: { flex: 1, minWidth: 140, padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--panel-2)', color: 'inherit', fontSize: 13 } as CSSProperties,
-  btn: { padding: '7px 14px', border: '1px solid var(--accent, #3b82f6)', borderRadius: 6, background: 'var(--accent, #3b82f6)', color: '#fff', fontSize: 13, cursor: 'pointer' } as CSSProperties,
+  btn: { padding: '7px 14px', border: '1px solid var(--accent)', borderRadius: 6, background: 'var(--accent-grad)', color: 'var(--accent-ink)', fontWeight: 700, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   btnGhost: { padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'transparent', color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   err: { padding: '10px 12px', border: '1px solid #ef4444', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: '#ef4444', marginBottom: 16, fontSize: 13 } as CSSProperties,
 };

@@ -77,3 +77,32 @@ export function buildArAging(invoices: CustomerInvoice[], asOf: string): ArAging
   const grandTotal = round2(Object.values(totals).reduce((s, n) => s + n, 0));
   return { asOf, byCustomer, totals, grandTotal };
 }
+
+/** Column order for the AR-aging CSV/BI export. */
+export const AR_AGING_CSV_COLUMNS = ['customer', 'current', 'd1_30', 'd31_60', 'd61_90', 'd90_plus', 'total'] as const;
+
+/**
+ * Flatten an AR-aging report to CSV rows — one row per customer (sorted by exposure) plus a
+ * trailing TOTAL row. Pure, so the shape is unit-tested without spinning up the controller.
+ */
+export function arAgingCsvRows(report: ArAgingReport): Array<Record<string, string | number>> {
+  const rows = report.byCustomer.map((c) => ({
+    customer: c.customerName,
+    current: c.buckets.current,
+    d1_30: c.buckets.d1_30,
+    d31_60: c.buckets.d31_60,
+    d61_90: c.buckets.d61_90,
+    d90_plus: c.buckets.d90_plus,
+    total: c.total,
+  }));
+  rows.push({
+    customer: 'TOTAL',
+    current: report.totals.current,
+    d1_30: report.totals.d1_30,
+    d31_60: report.totals.d31_60,
+    d61_90: report.totals.d61_90,
+    d90_plus: report.totals.d90_plus,
+    total: report.grandTotal,
+  });
+  return rows;
+}

@@ -55,7 +55,7 @@ These are architectural commitments, each traceable to code:
 | **Metadata Driven** | Forms are JSON schemas (fields, layout, rules, formulas, permissions) rendered by an engine; entity/form/workflow registries in the kernel builder. | `shared/src/forms/*`, `apps/web/components/form-engine/*`, `core/src/builder/*` | ✅ forms; entity/views partial |
 | **Workflow Driven** | Definition-based workflow engine + saga orchestrator with persisted state; approval matrix service for threshold routing. | `core/src/workflow/*`, `core/src/builder/approval-matrix.service.ts`, `shared/src/workflow/*` | ✅ engine; catalog growing |
 | **Document Centric** | Kernel DMS: document store + storage ports (local/Supabase), templates, print views for every commercial document (quotes, POs, IPCs, invoices, payslips). | `core/src/dms/*`, `apps/api/src/templates`, 9 `/print` pages | ✅ |
-| **API First** | 551 REST handlers under `/api/v1`, idempotency keys on spine creates, UUID guards, webhooks out, SDK generator. | `apps/api/src/*` | ✅ REST; OpenAPI **[Gap]** |
+| **API First** | 551+ REST handlers under `/api/v1`, idempotency keys on spine creates, UUID guards, webhooks out, SDK generator, OpenAPI spec + Swagger UI at `/api/docs`. | `apps/api/src/*` | ✅ |
 | **Offline Ready** | Aspiration: field crews with intermittent connectivity. Today: web-only; no PWA/service-worker/drafts sync. | — | **[Gap]** — designed in Volume 24 |
 | **Multi Tenant** | `tenant_id` on every business table; tenant context propagation; RLS policies written for 87 tables (migrations 0032/0049); enforcement deliberately deferred until app-complete. | `core/src/tenancy/tenant-context.ts`, `infrastructure/migrations/0032,0049` | ◐ app-level now; DB-enforced is the final task |
 | **Enterprise Security** | JWT auth + RBAC/ABAC engine + immutable audit exist; enforcement is env-gated (`AUTH_REQUIRED`) and off in dev. | `core/src/identity/*`, `core/src/audit/*` | ◐ built, not yet enforced by default |
@@ -97,8 +97,8 @@ Tracked as the Enterprise Bar in Volume 23:
 1. Metadata platform covering entities/views/menus, not just forms — ◐ in progress
 2. No-code designer for admins — [Planned], Volume 5 §10
 3. AppSource-style extension packaging — [Planned], Volume 20 V3
-4. SLA-grade operations (SSO/MFA, DR, observability, 99.9%) — [Gap], Volumes 7/19
-5. Public API + SDK + webhooks — ◐ (REST + webhooks + SDK generator exist; OpenAPI missing)
+4. SLA-grade operations — ◐ (SSO/MFA ✅ + observability ✅ closed 2026-07-08; DR/backups still [Gap — P0]), Volumes 7/19
+5. Public API + SDK + webhooks — ◐ (REST + webhooks + SDK generator + OpenAPI at `/api/docs`; contract tests missing)
 
 ## 5. Target Industries
 

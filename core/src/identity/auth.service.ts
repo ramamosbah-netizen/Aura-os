@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   type AuthClaims,
   type Id,
@@ -10,6 +10,27 @@ import {
 } from '@aura/shared';
 import type { TenantInfo } from '../tenancy/tenant-context';
 import { TokenRevocationStore } from './token-revocation';
+import { AccessService } from './access.service';
+
+/**
+ * Parse the AUTH_GROUP_ROLE_MAP csv (`<idp-group>=<aura-role>,…`) and resolve which AURA
+ * role ids a token's `groups` claim maps to (gap Vol 23 #13 — Entra groups → AURA roles).
+ * Pure — unit-tested without the service.
+ */
+export function mapGroupsToRoles(groups: unknown, csv: string | undefined): string[] {
+  if (!Array.isArray(groups) || groups.length === 0 || !csv?.trim()) return [];
+  const map = new Map<string, string>();
+  for (const pair of csv.split(',')) {
+    const i = pair.indexOf('=');
+    if (i > 0) map.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+  }
+  const roles = new Set<string>();
+  for (const g of groups) {
+    const role = map.get(String(g));
+    if (role) roles.add(role);
+  }
+  return [...roles];
+}
 
 /** Caches a hosted IdP's JWKS (public keys), refreshed on TTL or a key-miss (rotation). */
 class JwksCache {
@@ -51,7 +72,10 @@ export class AuthService {
   private readonly jwksCache = this.jwksUrl ? new JwksCache(this.jwksUrl) : null;
   private readonly defaultTenant = process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
 
-  constructor(private readonly revocation: TokenRevocationStore) {
+  constructor(
+    private readonly revocation: TokenRevocationStore,
+    @Optional() private readonly access: AccessService | null = null,
+  ) {
     const modes = [this.jwksCache ? 'JWKS (IdP)' : null, this.secret ? 'HS256 (self-issued)' : null].filter(Boolean);
     if (modes.length > 0) {
       this.logger.log(`Auth ON — verifying ${modes.join(' + ')}.`);
@@ -141,6 +165,21 @@ export class AuthService {
       (typeof claims.companyId === 'string' && claims.companyId) ||
       (typeof appMeta.company_id === 'string' && appMeta.company_id) ||
       null;
+
+    // Entra/IdP group claims → AURA role grants (AUTH_GROUP_ROLE_MAP, gap #13). grant()
+    // de-dupes, so re-mapping on every verified request is idempotent and keeps grants
+    // aligned with the IdP as group membership changes (adds; revokes stay admin-driven).
+    if (this.access) {
+      const groups = (claims.groups ?? (appMeta.groups as unknown)) as unknown;
+      for (const roleId of mapGroupsToRoles(groups, process.env.AUTH_GROUP_ROLE_MAP)) {
+        this.access.grant({
+          userId: String(claims.sub),
+          roleId,
+          scope: { kind: 'org', level: 'tenant', id: tenantId },
+        });
+      }
+    }
+
     return { tenantId, companyId, actorId: String(claims.sub) };
   }
 

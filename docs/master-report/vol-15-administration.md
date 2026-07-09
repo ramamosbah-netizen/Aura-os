@@ -15,18 +15,47 @@ every parameter — as the build contract.
 
 ## 1. What exists today
 
+**Phase 1 CLOSED 2026-07-08 (gap register #12)** — the `/admin` hub (live-count KPI strip,
+tiles grouped Governance / Configuration / Integration / Observability) plus seven config
+screens on shared professional chrome (`admin-chrome.tsx`), every store PG-backed.
+
+**Phase 1.5 "professional pass" + phase 2 start — same day (evening):** the config screens
+were rebuilt matrix-first with easy controls (shared kit: `admin-ui.tsx` Toggle/MatrixCell/Pill
++ `.adm-*` classes): Roles & Access is now a **permission matrix** (roles × modules, ALL-wildcard
+column, fine-grained keys as removable chips) plus a **user-grants matrix** (workspace directory ×
+roles, click-to-grant) with per-user **MFA reset**; the approval matrix is a **value-band grid**
+(inline From/Up-to, approver role chips from live roles, required-count, ↑↓ ordering, catch-all
+row); feature flags are **toggle switches**; numbering is an **inline-editable grid with a live
+next-number preview**; webhooks get pause/resume toggles + delivery status pills. Phase 2 opened
+with two spec sections shipped: **Organization** (§2.1) and **Platform Health** (§2.10).
+
 | Surface | Path / mechanism | State |
 |---|---|---|
-| **Workspace access** | `/admin/workspace` + `apps/api/src/workspace` | ✅ **new** |
-| Audit viewer | `/admin/audit` | ✅ |
+| **Admin hub** | `/admin` — KPI strip + grouped function tiles (`admin-nav.ts` registry) | ✅ 2026-07-08 |
+| **Organization** (phase 2, §2.1) | `/admin/organization` — guided tenant profile (legal identity, finance defaults, locale) over the settings service **+ companies master grid** | ✅ 2026-07-08 |
+| **Companies** (phase 2, §2.1) | `CompaniesService` (PG migration `0135_companies`) + `admin/companies` CRUD; the **app-shell company switcher now reads this registry** (hardcoded list is only the dev fallback) | ✅ 2026-07-08 |
+| **Business calendar** (phase 2, §2.1) | `/admin/calendar` — weekend-day toggle matrix (Sun–Sat), standard hours, public holidays, Ramadan-hour adjustments; kernel `CalendarService` grew full CRUD over the 0030 tables + `admin/calendar` API | ✅ 2026-07-08 |
+| **Platform health** (phase 2, §2.10) | `/admin/health` — dead letters, webhook delivery health, recent spine activity, KPI strip | ✅ 2026-07-08 |
+| **Notification routing** (phase 2, §2.8) | `/admin/notifications` — channel toggles, per-user recipient grid, tenant fallback (persisted as `notify.*` settings **the dispatcher reads on every send**, env fallback); transport status + event wirings read-only | ✅ 2026-07-09 |
+| **Data administration** (phase 2, §2.9) | `/admin/data` — idempotent demo-company seed (`DemoSeeder.runIfEmpty` + `admin/platform/seed-demo`), CSV export hub (audit, AR/AP aging, invoices), chart-of-accounts CSV import | ✅ 2026-07-09 |
+| **AI administration** (phase 2, §2.7) | `/admin/ai` — provider seam status (claude/local, key presence only), **guardrail rule toggles** (default pack now registers at boot: content-safety keywords, PII mask, token cap — `AiGuardrailsService.setEnabled`), autonomy queue KPI; deep IEC work stays on `/admin/intelligence`. **Durable + audited since later 2026-07-09**: toggles write-through to `aura_ai_guardrails` + hydrate on boot (restart-verified); admin config changes (settings/forms/roles/grants/guardrails) now write audit entries visible at /admin/audit. Remaining ..2.7 depth: prompt-pack overrides, usage/cost meters | ✅ 2026-07-09 |
+| **Form Designer P1** (§2.4) | `/admin/forms` — per-form field grid: rename labels, edit placeholders/hints, flip required, hide fields. Sparse per-tenant patches (`aura_form_overrides`, migration 0136) merged by shared `applyFormOverrides` in **both** the renderer (FormDrawer resolves `/forms/:id/overrides` before the engine inits) **and** `assertFormValid` (all 3 call sites) — designed = rendered = enforced; hiding defuses required. Verified: override → 400 with the custom label → reset → 201. Remaining §2.4 depth: add/reorder fields, layout & rules editing, versioned publish | ✅ 2026-07-09 (P1) |
+| **Workspace access** | `/admin/workspace` + `apps/api/src/workspace` (PG migration 0127) | ✅ |
+| **Roles & access** | `/admin/access` — **permission matrix + grants matrix + MFA reset**, PG-backed (migration 0133, write-through + hydrate) | ✅ 2026-07-08 |
+| **Org settings (raw)** | `/admin/settings` — key/value editor w/ namespace groups + quick-add (PG migration 0132) | ✅ 2026-07-08 |
+| **Feature flags** | `/admin/feature-flags` — toggle switches over `feature-flag.service` (PG) | ✅ 2026-07-08 |
+| **Approval matrix** | `/admin/approval-matrix` — value-band grid editor (PG migration 0085) | ✅ 2026-07-08 |
+| **Document numbering** | `/admin/numbering` — inline-edit grid + live next-number preview | ✅ 2026-07-08 |
+| **Connectors** | `/admin/connectors` — external-system registry (PG) | ✅ 2026-07-08 |
+| **Webhooks** | `/admin/webhooks` — pause/resume toggles + delivery status pills (PG) | ✅ 2026-07-08 |
+| Audit viewer | `/admin/audit` (+ filter-aware CSV export) | ✅ |
 | Intelligence admin | `/admin/intelligence` (calibrations, autonomy proposals) | ✅ |
 | Template management | `/admin/templates` + `apps/api/src/templates` | ✅ |
-| Builder API | `apps/api/src/builder` (entity/form registries, approval matrix) — **no UI yet** | ◐ |
-| Feature flags | `feature-flag.service` — **no UI** | ◐ |
+| Builder API | `apps/api/src/builder` (entity/form registries) — approval matrix now has UI | ◐ |
 | Saved views | `/views` | ✅ |
 | Event stream | `/events` (+dead-letter data) | ✅ |
 | Demo seeder | `DEMO_SEED=true` | ✅ |
-| Everything else below | — | ❌ [Planned] |
+| Remaining spec sections below (form designer §2.4, §2.7 depth: PG rule registry / prompt packs / cost meters, document retention §2.6) | — | phase 2+ [Planned] |
 
 ## 1a. Workspace Access (shipped 2026-07-04)
 
@@ -55,9 +84,9 @@ every user sees only what their role allows.
 - **Identity-driven:** `/workspace/me` resolves the user from the JWT `sub` (`actorId`), so
   logging in as `u-finance`/`u-ceo`/… yields that identity's role; unauthenticated dev default
   is `u-admin`.
-- **Note:** this is the UI/experience access layer; the kernel RBAC grants (Vol 7) still gate the
-  API. Remaining: run migration 0127 against a real DB (store is wired, exercised in-memory);
-  per-user (not just per-role) overrides. References:
+- **Note:** this is the UI/experience access layer; the kernel RBAC grants (Vol 7) gate the
+  API — both PG-backed now (0127 applied; roles/grants via 0133). Remaining: per-user (not
+  just per-role) overrides. References:
   `docs/reports/2026-07-04-role-based-workspace-admin.md`,
   `docs/reports/2026-07-04-workspace-persistence-identity-nav.md`.
 

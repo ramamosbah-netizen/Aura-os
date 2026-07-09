@@ -82,9 +82,11 @@ glassmorphism variant lives in the assets module (being normalized to tokens).
 
 ## 10. Charts
 
-**[Gap — P1 for exec credibility].** Current visualization: progress bars (site
-progress-mapping), S-curve data (tabular), stat tiles on dashboards. No charting library yet;
-decision pending (recommend lightweight SVG/uPlot over heavy libs). Volume 16 owns this.
+**✅ Done (gap #10 closed 2026-07-08; charts landed earlier).** In-house lightweight SVG
+charts — `components/charts.tsx` (BarChart / BarList / Donut) powering the finance and
+CFO dashboards, plus progress bars, S-curve data, and stat tiles. No heavy charting
+dependency (the SVG-first decision held). CSV/BI exports with web download buttons
+complete the exec-reporting floor. Volume 16 owns the deeper BI path.
 
 ## 11. Animations
 

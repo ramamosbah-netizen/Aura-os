@@ -26,11 +26,15 @@ password policy, brute-force lockout.
 
 - Engine: roles → permissions, grants per user, attribute conditions (tenant/company/ownership)
   — `core/src/identity/access.service.ts` + `shared/identity/access.ts`, guard tested.
-- Route guard: `@Permissions('key')` + `PermissionsGuard` exist; **controllers are not yet
-  annotated** — authorization currently rides service-level access checks.
-- **Required for GA:** define the permission taxonomy (proposal: `<module>.<entity>.<verb>`,
-  e.g. `finance.invoice.approve`), annotate all 551 handlers, move role storage from in-memory
-  registration to the database, and ship role-management UI (Volume 15).
+- Route guard: `@Permissions('key')` + `PermissionsGuard`, registered as a global `APP_GUARD`.
+- **DONE 2026-07-08 (gap #7 closed):** the taxonomy is `<module>.<entity>.<action>` and covers
+  **every handler by construction** — when a route has no explicit decorator the guard derives
+  the permission from its declared path (`POST crm/accounts` → `crm.account.create`,
+  `POST …/:id/approve` → `finance.invoice.approve`; `derivePermissionFromRoute`, 9 tests).
+  Explicit decorators override; health/auth/metrics exempt. Role storage is **DB-backed**
+  (migration `0133_access_roles_grants`, write-through + hydrate-on-boot) and the
+  role-management UI ships at `/admin/access`. Enforcement engages when auth is ON
+  (staged pass-through preserved for dev).
 
 ## 3. Tenant Isolation
 
@@ -49,7 +53,13 @@ cross-tenant integration test proving isolation.
 
 - In transit: TLS at the platform edge (Supabase/host) ✅.
 - At rest: storage-provider encryption (Supabase default) ✅.
-- **Field-level PII encryption** (salaries, IDs, bank details): [Gap — P1].
+- **Field-level PII encryption — DONE 2026-07-08 (gap #14 closed):** AES-256-GCM helpers in
+  shared (`encryptField`/`decryptField`, versioned `enc:v1:` format, random IV, auth-tag
+  fail-closed, legacy-plaintext passthrough; 8 tests), staged by `PII_ENCRYPTION_KEY` —
+  identity function until the key is set. Applied at the storage boundary for the WPS
+  identifiers (`iban`, `molEmployeeId` in the HR employee store); the domain/UI stay
+  plaintext while the DB column holds ciphertext. Extend field-by-field as the PII
+  catalog grows (same one-line pattern in each store).
 
 ## 5. Audit
 
@@ -65,26 +75,33 @@ region-pinned Postgres. Formal program [Gap — post-GA].
 
 ## 7. MFA
 
-[Gap]. Design: TOTP first (library-only, no vendor), WebAuthn second; enforced per-tenant
-policy via settings service (Volume 15 dependency).
+**DONE 2026-07-08 (gap #13 closed).** RFC 6238 TOTP, library-only (shared `totp.ts`, RFC
+vectors tested). Per-user enrolment **persists** (migration `0134_user_mfa`) with a
+two-step flow — `POST /auth/mfa/enroll` parks the secret inactive, the first valid code
+on `POST /auth/mfa/activate` switches it on — so an unscanned QR can never lock a user
+out. An active enrolment **gates `POST /auth/login`** (code required; bad codes share the
+brute-force lockout). WebAuthn remains the P2 follow-on. Entra/IdP users get MFA from
+the IdP.
 
 ## 8. SSO
 
-[Gap]. Design: OIDC first (Azure AD/Entra — the GCC enterprise default), SAML second.
-JWKS support in shared is the stepping stone. Required for government/semi-gov deals
-(Volume 1 §5).
+**DONE (accept-side) + group mapping DONE 2026-07-08 (gap #13 closed).** OIDC tokens from a
+hosted IdP (Azure AD/Entra, Supabase) verify via `AUTH_JWKS_URL` (JWKS cache with rotation
+retry). **Entra groups map to AURA roles** via `AUTH_GROUP_ROLE_MAP`
+(`<group-id>=<role-id>` csv), applied idempotently on every verified token — grants ride
+the DB-backed access store. SAML stays the P2 follow-on for legacy IdPs.
 
 ## 9. API Security
 
 | Control | State |
 |---|---|
 | SQL injection | ✅ parameterized queries throughout (audited) |
-| Input validation | ◐ hand-rolled guards + UUID pipe; **no global ValidationPipe/schema layer** [P1] — the form engine's server-side `evaluateForm` is the designed unification |
+| Input validation | ✅ global `ValidationPipe` (main.ts, class-validator DTOs) + enforced error taxonomy + `assertFormValid` running the form engine's `evaluateForm` server-side on every metadata-form endpoint (done 2026-07-08) |
 | Idempotency | ✅ keys on spine creates (interceptor, tested) |
 | Rate limiting | ✅ kernel `rate-limiter` (reliability) — needs per-route wiring [P2] |
 | Webhook signing | ✅ outbound deliveries signed |
 | CORS/headers | ◐ defaults; helmet/CSP hardening pass [P2] |
-| OpenAPI-driven contract tests | ❌ no OpenAPI yet [P2] |
+| OpenAPI-driven contract tests | ◐ OpenAPI spec now served (`/api/docs-json`); contract tests still to build [P2] |
 
 ## 10. Secrets
 
@@ -97,13 +114,13 @@ key that ever landed in a working tree.
 | # | Item | Sev | Status |
 |--:|---|---|---|
 | 1 | RLS enforcement bundle (least-priv role + GUC + FORCE RLS + isolation test) | P0 | scheduled final task |
-| 2 | Auth ON by default + refresh/revocation + lockout | P0 | designed |
+| 2 | Auth ON by default + refresh/revocation + lockout | P0 | ✅ done 2026-07-07 |
 | 3 | Secrets to vault + rotation + revoke exposed keys | P0 | not started |
-| 4 | Permission taxonomy annotated on all handlers + role storage → DB | P1 | engine ready |
-| 5 | Global input-validation layer | P1 | form-engine server evaluation is the path |
-| 6 | Field-level PII encryption | P1 | not started |
-| 7 | MFA (TOTP) | P1 | designed |
-| 8 | SSO (OIDC) | P1 | designed |
+| 4 | Permission taxonomy on all handlers + role storage → DB | P1 | ✅ done 2026-07-08 (route-derived coverage + migration 0133) |
+| 5 | Global input-validation layer | P1 | ✅ done 2026-07-08 (error taxonomy + `assertFormValid` on all metadata-form endpoints) |
+| 6 | Field-level PII encryption | P1 | ✅ done 2026-07-08 (AES-256-GCM at store boundary, `PII_ENCRYPTION_KEY`) |
+| 7 | MFA (TOTP) | P1 | ✅ done 2026-07-08 (persisted enrolment + login gate, migration 0134) |
+| 8 | SSO (OIDC) | P1 | ✅ done 2026-07-08 (JWKS accept + Entra group→role map) |
 | 9 | Helmet/CSP + per-route rate limits | P2 | partial |
 | 10 | Audit export/retention/hash-chain | P2 | base solid |
 

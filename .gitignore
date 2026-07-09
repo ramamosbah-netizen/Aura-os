@@ -20,3 +20,4 @@ coverage/
 # Playwright
 /apps/web/playwright-report/
 /apps/web/test-results/
+.claude/

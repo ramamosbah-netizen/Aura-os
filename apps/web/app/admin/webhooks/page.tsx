@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import { AdminHeader, AdminOffline, adminPage, type Kpi } from '@/components/admin-chrome';
 import WebhooksAdminClient from '@/components/webhooks-admin-client';
 
 export const dynamic = 'force-dynamic';
@@ -25,25 +25,34 @@ export default async function WebhooksAdminPage() {
     getJson<Delivery[]>('/api/admin/webhooks/deliveries'),
   ]);
 
+  if (subs === null) {
+    return (
+      <div style={adminPage}>
+        <AdminHeader title="Webhooks" glyph="📡" backToHub subtitle="Signed event delivery to your endpoints, with a delivery log." />
+        <AdminOffline label="Integration" />
+      </div>
+    );
+  }
+
+  const dels = deliveries ?? [];
+  const active = subs.filter((w) => w.active).length;
+  const failed = dels.filter((d) => d.status !== 'delivered' && d.status !== 'success' && d.status !== 'pending').length;
+  const kpis: Kpi[] = [
+    { label: 'Subscriptions', value: subs.length, sub: `${active} active`, tone: 'accent' },
+    { label: 'Deliveries', value: dels.length, sub: 'logged attempts', tone: 'info' },
+    { label: 'Failed', value: failed, sub: 'need attention', tone: failed > 0 ? 'bad' : 'good' },
+  ];
+
   return (
-    <div style={st.page}>
-      <h1 style={st.h1}>Administration · Webhooks</h1>
-      <p style={st.sub}>
-        Register outbound webhooks — any matching event on the spine is POSTed (signed) to your URL.
-        Toggle a subscription off to stop delivery without deleting it; the delivery log shows successes and failures.
-      </p>
-      {subs === null ? (
-        <p style={st.muted}>Integration API offline.</p>
-      ) : (
-        <WebhooksAdminClient initialWebhooks={subs} initialDeliveries={deliveries ?? []} />
-      )}
+    <div style={adminPage}>
+      <AdminHeader
+        title="Webhooks"
+        glyph="📡"
+        backToHub
+        subtitle="Register outbound webhooks — any matching event on the spine is POSTed (signed) to your URL. Toggle a subscription off to stop delivery without deleting it; the delivery log shows successes and failures."
+        kpis={kpis}
+      />
+      <WebhooksAdminClient initialWebhooks={subs} initialDeliveries={dels} />
     </div>
   );
 }
-
-const st = {
-  page: { maxWidth: 1000, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
-  h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
-  sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
-  muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
-};

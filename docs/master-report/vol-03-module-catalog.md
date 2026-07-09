@@ -13,9 +13,9 @@ Dashboard · AI Features · API · Database · KPIs · Future Roadmap.
 - **Entities** are verified from store ports in `modules/<m>/src/*-store.ts` (each has an
   in-memory + Postgres adapter).
 - **Permissions:** access control is enforced service-level through the kernel `AccessService`
-  (RBAC/ABAC); the `@Permissions()` route guard exists in the kernel but fine-grained per-module
-  permission keys are not yet annotated on controllers — this is a platform-wide [Gap] tracked
-  in Volume 7 §3, not repeated in every module below.
+  (RBAC/ABAC) **and** route-level by the global `PermissionsGuard` — since 2026-07-08 every
+  handler carries a `module.entity.action` key (derived from its route when not explicitly
+  decorated; gap #7 closed, see Volume 7 §2) — not repeated in every module below.
 - **Forms:** as of 2026-07-03 all creates/edits run through the metadata form engine (Volume 5) —
   either as registered `FormSchema` metadata or via the legacy `FieldSpec` adapter.
 - **API count** = route handlers in `apps/api/src/<area>` verified 2026-07-03.

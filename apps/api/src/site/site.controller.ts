@@ -128,6 +128,11 @@ export class SiteController {
     return this.siteService.resolveDelayLog(ctx.tenantId, ctx.actorId, id);
   }
 
+  @Get('delay-logs/paged')
+  listDelayLogsPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listDelayLogsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   @Get('delay-logs')
   listDelayLogs(): Promise<DelayLog[]> {
     const ctx = this.tenant.get();
@@ -162,6 +167,11 @@ export class SiteController {
     });
   }
 
+  @Get('material-consumption/paged')
+  listMaterialConsumptionPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listMaterialConsumptionPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   @Get('material-consumption')
   listMaterialConsumption(): Promise<MaterialConsumption[]> {
     const ctx = this.tenant.get();
@@ -191,6 +201,11 @@ export class SiteController {
       timeImplication: dto.timeImplication,
       createdBy: ctx.actorId || null,
     });
+  }
+
+  @Get('instructions/paged')
+  listInstructionsPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listSiteInstructionsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Get('instructions')
@@ -231,6 +246,11 @@ export class SiteController {
       notes: dto.notes,
       createdBy: ctx.actorId ?? undefined,
     });
+  }
+
+  @Get('labour/paged')
+  listLabourPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listLabourAllocationsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Get('labour')

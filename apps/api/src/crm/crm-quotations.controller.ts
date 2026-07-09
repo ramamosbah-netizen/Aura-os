@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { FormOverridesService, TenantContext } from '@aura/core';
+import { applyFormOverrides, assertFormValid, parsePageParams, quotationFormSchema } from '@aura/shared';
 import { type Quotation, type NewQuotationLine, QuotationService } from '@aura/crm';
 import { type Contract, ContractService } from '@aura/contracts';
 
@@ -22,6 +22,7 @@ export class CrmQuotationsController {
     private readonly quotations: QuotationService,
     private readonly contracts: ContractService,
     private readonly tenant: TenantContext,
+    private readonly formOverrides: FormOverridesService,
   ) {}
 
   /** One-click convert an accepted quotation into a draft contract (carries value + account). */
@@ -48,6 +49,11 @@ export class CrmQuotationsController {
 
   @Post()
   async create(@Body() dto: CreateQuotationDto): Promise<Quotation> {
+    // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
+    assertFormValid(
+      applyFormOverrides(quotationFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, quotationFormSchema.id)),
+      dto,
+    );
     if (!dto?.quoteNumber?.trim()) throw new BadRequestException('quoteNumber is required');
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');

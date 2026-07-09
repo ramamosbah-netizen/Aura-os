@@ -7,7 +7,7 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildFormPayload, type FormSchema } from '@aura/shared';
+import { applyFormOverrides, buildFormPayload, hasOverrides, type FormOverrides, type FormSchema } from '@aura/shared';
 import FormRenderer, { useFormEngine } from './FormRenderer';
 import { formToolbarActions, type FormApi, type FormMode } from './field-registry';
 
@@ -29,7 +29,46 @@ export interface FormDrawerProps {
   onSaved?: (payload: Record<string, unknown>) => void;
 }
 
-export default function FormDrawer({
+// Module-level cache: each schema's Form Designer patch fetches once per page
+// life, not once per drawer (list pages mount one edit-drawer per row).
+const overridesCache = new Map<string, Promise<FormOverrides | null>>();
+
+function fetchOverrides(schemaId: string): Promise<FormOverrides | null> {
+  let p = overridesCache.get(schemaId);
+  if (!p) {
+    p = fetch(`/api/forms/${encodeURIComponent(schemaId)}/overrides`, { cache: 'no-store' })
+      .then((r) => (r.ok ? (r.json() as Promise<FormOverrides>) : null))
+      .catch(() => null);
+    overridesCache.set(schemaId, p);
+  }
+  return p;
+}
+
+/**
+ * Public wrapper: resolve the tenant's Form Designer overrides (Vol 15 §2.4)
+ * and remount the drawer on the merged schema — users see exactly what the
+ * admin configured, and assertFormValid enforces the same merge server-side.
+ * Falls back to the code schema when the read fails; the drawer starts closed,
+ * so the pre-open remount is invisible.
+ */
+export default function FormDrawer(props: FormDrawerProps) {
+  const [effective, setEffective] = useState<FormSchema | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void fetchOverrides(props.schema.id).then((o) => {
+      if (live) setEffective(hasOverrides(o) ? applyFormOverrides(props.schema, o) : props.schema);
+    });
+    return () => {
+      live = false;
+    };
+  }, [props.schema]);
+
+  // key flips once the merged schema lands → useFormEngine re-initializes on it
+  return <FormDrawerImpl key={effective ? 'fx' : 'base'} {...props} schema={effective ?? props.schema} />;
+}
+
+function FormDrawerImpl({
   schema,
   mode = 'create',
   recordId,

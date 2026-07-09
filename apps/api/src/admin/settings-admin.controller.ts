@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Post, Query } from '@nestjs/common';
-import { type TenantSetting, Permissions, SettingsService, TenantContext } from '@aura/core';
+import { type TenantSetting, AuditService, Permissions, SettingsService, TenantContext } from '@aura/core';
 
 /**
  * Tenant settings admin (gap register Vol 23 #12). A generic key/value store for org-level
@@ -10,6 +10,7 @@ export class SettingsAdminController {
   constructor(
     private readonly settings: SettingsService,
     private readonly tenant: TenantContext,
+    private readonly audit: AuditService,
   ) {}
 
   @Permissions('admin.settings.manage')
@@ -23,7 +24,9 @@ export class SettingsAdminController {
   async set(@Body() dto: { key?: string; value?: string; description?: string }): Promise<{ ok: true }> {
     const key = dto?.key?.trim();
     if (!key) throw new BadRequestException('key is required');
-    await this.settings.set(this.tenant.get().tenantId, key, String(dto.value ?? ''), dto.description?.trim() ?? '');
+    const ctx = this.tenant.get();
+    await this.settings.set(ctx.tenantId, key, String(dto.value ?? ''), dto.description?.trim() ?? '');
+    void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'setting', key, 'updated', { value: String(dto.value ?? '') });
     return { ok: true };
   }
 
@@ -31,6 +34,9 @@ export class SettingsAdminController {
   @Delete()
   async remove(@Query('key') key?: string): Promise<{ removed: boolean }> {
     if (!key?.trim()) throw new BadRequestException('key is required');
-    return { removed: await this.settings.remove(this.tenant.get().tenantId, key.trim()) };
+    const ctx = this.tenant.get();
+    const removed = await this.settings.remove(ctx.tenantId, key.trim());
+    if (removed) void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'setting', key.trim(), 'deleted', {});
+    return { removed };
   }
 }

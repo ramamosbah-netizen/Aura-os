@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Headers, HttpException, HttpStatus, Post, UnauthorizedException } from '@nestjs/common';
-import { AuthService, throttleFromEnv } from '@aura/core';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpException, HttpStatus, Post, Query, UnauthorizedException } from '@nestjs/common';
+import { AuthService, MfaService, Permissions, throttleFromEnv } from '@aura/core';
 import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
 
 interface DevTokenDto {
@@ -11,6 +11,8 @@ interface DevTokenDto {
 interface LoginDto {
   username?: string;
   password?: string;
+  /** TOTP code — required once the account has an *active* MFA enrolment (gap #13). */
+  code?: string;
 }
 
 /**
@@ -23,7 +25,10 @@ export class AuthController {
   /** Per-node brute-force lockout for the login endpoint (config via AUTH_LOCKOUT_*). */
   private readonly throttle = throttleFromEnv();
 
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly mfa: MfaService,
+  ) {}
 
   @Get('status')
   status(): { enabled: boolean } {
@@ -31,7 +36,7 @@ export class AuthController {
   }
 
   @Post('login')
-  login(@Body() dto: LoginDto): { token: string; user: { sub: string; tenantId: string } } {
+  async login(@Body() dto: LoginDto): Promise<{ token: string; user: { sub: string; tenantId: string } }> {
     if (!this.auth.canMint) {
       throw new ForbiddenException('login (dev token mint) requires AUTH_JWT_SECRET');
     }
@@ -56,6 +61,23 @@ export class AuthController {
       }
       throw new UnauthorizedException('invalid credentials');
     }
+
+    // MFA gate (gap #13): an account with an *active* TOTP enrolment must present a code.
+    // Bad codes count toward the same lockout as bad passwords.
+    const mfaSecret = await this.mfa.activeSecret(username);
+    if (mfaSecret) {
+      if (!dto.code?.trim()) {
+        throw new UnauthorizedException('mfa code required');
+      }
+      if (!verifyTotp(mfaSecret, dto.code.trim())) {
+        const after = this.throttle.recordFailure(username);
+        if (after.locked) {
+          throw new HttpException('account locked after too many failed attempts', HttpStatus.TOO_MANY_REQUESTS);
+        }
+        throw new UnauthorizedException('invalid mfa code');
+      }
+    }
+
     this.throttle.reset(username);
     const tenantId = 'dev-tenant';
     return {
@@ -79,18 +101,39 @@ export class AuthController {
   }
 
   /**
-   * MFA enrolment (RFC 6238 TOTP). Returns a fresh secret + the otpauth URI an authenticator
-   * app scans; the caller persists the secret against the user (Entra SSO users get MFA from
-   * Entra, so this is the local-account path). Stateless — no secret is stored server-side here.
+   * MFA enrolment (RFC 6238 TOTP). Generates a secret, parks it *inactive* against the
+   * account, and returns it with the otpauth URI an authenticator app scans. The first
+   * valid code POSTed to `mfa/activate` switches it on — from then login requires a code.
+   * (Entra SSO users get MFA from Entra; this is the local-account path.)
    */
   @Post('mfa/enroll')
-  mfaEnroll(@Body() dto: { account?: string }): { secret: string; otpauthUri: string } {
+  async mfaEnroll(@Body() dto: { account?: string }): Promise<{ secret: string; otpauthUri: string }> {
+    const account = (dto?.account ?? '').trim();
+    if (!account) throw new BadRequestException('account is required');
     const secret = generateTotpSecret();
-    const account = (dto?.account ?? '').trim() || 'user';
+    await this.mfa.enroll(account, secret);
     return { secret, otpauthUri: totpAuthUri(secret, { label: account, issuer: process.env.MFA_ISSUER?.trim() || 'AURA' }) };
   }
 
-  /** Verify a TOTP code against a (caller-supplied) secret — the check the login step calls. */
+  /** Confirm enrolment: the first valid code activates MFA for the account (gap #13). */
+  @Post('mfa/activate')
+  async mfaActivate(@Body() dto: { account?: string; code?: string }): Promise<{ active: boolean }> {
+    if (!dto?.account?.trim()) throw new BadRequestException('account is required');
+    if (!dto?.code?.trim()) throw new BadRequestException('code is required');
+    const active = await this.mfa.activate(dto.account.trim(), dto.code.trim());
+    if (!active) throw new UnauthorizedException('invalid code — MFA not activated');
+    return { active };
+  }
+
+  /** Admin reset: remove a user's MFA enrolment (device loss). Guarded like the access admin. */
+  @Permissions('admin.access.manage')
+  @Delete('mfa')
+  async mfaReset(@Query('account') account?: string): Promise<{ removed: boolean }> {
+    if (!account?.trim()) throw new BadRequestException('account is required');
+    return { removed: await this.mfa.disable(account.trim()) };
+  }
+
+  /** Verify a TOTP code against a (caller-supplied) secret — kept for stateless checks. */
   @Post('mfa/verify')
   mfaVerify(@Body() dto: { secret?: string; code?: string }): { valid: boolean } {
     if (!dto?.secret?.trim()) throw new BadRequestException('secret is required');

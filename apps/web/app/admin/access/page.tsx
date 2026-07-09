@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import { AdminHeader, AdminOffline, adminPage, type Kpi } from '@/components/admin-chrome';
 import RolesAdminClient from '@/components/roles-admin-client';
 
 export const dynamic = 'force-dynamic';
@@ -22,27 +22,35 @@ interface Overview {
 export default async function AccessAdminPage() {
   const data = await getJson<Overview>('/api/admin/access');
 
+  if (data === null) {
+    return (
+      <div style={adminPage}>
+        <AdminHeader title="Roles & Access" glyph="🔐" backToHub subtitle="Permission bundles and per-user grants the API guard enforces." />
+        <AdminOffline label="Access" />
+      </div>
+    );
+  }
+
+  const roles = data.roles ?? [];
+  const grants = data.grants ?? [];
+  const perms = new Set(roles.flatMap((r) => r.permissions ?? [])).size;
+  const users = new Set(grants.map((g) => g.userId)).size;
+  const kpis: Kpi[] = [
+    { label: 'Roles', value: roles.length, sub: 'permission bundles', tone: 'accent' },
+    { label: 'User Grants', value: grants.length, sub: `${users} distinct users`, tone: 'info' },
+    { label: 'Permission Patterns', value: perms, sub: 'across all roles' },
+  ];
+
   return (
-    <div style={st.page}>
-      <h1 style={st.h1}>Administration · Roles &amp; Access</h1>
-      <p style={st.sub}>
-        Roles are named bundles of permission patterns (e.g. <code style={st.code}>procurement.*</code>,{' '}
-        <code style={st.code}>finance.invoice.approve</code>). Grant them to users here — this is exactly what the
-        API&apos;s permission guard enforces once authentication is turned on.
-      </p>
-      {data === null ? (
-        <p style={st.muted}>Access API offline.</p>
-      ) : (
-        <RolesAdminClient initialRoles={data.roles ?? []} initialGrants={data.grants ?? []} />
-      )}
+    <div style={adminPage}>
+      <AdminHeader
+        title="Roles & Access"
+        glyph="🔐"
+        backToHub
+        subtitle="Roles are named bundles of permission patterns (e.g. procurement.*, finance.invoice.approve). Grant them to users here — exactly what the API's permission guard enforces once authentication is on."
+        kpis={kpis}
+      />
+      <RolesAdminClient initialRoles={roles} initialGrants={grants} />
     </div>
   );
 }
-
-const st = {
-  page: { maxWidth: 1000, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
-  h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
-  sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
-  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12.5, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 5, padding: '1px 5px' } as CSSProperties,
-  muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
-};

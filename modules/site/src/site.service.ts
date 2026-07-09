@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, makeEvent, type Page, type PageParams, paginate } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type DailyReport, makeDailyReport } from './domain/daily-report';
@@ -180,6 +180,11 @@ export class SiteService {
     return this.delayLogStore.findAll(tenantId);
   }
 
+  /** Paged variant — low-growth list, so windowing over findAll suffices (gap #9 tail). */
+  async listDelayLogsPaged(tenantId: Id, page: PageParams): Promise<Page<DelayLog>> {
+    return paginate(await this.delayLogStore.findAll(tenantId), page);
+  }
+
   // ── Site Instructions ──────────────────────────────────────────────────────
 
   async issueSiteInstruction(input: {
@@ -252,6 +257,11 @@ export class SiteService {
     return this.siteInstructionStore.findAll(tenantId);
   }
 
+  /** Paged variant — low-growth list, windowed over findAll (gap #9 tail). */
+  async listSiteInstructionsPaged(tenantId: Id, page: PageParams): Promise<Page<SiteInstruction>> {
+    return paginate(await this.siteInstructionStore.findAll(tenantId), page);
+  }
+
   // ── Material Consumption ───────────────────────────────────────────────────
 
   async createMaterialConsumption(input: {
@@ -296,6 +306,11 @@ export class SiteService {
     return this.materialConsumptionStore.findAll(tenantId);
   }
 
+  /** Paged variant — low-growth list, windowed over findAll (gap #9 tail). */
+  async listMaterialConsumptionPaged(tenantId: Id, page: PageParams): Promise<Page<MaterialConsumption>> {
+    return paginate(await this.materialConsumptionStore.findAll(tenantId), page);
+  }
+
   // ── Labour allocation (manpower by trade) ───────────────────────────────────
 
   async createLabourAllocation(input: {
@@ -324,6 +339,11 @@ export class SiteService {
 
   listLabourAllocations(tenantId: Id): Promise<LabourAllocation[]> {
     return this.labourStore.findAll(tenantId);
+  }
+
+  /** Paged variant — low-growth list, windowed over findAll (gap #9 tail). */
+  async listLabourAllocationsPaged(tenantId: Id, page: PageParams): Promise<Page<LabourAllocation>> {
+    return paginate(await this.labourStore.findAll(tenantId), page);
   }
 
   /** Manpower rolled up by trade for a project (headcount + man-hours). */

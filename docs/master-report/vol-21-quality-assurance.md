@@ -24,12 +24,19 @@ CI on every push (Volume 18 §3): lint → typecheck → coverage tests → API 
 audit → web smoke. Local = same commands (`pnpm lint/typecheck/test`). [Gap]: pre-merge
 migration gate (apply all migrations against a scratch pg in CI).
 
-## 3. Performance
+## 3. Performance — ✅ DONE 2026-07-08 (gap #15 closed)
 
-[Gap — P1]. Nothing measured. Plan: k6 baseline against the seeded demo tenant — the four
-hot paths: list endpoints under pagination, GRN-accept reactor chain (write amplification),
-statements fold, event-relay throughput. Budgets to set *before* optimizing: p95 read <200ms,
-write <500ms, relay lag <2s at 50 rps.
+**Measured.** Harness: `apps/api/scripts/perf-baseline.mjs` (`pnpm --filter @aura/api perf`)
+— warmup + timed rounds per endpoint, p50/p95/max vs in-script budgets, `--enforce` exits 1
+on breach (CI perf smoke), `--json` for dashboards. Budgets: health <50ms · lists <150ms ·
+filtered finance lists <200ms · aggregate reports <400ms (p95).
+
+Baseline findings (full data: `docs/reports/2026-07-08-performance-baseline.md`): app work
+is <120ms on every endpoint once the dev environment's ~170ms remote-DB RTT is subtracted;
+**one real hotspot** — `GET /events` unwindowed feed (~675ms normalized p95) — plus a
+2-RTT note on paged endpoints (COUNT+SELECT could parallelize). Remaining (P2): k6-style
+sustained-load runs (write amplification, relay throughput at 50 rps) once a co-located
+staging DB exists.
 
 ## 4. Security testing
 

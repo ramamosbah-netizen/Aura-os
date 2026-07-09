@@ -95,6 +95,19 @@ export class MetricsRegistry {
   reset(): void {
     this.metrics.clear();
   }
+
+  /** Structured read of the whole registry (drives the OTLP exporter). */
+  snapshot(): Array<{ name: string; type: 'counter' | 'gauge'; help: string; series: Array<{ labels: Labels; value: number }> }> {
+    const out: Array<{ name: string; type: 'counter' | 'gauge'; help: string; series: Array<{ labels: Labels; value: number }> }> = [];
+    for (const [name, m] of this.metrics) {
+      const series =
+        m.type === 'gauge' && m.collect && m.series.size === 0
+          ? [{ labels: {} as Labels, value: m.collect() }]
+          : [...m.series.values()].map((s) => ({ labels: s.labels, value: s.value }));
+      out.push({ name, type: m.type, help: m.help, series });
+    }
+    return out;
+  }
 }
 
 /** Process-wide singleton every producer increments and the /metrics endpoint renders. */

@@ -37,13 +37,25 @@ export default function AppShell({
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [activeCompany, setActiveCompany] = useState('AURA Group HQ');
 
-  // Simulated authorized companies — in production, loaded from session/API
-  const companies = [
+  // Companies come from the admin registry (/admin/organization); the static list is
+  // only the dev fallback when none are configured or the API is down.
+  const FALLBACK_COMPANIES = [
     { id: 'company-hq', name: 'AURA Group HQ' },
     { id: 'company-mep', name: 'AURA MEP LLC' },
     { id: 'company-fm', name: 'AURA Facilities Management' },
     { id: 'company-elv', name: 'AURA ELV Systems' },
   ];
+  const [companies, setCompanies] = useState(FALLBACK_COMPANIES);
+
+  useEffect(() => {
+    fetch('/api/admin/companies', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: Array<{ id: string; name: string; active?: boolean }> | null) => {
+        const active = Array.isArray(d) ? d.filter((c) => c.active !== false) : [];
+        if (active.length > 0) setCompanies(active.map((c) => ({ id: c.id, name: c.name })));
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -84,8 +96,11 @@ export default function AppShell({
     <div style={s.root}>
       <aside style={s.sidebar}>
         <div style={s.brand}>
-          <span style={{ color: 'var(--accent)' }}>◆</span> AURA
-          <span style={{ color: 'var(--muted)' }}>OS</span>
+          <div style={s.brandLogo}>◆</div>
+          <div>
+            <div style={s.brandName}>AURA OS</div>
+            <div style={s.brandSub}>ENTERPRISE ERP</div>
+          </div>
         </div>
         <nav style={s.nav}>
           {groups.map((group) => (
@@ -99,7 +114,9 @@ export default function AppShell({
                     href={item.href}
                     style={active ? { ...s.link, ...s.linkActive } : s.link}
                   >
-                    <span style={s.linkGlyph}>{item.glyph}</span>
+                    <span style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>
+                      {item.glyph}
+                    </span>
                     {item.label}
                   </Link>
                 );
@@ -190,7 +207,23 @@ const s = {
     top: 0,
     height: '100vh',
   } as CSSProperties,
-  brand: { fontWeight: 700, fontSize: 17, letterSpacing: 0.5, padding: '4px 10px 22px' } as CSSProperties,
+  brand: { display: 'flex', alignItems: 'center', gap: 11, padding: '2px 8px 22px' } as CSSProperties,
+  brandLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    background: 'var(--accent-grad)',
+    color: 'var(--accent-ink)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 18,
+    fontWeight: 900,
+    flexShrink: 0,
+    boxShadow: '0 4px 14px var(--accent-soft)',
+  } as CSSProperties,
+  brandName: { fontWeight: 800, fontSize: 15, letterSpacing: 0.3, color: 'var(--text)' } as CSSProperties,
+  brandSub: { fontSize: 9, letterSpacing: 1.5, color: 'var(--muted)', marginTop: 1, fontWeight: 700 } as CSSProperties,
   group: { marginBottom: 18 } as CSSProperties,
   groupTitle: {
     fontSize: 11,
@@ -208,8 +241,14 @@ const s = {
     color: 'var(--text)',
     fontSize: 14,
   } as CSSProperties,
-  linkActive: { background: 'var(--panel-2)', color: 'var(--text)' } as CSSProperties,
+  linkActive: {
+    background: 'var(--accent-grad)',
+    color: 'var(--accent-ink)',
+    fontWeight: 700,
+    boxShadow: '0 2px 12px var(--accent-soft)',
+  } as CSSProperties,
   linkGlyph: { width: 18, textAlign: 'center', color: 'var(--accent)' } as CSSProperties,
+  linkGlyphActive: { color: 'var(--accent-ink)' } as CSSProperties,
   col: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' } as CSSProperties,
   topbar: {
     height: 56,

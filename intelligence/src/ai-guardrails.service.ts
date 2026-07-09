@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
+import type { Pool } from 'pg';
+import { PG_POOL } from '@aura/core';
 
 // ── Guardrail Rule Types ──────────────────────────────────────────────────────
 
@@ -26,9 +28,37 @@ export interface GuardrailCheckResult {
 // ── AI Guardrails Service ─────────────────────────────────────────────────────
 
 @Injectable()
-export class AiGuardrailsService {
+export class AiGuardrailsService implements OnModuleInit {
   private readonly logger = new Logger('AiGuardrails');
   private readonly rules = new Map<string, GuardrailRule>();
+  /** Rows persist under this tenant until the registry goes fully tenant-scoped. */
+  private static readonly TENANT = 'dev-tenant';
+
+  constructor(@Optional() @Inject(PG_POOL) private readonly pool: Pool | null = null) {
+    // Default rule pack — active from first boot so AI output is never unguarded.
+    // Admins tune these at /admin/ai (§2.7); modules may register more at runtime.
+    this.registerRule({
+      key: 'content-safety',
+      label: 'Content safety keywords',
+      type: 'blocked_keywords',
+      enabled: true,
+      config: { keywords: ['exploit', 'malware', 'ransomware', 'bypass security', 'sql injection'] },
+    });
+    this.registerRule({
+      key: 'pii-mask',
+      label: 'PII masking',
+      type: 'pii_mask',
+      enabled: true,
+      config: {},
+    });
+    this.registerRule({
+      key: 'token-cap',
+      label: 'Completion token cap',
+      type: 'max_tokens',
+      enabled: true,
+      config: { maxTokens: 4000 },
+    });
+  }
 
   registerRule(rule: GuardrailRule): void {
     this.rules.set(rule.key, rule);
@@ -37,6 +67,57 @@ export class AiGuardrailsService {
 
   listRules(): GuardrailRule[] {
     return Array.from(this.rules.values());
+  }
+
+  /** Load persisted rule state over the code defaults (PG mode). Runs once on boot. */
+  async onModuleInit(): Promise<void> {
+    if (!this.pool) return;
+    try {
+      const { rows } = await this.pool.query<{
+        rule_key: string;
+        label: string;
+        rule_type: GuardrailType;
+        config: GuardrailRule['config'];
+        enabled: boolean;
+      }>(`SELECT rule_key, label, rule_type, config, enabled FROM public.aura_ai_guardrails WHERE tenant_id = $1`, [
+        AiGuardrailsService.TENANT,
+      ]);
+      for (const r of rows) {
+        const existing = this.rules.get(r.rule_key);
+        this.rules.set(r.rule_key, {
+          key: r.rule_key,
+          label: r.label || existing?.label || r.rule_key,
+          type: r.rule_type,
+          enabled: r.enabled,
+          config: existing ? { ...existing.config, ...(r.config ?? {}) } : (r.config ?? {}),
+        });
+      }
+      if (rows.length) this.logger.log(`Hydrated ${rows.length} guardrail rule state(s) from Postgres`);
+    } catch (err) {
+      this.logger.warn(`Guardrail hydrate failed (using code defaults): ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Toggle a rule on/off (Admin Center 2.7). Returns false when the key is unknown.
+   * Write-throughs to `aura_ai_guardrails` when Postgres is configured, so toggles
+   * survive restarts (hydrated back in onModuleInit).
+   */
+  setEnabled(key: string, enabled: boolean): boolean {
+    const rule = this.rules.get(key);
+    if (!rule) return false;
+    this.rules.set(key, { ...rule, enabled });
+    if (this.pool) {
+      void this.pool
+        .query(
+          `INSERT INTO public.aura_ai_guardrails (tenant_id, rule_key, label, rule_type, config, enabled)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (tenant_id, rule_key) DO UPDATE SET enabled = excluded.enabled, label = excluded.label, config = excluded.config`,
+          [AiGuardrailsService.TENANT, rule.key, rule.label, rule.type, JSON.stringify(rule.config ?? {}), enabled],
+        )
+        .catch((err) => this.logger.error(`persist guardrail ${key} failed: ${(err as Error).message}`));
+    }
+    return true;
   }
 
   /**

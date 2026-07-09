@@ -10,8 +10,8 @@ L 1–3mo. Risk = what happens if shipped/sold without it.
 
 ## 1. What exists (the asset base — one paragraph of record)
 
-17 modules on a uniform kernelized template · 551 API handlers · 93 pages · 146 tables /
-126 migrations · 71-event catalog with transactional outbox + 12 automatic cross-module
+17 modules on a uniform kernelized template · 551+ API handlers · 93 pages · 149 tables /
+134 migrations · 71-event catalog with transactional outbox + 12 automatic cross-module
 reactors · workflow/saga/approval engines · DMS + templates + 9 print documents · immutable
 audit · numbering · notifications (in-app) · RBAC/ABAC engine · multi-currency + GL with
 DB-enforced double entry · GCC statutory HR (WPS/EOSB) · metadata form platform with rules/
@@ -20,6 +20,11 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 28 verification reports.
 
 ## 2. The gap register
+
+> **Re-verified against the live tree 2026-07-08 (morning)** — every row checked by code
+> inspection; #12 updated (admin hub + PG settings). **Same day (evening): the entire P1
+> tier was closed** — see the P1 section banner and `docs/reports/2026-07-08-p1-closure.md`
+> for the row-by-row evidence. P0 #1/#3/#4/#5 remain the open sell/deploy blockers.
 
 ### P0 — cannot sell/deploy without (all V1)
 
@@ -31,20 +36,24 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 | 4 | Docker + deploy target + migration gate in CI | Vol 19 §2–3 | M | cannot ship, cannot upgrade customers |
 | 5 | Backups/DR documented + restore drill | Vol 19 §8–9 | S | unrecoverable data loss |
 
-### P1 — enterprise-credibility (V1 → early V2)
+### P1 — enterprise-credibility (V1 → early V2) — **ALL CLOSED 2026-07-08**
+
+> The whole tier was closed in one pass on 2026-07-08 and verified live (build 22/22 ·
+> typecheck 42/42 · test tasks 41/41 · endpoint-by-endpoint API/web checks). Evidence:
+> `docs/reports/2026-07-08-p1-closure.md`.
 
 | # | Gap | Home | Effort | Risk |
 |--:|---|---|---|---|
-| 6 | Observability — **foundation landed 2026-07-07** (dependency-free metrics registry with Prometheus exposition; `jobs_processed_total` + `webhook_deliveries_total` counters instrumented; `GET /metrics` refreshes `outbox_pending`/`outbox_dead_letter` gauges at scrape time, gated by `METRICS_ENABLED`; 5 tests). Remaining: OTLP exporter option + alert rules + more gauges | Vol 19 §6 | S (was M) | blind operations; SLA impossible |
-| 7 | Permission taxonomy — **guard wired + enforced 2026-07-07** (PermissionsGuard was dead code; now a global APP_GUARD that passes through when auth is off and enforces `@Permissions` once a verifier is set; dev admin = full wildcard; purchase-order/approval-matrix handlers annotated `procurement.<entity>.<action>` as the template; 5 guard tests). Remaining: annotate the other ~588 handlers (mechanical, no-op until auth on) + roles-admin UI + DB-backed grants | Vol 7 §2 | M | coarse authz blocks enterprise security review |
-| 8 | Global validation layer — **error half done 2026-07-06/07** (enforced error taxonomy: pure `classifyDomainMessage` + fitness test failing CI on any 500-escape, PR #31; audit: 57/389 domain throws escaped → 0; **98 per-controller try/catch→400 wrappers retired 2026-07-07** across 21 controllers so the taxonomy's 404/409 now surface). **form half mechanism landed 2026-07-07** (`assertFormValid` in shared runs the same `evaluateForm` server-side → 400 VALIDATION via the taxonomy; schemas relocate to shared keyed by their own id/endpoint; first enforced on `POST /hr/employees`). Remaining: apply `assertFormValid` to the other create/update endpoints (mechanical, per-schema) | Vol 9 §7 | S | metadata rules bypassable on not-yet-wired endpoints |
-| 9 | Universal pagination — **tail closed 2026-07-07** (fleet, HR all-8, doc-control paginated + dormant assets/site wirings exposed; additive `/paged` `Page<T>` routes, non-breaking; ~5 new tests). Remaining: low-growth site child lists + frontend opt-in | Vol 9 §1 | XS (was S–M) | large-tenant performance cliffs |
-| 10 | Charts/BI floor — **charts already exist** (`charts.tsx`: BarChart/BarList/Donut + finance/CFO dashboards) + **CSV/BI export started 2026-07-07** (`GET /audit/export.csv`, filtered, jsonb-flattened, via shared `toCsv`; +1 test). Remaining: extend export to finance aging/invoices + a web download button | Vol 16 | XS (was S–M) | lost exec demos (competitive vulnerability #2) |
-| 11 | Notification delivery channels — **verified already delivered** (config-gated relay per channel: `SMTP_RELAY_URL`/`SMS_RELAY_URL`/`SLACK`/`TEAMS`, `NOTIFY_CHANNELS`+`NOTIFY_FALLBACK_RECIPIENT`, logged dev fallback; event→notification wiring for 6 event types; full test suite in `notification.service.test.ts`). Remaining: per-user recipient resolution (currently a tenant fallback address) + optional built-in SMTP transport (vs external relay) | Vol 4 §9 | XS (was S) | "system that doesn't tell you anything" |
-| 12 | Admin center phase 1 — **7 screens shipped 2026-07-07/08**: `/admin/access`, `/admin/webhooks`, `/admin/approval-matrix`, `/admin/feature-flags`, `/admin/connectors`, `/admin/numbering`, `/admin/settings`. Phase 1 essentially complete. Remaining: PG-backed stores (roles/settings persist in-memory today) | Vol 15 §3 | ✅ (phase 1) | every config change = engineering ticket |
-| 13 | MFA + SSO — **Entra OIDC already accepted** (AuthService verifies IdP JWKS via `AUTH_JWKS_URL`) + **TOTP MFA landed 2026-07-07** (RFC 6238 in shared, enroll/verify endpoints; 7 tests incl. RFC vectors). Remaining: persist per-user MFA secret + gate login; map Entra groups→AURA roles | Vol 7 §7–8 | S (was M) | enterprise IT checklist failure |
-| 14 | Field-level PII encryption | Vol 7 §4 | M | PDPL exposure (salaries, IDs) |
-| 15 | Performance baseline + budgets | Vol 21 §3 | S | unknown ceilings before first big tenant |
+| 6 | Observability — **CLOSED 2026-07-08**. Foundation (2026-07-07): metrics registry + Prometheus `GET /metrics` (`METRICS_ENABLED`). Close-out: dependency-free **OTLP/HTTP push** (`OTLP_METRICS_URL`/`_INTERVAL_MS`/`_HEADERS`, counters→cumulative sums; refreshes outbox gauges pre-push; 5 tests) · **HTTP metrics** (`http_requests_total` + duration sum/count by method/status class, main.ts middleware) · **alert rule pack** `infrastructure/observability/prometheus-alerts.yml` (dead-letters, backlog, webhook failures, 5xx ratio, latency, job failures) + README | Vol 19 §6 | ✅ | ~~blind operations~~ |
+| 7 | Permission taxonomy — **CLOSED 2026-07-08**. Guard enforced 2026-07-07; close-out: **route-derived default permissions** — with no `@Permissions` decorator the guard derives `module.entity.action` from the declared route (`POST crm/accounts`→`crm.account.create`, `POST …/:id/approve`→`finance.invoice.approve`), so **all ~600 handlers are covered by construction** (no 588-file annotation pass); explicit decorators override; health/auth/metrics exempt; 9 guard tests · roles-admin UI = `/admin/access` · **DB-backed grants** via #12 | Vol 7 §2 | ✅ | ~~coarse authz~~ |
+| 8 | Global validation layer — **CLOSED 2026-07-08**. Error half (taxonomy + fitness test + wrapper retirement) done 07-06/07; form half: `assertFormValid` mechanism + `hr.employee` (07-07), close-out relocated the remaining metadata schemas to shared and wired enforcement: **`crm.quotation` → POST /crm/quotations · `subcontracts.subcontract` → POST /subcontracts** (engineering-documents schema has no endpoint by design — submits via its own tab handler). Every metadata-form-backed endpoint now enforces server-side | Vol 9 §7 | ✅ | ~~rules bypassable~~ |
+| 9 | Universal pagination — **CLOSED 2026-07-08**. Fleet/HR/doc-control 07-07; close-out: the 4 site child lists (`delay-logs`, `material-consumption`, `instructions`, `labour`) got `/paged` routes (windowed over findAll — low-growth) + **frontend opt-in exemplar**: `/crm/accounts` now fetches `/paged` (50/window) with a server-rendered pager | Vol 9 §1 | ✅ | ~~performance cliffs~~ |
+| 10 | Charts/BI floor — **CLOSED 2026-07-08**. Audit CSV 07-07; close-out: **AR aging CSV** (`customer-invoices/aging.csv`, pure `arAgingCsvRows` + test) · **supplier-invoice register CSV** (`invoices/export.csv`) · **web download buttons** on AR aging, AP aging, invoices + filter-aware audit export, each via a BFF csv proxy route | Vol 16 | ✅ | ~~lost exec demos~~ |
+| 11 | Notification delivery — **CLOSED 2026-07-08**. Channel relays + event wiring verified 07-07; close-out: **per-user recipient resolution** — `NOTIFY_RECIPIENTS` map (`u-finance=fin@co.com,…`) → address-shaped userId passthrough → tenant fallback (`resolveRecipient`, 2 tests). Built-in SMTP transport stays external-relay by design (config seam) | Vol 4 §9 | ✅ | ~~"system that doesn't tell you anything"~~ |
+| 12 | Admin center phase 1 — **CLOSED 2026-07-08** (fully). 7 screens + `/admin` hub + professional chrome + PG settings (migration `0132`); close-out: **PG-backed roles/grants** (migration `0133_access_roles_grants`; AccessService write-through + hydrate-on-boot — decisions stay sync in-memory; verified surviving a restart: "Hydrated 3 role(s) + 3 grant(s)"). **Professional matrix pass + phase 2 start, same day (evening):** Roles & Access rebuilt as a **permission matrix** (roles × modules + ALL column + custom-key chips) and a **user-grants matrix** (directory × roles, click-to-grant) with per-user **MFA reset** (`DELETE /auth/mfa`); approval matrix → **value-band grid editor**; flags → toggles; numbering → inline grid w/ live preview; webhooks → pause/resume + status pills (shared kit `admin-ui.tsx` + `.adm-*`). **Phase 2 shipped:** `/admin/organization` (guided tenant profile, Vol 15 §2.1) + `/admin/health` (ops dashboard: dead letters, delivery health, spine activity, Vol 15 §2.10); **wave 2 same day:** companies master (migration `0135` + `CompaniesService` + grid on Organization; **app-shell switcher reads the registry**) + business calendar (kernel `CalendarService` CRUD over 0030 + `/admin/calendar`: weekend matrix, holidays, Ramadan adjustments). All 11 admin pages verified 200 + CRUD roundtrips live. **Wave 3 (2026-07-09):** notification routing §2.8 (dispatcher reads tenant `notify.*` settings, env fallback; `/admin/notifications` w/ channel toggles + recipient grid + transport/event status) + data admin §2.9 (`/admin/data`: idempotent demo seed, CSV export hub, COA import). Vol 15 §2.1/§2.8/§2.9/§2.10 all shipped | Vol 15 §1–3 | ✅ (phase 2 §2.1/§2.8/§2.9/§2.10 done) | ~~config = engineering ticket~~ |
+| 13 | MFA + SSO — **CLOSED 2026-07-08**. Entra OIDC accepted + TOTP landed 07-07; close-out: **persisted per-user MFA** (migration `0134_user_mfa`; two-step enroll→activate so an unscanned QR can't lock anyone out) · **login gate** (active enrolment ⇒ `POST /auth/login` requires a valid code; bad codes hit the same lockout) · **Entra groups→AURA roles** (`AUTH_GROUP_ROLE_MAP` csv, applied idempotently on IdP token verify; 6 tests) | Vol 7 §7–8 | ✅ | ~~IT checklist failure~~ |
+| 14 | Field-level PII encryption — **CLOSED 2026-07-08**. AES-256-GCM field crypto in shared (`enc:v1:` versioned format, random IV, auth-tag fail-closed, legacy-plaintext passthrough, staged by `PII_ENCRYPTION_KEY`; 8 tests). Wired at the storage boundary for the WPS identifiers (`iban`, `molEmployeeId` in the HR employee store) — domain/UI stay plaintext, DB holds ciphertext. Pattern set; extend per-field as catalogued | Vol 7 §4 | ✅ | ~~PDPL exposure~~ |
+| 15 | Performance baseline + budgets — **CLOSED 2026-07-08**. Harness `apps/api/scripts/perf-baseline.mjs` (`pnpm --filter @aura/api perf`; p50/p95/max vs per-endpoint budgets; `--enforce` for CI). Baseline measured & documented: app work is <120ms everywhere once the ~170ms remote-DB RTT is subtracted; **one real hotspot found** (`GET /events` unwindowed feed) + paged-endpoint 2-RTT note. Budgets + findings: `docs/reports/2026-07-08-performance-baseline.md` | Vol 21 §3 | ✅ | ~~unknown ceilings~~ |
 
 ### P2 — competitive depth (V2)
 
@@ -89,8 +98,10 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 ## 4. Health-score reconciliation
 
 The README health board derives from this register: an area's score falls with the count and
-severity of its open rows (e.g. Security 4.5 = five P0/P1 rows; Admin Center 3.0 = spec-only).
-When a row closes, the board updates — the two documents are maintained together.
+severity of its open rows. With P1 closed (2026-07-08), Security carries only its two P0 rows
+(RLS #1, vault #3 → 5.5), Admin Center is function-complete for phase 1 (7.2), and Reporting/
+Deployment tick up for the CSV/BI floor and the observability stack. When a row closes, the
+board updates — the two documents are maintained together.
 
 ## 5. The single most important sentence
 

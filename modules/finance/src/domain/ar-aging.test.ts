@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { bucketFor, buildArAging } from './ar-aging';
+import { AR_AGING_CSV_COLUMNS, arAgingCsvRows, bucketFor, buildArAging } from './ar-aging';
+import { toCsv } from '@aura/shared';
 import type { CustomerInvoice } from './customer-invoice';
 
 function inv(over: Partial<CustomerInvoice>): CustomerInvoice {
@@ -88,5 +89,24 @@ describe('buildArAging', () => {
       '2026-07-10',
     );
     expect(r.byCustomer[0].customerName).toBe('Big');
+  });
+});
+
+describe('arAgingCsvRows (BI export)', () => {
+  it('flattens per-customer rows and appends a TOTAL row', () => {
+    const r = buildArAging(
+      [
+        inv({ customerName: 'Acme', dueDate: '2026-06-30', total: 1000 }),
+        inv({ customerName: 'Globex', dueDate: '2026-05-01', total: 500 }),
+      ],
+      '2026-07-10',
+    );
+    const rows = arAgingCsvRows(r);
+    expect(rows).toHaveLength(3);
+    expect(rows[rows.length - 1].customer).toBe('TOTAL');
+    expect(rows[rows.length - 1].total).toBe(1500);
+    const csv = toCsv(rows, [...AR_AGING_CSV_COLUMNS]);
+    expect(csv.split('\n')[0]).toBe('customer,current,d1_30,d31_60,d61_90,d90_plus,total');
+    expect(csv.split('\n')).toHaveLength(4);
   });
 });

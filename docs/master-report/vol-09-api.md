@@ -24,9 +24,9 @@ routes.
 | Creates | `POST /<resource>` with `Idempotency-Key` honored on spine modules (interceptor + store) |
 | Updates | `PATCH /<resource>/:id` partial update (undefined-stripping server-side) on the six spine entities + others; lifecycle verbs as explicit sub-routes |
 | Lifecycle verbs | `PUT /<resource>/:id/<verb>` — e.g. `/approve`, `/submit`, `/certify`, `/close`, `/resolve` |
-| Errors | 400 with `{error|message}`; 404 on missing; per-endpoint try/catch (global exception filter [Gap]) |
+| Errors | global exception filter + enforced taxonomy (`classifyDomainMessage` → 400/403/404/409; CI fitness test blocks 500-escapes) — ✅ done 2026-07-06/07 |
 | Filtering | query params on lists (`status`, `projectId`, date ranges) |
-| Pagination | `PageParams`/`listPaged` contract exists; adopted on ~9 heavy lists — universal adoption [P1] |
+| Pagination | additive `GET .../paged` `Page<T>` routes across all modules (73 routes incl. site tails); frontend opt-in live on `/crm/accounts` — ✅ done 2026-07-08 |
 
 ### 1.2 Endpoint map (handlers per area, verified)
 
@@ -105,9 +105,10 @@ curl -X POST $HOST/api/v1/ai/complete -d '{"messages":[{"role":"user","content":
 
 | Gap | Sev |
 |---|---|
-| OpenAPI/Swagger spec | P2 (unlocks SDK/docs/contract tests) |
-| Global exception filter + error taxonomy | P1 |
-| Universal pagination adoption | P1 |
+| OpenAPI/Swagger spec | ✅ done (spec at `/api/docs-json`, UI at `/api/docs`) |
+| Global exception filter + error taxonomy | ✅ done 2026-07-06/07 (`classifyDomainMessage` + CI fitness test; wrappers retired) |
+| Global validation layer (form half) | ✅ done 2026-07-08 (`assertFormValid` on every metadata-form endpoint: employee, quotation, subcontract) |
+| Universal pagination adoption | ✅ done 2026-07-08 (73 `/paged` `Page<T>` routes incl. site tails; frontend opt-in live on `/crm/accounts`) |
 | Full CRUD on some masters (cost/profit centres update/delete) | P2 |
 | API versioning policy beyond `/v1` prefix | P3 |
 

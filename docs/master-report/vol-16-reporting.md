@@ -41,8 +41,15 @@ a KPI registry with thresholds/targets and trend history.
 
 ## 4. BI
 
-[Gap]. The designed path (data side exists): reporting SQL views (`0113_reporting_views.sql`)
-+ **OLAP export service** (`core/projections/olap-export`, tested) → scheduled extracts →
+**CSV/BI floor — ✅ done (gap #10 closed 2026-07-08):** filtered **audit-log export**
+(`GET /audit/export.csv`), **AP + AR aging exports** (`invoices/aging.csv`,
+`customer-invoices/aging.csv` — pure, tested row builders), **supplier-invoice register
+export** (`invoices/export.csv`), all via shared `toCsv`, with **web download buttons**
+on the AR/AP aging, invoices, and audit pages (BFF csv proxies). These are the Power BI /
+Excel feeds.
+
+Deeper BI path (data side exists): reporting SQL views (`0113_reporting_views.sql`) +
+**OLAP export service** (`core/projections/olap-export`, tested) → scheduled extracts →
 Power BI / Metabase connection. Decision pending: embedded BI vs export-first (recommend
 export-first — zero lock-in, matches the integration posture; Volume 17 lists Power BI).
 

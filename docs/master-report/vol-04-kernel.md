@@ -25,12 +25,14 @@ and its maturity.
 
 **Files:** `core/src/identity/access.service.ts` (+ `shared/src/identity/access.ts` evaluation)
 
-Roles are named permission bundles registered with the access service; users hold grants.
-`can(userId, target)` evaluates grants → roles → permissions. Route-level enforcement via
-`@Permissions('key')` + `PermissionsGuard` (metadata + guard tested). Current honest state:
-the engine and guard are production-shaped, but **controllers are not yet annotated with
-fine-grained keys** — service-level access checks carry authorization today. Annotating the
-551 handlers with a permission taxonomy is a scoped task in Volume 23.
+Roles are named permission bundles registered with the access service; users hold grants —
+**PG-backed** since 2026-07-08 (migration `0133`, write-through + hydrate-on-boot; decisions
+stay sync in-memory). `can(userId, target)` evaluates grants → roles → permissions.
+Route-level enforcement via `@Permissions('key')` + a global `PermissionsGuard`; **every
+handler is covered** (gap #7 closed 2026-07-08): where no decorator is present the guard
+derives the `module.entity.action` key from the declared route, so the taxonomy is complete
+by construction (explicit decorators override; health/auth/metrics exempt). Enforcement
+engages when auth is ON; service-level access checks still run underneath.
 
 ## 3. ABAC
 
@@ -95,8 +97,12 @@ claim, prefix/format config, gap-controlled. Used by spine documents.
 **Files:** `core/src/notifications/{notification.service, notification-store}.ts` (+ migration 0114)
 
 In-app notifications with read state; `/notifications` page + universal inbox aggregation.
-Event-driven creation (e.g. fleet registration-expiry scanner). **Delivery channels (email/SMS/
-push) are not wired** [Gap — the notification store is channel-ready].
+Event-driven creation (e.g. fleet registration-expiry scanner). **Delivery channels — ✅ done
+(gap #11 closed 2026-07-08):** config-gated relay per channel (`SMTP_RELAY_URL` /
+`SMS_RELAY_URL` / `SLACK_WEBHOOK_URL` / `TEAMS_WEBHOOK_URL`; logged dev fallback),
+`NOTIFY_CHANNELS` defaults, and **per-user recipient resolution** — `NOTIFY_RECIPIENTS`
+map (`u-finance=fin@co.com,…`) → address-shaped userId passthrough → tenant
+`NOTIFY_FALLBACK_RECIPIENT`.
 
 ## 10. AI Provider
 
@@ -109,11 +115,12 @@ fallback provider (keeps every AI feature functional with no API key — degrade
 
 ## 11. Settings
 
-**Files:** `core/src/config/feature-flag.service.ts`
+**Files:** `core/src/config/{feature-flag.service, settings.service}.ts`
 
-Feature flags (per-tenant capable). Honest state: a general settings service (tenant settings,
-parameter registry, admin UI) is **[Gap]** — tracked as the Administration Center foundation
-(Volume 15). Environment configuration is documented in Volume 19.
+Feature flags (per-tenant capable) **and** the general tenant settings service — ✅ done
+(gap #12, 2026-07-08): PG-backed key/value store (`aura_tenant_settings`, migration 0132;
+in-memory in dev) with the admin UI at `/admin/settings`. Environment configuration is
+documented in Volume 19.
 
 ## 12. Metadata
 

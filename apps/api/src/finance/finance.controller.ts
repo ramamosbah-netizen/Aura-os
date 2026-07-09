@@ -32,6 +32,8 @@ import {
   type ApAgingReport,
   apAgingCsvRows,
   AP_AGING_CSV_COLUMNS,
+  arAgingCsvRows,
+  AR_AGING_CSV_COLUMNS,
   CustomerInvoiceService,
   type BankGuarantee,
   type GuaranteeType,
@@ -178,6 +180,34 @@ export class FinanceController {
   async apAgingCsv(@Query('asOf') asOf?: string): Promise<string> {
     const report = await this.invoices.aging(this.tenant.get().tenantId, asOf);
     return toCsv(apAgingCsvRows(report), [...AP_AGING_CSV_COLUMNS]);
+  }
+
+  /** Supplier invoices as CSV — flat register for Power BI / Excel (gap #10). Same filters as `list`. */
+  @Get('invoices/export.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="invoices.csv"')
+  async invoicesCsv(
+    @Query('status') status?: string,
+    @Query('poId') poId?: string,
+    @Query('projectId') projectId?: string,
+  ): Promise<string> {
+    const rows = await this.invoices.list({ status, poId, projectId, limit: 10_000 });
+    const COLS = ['id', 'reference', 'title', 'supplierName', 'projectName', 'status', 'value', 'currency', 'exchangeRate', 'createdAt'];
+    return toCsv(
+      rows.map((i) => ({
+        id: i.id,
+        reference: i.reference ?? '',
+        title: i.title,
+        supplierName: i.supplierName,
+        projectName: i.projectName ?? '',
+        status: i.status,
+        value: i.value,
+        currency: i.currency,
+        exchangeRate: i.exchangeRate,
+        createdAt: i.createdAt,
+      })),
+      COLS,
+    );
   }
 
   @Get('invoices/fx-revaluation')
@@ -660,6 +690,15 @@ export class FinanceController {
   @Get('customer-invoices/aging')
   arAging(@Query('asOf') asOf?: string): Promise<ArAgingReport> {
     return this.customerInvoices.aging(this.tenant.get().tenantId, asOf);
+  }
+
+  /** AR aging as CSV — the receivables exec report for Power BI / Excel (gap #10). */
+  @Get('customer-invoices/aging.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="ar-aging.csv"')
+  async arAgingCsv(@Query('asOf') asOf?: string): Promise<string> {
+    const report = await this.customerInvoices.aging(this.tenant.get().tenantId, asOf);
+    return toCsv(arAgingCsvRows(report), [...AR_AGING_CSV_COLUMNS]);
   }
 
   @Get('customer-invoices/fx-revaluation')

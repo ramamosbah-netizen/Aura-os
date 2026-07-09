@@ -24,7 +24,10 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 > **Re-verified against the live tree 2026-07-08 (morning)** — every row checked by code
 > inspection; #12 updated (admin hub + PG settings). **Same day (evening): the entire P1
 > tier was closed** — see the P1 section banner and `docs/reports/2026-07-08-p1-closure.md`
-> for the row-by-row evidence. P0 #1/#3/#4/#5 remain the open sell/deploy blockers.
+> for the row-by-row evidence. **2026-07-09: P0 #3/#4/#5 closed in one wave** (Docker + CI
+> migration gate + secrets seam + backup/DR restore drill — PR #51,
+> `docs/reports/2026-07-09-p0-deploy-wave.md`). **P0 #1 (RLS) is the only open register row
+> below P2 — scheduled last by design.**
 
 ### P0 — cannot sell/deploy without (all V1)
 
@@ -32,9 +35,9 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 |--:|---|---|---|---|
 | 1 | RLS enforcement bundle (least-priv role, tenant GUC, FORCE RLS, isolation test) | Vol 7 §3 | M | cross-tenant data exposure — existential |
 | 2 | Auth ON + refresh/revocation + lockout — **DONE 2026-07-07**: `AUTH_REQUIRED=true` fail-closed 401 (main.ts, public allowlist) · brute-force `LoginThrottle` (429 after N, `AUTH_LOCKOUT_*`) · JWT `jti` + `TokenRevocationStore` denylist checked on verify · `POST /auth/refresh` (sliding session) + `POST /auth/logout` (revoke). ~19 new tests. *Turning auth on also makes the #7 permission guard enforce.* | Vol 7 §1 | ✅ | open API in any misconfig |
-| 3 | Secrets vault + rotation + revoke exposed keys | Vol 7 §10 | S | credential compromise (keys have touched dev trees) |
-| 4 | Docker + deploy target + migration gate in CI | Vol 19 §2–3 | M | cannot ship, cannot upgrade customers |
-| 5 | Backups/DR documented + restore drill | Vol 19 §8–9 | S | unrecoverable data loss |
+| 3 | Secrets vault + rotation — **DONE 2026-07-09**: `readSecret()` vault seam (`<NAME>_FILE` convention for Docker/K8s/vault-CSI mounts, env fallback, unreadable explicit mount fails at boot) wired at every secret read (`DATABASE_URL`, `AUTH_JWT_SECRET`, `ANTHROPIC_API_KEY`, `PII_ENCRYPTION_KEY`) · staged PII key rotation (`PII_ENCRYPTION_KEY_PREVIOUS` decrypt fallback, +1 test) · gitleaks CI job · `docs/runbooks/secrets-rotation.md` (inventory, windows, revocation drill; history greps clean) | Vol 7 §10 | ✅ | ~~credential compromise~~ (residual: rotate dev keys per runbook) |
+| 4 | Docker + deploy target + migration gate in CI — **DONE 2026-07-09**: multi-stage `apps/api/Dockerfile` (same image = migration job) + `apps/web/Dockerfile` (Next standalone) + `docker-compose.yml` (pgvector PG → migration gate → api → web) · CI `deploy-readiness` (full 136-chain from zero + idempotence rerun + built API boots) · CI `docker-images` (build per PR, GHCR publish on main). Production `next build` verified. First cloud target (Azure, Vol 19 §4) is the remaining deploy step — tracked in Vol 19 §11, not a register row | Vol 19 §2–3 | ✅ | ~~cannot ship~~ |
+| 5 | Backups/DR + restore drill — **DONE 2026-07-09**: `docs/runbooks/backup-dr.md` (RPO ≤5 min PITR / RTO ≤4 h, portable `pg_dump -Fc` secondary, DMS bucket versioning, failure scenarios, quarterly-drill policy + log) · **drill automated in CI**: seed via live API → freeze → dump → restore into fresh DB → `verify-restore.mjs` fails on any per-table count drift or empty source | Vol 19 §8–9 | ✅ | ~~unrecoverable data loss~~ |
 
 ### P1 — enterprise-credibility (V1 → early V2) — **ALL CLOSED 2026-07-08**
 
@@ -98,16 +101,16 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 ## 4. Health-score reconciliation
 
 The README health board derives from this register: an area's score falls with the count and
-severity of its open rows. With P1 closed (2026-07-08), Security carries only its two P0 rows
-(RLS #1, vault #3 → 5.5), Admin Center is function-complete for phase 1 (7.2), and Reporting/
-Deployment tick up for the CSV/BI floor and the observability stack. When a row closes, the
-board updates — the two documents are maintained together.
+severity of its open rows. With P1 closed (2026-07-08) and P0 #3/#4/#5 closed (2026-07-09),
+Security carries only the RLS row (#1 → 6.0) and Deployment/Operations rises to 6.3 (packaging,
+gate, observability, backup/DR built; first cloud target is what remains). When a row closes,
+the board updates — the two documents are maintained together.
 
 ## 5. The single most important sentence
 
-**Nothing on the P0 list is architecturally hard — every one is scoped, most are S/M — but all
-five together are the difference between "impressive codebase" and "product a customer can
-trust with their books."**
+**Four of the five P0s are closed; the RLS enforcement bundle (#1) — deliberately sequenced
+last, to land with the first real deploy — is now the single remaining gap between "impressive
+codebase" and "product a customer can trust with their books."**
 
 ---
 

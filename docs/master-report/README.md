@@ -123,6 +123,20 @@ or **[Gap]**.
 > reset → 201. +4 shared tests (159). Remaining §2.4: add/reorder fields, layout & rule
 > editing, versioned publish. Board: Admin Center 8.1 → 8.4.
 >
+> **Update 2026-07-09 (P0 deploy wave — gaps #3/#4/#5 closed, PR #51):** the platform is
+> now **packaged, gated, and rehearsed**. Docker: multi-stage `apps/api/Dockerfile` (same
+> image runs migrations), `apps/web/Dockerfile` (Next standalone; production build
+> verified), `docker-compose.yml` (pgvector PG → migration gate → api → web). CI grew
+> three jobs: **deploy-readiness** (full migration chain from zero + idempotence rerun +
+> built API boots + **automated restore drill**: seed via live API → `pg_dump` →
+> `pg_restore` into a fresh DB → per-table count verification), **secret-scan**
+> (gitleaks), **docker-images** (GHCR publish on main). Secrets: `readSecret()` vault
+> seam (`<NAME>_FILE` for Docker/K8s/vault-CSI mounts) at every secret read + staged PII
+> key rotation (`PII_ENCRYPTION_KEY_PREVIOUS`) + `docs/runbooks/secrets-rotation.md`.
+> DR: `docs/runbooks/backup-dr.md` (RPO ≤5 min / RTO ≤4 h). **P0 #1 RLS is the only
+> remaining register row below P2** — scheduled last by design, to land with first
+> deploy. See `docs/reports/2026-07-09-p0-deploy-wave.md` and Vol 19/Vol 7 §10/Vol 23.
+>
 > **Update 2026-07-09 (governance hardening):** guardrail toggles are now **durable** —
 > write-through to `aura_ai_guardrails` (the 0040 table, finally wired) + hydrate on boot,
 > verified surviving an API restart. **Config-change audit** landed: admin mutations on
@@ -200,8 +214,8 @@ row updated 2026-07-08 per the Vol 23 register re-verification).
 | AI Platform (provider seam, RAG, insights, autonomy, MCP) | 55% | Good | Early | **6.5/10** |
 | Integration Platform (webhooks, connectors, SDK generator) | 45% | Good | Not yet | **5.5/10** |
 | Reporting / BI (charts + CSV/BI exports w/ web downloads) | 50% | Fair | Early | **5.5/10** |
-| Security (P1 closed: full permission taxonomy, MFA gate, PII crypto; RLS + vault P0s open) | 60% | Good design | **No — P0s open** | **5.5/10** |
-| Deployment / Operations (observability done: metrics+OTLP+alerts; docker/backups open) | 35% | Early | No | **4.2/10** |
+| Security (P1 closed; vault seam + rotation + secret scanning done; **RLS is the one open P0**) | 65% | Good design | **No — RLS open** | **6.0/10** |
+| Deployment / Operations (Docker + compose + CI migration gate + GHCR images + observability + backup/DR drill; first cloud target open) | 60% | Good | Nearly (single-host eval yes) | **6.3/10** |
 | Administration Center (searchable hub + 18 screens; §2.1/§2.4-P1/§2.7/§2.8/§2.9/§2.10 shipped; matrix UIs; PG-backed) | 85% | Good | Yes (config self-serve) | **8.4/10** |
 | Mobile / Offline | 5% | Not started | No | **1.5/10** |
 

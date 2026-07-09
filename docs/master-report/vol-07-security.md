@@ -103,11 +103,19 @@ the DB-backed access store. SAML stays the P2 follow-on for legacy IdPs.
 | CORS/headers | ◐ defaults; helmet/CSP hardening pass [P2] |
 | OpenAPI-driven contract tests | ◐ OpenAPI spec now served (`/api/docs-json`); contract tests still to build [P2] |
 
-## 10. Secrets
+## 10. Secrets — ✅ DONE 2026-07-09 (gap #3 closed)
 
-❌ **P0:** plaintext `.env.local` in dev including live service keys (flagged 2026-07-01, still
-true). Required: vault/managed-secret store, key rotation, CI secret scanning, and revoking any
-key that ever landed in a working tree.
+The vault seam shipped: every process secret reads through `readSecret()`
+(`shared/src/security/secret-source.ts`) honoring the `<NAME>_FILE` convention — Docker/K8s
+secret mounts and vault CSI drivers (Azure Key Vault per Vol 19 §4) inject secrets with **zero
+code changes**; plain env stays the dev fallback; an explicitly-set-but-unreadable mount fails
+at boot (never runs open). Wired at every read site: `DATABASE_URL` (pool + migration runner),
+`AUTH_JWT_SECRET`, `ANTHROPIC_API_KEY`, `PII_ENCRYPTION_KEY`. **Rotation:** staged PII key
+rotation via `PII_ENCRYPTION_KEY_PREVIOUS` (decrypt-old / write-new); full inventory, rotation
+windows, and the revocation drill in `docs/runbooks/secrets-rotation.md`. **CI secret scanning:**
+gitleaks job fails any PR introducing a credential-shaped string; targeted history greps came
+back clean (2026-07-09). Residual (operational, not code): rotate the dev Supabase/AI keys per
+the runbook schedule since they have touched dev trees.
 
 ## 11. Consolidated security P-list
 
@@ -115,7 +123,7 @@ key that ever landed in a working tree.
 |--:|---|---|---|
 | 1 | RLS enforcement bundle (least-priv role + GUC + FORCE RLS + isolation test) | P0 | scheduled final task |
 | 2 | Auth ON by default + refresh/revocation + lockout | P0 | ✅ done 2026-07-07 |
-| 3 | Secrets to vault + rotation + revoke exposed keys | P0 | not started |
+| 3 | Secrets to vault + rotation + revoke exposed keys | P0 | ✅ done 2026-07-09 (`readSecret` `_FILE` seam + staged PII rotation + gitleaks CI + rotation runbook) |
 | 4 | Permission taxonomy on all handlers + role storage → DB | P1 | ✅ done 2026-07-08 (route-derived coverage + migration 0133) |
 | 5 | Global input-validation layer | P1 | ✅ done 2026-07-08 (error taxonomy + `assertFormValid` on all metadata-form endpoints) |
 | 6 | Field-level PII encryption | P1 | ✅ done 2026-07-08 (AES-256-GCM at store boundary, `PII_ENCRYPTION_KEY`) |

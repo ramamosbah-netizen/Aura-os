@@ -2,8 +2,9 @@
 
 [← Master index](README.md)
 
-**Honest status: 25% (score 3.5)** — the app is architecturally deploy-ready (stateless API,
-dual-runtime, migrations, CI) but packaging, orchestration, and operations are unbuilt. This
+**Honest status: 60% (score 6.3, re-scored 2026-07-09)** — packaging, the CI migration gate,
+observability, and backup/DR are **built and rehearsed**; what remains is the first actual
+cloud target (Azure §4) and the P2 operations depth (traces, central logging, K8s). This
 volume records today's runtime and the target reference architecture as the build contract.
 
 ---
@@ -25,12 +26,23 @@ API (Nest, :4200, `PORT`/`AUTH_JWT_SECRET`/`DEMO_SEED`) · web (Next dev, :3200,
 | AI provider key/model | Claude on; absent = local fallback |
 | Supabase storage keys | DMS binary adapter |
 
-## 2. Docker [Gap — P0]
+Every secret-bearing var also accepts the `<NAME>_FILE` convention (vault/secret-mount
+seam, 2026-07-09 — see Vol 7 §10 and `docs/runbooks/secrets-rotation.md`).
 
-Contract: multi-stage Dockerfiles (`apps/api`, `apps/web`) — pnpm fetch → turbo build →
-distroless runtime; a migrations job image (same runner); compose file for single-host
-evaluation (api + web + postgres + storage). Images are the prerequisite for every target
-below.
+## 2. Docker — ✅ DONE 2026-07-09 (gap #4 closed)
+
+Shipped exactly per the contract:
+- **`apps/api/Dockerfile`** — multi-stage: pnpm fetch → turbo build → `pnpm deploy` →
+  non-root `node:22-alpine` runtime. The **same image is the migrations job**
+  (`node scripts/migrate.mjs`; migrations baked in at `/app/infrastructure/migrations`).
+- **`apps/web/Dockerfile`** — Next standalone output (gated by `NEXT_OUTPUT=standalone`
+  so local prod builds keep the default; `outputFileTracingRoot` = repo root).
+- **`docker-compose.yml`** — single-host evaluation: `pgvector/pgvector:pg16` (migration
+  0019 needs the vector extension) → **migration gate** (api/web start only after the
+  chain applies cleanly) → api (auth ON, health-checked) → web.
+- **CI**: `deploy-readiness` job proves the full migration chain from zero + idempotent
+  rerun + the built API boots against the result, on every PR. `docker-images` builds
+  both images per PR and **publishes to GHCR on main** (`api`/`web`, `latest` + sha).
 
 ## 3. Kubernetes [Planned]
 
@@ -71,16 +83,20 @@ Remaining (P2): distributed traces (HTTP + pg + relay spans) and hosted dashboar
 Today: Nest logger + correlation id. Target: structured JSON, request/tenant/actor fields,
 central aggregation (Loki/ELK), PII scrubbing [P2].
 
-## 8. Backup
+## 8. Backup — ✅ DONE 2026-07-09 (gap #5 closed)
 
-Today: Supabase defaults, **undocumented** [P0 item]. Target: PITR enabled + documented RPO
-(≤5 min) / RTO (≤4 h) + storage-bucket versioning for DMS.
+`docs/runbooks/backup-dr.md`: RPO ≤ 5 min (provider PITR) / RTO ≤ 4 h documented, nightly
+portable `pg_dump -Fc` as the secondary path, storage-bucket versioning for DMS, secrets
+excluded from dumps (they live in the vault seam).
 
-## 9. Recovery
+## 9. Recovery — ✅ DONE 2026-07-09 (gap #5 closed)
 
-[Gap]: written runbooks — DB restore, dead-letter replay (data + tooling exist), webhook
-redelivery, partial-region failover. **Quarterly restore test** as policy; recovery that isn't
-rehearsed doesn't exist.
+The runbook covers DB restore (PITR and dump paths), post-restore verification, dead-letter
+replay via `/admin/health`, webhook auto-redelivery, and failure scenarios (bad migration →
+`migrate.mjs down`, region loss). **The drill is automated**: every CI run seeds a real
+dataset through the live API, dumps, restores into a fresh database, and fails unless
+per-table row counts match (`apps/api/scripts/verify-restore.mjs`). Quarterly manual drill
+against *production* dumps is policy, with a drill log in the runbook.
 
 ## 10. Scaling
 
@@ -90,10 +106,12 @@ replicas + partitioning (Vol 8 §7) when volume demands.
 
 ## 11. Sequencing (deployment epic)
 
-1. Dockerfiles + compose → 2. CI publishes images + migration gate → 3. single-region Azure
-(Container Apps + Flexible PG + Key Vault) with auth ON and RLS bundle (the Vol 7 P0s land
-*with* first deploy) → 4. OTel/metrics/alerts → 5. backup/DR runbooks + restore drill →
-6. K8s only when scale demands.
+1. ~~Dockerfiles + compose~~ ✅ → 2. ~~CI publishes images + migration gate~~ ✅ →
+3. single-region Azure (Container Apps + Flexible PG + Key Vault via the `_FILE` seam) with
+auth ON and the RLS bundle (the last Vol 7 P0 lands *with* first deploy) →
+4. ~~metrics/alerts~~ ✅ → 5. ~~backup/DR runbooks + restore drill~~ ✅ →
+6. K8s only when scale demands. **The epic's remaining step is #3 — everything around it
+is built.**
 
 ---
 

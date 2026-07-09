@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Put } from '@nestjs/common';
-import { FormOverridesService, Permissions, TenantContext } from '@aura/core';
+import { AuditService, FormOverridesService, Permissions, TenantContext } from '@aura/core';
 import {
   type FieldOverride,
   type FormOverrides,
@@ -21,6 +21,7 @@ export class FormsAdminController {
   constructor(
     private readonly overrides: FormOverridesService,
     private readonly tenant: TenantContext,
+    private readonly audit: AuditService,
   ) {}
 
   /** The designable schemas — code-registered in shared (grow this list as schemas land). */
@@ -92,7 +93,9 @@ export class FormsAdminController {
       if (typeof patch?.hidden === 'boolean') clean.hidden = patch.hidden;
       if (Object.keys(clean).length > 0) fields[name] = clean;
     }
-    await this.overrides.set(this.tenant.get().tenantId, id, { fields });
+    const ctx = this.tenant.get();
+    await this.overrides.set(ctx.tenantId, id, { fields });
+    void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'form', id, 'designed', { fields: Object.keys(fields) });
     return { ok: true };
   }
 
@@ -100,7 +103,10 @@ export class FormsAdminController {
   @Delete(':id')
   async reset(@Param('id') id: string): Promise<{ removed: boolean }> {
     this.schemaById(id);
-    return { removed: await this.overrides.remove(this.tenant.get().tenantId, id) };
+    const ctx = this.tenant.get();
+    const removed = await this.overrides.remove(ctx.tenantId, id);
+    if (removed) void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'form', id, 'reset', {});
+    return { removed };
   }
 }
 

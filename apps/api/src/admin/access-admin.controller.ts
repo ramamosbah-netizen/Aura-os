@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Post, Query } from '@nestjs/common';
-import { AccessService, Permissions, TenantContext } from '@aura/core';
+import { AccessService, AuditService, Permissions, TenantContext } from '@aura/core';
 import type { Grant, Role } from '@aura/shared';
 
 /**
@@ -14,6 +14,7 @@ export class AccessAdminController {
   constructor(
     private readonly access: AccessService,
     private readonly tenant: TenantContext,
+    private readonly audit: AuditService,
   ) {}
 
   @Permissions('admin.access.manage')
@@ -34,6 +35,8 @@ export class AccessAdminController {
       : [];
     const role: Role = { id, name, permissions };
     this.access.registerRole(role);
+    const ctx = this.tenant.get();
+    void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'role', id, 'upserted', { name, permissions });
     return role;
   }
 
@@ -49,6 +52,8 @@ export class AccessAdminController {
     }
     const tenantId = dto?.tenantId?.trim() || this.tenant.get().tenantId;
     this.access.grant({ userId, roleId, scope: { kind: 'org', level: 'tenant', id: tenantId } });
+    const ctx = this.tenant.get();
+    void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'grant', `:`, 'created', { userId, roleId });
     return { ok: true };
   }
 

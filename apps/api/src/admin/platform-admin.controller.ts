@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
-import { AiService, Permissions, SettingsService, TenantContext } from '@aura/core';
+import { AiService, AuditService, Permissions, SettingsService, TenantContext } from '@aura/core';
 import { AiGuardrailsService, AutonomyService, type GuardrailRule } from '@aura/intelligence';
 import { DemoSeeder } from '../demo/demo.seeder';
 
@@ -20,6 +20,7 @@ export class PlatformAdminController {
     private readonly ai: AiService,
     private readonly guardrails: AiGuardrailsService,
     private readonly autonomy: AutonomyService,
+    private readonly audit: AuditService,
   ) {}
 
   /** §2.7 AI administration — provider seam, guardrail rules, autonomy queue size. */
@@ -43,7 +44,7 @@ export class PlatformAdminController {
     };
   }
 
-  /** Toggle a guardrail rule (in-memory registry — resets to code defaults on reboot). */
+  /** Toggle a guardrail rule — write-through to aura_ai_guardrails, survives restarts; audited. */
   @Permissions('admin.ai.manage')
   @Post('ai/guardrails/toggle')
   toggleGuardrail(@Body() dto: { key?: string; enabled?: boolean }): { ok: true } {
@@ -51,6 +52,8 @@ export class PlatformAdminController {
     if (!this.guardrails.setEnabled(dto.key.trim(), dto.enabled !== false)) {
       throw new BadRequestException(`unknown guardrail: ${dto.key}`);
     }
+    const ctx = this.tenant.get();
+    void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'guardrail', dto.key.trim(), dto.enabled !== false ? 'enabled' : 'disabled', {});
     return { ok: true };
   }
 

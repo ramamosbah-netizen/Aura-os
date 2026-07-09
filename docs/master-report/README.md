@@ -122,6 +122,13 @@ or **[Gap]**.
 > require+relabel laborCamp → employee create 400 "Camp / Accommodation is required" →
 > reset → 201. +4 shared tests (159). Remaining §2.4: add/reorder fields, layout & rule
 > editing, versioned publish. Board: Admin Center 8.1 → 8.4.
+>
+> **Update 2026-07-09 (governance hardening):** guardrail toggles are now **durable** —
+> write-through to `aura_ai_guardrails` (the 0040 table, finally wired) + hydrate on boot,
+> verified surviving an API restart. **Config-change audit** landed: admin mutations on
+> settings, form designs, roles/grants, and guardrails write immutable audit entries
+> (module=admin) — verified rows for `setting:company.website updated` and
+> `guardrail:content-safety disabled/enabled` via /audit, browsable at /admin/audit.
 
 **Verified platform counts (2026-07-04):**
 

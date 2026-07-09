@@ -48,6 +48,151 @@ jobs:
       - name: Dependency audit (TIER-2 #43)
         run: pnpm audit --prod || true
 
+  # P0 #4 (Vol 23): the migration gate — the full chain must apply onto an empty
+  # Postgres, be idempotent on rerun, and the built API must boot against the result.
+  # P0 #5: the restore drill — seed real data, pg_dump, restore into a fresh database,
+  # and verify per-table row counts match. A backup that isn't rehearsed doesn't exist.
+  deploy-readiness:
+    name: migration gate · boot · restore drill
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16 # migration 0019 needs `create extension vector`
+        env:
+          POSTGRES_USER: aura
+          POSTGRES_PASSWORD: aura
+          POSTGRES_DB: aura
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aura -d aura"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://aura:aura@localhost:5432/aura?sslmode=disable
+      PGPASSWORD: aura
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Migration gate — full chain from zero
+        run: node apps/api/scripts/migrate.mjs
+
+      - name: Migration gate — idempotent rerun applies nothing
+        run: |
+          out=$(node apps/api/scripts/migrate.mjs)
+          echo "$out" | tail -n 2
+          echo "$out" | grep -q "0 applied" || { echo "::error::migration rerun applied files — the chain is not idempotent"; exit 1; }
+
+      - name: Build the API (workspace deps included)
+        run: pnpm exec turbo run build --filter=@aura/api...
+
+      - name: Boot the built API against the migrated database
+        run: |
+          cd apps/api
+          AUTH_JWT_SECRET=ci-drill-secret AUTH_REQUIRED=true PORT=4300 nohup node dist/main.js > api.log 2>&1 &
+          echo $! > api.pid
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4300/api/v1/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4300/api/v1/health || { echo '--- api.log'; cat api.log; exit 1; }
+
+      - name: Seed the demo dataset through the live API
+        run: AURA_API_URL=http://localhost:4300 node apps/api/scripts/seed-demo.mjs
+
+      - name: Freeze the source (stop the API) before backup
+        run: |
+          kill "$(cat apps/api/api.pid)" || true
+          sleep 3
+
+      - name: Backup — pg_dump custom format
+        run: pg_dump -h localhost -U aura -d aura -Fc -f aura.dump
+
+      - name: Restore drill — into a fresh database
+        run: |
+          createdb -h localhost -U aura aura_restore
+          pg_restore -h localhost -U aura -d aura_restore --no-owner aura.dump
+
+      - name: Verify — per-table row counts identical, source non-empty
+        run: >
+          SOURCE_URL="$DATABASE_URL"
+          RESTORE_URL="postgres://aura:aura@localhost:5432/aura_restore?sslmode=disable"
+          node apps/api/scripts/verify-restore.mjs
+
+      - name: API log on failure
+        if: failure()
+        run: cat apps/api/api.log || true
+
+  # P0 #3: secret scanning — fail the build when a credential-shaped string lands in
+  # the diff. Rotation/revocation procedure: docs/runbooks/secrets-rotation.md.
+  secret-scan:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # P0 #4: the deployable artifacts. Both images build on every PR; pushes to main
+  # publish them to GHCR so a tagged, runnable image exists for every main commit.
+  docker-images:
+    name: docker images (api + web)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and on main, push) the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ghcr.io/${{ github.repository }}/api:latest
+            ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Build (and on main, push) the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ghcr.io/${{ github.repository }}/web:latest
+            ghcr.io/${{ github.repository }}/web:${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
   web-smoke:
     name: web smoke (Playwright — TIER-2 #41)
     runs-on: ubuntu-latest

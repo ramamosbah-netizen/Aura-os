@@ -48,6 +48,18 @@ describe('field-crypto (gap #14 — PII at rest)', () => {
     expect(decryptField(stored)).toBeNull();
   });
 
+  it('decrypts under PII_ENCRYPTION_KEY_PREVIOUS during a staged rotation', () => {
+    const stored = encryptField('AE070331234567890123456')!; // written under the old key
+    process.env.PII_ENCRYPTION_KEY = 'rotated-new-secret';
+    expect(decryptField(stored)).toBeNull(); // new key alone can't read old rows
+    process.env.PII_ENCRYPTION_KEY_PREVIOUS = 'unit-test-secret';
+    expect(decryptField(stored)).toBe('AE070331234567890123456');
+    // new writes use the new key and stay readable without the previous key
+    const rewritten = encryptField('AE070331234567890123456')!;
+    delete process.env.PII_ENCRYPTION_KEY_PREVIOUS;
+    expect(decryptField(rewritten)).toBe('AE070331234567890123456');
+  });
+
   it('handles null/empty passthrough', () => {
     expect(encryptField(null)).toBeNull();
     expect(decryptField(null)).toBeNull();

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { readSecret } from './secret-source';
 
 // Field-level PII encryption (gap register Vol 23 #14). AES-256-GCM with a key derived
 // from PII_ENCRYPTION_KEY — applied at the storage boundary (encrypt-on-write /
@@ -13,11 +14,27 @@ import crypto from 'node:crypto';
 
 const PREFIX = 'enc:v1:';
 
-/** Derive the 32-byte AES key from the env secret (any length) — sha256(secret). */
-function keyFromEnv(): Buffer | null {
-  const raw = process.env.PII_ENCRYPTION_KEY?.trim();
+/** Derive the 32-byte AES key from a secret (any length) — sha256(secret). */
+function deriveKey(raw: string | null): Buffer | null {
   if (!raw) return null;
   return crypto.createHash('sha256').update(raw).digest();
+}
+
+/** Current write key (PII_ENCRYPTION_KEY, `_FILE` convention honored). */
+function keyFromEnv(): Buffer | null {
+  return deriveKey(readSecret('PII_ENCRYPTION_KEY'));
+}
+
+/**
+ * Keys accepted on decrypt, in order: the current key, then the previous one
+ * (PII_ENCRYPTION_KEY_PREVIOUS) during a staged rotation — new writes use the new
+ * key immediately while rows encrypted under the old key stay readable until
+ * they're rewritten. See docs/runbooks/secrets-rotation.md.
+ */
+function decryptKeys(): Buffer[] {
+  return [keyFromEnv(), deriveKey(readSecret('PII_ENCRYPTION_KEY_PREVIOUS'))].filter(
+    (k): k is Buffer => k !== null,
+  );
 }
 
 /** Is this stored value in the encrypted wire format? */
@@ -47,14 +64,17 @@ export function encryptField(plain: string | null | undefined): string | null {
 export function decryptField(stored: string | null | undefined): string | null {
   if (stored === null || stored === undefined || stored === '') return stored ?? null;
   if (!isEncryptedField(stored)) return stored;
-  const key = keyFromEnv();
-  if (!key) return null; // encrypted at rest but no key in this process — fail closed
-  try {
-    const [ivB64, tagB64, ctB64] = stored.slice(PREFIX.length).split(':');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
-    decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
-    return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
-  } catch {
-    return null;
+  const keys = decryptKeys();
+  if (keys.length === 0) return null; // encrypted at rest but no key in this process — fail closed
+  const [ivB64, tagB64, ctB64] = stored.slice(PREFIX.length).split(':');
+  for (const key of keys) {
+    try {
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+      decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+      return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+    } catch {
+      // wrong key (rotation) or tampered — try the next key, else fail closed below
+    }
   }
+  return null;
 }

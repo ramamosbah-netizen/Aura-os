@@ -6,6 +6,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import crypto from 'node:crypto';
 import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, metrics } from '@aura/core';
+import { readSecret } from '@aura/shared';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { AccessDeniedFilter } from './auth/access-denied.filter';
@@ -49,7 +50,7 @@ async function bootstrap(): Promise<void> {
   const auth = app.get(AuthService);
   const tenant = app.get(TenantContext);
   const enforce = process.env.AUTH_REQUIRED === 'true';
-  if (enforce && !process.env.AUTH_JWT_SECRET) {
+  if (enforce && !readSecret('AUTH_JWT_SECRET')) {
     new Logger('Bootstrap').error('AUTH_REQUIRED is set but AUTH_JWT_SECRET is missing — cannot enforce; running open.');
   }
   const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status'];

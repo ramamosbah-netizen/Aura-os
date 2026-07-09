@@ -7,6 +7,7 @@ const svc = () => new NotificationService(new InMemoryNotificationStore());
 afterEach(() => {
   delete process.env.NOTIFY_CHANNELS;
   delete process.env.NOTIFY_FALLBACK_RECIPIENT;
+  delete process.env.NOTIFY_RECIPIENTS;
   delete process.env.SMTP_RELAY_URL;
   vi.restoreAllMocks();
 });
@@ -59,6 +60,41 @@ describe('NotificationService (channel delivery)', () => {
     const send = vi.spyOn(s, 'send');
     await s.record({ tenantId: 't1', title: 'X', body: 'x' }); // no userId, no fallback
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('tenant settings override env routing (Admin Center §2.8)', async () => {
+    process.env.NOTIFY_CHANNELS = 'slack'; // env says slack…
+    process.env.NOTIFY_FALLBACK_RECIPIENT = 'env-ops@example.com';
+    const settings = {
+      get: async (_tenant: string, key: string) =>
+        key === 'notify.channels' ? 'email' : key === 'notify.recipients' ? 'u-fin=settings-fin@co.com' : null,
+    } as never;
+    const s = new NotificationService(new InMemoryNotificationStore(), settings);
+    const send = vi.spyOn(s, 'send');
+    await s.record({ tenantId: 't1', userId: 'u-fin', title: 'X', body: 'x' });
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'settings-fin@co.com', channels: ['email'] }),
+    );
+  });
+
+  it('resolves per-user recipients from the NOTIFY_RECIPIENTS map (gap #11)', async () => {
+    process.env.NOTIFY_CHANNELS = 'email';
+    process.env.NOTIFY_RECIPIENTS = 'u-finance=fin@co.com, u-admin=admin@co.com';
+    process.env.NOTIFY_FALLBACK_RECIPIENT = 'ops@example.com';
+    const s = svc();
+    const send = vi.spyOn(s, 'send');
+    await s.record({ tenantId: 't1', userId: 'u-finance', title: 'Invoice approved', body: '…' });
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ userId: 'fin@co.com' }));
+  });
+
+  it('passes through userIds that are already an email or phone, else falls back', () => {
+    process.env.NOTIFY_FALLBACK_RECIPIENT = 'ops@example.com';
+    const s = svc();
+    expect(s.resolveRecipient('someone@direct.com')).toBe('someone@direct.com');
+    expect(s.resolveRecipient('+971501234567')).toBe('+971501234567');
+    expect(s.resolveRecipient('u-unmapped')).toBe('ops@example.com');
+    delete process.env.NOTIFY_FALLBACK_RECIPIENT;
+    expect(s.resolveRecipient('u-unmapped')).toBeNull();
   });
 
   it('reports logged without a transport and sent when the relay URL is set', async () => {

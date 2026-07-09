@@ -39,16 +39,23 @@ export class DemoSeeder implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     if (process.env.DEMO_SEED !== 'true') return;
+    await this.runIfEmpty();
+  }
+
+  /** Idempotent demo seed — used by DEMO_SEED boot and the admin data page (§2.9). */
+  async runIfEmpty(): Promise<{ seeded: boolean; reason?: string }> {
     try {
       const existing = await this.accounts.list({ tenantId: TENANT, limit: 1 });
       if (existing.length > 0) {
         this.logger.log('Demo seed skipped — tenant already has data.');
-        return;
+        return { seeded: false, reason: 'tenant already has data' };
       }
       await this.seed();
       this.logger.log('Demo company seeded (accounts → tenders → contract → project → operate loop + HR/Quality inbox items).');
+      return { seeded: true };
     } catch (e) {
       this.logger.warn(`Demo seed failed (continuing without it): ${(e as Error).message}`);
+      return { seeded: false, reason: (e as Error).message };
     }
   }
 

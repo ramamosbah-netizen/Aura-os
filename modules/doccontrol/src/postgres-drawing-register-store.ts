@@ -1,7 +1,9 @@
 import type { Pool, PoolClient } from 'pg';
 import type { TxHandle } from '@aura/core';
+import { type Page, type PageParams } from '@aura/shared';
 import type { DrawingRegisterEntry } from './domain/drawing-register';
-import type { DrawingRegisterStore } from './store.interface';
+import type { DrawingRegisterStore, DocListFilter } from './store.interface';
+import { pagePostgres, docWhere } from './paged-query';
 
 export class PostgresDrawingRegisterStore implements DrawingRegisterStore {
   constructor(private readonly pool: Pool) {}
@@ -35,6 +37,11 @@ export class PostgresDrawingRegisterStore implements DrawingRegisterStore {
   async findAll(tenantId: string): Promise<DrawingRegisterEntry[]> {
     const res = await this.pool.query(`select * from public.aura_doccontrol_drawing_register where tenant_id = $1 order by document_number asc`, [tenantId]);
     return res.rows.map(this.mapRow);
+  }
+
+  async listPaged(filter: DocListFilter, page: PageParams): Promise<Page<DrawingRegisterEntry>> {
+    const { where, params } = docWhere(filter);
+    return pagePostgres(this.pool, { table: 'aura_doccontrol_drawing_register', where, params, orderBy: 'document_number ASC', map: (r) => this.mapRow(r) }, page);
   }
 
   private mapRow(row: any): DrawingRegisterEntry {

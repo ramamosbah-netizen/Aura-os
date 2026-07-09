@@ -78,6 +78,14 @@ export default function AuditBrowserClient() {
       <div style={s.header}>
         <h1 style={s.title}>🔍 Audit Trail Browser</h1>
         <span style={s.subtitle}>{total.toLocaleString()} records</span>
+        <a
+          style={s.csvBtn}
+          href={`/api/audit/csv?${new URLSearchParams(
+            Object.entries(filters).filter(([, v]) => v) as [string, string][],
+          ).toString()}`}
+        >
+          ⬇ Export CSV
+        </a>
       </div>
 
       {/* ── Filter Bar ── */}
@@ -145,6 +153,16 @@ const s = {
   header: { display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 20 } as CSSProperties,
   title: { fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text)' } as CSSProperties,
   subtitle: { fontSize: 13, color: 'var(--muted)' } as CSSProperties,
+  csvBtn: {
+    marginLeft: 'auto',
+    color: 'var(--accent)',
+    fontSize: 12.5,
+    fontWeight: 700,
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '6px 14px',
+    textDecoration: 'none',
+  } as CSSProperties,
   filterBar: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20, padding: 16, background: 'var(--panel)', borderRadius: 12, border: '1px solid var(--border)' } as CSSProperties,
   select: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' } as CSSProperties,
   input: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', width: 130 } as CSSProperties,

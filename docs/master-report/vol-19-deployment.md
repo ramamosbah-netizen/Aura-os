@@ -50,11 +50,21 @@ Azure Monitor.
 ECS-Fargate/EKS + RDS + S3 + Secrets Manager + CloudFront | Cloud Run/GKE + Cloud SQL + GCS +
 Secret Manager. No cloud-specific code exists anywhere — the ports keep it that way.
 
-## 6. Monitoring [Gap — P1]
+## 6. Monitoring — ✅ DONE 2026-07-08 (gap #6 closed)
 
-Target: OpenTelemetry traces (HTTP + pg + event relay spans) · Prometheus metrics — the four
-platform-specific gauges: **outbox lag, dead-letter depth, webhook failure rate, job queue
-age** · dashboards + alerts. `/health` endpoint exists as the seed.
+Shipped (dependency-free, no OTel SDK):
+- **Prometheus scrape**: `GET /api/v1/metrics` (text exposition, gated by `METRICS_ENABLED`)
+  — `outbox_pending` / `outbox_dead_letter` gauges refreshed from the DB at scrape time;
+  `jobs_processed_total`, `webhook_deliveries_total`, `http_requests_total` +
+  `http_request_duration_ms_sum/_count` (method/status-class labels, low-cardinality).
+- **OTLP/HTTP push** (opt-in): `OTLP_METRICS_URL` / `OTLP_EXPORT_INTERVAL_MS` /
+  `OTLP_HEADERS` / `OTLP_SERVICE_NAME` — counters export as monotonic cumulative sums;
+  outbox gauges refresh before each push.
+- **Alert pack**: `infrastructure/observability/prometheus-alerts.yml` (dead-letters,
+  outbox backlog, webhook failure rate, 5xx ratio >2%, mean latency >750ms, job failures)
+  + `infrastructure/observability/README.md` (runbook + metric catalog).
+
+Remaining (P2): distributed traces (HTTP + pg + relay spans) and hosted dashboards.
 
 ## 7. Logging
 

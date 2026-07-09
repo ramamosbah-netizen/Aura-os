@@ -30,6 +30,32 @@ export class AiGuardrailsService {
   private readonly logger = new Logger('AiGuardrails');
   private readonly rules = new Map<string, GuardrailRule>();
 
+  constructor() {
+    // Default rule pack — active from first boot so AI output is never unguarded.
+    // Admins tune these at /admin/ai (§2.7); modules may register more at runtime.
+    this.registerRule({
+      key: 'content-safety',
+      label: 'Content safety keywords',
+      type: 'blocked_keywords',
+      enabled: true,
+      config: { keywords: ['exploit', 'malware', 'ransomware', 'bypass security', 'sql injection'] },
+    });
+    this.registerRule({
+      key: 'pii-mask',
+      label: 'PII masking',
+      type: 'pii_mask',
+      enabled: true,
+      config: {},
+    });
+    this.registerRule({
+      key: 'token-cap',
+      label: 'Completion token cap',
+      type: 'max_tokens',
+      enabled: true,
+      config: { maxTokens: 4000 },
+    });
+  }
+
   registerRule(rule: GuardrailRule): void {
     this.rules.set(rule.key, rule);
     this.logger.log(`[AiGuardrails] Rule registered: "${rule.key}" (${rule.type})`);
@@ -37,6 +63,14 @@ export class AiGuardrailsService {
 
   listRules(): GuardrailRule[] {
     return Array.from(this.rules.values());
+  }
+
+  /** Toggle a rule on/off (Admin Center �2.7). Returns false when the key is unknown. */
+  setEnabled(key: string, enabled: boolean): boolean {
+    const rule = this.rules.get(key);
+    if (!rule) return false;
+    this.rules.set(key, { ...rule, enabled });
+    return true;
   }
 
   /**

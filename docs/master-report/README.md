@@ -36,6 +36,81 @@ or **[Gap]**.
 > **409** (procurement PO approval gates, insufficient stock) instead of a forced 400. 29 unit
 > + 6 e2e + taxonomy-fitness green. See
 > `docs/reports/2026-07-07-controller-wrapper-retirement.md`.
+>
+> **Update 2026-07-07 (universal pagination, gap #9):** closed the pagination tail —
+> **fleet, all 8 HR lists, and doc-control** now expose additive `GET .../paged` `Page<T>`
+> routes (plus the dormant assets/site wirings). Non-breaking (bare routes stay); ~5 new
+> tests; API 29 unit + 6 e2e + turbo 22/22 green. See
+> `docs/reports/2026-07-07-universal-pagination-adoption.md`.
+>
+> **Update 2026-07-07 (server-side form enforcement, gap #8 form half):** `assertFormValid`
+> in shared runs the renderer's `evaluateForm` on the server so metadata rules
+> (required/validation/custom-validators/blocking-rules) can't be bypassed via the API —
+> 400 VALIDATION via the taxonomy; schemas relocate to shared keyed by their own id/endpoint;
+> first enforced on `POST /hr/employees`. See
+> `docs/reports/2026-07-07-server-side-form-enforcement.md`.
+>
+> **Update 2026-07-08 (admin center close-out, gap #12):** `/admin` hub landing shipped
+> (live-count KPI strip + tiles grouped Governance/Configuration/Integration/Observability)
+> and all 7 config screens rebuilt on shared professional chrome (`admin-chrome.tsx`) with
+> per-page KPIs and offline guards; settings store now PG-backed (migration
+> `0132_tenant_settings` fixed the missing table behind the settings 500). App-wide ELV
+> navy/amber retheme via `globals.css` tokens. Remaining on #12: PG-backed roles/grants.
+> Vol 23 register re-verified row-by-row against the live tree same day.
+>
+> **Update 2026-07-08 (P1 tier closed — gaps #6–#15, all ten):** OTLP metrics push + HTTP
+> metrics + Prometheus alert pack (#6) · route-derived permission taxonomy covering all
+> ~600 handlers by construction (#7) · `assertFormValid` on every metadata-form endpoint
+> — quotation + subcontract schemas relocated to shared (#8) · site `/paged` tails +
+> first frontend opt-in on `/crm/accounts` (#9) · AR-aging/invoice CSVs + web download
+> buttons (#10) · per-user notification recipients via `NOTIFY_RECIPIENTS` (#11) ·
+> PG-backed roles/grants with hydrate-on-boot, migration `0133` (#12) · persisted TOTP
+> MFA gating login + Entra group→role mapping, migration `0134` (#13) · AES-256-GCM
+> field-level PII crypto on WPS identifiers (#14) · perf baseline harness + budgets,
+> one real hotspot found (#15). Verified: build 22/22 · typecheck 42/42 · tests 41/41
+> tasks · live endpoint checks incl. restart-survival of PG grants. See
+> `docs/reports/2026-07-08-p1-closure.md` and Vol 23 §2.
+>
+> **Update 2026-07-08 (admin center professional pass + phase 2 start):** config screens
+> rebuilt matrix-first — Roles & Access as a **permission matrix** (roles × modules, ALL
+> wildcard, custom-key chips) + **user-grants matrix** (directory × roles, click-to-grant)
+> with per-user MFA reset; approval matrix as a **value-band grid editor**; flags as
+> toggles; numbering inline-edit with live next-number preview; webhooks pause/resume +
+> status pills (shared kit `admin-ui.tsx`). **Phase 2 opened:** `/admin/organization`
+> (guided tenant profile, Vol 15 §2.1) and `/admin/health` (ops dashboard — dead letters,
+> webhook delivery health, spine activity, Vol 15 §2.10). All 9 admin pages verified 200;
+> matrix toggle + band-save roundtrips exercised live. Board: Admin Center 7.2 → 7.7.
+>
+> **Update 2026-07-08 (phase 2 wave 2 — companies + business calendar, Vol 15 §2.1):**
+> **Companies master** shipped end-to-end: `aura_companies` (migration `0135`) +
+> `CompaniesService` + `admin/companies` CRUD + inline-edit grid on `/admin/organization`;
+> the **app-shell company switcher now reads the registry** (hardcoded list is only the
+> dev fallback). **Business calendar** shipped: kernel `CalendarService` grew full CRUD
+> over the 0030 tables (calendars, holidays, hour adjustments) + `admin/calendar` API +
+> `/admin/calendar` page — weekend-day toggle matrix, holidays, Ramadan-hour periods.
+> Verified live: company + calendar + UAE National Day holiday + Ramadan adjustment
+> created and read back; build 22/22, core 125 tests. Board: Admin Center 7.7 → 7.9.
+>
+> **Update 2026-07-09 (phase 2 wave 3 — notification routing §2.8 + data admin §2.9):**
+> **Notification routing is now tenant-editable**: NotificationService consults
+> `notify.channels` / `notify.recipients` / `notify.fallbackRecipient` settings on every
+> dispatch (env stays the fallback; +1 test, core 126); `/admin/notifications` gives
+> channel toggles, a per-user recipient grid, transport status (env booleans only — no
+> secrets), and the six event→notification wirings. **Data admin**: `/admin/data` with an
+> idempotent demo-company seed (`admin/platform/seed-demo` over `DemoSeeder.runIfEmpty`),
+> the four CSV export feeds, and chart-of-accounts CSV import. Verified live: settings
+> write → effective routing readback flips source env→settings; seed correctly refuses on
+> a non-empty tenant; all pages 200. Vol 15 §2.1/§2.8/§2.9/§2.10 now shipped — remaining
+> spec: form designer §2.4, AI admin depth §2.7, document retention §2.6.
+> Board: Admin Center 7.9 → 8.1.
+>
+> **Update 2026-07-09 (§2.7 AI administration):** `/admin/ai` shipped — provider seam
+> status (claude vs local fallback, key presence booleans only), **guardrail toggles**
+> over a default rule pack that now registers at boot (content-safety keywords, PII
+> mask, 4k token cap; `AiGuardrailsService.setEnabled` + `admin/platform/ai` endpoints),
+> and the autonomy-queue KPI with a deep link to the Intelligence Console. Verified
+> live: toggle off → readback `enabled:false` → restored; intelligence 27 tests green.
+> §2.7 remaining depth: durable PG rule registry, prompt-pack overrides, cost meters.
 
 **Verified platform counts (2026-07-04):**
 
@@ -94,7 +169,8 @@ Scoring method: **Completion** = share of the module's target scope that exists 
 (verified). **Architecture** = adherence to the kernel template (ports/adapters, events, domain
 purity, tests). **Enterprise Ready** = usable by a real customer for daily work in that area
 today. **Score** = weighted blend (50% completion, 30% architecture, 20% readiness), calibrated
-against the 2026-07-01 due-diligence audit and re-verified 2026-07-03.
+against the 2026-07-01 due-diligence audit and re-verified 2026-07-03 (Administration Center
+row updated 2026-07-08 per the Vol 23 register re-verification).
 
 ### Platform layers
 
@@ -105,10 +181,10 @@ against the 2026-07-01 due-diligence audit and re-verified 2026-07-03.
 | Command Center (attention scoring, business-health, AI briefing homepage) | 80% | Excellent | Yes | **8.6/10** |
 | AI Platform (provider seam, RAG, insights, autonomy, MCP) | 55% | Good | Early | **6.5/10** |
 | Integration Platform (webhooks, connectors, SDK generator) | 45% | Good | Not yet | **5.5/10** |
-| Reporting / BI | 40% | Fair | Not yet | **5.0/10** |
-| Security (designed ✔, enforcement gated) | 45% | Good design | **No — P0s open** | **4.5/10** |
-| Deployment / Operations | 25% | Early | No | **3.5/10** |
-| Administration Center (workspace access shipped; rest in design) | 25% | In design | Partially | **3.2/10** |
+| Reporting / BI (charts + CSV/BI exports w/ web downloads) | 50% | Fair | Early | **5.5/10** |
+| Security (P1 closed: full permission taxonomy, MFA gate, PII crypto; RLS + vault P0s open) | 60% | Good design | **No — P0s open** | **5.5/10** |
+| Deployment / Operations (observability done: metrics+OTLP+alerts; docker/backups open) | 35% | Early | No | **4.2/10** |
+| Administration Center (hub + 13 screens; §2.1/§2.8/§2.9/§2.10 shipped; matrix UIs; all stores PG-backed) | 82% | Good | Yes (config self-serve) | **8.1/10** |
 | Mobile / Offline | 5% | Not started | No | **1.5/10** |
 
 ### Business modules

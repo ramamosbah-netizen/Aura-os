@@ -1,4 +1,5 @@
 import { signPayload } from '@aura/shared';
+import { metrics } from '../observability/metrics';
 
 export interface WebhookSendResult {
   ok: boolean;
@@ -27,8 +28,10 @@ export async function sendWebhook(
       },
       body,
     });
+    metrics.inc('webhook_deliveries_total', { outcome: res.ok ? 'ok' : 'failed' });
     return { ok: res.ok, statusCode: res.status, error: res.ok ? null : `HTTP ${res.status}` };
   } catch (err) {
+    metrics.inc('webhook_deliveries_total', { outcome: 'failed' });
     return { ok: false, statusCode: null, error: err instanceof Error ? err.message : String(err) };
   }
 }

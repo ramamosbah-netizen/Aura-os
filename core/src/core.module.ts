@@ -10,6 +10,9 @@ import { TX_RUNNER, PostgresTxRunner, NullTxRunner } from './events/tx';
 import { TenantContext } from './tenancy/tenant-context';
 import { AccessService } from './identity/access.service';
 import { AuthService } from './identity/auth.service';
+import { MfaService } from './identity/mfa.service';
+import { CompaniesService } from './identity/companies.service';
+import { TokenRevocationStore } from './identity/token-revocation';
 import { OrgService } from './identity/org.service';
 import { AiService } from './ai/ai.service';
 import { DmsService } from './dms/dms.service';
@@ -48,6 +51,7 @@ import { SAVED_VIEW_STORE, InMemorySavedViewStore, PostgresSavedViewStore } from
 import { SavedViewService } from './views/saved-view.service';
 import { NOTIFICATION_STORE, InMemoryNotificationStore, PostgresNotificationStore } from './notifications/notification-store';
 import { FeatureFlagService } from './config/feature-flag.service';
+import { SettingsService } from './config/settings.service';
 import { BackgroundJobService } from './jobs/background-job.service';
 import { ConnectorService } from './integration/connector.service';
 import { SdkGeneratorService } from './integration/sdk-generator.service';
@@ -75,6 +79,9 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     OrgService,
     AccessService,
     AuthService,
+    MfaService,
+    CompaniesService,
+    TokenRevocationStore,
     AiService,
     NumberingService,
     AuditService,
@@ -105,6 +112,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     },
     SavedViewService,
     FeatureFlagService,
+    SettingsService,
     BackgroundJobService,
     ConnectorService,
     SdkGeneratorService,
@@ -168,6 +176,9 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     OrgService,
     AccessService,
     AuthService,
+    MfaService,
+    CompaniesService,
+    TokenRevocationStore,
     AiService,
     DmsService,
     WorkflowService,
@@ -189,6 +200,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     NotificationService,
     SavedViewService,
     FeatureFlagService,
+    SettingsService,
     BackgroundJobService,
     ConnectorService,
     SdkGeneratorService,

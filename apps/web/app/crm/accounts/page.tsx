@@ -13,12 +13,30 @@ interface Account {
   createdAt: string;
 }
 
+// The shared Page<T> envelope shape (mirrors @aura/shared pagination).
+interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export default async function AccountsPage() {
-  const accounts = await getJson<Account[]>('/api/crm/accounts');
+const PAGE_SIZE = 50;
+
+export default async function AccountsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string }>;
+}) {
+  // Frontend opt-in to the paged API (gap #9): fetch one window, not the whole table.
+  const pageNo = Math.max(0, Number((await searchParams)?.page ?? 0) || 0);
+  const page = await getJson<Page<Account>>(`/api/crm/accounts/paged?limit=${PAGE_SIZE}&offset=${pageNo * PAGE_SIZE}`);
+  const accounts = page?.items ?? null;
 
   return (
     <div style={st.page}>
@@ -71,6 +89,24 @@ export default async function AccountsPage() {
           </table>
         )}
       </section>
+
+      {page && page.total > PAGE_SIZE ? (
+        <div style={st.pager}>
+          {pageNo > 0 ? (
+            <a style={st.pagerLink} href={`/crm/accounts?page=${pageNo - 1}`}>← Previous</a>
+          ) : (
+            <span style={st.pagerDisabled}>← Previous</span>
+          )}
+          <span style={st.pagerInfo}>
+            {page.offset + 1}–{page.offset + page.items.length} of {page.total.toLocaleString()}
+          </span>
+          {page.hasMore ? (
+            <a style={st.pagerLink} href={`/crm/accounts?page=${pageNo + 1}`}>Next →</a>
+          ) : (
+            <span style={st.pagerDisabled}>Next →</span>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -110,4 +146,22 @@ const st = {
     padding: '2px 8px',
     textTransform: 'capitalize',
   } as CSSProperties,
+  pager: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginTop: 14 } as CSSProperties,
+  pagerLink: {
+    color: 'var(--accent)',
+    fontSize: 13,
+    fontWeight: 600,
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '6px 14px',
+  } as CSSProperties,
+  pagerDisabled: {
+    color: 'var(--muted)',
+    opacity: 0.5,
+    fontSize: 13,
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '6px 14px',
+  } as CSSProperties,
+  pagerInfo: { color: 'var(--muted)', fontSize: 12.5 } as CSSProperties,
 };

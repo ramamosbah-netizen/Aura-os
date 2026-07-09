@@ -9,7 +9,9 @@ import type { ExpenseClaim } from './domain/expense-claim';
 import type { StaffAdvance } from './domain/staff-advance';
 import type { AttendanceRecord } from './domain/attendance';
 import type { PerformanceAppraisal, AppraisalCriterion } from './domain/appraisal';
-import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore } from './store.interface';
+import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, EmployeeScopedFilter } from './store.interface';
+import { type Page, type PageParams } from '@aura/shared';
+import { pagePostgres, scopedWhere } from './paged-query';
 
 /**
  * Format a `date` column as YYYY-MM-DD using LOCAL parts. node-pg parses `date` to a Date at
@@ -91,6 +93,11 @@ export class PostgresPayrollRunStore implements PayrollRunStore {
       [id, tenantId],
     );
     return (res.rowCount ?? 0) > 0;
+  }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PayrollRun>> {
+    const { where, params } = scopedWhere(filter);
+    return pagePostgres(this.pool, { table: 'aura_hr_payroll_runs', where, params, orderBy: 'created_at DESC', map: (r) => this.mapPayrollRun(r) }, page);
   }
 
   private mapPayrollRun(row: QueryResultRow): PayrollRun {

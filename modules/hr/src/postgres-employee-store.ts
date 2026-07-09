@@ -9,7 +9,9 @@ import type { ExpenseClaim } from './domain/expense-claim';
 import type { StaffAdvance } from './domain/staff-advance';
 import type { AttendanceRecord } from './domain/attendance';
 import type { PerformanceAppraisal, AppraisalCriterion } from './domain/appraisal';
-import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore } from './store.interface';
+import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, EmployeeFilter } from './store.interface';
+import { type Page, type PageParams, decryptField, encryptField } from '@aura/shared';
+import { pagePostgres } from './paged-query';
 
 /**
  * Format a `date` column as YYYY-MM-DD using LOCAL parts. node-pg parses `date` to a Date at
@@ -68,8 +70,10 @@ export class PostgresEmployeeStore implements EmployeeStore {
         employee.visaExpiry,
         employee.permitExpiry,
         employee.laborCamp,
-        employee.iban,
-        employee.molEmployeeId,
+        // PII at rest (gap #14): bank + government identifiers encrypt at the storage
+        // boundary when PII_ENCRYPTION_KEY is set; domain/UI stay plaintext.
+        encryptField(employee.iban),
+        encryptField(employee.molEmployeeId),
         employee.bankRoutingCode,
         employee.createdAt,
         employee.updatedAt,
@@ -103,6 +107,16 @@ export class PostgresEmployeeStore implements EmployeeStore {
     return (res.rowCount ?? 0) > 0;
   }
 
+  async listPaged(filter: EmployeeFilter, page: PageParams): Promise<Page<Employee>> {
+    const where = ['deleted_at IS NULL'];
+    const params: unknown[] = [];
+    if (filter.tenantId) {
+      params.push(filter.tenantId);
+      where.push(`tenant_id = $${params.length}`);
+    }
+    return pagePostgres(this.pool, { table: 'aura_hr_employees', where, params, orderBy: 'created_at DESC', map: (r) => this.mapEmployee(r) }, page);
+  }
+
   private mapEmployee(row: QueryResultRow): Employee {
     return {
       id: row.id,
@@ -120,8 +134,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
       visaExpiry: dateOnly(row.visa_expiry),
       permitExpiry: dateOnly(row.permit_expiry),
       laborCamp: row.labor_camp,
-      iban: row.iban ?? null,
-      molEmployeeId: row.mol_employee_id ?? null,
+      // decryptField passes legacy plaintext rows through; tampered ciphertext → null.
+      iban: decryptField(row.iban ?? null),
+      molEmployeeId: decryptField(row.mol_employee_id ?? null),
       bankRoutingCode: row.bank_routing_code ?? null,
       deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),

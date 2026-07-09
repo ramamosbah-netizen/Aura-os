@@ -46,4 +46,23 @@ describe('NumberingService', () => {
     expect(mockClient.release).toHaveBeenCalled();
     expect(code).toBe('INV-2026-000042');
   });
+
+  it('lists configured sequences with their current value', async () => {
+    const s = new NumberingService(null);
+    await s.generateNextNumber('t1', null, 'finance', 'invoice', 'INV', { fiscalYear: 2026 });
+    await s.generateNextNumber('t1', null, 'finance', 'invoice', 'INV', { fiscalYear: 2026 });
+    const seqs = await s.listSequences('t1');
+    expect(seqs).toHaveLength(1);
+    expect(seqs[0]).toMatchObject({ module: 'finance', entity: 'invoice', prefix: 'INV', currentSeq: 2 });
+    expect(await s.listSequences('other')).toHaveLength(0);
+  });
+
+  it('setSequence changes the next generated number', async () => {
+    const s = new NumberingService(null);
+    await s.generateNextNumber('t1', null, 'procurement', 'po', 'PO', { fiscalYear: 2026, padWidth: 3 });
+    await s.setSequence('t1', { module: 'procurement', entity: 'po', fiscalYear: 2026, currentSeq: 100, padWidth: 3, prefix: 'PO' });
+    const next = await s.generateNextNumber('t1', null, 'procurement', 'po', 'PO', { fiscalYear: 2026, padWidth: 3 });
+    expect(next).toBe('PO-2026-101');
+    expect((await s.listSequences('t1'))[0].currentSeq).toBe(101);
+  });
 });

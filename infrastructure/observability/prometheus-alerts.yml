@@ -1,0 +1,63 @@
+# AURA OS — Prometheus alert rules (gap register Vol 23 #6).
+# Load into Prometheus via `rule_files: [prometheus-alerts.yml]` (or the equivalent
+# PrometheusRule CRD). The API exposes /api/v1/metrics when METRICS_ENABLED=true;
+# the same registry can push OTLP with OTLP_METRICS_URL. See README.md alongside.
+
+groups:
+  - name: aura-os-api
+    rules:
+      # ── Event spine ────────────────────────────────────────────────────────
+      - alert: OutboxDeadLetters
+        expr: outbox_dead_letter > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: 'Outbox has dead-lettered events'
+          description: '{{ $value }} event(s) exhausted retries and sit in the dead-letter state — cross-module reactions are being lost. Inspect GET /api/v1/events/dead-letters.'
+
+      - alert: OutboxBacklogGrowing
+        expr: outbox_pending > 100
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Outbox delivery lag'
+          description: 'outbox_pending has stayed above 100 for 10m — the relay is behind (or down) and event-driven automations are delayed.'
+
+      # ── Webhooks ──────────────────────────────────────────────────────────
+      - alert: WebhookDeliveryFailures
+        expr: rate(webhook_deliveries_total{outcome="failed"}[15m]) > 0.1
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Webhook deliveries failing'
+          description: 'Sustained webhook delivery failures — a subscriber endpoint is down or rejecting. Check /admin/webhooks delivery log.'
+
+      # ── HTTP ──────────────────────────────────────────────────────────────
+      - alert: Http5xxRatioHigh
+        expr: >
+          sum(rate(http_requests_total{status="5xx"}[5m]))
+            / clamp_min(sum(rate(http_requests_total[5m])), 0.001) > 0.02
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: 'API 5xx ratio above 2%'
+          description: 'More than 2% of requests are failing server-side over 5m — check logs by x-correlation-id.'
+
+      - alert: HttpLatencyHigh
+        expr: >
+          sum(rate(http_request_duration_ms_sum[5m]))
+            / clamp_min(sum(rate(http_request_duration_ms_count[5m])), 0.001) > 750
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'API mean latency above 750ms'
+          description: 'Mean request duration exceeded 750ms for 10m — check DB pool saturation and slow queries (see the performance budgets doc).'
+
+      # ── Background jobs ───────────────────────────────────────────────────
+      - alert: JobFailures
+        expr: rate(jobs_processed_total{outcome="failed"}[15m]) > 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Background jobs failing'
+          description: 'Job workers are recording failures — inspect the jobs table / worker logs.'

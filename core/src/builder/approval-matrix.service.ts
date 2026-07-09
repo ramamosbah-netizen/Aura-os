@@ -63,6 +63,11 @@ export class ApprovalMatrixService {
     this.logger.log(`[ApprovalMatrix] Configured ${sorted.length} rules for "${config.entityType}" (tenant: ${config.tenantId})`);
   }
 
+  /** Read the current matrix for an entity type (for the admin editor). Null if none configured. */
+  getConfig(tenantId: string, entityType: string): Promise<ApprovalMatrixConfig | null> {
+    return this.load(tenantId, entityType);
+  }
+
   private async load(tenantId: string, entityType: string): Promise<ApprovalMatrixConfig | null> {
     const cached = this.configs.get(this.configKey(tenantId, entityType));
     if (cached) return cached;

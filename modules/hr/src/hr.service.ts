@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Employee, makeEmployee } from './domain/employee';
@@ -32,6 +32,8 @@ import {
   type StaffAdvanceStore,
   type AttendanceStore,
   type AppraisalStore,
+  type EmployeeFilter,
+  type EmployeeScopedFilter,
 } from './store.interface';
 
 export const HR_EVENT = {
@@ -154,6 +156,10 @@ export class HrService {
     return this.employeeStore.findByTenant(tenantId);
   }
 
+  listEmployeesPaged(filter: EmployeeFilter, page: PageParams): Promise<Page<Employee>> {
+    return this.employeeStore.listPaged(filter, page);
+  }
+
   // ── Leaves ─────────────────────────────────────────────────────────────────
 
   async requestLeave(
@@ -233,6 +239,10 @@ export class HrService {
 
   listLeaves(tenantId: string): Promise<Leave[]> {
     return this.leaveStore.findByTenant(tenantId);
+  }
+
+  listLeavesPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<Leave>> {
+    return this.leaveStore.listPaged(filter, page);
   }
 
   /** Computed leave balance: pro-rata accrual from join date minus approved leave taken. */
@@ -315,6 +325,10 @@ export class HrService {
     return this.payrollRunStore.findByTenant(tenantId);
   }
 
+  listPayrollRunsPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PayrollRun>> {
+    return this.payrollRunStore.listPaged(filter, page);
+  }
+
   getPayrollRun(tenantId: string, id: string): Promise<PayrollRun | null> {
     return this.payrollRunStore.findById(tenantId, id);
   }
@@ -385,6 +399,10 @@ export class HrService {
 
   listTimesheets(tenantId: string): Promise<TimesheetEntry[]> {
     return this.timesheetStore.findByTenant(tenantId);
+  }
+
+  listTimesheetsPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<TimesheetEntry>> {
+    return this.timesheetStore.listPaged(filter, page);
   }
 
   listTimesheetsByEmployee(tenantId: string, employeeId: string): Promise<TimesheetEntry[]> {
@@ -471,6 +489,10 @@ export class HrService {
     return employeeId ? this.attendanceStore.findByEmployee(tenantId, employeeId) : this.attendanceStore.findByTenant(tenantId);
   }
 
+  listAttendancePaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<AttendanceRecord>> {
+    return this.attendanceStore.listPaged(filter, page);
+  }
+
   async attendanceSummary(tenantId: string, from: string, to: string, employeeId?: string): Promise<AttendanceSummary> {
     return summariseAttendance(await this.attendanceStore.findByDateRange(tenantId, from, to, employeeId));
   }
@@ -552,6 +574,10 @@ export class HrService {
     return this.expenseClaimStore.findByTenant(tenantId);
   }
 
+  listExpenseClaimsPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<ExpenseClaim>> {
+    return this.expenseClaimStore.listPaged(filter, page);
+  }
+
   // ── Staff Advances / Loans ────────────────────────────────────────────────
 
   async createStaffAdvance(input: { tenantId: string; employeeId: string; amount: number; reason?: string; installments?: number; requestDate: string }): Promise<StaffAdvance> {
@@ -629,6 +655,10 @@ export class HrService {
     return this.staffAdvanceStore.findByTenant(tenantId);
   }
 
+  listStaffAdvancesPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<StaffAdvance>> {
+    return this.staffAdvanceStore.listPaged(filter, page);
+  }
+
   // ── Staff Document Expiry (compliance watch-list) ─────────────────────────
 
   /** Visa / work-permit documents expired or expiring within `withinDays`, soonest first. */
@@ -658,6 +688,10 @@ export class HrService {
 
   listAppraisals(tenantId: Id, employeeId?: Id): Promise<PerformanceAppraisal[]> {
     return employeeId ? this.appraisalStore.findByEmployee(tenantId, employeeId) : this.appraisalStore.findByTenant(tenantId);
+  }
+
+  listAppraisalsPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PerformanceAppraisal>> {
+    return this.appraisalStore.listPaged(filter, page);
   }
 
   // ── Org chart (derived from employee reporting lines) ──────────────────────────

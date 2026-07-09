@@ -1,15 +1,23 @@
 import type { TxHandle } from '@aura/core';
+import type { Page, PageParams } from '@aura/shared';
 import type { Transmittal } from './domain/transmittal';
 import type { Correspondence } from './domain/correspondence';
 import type { Submittal } from './domain/submittal';
 import type { DrawingRegisterEntry } from './domain/drawing-register';
 import type { TransmittalItem } from './domain/transmittal-item';
 
+/** Tenant-wide doc list filter; project_id narrows to a single project's documents. */
+export interface DocListFilter {
+  tenantId?: string;
+  projectId?: string;
+}
+
 export interface DrawingRegisterStore {
   save(entry: DrawingRegisterEntry, tx?: TxHandle): Promise<void>;
   findById(id: string, tenantId: string): Promise<DrawingRegisterEntry | null>;
   findByProject(projectId: string, tenantId: string): Promise<DrawingRegisterEntry[]>;
   findAll(tenantId: string): Promise<DrawingRegisterEntry[]>;
+  listPaged(filter: DocListFilter, page: PageParams): Promise<Page<DrawingRegisterEntry>>;
 }
 
 export interface TransmittalStore {
@@ -17,6 +25,7 @@ export interface TransmittalStore {
   findById(id: string, tenantId: string): Promise<Transmittal | null>;
   findByProject(projectId: string, tenantId: string): Promise<Transmittal[]>;
   findAll(tenantId: string): Promise<Transmittal[]>;
+  listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Transmittal>>;
 }
 
 export interface CorrespondenceStore {
@@ -24,6 +33,7 @@ export interface CorrespondenceStore {
   findById(id: string, tenantId: string): Promise<Correspondence | null>;
   findByProject(projectId: string, tenantId: string): Promise<Correspondence[]>;
   findAll(tenantId: string): Promise<Correspondence[]>;
+  listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Correspondence>>;
 }
 
 export interface SubmittalStore {
@@ -31,6 +41,7 @@ export interface SubmittalStore {
   findById(id: string, tenantId: string): Promise<Submittal | null>;
   findByProject(projectId: string, tenantId: string): Promise<Submittal[]>;
   findAll(tenantId: string): Promise<Submittal[]>;
+  listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Submittal>>;
 }
 
 export interface TransmittalItemStore {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertFormValid,
+  checkFormValid,
   compileFormulas,
+  employeeFormSchema,
   evaluateCondition,
   evaluateForm,
   evaluateFormula,
@@ -236,6 +239,33 @@ describe('evaluateForm', () => {
     };
     expect(evaluateForm(s, { trn: '12345' }).fieldErrors.trn).toBe('TRN must be 15 digits');
     expect(evaluateForm(s, { trn: '100123456789012' }).fieldErrors.trn).toBeUndefined();
+  });
+});
+
+describe('assertFormValid — server-side enforcement', () => {
+  const valid = { firstName: 'Jane', lastName: 'Doe', role: 'Engineer', department: 'Ops', joinedDate: '2026-02-10' };
+
+  it('passes a valid submission (no throw) and coerces non-string inputs', () => {
+    expect(() => assertFormValid(employeeFormSchema, { ...valid, phone: 501234567 })).not.toThrow();
+  });
+
+  it('rejects a missing required field, taxonomy-classifiable to 400', () => {
+    expect(() => assertFormValid(employeeFormSchema, { ...valid, lastName: '' })).toThrow(/validation failed/i);
+  });
+
+  it('rejects a bad email via the shared custom validator', () => {
+    expect(() => assertFormValid(employeeFormSchema, { ...valid, email: 'not-an-email' })).toThrow(/email/i);
+  });
+
+  it('enforces a declarative rule (labor camp requires visa tracking)', () => {
+    expect(() => assertFormValid(employeeFormSchema, { ...valid, laborCamp: 'Sonapur C' })).toThrow(/visa/i);
+    expect(() => assertFormValid(employeeFormSchema, { ...valid, laborCamp: 'Sonapur C', visaExpiry: '2027-01-01' })).not.toThrow();
+  });
+
+  it('checkFormValid reports issues without throwing', () => {
+    const issues = checkFormValid(employeeFormSchema, { ...valid, email: 'bad' });
+    expect(issues.fieldErrors.email).toMatch(/email/i);
+    expect(checkFormValid(employeeFormSchema, valid).fieldErrors).toEqual({});
   });
 });
 

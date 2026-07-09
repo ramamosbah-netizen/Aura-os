@@ -7,7 +7,22 @@ import { ExpenseClaim } from './domain/expense-claim';
 import { StaffAdvance } from './domain/staff-advance';
 import { AttendanceRecord } from './domain/attendance';
 import { PerformanceAppraisal } from './domain/appraisal';
-import { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore } from './store.interface';
+import { type Page, type PageParams, paginate } from '@aura/shared';
+import { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, type EmployeeFilter, type EmployeeScopedFilter } from './store.interface';
+
+/** In-memory paging for an employee-scoped child list: filter, sort, slice. */
+function pageScoped<T extends { tenantId: string; employeeId: string }>(
+  items: Iterable<T>,
+  filter: EmployeeScopedFilter,
+  page: PageParams,
+  sortKey: (item: T) => string,
+): Page<T> {
+  let all = [...items];
+  if (filter.tenantId) all = all.filter((i) => i.tenantId === filter.tenantId);
+  if (filter.employeeId) all = all.filter((i) => i.employeeId === filter.employeeId);
+  all.sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+  return paginate(all, page);
+}
 
 export class InMemoryAppraisalStore implements AppraisalStore {
   private items = new Map<string, PerformanceAppraisal>();
@@ -31,6 +46,10 @@ export class InMemoryAppraisalStore implements AppraisalStore {
   async findByEmployee(tenantId: string, employeeId: string): Promise<PerformanceAppraisal[]> {
     return [...this.items.values()].filter((i) => i.tenantId === tenantId && i.employeeId === employeeId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PerformanceAppraisal>> {
+    return pageScoped(this.items.values(), filter, page, (i) => i.createdAt);
+  }
 }
 
 export class InMemoryEmployeeStore implements EmployeeStore {
@@ -52,6 +71,13 @@ export class InMemoryEmployeeStore implements EmployeeStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId && !item.deletedAt)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: EmployeeFilter, page: PageParams): Promise<Page<Employee>> {
+    let all = Array.from(this.items.values()).filter((item) => !item.deletedAt);
+    if (filter.tenantId) all = all.filter((item) => item.tenantId === filter.tenantId);
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return paginate(all, page);
   }
 
   async setDeleted(tenantId: string, id: string, deleted: boolean): Promise<boolean> {
@@ -89,6 +115,10 @@ export class InMemoryLeaveStore implements LeaveStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<Leave>> {
+    return pageScoped(this.items.values(), filter, page, (i) => i.createdAt);
+  }
+
   async delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean> {
     const item = this.items.get(id);
     if (!item || item.tenantId !== tenantId) return false;
@@ -121,6 +151,10 @@ export class InMemoryPayrollRunStore implements PayrollRunStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId && item.employeeId === employeeId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<PayrollRun>> {
+    return pageScoped(this.items.values(), filter, page, (i) => i.createdAt);
   }
 
   async delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean> {
@@ -162,6 +196,10 @@ export class InMemoryTimesheetStore implements TimesheetStore {
       .filter((i) => i.tenantId === tenantId && i.employeeId === employeeId && i.date >= from && i.date <= to)
       .sort((a, b) => a.date.localeCompare(b.date));
   }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<TimesheetEntry>> {
+    return pageScoped(this.items.values(), filter, page, (i) => i.date);
+  }
 }
 
 export class InMemoryExpenseClaimStore implements ExpenseClaimStore {
@@ -190,6 +228,10 @@ export class InMemoryExpenseClaimStore implements ExpenseClaimStore {
       .filter((i) => i.tenantId === tenantId && i.employeeId === employeeId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<ExpenseClaim>> {
+    return pageScoped(this.items.values(), filter, page, (i) => i.createdAt);
+  }
 }
 
 export class InMemoryStaffAdvanceStore implements StaffAdvanceStore {
@@ -217,6 +259,10 @@ export class InMemoryStaffAdvanceStore implements StaffAdvanceStore {
     return [...this.items.values()]
       .filter((i) => i.tenantId === tenantId && i.employeeId === employeeId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<StaffAdvance>> {
+    return pageScoped(this.items.values(), filter, page, (i) => i.createdAt);
   }
 }
 
@@ -251,5 +297,9 @@ export class InMemoryAttendanceStore implements AttendanceStore {
     return [...this.items.values()]
       .filter((i) => i.tenantId === tenantId && i.date >= from && i.date <= to && (!employeeId || i.employeeId === employeeId))
       .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async listPaged(filter: EmployeeScopedFilter, page: PageParams): Promise<Page<AttendanceRecord>> {
+    return pageScoped(this.items.values(), filter, page, (i) => i.date);
   }
 }

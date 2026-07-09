@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { assertFormValid, parsePageParams, subcontractFormSchema } from '@aura/shared';
 import {
   type Subcontract,
   type SubcontractStatus,
@@ -51,6 +51,8 @@ export class SubcontractsController {
 
   @Post()
   createSubcontract(@Body() dto: CreateSubcontractDto): Promise<Subcontract> {
+    // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
+    assertFormValid(subcontractFormSchema(), dto);
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     if (!dto?.subcontractorName?.trim()) throw new BadRequestException('subcontractorName is required');

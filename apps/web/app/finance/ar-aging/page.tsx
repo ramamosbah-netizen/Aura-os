@@ -37,7 +37,10 @@ export default async function ArAgingPage() {
         <p style={st.muted}>No outstanding receivables as of {report.asOf}.</p>
       ) : (
         <>
-          <p style={st.asOf}>As of <b>{report.asOf}</b> · total outstanding <b>{fmt(report.grandTotal)} AED</b></p>
+          <p style={st.asOf}>
+            As of <b>{report.asOf}</b> · total outstanding <b>{fmt(report.grandTotal)} AED</b>
+            <a href="/api/finance/ar-aging/csv" style={st.csvBtn}>⬇ Download CSV</a>
+          </p>
           <table style={st.table}>
             <thead>
               <tr>
@@ -73,7 +76,16 @@ const st = {
   page: { maxWidth: 1040, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 18px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
-  asOf: { margin: '0 0 12px', fontSize: 14 } as CSSProperties,
+  asOf: { margin: '0 0 12px', fontSize: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } as CSSProperties,
+  csvBtn: {
+    marginLeft: 'auto',
+    color: 'var(--accent)',
+    fontSize: 12.5,
+    fontWeight: 700,
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '5px 12px',
+  } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0', margin: 0 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
   th: { textAlign: 'right' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,

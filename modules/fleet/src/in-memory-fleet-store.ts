@@ -6,7 +6,7 @@ import type { TrafficFine } from './domain/traffic-fine';
 import type { SalikCharge } from './domain/salik-charge';
 import type { VehicleTelemetry } from './domain/telemetry';
 import { type Page, type PageParams, paginate } from '@aura/shared';
-import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore, TelemetryStore, VehicleFilter } from './store.interface';
+import type { VehicleStore, FuelLogStore, MaintenanceStore, TrafficFineStore, SalikChargeStore, TelemetryStore, VehicleFilter, FuelLogFilter, MaintenanceFilter, TrafficFineFilter, SalikChargeFilter } from './store.interface';
 
 export class InMemoryVehicleStore implements VehicleStore {
   private items = new Map<string, Vehicle>();
@@ -82,6 +82,14 @@ export class InMemoryFuelLogStore implements FuelLogStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  async listPaged(filter: FuelLogFilter, page: PageParams): Promise<Page<FuelLog>> {
+    let all = Array.from(this.items.values());
+    if (filter.tenantId) all = all.filter((item) => item.tenantId === filter.tenantId);
+    if (filter.vehicleId) all = all.filter((item) => item.vehicleId === filter.vehicleId);
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return paginate(all, page);
+  }
+
   async delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean> {
     const item = this.items.get(id);
     if (!item || item.tenantId !== tenantId) return false;
@@ -114,6 +122,15 @@ export class InMemoryMaintenanceStore implements MaintenanceStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId && item.vehicleId === vehicleId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: MaintenanceFilter, page: PageParams): Promise<Page<MaintenanceRecord>> {
+    let all = Array.from(this.items.values());
+    if (filter.tenantId) all = all.filter((item) => item.tenantId === filter.tenantId);
+    if (filter.vehicleId) all = all.filter((item) => item.vehicleId === filter.vehicleId);
+    if (filter.status) all = all.filter((item) => item.status === filter.status);
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return paginate(all, page);
   }
 
   async delete(tenantId: string, id: string, tx?: TxHandle): Promise<boolean> {
@@ -149,6 +166,15 @@ export class InMemoryTrafficFineStore implements TrafficFineStore {
       .filter((item) => item.tenantId === tenantId && item.vehicleId === vehicleId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+
+  async listPaged(filter: TrafficFineFilter, page: PageParams): Promise<Page<TrafficFine>> {
+    let all = Array.from(this.items.values());
+    if (filter.tenantId) all = all.filter((item) => item.tenantId === filter.tenantId);
+    if (filter.vehicleId) all = all.filter((item) => item.vehicleId === filter.vehicleId);
+    if (filter.status) all = all.filter((item) => item.status === filter.status);
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return paginate(all, page);
+  }
 }
 
 export class InMemorySalikChargeStore implements SalikChargeStore {
@@ -176,6 +202,15 @@ export class InMemorySalikChargeStore implements SalikChargeStore {
     return Array.from(this.items.values())
       .filter((item) => item.tenantId === tenantId && item.vehicleId === vehicleId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listPaged(filter: SalikChargeFilter, page: PageParams): Promise<Page<SalikCharge>> {
+    let all = Array.from(this.items.values());
+    if (filter.tenantId) all = all.filter((item) => item.tenantId === filter.tenantId);
+    if (filter.vehicleId) all = all.filter((item) => item.vehicleId === filter.vehicleId);
+    if (filter.status) all = all.filter((item) => item.status === filter.status);
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return paginate(all, page);
   }
 }
 

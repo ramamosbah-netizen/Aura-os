@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { parsePageParams, assertFormValid, employeeFormSchema } from '@aura/shared';
 import {
   type Employee,
   type Leave,
@@ -76,6 +77,11 @@ export class HrController {
     if (!dto?.department?.trim()) throw new BadRequestException('department is required');
     if (!dto?.joinedDate?.trim()) throw new BadRequestException('joinedDate is required');
 
+    // Enforce the shared metadata schema server-side (email/phone format, the
+    // camp→visa-tracking rule) so the same rules the renderer shows can't be
+    // bypassed by calling the endpoint directly.
+    assertFormValid(employeeFormSchema, dto);
+
     const ctx = this.tenant.get();
     return this.hrService.createEmployee(ctx.actorId, {
       tenantId: ctx.tenantId,
@@ -112,18 +118,20 @@ export class HrController {
   }
 
   @Post('employees/:id/restore')
-  async restoreEmployee(@Param('id') id: string): Promise<Employee> {
-    try {
-      return await this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
-    } catch (e) {
-      throw new NotFoundException((e as Error).message);
-    }
+  restoreEmployee(@Param('id') id: string): Promise<Employee> {
+    // "employee profile not found" is classified to 404 by the global error taxonomy.
+    return this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
   }
 
   @Get('employees')
   listEmployees(): Promise<Employee[]> {
     const ctx = this.tenant.get();
     return this.hrService.listEmployees(ctx.tenantId);
+  }
+
+  @Get('employees/paged')
+  listEmployeesPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listEmployeesPaged({ tenantId: this.tenant.get().tenantId }, parsePageParams(limit, offset));
   }
 
   @Get('document-expiry')
@@ -172,6 +180,11 @@ export class HrController {
     return this.hrService.listLeaves(ctx.tenantId);
   }
 
+  @Get('leaves/paged')
+  listLeavesPaged(@Query('employeeId') employeeId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listLeavesPaged({ tenantId: this.tenant.get().tenantId, employeeId }, parsePageParams(limit, offset));
+  }
+
   // ── Payroll Runs ────────────────────────────────────────────────────────────
 
   @Post('payroll')
@@ -217,6 +230,11 @@ export class HrController {
     return this.hrService.listPayrollRuns(ctx.tenantId);
   }
 
+  @Get('payroll/paged')
+  listPayrollRunsPaged(@Query('employeeId') employeeId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listPayrollRunsPaged({ tenantId: this.tenant.get().tenantId, employeeId }, parsePageParams(limit, offset));
+  }
+
   @Get('payroll/:id')
   async getPayrollRun(@Param('id') id: string): Promise<PayrollRun> {
     const run = await this.hrService.getPayrollRun(this.tenant.get().tenantId, id);
@@ -253,6 +271,11 @@ export class HrController {
     return this.hrService.listTimesheets(this.tenant.get().tenantId);
   }
 
+  @Get('timesheets/paged')
+  listTimesheetsPaged(@Query('employeeId') employeeId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listTimesheetsPaged({ tenantId: this.tenant.get().tenantId, employeeId }, parsePageParams(limit, offset));
+  }
+
   @Post('timesheets/:id/submit')
   async submitTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
     return await this.hrService.submitTimesheetEntry(this.tenant.get().tenantId, id);
@@ -281,6 +304,11 @@ export class HrController {
   @Get('attendance')
   listAttendance(@Query('employeeId') employeeId?: string): Promise<AttendanceRecord[]> {
     return this.hrService.listAttendance(this.tenant.get().tenantId, employeeId);
+  }
+
+  @Get('attendance/paged')
+  listAttendancePaged(@Query('employeeId') employeeId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listAttendancePaged({ tenantId: this.tenant.get().tenantId, employeeId }, parsePageParams(limit, offset));
   }
 
   @Get('attendance/summary')
@@ -312,6 +340,11 @@ export class HrController {
   @Get('expense-claims')
   listExpenseClaims(): Promise<ExpenseClaim[]> {
     return this.hrService.listExpenseClaims(this.tenant.get().tenantId);
+  }
+
+  @Get('expense-claims/paged')
+  listExpenseClaimsPaged(@Query('employeeId') employeeId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listExpenseClaimsPaged({ tenantId: this.tenant.get().tenantId, employeeId }, parsePageParams(limit, offset));
   }
 
   @Post('expense-claims/:id/submit')
@@ -350,6 +383,11 @@ export class HrController {
   @Get('staff-advances')
   listStaffAdvances(): Promise<StaffAdvance[]> {
     return this.hrService.listStaffAdvances(this.tenant.get().tenantId);
+  }
+
+  @Get('staff-advances/paged')
+  listStaffAdvancesPaged(@Query('employeeId') employeeId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listStaffAdvancesPaged({ tenantId: this.tenant.get().tenantId, employeeId }, parsePageParams(limit, offset));
   }
 
   @Post('staff-advances/:id/approve')
@@ -403,6 +441,11 @@ export class HrController {
   @Get('appraisals')
   listAppraisals(@Query('employeeId') employeeId?: string): Promise<PerformanceAppraisal[]> {
     return this.hrService.listAppraisals(this.tenant.get().tenantId, employeeId);
+  }
+
+  @Get('appraisals/paged')
+  listAppraisalsPaged(@Query('employeeId') employeeId?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.hrService.listAppraisalsPaged({ tenantId: this.tenant.get().tenantId, employeeId }, parsePageParams(limit, offset));
   }
 
   @Put('appraisals/:id/submit')

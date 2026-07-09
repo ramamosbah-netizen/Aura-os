@@ -57,7 +57,10 @@ export default async function InvoicesPage() {
       <h1 style={st.h1}>Finance · Invoices</h1>
       <p style={st.sub}>
         The pay step — a supplier invoice bills against a <strong>received PO</strong> and inherits
-        its supplier and project. Closes the loop: spend → receive → pay.
+        its supplier and project. Closes the loop: spend → receive → pay.{' '}
+        <a href="/api/finance/invoices/csv" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 12.5 }}>
+          ⬇ Download CSV
+        </a>
       </p>
 
       <InvoiceCreate

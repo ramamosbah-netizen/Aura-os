@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
 import {
   type DailyReport,
   type DelayLog,
@@ -74,6 +75,19 @@ export class SiteController {
     return this.siteService.submitDailyReport(ctx.tenantId, ctx.actorId, id);
   }
 
+  @Get('daily-reports/paged')
+  listDailyReportsPaged(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.siteService.listDailyReportsPaged(
+      { tenantId: this.tenant.get().tenantId, projectId, status },
+      parsePageParams(limit, offset),
+    );
+  }
+
   @Get('daily-reports')
   listDailyReports(): Promise<DailyReport[]> {
     const ctx = this.tenant.get();
@@ -114,6 +128,11 @@ export class SiteController {
     return this.siteService.resolveDelayLog(ctx.tenantId, ctx.actorId, id);
   }
 
+  @Get('delay-logs/paged')
+  listDelayLogsPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listDelayLogsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   @Get('delay-logs')
   listDelayLogs(): Promise<DelayLog[]> {
     const ctx = this.tenant.get();
@@ -148,6 +167,11 @@ export class SiteController {
     });
   }
 
+  @Get('material-consumption/paged')
+  listMaterialConsumptionPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listMaterialConsumptionPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
   @Get('material-consumption')
   listMaterialConsumption(): Promise<MaterialConsumption[]> {
     const ctx = this.tenant.get();
@@ -177,6 +201,11 @@ export class SiteController {
       timeImplication: dto.timeImplication,
       createdBy: ctx.actorId || null,
     });
+  }
+
+  @Get('instructions/paged')
+  listInstructionsPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listSiteInstructionsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Get('instructions')
@@ -217,6 +246,11 @@ export class SiteController {
       notes: dto.notes,
       createdBy: ctx.actorId ?? undefined,
     });
+  }
+
+  @Get('labour/paged')
+  listLabourPaged(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.siteService.listLabourAllocationsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
   }
 
   @Get('labour')

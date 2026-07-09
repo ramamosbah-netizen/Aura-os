@@ -23,4 +23,13 @@ export class WebhookService {
   listDeliveries(subscriptionId?: Id, limit?: number): Promise<WebhookDelivery[]> {
     return this.store.listDeliveries(subscriptionId, limit);
   }
+
+  /** Enable/disable a subscription (an inactive one is skipped by the dispatcher). */
+  async setActive(id: Id, active: boolean): Promise<WebhookSubscription | null> {
+    const sub = await this.store.getSubscription(id);
+    if (!sub) return null;
+    const updated: WebhookSubscription = { ...sub, active };
+    await this.store.saveSubscription(updated);
+    return updated;
+  }
 }

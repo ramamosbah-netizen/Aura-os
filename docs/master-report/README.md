@@ -161,8 +161,15 @@ or **[Gap]**.
 > pointers). **`/admin/workflows`** — the definitions registry with live instance counts
 > (`WorkflowStore.listDefinitions`). **`/admin/notifications`** grew a per-event **rules
 > matrix** (`notify.rule.<event>`: off / channel overrides) enforced on every dispatch.
-> Verified live: 18/18 smoke assertions incl. the full deactivation chain; SDK regen 654
-> ops. See `docs/reports/2026-07-10-admin-depth-wave.md`.
+> Verified live: 18/18 smoke assertions incl. the full deactivation chain.
+> **Same day: API keys / service accounts (§2.5)** — `aura_service_accounts` (migration
+> **0138**, hash-only, key shown once), `aura_sk_…` bearer resolves to `sa:<id>` via auth
+> step 0 and authorizes through **normal role grants**; create/revoke card on
+> `/admin/security`; revocation immediate (11/11 live). This flushed out a **latent DI
+> bug**: union-typed `@Optional()` ctor params silently injected null — the Entra
+> group→role application and the users-deactivation guard check had been inert; fixed
+> with explicit `@Inject` + an isolated regression. SDK 658 ops.
+> See `docs/reports/2026-07-10-admin-depth-wave.md`.
 >
 > **Update 2026-07-09 (governance hardening):** guardrail toggles are now **durable** —
 > write-through to `aura_ai_guardrails` (the 0040 table, finally wired) + hydrate on boot,

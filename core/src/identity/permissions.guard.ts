@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Inject,
   Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -76,7 +77,8 @@ export class PermissionsGuard implements CanActivate {
     private readonly access: AccessService,
     private readonly tenant: TenantContext,
     private readonly auth: AuthService,
-    @Optional() private readonly users: UsersService | null = null,
+    // Explicit @Inject: union types emit `Object` in design:paramtypes (see auth.service).
+    @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

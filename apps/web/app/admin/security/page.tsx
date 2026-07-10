@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import { AdminHeader, AdminCard, AdminOffline, adminPage, type Kpi } from '@/components/admin-chrome';
 import { Pill } from '@/components/admin-ui';
+import ServiceAccountsClient from '@/components/service-accounts-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +96,15 @@ export default async function SecurityAdminPage() {
             ))}
           </tbody>
         </table>
+      </AdminCard>
+
+      <AdminCard title="API keys (service accounts)">
+        <p style={{ ...dim, marginBottom: 10 }}>
+          Machine credentials for external integrations — an <code style={code}>aura_sk_…</code> key
+          authenticates as <code style={code}>sa:&lt;id&gt;</code> and is authorized through the same
+          role grants as any user. Only the key&apos;s hash is stored; revocation is immediate.
+        </p>
+        <ServiceAccountsClient />
       </AdminCard>
 
       <AdminCard title="PII field encryption">

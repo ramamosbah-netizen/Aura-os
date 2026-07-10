@@ -46,6 +46,31 @@ defaults, unset → default routing. The subscriber passes `e.type` on all six w
 Default / In-app only / per-channel toggles, saved as settings (clearing returns an event
 to defaults).
 
+## 4a. API keys / service accounts (§2.5 — same wave, second push)
+
+Machine credentials for external integrations (pairs with the published `@aura/sdk`):
+
+- **`aura_service_accounts`** (migration **0138**, `@DOWN`) + kernel `ServiceAccountsService`
+  (hydrate pattern; sync `verify()` on the hot path; `last_used_at` touched ≤ once/5 min).
+  **Only the SHA-256 hash is stored — the `aura_sk_…` key is returned exactly once.**
+- **Auth step 0**: `contextFromHeader` resolves an `aura_sk_` bearer to identity `sa:<id>`;
+  authorization goes through the **same role grants as any user** (grant at /admin/access —
+  no parallel permission system). Revocation/deletion refuses the key on the next request.
+- Admin CRUD at `admin/service-accounts` (audited) + an **API keys** card on `/admin/security`
+  (list w/ last-used, create-with-one-time-key banner, revoke/reinstate/delete).
+
+### The DI bug this flushed out (real find)
+
+The first smoke failed: an `aura_sk_` key resolved to nothing. Root cause: constructor params
+typed as a union (`X | null`) emit `Object` in `design:paramtypes` under strict TS, so
+`@Optional()` **silently injects null**. This wasn't new — the pre-existing
+`AuthService.access` param had the same shape, meaning the Entra group→role application path
+was silently inert, and the users-registry check in the PermissionsGuard from earlier today
+never actually ran (its smoke passed for the wrong reason: the test user also had no grants).
+Fix: explicit `@Optional() @Inject(Token)` on all three sites, plus a regression smoke that
+isolates the deactivation check (a **granted** user → 200, deactivate → 403 with the
+"deactivated" message — so only the registry check can be the cause).
+
 ## 5. Verification (live, dev DB)
 
 18/18 smoke assertions green (`admin-depth-smoke`): register → login OK → deactivate →
@@ -56,9 +81,14 @@ cleanup. Migration 0137 applied to dev (137 total). Core 126 / api 30 tests gree
 API build 21/21; SDK regenerated (**654 operations**, +6 routes) for the drift gate.
 Page renders verified on a scratch stack (hub + 3 new pages + notifications).
 
+Second push (service accounts + DI fix), 11/11 live: create key → list never contains it →
+ungranted key **403** → grant role to `sa:<id>` via /admin/access → **200** → revoke →
+**401** → reinstate → 200 → delete → 401 · isolated deactivation regression (granted user
+200 → deactivate → 403 "account … is deactivated"). Migration 0138 applied (138 total);
+SDK 658 ops; core 126 green.
+
 ## 6. What §2 still honestly lacks
 
-API keys / service accounts (§2.5 — natural next now the SDK is published), form-designer
-§2.4 remainder (add/reorder fields, versioned publish), §2.7 prompt-packs + cost meters,
-digest schedules (§2.8), list-view/dashboard/menu designers (§2.4/Vol 14), workflow
-*designer* (P3).
+Form-designer §2.4 remainder (add/reorder fields, versioned publish), §2.7 prompt-packs +
+cost meters, digest schedules (§2.8), list-view/dashboard/menu designers (§2.4/Vol 14),
+workflow *designer* (P3).

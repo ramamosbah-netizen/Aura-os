@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   type AuthClaims,
   type Id,
@@ -12,6 +12,7 @@ import {
 import type { TenantInfo } from '../tenancy/tenant-context';
 import { TokenRevocationStore } from './token-revocation';
 import { AccessService } from './access.service';
+import { ServiceAccountsService } from './service-accounts.service';
 
 /**
  * Parse the AUTH_GROUP_ROLE_MAP csv (`<idp-group>=<aura-role>,…`) and resolve which AURA
@@ -73,9 +74,12 @@ export class AuthService {
   private readonly jwksCache = this.jwksUrl ? new JwksCache(this.jwksUrl) : null;
   private readonly defaultTenant = process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
 
+  // NOTE: union-typed params (`X | null`) emit `Object` in design:paramtypes under
+  // strict mode, so @Optional() silently injects nothing — explicit @Inject required.
   constructor(
     private readonly revocation: TokenRevocationStore,
-    @Optional() private readonly access: AccessService | null = null,
+    @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
+    @Optional() @Inject(ServiceAccountsService) private readonly serviceAccounts: ServiceAccountsService | null = null,
   ) {
     const modes = [this.jwksCache ? 'JWKS (IdP)' : null, this.secret ? 'HS256 (self-issued)' : null].filter(Boolean);
     if (modes.length > 0) {
@@ -99,6 +103,13 @@ export class AuthService {
   async contextFromHeader(authorization: string | undefined): Promise<TenantInfo | null> {
     const token = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : null;
     if (!token) return null;
+
+    // 0. Service-account API key (`aura_sk_…`, Vol 15 §2.5): resolves to identity
+    //    `sa:<id>` — authorized through the same role grants as any user. Sync lookup.
+    if (ServiceAccountsService.isServiceKey(token)) {
+      const account = this.serviceAccounts?.verify(token) ?? null;
+      return account ? { tenantId: account.tenantId, companyId: null, actorId: `sa:${account.id}` } : null;
+    }
 
     // 1. Hosted-IdP (asymmetric) token via JWKS.
     if (this.jwksCache) {

@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { FormOverridesService, TenantContext } from '@aura/core';
-import { applyFormOverrides, parsePageParams, assertFormValid, employeeFormSchema } from '@aura/shared';
+import { FormCustomValuesService, FormOverridesService, TenantContext } from '@aura/core';
+import { applyFormOverrides, parsePageParams, assertFormValid, employeeFormSchema, pickCustomFieldValues } from '@aura/shared';
 import {
   type Employee,
   type Leave,
@@ -66,12 +66,14 @@ export class HrController {
     private readonly hrService: HrService,
     private readonly tenant: TenantContext,
     private readonly formOverrides: FormOverridesService,
+    private readonly customValues: FormCustomValuesService,
   ) {}
 
   // ── Employees ──────────────────────────────────────────────────────────────
 
   @Post('employees')
-  async createEmployee(@Body() dto: CreateEmployeeDto): Promise<Employee> {
+  async createEmployee(@Body() dto: CreateEmployeeDto, @Req() req: { body?: Record<string, unknown> }): Promise<Employee> {
+    const body = req.body;
     if (!dto?.firstName?.trim()) throw new BadRequestException('firstName is required');
     if (!dto?.lastName?.trim()) throw new BadRequestException('lastName is required');
     if (!dto?.role?.trim()) throw new BadRequestException('role is required');
@@ -81,14 +83,14 @@ export class HrController {
     // Enforce the shared metadata schema server-side (email/phone format, the
     // camp→visa-tracking rule) so the same rules the renderer shows can't be
     // bypassed by calling the endpoint directly.
-    // Form Designer overrides (Vol 15 �2.4) merge over the code schema before enforcement.
-    assertFormValid(
-      applyFormOverrides(employeeFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, employeeFormSchema.id)),
-      dto,
-    );
+    // Form Designer overrides (Vol 15 �2.4) merge over the code schema before enforcement.
+    // Validate the RAW body: the global pipe strips unknown keys from the decorated
+    // DTO, but designer-added cf_* fields (Form Designer P2) live only in the body.
+    const merged = applyFormOverrides(employeeFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, employeeFormSchema.id));
+    assertFormValid(merged, (body ?? dto) as Record<string, unknown>);
 
     const ctx = this.tenant.get();
-    return this.hrService.createEmployee(ctx.actorId, {
+    const employee = await this.hrService.createEmployee(ctx.actorId, {
       tenantId: ctx.tenantId,
       companyId: ctx.companyId || null,
       firstName: dto.firstName,
@@ -106,6 +108,9 @@ export class HrController {
       molEmployeeId: dto.molEmployeeId,
       bankRoutingCode: dto.bankRoutingCode,
     });
+    // Capture designer-added field values per record (Form Designer P2).
+    await this.customValues.save(ctx.tenantId, merged.id, employee.id, pickCustomFieldValues(merged, body));
+    return employee;
   }
 
   @Post('wps')

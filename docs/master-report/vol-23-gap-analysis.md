@@ -65,7 +65,7 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 
 | # | Gap | Home | Effort |
 |--:|---|---|---|
-| 16 | Form designer (no-code phase 1, DB schemas) — **P1 slice shipped 2026-07-09** (`/admin/forms`: per-tenant label/required/visibility overrides, designed = rendered = enforced, migration 0136). Remaining: add/reorder fields, layout & rule editing, versioned publish | Vol 5 §10 | L (remainder) |
+| 16 | Form designer — **P1 2026-07-09** (label/required/visibility overrides, 0136) · **P2 2026-07-10**: **add custom `cf_*` fields** (render + validate + values persist per record, `aura_form_custom_values` 0140, raw-body enforcement on all 3 endpoints), **reordering**, **versioned draft→publish** (0139, atomic promote + version++, audited; live form never sees drafts). Verified live 9/9 incl. draft isolation + designed-label 400 + value readback. Remaining: layout/rules/formula editing (the rest is Vol 14 / #23) | Vol 5 §10 | ✅ core (layout/rules remain) |
 | 17 | Mobile field app (PWA + offline drafts) | Vol 20 V2 | L |
 | 18 | Customer + supplier portals | Vol 20 V2 | L |
 | 19 | Gantt/baselines + Primavera import | Vol 3 §4, Vol 17 | L |

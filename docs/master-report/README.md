@@ -151,6 +151,19 @@ or **[Gap]**.
 > disposal guards, transmittal project guard). Remaining P2: the L rows (#16 remainder,
 > #17–#20, #22–#24, #26). See `docs/reports/2026-07-09-p2-wave1.md`.
 >
+> **Update 2026-07-10 (Form Designer P2 — the §2.4 flagship, register #16 core closed):**
+> admins now **add fields the schema never had**: `cf_*` custom fields (text/number/
+> select/date/textarea, required, options) that render, validate, **and persist per
+> record** — the enforced endpoints validate the raw body and capture values into
+> `aura_form_custom_values` (migration **0140**), read back at
+> `GET /forms/:id/values/:recordId`. Plus **▲▼ field reordering** and a **versioned
+> draft→publish cycle** (migration **0139**: the designer edits a draft; Publish promotes
+> atomically with version++ and audit — renderer + enforcement only ever read the
+> published patch). Verified live 9/9: draft isolation → publish v2 → missing custom
+> field 400 with the designed label → value captured + read back → reset. Shared 165 /
+> core 132 tests; SDK 660 ops. Remaining §2.4: layout/rules/formula editing.
+> See `docs/reports/2026-07-10-form-designer-p2.md`.
+>
 > **Update 2026-07-10 (admin depth wave — "manage everything from the hub"):** the four
 > Vol 15 §2 capabilities that still had no screen shipped; the hub is now **22 screens**.
 > **`/admin/users`** — a real users registry (`aura_users`, migration **0137**, kernel
@@ -243,7 +256,7 @@ row updated 2026-07-08 per the Vol 23 register re-verification).
 | Area | Completion | Architecture | Enterprise Ready | Score |
 |---|--:|---|---|--:|
 | Kernel (events, workflow, DMS, identity, numbering, audit…) | 88% | Excellent | Yes | **9.2/10** |
-| Form Engine (metadata forms, rules, formulas, plugins, AI fill/review) | 85% | Excellent | Yes | **9.0/10** |
+| Form Engine (metadata forms, rules, formulas, plugins, AI fill/review; no-code designer w/ custom fields + versioned publish) | 88% | Excellent | Yes | **9.2/10** |
 | Command Center (attention scoring, business-health, AI briefing homepage) | 80% | Excellent | Yes | **8.6/10** |
 | AI Platform (provider seam, RAG, insights, autonomy, MCP) | 55% | Good | Early | **6.5/10** |
 | Integration Platform (webhooks, connectors, **published @aura/sdk** w/ CI drift gate) | 50% | Good | Early | **5.9/10** |

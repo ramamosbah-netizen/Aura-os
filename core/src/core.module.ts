@@ -15,6 +15,7 @@ import { UsersService } from './identity/users.service';
 import { ServiceAccountsService } from './identity/service-accounts.service';
 import { CompaniesService } from './identity/companies.service';
 import { FormOverridesService } from './forms/form-overrides.service';
+import { FormCustomValuesService } from './forms/form-custom-values.service';
 import { TokenRevocationStore } from './identity/token-revocation';
 import { OrgService } from './identity/org.service';
 import { AiService } from './ai/ai.service';
@@ -87,6 +88,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     ServiceAccountsService,
     CompaniesService,
     FormOverridesService,
+    FormCustomValuesService,
     TokenRevocationStore,
     AiService,
     NumberingService,
@@ -187,6 +189,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     ServiceAccountsService,
     CompaniesService,
     FormOverridesService,
+    FormCustomValuesService,
     TokenRevocationStore,
     AiService,
     DmsService,

@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
-import { FormOverridesService, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { applyFormOverrides, assertFormValid, parsePageParams, subcontractFormSchema } from '@aura/shared';
+import { FormCustomValuesService, FormOverridesService, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, subcontractFormSchema } from '@aura/shared';
 import {
   type Subcontract,
   type SubcontractStatus,
@@ -46,24 +46,24 @@ export class SubcontractsController {
     private readonly subcontracts: SubcontractsService,
     private readonly tenant: TenantContext,
     private readonly formOverrides: FormOverridesService,
+    private readonly customValues: FormCustomValuesService,
   ) {}
 
   // ── SUBCONTRACTS ─────────────────────────────────────────────────────────
 
   @Post()
-  async createSubcontract(@Body() dto: CreateSubcontractDto): Promise<Subcontract> {
+  async createSubcontract(@Body() dto: CreateSubcontractDto, @Req() req: { body?: Record<string, unknown> }): Promise<Subcontract> {
     // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
-    assertFormValid(
-      applyFormOverrides(subcontractFormSchema(), await this.formOverrides.get(this.tenant.get().tenantId, 'subcontracts.subcontract')),
-      dto,
-    );
+    // Raw body: designer-added cf_* fields (P2) are stripped from the decorated DTO.
+    const merged = applyFormOverrides(subcontractFormSchema(), await this.formOverrides.get(this.tenant.get().tenantId, 'subcontracts.subcontract'));
+    assertFormValid(merged, (req.body ?? dto) as Record<string, unknown>);
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     if (!dto?.subcontractorName?.trim()) throw new BadRequestException('subcontractorName is required');
     if (dto?.value === undefined) throw new BadRequestException('value is required');
 
     const ctx = this.tenant.get();
-    return this.subcontracts.createSubcontract({
+    const subcontract = await this.subcontracts.createSubcontract({
       tenantId: ctx.tenantId,
       projectId: dto.projectId,
       projectName: dto.projectName,
@@ -73,6 +73,8 @@ export class SubcontractsController {
       retentionPercentage: dto.retentionPercentage,
       createdBy: ctx.actorId,
     });
+    await this.customValues.save(ctx.tenantId, merged.id, subcontract.id, pickCustomFieldValues(merged, req.body));
+    return subcontract;
   }
 
   @Get()

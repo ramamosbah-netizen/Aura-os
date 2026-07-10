@@ -15,8 +15,15 @@
 | Browser e2e | ◐ smoke | Playwright Chromium smoke (`apps/web/e2e/smoke.spec.ts`) in CI |
 | Manual verification | ✅ disciplined | every shipped feature live-verified + written to `docs/reports/` (28 reports) |
 
-Distribution risk: weakest modules Engineering (1 file), HSE/Site/Assets/DocControl (2 each) —
-matches Volume 3 flags.
+Distribution risk — **closed 2026-07-09 (gap #27)**: the five weakest modules now hold ≥4
+meaningful test files each — Engineering 4 (incl. the design-change→Variation composition
+seam asserting the `triggersVariation` event payload, exercised through a real
+`AccessService` grant), HSE 4 (permit-to-work lifecycle, incident close, CAPA — with
+emitted-event checks), Site 5 (daily-report submit, delay-log/EOT lifecycle, material
+consumption), Assets 4 (maintenance schedule→complete, inspections, disposal double-dispose
+guard + gain/loss math), DocControl 5 (correspondence lifecycle, transmittal-item
+project-mismatch guard + revision snapshotting). Service-level against in-memory stores with
+a recording EventStore; tenant isolation asserted throughout.
 
 ## 2. Automation
 

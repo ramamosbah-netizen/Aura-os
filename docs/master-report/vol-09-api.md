@@ -74,12 +74,19 @@ subscribers today; external consumers via webhooks (§4). Event stream inspectio
 (HMAC), retried with backoff by a worker (migration 0012), dead-lettered on exhaustion.
 Management UI [Planned — admin center].
 
-## 5. SDK
+## 5. SDK — ✅ DONE 2026-07-09 (gap #21 closed)
 
-`core/src/integration/sdk-generator.service.ts` — generates typed TS clients from route
-metadata. Published SDK package + docs site [Planned]. **OpenAPI spec is the prerequisite gap**
-(P2): adding `@nestjs/swagger` annotations unlocks generated docs, contract tests, and
-third-party codegen simultaneously.
+**`@aura/sdk`** (`packages/sdk`): a typed TS client **generated from the live OpenAPI
+document** (`scripts/generate-sdk.mjs` boots the built API in-memory or takes `SPEC_URL`),
+646 operations, method names from operation ids (`crmAccountsCreate`, `financeInvoicesList`…).
+The hand-written core carries the platform contracts: `AuraApiError` mapping the **enforced
+error taxonomy** (VALIDATION/AUTH/FORBIDDEN/NOT_FOUND/CONFLICT/RATE_LIMITED/SERVER),
+`Idempotency-Key` support, `Page<T>`, token rotation. **CI regenerates against the built API
+and fails on drift**, so the SDK can never fall behind the routes. Verified live end-to-end
+(login → create → paged list → 404→NOT_FOUND). Payload types are `unknown` today and tighten
+as DTOs gain swagger schemas. API docs remain served at `/api/docs` (Swagger UI).
+The older `core/src/integration/sdk-generator.service.ts` (command-style stub emitter) is
+superseded by this package.
 
 ## 6. Examples
 

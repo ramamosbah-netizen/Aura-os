@@ -137,6 +137,20 @@ or **[Gap]**.
 > remaining register row below P2** — scheduled last by design, to land with first
 > deploy. See `docs/reports/2026-07-09-p0-deploy-wave.md` and Vol 19/Vol 7 §10/Vol 23.
 >
+> **Update 2026-07-09 (P2 wave 1 — gaps #21/#25/#27, the S–M tier):** with P0 done, the
+> register's P2 tier opened. **#21 SDK**: `@aura/sdk` (`packages/sdk`) — typed client
+> generated from the live OpenAPI doc (646 operations) over a hand-written core carrying
+> the error taxonomy (`AuraApiError`), idempotency keys, and `Page<T>`; **CI regenerates
+> against the built API and fails on drift**; verified live (login → create → paged →
+> 404→NOT_FOUND). **#25 data lifecycle**: forward-only migration policy with `@DOWN`
+> required from 0137 (CI gate incl. numbering-gap check) · **orphan scan** over the 11
+> spine cross-context references (enforced in CI post-seed) · **archiver** for
+> events/audit → `*_archive` twins (processed-only guard, dry-run default) ·
+> `docs/runbooks/data-lifecycle.md`. **#27 test depth**: the five weakest modules now ≥4
+> meaningful test files each (design-change→Variation seam, PTW/CAPA, EOT delay logs,
+> disposal guards, transmittal project guard). Remaining P2: the L rows (#16 remainder,
+> #17–#20, #22–#24, #26). See `docs/reports/2026-07-09-p2-wave1.md`.
+>
 > **Update 2026-07-09 (governance hardening):** guardrail toggles are now **durable** —
 > write-through to `aura_ai_guardrails` (the 0040 table, finally wired) + hydrate on boot,
 > verified surviving an API restart. **Config-change audit** landed: admin mutations on
@@ -212,7 +226,7 @@ row updated 2026-07-08 per the Vol 23 register re-verification).
 | Form Engine (metadata forms, rules, formulas, plugins, AI fill/review) | 85% | Excellent | Yes | **9.0/10** |
 | Command Center (attention scoring, business-health, AI briefing homepage) | 80% | Excellent | Yes | **8.6/10** |
 | AI Platform (provider seam, RAG, insights, autonomy, MCP) | 55% | Good | Early | **6.5/10** |
-| Integration Platform (webhooks, connectors, SDK generator) | 45% | Good | Not yet | **5.5/10** |
+| Integration Platform (webhooks, connectors, **published @aura/sdk** w/ CI drift gate) | 50% | Good | Early | **5.9/10** |
 | Reporting / BI (charts + CSV/BI exports w/ web downloads) | 50% | Fair | Early | **5.5/10** |
 | Security (P1 closed; vault seam + rotation + secret scanning done; **RLS is the one open P0**) | 65% | Good design | **No — RLS open** | **6.0/10** |
 | Deployment / Operations (Docker + compose + CI migration gate + GHCR images + observability + backup/DR drill; first cloud target open) | 60% | Good | Nearly (single-host eval yes) | **6.3/10** |

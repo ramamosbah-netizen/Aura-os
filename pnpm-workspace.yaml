@@ -5,6 +5,7 @@
 #   modules/*      business modules (one bounded context each) — added from T1
 #   intelligence   AI brain (read-only consumers) — added from T4
 #   infrastructure DB clients, Supabase, event-bus impls, config
+#   packages/*     publishable artifacts (sdk = generated typed API client)
 packages:
   - "apps/*"
   - "shared"
@@ -12,6 +13,7 @@ packages:
   - "modules/*"
   - "intelligence"
   - "infrastructure"
+  - "packages/*"
 
 # Build-script policy. Every dependency that ships a postinstall/native build step must
 # be listed with an explicit true/false — otherwise `pnpm install` stops on the

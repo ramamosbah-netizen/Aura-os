@@ -22,8 +22,9 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app/apps/api
 COPY --from=build /out/apps/api ./
-# migrate.mjs resolves ../../infrastructure/migrations relative to apps/api.
-COPY --from=build /repo/infrastructure/migrations /app/infrastructure/migrations
+# migrate.mjs resolves ../../infrastructure/migrations relative to apps/api; the
+# orphan-reference catalog + observability pack ride along (data-lifecycle endpoint).
+COPY --from=build /repo/infrastructure /app/infrastructure
 USER node
 EXPOSE 4000
 CMD ["node", "dist/main.js"]

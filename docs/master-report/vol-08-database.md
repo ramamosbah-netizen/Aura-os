@@ -80,16 +80,21 @@ indexes for hot reads (aging, stock lookups). No index-bloat audit yet [P2].
 Only **1 hard FK** (by design — snapshot-not-join across contexts; ADR-0001 documents the FK
 policy). Inside a context, parent-child integrity is app-enforced with idempotent writes.
 Tradeoff accepted: referential integrity rests on service code + events; mitigations are the
-audit trail, idempotency keys, and reconciliation projections. A periodic orphan-scan job is
-[Planned — P2].
+audit trail, idempotency keys, and reconciliation projections — plus, **since 2026-07-09, the
+orphan scan** (`pnpm --filter @aura/api db:orphan-scan`): a curated catalog of the 11 spine
+cross-context references checked tenant-scoped; **enforced in CI** against the seeded deal
+chain, run monthly in report mode against production (`docs/runbooks/data-lifecycle.md` §2).
 
 ## 6. Migration
 
 - 126 files, strictly sequential (`0001`–`0126`), one concern each, applied via `pnpm db:migrate`.
 - Header comments state ownership ("The CRM module OWNS this table").
 - RLS enablement + policies ship *with* the tables (0032/0049 dynamic policy generation).
-- **Down-migrations: none** [Gap — P2]. Policy decision required: forward-only with
-  point-in-time restore (recommended, matches Supabase PITR) vs authored down scripts.
+- **Down-migration policy — decided & enforced 2026-07-09**: the chain is **forward-only**
+  (recovery = PITR/dump restore per the backup-dr runbook); every migration **from 0137 on
+  must carry `-- @DOWN`** as the bad-deploy hatch (`migrate.mjs down` reverts the latest).
+  CI gate `scripts/migration-policy-check.mjs`: naming, no duplicates, **no numbering gaps**,
+  @DOWN present. The deploy-readiness job separately proves chain-from-zero + idempotence.
 
 ## 7. Partitioning
 
@@ -98,11 +103,14 @@ None yet — correct for current volumes. Designed candidates when scale demands
 telemetry (`aura_fleet_telemetry` by month). All three are insert-heavy, time-keyed, and
 query-recent — textbook range-partition fits. Trigger point: >50M rows or relay-lag SLO breach.
 
-## 8. Archiving
+## 8. Archiving — ✅ tooling + policy 2026-07-09
 
-[Gap — P2]. Design: closed-period financial data stays hot (statements need it); events/audit
-beyond N months roll to cold storage via the OLAP export path (`core/projections/olap-export`),
-with the dead-letter and replay tooling keeping archival safe.
+Policy as designed: closed-period financial data stays hot; only the append-only kernel
+tables roll cold. `pnpm --filter @aura/api db:archive` moves `aura_events` (**processed rows
+only** — pending outbox never moves) and `aura_audit_log` older than 12 months into
+`*_archive` twins in transactional batches; dry-run by default, `--execute` to act; smoke-run
+in CI. Cadence, retention floor (UAE 5y financial), and the run log:
+`docs/runbooks/data-lifecycle.md` §3.
 
 ---
 

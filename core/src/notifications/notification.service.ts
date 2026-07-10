@@ -103,22 +103,36 @@ export class NotificationService {
     return fallback;
   }
 
-  /** Persist a notification (the inbox record) and best-effort dispatch to channels. */
-  async record(input: NewNotification, channels: NotificationPayload['channels'] = []): Promise<Notification> {
+  /**
+   * Persist a notification (the inbox record) and best-effort dispatch to channels.
+   * `sourceEvent` (the spine event that raised it) activates the per-event rule:
+   * `notify.rule.<event>` = `off` (in-app only) or a channels csv overriding defaults.
+   */
+  async record(
+    input: NewNotification,
+    channels: NotificationPayload['channels'] = [],
+    sourceEvent?: string,
+  ): Promise<Notification> {
     const n = makeNotification(input);
     await this.store.save(n);
 
     // Routing (Admin Center §2.8): tenant settings win, env is the fallback.
-    const [chSetting, mapSetting, fbSetting] = await Promise.all([
+    const [chSetting, mapSetting, fbSetting, ruleSetting] = await Promise.all([
       this.routingSetting(n.tenantId, 'notify.channels'),
       this.routingSetting(n.tenantId, 'notify.recipients'),
       this.routingSetting(n.tenantId, 'notify.fallbackRecipient'),
+      sourceEvent ? this.routingSetting(n.tenantId, `notify.rule.${sourceEvent}`) : Promise.resolve(null),
     ]);
-    const resolved = channels.length
-      ? channels
-      : chSetting !== null
-        ? this.parseChannels(chSetting)
-        : this.defaultChannels();
+    const resolved =
+      ruleSetting !== null
+        ? ruleSetting.trim().toLowerCase() === 'off'
+          ? []
+          : this.parseChannels(ruleSetting)
+        : channels.length
+          ? channels
+          : chSetting !== null
+            ? this.parseChannels(chSetting)
+            : this.defaultChannels();
     const recipient = this.resolveRecipient(
       n.userId ?? null,
       mapSetting ?? process.env.NOTIFY_RECIPIENTS,

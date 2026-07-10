@@ -110,6 +110,19 @@ export class PostgresWorkflowStore implements WorkflowStore {
     return res.rows.length ? rowToDef(res.rows[0]) : null;
   }
 
+  async listDefinitions(tenantId?: Id | null): Promise<WorkflowDefinition[]> {
+    // Tenant-scoped rows shadow the global ('') definition for the same key.
+    const res = await this.pool.query<DefRow>(
+      `SELECT DISTINCT ON (key)
+              id, key, tenant_id, name, initial_state, states, terminal_states, transitions, version
+         FROM public.aura_workflow_definitions
+        WHERE tenant_id IN ($1, '')
+        ORDER BY key, tenant_id DESC`,
+      [tenantId ?? ''],
+    );
+    return res.rows.map(rowToDef);
+  }
+
   async createInstance(i: WorkflowInstance): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_workflow_instances (${INST_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,

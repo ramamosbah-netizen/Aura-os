@@ -53,6 +53,17 @@ export class MfaService {
     return row?.active ? row.secret : null;
   }
 
+  /** All enrolments (admin security screen) — user + active/pending, never secrets. */
+  async listEnrolments(): Promise<Array<{ userId: string; active: boolean }>> {
+    if (!this.pool) {
+      return [...this.local.entries()].map(([userId, r]) => ({ userId, active: r.active }));
+    }
+    const { rows } = await this.pool.query<{ userId: string; active: boolean }>(
+      `SELECT user_id as "userId", active FROM public.aura_user_mfa ORDER BY user_id`,
+    );
+    return rows;
+  }
+
   /** Remove the user's enrolment (admin reset / device loss). */
   async disable(userId: string): Promise<boolean> {
     if (!this.pool) return this.local.delete(userId);

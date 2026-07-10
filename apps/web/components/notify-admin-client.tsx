@@ -17,7 +17,7 @@ export interface NotifyStatus {
     recipients: string;
     source: Record<string, 'settings' | 'env' | 'unset'>;
   };
-  events: Array<{ type: string; title: string }>;
+  events: Array<{ type: string; title: string; rule: string | null }>;
 }
 
 const CHANNELS = ['email', 'sms', 'slack', 'teams'] as const;
@@ -40,6 +40,15 @@ export default function NotifyAdminClient({ initial }: { initial: NotifyStatus }
   );
   const [fallback, setFallback] = useState(initial.effective.fallbackRecipient);
   const [rows, setRows] = useState(parseMap(initial.effective.recipients));
+  // Per-event rules (§2.8 depth): null = use defaults, [] = off (in-app only), else channels.
+  const [rules, setRules] = useState<Record<string, string[] | null>>(
+    Object.fromEntries(
+      initial.events.map((e) => [
+        e.type,
+        e.rule === null ? null : e.rule.trim().toLowerCase() === 'off' ? [] : e.rule.split(',').map((c) => c.trim()).filter(Boolean),
+      ]),
+    ),
+  );
   const [dirty, setDirty] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -64,6 +73,14 @@ export default function NotifyAdminClient({ initial }: { initial: NotifyStatus }
         ['notify.fallbackRecipient', fallback.trim(), 'Tenant fallback address (ops distribution)'],
         ['notify.recipients', toCsvMap(rows), 'Per-user recipient map (userId=address)'],
       ];
+      for (const [type, rule] of Object.entries(rules)) {
+        // null → clear the key (defaults apply); [] → 'off'; else the channels csv.
+        if (rule === null) {
+          await fetch(`/api/admin/settings?key=${encodeURIComponent(`notify.rule.${type}`)}`, { method: 'DELETE' });
+        } else {
+          writes.push([`notify.rule.${type}`, rule.length === 0 ? 'off' : rule.join(','), `Per-event channels for ${type}`]);
+        }
+      }
       for (const [key, value, description] of writes) {
         const res = await fetch('/api/admin/settings', {
           method: 'POST',
@@ -176,16 +193,62 @@ export default function NotifyAdminClient({ initial }: { initial: NotifyStatus }
         </button>
       </section>
 
-      {/* Event wirings (read-only) */}
+      {/* Per-event rules matrix (§2.8 depth) */}
       <section style={st.card}>
-        <h2 style={st.h2}>Event wirings</h2>
-        <p style={st.hint}>Spine events that raise notifications automatically (registered in code).</p>
-        {initial.events.map((e) => (
-          <div key={e.type} style={st.eventRow}>
-            <code style={st.code}>{e.type}</code>
-            <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>{e.title}</span>
-          </div>
-        ))}
+        <h2 style={st.h2}>Per-event rules</h2>
+        <p style={st.hint}>
+          Route each auto-raised event to specific channels, silence its outbound delivery
+          (<em>in-app only</em>), or leave it on the defaults above. Enforced on every dispatch.
+        </p>
+        <table className="adm-matrix" style={{ width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left' }}>Event</th>
+              <th>Default</th>
+              <th>In-app only</th>
+              {CHANNELS.map((c) => (
+                <th key={c} style={{ textTransform: 'capitalize' }}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {initial.events.map((e) => {
+              const rule = rules[e.type];
+              const custom = rule !== null && rule !== undefined;
+              return (
+                <tr key={e.type}>
+                  <td style={{ textAlign: 'left' }}>
+                    <code style={st.code}>{e.type}</code>
+                    <div style={{ color: 'var(--muted)', fontSize: 11.5 }}>{e.title}</div>
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <Toggle on={!custom} disabled={busy} onChange={() => { setRules({ ...rules, [e.type]: custom ? null : [] }); mark(); }} />
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {custom ? (
+                      <Toggle on={rule.length === 0} disabled={busy} onChange={() => { setRules({ ...rules, [e.type]: rule.length === 0 ? [...channels] : [] }); mark(); }} />
+                    ) : (
+                      <span style={{ color: 'var(--muted)' }}>—</span>
+                    )}
+                  </td>
+                  {CHANNELS.map((c) => (
+                    <td key={c} style={{ textAlign: 'center' }}>
+                      {custom ? (
+                        <Toggle
+                          on={rule.includes(c)}
+                          disabled={busy}
+                          onChange={() => { setRules({ ...rules, [e.type]: rule.includes(c) ? rule.filter((x) => x !== c) : [...rule, c] }); mark(); }}
+                        />
+                      ) : (
+                        <span style={{ color: 'var(--muted)' }}>—</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </section>
 
       <div style={st.saveBar}>

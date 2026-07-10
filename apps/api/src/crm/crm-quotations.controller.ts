@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { FormOverridesService, TenantContext } from '@aura/core';
-import { applyFormOverrides, assertFormValid, parsePageParams, quotationFormSchema } from '@aura/shared';
+import { FormCustomValuesService, FormOverridesService, TenantContext } from '@aura/core';
+import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
 import { type Quotation, type NewQuotationLine, QuotationService } from '@aura/crm';
 import { type Contract, ContractService } from '@aura/contracts';
 
@@ -23,6 +23,7 @@ export class CrmQuotationsController {
     private readonly contracts: ContractService,
     private readonly tenant: TenantContext,
     private readonly formOverrides: FormOverridesService,
+    private readonly customValues: FormCustomValuesService,
   ) {}
 
   /** One-click convert an accepted quotation into a draft contract (carries value + account). */
@@ -48,18 +49,17 @@ export class CrmQuotationsController {
   }
 
   @Post()
-  async create(@Body() dto: CreateQuotationDto): Promise<Quotation> {
+  async create(@Body() dto: CreateQuotationDto, @Req() req: { body?: Record<string, unknown> }): Promise<Quotation> {
     // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
-    assertFormValid(
-      applyFormOverrides(quotationFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, quotationFormSchema.id)),
-      dto,
-    );
+    // Raw body: designer-added cf_* fields (P2) are stripped from the decorated DTO.
+    const merged = applyFormOverrides(quotationFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, quotationFormSchema.id));
+    assertFormValid(merged, (req.body ?? dto) as Record<string, unknown>);
     if (!dto?.quoteNumber?.trim()) throw new BadRequestException('quoteNumber is required');
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
     const ctx = this.tenant.get();
-    return await this.quotations.create({
+    const quotation = await this.quotations.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
       quoteNumber: dto.quoteNumber,
@@ -71,6 +71,8 @@ export class CrmQuotationsController {
       lines: dto.lines,
       createdBy: ctx.actorId,
     });
+    await this.customValues.save(ctx.tenantId, merged.id, quotation.id, pickCustomFieldValues(merged, req.body));
+    return quotation;
   }
 
   @Get()

@@ -16,6 +16,7 @@ export * from './identity/users.service';
 export * from './identity/service-accounts.service';
 export * from './identity/companies.service';
 export * from './forms/form-overrides.service';
+export * from './forms/form-custom-values.service';
 export * from './ai/ai.service';
 export * from './ai/claude-provider';
 export * from './ai/local-provider';

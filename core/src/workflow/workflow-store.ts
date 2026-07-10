@@ -20,6 +20,8 @@ export interface WorkflowInstanceFilter {
 export interface WorkflowStore {
   saveDefinition(def: WorkflowDefinition): Promise<void>;
   getDefinition(key: string, tenantId?: Id | null): Promise<WorkflowDefinition | null>;
+  /** All definitions visible to a tenant (its own + global fallbacks) — admin registry. */
+  listDefinitions(tenantId?: Id | null): Promise<WorkflowDefinition[]>;
   createInstance(instance: WorkflowInstance): Promise<void>;
   updateInstance(instance: WorkflowInstance): Promise<void>;
   getInstance(id: Id): Promise<WorkflowInstance | null>;

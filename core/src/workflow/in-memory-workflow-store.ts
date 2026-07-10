@@ -18,6 +18,18 @@ export class InMemoryWorkflowStore implements WorkflowStore {
     return this.defs.get(this.defKey(key, tenantId ?? null)) ?? this.defs.get(this.defKey(key, null)) ?? null;
   }
 
+  async listDefinitions(tenantId?: Id | null): Promise<WorkflowDefinition[]> {
+    // Tenant-scoped definitions shadow the global one for the same key.
+    const byKey = new Map<string, WorkflowDefinition>();
+    for (const def of this.defs.values()) {
+      if (!def.tenantId) byKey.set(def.key, byKey.get(def.key) ?? def);
+    }
+    for (const def of this.defs.values()) {
+      if (tenantId && def.tenantId === tenantId) byKey.set(def.key, def);
+    }
+    return [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+  }
+
   async createInstance(instance: WorkflowInstance): Promise<void> {
     this.instances.set(instance.id, instance);
   }

@@ -19,7 +19,8 @@ export class NotificationsSubscriber implements OnModuleInit {
   onModuleInit(): void {
     const raise = async (e: DomainEvent, title: string, body: string, category: string, refType: string): Promise<void> => {
       try {
-        await this.notifications.record({ tenantId: e.tenantId, title, body, category, refType, refId: e.aggregateId });
+        // e.type activates the admin per-event rule (notify.rule.<event>, §2.8 depth).
+        await this.notifications.record({ tenantId: e.tenantId, title, body, category, refType, refId: e.aggregateId }, [], e.type);
       } catch (err) {
         this.logger.error(`Failed to raise notification for ${e.type}: ${err}`);
       }

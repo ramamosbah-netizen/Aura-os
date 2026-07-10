@@ -3,10 +3,12 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AccessService } from './access.service';
 import { AuthService } from './auth.service';
+import { UsersService } from './users.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { PERMISSIONS_KEY } from './permissions.decorator';
 import { type AccessTarget, type OrgLevel, type Id, AccessDeniedError } from '@aura/shared';
@@ -74,6 +76,7 @@ export class PermissionsGuard implements CanActivate {
     private readonly access: AccessService,
     private readonly tenant: TenantContext,
     private readonly auth: AuthService,
+    @Optional() private readonly users: UsersService | null = null,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -113,6 +116,12 @@ export class PermissionsGuard implements CanActivate {
     const { tenantId, companyId, actorId } = this.tenant.get();
     if (!actorId) {
       throw new ForbiddenException('Actor identity is missing from context.');
+    }
+
+    // Users registry (Vol 15 §2.2): a registered-and-deactivated user is refused on
+    // every guarded request, token validity notwithstanding. Sync in-memory check.
+    if (this.users && !this.users.isActive(tenantId, actorId)) {
+      throw new ForbiddenException(`account ${actorId} is deactivated`);
     }
 
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { EventBus } from './events/event-bus';
 import { EVENT_STORE } from './events/event-store';
@@ -11,6 +11,7 @@ import { TenantContext } from './tenancy/tenant-context';
 import { AccessService } from './identity/access.service';
 import { AuthService } from './identity/auth.service';
 import { MfaService } from './identity/mfa.service';
+import { UsersService } from './identity/users.service';
 import { CompaniesService } from './identity/companies.service';
 import { FormOverridesService } from './forms/form-overrides.service';
 import { TokenRevocationStore } from './identity/token-revocation';
@@ -81,6 +82,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     AccessService,
     AuthService,
     MfaService,
+    UsersService,
     CompaniesService,
     FormOverridesService,
     TokenRevocationStore,
@@ -179,6 +181,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     AccessService,
     AuthService,
     MfaService,
+    UsersService,
     CompaniesService,
     FormOverridesService,
     TokenRevocationStore,

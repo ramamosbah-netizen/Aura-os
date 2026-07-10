@@ -151,6 +151,19 @@ or **[Gap]**.
 > disposal guards, transmittal project guard). Remaining P2: the L rows (#16 remainder,
 > #17–#20, #22–#24, #26). See `docs/reports/2026-07-09-p2-wave1.md`.
 >
+> **Update 2026-07-10 (admin depth wave — "manage everything from the hub"):** the four
+> Vol 15 §2 capabilities that still had no screen shipped; the hub is now **22 screens**.
+> **`/admin/users`** — a real users registry (`aura_users`, migration **0137**, kernel
+> `UsersService`): register/invite, company assignment, and **deactivation enforced at
+> login (401) and on every guarded request (403)** even with a still-valid token.
+> **`/admin/security`** — the live security posture: auth mode, lockout numbers, MFA
+> enrolments, SSO group→role map, PII-crypto staging (env-bound values read-only, runbook
+> pointers). **`/admin/workflows`** — the definitions registry with live instance counts
+> (`WorkflowStore.listDefinitions`). **`/admin/notifications`** grew a per-event **rules
+> matrix** (`notify.rule.<event>`: off / channel overrides) enforced on every dispatch.
+> Verified live: 18/18 smoke assertions incl. the full deactivation chain; SDK regen 654
+> ops. See `docs/reports/2026-07-10-admin-depth-wave.md`.
+>
 > **Update 2026-07-09 (governance hardening):** guardrail toggles are now **durable** —
 > write-through to `aura_ai_guardrails` (the 0040 table, finally wired) + hydrate on boot,
 > verified surviving an API restart. **Config-change audit** landed: admin mutations on
@@ -230,7 +243,7 @@ row updated 2026-07-08 per the Vol 23 register re-verification).
 | Reporting / BI (charts + CSV/BI exports w/ web downloads) | 50% | Fair | Early | **5.5/10** |
 | Security (P1 closed; vault seam + rotation + secret scanning done; **RLS is the one open P0**) | 65% | Good design | **No — RLS open** | **6.0/10** |
 | Deployment / Operations (Docker + compose + CI migration gate + GHCR images + observability + backup/DR drill; first cloud target open) | 60% | Good | Nearly (single-host eval yes) | **6.3/10** |
-| Administration Center (searchable hub + 18 screens; §2.1/§2.4-P1/§2.7/§2.8/§2.9/§2.10 shipped; matrix UIs; PG-backed) | 85% | Good | Yes (config self-serve) | **8.4/10** |
+| Administration Center (searchable hub + 22 screens; users registry w/ enforced deactivation, security posture, workflow registry, per-event rules; matrix UIs; PG-backed) | 90% | Good | Yes (platform self-serve) | **8.8/10** |
 | Mobile / Offline | 5% | Not started | No | **1.5/10** |
 
 ### Business modules

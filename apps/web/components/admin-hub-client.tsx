@@ -12,7 +12,10 @@ import { ADMIN_GROUPS, ADMIN_SECTIONS } from './admin-nav';
 /** Extra search keywords per section — what admins actually type. */
 const KEYWORDS: Record<string, string> = {
   organization: 'company name trn currency fiscal locale timezone profile legal',
+  users: 'invite deactivate leaver account register directory employee login block disable',
   access: 'permission role grant user rbac matrix mfa security who can',
+  security: 'auth lockout mfa totp sso entra jwks pii encryption posture password policy',
+  workflows: 'workflow approval states transitions instances definition engine',
   'approval-matrix': 'approve threshold band value limit purchase',
   workspace: 'sidebar functions visibility role workspace what users see',
   settings: 'key value tenant raw config',

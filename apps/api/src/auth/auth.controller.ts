@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpException, HttpStatus, Post, Query, UnauthorizedException } from '@nestjs/common';
-import { AuthService, MfaService, Permissions, throttleFromEnv } from '@aura/core';
+import { AuthService, MfaService, Permissions, UsersService, throttleFromEnv } from '@aura/core';
 import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
 
 interface DevTokenDto {
@@ -28,6 +28,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly mfa: MfaService,
+    private readonly users: UsersService,
   ) {}
 
   @Get('status')
@@ -41,6 +42,11 @@ export class AuthController {
       throw new ForbiddenException('login (dev token mint) requires AUTH_JWT_SECRET');
     }
     const username = (dto.username ?? '').trim() || 'u-admin';
+
+    // Users registry (Vol 15 §2.2): a deactivated account cannot log in at all.
+    if (!this.users.isActive('dev-tenant', username)) {
+      throw new UnauthorizedException('account is deactivated — contact an administrator');
+    }
 
     // Brute-force lockout: refuse while locked, count failures, clear on success.
     const lock = this.throttle.status(username);

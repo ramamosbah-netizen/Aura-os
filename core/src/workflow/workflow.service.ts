@@ -47,6 +47,11 @@ export class WorkflowService {
     return this.store.getDefinition(key, tenantId);
   }
 
+  /** All definitions visible to a tenant — the admin registry (Vol 15 §2.3). */
+  listDefinitions(tenantId?: Id | null): Promise<WorkflowDefinition[]> {
+    return this.store.listDefinitions(tenantId);
+  }
+
   async start(definitionKey: string, input: NewWorkflowInstance): Promise<WorkflowInstance> {
     const def = await this.store.getDefinition(definitionKey, input.tenantId);
     if (!def) throw new Error(`workflow definition not found: ${definitionKey}`);

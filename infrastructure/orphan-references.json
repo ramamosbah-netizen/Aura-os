@@ -1,0 +1,16 @@
+{
+  "$comment": "Cross-context reference catalog (Vol 8 §5, gap #25). Single source for the orphan scan — consumed by apps/api/scripts/orphan-scan.mjs (CLI/CI) and the admin data-lifecycle endpoint. Each row: child table + column referencing parent table's id, tenant-scoped. Add a row whenever a new cross-context id column ships.",
+  "references": [
+    { "child": "aura_tendering_tenders", "column": "account_id", "parent": "aura_crm_accounts" },
+    { "child": "aura_crm_opportunities", "column": "account_id", "parent": "aura_crm_accounts" },
+    { "child": "aura_contracts_contracts", "column": "tender_id", "parent": "aura_tendering_tenders" },
+    { "child": "aura_contracts_contracts", "column": "account_id", "parent": "aura_crm_accounts" },
+    { "child": "aura_projects_projects", "column": "contract_id", "parent": "aura_contracts_contracts" },
+    { "child": "aura_projects_projects", "column": "account_id", "parent": "aura_crm_accounts" },
+    { "child": "aura_procurement_purchase_orders", "column": "project_id", "parent": "aura_projects_projects" },
+    { "child": "aura_finance_invoices", "column": "po_id", "parent": "aura_procurement_purchase_orders" },
+    { "child": "aura_finance_invoices", "column": "project_id", "parent": "aura_projects_projects" },
+    { "child": "aura_inventory_grns", "column": "po_id", "parent": "aura_procurement_purchase_orders" },
+    { "child": "aura_inventory_grns", "column": "project_id", "parent": "aura_projects_projects" }
+  ]
+}

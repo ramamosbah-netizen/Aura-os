@@ -17,20 +17,11 @@ import pg from 'pg';
 const here = dirname(fileURLToPath(import.meta.url));
 config({ path: join(here, '..', '.env.local') });
 
-// child table . column  →  parent table (id), both tenant-scoped.
-const REFERENCES = [
-  ['aura_tendering_tenders', 'account_id', 'aura_crm_accounts'],
-  ['aura_crm_opportunities', 'account_id', 'aura_crm_accounts'],
-  ['aura_contracts_contracts', 'tender_id', 'aura_tendering_tenders'],
-  ['aura_contracts_contracts', 'account_id', 'aura_crm_accounts'],
-  ['aura_projects_projects', 'contract_id', 'aura_contracts_contracts'],
-  ['aura_projects_projects', 'account_id', 'aura_crm_accounts'],
-  ['aura_procurement_purchase_orders', 'project_id', 'aura_projects_projects'],
-  ['aura_finance_invoices', 'po_id', 'aura_procurement_purchase_orders'],
-  ['aura_finance_invoices', 'project_id', 'aura_projects_projects'],
-  ['aura_inventory_grns', 'po_id', 'aura_procurement_purchase_orders'],
-  ['aura_inventory_grns', 'project_id', 'aura_projects_projects'],
-];
+// Single-source catalog (also consumed by the admin data-lifecycle endpoint).
+const catalog = JSON.parse(
+  readFileSync(join(here, '..', '..', '..', 'infrastructure', 'orphan-references.json'), 'utf8'),
+);
+const REFERENCES = catalog.references.map((r) => [r.child, r.column, r.parent]);
 
 const envOrFile = (name) => {
   const file = process.env[`${name}_FILE`]?.trim();

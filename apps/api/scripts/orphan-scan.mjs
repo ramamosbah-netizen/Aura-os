@@ -63,13 +63,14 @@ async function main() {
       console.log(`• skip  ${child}.${column} → ${parent} (table missing)`);
       continue;
     }
+    // id columns are uuid in some tables and text in others — compare as text.
     const { rows } = await client.query(
       `select count(*)::int as n
        from public.${child} c
        where c.${column} is not null
          and not exists (
            select 1 from public.${parent} p
-           where p.id = c.${column} and p.tenant_id = c.tenant_id
+           where p.id::text = c.${column}::text and p.tenant_id = c.tenant_id
          )`,
     );
     scanned += 1;

@@ -39,6 +39,44 @@ export class ContactService {
     return this.store.get(id);
   }
 
+  /**
+   * Sparse update. Setting `isPrimary: true` demotes any other primary contact
+   * on the same account — an account has at most ONE primary point of contact
+   * (the Account 360 header shows it as the main contact).
+   */
+  async update(
+    id: Id,
+    patch: Partial<Pick<Contact, 'name' | 'jobTitle' | 'email' | 'phone' | 'isPrimary' | 'status' | 'ownerId' | 'accountId' | 'accountName'>>,
+  ): Promise<Contact> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`contact ${id} not found`);
+    if (patch.name !== undefined && !patch.name.trim()) throw new Error('contact name is required');
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const updated: Contact = { ...existing, ...defined };
+
+    if (updated.isPrimary && updated.accountId && !(existing.isPrimary && existing.accountId === updated.accountId)) {
+      const siblings = await this.store.list({ tenantId: existing.tenantId, accountId: updated.accountId });
+      for (const sib of siblings) {
+        if (sib.id !== id && sib.isPrimary) await this.store.save({ ...sib, isPrimary: false });
+      }
+    }
+
+    await this.store.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: CRM_CONTACT_EVENT.updated,
+        tenantId: updated.tenantId,
+        companyId: updated.companyId,
+        actorId: null,
+        aggregateType: 'crm.contact',
+        aggregateId: updated.id,
+        payload: { name: updated.name, accountId: updated.accountId, isPrimary: updated.isPrimary, status: updated.status },
+      }),
+    ]);
+    this.logger.log(`Contact updated: ${updated.name} (${updated.id})`);
+    return updated;
+  }
+
   list(filter?: ContactFilter): Promise<Contact[]> {
     return this.store.list(filter);
   }

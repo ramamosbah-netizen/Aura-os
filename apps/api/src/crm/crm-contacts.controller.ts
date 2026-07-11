@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -13,6 +13,18 @@ class CreateContactDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
   @IsOptional() @IsString() status?: ContactStatus;
+}
+
+class UpdateContactDto {
+  @IsOptional() @IsString() name?: string;
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsString() accountName?: string;
+  @IsOptional() @IsString() jobTitle?: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsBoolean() isPrimary?: boolean;
+  @IsOptional() @IsString() status?: ContactStatus;
+  @IsOptional() @IsString() ownerId?: string;
 }
 
 /**
@@ -44,6 +56,15 @@ export class CrmContactsController {
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });
+  }
+
+  @Patch(':id')
+  async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateContactDto): Promise<Contact> {
+    try {
+      return await this.contacts.update(id, dto);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'update failed');
+    }
   }
 
   @Get()

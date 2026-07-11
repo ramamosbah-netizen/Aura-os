@@ -172,7 +172,7 @@ export function compileResourceBreakdown(
   if (r.subcontract > 0) {
     components.push({ costType: 'subcontract', description: 'Subcontracted works', quantity: 1, unitCost: r4(r.subcontract / qty) });
   }
-  if (components.length === 0) throw new Error('the resource breakdown has no cost — fill at least one block');
+  if (components.length === 0) throw new Error('the resource breakdown has no cost — at least one filled block is required');
   return { resources: r, components };
 }
 

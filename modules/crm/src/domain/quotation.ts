@@ -6,7 +6,26 @@ import { type Id, newId } from '@aura/shared';
  * UAE VAT (default 5%), and runs draft → sent → accepted | rejected | expired. On acceptance it's
  * the basis for a contract/invoice. Account/contact are snapshots, not joins.
  */
-export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+export type QuotationStatus =
+  | 'draft'
+  | 'internal_review'
+  | 'approved'
+  | 'sent'
+  | 'under_negotiation'
+  | 'revised'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
+
+/** Statuses a quotation can still move out of (everything else is terminal). */
+export const OPEN_QUOTATION_STATUSES: readonly QuotationStatus[] = [
+  'draft',
+  'internal_review',
+  'approved',
+  'sent',
+  'under_negotiation',
+];
 
 export interface QuotationLine {
   description: string;
@@ -34,6 +53,16 @@ export interface Quotation {
   contactName: string | null;
   /** Tender this quotation was generated from (tender pricing sheet), reference not join. */
   sourceTenderId: Id | null;
+  /** Opportunity this quotation was converted from (direct-sale path), reference not join. */
+  sourceOpportunityId: Id | null;
+  ownerId: Id | null;
+  /** Commercial terms shown to the client (payment, delivery, exclusions …). */
+  terms: string | null;
+  /** Revision number — Rev 0 is the original; revising supersedes it (status 'revised'). */
+  revision: number;
+  parentQuotationId: Id | null;
+  /** The contract created from this quotation (convert-to-contract), reference not join. */
+  convertedContractId: Id | null;
   issueDate: string; // YYYY-MM-DD
   validUntil: string | null;
   lines: QuotationLine[];
@@ -53,6 +82,11 @@ export interface NewQuotation {
   accountId?: Id | null;
   contactName?: string | null;
   sourceTenderId?: Id | null;
+  sourceOpportunityId?: Id | null;
+  ownerId?: Id | null;
+  terms?: string | null;
+  revision?: number;
+  parentQuotationId?: Id | null;
   issueDate: string;
   validUntil?: string | null;
   lines: NewQuotationLine[];
@@ -101,6 +135,12 @@ export function makeQuotation(input: NewQuotation): Quotation {
     accountId: input.accountId ?? null,
     contactName: input.contactName ?? null,
     sourceTenderId: input.sourceTenderId ?? null,
+    sourceOpportunityId: input.sourceOpportunityId ?? null,
+    ownerId: input.ownerId ?? null,
+    terms: input.terms?.trim() || null,
+    revision: Number.isInteger(input.revision) && input.revision! >= 0 ? input.revision! : 0,
+    parentQuotationId: input.parentQuotationId ?? null,
+    convertedContractId: null,
     issueDate: input.issueDate,
     validUntil: input.validUntil ?? null,
     lines,
@@ -113,28 +153,94 @@ export function makeQuotation(input: NewQuotation): Quotation {
   };
 }
 
+/* ── Lifecycle ────────────────────────────────────────────────────────────
+ * Draft → Internal Review → Approved → Sent → Under Negotiation →
+ * Accepted / Rejected / Expired / Cancelled (+ Revised when superseded by a
+ * new revision). `send` is also allowed straight from draft so small quotes
+ * skip the review step.
+ */
+
+export type QuotationAction =
+  | 'submit_review'
+  | 'approve'
+  | 'send'
+  | 'negotiate'
+  | 'accept'
+  | 'reject'
+  | 'expire'
+  | 'cancel';
+
+const TRANSITIONS: Record<QuotationAction, { from: readonly QuotationStatus[]; to: QuotationStatus }> = {
+  submit_review: { from: ['draft'], to: 'internal_review' },
+  approve: { from: ['internal_review'], to: 'approved' },
+  send: { from: ['draft', 'approved'], to: 'sent' },
+  negotiate: { from: ['sent'], to: 'under_negotiation' },
+  accept: { from: ['sent', 'under_negotiation'], to: 'accepted' },
+  reject: { from: ['sent', 'under_negotiation'], to: 'rejected' },
+  expire: { from: OPEN_QUOTATION_STATUSES, to: 'expired' },
+  cancel: { from: OPEN_QUOTATION_STATUSES, to: 'cancelled' },
+};
+
+export const QUOTATION_ACTIONS = Object.keys(TRANSITIONS) as QuotationAction[];
+
+export function applyQuotationAction(q: Quotation, action: QuotationAction): Quotation {
+  const t = TRANSITIONS[action];
+  if (!t) throw new Error(`unknown action ${action}`);
+  if (!t.from.includes(q.status)) {
+    throw new Error(`cannot ${action.replace('_', ' ')} from status ${q.status}`);
+  }
+  return { ...q, status: t.to };
+}
+
 export function sendQuotation(q: Quotation): Quotation {
-  if (q.status !== 'draft') throw new Error(`cannot send from status ${q.status}`);
-  return { ...q, status: 'sent' };
+  return applyQuotationAction(q, 'send');
 }
-
 export function acceptQuotation(q: Quotation): Quotation {
-  if (q.status !== 'sent') throw new Error(`cannot accept from status ${q.status} — must be sent first`);
-  return { ...q, status: 'accepted' };
+  return applyQuotationAction(q, 'accept');
 }
-
 export function rejectQuotation(q: Quotation): Quotation {
-  if (q.status !== 'sent') throw new Error(`cannot reject from status ${q.status} — must be sent first`);
-  return { ...q, status: 'rejected' };
+  return applyQuotationAction(q, 'reject');
+}
+export function expireQuotation(q: Quotation): Quotation {
+  return applyQuotationAction(q, 'expire');
 }
 
-export function expireQuotation(q: Quotation): Quotation {
-  if (q.status === 'accepted' || q.status === 'rejected') throw new Error(`cannot expire a ${q.status} quotation`);
-  return { ...q, status: 'expired' };
+/**
+ * Revise a quotation (MEP/ELV price/scope/terms move during negotiation):
+ * the current record is superseded (status 'revised', terminal) and a NEW
+ * draft is created with revision+1 carrying the same number, account, source
+ * references, lines and terms — edit then re-send.
+ */
+export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Quotation } {
+  const revisable: QuotationStatus[] = ['sent', 'under_negotiation', 'rejected', 'expired'];
+  if (!revisable.includes(q.status)) {
+    throw new Error(`cannot revise from status ${q.status} — must be sent, under negotiation, rejected or expired`);
+  }
+  const next = makeQuotation({
+    tenantId: q.tenantId,
+    companyId: q.companyId,
+    quoteNumber: q.quoteNumber,
+    customerName: q.customerName,
+    accountId: q.accountId,
+    contactName: q.contactName,
+    sourceTenderId: q.sourceTenderId,
+    sourceOpportunityId: q.sourceOpportunityId,
+    ownerId: q.ownerId,
+    terms: q.terms,
+    revision: q.revision + 1,
+    parentQuotationId: q.id,
+    issueDate: new Date().toISOString().slice(0, 10),
+    validUntil: q.validUntil,
+    lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })),
+    createdBy: q.createdBy,
+  });
+  return { superseded: { ...q, status: 'revised' }, next };
 }
 
 export const QUOTATION_EVENT = {
   created: 'crm.quotation.created',
   sent: 'crm.quotation.sent',
   accepted: 'crm.quotation.accepted',
+  statusChanged: 'crm.quotation.status_changed',
+  revised: 'crm.quotation.revised',
 } as const;

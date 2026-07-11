@@ -13,6 +13,12 @@ interface Row {
   account_id: string | null;
   contact_name: string | null;
   source_tender_id: string | null;
+  source_opportunity_id: string | null;
+  owner_id: string | null;
+  terms: string | null;
+  revision: number | string | null;
+  parent_quotation_id: string | null;
+  converted_contract_id: string | null;
   issue_date: string;
   valid_until: string | null;
   lines: QuotationLine[] | string;
@@ -25,7 +31,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, ' +
+  'id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, revision, parent_quotation_id, converted_contract_id, ' +
   'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, status, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
@@ -40,6 +46,12 @@ function rowTo(r: Row): Quotation {
     accountId: r.account_id,
     contactName: r.contact_name,
     sourceTenderId: r.source_tender_id,
+    sourceOpportunityId: r.source_opportunity_id,
+    ownerId: r.owner_id,
+    terms: r.terms,
+    revision: Number(r.revision ?? 0),
+    parentQuotationId: r.parent_quotation_id,
+    convertedContractId: r.converted_contract_id,
     issueDate: String(r.issue_date),
     validUntil: r.valid_until ? String(r.valid_until) : null,
     lines,
@@ -58,11 +70,13 @@ export class PostgresQuotationStore implements QuotationStore {
   async save(q: Quotation): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_crm_quotations
-        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, issue_date, valid_until, lines, subtotal, vat_total, total, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status`,
+        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, status, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+       ON CONFLICT (id) DO UPDATE SET
+         status = EXCLUDED.status, terms = EXCLUDED.terms, owner_id = EXCLUDED.owner_id,
+         converted_contract_id = EXCLUDED.converted_contract_id, valid_until = EXCLUDED.valid_until`,
       [
-        q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.sourceTenderId, q.issueDate, q.validUntil,
+        q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.sourceTenderId, q.sourceOpportunityId, q.ownerId, q.terms, q.revision, q.parentQuotationId, q.convertedContractId, q.issueDate, q.validUntil,
         JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.status, q.createdBy, q.createdAt,
       ],
     );

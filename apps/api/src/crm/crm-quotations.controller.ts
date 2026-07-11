@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { FormCustomValuesService, FormOverridesService, TenantContext } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
-import { type Quotation, type NewQuotationLine, QuotationService } from '@aura/crm';
+import { QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService } from '@aura/crm';
 import { type Contract, ContractService } from '@aura/contracts';
 
 class CreateQuotationDto {
@@ -33,7 +33,7 @@ export class CrmQuotationsController {
     if (!q) throw new NotFoundException(`quotation ${id} not found`);
     if (q.status !== 'accepted') throw new BadRequestException(`quotation must be 'accepted' to convert (is '${q.status}')`);
     const ctx = this.tenant.get();
-    return this.contracts.create(
+    const contract = await this.contracts.create(
       {
         tenantId: ctx.tenantId,
         companyId: q.companyId,
@@ -46,6 +46,19 @@ export class CrmQuotationsController {
       },
       `contract-from-quotation:${q.id}`,
     );
+    // Deal-chain link: the quotation remembers the contract it became.
+    await this.quotations.linkContract(q.id, contract.id);
+    return contract;
+  }
+
+  /** Supersede this quotation (status 'revised') and draft Rev n+1 with the same number, lines and terms. */
+  @Post(':id/revise')
+  async revise(@Param('id') id: string): Promise<Quotation> {
+    try {
+      return await this.quotations.revise(id);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'revise failed');
+    }
   }
 
   @Post()
@@ -53,7 +66,13 @@ export class CrmQuotationsController {
     // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
     // Raw body: designer-added cf_* fields (P2) are stripped from the decorated DTO.
     const merged = applyFormOverrides(quotationFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, quotationFormSchema.id));
-    assertFormValid(merged, (req.body ?? dto) as Record<string, unknown>);
+    const raw = (req.body ?? dto) as Record<string, unknown>;
+    // The schema's 'lines' field validates via opts.lines rows (evaluateForm
+    // contract) — without this every create carrying line items is rejected
+    // with "Add at least one line item".
+    assertFormValid(merged, raw, {
+      lines: { lines: (Array.isArray(raw.lines) ? raw.lines : []) as Array<Record<string, string | number | boolean | null>> },
+    });
     if (!dto?.quoteNumber?.trim()) throw new BadRequestException('quoteNumber is required');
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
@@ -101,9 +120,9 @@ export class CrmQuotationsController {
   }
 
   @Patch(':id/status')
-  async changeStatus(@Param('id') id: string, @Body() dto: { action: 'send' | 'accept' | 'reject' | 'expire' }): Promise<Quotation> {
-    if (!['send', 'accept', 'reject', 'expire'].includes(dto?.action)) {
-      throw new BadRequestException("action must be 'send', 'accept', 'reject', or 'expire'");
+  async changeStatus(@Param('id') id: string, @Body() dto: { action: QuotationAction }): Promise<Quotation> {
+    if (!QUOTATION_ACTIONS.includes(dto?.action)) {
+      throw new BadRequestException(`action must be one of ${QUOTATION_ACTIONS.join(', ')}`);
     }
     return await this.quotations.changeStatus(id, dto.action);
   }

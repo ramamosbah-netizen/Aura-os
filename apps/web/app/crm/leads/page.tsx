@@ -44,8 +44,9 @@ export default async function CrmLeadsPage() {
     <div style={st.page}>
       <h1 style={st.h1}>CRM · Sales Pipeline</h1>
       <p style={st.sub}>
-        Leads, opportunities, and AI-powered forecasting — the full deal chain starts here.
-        When an opportunity is won, a tender is created for it automatically.
+        The full sales cycle: Lead → Qualified → Opportunity → Proposal → Negotiation → Won/Lost.
+        After a win the deal chain is optional per deal — tender/estimation for bid work, or a
+        direct quotation for direct sales, AMC renewals and variations.
       </p>
 
       <CrmPipelineClient

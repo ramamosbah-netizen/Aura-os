@@ -67,6 +67,12 @@ export class CrossModuleSubscriber implements OnModuleInit {
       try {
         const p = e.payload as Record<string, unknown>;
         if (p.stage !== 'won') return; // Only react on won stage
+        // The deal chain is OPTIONAL per deal: direct sales / AMC renewals /
+        // variations skip tendering and convert straight to a quotation.
+        if (p.requiresTender === false) {
+          this.logger.log(`opportunity.won (${e.aggregateId}) — requiresTender=false, no tender created (direct-sale path)`);
+          return;
+        }
         const tender = await this.tenders.create(
           {
             tenantId: e.tenantId,

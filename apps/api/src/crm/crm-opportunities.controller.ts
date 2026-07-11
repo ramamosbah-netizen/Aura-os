@@ -4,6 +4,12 @@ import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams, type Opportunity, type OpportunityStage } from '@aura/shared';
 import { type Quotation, OpportunityService, QuotationService } from '@aura/crm';
 
+/** The create drawer posts select values as strings — accept both. */
+function coerceBool(v: boolean | string | undefined): boolean | undefined {
+  if (v === undefined) return undefined;
+  return v === true || v === 'true';
+}
+
 class CreateOpportunityDto {
   @IsString() title!: string;
   @IsOptional() @IsString() leadId?: string;
@@ -13,6 +19,9 @@ class CreateOpportunityDto {
   @IsOptional() @IsString() stage?: OpportunityStage;
   @IsOptional() @IsNumber() winProbability?: number;
   @IsOptional() @IsString() closeDate?: string;
+  @IsOptional() requiresTender?: boolean | string;
+  @IsOptional() @IsString() ownerId?: string;
+  @IsOptional() @IsString() nextAction?: string;
 }
 
 class UpdateOpportunityDto {
@@ -23,6 +32,9 @@ class UpdateOpportunityDto {
   @IsOptional() @IsString() stage?: OpportunityStage;
   @IsOptional() @IsNumber() winProbability?: number;
   @IsOptional() @IsString() closeDate?: string;
+  @IsOptional() requiresTender?: boolean | string;
+  @IsOptional() @IsString() ownerId?: string;
+  @IsOptional() @IsString() nextAction?: string;
 }
 
 @Controller('crm/opportunities')
@@ -67,6 +79,9 @@ export class CrmOpportunitiesController {
       stage: dto.stage,
       winProbability: dto.winProbability,
       closeDate: dto.closeDate,
+      requiresTender: coerceBool(dto.requiresTender),
+      ownerId: dto.ownerId,
+      nextAction: dto.nextAction,
       actorId: ctx.actorId,
     });
   }
@@ -74,7 +89,8 @@ export class CrmOpportunitiesController {
   @Patch(':id')
   update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateOpportunityDto): Promise<Opportunity> {
     const ctx = this.tenant.get();
-    return this.opportunities.update(id, dto, ctx.actorId);
+    const patch = { ...dto, ...(dto.requiresTender !== undefined ? { requiresTender: coerceBool(dto.requiresTender) } : {}) };
+    return this.opportunities.update(id, patch as Parameters<typeof this.opportunities.update>[1], ctx.actorId);
   }
 
   @Post(':id/forecast')

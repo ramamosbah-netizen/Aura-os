@@ -37,6 +37,8 @@ export interface FieldSpec {
   defaultValue?: string;
   /** payload transform: 'csv' splits into a trimmed string array; 'isoDate' posts an ISO timestamp */
   transform?: 'csv' | 'isoDate';
+  /** rendered non-editable; its defaultValue still posts (fixed context like a parent record id) */
+  readonly?: boolean;
 }
 
 /** @deprecated import FormLineItem from @aura/shared */

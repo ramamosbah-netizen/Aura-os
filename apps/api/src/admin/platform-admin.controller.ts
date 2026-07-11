@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
-import { AiService, AuditService, MfaService, Permissions, SettingsService, TenantContext, WorkflowService } from '@aura/core';
-import { readSecret } from '@aura/shared';
+import { AiService, AuditService, MfaService, ModulesService, Permissions, SettingsService, TenantContext, WorkflowService } from '@aura/core';
+import { BUSINESS_MODULES, readSecret } from '@aura/shared';
 import { AiGuardrailsService, AutonomyService, type GuardrailRule } from '@aura/intelligence';
 import { DemoSeeder } from '../demo/demo.seeder';
 
@@ -24,7 +24,31 @@ export class PlatformAdminController {
     private readonly audit: AuditService,
     private readonly mfa: MfaService,
     private readonly workflows: WorkflowService,
+    private readonly modules: ModulesService,
   ) {}
+
+  /** Module Manager — every business module with its per-tenant enabled state. */
+  @Permissions('admin.modules.manage')
+  @Get('modules')
+  moduleStates(): { modules: Array<{ id: string; label: string; glyph: string; desc: string; enabled: boolean }> } {
+    const tenantId = this.tenant.get().tenantId;
+    return {
+      modules: BUSINESS_MODULES.map((m) => ({ ...m, enabled: this.modules.isEnabled(tenantId, m.id) })),
+    };
+  }
+
+  /** Enable/disable a business module — enforced by the guard on the next request. */
+  @Permissions('admin.modules.manage')
+  @Post('modules-toggle')
+  async toggleModule(@Body() dto: { id?: string; enabled?: boolean }): Promise<{ disabled: string[] }> {
+    const id = dto?.id?.trim();
+    if (!id || !BUSINESS_MODULES.some((m) => m.id === id)) throw new BadRequestException(`unknown module: ${id}`);
+    const ctx = this.tenant.get();
+    const enabled = dto?.enabled !== false;
+    const disabled = await this.modules.setEnabled(ctx.tenantId, id, enabled);
+    void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'module', id, enabled ? 'enabled' : 'disabled', {});
+    return { disabled };
+  }
 
   /**
    * §2.2/§2.3 depth — the security posture in one guarded read: auth mode, lockout

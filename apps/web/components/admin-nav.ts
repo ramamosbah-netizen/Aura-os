@@ -69,6 +69,22 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     group: 'Governance',
   },
   {
+    key: 'modules',
+    href: '/admin/modules',
+    glyph: '🧩',
+    title: 'Module Manager',
+    desc: 'Switch business modules on/off — enforced in nav and API.',
+    group: 'Configuration',
+  },
+  {
+    key: 'module-settings',
+    href: '/admin/module-settings',
+    glyph: '🎛',
+    title: 'Module Settings',
+    desc: 'Business defaults per module: rates, thresholds, stages, policies.',
+    group: 'Configuration',
+  },
+  {
     key: 'settings',
     href: '/admin/settings',
     glyph: '⚙',

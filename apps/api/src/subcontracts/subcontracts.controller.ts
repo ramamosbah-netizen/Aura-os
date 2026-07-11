@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
-import { FormCustomValuesService, FormOverridesService, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { FormCustomValuesService, FormOverridesService, SettingsService, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, subcontractFormSchema } from '@aura/shared';
 import {
   type Subcontract,
@@ -47,6 +47,7 @@ export class SubcontractsController {
     private readonly tenant: TenantContext,
     private readonly formOverrides: FormOverridesService,
     private readonly customValues: FormCustomValuesService,
+    private readonly settings: SettingsService,
   ) {}
 
   // ── SUBCONTRACTS ─────────────────────────────────────────────────────────
@@ -63,6 +64,12 @@ export class SubcontractsController {
     if (dto?.value === undefined) throw new BadRequestException('value is required');
 
     const ctx = this.tenant.get();
+    // Module setting (admin-configurable): default retention when the dto omits it.
+    let retention = dto.retentionPercentage;
+    if (retention === undefined) {
+      const configured = Number(await this.settings.get(ctx.tenantId, 'subcontracts.defaultRetentionPercent'));
+      if (Number.isFinite(configured) && configured >= 0 && configured <= 100) retention = configured;
+    }
     const subcontract = await this.subcontracts.createSubcontract({
       tenantId: ctx.tenantId,
       projectId: dto.projectId,
@@ -70,7 +77,7 @@ export class SubcontractsController {
       title: dto.title,
       subcontractorName: dto.subcontractorName,
       value: dto.value,
-      retentionPercentage: dto.retentionPercentage,
+      retentionPercentage: retention,
       createdBy: ctx.actorId,
     });
     await this.customValues.save(ctx.tenantId, merged.id, subcontract.id, pickCustomFieldValues(merged, req.body));

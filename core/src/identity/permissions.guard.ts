@@ -10,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { AccessService } from './access.service';
 import { AuthService } from './auth.service';
 import { UsersService } from './users.service';
+import { ModulesService } from '../config/modules.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { PERMISSIONS_KEY } from './permissions.decorator';
 import { type AccessTarget, type OrgLevel, type Id, AccessDeniedError } from '@aura/shared';
@@ -79,9 +80,19 @@ export class PermissionsGuard implements CanActivate {
     private readonly auth: AuthService,
     // Explicit @Inject: union types emit `Object` in design:paramtypes (see auth.service).
     @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
+    @Optional() @Inject(ModulesService) private readonly modules: ModulesService | null = null,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Module Manager gate (Admin Center): a disabled business module is 403 for every
+    // request, independent of auth state — it's tenant configuration, not identity.
+    if (this.modules && context.getType() === 'http') {
+      const ctrl = ((Reflect.getMetadata('path', context.getClass()) as string) ?? '').replace(/^\/+/, '');
+      const moduleId = ctrl.split('/')[0];
+      if (moduleId && !this.modules.isEnabled(this.tenant.get().tenantId, moduleId)) {
+        throw new ForbiddenException(`module '${moduleId}' is disabled for this tenant`);
+      }
+    }
     // Staged pass-through: when auth is OFF (no verifier configured — the dev default) the
     // whole access seam passes through, so requests run as the dev actor (actorId null).
     // The permission guard mirrors that: annotations become no-ops until auth is turned on,

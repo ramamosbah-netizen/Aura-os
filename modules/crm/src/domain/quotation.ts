@@ -32,6 +32,8 @@ export interface Quotation {
   customerName: string;
   accountId: Id | null;
   contactName: string | null;
+  /** Tender this quotation was generated from (tender pricing sheet), reference not join. */
+  sourceTenderId: Id | null;
   issueDate: string; // YYYY-MM-DD
   validUntil: string | null;
   lines: QuotationLine[];
@@ -50,6 +52,7 @@ export interface NewQuotation {
   customerName: string;
   accountId?: Id | null;
   contactName?: string | null;
+  sourceTenderId?: Id | null;
   issueDate: string;
   validUntil?: string | null;
   lines: NewQuotationLine[];
@@ -97,6 +100,7 @@ export function makeQuotation(input: NewQuotation): Quotation {
     customerName: input.customerName.trim(),
     accountId: input.accountId ?? null,
     contactName: input.contactName ?? null,
+    sourceTenderId: input.sourceTenderId ?? null,
     issueDate: input.issueDate,
     validUntil: input.validUntil ?? null,
     lines,

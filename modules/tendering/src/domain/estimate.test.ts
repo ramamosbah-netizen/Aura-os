@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeBOQ, makeBOQItem } from './boq';
-import { computeBuildUp, makeRateBuildUp, summariseEstimate, type NewRateBuildUp } from './estimate';
+import { compileResourceBreakdown, computeBuildUp, makeRateBuildUp, summariseEstimate, type NewRateBuildUp } from './estimate';
 
 const base: NewRateBuildUp = {
   tenantId: 't-1',
@@ -81,5 +81,52 @@ describe('tender estimate summary', () => {
     const est = summariseEstimate('boq-1', 'tender-1', [], []);
     expect(est.estimatedTenderValue).toBe(0);
     expect(est.marginPercent).toBe(0);
+  });
+});
+
+describe('resource breakdown sheet → components (internal pricing sheet)', () => {
+  // The CCTV sheet shape: 10 cameras, AED 450 supply each, 2 techs × 16h @ 15,
+  // 1 engineer × 8h @ 20, PM 4h @ 40, AED 300 transport, 2% wastage,
+  // AED 200 accessories, no subcontract.
+  const sheet = {
+    supplyUnitPrice: 450,
+    technician: { count: 2, hours: 16, rate: 15 },
+    engineer: { count: 1, hours: 8, rate: 20 },
+    projectManager: { count: 1, hours: 4, rate: 40 },
+    transport: 300,
+    wastagePercent: 2,
+    accessories: 200,
+    subcontract: 0,
+  };
+
+  it('compiles per-line figures into per-unit components (÷ BOQ qty)', () => {
+    const { components } = compileResourceBreakdown(sheet, 10);
+    const by = Object.fromEntries(components.map((c) => [c.description.split(' —')[0], c]));
+    expect(by['Material supply']).toMatchObject({ costType: 'material', quantity: 1, unitCost: 450 });
+    expect(by['Wastage 2%']).toMatchObject({ costType: 'material', unitCost: 9 }); // 2% of 450
+    expect(by['Accessories & consumables']).toMatchObject({ costType: 'material', unitCost: 20 }); // 200/10
+    expect(by['Technician']).toMatchObject({ costType: 'labour', quantity: 3.2, unitCost: 15 }); // 32h/10
+    expect(by['Engineer']).toMatchObject({ costType: 'labour', quantity: 0.8, unitCost: 20 });
+    expect(by['Project manager']).toMatchObject({ costType: 'labour', quantity: 0.4, unitCost: 40 });
+    expect(by['Transport']).toMatchObject({ costType: 'plant', unitCost: 30 }); // 300/10
+    expect(by['Subcontracted works']).toBeUndefined(); // zero blocks omitted
+  });
+
+  it('the compiled build-up prices the whole line correctly through the engine', () => {
+    const { resources, components } = compileResourceBreakdown(sheet, 10);
+    const b = makeRateBuildUp({ ...base, components, resources, overheadPercent: 0, profitPercent: 0 });
+    // Per unit: 450 supply + 9 wastage + 20 accessories + 48 tech + 16 eng + 16 pm + 30 transport = 589
+    expect(b.directCost).toBe(589);
+    expect(b.sellingRate).toBe(589);
+    expect(b.resources).toEqual(resources);
+    // Line total over 10 units = the sheet's own line total:
+    // 4500 supply + 90 wastage + 200 accessories + 480 tech + 160 eng + 160 pm + 300 transport = 5890
+    expect(b.sellingRate * 10).toBe(5890);
+  });
+
+  it('rejects qty ≤ 0, negative figures, and an all-zero sheet', () => {
+    expect(() => compileResourceBreakdown(sheet, 0)).toThrow(/quantity/);
+    expect(() => compileResourceBreakdown({ ...sheet, transport: -5 }, 10)).toThrow(/negative/);
+    expect(() => compileResourceBreakdown({}, 10)).toThrow(/no cost/);
   });
 });

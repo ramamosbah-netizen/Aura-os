@@ -38,6 +38,9 @@ export default async function TenderDetailPage({
       <RecordChrome type="Tender" title={tender.title} />
       <div style={st.navRow}>
         <a href="/tendering/tenders" style={st.link}>← Back to Tenders</a>
+        <a href={`/tendering/tenders/${tender.id}/pricing`} style={{ ...st.link, marginLeft: 16 }}>
+          Pricing sheet (internal) →
+        </a>
       </div>
       <TenderDetail tender={tender} />
     </div>

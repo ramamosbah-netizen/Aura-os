@@ -12,6 +12,7 @@ interface Row {
   customer_name: string;
   account_id: string | null;
   contact_name: string | null;
+  source_tender_id: string | null;
   issue_date: string;
   valid_until: string | null;
   lines: QuotationLine[] | string;
@@ -24,7 +25,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, ' +
+  'id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, ' +
   'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, status, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
@@ -38,6 +39,7 @@ function rowTo(r: Row): Quotation {
     customerName: r.customer_name,
     accountId: r.account_id,
     contactName: r.contact_name,
+    sourceTenderId: r.source_tender_id,
     issueDate: String(r.issue_date),
     validUntil: r.valid_until ? String(r.valid_until) : null,
     lines,
@@ -56,11 +58,11 @@ export class PostgresQuotationStore implements QuotationStore {
   async save(q: Quotation): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_crm_quotations
-        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, issue_date, valid_until, lines, subtotal, vat_total, total, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, issue_date, valid_until, lines, subtotal, vat_total, total, status, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status`,
       [
-        q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.issueDate, q.validUntil,
+        q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.sourceTenderId, q.issueDate, q.validUntil,
         JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.status, q.createdBy, q.createdAt,
       ],
     );
@@ -83,6 +85,7 @@ export class PostgresQuotationStore implements QuotationStore {
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('account_id', filter.accountId);
+    add('source_tender_id', filter.sourceTenderId);
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 

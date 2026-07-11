@@ -7,6 +7,7 @@ export interface QuotationFilter {
   tenantId?: string;
   status?: QuotationStatus;
   accountId?: string;
+  sourceTenderId?: string;
   limit?: number;
 }
 

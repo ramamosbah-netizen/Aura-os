@@ -177,6 +177,8 @@ export class Account360Controller {
       this.invoices.list({ tenantId, limit: 2000 }),
     ]);
 
+    // Primary contact first — the 360 header shows contacts[0] as the main contact.
+    contacts.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
     const accInvoices = allInvoices.filter((i) => i.customerName === account.name && i.status !== 'cancelled');
     const today = new Date().toISOString().slice(0, 10);
     const receivables = {

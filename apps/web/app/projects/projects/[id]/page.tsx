@@ -1,5 +1,7 @@
+import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import RecordDetail, { RecordNotFound } from '../../../../components/record-detail';
+import RecordChrome from '../../../../components/record-chrome';
+import Project360Client from '../../../../components/project-360-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,40 +18,38 @@ interface Project {
   createdAt: string;
 }
 
-const money = (n: number) => (n ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-
+/**
+ * Project 360 — delivery + commercial control: inherited budget vs variations vs
+ * certification vs EVM, execution lifecycle, and the closeout that closes the
+ * deal chain (completing the project completes the source contract).
+ */
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getJson<Project>(`/api/projects/projects/${id}`);
-  if (!project) return <RecordNotFound type="Project" backHref="/projects/projects" backLabel="Back to Projects" />;
 
-  const links = [
-    project.accountId
-      ? { label: `Account: ${project.accountName ?? 'view'}`, href: `/crm/accounts/${project.accountId}` }
-      : null,
-    project.contractId
-      ? { label: `Contract: ${project.contractTitle ?? 'view'}`, href: `/contracts/contracts/${project.contractId}` }
-      : null,
-    { label: 'Schedule (Gantt)', href: '/projects/schedule' },
-    { label: 'Variations', href: '/projects/variations' },
-    { label: 'Projects dashboard', href: '/projects/dashboard' },
-  ].filter((l): l is { label: string; href: string } => l !== null);
+  if (!project) {
+    return (
+      <div style={st.container}>
+        <h1 style={st.h1}>Project Not Found</h1>
+        <a href="/projects/projects" style={st.link}>← Back to Projects</a>
+      </div>
+    );
+  }
 
   return (
-    <RecordDetail
-      type="Project"
-      title={project.title}
-      status={project.status}
-      backHref="/projects/projects"
-      backLabel="Back to Projects"
-      fields={[
-        { label: 'Reference', value: project.reference ?? '—' },
-        { label: 'Client', value: project.accountName ?? '—' },
-        { label: 'Source contract', value: project.contractTitle ?? '—' },
-        { label: 'Budget', value: money(project.value) },
-        { label: 'Created', value: new Date(project.createdAt).toLocaleDateString() },
-      ]}
-      links={links}
-    />
+    <div style={st.container}>
+      <RecordChrome type="Project" title={project.title} />
+      <div style={st.navRow}>
+        <a href="/projects/projects" style={st.link}>← Back to Projects</a>
+      </div>
+      <Project360Client project={project} />
+    </div>
   );
 }
+
+const st = {
+  container: { maxWidth: 1180, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  h1: { fontSize: 24, margin: '0 0 10px', color: 'var(--accent)' } as CSSProperties,
+  navRow: { marginBottom: 14 } as CSSProperties,
+  link: { color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 500 } as CSSProperties,
+};

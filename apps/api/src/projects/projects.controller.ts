@@ -171,6 +171,17 @@ export class ProjectsController {
     }
   }
 
+  /** Execution lifecycle: planned → active → completed (completes the contract via the reactor). */
+  @Patch('projects/:id/status')
+  async changeProjectStatus(@Param('id') id: string, @Body() dto: { status: 'active' | 'completed' | 'cancelled' }): Promise<Project> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    try {
+      return await this.projects.changeStatus(id, dto.status);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'transition failed');
+    }
+  }
+
   @Get('projects/:id')
   async getProject(@Param('id') id: string): Promise<Project> {
     const found = await this.projects.get(id);

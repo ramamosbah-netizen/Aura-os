@@ -74,6 +74,42 @@ export class ProjectService implements OnModuleInit {
   }
 
   /** Update mutable fields on a project (title, reference, status, value). */
+  /**
+   * Guarded execution lifecycle: planned → active (STARTED) → completed
+   * (COMPLETED — the reactor completes the source contract, closing the deal
+   * chain), cancel from planned/active. Emits the specific spine events.
+   */
+  async changeStatus(id: Id, status: Project['status']): Promise<Project> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`project ${id} not found`);
+    const allowed: Record<string, string[]> = {
+      active: ['planned'],
+      completed: ['active'],
+      cancelled: ['planned', 'active'],
+      planned: [],
+    };
+    if (!allowed[status] || !allowed[status].includes(existing.status)) {
+      throw new Error(`cannot move project from ${existing.status} to ${status}`);
+    }
+    const updated: Project = { ...existing, status };
+    const eventType =
+      status === 'active' ? PROJECT_EVENT.started : status === 'completed' ? PROJECT_EVENT.completed : PROJECT_EVENT.updated;
+    await this.store.update(updated);
+    await this.events.append([
+      makeEvent({
+        type: eventType,
+        tenantId: updated.tenantId,
+        companyId: updated.companyId,
+        actorId: null,
+        aggregateType: 'projects.project',
+        aggregateId: updated.id,
+        payload: { title: updated.title, status: updated.status, contractId: updated.contractId, value: updated.value },
+      }),
+    ]);
+    this.logger.log(`Project ${updated.title}: ${existing.status} → ${status}`);
+    return updated;
+  }
+
   async update(id: Id, patch: Partial<Pick<Project, 'title' | 'reference' | 'status' | 'value'>>): Promise<Project> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`project ${id} not found`);

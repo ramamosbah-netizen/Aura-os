@@ -20,6 +20,7 @@ export class InMemoryQuotationStore implements QuotationStore {
     if (filter.tenantId) out = out.filter((q) => q.tenantId === filter.tenantId);
     if (filter.status) out = out.filter((q) => q.status === filter.status);
     if (filter.accountId) out = out.filter((q) => q.accountId === filter.accountId);
+    if (filter.sourceTenderId) out = out.filter((q) => q.sourceTenderId === filter.sourceTenderId);
     out.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

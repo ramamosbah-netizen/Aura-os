@@ -20,6 +20,41 @@ export interface CostComponent {
   amount: number;
 }
 
+/**
+ * A manpower block from the company's internal "Cost & Resource Breakdown" sheet:
+ * how many people × how many hours at what hourly rate — PER BOQ LINE (the way
+ * estimators actually plan: "2 techs for 16 hours"), not per unit.
+ */
+export interface ManpowerBlock {
+  count: number;
+  hours: number;
+  /** AED per hour. */
+  rate: number;
+}
+
+/**
+ * The structured internal pricing sheet for ONE BOQ item (mirrors the company's
+ * Cost & Resource Breakdown sheet). All money figures are AED per LINE except
+ * `supplyUnitPrice` (per BOQ unit); `compileResourceBreakdown` converts the sheet
+ * into per-unit cost components so the existing rate engine and tender estimate
+ * roll-ups work unchanged.
+ */
+export interface ResourceBreakdown {
+  /** Material unit supply price (per BOQ unit). */
+  supplyUnitPrice: number;
+  technician: ManpowerBlock;
+  engineer: ManpowerBlock;
+  projectManager: ManpowerBlock;
+  /** Transport for this line, AED. */
+  transport: number;
+  /** Wastage as % of material supply. */
+  wastagePercent: number;
+  /** Accessories/consumables for this line, AED lump. */
+  accessories: number;
+  /** Subcontracted works for this line, AED. */
+  subcontract: number;
+}
+
 export interface RateBuildUp {
   id: Id;
   tenantId: Id;
@@ -27,6 +62,8 @@ export interface RateBuildUp {
   tenderId: Id;
   boqItemId: Id;
   components: CostComponent[];
+  /** The structured sheet the components were compiled from (null when entered as raw components). */
+  resources: ResourceBreakdown | null;
   /** Σ component amounts — direct cost per unit. */
   directCost: number;
   overheadPercent: number;
@@ -48,6 +85,8 @@ export interface NewRateBuildUp {
   tenderId: Id;
   boqItemId: Id;
   components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
+  /** When the build-up came from the structured pricing sheet, keep it for redisplay. */
+  resources?: ResourceBreakdown | null;
   overheadPercent?: number;
   profitPercent?: number;
   notes?: string | null;
@@ -55,6 +94,87 @@ export interface NewRateBuildUp {
 }
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
+const r4 = (n: number): number => Math.round(n * 10000) / 10000;
+
+const nn = (v: unknown): number => {
+  const n = Number(v) || 0;
+  if (n < 0) throw new Error('resource figures cannot be negative');
+  return n;
+};
+
+const manpower = (b: Partial<ManpowerBlock> | undefined): ManpowerBlock => ({
+  count: nn(b?.count),
+  hours: nn(b?.hours),
+  rate: nn(b?.rate),
+});
+
+/** Normalize a raw sheet payload (all figures ≥ 0, numbers coerced). */
+export function normalizeResourceBreakdown(input: Partial<ResourceBreakdown>): ResourceBreakdown {
+  return {
+    supplyUnitPrice: nn(input.supplyUnitPrice),
+    technician: manpower(input.technician),
+    engineer: manpower(input.engineer),
+    projectManager: manpower(input.projectManager),
+    transport: nn(input.transport),
+    wastagePercent: nn(input.wastagePercent),
+    accessories: nn(input.accessories),
+    subcontract: nn(input.subcontract),
+  };
+}
+
+/**
+ * Compile the internal pricing sheet into per-unit cost components for the rate
+ * engine. Per-line figures (manpower/transport/accessories/subcontract) divide by
+ * the BOQ quantity; zero-amount blocks are omitted. Pure.
+ */
+export function compileResourceBreakdown(
+  input: Partial<ResourceBreakdown>,
+  quantity: number,
+): { resources: ResourceBreakdown; components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>> } {
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) throw new Error('BOQ quantity must be > 0 to compile a resource breakdown');
+  const r = normalizeResourceBreakdown(input);
+
+  const components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>> = [];
+  if (r.supplyUnitPrice > 0) {
+    components.push({ costType: 'material', description: 'Material supply', quantity: 1, unitCost: r.supplyUnitPrice });
+  }
+  if (r.supplyUnitPrice > 0 && r.wastagePercent > 0) {
+    components.push({
+      costType: 'material',
+      description: `Wastage ${r.wastagePercent}%`,
+      quantity: 1,
+      unitCost: r4(r.supplyUnitPrice * (r.wastagePercent / 100)),
+    });
+  }
+  if (r.accessories > 0) {
+    components.push({ costType: 'material', description: 'Accessories & consumables', quantity: 1, unitCost: r4(r.accessories / qty) });
+  }
+  const roles: Array<[string, ManpowerBlock]> = [
+    ['Technician', r.technician],
+    ['Engineer', r.engineer],
+    ['Project manager', r.projectManager],
+  ];
+  for (const [label, b] of roles) {
+    const manHours = b.count * b.hours;
+    if (manHours > 0 && b.rate > 0) {
+      components.push({
+        costType: 'labour',
+        description: `${label} — ${b.count} × ${b.hours}h @ ${b.rate}/h`,
+        quantity: r4(manHours / qty),
+        unitCost: b.rate,
+      });
+    }
+  }
+  if (r.transport > 0) {
+    components.push({ costType: 'plant', description: 'Transport', quantity: 1, unitCost: r4(r.transport / qty) });
+  }
+  if (r.subcontract > 0) {
+    components.push({ costType: 'subcontract', description: 'Subcontracted works', quantity: 1, unitCost: r4(r.subcontract / qty) });
+  }
+  if (components.length === 0) throw new Error('the resource breakdown has no cost — at least one filled block is required');
+  return { resources: r, components };
+}
 
 /** Pure engine: components + percentages → per-unit cost figures. */
 export function computeBuildUp(
@@ -96,6 +216,7 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
     tenderId: input.tenderId,
     boqItemId: input.boqItemId,
     components,
+    resources: input.resources ?? null,
     ...figures,
     overheadPercent,
     profitPercent,
@@ -176,4 +297,5 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
 
 export const TENDER_ESTIMATE_EVENT = {
   rateBuilt: 'tendering.estimate.rate_built',
+  quotationGenerated: 'tendering.quotation.generated',
 } as const;

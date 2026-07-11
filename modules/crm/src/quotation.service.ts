@@ -78,6 +78,11 @@ export class QuotationService {
     return this.store.get(id);
   }
 
+  /** Quotations generated from a tender's pricing sheet. */
+  listBySourceTender(tenantId: string, tenderId: string): Promise<Quotation[]> {
+    return this.store.list({ tenantId, sourceTenderId: tenderId });
+  }
+
   list(filter?: QuotationFilter): Promise<Quotation[]> {
     return this.store.list(filter);
   }

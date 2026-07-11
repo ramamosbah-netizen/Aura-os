@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
-import { TENDER_ESTIMATE_EVENT, type NewRateBuildUp, type RateBuildUp, type TenderEstimate, makeRateBuildUp, summariseEstimate } from './domain/estimate';
+import { TENDER_ESTIMATE_EVENT, type NewRateBuildUp, type RateBuildUp, type TenderEstimate, compileResourceBreakdown, makeRateBuildUp, summariseEstimate } from './domain/estimate';
 import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
 
@@ -26,7 +26,7 @@ export class EstimateService {
    * back onto the BOQ item (rate + extended amount).
    */
   async buildRate(
-    input: Omit<NewRateBuildUp, 'tenderId'>,
+    input: Omit<NewRateBuildUp, 'tenderId' | 'components'> & { components?: NewRateBuildUp['components'] },
     options: { applyToBoq?: boolean } = {},
   ): Promise<RateBuildUp> {
     const item = await this.boqStore.getBOQItem(input.tenantId, input.boqItemId);
@@ -34,7 +34,15 @@ export class EstimateService {
     const boq = await this.boqStore.findBOQ(input.tenantId, item.boqId);
     if (!boq) throw new Error(`BOQ ${item.boqId} not found`);
 
-    const buildUp = makeRateBuildUp({ ...input, tenderId: boq.tenderId });
+    // The internal pricing sheet path: a structured resource breakdown compiles
+    // into per-unit components against the item's BOQ quantity.
+    let resolved = { ...input, components: input.components ?? [] };
+    if (input.resources && resolved.components.length === 0) {
+      const compiled = compileResourceBreakdown(input.resources, item.quantity);
+      resolved = { ...resolved, resources: compiled.resources, components: compiled.components };
+    }
+
+    const buildUp = makeRateBuildUp({ ...resolved, tenderId: boq.tenderId });
 
     const existing = await this.store.getByBoqItem(input.tenantId, input.boqItemId);
     if (existing) await this.store.delete(existing.id);
@@ -79,6 +87,42 @@ export class EstimateService {
 
   listByTender(tenantId: Id, tenderId: Id): Promise<RateBuildUp[]> {
     return this.store.listByTender(tenantId, tenderId);
+  }
+
+  /**
+   * Record that a client quotation was generated from this tender's pricing
+   * (the API layer composes the CRM create; the tendering event lands here so
+   * the estimate aggregate owns its own trail).
+   */
+  async recordQuotationGenerated(args: {
+    tenantId: Id;
+    companyId?: Id | null;
+    actorId?: Id | null;
+    tenderId: Id;
+    quotationId: Id;
+    quoteNumber: string;
+    total: number;
+    pricedLines: number;
+    unpricedLines: number;
+  }): Promise<void> {
+    await this.events.append([
+      makeEvent({
+        type: TENDER_ESTIMATE_EVENT.quotationGenerated,
+        tenantId: args.tenantId,
+        companyId: args.companyId ?? null,
+        actorId: args.actorId ?? null,
+        aggregateType: 'tendering.tender',
+        aggregateId: args.tenderId,
+        payload: {
+          quotationId: args.quotationId,
+          quoteNumber: args.quoteNumber,
+          total: args.total,
+          pricedLines: args.pricedLines,
+          unpricedLines: args.unpricedLines,
+        },
+      }),
+    ]);
+    this.logger.log(`Quotation ${args.quoteNumber} generated from tender ${args.tenderId} (total ${args.total})`);
   }
 
   /** Tender-level estimate: build-ups folded over the BOQ. Null when the tender has no BOQ. */

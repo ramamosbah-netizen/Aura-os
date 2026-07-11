@@ -94,10 +94,11 @@ const s = {
     userSelect: 'none',
     whiteSpace: 'nowrap',
   } as CSSProperties,
+  // NOTE: no border* keys here — the base style uses border shorthands, and mixing
+  // a longhand (borderColor) with them makes React warn on active↔inactive rerenders.
   tabActive: {
     background: 'var(--panel)',
     color: 'var(--text)',
-    borderColor: 'var(--border)',
     boxShadow: 'inset 0 2px 0 var(--accent)',
   } as CSSProperties,
   tabType: {

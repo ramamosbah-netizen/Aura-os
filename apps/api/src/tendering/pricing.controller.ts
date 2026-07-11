@@ -1,8 +1,12 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Post } from '@nestjs/common';
 import { NumberingService, ParseUuidOr404Pipe, SettingsService, TenantContext } from '@aura/core';
+import { toCsv } from '@aura/shared';
 import {
   EstimateService,
+  PRICING_SHEET_CSV_COLUMNS,
+  PRICING_SUMMARY_CSV_COLUMNS,
   TenderService,
+  pricingSheetCsvRows,
   type BOQItem,
   type RateBuildUp,
   type ResourceBreakdown,
@@ -10,6 +14,25 @@ import {
   type Tender,
 } from '@aura/tendering';
 import { QuotationService, type NewQuotationLine, type Quotation } from '@aura/crm';
+
+/** One pricing-sheet summary row (the hub + the summary CSV share it). */
+interface SheetSummary {
+  tenderId: string;
+  tenderTitle: string;
+  reference: string | null;
+  client: string | null;
+  status: string;
+  boqItems: number;
+  pricedItems: number;
+  directCost: number;
+  indirect: number;
+  overhead: number;
+  profit: number;
+  sellingValue: number;
+  unpricedBoqValue: number;
+  tenderValue: number;
+  marginPercent: number;
+}
 
 /**
  * Tender pricing sheet (the company's INTERNAL "Cost & Resource Breakdown") +
@@ -49,6 +72,64 @@ export class TenderPricingController {
     };
   }
 
+  private async sheetSummaries(tenantId: string): Promise<SheetSummary[]> {
+    const tenderIds = await this.estimates.tendersWithSheets(tenantId);
+    const out: SheetSummary[] = [];
+    for (const tid of tenderIds) {
+      const [tender, estimate] = await Promise.all([this.tenders.get(tid), this.estimates.tenderEstimate(tenantId, tid)]);
+      // Orphan sheets (all BOQ lines deleted since pricing) carry no information — skip.
+      if (!tender || tender.tenantId !== tenantId || !estimate || estimate.itemCount === 0) continue;
+      out.push({
+        tenderId: tid,
+        tenderTitle: tender.title,
+        reference: tender.reference,
+        client: tender.accountName,
+        status: tender.status,
+        boqItems: estimate.itemCount,
+        pricedItems: estimate.estimatedItemCount,
+        directCost: estimate.totalDirectCost,
+        indirect: estimate.totalIndirect,
+        overhead: estimate.totalOverhead,
+        profit: estimate.totalProfit,
+        sellingValue: estimate.totalSellingValue,
+        unpricedBoqValue: estimate.unpricedBoqValue,
+        tenderValue: estimate.estimatedTenderValue,
+        marginPercent: estimate.marginPercent,
+      });
+    }
+    return out;
+  }
+
+  /** Every pricing sheet in the tenant (tenders with at least one priced line) — the hub. */
+  @Get('pricing/sheets')
+  async sheets(): Promise<SheetSummary[]> {
+    return this.sheetSummaries(this.tenant.get().tenantId);
+  }
+
+  /** All sheets as a summary CSV (one row per tender). */
+  @Get('pricing/sheets.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="pricing-sheets.csv"')
+  async sheetsCsv(): Promise<string> {
+    const rows = await this.sheetSummaries(this.tenant.get().tenantId);
+    return toCsv(
+      rows.map(({ tenderId: _tenderId, ...r }) => ({ ...r, reference: r.reference ?? '', client: r.client ?? '' })),
+      [...PRICING_SUMMARY_CSV_COLUMNS],
+    );
+  }
+
+  /** One tender's full breakdown as CSV — the original spreadsheet, exported. */
+  @Get(':id/pricing/export.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="pricing-sheet.csv"')
+  async sheetCsv(@Param('id', ParseUuidOr404Pipe) id: string): Promise<string> {
+    const ctx = this.tenant.get();
+    await this.tenderOr404(id);
+    const { items } = await this.tenders.getOrCreateBOQ(ctx.tenantId, ctx.companyId ?? null, id);
+    const buildUps = await this.estimates.listByTender(ctx.tenantId, id);
+    return toCsv(pricingSheetCsvRows(items, buildUps), [...PRICING_SHEET_CSV_COLUMNS]);
+  }
+
   /** Everything the pricing sheet page needs in one fetch. */
   @Get(':id/pricing')
   async pricing(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{
@@ -83,7 +164,7 @@ export class TenderPricingController {
   async priceItem(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('itemId', ParseUuidOr404Pipe) itemId: string,
-    @Body() dto: { resources?: Partial<ResourceBreakdown>; overheadPercent?: number; profitPercent?: number; notes?: string },
+    @Body() dto: { resources?: Partial<ResourceBreakdown>; indirectPercent?: number; overheadPercent?: number; profitPercent?: number; notes?: string },
   ): Promise<RateBuildUp> {
     await this.tenderOr404(id);
     if (!dto?.resources || typeof dto.resources !== 'object') throw new BadRequestException('resources breakdown is required');
@@ -95,6 +176,7 @@ export class TenderPricingController {
           companyId: ctx.companyId ?? null,
           boqItemId: itemId,
           resources: dto.resources as ResourceBreakdown,
+          indirectPercent: dto.indirectPercent,
           overheadPercent: dto.overheadPercent,
           profitPercent: dto.profitPercent,
           notes: dto.notes ?? null,

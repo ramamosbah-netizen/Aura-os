@@ -6,9 +6,9 @@ import type { BOQItem } from './boq';
 // subcontract) per unit, plus overhead and profit percentages, producing the selling
 // rate. One build-up per BOQ item; the tender estimate folds build-ups over the BOQ.
 
-export type CostType = 'material' | 'labour' | 'plant' | 'subcontract';
+export type CostType = 'material' | 'labour' | 'plant' | 'subcontract' | 'other';
 
-export const COST_TYPES: readonly CostType[] = ['material', 'labour', 'plant', 'subcontract'];
+export const COST_TYPES: readonly CostType[] = ['material', 'labour', 'plant', 'subcontract', 'other'];
 
 export interface CostComponent {
   costType: CostType;
@@ -53,6 +53,10 @@ export interface ResourceBreakdown {
   accessories: number;
   /** Subcontracted works for this line, AED. */
   subcontract: number;
+  /** Equipment/plant rental for this line, AED. */
+  equipmentRent: number;
+  /** Any other direct cost for this line, AED lump. */
+  otherDirect: number;
 }
 
 export interface RateBuildUp {
@@ -66,13 +70,17 @@ export interface RateBuildUp {
   resources: ResourceBreakdown | null;
   /** Σ component amounts — direct cost per unit. */
   directCost: number;
+  /** Indirect/preliminaries % on direct cost (mobilization, supervision, site setup). */
+  indirectPercent: number;
   overheadPercent: number;
   profitPercent: number;
+  /** directCost × indirectPercent. */
+  indirectAmount: number;
   /** directCost × overheadPercent. */
   overheadAmount: number;
-  /** (directCost + overhead) × profitPercent — profit is marked up on total cost. */
+  /** (directCost + indirect + overhead) × profitPercent — profit is marked up on total cost. */
   profitAmount: number;
-  /** directCost + overhead + profit — the rate the BOQ item should carry. */
+  /** directCost + indirect + overhead + profit — the rate the BOQ item should carry. */
   sellingRate: number;
   notes: string | null;
   createdAt: string;
@@ -87,6 +95,7 @@ export interface NewRateBuildUp {
   components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
   /** When the build-up came from the structured pricing sheet, keep it for redisplay. */
   resources?: ResourceBreakdown | null;
+  indirectPercent?: number;
   overheadPercent?: number;
   profitPercent?: number;
   notes?: string | null;
@@ -119,6 +128,8 @@ export function normalizeResourceBreakdown(input: Partial<ResourceBreakdown>): R
     wastagePercent: nn(input.wastagePercent),
     accessories: nn(input.accessories),
     subcontract: nn(input.subcontract),
+    equipmentRent: nn(input.equipmentRent),
+    otherDirect: nn(input.otherDirect),
   };
 }
 
@@ -169,23 +180,40 @@ export function compileResourceBreakdown(
   if (r.transport > 0) {
     components.push({ costType: 'plant', description: 'Transport', quantity: 1, unitCost: r4(r.transport / qty) });
   }
+  if (r.equipmentRent > 0) {
+    components.push({ costType: 'plant', description: 'Equipment rent', quantity: 1, unitCost: r4(r.equipmentRent / qty) });
+  }
   if (r.subcontract > 0) {
     components.push({ costType: 'subcontract', description: 'Subcontracted works', quantity: 1, unitCost: r4(r.subcontract / qty) });
+  }
+  if (r.otherDirect > 0) {
+    components.push({ costType: 'other', description: 'Other direct cost', quantity: 1, unitCost: r4(r.otherDirect / qty) });
   }
   if (components.length === 0) throw new Error('the resource breakdown has no cost — at least one filled block is required');
   return { resources: r, components };
 }
 
-/** Pure engine: components + percentages → per-unit cost figures. */
+/**
+ * Pure engine: components + percentages → per-unit cost figures.
+ * direct → + indirect % (preliminaries) → + overhead % → + profit % on the total cost.
+ */
 export function computeBuildUp(
   components: CostComponent[],
   overheadPercent: number,
   profitPercent: number,
-): Pick<RateBuildUp, 'directCost' | 'overheadAmount' | 'profitAmount' | 'sellingRate'> {
+  indirectPercent = 0,
+): Pick<RateBuildUp, 'directCost' | 'indirectAmount' | 'overheadAmount' | 'profitAmount' | 'sellingRate'> {
   const directCost = r2(components.reduce((s, c) => s + c.amount, 0));
+  const indirectAmount = r2(directCost * (indirectPercent / 100));
   const overheadAmount = r2(directCost * (overheadPercent / 100));
-  const profitAmount = r2((directCost + overheadAmount) * (profitPercent / 100));
-  return { directCost, overheadAmount, profitAmount, sellingRate: r2(directCost + overheadAmount + profitAmount) };
+  const profitAmount = r2((directCost + indirectAmount + overheadAmount) * (profitPercent / 100));
+  return {
+    directCost,
+    indirectAmount,
+    overheadAmount,
+    profitAmount,
+    sellingRate: r2(directCost + indirectAmount + overheadAmount + profitAmount),
+  };
 }
 
 export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
@@ -193,8 +221,10 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
   if (!Array.isArray(input.components) || input.components.length === 0) {
     throw new Error('at least one cost component is required');
   }
+  const indirectPercent = Number(input.indirectPercent) || 0;
   const overheadPercent = Number(input.overheadPercent) || 0;
   const profitPercent = Number(input.profitPercent) || 0;
+  if (indirectPercent < 0) throw new Error('indirectPercent cannot be negative');
   if (overheadPercent < 0) throw new Error('overheadPercent cannot be negative');
   if (profitPercent < 0) throw new Error('profitPercent cannot be negative');
 
@@ -208,7 +238,7 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
     return { costType: c.costType, description: c.description.trim(), quantity, unitCost, amount: r2(quantity * unitCost) };
   });
 
-  const figures = computeBuildUp(components, overheadPercent, profitPercent);
+  const figures = computeBuildUp(components, overheadPercent, profitPercent, indirectPercent);
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -218,6 +248,7 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
     components,
     resources: input.resources ?? null,
     ...figures,
+    indirectPercent,
     overheadPercent,
     profitPercent,
     notes: input.notes?.trim() || null,
@@ -237,6 +268,8 @@ export interface TenderEstimate {
   /** Direct cost by resource type, extended by BOQ quantities. */
   directCostByType: Record<CostType, number>;
   totalDirectCost: number;
+  /** Σ indirect/preliminaries (mobilization, supervision, site setup) over estimated items. */
+  totalIndirect: number;
   totalOverhead: number;
   totalProfit: number;
   /** Σ sellingRate × quantity over estimated items. */
@@ -251,8 +284,9 @@ export interface TenderEstimate {
 
 export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], buildUps: RateBuildUp[]): TenderEstimate {
   const byItem = new Map(buildUps.map((b) => [b.boqItemId, b]));
-  const directCostByType: Record<CostType, number> = { material: 0, labour: 0, plant: 0, subcontract: 0 };
+  const directCostByType: Record<CostType, number> = { material: 0, labour: 0, plant: 0, subcontract: 0, other: 0 };
   let totalDirectCost = 0;
+  let totalIndirect = 0;
   let totalOverhead = 0;
   let totalProfit = 0;
   let totalSellingValue = 0;
@@ -266,14 +300,16 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
       continue;
     }
     estimatedItemCount += 1;
-    for (const c of b.components) directCostByType[c.costType] = r2(directCostByType[c.costType] + c.amount * item.quantity);
+    for (const c of b.components) directCostByType[c.costType] = r2((directCostByType[c.costType] ?? 0) + c.amount * item.quantity);
     totalDirectCost += b.directCost * item.quantity;
+    totalIndirect += (b.indirectAmount ?? 0) * item.quantity;
     totalOverhead += b.overheadAmount * item.quantity;
     totalProfit += b.profitAmount * item.quantity;
     totalSellingValue += b.sellingRate * item.quantity;
   }
 
   totalDirectCost = r2(totalDirectCost);
+  totalIndirect = r2(totalIndirect);
   totalOverhead = r2(totalOverhead);
   totalProfit = r2(totalProfit);
   totalSellingValue = r2(totalSellingValue);
@@ -286,6 +322,7 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
     estimatedItemCount,
     directCostByType,
     totalDirectCost,
+    totalIndirect,
     totalOverhead,
     totalProfit,
     totalSellingValue,

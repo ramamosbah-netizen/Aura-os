@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeBOQ, makeBOQItem } from './boq';
+import { PRICING_SHEET_CSV_COLUMNS, pricingSheetCsvRows } from './pricing-csv';
 import { compileResourceBreakdown, computeBuildUp, makeRateBuildUp, summariseEstimate, type NewRateBuildUp } from './estimate';
 
 const base: NewRateBuildUp = {
@@ -128,5 +129,74 @@ describe('resource breakdown sheet → components (internal pricing sheet)', () 
     expect(() => compileResourceBreakdown(sheet, 0)).toThrow(/quantity/);
     expect(() => compileResourceBreakdown({ ...sheet, transport: -5 }, 10)).toThrow(/negative/);
     expect(() => compileResourceBreakdown({}, 10)).toThrow(/no cost/);
+  });
+});
+
+describe('pricing sheet CSV rows', () => {
+  it('one row per BOQ item: sheet columns for priced, BOQ-rate fallback for unpriced', () => {
+    const boq = makeBOQ({ tenantId: 't-1', tenderId: 'tender-1' });
+    const priced = makeBOQItem({ tenantId: 't-1', boqId: boq.id, itemCode: '1.1', description: 'Camera', unit: 'nos', quantity: 10, rate: 0 });
+    const unpriced = makeBOQItem({ tenantId: 't-1', boqId: boq.id, itemCode: '1.2', description: 'Cabling', unit: 'point', quantity: 40, rate: 55 });
+    const { resources, components } = compileResourceBreakdown(
+      {
+        supplyUnitPrice: 450,
+        technician: { count: 2, hours: 16, rate: 15 },
+        engineer: { count: 1, hours: 8, rate: 20 },
+        projectManager: { count: 1, hours: 4, rate: 40 },
+        transport: 300, wastagePercent: 2, accessories: 200, subcontract: 0,
+      },
+      10,
+    );
+    const b = makeRateBuildUp({ ...base, boqItemId: priced.id, components, resources, overheadPercent: 0, profitPercent: 0 });
+
+    const rows = pricingSheetCsvRows([priced, unpriced], [b]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      itemCode: '1.1', quantity: 10, supplyUnitPrice: 450, materialTotal: 4500,
+      techTotal: 480, engTotal: 160, pmTotal: 160, manpowerTotal: 800,
+      transport: 300, directCostLine: 5890, sellingRateUnit: 589, lineTotal: 5890,
+      status: 'priced (sheet)',
+    });
+    expect(rows[1]).toMatchObject({ itemCode: '1.2', sellingRateUnit: 55, lineTotal: 2200, status: 'unpriced (BOQ rate)' });
+    // every column present in every row
+    for (const row of rows) for (const col of PRICING_SHEET_CSV_COLUMNS) expect(col in row).toBe(true);
+  });
+});
+
+describe('full cost taxonomy (indirect %, equipment rent, other direct)', () => {
+  it('indirect sits between direct and overhead; profit marks up the total cost', () => {
+    const f = computeBuildUp(
+      [{ costType: 'material', description: 'M', quantity: 1, unitCost: 1000, amount: 1000 }],
+      10, // overhead %
+      15, // profit %
+      5,  // indirect %
+    );
+    expect(f.directCost).toBe(1000);
+    expect(f.indirectAmount).toBe(50);   // 5% of direct
+    expect(f.overheadAmount).toBe(100);  // 10% of direct
+    expect(f.profitAmount).toBe(172.5);  // 15% of 1150
+    expect(f.sellingRate).toBe(1322.5);
+  });
+
+  it('equipment rent and other direct compile to plant/other components (÷ qty)', () => {
+    const { components } = compileResourceBreakdown(
+      { supplyUnitPrice: 100, equipmentRent: 500, otherDirect: 50 },
+      10,
+    );
+    const by = Object.fromEntries(components.map((c) => [c.description, c]));
+    expect(by['Equipment rent']).toMatchObject({ costType: 'plant', unitCost: 50 });
+    expect(by['Other direct cost']).toMatchObject({ costType: 'other', unitCost: 5 });
+  });
+
+  it('estimate roll-up carries totalIndirect and the other bucket', () => {
+    const boq = makeBOQ({ tenantId: 't-1', tenderId: 'tender-1' });
+    const item = makeBOQItem({ tenantId: 't-1', boqId: boq.id, itemCode: '1', description: 'X', unit: 'nos', quantity: 10, rate: 0 });
+    const { resources, components } = compileResourceBreakdown({ supplyUnitPrice: 100, otherDirect: 50 }, 10);
+    const b = makeRateBuildUp({ ...base, boqItemId: item.id, components, resources, overheadPercent: 0, profitPercent: 0, indirectPercent: 10 });
+    const est = summariseEstimate(boq.id, 'tender-1', [item], [b]);
+    expect(est.totalDirectCost).toBe(1050);
+    expect(est.totalIndirect).toBe(105);
+    expect(est.directCostByType.other).toBe(50);
+    expect(est.totalSellingValue).toBe(1155);
   });
 });

@@ -49,6 +49,30 @@ and chips every generated quotation. Linked from the tender detail page.
 (`u-admin`, `sa:<id>`) — ANY authored quotation insert failed on Postgres. Surfaced by this
 bridge's smoke; column aligned to `text` like the rest of the spine.
 
+### Sheets hub + CSV exports (same day, second wave)
+- **`/tendering/pricing`** (sidebar: "Pricing Sheets"): every sheet in the tenant — tender,
+  client, status, priced x/y, direct cost, selling value, tender value, margin — Open +
+  per-sheet CSV; orphan sheets (all BOQ lines deleted) filtered out.
+- **`GET /tendering/tenders/:id/pricing/export.csv`** — the original spreadsheet per line:
+  material (supply/unit, total, wastage %, accessories), tech/eng/PM (count·hours·rate·
+  total), manpower total, transport, subcontract, direct line cost, OH %, profit %, selling
+  rate, line total, margin, status; unpriced lines carry their BOQ rate. Export buttons on
+  the sheet page and the hub.
+- **`GET /tendering/tenders/pricing/sheets(.csv)`** — hub JSON + one-row-per-tender summary
+  CSV. `EstimateStore.listByTenant` added (pg + in-memory). Pure `pricingSheetCsvRows`
+  (+1 test, platform CSV pattern: shared `toCsv` + @Header routes + BFF stream proxies).
+
+### Full cost taxonomy (same day, third wave — migration **0143**)
+The sheet now carries EVERY cost line of the legacy `PricingLine`: direct cost = supply +
+wastage % + accessories + technician/engineer/PM manpower + transport + **equipment rent**
++ subcontract + **other direct** → **indirect/preliminaries %** (mobilization, supervision,
+site setup — `indirect_percent`/`indirect_amount` on the build-up) → overhead % → profit %
+(marked up on total cost) → selling rate. `CostType` gained `other`; the estimate roll-up
+reports `totalIndirect` and the `other` bucket; editor, totals bar, and both CSVs carry the
+new columns (incl. per-line indirect/overhead/profit amounts). Verified live: 654 direct →
++5% indirect → +10% OH → +15% profit = **864.92/unit**, roll-up buckets
+plant 800 (transport+equipment) / subcontract 100 / other 50; tendering tests 25 (+3).
+
 ## 2. Verification
 
 - **Live smoke 20/20** (built API, dev DB): tender + 2-item BOQ → line priced with the real

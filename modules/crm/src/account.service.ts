@@ -74,7 +74,7 @@ export class AccountService implements OnModuleInit {
   }
 
   /** Update mutable fields on an account (name, status, industry, website). */
-  async update(id: Id, patch: Partial<Pick<Account, 'name' | 'status' | 'industry' | 'website'>>): Promise<Account> {
+  async update(id: Id, patch: Partial<Pick<Account, 'name' | 'status' | 'industry' | 'website' | 'phone' | 'email' | 'billingAddress' | 'source' | 'paymentTerms' | 'ownerId'>>): Promise<Account> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`account ${id} not found`);
     if (patch.name !== undefined && !patch.name.trim()) throw new Error('account name is required');

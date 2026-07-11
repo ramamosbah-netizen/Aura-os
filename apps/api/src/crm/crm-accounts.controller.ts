@@ -9,6 +9,11 @@ class CreateAccountDto {
   @IsOptional() @IsString() status?: AccountStatus;
   @IsOptional() @IsString() industry?: string;
   @IsOptional() @IsString() website?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() billingAddress?: string;
+  @IsOptional() @IsString() source?: string;
+  @IsOptional() @IsString() paymentTerms?: string;
 }
 
 class UpdateAccountDto {
@@ -16,6 +21,11 @@ class UpdateAccountDto {
   @IsOptional() @IsString() status?: AccountStatus;
   @IsOptional() @IsString() industry?: string;
   @IsOptional() @IsString() website?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() billingAddress?: string;
+  @IsOptional() @IsString() source?: string;
+  @IsOptional() @IsString() paymentTerms?: string;
 }
 
 /**
@@ -40,6 +50,11 @@ export class CrmAccountsController {
       status: dto.status,
       industry: dto.industry,
       website: dto.website,
+      phone: dto.phone,
+      email: dto.email,
+      billingAddress: dto.billingAddress,
+      source: dto.source,
+      paymentTerms: dto.paymentTerms,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
@@ -77,6 +92,11 @@ export class CrmAccountsController {
         status: dto.status,
         industry: dto.industry,
         website: dto.website,
+        phone: dto.phone,
+        email: dto.email,
+        billingAddress: dto.billingAddress,
+        source: dto.source,
+        paymentTerms: dto.paymentTerms,
       });
     } catch (e) {
       const msg = (e as Error).message;

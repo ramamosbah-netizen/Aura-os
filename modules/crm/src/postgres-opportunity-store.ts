@@ -102,6 +102,10 @@ export class PostgresOpportunityStore implements OpportunityStore {
       params.push(filter.stage);
       where.push(`stage = $${params.length}`);
     }
+    if (filter.accountId) {
+      params.push(filter.accountId);
+      where.push(`account_id = $${params.length}`);
+    }
     if (filter.leadId) {
       params.push(filter.leadId);
       where.push(`lead_id = $${params.length}`);

@@ -3,24 +3,17 @@ import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   QUOTATION_EVENT,
+  QUOTATION_ACTIONS,
   type Quotation,
   type NewQuotation,
+  type QuotationAction,
+  applyQuotationAction,
   makeQuotation,
-  sendQuotation,
-  acceptQuotation,
-  rejectQuotation,
-  expireQuotation,
+  reviseQuotation,
 } from './domain/quotation';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 
-type QuotationAction = 'send' | 'accept' | 'reject' | 'expire';
-
-const ACTIONS: Record<QuotationAction, (q: Quotation) => Quotation> = {
-  send: sendQuotation,
-  accept: acceptQuotation,
-  reject: rejectQuotation,
-  expire: expireQuotation,
-};
+export { QUOTATION_ACTIONS, type QuotationAction };
 
 /**
  * Quotation service — owns `aura_crm_quotations`, emits `crm.quotation.*` on the spine.
@@ -56,22 +49,46 @@ export class QuotationService {
   async changeStatus(id: Id, action: QuotationAction): Promise<Quotation> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
-    const fn = ACTIONS[action];
-    if (!fn) throw new Error(`unknown action ${action}`);
-    const updated = fn(q);
+    const updated = applyQuotationAction(q, action);
     await this.store.save(updated);
-    const eventType = action === 'send' ? QUOTATION_EVENT.sent : action === 'accept' ? QUOTATION_EVENT.accepted : null;
-    if (eventType) {
-      await this.events.append([
-        makeEvent({
-          type: eventType,
-          tenantId: q.tenantId, companyId: q.companyId, actorId: null,
-          aggregateType: 'crm.quotation', aggregateId: id,
-          payload: { quoteNumber: q.quoteNumber, total: q.total, status: updated.status },
-        }),
-      ]);
-    }
+    const eventType =
+      action === 'send' ? QUOTATION_EVENT.sent : action === 'accept' ? QUOTATION_EVENT.accepted : QUOTATION_EVENT.statusChanged;
+    await this.events.append([
+      makeEvent({
+        type: eventType,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: null,
+        aggregateType: 'crm.quotation', aggregateId: id,
+        payload: { quoteNumber: q.quoteNumber, total: q.total, status: updated.status, action },
+      }),
+    ]);
+    this.logger.log(`Quotation ${q.quoteNumber} (rev ${q.revision}) ${action} → ${updated.status}`);
     return updated;
+  }
+
+  /** Supersede + copy: the old record becomes 'revised', a new draft carries revision+1. */
+  async revise(id: Id): Promise<Quotation> {
+    const q = await this.store.get(id);
+    if (!q) throw new Error(`quotation ${id} not found`);
+    const { superseded, next } = reviseQuotation(q);
+    await this.store.save(superseded);
+    await this.store.save(next);
+    await this.events.append([
+      makeEvent({
+        type: QUOTATION_EVENT.revised,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: null,
+        aggregateType: 'crm.quotation', aggregateId: next.id,
+        payload: { quoteNumber: q.quoteNumber, fromRevision: q.revision, toRevision: next.revision, supersededId: q.id },
+      }),
+    ]);
+    this.logger.log(`Quotation ${q.quoteNumber} revised: Rev ${q.revision} → Rev ${next.revision}`);
+    return next;
+  }
+
+  /** Record the contract created from an accepted quotation (deal-chain link). */
+  async linkContract(id: Id, contractId: Id): Promise<void> {
+    const q = await this.store.get(id);
+    if (!q) throw new Error(`quotation ${id} not found`);
+    await this.store.save({ ...q, convertedContractId: contractId });
   }
 
   get(id: Id): Promise<Quotation | null> {

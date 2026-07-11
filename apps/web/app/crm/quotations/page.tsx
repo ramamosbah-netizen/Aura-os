@@ -8,6 +8,14 @@ interface Quotation {
   id: string;
   quoteNumber: string;
   customerName: string;
+  accountId: string | null;
+  sourceTenderId?: string | null;
+  sourceOpportunityId?: string | null;
+  convertedContractId?: string | null;
+  ownerId?: string | null;
+  terms?: string | null;
+  revision?: number;
+  parentQuotationId?: string | null;
   issueDate: string;
   validUntil: string | null;
   subtotal: number;
@@ -24,9 +32,10 @@ export default async function QuotationsPage() {
     <div style={st.page}>
       <h1 style={st.h1}>CRM · Quotations</h1>
       <p style={st.sub}>
-        Pre-sales quotes to customers — the deal-chain step before a contract or invoice. Add line items
-        (net, 5% VAT and gross compute automatically), send to the client, then mark accepted, rejected,
-        or expired. Totals show the open (sent) pipeline and won value.
+        The client-facing quote in the deal chain: Draft → Internal Review → Approved → Sent →
+        Under Negotiation → Accepted / Rejected / Expired / Cancelled, with revisions
+        (Rev 0 → 1 → 2 …). Accepted quotes convert to a contract in one click; every quote
+        keeps its source (opportunity or tender pricing sheet) and its account.
       </p>
       <section style={{ marginTop: 10 }}>
         {quotations === null ? <p style={st.muted}>API offline.</p> : <QuotationsClient initialQuotations={quotations} />}

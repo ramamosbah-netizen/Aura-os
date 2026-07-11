@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeQuotation, computeQuotationTotals, buildQuotationLine, sendQuotation, acceptQuotation, rejectQuotation, expireQuotation } from './quotation';
+import { applyQuotationAction, reviseQuotation, makeQuotation, computeQuotationTotals, buildQuotationLine, sendQuotation, acceptQuotation, rejectQuotation, expireQuotation } from './quotation';
 
 const T = 'tenant-1';
 const lines = [
@@ -45,7 +45,7 @@ describe('lifecycle', () => {
     expect(rejectQuotation(sendQuotation(makeQuotation(base))).status).toBe('rejected');
   });
   it('cannot accept a draft (must send first)', () => {
-    expect(() => acceptQuotation(makeQuotation(base))).toThrow('must be sent first');
+    expect(() => acceptQuotation(makeQuotation(base))).toThrow('cannot accept from status draft');
   });
   it('can expire a draft or sent quote', () => {
     expect(expireQuotation(makeQuotation(base)).status).toBe('expired');
@@ -53,5 +53,39 @@ describe('lifecycle', () => {
   });
   it('cannot expire an accepted quote', () => {
     expect(() => expireQuotation(acceptQuotation(sendQuotation(makeQuotation(base))))).toThrow('cannot expire');
+  });
+});
+
+
+describe('extended lifecycle (review/negotiation/revisions)', () => {
+  it('walks draft -> internal_review -> approved -> sent -> under_negotiation -> accepted', () => {
+    let q = makeQuotation(base);
+    q = applyQuotationAction(q, 'submit_review');
+    expect(q.status).toBe('internal_review');
+    q = applyQuotationAction(q, 'approve');
+    expect(q.status).toBe('approved');
+    q = applyQuotationAction(q, 'send');
+    q = applyQuotationAction(q, 'negotiate');
+    expect(q.status).toBe('under_negotiation');
+    expect(applyQuotationAction(q, 'accept').status).toBe('accepted');
+  });
+
+  it('cancel works from any open status but not after acceptance', () => {
+    expect(applyQuotationAction(makeQuotation(base), 'cancel').status).toBe('cancelled');
+    const accepted = applyQuotationAction(applyQuotationAction(makeQuotation(base), 'send'), 'accept');
+    expect(() => applyQuotationAction(accepted, 'cancel')).toThrow('cannot cancel from status accepted');
+  });
+
+  it('revise supersedes the sent quote and drafts Rev n+1 with the same number and lines', () => {
+    const sent = applyQuotationAction(makeQuotation(base), 'send');
+    const { superseded, next } = reviseQuotation(sent);
+    expect(superseded.status).toBe('revised');
+    expect(next.status).toBe('draft');
+    expect(next.revision).toBe(1);
+    expect(next.parentQuotationId).toBe(sent.id);
+    expect(next.quoteNumber).toBe(sent.quoteNumber);
+    expect(next.lines).toHaveLength(sent.lines.length);
+    expect(next.total).toBe(sent.total);
+    expect(() => reviseQuotation(makeQuotation(base))).toThrow('cannot revise from status draft');
   });
 });

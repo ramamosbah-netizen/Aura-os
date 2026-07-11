@@ -58,6 +58,8 @@ export class CrmOpportunitiesController {
       quoteNumber: `QT-OPP-${opp.id.slice(0, 8)}`,
       customerName: opp.accountName ?? 'Client',
       accountId: opp.accountId,
+      sourceOpportunityId: opp.id,
+      ownerId: opp.ownerId ?? null,
       issueDate: new Date().toISOString().slice(0, 10),
       lines: [{ description: opp.title, quantity: 1, unitPrice: opp.value, vatRate: 5 }],
       createdBy: ctx.actorId,

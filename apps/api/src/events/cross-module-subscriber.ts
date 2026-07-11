@@ -97,6 +97,21 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Deal chain CLOSE: Project completed → complete the source contract ──
+    this.bus.subscribe('projects.project.completed', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const contractId = p.contractId as string | null;
+        if (!contractId) return;
+        const contract = await this.contracts.get(contractId);
+        if (!contract || contract.status !== 'active') return; // only close an active contract once
+        await this.contracts.changeStatus(contractId, 'completed');
+        this.logger.log(`⚡ project.completed → contract "${contract.title}" completed (deal chain closed)`);
+      } catch (err) {
+        this.logger.error(`Failed to complete contract from project.completed: ${err}`);
+      }
+    });
+
     // ── Deal chain: Tender won → auto-create Contract (draft) ──────────
     this.bus.subscribe('tendering.tender.awarded', async (e: DomainEvent) => {
       try {

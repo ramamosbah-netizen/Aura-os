@@ -137,6 +137,8 @@ export default function Account360Client({ accountId }: { accountId: string }) {
           <a href="/crm/quotations" style={st.actionBtn}>+ Quotation</a>
           <a href="/tendering/tenders" style={st.actionBtn}>+ Tender</a>
           <a href="/crm/contacts" style={st.actionBtn}>+ Contact</a>
+          <a href={`/api/crm/accounts/${a.id}/dossier/xlsx`} style={st.actionBtn}>⤓ Excel</a>
+          <a href={`/crm/accounts/${a.id}/print`} style={st.actionBtn}>🖨 PDF</a>
         </div>
       </div>
 

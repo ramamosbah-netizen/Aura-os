@@ -40,11 +40,19 @@ export default async function AccountsPage({
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>CRM · Accounts</h1>
-      <p style={st.sub}>
-        Customers and prospects — where every deal begins. Accounts flow through the full
-        deal chain: CRM → Tender → Contract → Project.
-      </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={st.h1}>CRM · Accounts</h1>
+          <p style={st.sub}>
+            Customers and prospects — where every deal begins. Accounts flow through the full
+            deal chain: CRM → Tender → Contract → Project.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <a href="/api/crm/accounts/export/xlsx" style={st.exportBtn}>⤓ Excel</a>
+          <a href="/crm/accounts/print" style={st.exportBtn}>🖨 PDF</a>
+        </div>
+      </div>
 
       <AccountCreate />
 
@@ -112,6 +120,7 @@ export default async function AccountsPage({
 }
 
 const st = {
+  exportBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
   page: { maxWidth: 980, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 640, lineHeight: 1.5 } as CSSProperties,

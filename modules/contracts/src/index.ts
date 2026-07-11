@@ -20,3 +20,8 @@ export * from './in-memory-obligation-store';
 export * from './postgres-obligation-store';
 export * from './obligation.service';
 export * from './contracts.module';
+export * from './domain/contract-bond';
+export * from './bond-store';
+export * from './in-memory-bond-store';
+export * from './postgres-bond-store';
+export * from './bond.service';

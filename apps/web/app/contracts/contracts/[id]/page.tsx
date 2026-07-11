@@ -1,5 +1,7 @@
+import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import RecordDetail, { RecordNotFound } from '../../../../components/record-detail';
+import RecordChrome from '../../../../components/record-chrome';
+import Contract360Client from '../../../../components/contract-360-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,40 +18,37 @@ interface Contract {
   createdAt: string;
 }
 
-const money = (n: number) => (n ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-
+/**
+ * Contract 360 — where the deal chain closes: workflow (sign → project),
+ * obligations & milestones, bonds/guarantees with expiry watch, and IPCs.
+ */
 export default async function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const contract = await getJson<Contract>(`/api/contracts/contracts/${id}`);
-  if (!contract)
-    return <RecordNotFound type="Contract" backHref="/contracts/contracts" backLabel="Back to Contracts" />;
 
-  const links = [
-    contract.accountId
-      ? { label: `Account: ${contract.accountName ?? 'view'}`, href: `/crm/accounts/${contract.accountId}` }
-      : null,
-    contract.tenderId
-      ? { label: `Tender: ${contract.tenderTitle ?? 'view'}`, href: `/tendering/tenders/${contract.tenderId}` }
-      : null,
-    { label: 'Print contract', href: `/contracts/contracts/${contract.id}/print` },
-    { label: 'Payment certificates', href: '/contracts/certificates' },
-  ].filter((l): l is { label: string; href: string } => l !== null);
+  if (!contract) {
+    return (
+      <div style={st.container}>
+        <h1 style={st.h1}>Contract Not Found</h1>
+        <a href="/contracts/contracts" style={st.link}>← Back to Contracts</a>
+      </div>
+    );
+  }
 
   return (
-    <RecordDetail
-      type="Contract"
-      title={contract.title}
-      status={contract.status}
-      backHref="/contracts/contracts"
-      backLabel="Back to Contracts"
-      fields={[
-        { label: 'Reference', value: contract.reference ?? '—' },
-        { label: 'Client', value: contract.accountName ?? '—' },
-        { label: 'Source tender', value: contract.tenderTitle ?? '—' },
-        { label: 'Contract value', value: money(contract.value) },
-        { label: 'Created', value: new Date(contract.createdAt).toLocaleDateString() },
-      ]}
-      links={links}
-    />
+    <div style={st.container}>
+      <RecordChrome type="Contract" title={contract.title} />
+      <div style={st.navRow}>
+        <a href="/contracts/contracts" style={st.link}>← Back to Contracts</a>
+      </div>
+      <Contract360Client contract={contract} />
+    </div>
   );
 }
+
+const st = {
+  container: { maxWidth: 1180, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  h1: { fontSize: 24, margin: '0 0 10px', color: 'var(--accent)' } as CSSProperties,
+  navRow: { marginBottom: 14 } as CSSProperties,
+  link: { color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 500 } as CSSProperties,
+};

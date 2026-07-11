@@ -16,6 +16,11 @@ import { InMemoryClauseStore } from './in-memory-clause-store';
 import { PostgresClauseStore } from './postgres-clause-store';
 import { ClauseService } from './clause.service';
 
+import { CONTRACT_BOND_STORE } from './bond-store';
+import { InMemoryBondStore } from './in-memory-bond-store';
+import { PostgresBondStore } from './postgres-bond-store';
+import { BondService } from './bond.service';
+
 import { OBLIGATION_STORE } from './obligation-store';
 import { InMemoryObligationStore } from './in-memory-obligation-store';
 import { PostgresObligationStore } from './postgres-obligation-store';
@@ -32,6 +37,12 @@ import { ObligationService } from './obligation.service';
         pool ? new PostgresContractStore(pool) : new InMemoryContractStore(),
     },
     ContractService,
+    {
+      provide: CONTRACT_BOND_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? new PostgresBondStore(pool) : new InMemoryBondStore()),
+    },
+    BondService,
     {
       provide: PAYMENT_CERTIFICATE_STORE,
       inject: [PG_POOL],
@@ -54,6 +65,6 @@ import { ObligationService } from './obligation.service';
     },
     ObligationService,
   ],
-  exports: [ContractService, PaymentCertificateService, ClauseService, ObligationService],
+  exports: [ContractService, PaymentCertificateService, ClauseService, ObligationService, BondService],
 })
 export class ContractsModule {}

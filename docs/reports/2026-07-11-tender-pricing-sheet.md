@@ -49,6 +49,19 @@ and chips every generated quotation. Linked from the tender detail page.
 (`u-admin`, `sa:<id>`) — ANY authored quotation insert failed on Postgres. Surfaced by this
 bridge's smoke; column aligned to `text` like the rest of the spine.
 
+### Sheets hub + CSV exports (same day, second wave)
+- **`/tendering/pricing`** (sidebar: "Pricing Sheets"): every sheet in the tenant — tender,
+  client, status, priced x/y, direct cost, selling value, tender value, margin — Open +
+  per-sheet CSV; orphan sheets (all BOQ lines deleted) filtered out.
+- **`GET /tendering/tenders/:id/pricing/export.csv`** — the original spreadsheet per line:
+  material (supply/unit, total, wastage %, accessories), tech/eng/PM (count·hours·rate·
+  total), manpower total, transport, subcontract, direct line cost, OH %, profit %, selling
+  rate, line total, margin, status; unpriced lines carry their BOQ rate. Export buttons on
+  the sheet page and the hub.
+- **`GET /tendering/tenders/pricing/sheets(.csv)`** — hub JSON + one-row-per-tender summary
+  CSV. `EstimateStore.listByTenant` added (pg + in-memory). Pure `pricingSheetCsvRows`
+  (+1 test, platform CSV pattern: shared `toCsv` + @Header routes + BFF stream proxies).
+
 ## 2. Verification
 
 - **Live smoke 20/20** (built API, dev DB): tender + 2-item BOQ → line priced with the real

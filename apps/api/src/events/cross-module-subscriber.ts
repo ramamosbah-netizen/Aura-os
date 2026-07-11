@@ -82,6 +82,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
             accountName: (p.accountName as string) ?? null,
             value: (p.value as number) ?? 0,
             status: 'draft',
+            sourceOpportunityId: e.aggregateId,
           },
           // Idempotency: the outbox is at-least-once, so a re-delivered (or re-won)
           // opportunity event must not spawn a second tender. Keyed by the source

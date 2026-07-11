@@ -18,6 +18,8 @@ export interface Activity {
   /** What this activity is about — polymorphic reference (type + id), no join. */
   relatedType: ActivityRelatedType | null;
   relatedId: Id | null;
+  /** Name snapshot of the related record (deal-chain convention: reference + snapshot). */
+  relatedName: string | null;
   /** Tasks: when it is due and who owns it. */
   dueDate: string | null;
   status: ActivityStatus;
@@ -35,6 +37,7 @@ export interface NewActivity {
   notes?: string | null;
   relatedType?: ActivityRelatedType | null;
   relatedId?: Id | null;
+  relatedName?: string | null;
   dueDate?: string | null;
   status?: ActivityStatus;
   assigneeId?: Id | null;
@@ -51,6 +54,7 @@ export function makeActivity(input: NewActivity): Activity {
     notes: input.notes?.trim() || null,
     relatedType: input.relatedType ?? null,
     relatedId: input.relatedId ?? null,
+    relatedName: input.relatedName?.trim() || null,
     dueDate: input.dueDate ?? null,
     status: input.status ?? 'open',
     completedAt: null,
@@ -64,6 +68,17 @@ export function makeActivity(input: NewActivity): Activity {
 export function completeActivity(a: Activity, at?: string): Activity {
   if (a.status === 'completed') return a;
   return { ...a, status: 'completed', completedAt: at ?? new Date().toISOString() };
+}
+
+export function cancelActivity(a: Activity): Activity {
+  if (a.status !== 'open') throw new Error(`cannot cancel from status ${a.status}`);
+  return { ...a, status: 'cancelled' };
+}
+
+/** Completed/cancelled back to open — plans change. */
+export function reopenActivity(a: Activity): Activity {
+  if (a.status === 'open') throw new Error('activity is already open');
+  return { ...a, status: 'open', completedAt: null };
 }
 
 /** CRM activity events on the spine. */

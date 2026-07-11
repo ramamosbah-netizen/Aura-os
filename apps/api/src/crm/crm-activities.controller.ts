@@ -13,6 +13,7 @@ class CreateActivityDto {
   @IsOptional() @IsString() dueDate?: string;
   @IsOptional() @IsString() status?: ActivityStatus;
   @IsOptional() @IsString() assigneeId?: string;
+  @IsOptional() @IsString() relatedName?: string;
 }
 
 /**
@@ -38,7 +39,8 @@ export class CrmActivitiesController {
       subject: dto.subject,
       notes: dto.notes ?? null,
       relatedType: dto.relatedType ?? null,
-      relatedId: dto.relatedId ?? null,
+      relatedId: dto.relatedId,
+      relatedName: dto.relatedName ?? null,
       dueDate: dto.dueDate ?? null,
       status: dto.status,
       assigneeId: dto.assigneeId ?? ctx.actorId,
@@ -76,6 +78,24 @@ export class CrmActivitiesController {
     const found = await this.activities.get(id);
     if (!found) throw new NotFoundException(`activity ${id} not found`);
     return found;
+  }
+
+  @Post(':id/cancel')
+  async cancel(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
+    try {
+      return await this.activities.cancel(id);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'cancel failed');
+    }
+  }
+
+  @Post(':id/reopen')
+  async reopen(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
+    try {
+      return await this.activities.reopen(id);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'reopen failed');
+    }
   }
 
   @Post(':id/complete')

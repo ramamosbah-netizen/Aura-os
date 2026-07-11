@@ -31,8 +31,21 @@ export default function AppShell({
   isAdmin?: boolean;
 }) {
   const pathname = usePathname();
+  // Module Manager: tenant-disabled business modules disappear from the nav for everyone
+  // (the API rejects their routes with 403 regardless — this is the UX half).
+  const [disabledModules, setDisabledModules] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    fetch('/api/workspace/modules', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { disabled?: string[] } | null) => {
+        if (d?.disabled?.length) setDisabledModules(new Set(d.disabled));
+      })
+      .catch(() => undefined);
+  }, []);
   // Admins always see every suite; otherwise gate by the role's allowed suites.
-  const groups = visibleNav(isAdmin || navSuites == null ? null : new Set(navSuites));
+  const groups = visibleNav(isAdmin || navSuites == null ? null : new Set(navSuites))
+    .map((g) => ({ ...g, items: g.items.filter((i) => !disabledModules.has(i.href.split('/')[1] ?? '')) }))
+    .filter((g) => g.items.length > 0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [activeCompany, setActiveCompany] = useState('AURA Group HQ');

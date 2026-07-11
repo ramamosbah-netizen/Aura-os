@@ -56,6 +56,7 @@ import { SavedViewService } from './views/saved-view.service';
 import { NOTIFICATION_STORE, InMemoryNotificationStore, PostgresNotificationStore } from './notifications/notification-store';
 import { FeatureFlagService } from './config/feature-flag.service';
 import { SettingsService } from './config/settings.service';
+import { ModulesService } from './config/modules.service';
 import { BackgroundJobService } from './jobs/background-job.service';
 import { ConnectorService } from './integration/connector.service';
 import { SdkGeneratorService } from './integration/sdk-generator.service';
@@ -121,6 +122,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     SavedViewService,
     FeatureFlagService,
     SettingsService,
+    ModulesService,
     BackgroundJobService,
     ConnectorService,
     SdkGeneratorService,
@@ -213,6 +215,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     SavedViewService,
     FeatureFlagService,
     SettingsService,
+    ModulesService,
     BackgroundJobService,
     ConnectorService,
     SdkGeneratorService,

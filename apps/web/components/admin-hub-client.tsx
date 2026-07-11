@@ -19,6 +19,8 @@ const KEYWORDS: Record<string, string> = {
   'approval-matrix': 'approve threshold band value limit purchase',
   workspace: 'sidebar functions visibility role workspace what users see',
   settings: 'key value tenant raw config',
+  modules: 'enable disable module on off feature app crm finance hide turn',
+  'module-settings': 'vat rate threshold retention stages defaults payment terms leave policy business',
   'feature-flags': 'toggle rollout enable disable flag',
   numbering: 'sequence prefix invoice number format',
   calendar: 'holiday weekend working days ramadan hours',

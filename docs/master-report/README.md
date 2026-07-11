@@ -151,6 +151,16 @@ or **[Gap]**.
 > disposal guards, transmittal project guard). Remaining P2: the L rows (#16 remainder,
 > #17–#20, #22–#24, #26). See `docs/reports/2026-07-09-p2-wave1.md`.
 >
+> **Update 2026-07-11 (Module Manager + Module Settings — NEW-ERP parity, hub → 24 screens):**
+> `/admin/modules` switches the 17 business modules on/off per tenant — **enforced**: the
+> guard 403s a disabled module's routes (auth state irrelevant) and the sidebar hides
+> them for every user; the gate lives in the `modules.disabled` settings row (kernel
+> `ModulesService`, hydrate-on-boot, audited). `/admin/module-settings` — catalog-driven
+> business defaults per module (VAT, purchase thresholds, project stages, retention,
+> leave…), mirroring the legacy NEW-ERP settings workspace;
+> `subcontracts.defaultRetentionPercent` consumed live. Verified 9/9 incl. gate 403 →
+> re-enable → 200 and retention default applied. Core 135; SDK 663 ops.
+>
 > **Update 2026-07-10 (Form Designer P2 — the §2.4 flagship, register #16 core closed):**
 > admins now **add fields the schema never had**: `cf_*` custom fields (text/number/
 > select/date/textarea, required, options) that render, validate, **and persist per
@@ -263,7 +273,7 @@ row updated 2026-07-08 per the Vol 23 register re-verification).
 | Reporting / BI (charts + CSV/BI exports w/ web downloads) | 50% | Fair | Early | **5.5/10** |
 | Security (P1 closed; vault seam + rotation + secret scanning done; **RLS is the one open P0**) | 65% | Good design | **No — RLS open** | **6.0/10** |
 | Deployment / Operations (Docker + compose + CI migration gate + GHCR images + observability + backup/DR drill; first cloud target open) | 60% | Good | Nearly (single-host eval yes) | **6.3/10** |
-| Administration Center (searchable hub + 22 screens; users registry w/ enforced deactivation, security posture, workflow registry, per-event rules; matrix UIs; PG-backed) | 90% | Good | Yes (platform self-serve) | **8.8/10** |
+| Administration Center (searchable hub + 24 screens; module on/off enforced at guard+nav, per-module business settings, users registry, security posture, form designer w/ publish; PG-backed) | 92% | Good | Yes (platform self-serve) | **9.0/10** |
 | Mobile / Offline | 5% | Not started | No | **1.5/10** |
 
 ### Business modules

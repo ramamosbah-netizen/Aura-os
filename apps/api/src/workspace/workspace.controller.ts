@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { ModulesService, TenantContext } from '@aura/core';
 import type { WorkspaceConfig, WorkspaceMe } from '@aura/shared';
 import { WorkspaceConfigService, type WorkspaceUser } from './workspace-config.service';
 
@@ -18,7 +18,14 @@ export class WorkspaceController {
   constructor(
     private readonly workspace: WorkspaceConfigService,
     private readonly tenant: TenantContext,
+    private readonly modules: ModulesService,
   ) {}
+
+  /** Disabled business modules for this tenant — the sidebar hides them (Module Manager). */
+  @Get('modules')
+  moduleGates(): { disabled: string[] } {
+    return { disabled: this.modules.disabledIds(this.tenant.get().tenantId) };
+  }
 
   @Get('config')
   getConfig(): Promise<WorkspaceConfig> {

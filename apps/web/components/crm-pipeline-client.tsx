@@ -47,6 +47,10 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [busy, setBusy] = useState(false);
   const [forecast, setForecast] = useState<{ id: string; prob: number; reason: string } | null>(null);
   const [activities, setActivities] = useState<Activity[] | null>(null);
+  // Native HTML5 drag & drop across board columns (buttons stay as the
+  // keyboard-accessible fallback for the same moves).
+  const [drag, setDrag] = useState<{ kind: 'lead' | 'opp'; id: string; from: string } | null>(null);
+  const [hoverCol, setHoverCol] = useState<string | null>(null);
 
   useEffect(() => {
     if (view !== 'activities' || activities) return;
@@ -128,6 +132,60 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       else setErr(data.error ?? 'Forecast failed');
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   }
+
+  /** Which columns the current drag may drop on. */
+  const canDrop = (colKey: string): boolean => {
+    if (!drag) return false;
+    if (drag.kind === 'opp') return OPP_STAGES.includes(colKey as (typeof OPP_STAGES)[number]) && colKey !== drag.from;
+    // leads: new → Qualified Leads column; qualified → Discovery (converts to an opportunity)
+    if (drag.from !== 'qualified') return colKey === 'lead-qualified';
+    return colKey === 'qualification';
+  };
+
+  const onDropTo = (colKey: string): void => {
+    if (!drag || !canDrop(colKey)) return;
+    const d = drag;
+    setDrag(null);
+    setHoverCol(null);
+    if (d.kind === 'opp') {
+      const o = initialOpportunities.find((x) => x.id === d.id);
+      if (o) changeStage(o, colKey);
+      return;
+    }
+    const l = initialLeads.find((x) => x.id === d.id);
+    if (!l) return;
+    if (colKey === 'lead-qualified') qualifyLead(l);
+    else convertLead(l);
+  };
+
+  const dragHandlers = (kind: 'lead' | 'opp', id: string, from: string) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', id); // required by Firefox to start a drag
+      setDrag({ kind, id, from });
+    },
+    onDragEnd: () => {
+      setDrag(null);
+      setHoverCol(null);
+    },
+  });
+
+  const dropHandlers = (colKey: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!canDrop(colKey)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (hoverCol !== colKey) setHoverCol(colKey);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (e.currentTarget === e.target && hoverCol === colKey) setHoverCol(null);
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      onDropTo(colKey);
+    },
+  });
 
   /* ── KPIs (leads and opportunities counted separately) ─────────────────── */
   const leads = initialLeads;
@@ -234,7 +292,15 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       {view === 'board' && (
         <div style={s.board}>
           {boardCols.map((col) => (
-            <div key={col.key} style={s.col}>
+            <div
+              key={col.key}
+              style={{
+                ...s.col,
+                ...(drag && canDrop(col.key) ? s.colDroppable : {}),
+                ...(hoverCol === col.key ? s.colHover : {}),
+              }}
+              {...dropHandlers(col.key)}
+            >
               <div style={s.colHead}>
                 <span>{col.label}</span>
                 <span style={s.colCount}>{col.kind === 'lead' ? col.leads!.length : col.opps!.length}</span>
@@ -244,7 +310,8 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               )}
 
               {col.kind === 'lead' && col.leads!.map((l) => (
-                <div key={l.id} style={s.card}>
+                <div key={l.id} style={{ ...s.card, ...s.cardGrab, ...(drag?.id === l.id ? s.cardDragging : {}) }}
+                  {...dragHandlers('lead', l.id, l.status)} title="Drag to qualify / convert">
                   <div style={s.cardTitle}>{l.name}</div>
                   {l.companyName && <div style={s.cardSub}>{l.companyName}</div>}
                   <div style={s.cardMetaRow}>
@@ -263,7 +330,12 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 const stageIdx = OPP_STAGES.indexOf(o.stage as (typeof OPP_STAGES)[number]);
                 const direct = o.requiresTender === false;
                 return (
-                  <div key={o.id} style={{ ...s.card, ...(o.stage === 'won' ? s.cardWon : o.stage === 'lost' ? s.cardLost : {}) }}>
+                  <div
+                    key={o.id}
+                    style={{ ...s.card, ...s.cardGrab, ...(o.stage === 'won' ? s.cardWon : o.stage === 'lost' ? s.cardLost : {}), ...(drag?.id === o.id ? s.cardDragging : {}) }}
+                    {...dragHandlers('opp', o.id, o.stage)}
+                    title="Drag to another stage"
+                  >
                     <div style={s.cardTitle}>{o.title}</div>
                     {o.accountName && <div style={s.cardSub}>{o.accountName}</div>}
                     <div style={s.cardMetaRow}>
@@ -303,11 +375,16 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               })}
 
               {((col.kind === 'lead' && col.leads!.length === 0) || (col.kind === 'opp' && col.opps!.length === 0)) && (
-                <div style={s.colEmpty}>—</div>
+                <div style={s.colEmpty}>{drag && canDrop(col.key) ? 'Drop here' : '—'}</div>
               )}
             </div>
           ))}
         </div>
+      )}
+      {view === 'board' && (
+        <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: '-6px 2px 0' }}>
+          Drag cards between stages (or use the card buttons) — a lead drops onto Qualified, a qualified lead onto Discovery to become an opportunity.
+        </p>
       )}
 
       {/* ── LIST ── */}
@@ -479,6 +556,10 @@ const s = {
   colValue: { fontSize: 11, color: 'var(--accent)', fontWeight: 700, padding: '0 4px' } as CSSProperties,
   colEmpty: { color: 'var(--muted)', textAlign: 'center', padding: '14px 0', fontSize: 12 } as CSSProperties,
   card: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 11px', display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
+  cardGrab: { cursor: 'grab' } as CSSProperties,
+  cardDragging: { opacity: 0.45, cursor: 'grabbing' } as CSSProperties,
+  colDroppable: { borderStyle: 'dashed', borderColor: 'var(--accent)' } as CSSProperties,
+  colHover: { background: 'rgba(255,193,7,0.06)', borderColor: 'var(--accent)' } as CSSProperties,
   cardWon: { borderColor: 'var(--good)' } as CSSProperties,
   cardLost: { opacity: 0.65 } as CSSProperties,
   cardTitle: { fontWeight: 700, fontSize: 12.5, lineHeight: 1.3 } as CSSProperties,

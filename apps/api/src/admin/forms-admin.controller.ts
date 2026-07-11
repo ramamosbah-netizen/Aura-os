@@ -2,16 +2,38 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put } 
 import { AuditService, FormCustomValuesService, FormOverridesService, Permissions, TenantContext, type FormOverridesStatus } from '@aura/core';
 import {
   ADDED_FIELD_NAME,
+  validateFormOverrides,
   type AddedField,
   type FieldOverride,
+  type FieldValidation,
   type FormOverrides,
+  type FormRule,
   type FormSchema,
+  type LayoutNode,
   employeeFormSchema,
   quotationFormSchema,
   subcontractFormSchema,
 } from '@aura/shared';
 
 const ADDED_KINDS = new Set(['text', 'number', 'select', 'date', 'textarea']);
+// Designer-authorable validation types — 'custom' (plugin validators) stays code-side.
+const VALIDATION_TYPES = new Set(['min', 'max', 'minLength', 'maxLength', 'pattern']);
+
+/** Keep only well-shaped declarative validation rules (deep checks run in validateFormOverrides). */
+function cleanValidation(input: unknown): FieldValidation[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const out: FieldValidation[] = [];
+  for (const v of input) {
+    if (!v || typeof v !== 'object' || !VALIDATION_TYPES.has((v as FieldValidation).type)) continue;
+    const r = v as FieldValidation;
+    out.push({
+      type: r.type,
+      ...(r.value !== undefined ? { value: r.value } : {}),
+      ...(typeof r.message === 'string' && r.message.trim() ? { message: r.message.trim() } : {}),
+    });
+  }
+  return out;
+}
 
 /**
  * Form Designer (Vol 15 §2.4). P1: per-tenant override patches (labels, hints,
@@ -57,7 +79,19 @@ export class FormsAdminController {
   @Permissions('admin.forms.manage')
   @Get(':id')
   async detail(@Param('id') id: string): Promise<{
-    schema: { id: string; entity: string; endpoint: string; fields: Array<Pick<FormSchema['fields'][number], 'name' | 'label' | 'kind' | 'required' | 'hint' | 'placeholder' | 'hidden' | 'transient'>> };
+    schema: {
+      id: string;
+      entity: string;
+      endpoint: string;
+      fields: Array<
+        Pick<FormSchema['fields'][number], 'name' | 'label' | 'kind' | 'required' | 'hint' | 'placeholder' | 'hidden' | 'transient' | 'formula'> & {
+          options?: string[];
+          validationCount?: number;
+        }
+      >;
+      ruleCount: number;
+      hasLayout: boolean;
+    };
     overrides: FormOverrides;
     status: FormOverridesStatus;
   }> {
@@ -81,7 +115,12 @@ export class FormsAdminController {
           placeholder: f.placeholder,
           hidden: f.hidden,
           transient: f.transient,
+          formula: f.formula,
+          ...(f.options?.length ? { options: f.options.map((op) => op.value) } : {}),
+          ...(f.validation?.length ? { validationCount: f.validation.length } : {}),
         })),
+        ruleCount: s.rules?.length ?? 0,
+        hasLayout: (s.layout?.length ?? 0) > 0,
       },
       overrides: o ?? { fields: {} },
       status,
@@ -93,10 +132,17 @@ export class FormsAdminController {
   @Put(':id')
   async save(
     @Param('id') id: string,
-    @Body() dto: { fields?: Record<string, FieldOverride>; added?: AddedField[]; order?: string[] },
+    @Body() dto: {
+      fields?: Record<string, FieldOverride>;
+      added?: AddedField[];
+      order?: string[];
+      rules?: FormRule[];
+      layout?: LayoutNode[];
+    },
   ): Promise<{ ok: true }> {
     const s = this.schemaById(id);
     const known = new Set(s.fields.map((f) => f.name));
+    const codeFormula = new Map(s.fields.filter((f) => f.formula).map((f) => [f.name, f.formula]));
     const fields: Record<string, FieldOverride> = {};
     for (const [name, patch] of Object.entries(dto?.fields ?? {})) {
       if (!known.has(name)) throw new BadRequestException(`unknown field: ${name}`);
@@ -106,6 +152,14 @@ export class FormsAdminController {
       if (typeof patch?.placeholder === 'string') clean.placeholder = patch.placeholder.trim();
       if (typeof patch?.required === 'boolean') clean.required = patch.required;
       if (typeof patch?.hidden === 'boolean') clean.hidden = patch.hidden;
+      // P3: a non-empty formula overrides; '' is only meaningful as "clear the code formula".
+      if (typeof patch?.formula === 'string') {
+        const f = patch.formula.trim();
+        if (f) clean.formula = f;
+        else if (codeFormula.has(name)) clean.formula = '';
+      }
+      const validation = cleanValidation(patch?.validation);
+      if (validation && validation.length > 0) clean.validation = validation;
       if (Object.keys(clean).length > 0) fields[name] = clean;
     }
 
@@ -122,6 +176,7 @@ export class FormsAdminController {
       const options = (a.options ?? []).map((v) => String(v).trim()).filter(Boolean);
       if (a.kind === 'select' && options.length === 0) throw new BadRequestException(`select field ${name} needs at least one option`);
       seen.add(name);
+      const addedValidation = cleanValidation(a.validation);
       added.push({
         name,
         label: a.label.trim(),
@@ -130,6 +185,8 @@ export class FormsAdminController {
         ...(a.hint?.trim() ? { hint: a.hint.trim() } : {}),
         ...(a.placeholder?.trim() ? { placeholder: a.placeholder.trim() } : {}),
         ...(a.kind === 'select' ? { options } : {}),
+        ...(typeof a.formula === 'string' && a.formula.trim() ? { formula: a.formula.trim() } : {}),
+        ...(addedValidation && addedValidation.length > 0 ? { validation: addedValidation } : {}),
       });
     }
 
@@ -137,16 +194,60 @@ export class FormsAdminController {
     const orderable = new Set([...known, ...seen]);
     const order = (dto?.order ?? []).filter((n) => orderable.has(n));
 
-    const ctx = this.tenant.get();
-    await this.overrides.setDraft(ctx.tenantId, id, {
+    // P3: rules — structural pass-through; deep checks (fields/ops/messages)
+    // run in validateFormOverrides below.
+    const rules: FormRule[] = [];
+    for (const r of dto?.rules ?? []) {
+      if (!r || typeof r !== 'object' || !r.when || !Array.isArray(r.actions)) {
+        throw new BadRequestException('each rule needs a condition and an actions array');
+      }
+      rules.push({
+        ...(typeof r.description === 'string' && r.description.trim() ? { description: r.description.trim() } : {}),
+        when: r.when,
+        actions: r.actions,
+        ...(Array.isArray(r.otherwise) ? { otherwise: r.otherwise } : {}),
+      });
+    }
+
+    // P3: layout — the designer authors sections of fields; anything else is refused.
+    const layout: LayoutNode[] = [];
+    for (const node of dto?.layout ?? []) {
+      if (!node || typeof node !== 'object' || node.type !== 'section' || !Array.isArray(node.children)) {
+        throw new BadRequestException('layout nodes must be sections of fields');
+      }
+      const children = node.children.filter(
+        (c): c is { type: 'field'; name: string } => !!c && c.type === 'field' && typeof c.name === 'string',
+      );
+      layout.push({
+        type: 'section',
+        ...(typeof node.label === 'string' && node.label.trim() ? { label: node.label.trim() } : {}),
+        ...(typeof node.description === 'string' && node.description.trim() ? { description: node.description.trim() } : {}),
+        children,
+      });
+    }
+
+    const draft: FormOverrides = {
       fields,
       ...(added.length > 0 ? { added } : {}),
       ...(order.length > 0 ? { order } : {}),
-    });
+      ...(rules.length > 0 ? { rules } : {}),
+      ...(layout.length > 0 ? { layout } : {}),
+    };
+
+    // The deep gate: broken formulas, rules pointing at unknown fields, bad
+    // regexes, duplicate layout placements — a draft with problems is refused,
+    // so the published channel can never hold one.
+    const problems = validateFormOverrides(s, draft);
+    if (problems.length > 0) throw new BadRequestException(problems.join('; '));
+
+    const ctx = this.tenant.get();
+    await this.overrides.setDraft(ctx.tenantId, id, draft);
     void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'form', id, 'draft-saved', {
       fields: Object.keys(fields),
       added: added.map((a) => a.name),
       ordered: order.length > 0,
+      rules: rules.length,
+      sections: layout.length,
     });
     return { ok: true };
   }

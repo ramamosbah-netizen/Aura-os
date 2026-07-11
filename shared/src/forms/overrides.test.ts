@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { applyFormOverrides, hasOverrides } from './overrides';
+import { applyFormOverrides, hasOverrides, validateFormOverrides } from './overrides';
 import { checkFormValid } from './enforce';
+import { evaluateForm } from './evaluate';
 import type { FormSchema } from './schema';
 
 const schema: FormSchema = {
@@ -92,5 +93,136 @@ describe('applyFormOverrides (Form Designer P2 — added fields + order)', () =>
     // unknown names in the order list are ignored
     const out2 = applyFormOverrides(schema, { fields: {}, order: ['ghost', 'notes'] });
     expect(out2.fields.map((f) => f.name)).toEqual(['notes', 'title']);
+  });
+});
+
+describe('applyFormOverrides (Form Designer P3 — formulas, validation, rules, layout)', () => {
+  const numSchema: FormSchema = {
+    id: 't.calc',
+    entity: 'Calc',
+    endpoint: '/api/calc',
+    fields: [
+      { name: 'qty', label: 'Qty', kind: 'number' },
+      { name: 'rate', label: 'Rate', kind: 'number' },
+      { name: 'total', label: 'Total', kind: 'number' },
+    ],
+  };
+
+  it('an override formula computes live and renders read-only', () => {
+    const out = applyFormOverrides(numSchema, { fields: { total: { formula: 'qty * rate' } } });
+    const ev = evaluateForm(out, { qty: '3', rate: '25', total: '' });
+    expect(ev.values.total).toBe('75');
+    expect(ev.state.total.readonly).toBe(true);
+  });
+
+  it('an empty-string formula CLEARS a code formula (field editable again)', () => {
+    const withCode: FormSchema = {
+      ...numSchema,
+      fields: [numSchema.fields[0], numSchema.fields[1], { ...numSchema.fields[2], formula: 'qty * rate' }],
+    };
+    const out = applyFormOverrides(withCode, { fields: { total: { formula: '' } } });
+    expect(out.fields[2].formula).toBeUndefined();
+    expect(evaluateForm(out, { qty: '3', rate: '25', total: '9' }).state.total.readonly).toBe(false);
+  });
+
+  it('override validation replaces code validation and is enforced', () => {
+    const out = applyFormOverrides(numSchema, {
+      fields: { qty: { validation: [{ type: 'min', value: 1, message: 'Qty must be positive' }] } },
+    });
+    expect(checkFormValid(out, { qty: '0' }).fieldErrors.qty).toBe('Qty must be positive');
+    expect(Object.keys(checkFormValid(out, { qty: '2' }).fieldErrors)).toHaveLength(0);
+  });
+
+  it('designer rules append after code rules and enforce (error + require)', () => {
+    const out = applyFormOverrides(numSchema, {
+      fields: {},
+      rules: [
+        {
+          description: 'big orders need a rate',
+          when: { field: 'qty', op: 'gt', value: 100 },
+          actions: [
+            { type: 'require', field: 'rate' },
+            { type: 'error', message: 'Orders over 100 need review' },
+          ],
+        },
+      ],
+    });
+    const bad = checkFormValid(out, { qty: '150' });
+    expect(bad.errors).toContain('Orders over 100 need review');
+    expect(bad.fieldErrors.rate).toMatch(/required/);
+    expect(checkFormValid(out, { qty: '5' }).errors).toHaveLength(0);
+  });
+
+  it('a designer layout replaces the code layout; rules/layout count as overrides', () => {
+    const layout = [{ type: 'section' as const, label: 'Pricing', children: [{ type: 'field' as const, name: 'qty' }] }];
+    const out = applyFormOverrides(numSchema, { fields: {}, layout });
+    expect(out.layout).toEqual(layout);
+    expect(hasOverrides({ fields: {}, layout })).toBe(true);
+    expect(hasOverrides({ fields: {}, rules: [{ when: { field: 'qty', op: 'empty' }, actions: [] }] })).toBe(true);
+  });
+});
+
+describe('validateFormOverrides (P3 draft validation)', () => {
+  it('accepts a clean draft', () => {
+    expect(
+      validateFormOverrides(schema, {
+        fields: { notes: { formula: 'title', validation: [{ type: 'maxLength', value: 10 }] } },
+        added: [{ name: 'cf_score', label: 'Score', kind: 'number', formula: 'LEN(title)' }],
+        rules: [{ when: { field: 'title', op: 'notEmpty' }, actions: [{ type: 'require', field: 'notes' }] }],
+        layout: [{ type: 'section', label: 'Main', children: [{ type: 'field', name: 'title' }] }],
+      }),
+    ).toEqual([]);
+  });
+
+  it('flags formula parse errors and unknown field refs (code + added)', () => {
+    const problems = validateFormOverrides(schema, {
+      fields: { notes: { formula: 'title +' } },
+      added: [{ name: 'cf_x', label: 'X', kind: 'number', formula: 'ghost * 2' }],
+    });
+    expect(problems.some((p) => p.startsWith('field notes: formula error'))).toBe(true);
+    expect(problems).toContain('field cf_x: formula references unknown field "ghost"');
+  });
+
+  it('flags bad validation values and broken regex patterns', () => {
+    const problems = validateFormOverrides(schema, {
+      fields: {
+        title: { validation: [{ type: 'min', value: 'abc' }, { type: 'pattern', value: '(' }] },
+      },
+    });
+    expect(problems).toContain('field title: min needs a numeric value');
+    expect(problems).toContain('field title: invalid pattern regex');
+  });
+
+  it('flags rules with unknown fields, missing actions, and message-less errors', () => {
+    const problems = validateFormOverrides(schema, {
+      fields: {},
+      rules: [
+        { when: { field: 'ghost', op: 'eq', value: 'x' }, actions: [] },
+        { when: { field: 'title', op: 'notEmpty' }, actions: [{ type: 'hide', field: 'phantom' }, { type: 'error' }] },
+      ],
+    });
+    expect(problems).toContain('rule 1: condition references unknown field "ghost"');
+    expect(problems).toContain('rule 1: needs at least one action');
+    expect(problems).toContain('rule 2: action targets unknown field "phantom"');
+    expect(problems).toContain('rule 2: action "error" needs a message');
+  });
+
+  it('flags layout placing unknown or duplicate fields', () => {
+    const problems = validateFormOverrides(schema, {
+      fields: {},
+      layout: [
+        {
+          type: 'section',
+          label: 'S',
+          children: [
+            { type: 'field', name: 'title' },
+            { type: 'field', name: 'title' },
+            { type: 'field', name: 'ghost' },
+          ],
+        },
+      ],
+    });
+    expect(problems).toContain('layout places field "title" twice');
+    expect(problems).toContain('layout places unknown field "ghost"');
   });
 });

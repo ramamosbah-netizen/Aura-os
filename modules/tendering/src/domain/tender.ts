@@ -18,6 +18,10 @@ export interface Tender {
   status: TenderStatus;
   /** Estimated bid value. */
   value: number;
+  /** Client submission deadline (YYYY-MM-DD) — the date the bid must be in. */
+  submissionDeadline: string | null;
+  /** Opportunity this tender was auto-created from (deal chain), reference not join. */
+  sourceOpportunityId: Id | null;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -32,6 +36,8 @@ export interface NewTender {
   accountName?: string | null;
   status?: TenderStatus;
   value?: number;
+  submissionDeadline?: string | null;
+  sourceOpportunityId?: Id | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
@@ -47,6 +53,8 @@ export function makeTender(input: NewTender): Tender {
     accountName: input.accountName ?? null,
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    submissionDeadline: input.submissionDeadline ?? null,
+    sourceOpportunityId: input.sourceOpportunityId ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

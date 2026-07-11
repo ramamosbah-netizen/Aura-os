@@ -6,7 +6,7 @@ interface AccountLite {
 }
 
 /** Row-level "Edit" — opens the drawer prefilled, PATCHes the tender. */
-export function TenderEdit({ tender }: { tender: { id: string; title: string; reference?: string | null; value: number } }) {
+export function TenderEdit({ tender }: { tender: { id: string; title: string; reference?: string | null; value: number; submissionDeadline?: string | null } }) {
   return (
     <CreateDrawer
       mode="edit"
@@ -17,11 +17,13 @@ export function TenderEdit({ tender }: { tender: { id: string; title: string; re
         title: tender.title,
         reference: tender.reference ?? '',
         value: tender.value ? String(tender.value) : '',
+        submissionDeadline: tender.submissionDeadline ?? '',
       }}
       fields={[
         { name: 'title', label: 'Tender title', kind: 'text', required: true, span: 2 },
         { name: 'reference', label: 'Reference', kind: 'text' },
         { name: 'value', label: 'Value (AED)', kind: 'number' },
+        { name: 'submissionDeadline', label: 'Submission deadline', kind: 'date' },
       ]}
     />
   );
@@ -56,6 +58,7 @@ export default function TenderCreate({ accounts }: { accounts: AccountLite[] }) 
           options: accounts.map((a) => ({ value: a.id, label: a.name })),
         },
         { name: 'value', label: 'Value (AED)', kind: 'number', placeholder: '0' },
+        { name: 'submissionDeadline', label: 'Submission deadline', kind: 'date', hint: 'When the bid must reach the client' },
       ]}
     />
   );

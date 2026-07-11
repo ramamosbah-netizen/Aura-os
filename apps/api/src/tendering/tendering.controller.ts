@@ -13,6 +13,8 @@ class CreateTenderDto {
   @IsOptional() @IsString() accountName?: string | null;
   @IsOptional() @IsString() status?: TenderStatus;
   @IsOptional() @IsNumber() value?: number;
+  @IsOptional() @IsString() submissionDeadline?: string;
+  @IsOptional() @IsString() sourceOpportunityId?: string;
 }
 
 class UpdateTenderDto {
@@ -21,6 +23,7 @@ class UpdateTenderDto {
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() accountName?: string;
   @IsOptional() @IsNumber() value?: number;
+  @IsOptional() @IsString() submissionDeadline?: string;
 }
 
 /** Tendering API — stamps tenant/actor from context, delegates to TenderService. */
@@ -44,6 +47,8 @@ export class TenderingController {
       accountName: dto.accountName ?? null,
       status: dto.status,
       value: dto.value,
+      submissionDeadline: dto.submissionDeadline,
+      sourceOpportunityId: dto.sourceOpportunityId,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
@@ -59,6 +64,7 @@ export class TenderingController {
         value: dto.value,
         accountId: dto.accountId,
         accountName: dto.accountName,
+        submissionDeadline: dto.submissionDeadline,
       });
     } catch (e) {
       const msg = (e as Error).message;

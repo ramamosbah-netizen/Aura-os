@@ -7,6 +7,7 @@ export interface OpportunityFilter {
   tenantId?: string;
   stage?: OpportunityStage;
   leadId?: string;
+  accountId?: string;
   limit?: number;
 }
 

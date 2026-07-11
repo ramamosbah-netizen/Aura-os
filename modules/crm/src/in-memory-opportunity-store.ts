@@ -28,6 +28,7 @@ export class InMemoryOpportunityStore implements OpportunityStore {
     if (filter.tenantId) out = out.filter((o) => o.tenantId === filter.tenantId);
     if (filter.stage) out = out.filter((o) => o.stage === filter.stage);
     if (filter.leadId) out = out.filter((o) => o.leadId === filter.leadId);
+    if (filter.accountId) out = out.filter((o) => o.accountId === filter.accountId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

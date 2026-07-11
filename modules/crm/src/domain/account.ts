@@ -14,6 +14,14 @@ export interface Account {
   status: AccountStatus;
   industry: string | null;
   website: string | null;
+  /** Main phone/email for the party (a contact can refine these). */
+  phone: string | null;
+  email: string | null;
+  billingAddress: string | null;
+  /** Where the relationship came from (referral, exhibition, cold call, …). */
+  source: string | null;
+  /** Credit / payment terms, e.g. "30 days PDC". */
+  paymentTerms: string | null;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -26,6 +34,11 @@ export interface NewAccount {
   status?: AccountStatus;
   industry?: string | null;
   website?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  billingAddress?: string | null;
+  source?: string | null;
+  paymentTerms?: string | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
@@ -39,6 +52,11 @@ export function makeAccount(input: NewAccount): Account {
     status: input.status ?? 'lead',
     industry: input.industry ?? null,
     website: input.website ?? null,
+    phone: input.phone ?? null,
+    email: input.email ?? null,
+    billingAddress: input.billingAddress ?? null,
+    source: input.source ?? null,
+    paymentTerms: input.paymentTerms ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

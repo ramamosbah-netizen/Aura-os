@@ -162,3 +162,41 @@ describe('pricing sheet CSV rows', () => {
     for (const row of rows) for (const col of PRICING_SHEET_CSV_COLUMNS) expect(col in row).toBe(true);
   });
 });
+
+describe('full cost taxonomy (indirect %, equipment rent, other direct)', () => {
+  it('indirect sits between direct and overhead; profit marks up the total cost', () => {
+    const f = computeBuildUp(
+      [{ costType: 'material', description: 'M', quantity: 1, unitCost: 1000, amount: 1000 }],
+      10, // overhead %
+      15, // profit %
+      5,  // indirect %
+    );
+    expect(f.directCost).toBe(1000);
+    expect(f.indirectAmount).toBe(50);   // 5% of direct
+    expect(f.overheadAmount).toBe(100);  // 10% of direct
+    expect(f.profitAmount).toBe(172.5);  // 15% of 1150
+    expect(f.sellingRate).toBe(1322.5);
+  });
+
+  it('equipment rent and other direct compile to plant/other components (÷ qty)', () => {
+    const { components } = compileResourceBreakdown(
+      { supplyUnitPrice: 100, equipmentRent: 500, otherDirect: 50 },
+      10,
+    );
+    const by = Object.fromEntries(components.map((c) => [c.description, c]));
+    expect(by['Equipment rent']).toMatchObject({ costType: 'plant', unitCost: 50 });
+    expect(by['Other direct cost']).toMatchObject({ costType: 'other', unitCost: 5 });
+  });
+
+  it('estimate roll-up carries totalIndirect and the other bucket', () => {
+    const boq = makeBOQ({ tenantId: 't-1', tenderId: 'tender-1' });
+    const item = makeBOQItem({ tenantId: 't-1', boqId: boq.id, itemCode: '1', description: 'X', unit: 'nos', quantity: 10, rate: 0 });
+    const { resources, components } = compileResourceBreakdown({ supplyUnitPrice: 100, otherDirect: 50 }, 10);
+    const b = makeRateBuildUp({ ...base, boqItemId: item.id, components, resources, overheadPercent: 0, profitPercent: 0, indirectPercent: 10 });
+    const est = summariseEstimate(boq.id, 'tender-1', [item], [b]);
+    expect(est.totalDirectCost).toBe(1050);
+    expect(est.totalIndirect).toBe(105);
+    expect(est.directCostByType.other).toBe(50);
+    expect(est.totalSellingValue).toBe(1155);
+  });
+});

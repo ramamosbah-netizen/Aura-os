@@ -25,6 +25,7 @@ interface SheetSummary {
   boqItems: number;
   pricedItems: number;
   directCost: number;
+  indirect: number;
   overhead: number;
   profit: number;
   sellingValue: number;
@@ -87,6 +88,7 @@ export class TenderPricingController {
         boqItems: estimate.itemCount,
         pricedItems: estimate.estimatedItemCount,
         directCost: estimate.totalDirectCost,
+        indirect: estimate.totalIndirect,
         overhead: estimate.totalOverhead,
         profit: estimate.totalProfit,
         sellingValue: estimate.totalSellingValue,
@@ -162,7 +164,7 @@ export class TenderPricingController {
   async priceItem(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('itemId', ParseUuidOr404Pipe) itemId: string,
-    @Body() dto: { resources?: Partial<ResourceBreakdown>; overheadPercent?: number; profitPercent?: number; notes?: string },
+    @Body() dto: { resources?: Partial<ResourceBreakdown>; indirectPercent?: number; overheadPercent?: number; profitPercent?: number; notes?: string },
   ): Promise<RateBuildUp> {
     await this.tenderOr404(id);
     if (!dto?.resources || typeof dto.resources !== 'object') throw new BadRequestException('resources breakdown is required');
@@ -174,6 +176,7 @@ export class TenderPricingController {
           companyId: ctx.companyId ?? null,
           boqItemId: itemId,
           resources: dto.resources as ResourceBreakdown,
+          indirectPercent: dto.indirectPercent,
           overheadPercent: dto.overheadPercent,
           profitPercent: dto.profitPercent,
           notes: dto.notes ?? null,

@@ -62,6 +62,17 @@ bridge's smoke; column aligned to `text` like the rest of the spine.
   CSV. `EstimateStore.listByTenant` added (pg + in-memory). Pure `pricingSheetCsvRows`
   (+1 test, platform CSV pattern: shared `toCsv` + @Header routes + BFF stream proxies).
 
+### Full cost taxonomy (same day, third wave — migration **0143**)
+The sheet now carries EVERY cost line of the legacy `PricingLine`: direct cost = supply +
+wastage % + accessories + technician/engineer/PM manpower + transport + **equipment rent**
++ subcontract + **other direct** → **indirect/preliminaries %** (mobilization, supervision,
+site setup — `indirect_percent`/`indirect_amount` on the build-up) → overhead % → profit %
+(marked up on total cost) → selling rate. `CostType` gained `other`; the estimate roll-up
+reports `totalIndirect` and the `other` bucket; editor, totals bar, and both CSVs carry the
+new columns (incl. per-line indirect/overhead/profit amounts). Verified live: 654 direct →
++5% indirect → +10% OH → +15% profit = **864.92/unit**, roll-up buckets
+plant 800 (transport+equipment) / subcontract 100 / other 50; tendering tests 25 (+3).
+
 ## 2. Verification
 
 - **Live smoke 20/20** (built API, dev DB): tender + 2-item BOQ → line priced with the real

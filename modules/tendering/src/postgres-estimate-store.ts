@@ -12,6 +12,8 @@ interface Row {
   components: unknown;
   resources: unknown;
   direct_cost: string | number;
+  indirect_percent: string | number;
+  indirect_amount: string | number;
   overhead_percent: string | number;
   profit_percent: string | number;
   overhead_amount: string | number;
@@ -23,7 +25,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, tender_id, boq_item_id, components, resources, direct_cost, overhead_percent, profit_percent, overhead_amount, profit_amount, selling_rate, notes, created_by, created_at';
+  'id, tenant_id, company_id, tender_id, boq_item_id, components, resources, direct_cost, indirect_percent, indirect_amount, overhead_percent, profit_percent, overhead_amount, profit_amount, selling_rate, notes, created_by, created_at';
 
 function rowToBuildUp(r: Row): RateBuildUp {
   return {
@@ -35,6 +37,8 @@ function rowToBuildUp(r: Row): RateBuildUp {
     components: (typeof r.components === 'string' ? JSON.parse(r.components) : r.components) as CostComponent[],
     resources: (r.resources == null ? null : typeof r.resources === 'string' ? JSON.parse(r.resources) : r.resources) as ResourceBreakdown | null,
     directCost: Number(r.direct_cost),
+    indirectPercent: Number(r.indirect_percent ?? 0),
+    indirectAmount: Number(r.indirect_amount ?? 0),
     overheadPercent: Number(r.overhead_percent),
     profitPercent: Number(r.profit_percent),
     overheadAmount: Number(r.overhead_amount),
@@ -52,13 +56,14 @@ export class PostgresEstimateStore implements EstimateStore {
 
   async save(b: RateBuildUp): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_tendering_rate_buildups (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      `INSERT INTO public.aura_tendering_rate_buildups (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (id) DO UPDATE SET
          components = EXCLUDED.components, resources = EXCLUDED.resources, direct_cost = EXCLUDED.direct_cost,
+         indirect_percent = EXCLUDED.indirect_percent, indirect_amount = EXCLUDED.indirect_amount,
          overhead_percent = EXCLUDED.overhead_percent, profit_percent = EXCLUDED.profit_percent,
          overhead_amount = EXCLUDED.overhead_amount, profit_amount = EXCLUDED.profit_amount,
          selling_rate = EXCLUDED.selling_rate, notes = EXCLUDED.notes`,
-      [b.id, b.tenantId, b.companyId, b.tenderId, b.boqItemId, JSON.stringify(b.components), b.resources === null ? null : JSON.stringify(b.resources), b.directCost, b.overheadPercent, b.profitPercent, b.overheadAmount, b.profitAmount, b.sellingRate, b.notes, b.createdBy, b.createdAt],
+      [b.id, b.tenantId, b.companyId, b.tenderId, b.boqItemId, JSON.stringify(b.components), b.resources === null ? null : JSON.stringify(b.resources), b.directCost, b.indirectPercent, b.indirectAmount, b.overheadPercent, b.profitPercent, b.overheadAmount, b.profitAmount, b.sellingRate, b.notes, b.createdBy, b.createdAt],
     );
   }
 

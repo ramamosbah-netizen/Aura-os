@@ -41,11 +41,15 @@ interface ResourceBreakdown {
   wastagePercent: number;
   accessories: number;
   subcontract: number;
+  equipmentRent: number;
+  otherDirect: number;
 }
 interface BuildUp {
   boqItemId: string;
   resources: ResourceBreakdown | null;
   directCost: number;
+  indirectPercent: number;
+  indirectAmount: number;
   overheadPercent: number;
   profitPercent: number;
   sellingRate: number;
@@ -55,6 +59,7 @@ interface Estimate {
   estimatedItemCount: number;
   directCostByType: Record<string, number>;
   totalDirectCost: number;
+  totalIndirect: number;
   totalOverhead: number;
   totalProfit: number;
   totalSellingValue: number;
@@ -87,6 +92,9 @@ interface SheetDraft {
   wastagePercent: string;
   accessories: string;
   subcontract: string;
+  equipmentRent: string;
+  otherDirect: string;
+  indirectPercent: string;
   overheadPercent: string;
   profitPercent: string;
 }
@@ -136,6 +144,9 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
       wastagePercent: String(r?.wastagePercent ?? ''),
       accessories: String(r?.accessories ?? ''),
       subcontract: String(r?.subcontract ?? ''),
+      equipmentRent: String(r?.equipmentRent ?? ''),
+      otherDirect: String(r?.otherDirect ?? ''),
+      indirectPercent: String(b?.indirectPercent ?? 0),
       overheadPercent: String(b?.overheadPercent ?? 10),
       profitPercent: String(b?.profitPercent ?? 15),
     });
@@ -155,11 +166,13 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
       n(d.techCount) * n(d.techHours) * n(d.techRate) +
       n(d.engCount) * n(d.engHours) * n(d.engRate) +
       n(d.pmCount) * n(d.pmHours) * n(d.pmRate);
-    const direct = supply + wastage + n(d.accessories) + n(d.transport) + manpower + n(d.subcontract);
+    const direct =
+      supply + wastage + n(d.accessories) + n(d.transport) + n(d.equipmentRent) + manpower + n(d.subcontract) + n(d.otherDirect);
+    const indirect = direct * (n(d.indirectPercent) / 100);
     const overhead = direct * (n(d.overheadPercent) / 100);
-    const profit = (direct + overhead) * (n(d.profitPercent) / 100);
-    const selling = direct + overhead + profit;
-    return { direct, overhead, profit, selling, sellingRate: selling / qty, margin: selling > 0 ? ((overhead + profit) / selling) * 100 : 0 };
+    const profit = (direct + indirect + overhead) * (n(d.profitPercent) / 100);
+    const selling = direct + indirect + overhead + profit;
+    return { direct, indirect, overhead, profit, selling, sellingRate: selling / qty, margin: selling > 0 ? ((overhead + profit) / selling) * 100 : 0 };
   };
 
   const saveLine = async (item: BOQItem): Promise<void> => {
@@ -180,7 +193,10 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
             wastagePercent: n(draft.wastagePercent),
             accessories: n(draft.accessories),
             subcontract: n(draft.subcontract),
+            equipmentRent: n(draft.equipmentRent),
+            otherDirect: n(draft.otherDirect),
           },
+          indirectPercent: n(draft.indirectPercent),
           overheadPercent: n(draft.overheadPercent),
           profitPercent: n(draft.profitPercent),
         }),
@@ -233,7 +249,9 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           <Stat label="Labour" value={`AED ${aed(estimate.directCostByType.labour ?? 0)}`} />
           <Stat label="Plant / transport" value={`AED ${aed(estimate.directCostByType.plant ?? 0)}`} />
           <Stat label="Subcontract" value={`AED ${aed(estimate.directCostByType.subcontract ?? 0)}`} />
+          {(estimate.directCostByType.other ?? 0) > 0 && <Stat label="Other direct" value={`AED ${aed(estimate.directCostByType.other)}`} />}
           <Stat label="Direct cost" value={`AED ${aed(estimate.totalDirectCost)}`} strong />
+          <Stat label="Indirect" value={`AED ${aed(estimate.totalIndirect ?? 0)}`} />
           <Stat label="Overhead" value={`AED ${aed(estimate.totalOverhead)}`} />
           <Stat label="Profit" value={`AED ${aed(estimate.totalProfit)}`} />
           <Stat label="Selling value" value={`AED ${aed(estimate.totalSellingValue)}`} strong />
@@ -366,7 +384,7 @@ function SheetEditor({
   item: BOQItem;
   draft: SheetDraft;
   setDraft: (d: SheetDraft) => void;
-  preview: { direct: number; overhead: number; profit: number; selling: number; sellingRate: number; margin: number };
+  preview: { direct: number; indirect: number; overhead: number; profit: number; selling: number; sellingRate: number; margin: number };
   busy: boolean;
   onSave: () => void;
 }) {
@@ -383,10 +401,12 @@ function SheetEditor({
           </div>
         </div>
         <div style={ed.group}>
-          <div style={ed.groupTitle}>Logistics & subcontract (whole line)</div>
+          <div style={ed.groupTitle}>Logistics, plant & subcontract (whole line)</div>
           <div style={ed.fields}>
             <Field label="Transport (AED)" value={draft.transport} onChange={set('transport')} width={100} />
+            <Field label="Equipment rent (AED)" value={draft.equipmentRent} onChange={set('equipmentRent')} width={110} />
             <Field label="Subcontract (AED)" value={draft.subcontract} onChange={set('subcontract')} width={100} />
+            <Field label="Other direct (AED)" value={draft.otherDirect} onChange={set('otherDirect')} width={100} />
           </div>
         </div>
       </div>
@@ -415,11 +435,13 @@ function SheetEditor({
       </div>
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
+        <Field label="Indirect % (prelims)" value={draft.indirectPercent} onChange={set('indirectPercent')} width={70} />
         <Field label="Overhead %" value={draft.overheadPercent} onChange={set('overheadPercent')} width={70} />
         <Field label="Profit %" value={draft.profitPercent} onChange={set('profitPercent')} width={70} />
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 18, fontSize: 12.5, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>Direct <b>AED {new Intl.NumberFormat().format(Math.round(preview.direct * 100) / 100)}</b></span>
+          <span>+Indirect <b>{new Intl.NumberFormat().format(Math.round(preview.indirect * 100) / 100)}</b></span>
           <span>+OH <b>{new Intl.NumberFormat().format(Math.round(preview.overhead * 100) / 100)}</b></span>
           <span>+Profit <b>{new Intl.NumberFormat().format(Math.round(preview.profit * 100) / 100)}</b></span>
           <span style={{ color: 'var(--accent)', fontWeight: 800 }}>

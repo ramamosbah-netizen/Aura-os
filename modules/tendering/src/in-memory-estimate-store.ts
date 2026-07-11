@@ -33,6 +33,13 @@ export class InMemoryEstimateStore implements EstimateStore {
       .map((b) => (clone(b)));
   }
 
+  async listByTenant(tenantId: string): Promise<RateBuildUp[]> {
+    return [...this.buildUps.values()]
+      .filter((b) => b.tenantId === tenantId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(clone);
+  }
+
   async delete(id: Id): Promise<void> {
     this.buildUps.delete(id);
   }

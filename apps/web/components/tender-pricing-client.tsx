@@ -314,9 +314,12 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
             </div>
           )}
         </div>
-        <button style={st.btnPrimary} disabled={busy || items.length === 0} onClick={() => void generateQuotation()}>
-          Generate quotation →
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <a href={`/api/tendering/tenders/${tenderId}/pricing/csv`} style={st.btnGhostLink}>⤓ Export sheet (CSV)</a>
+          <button style={st.btnPrimary} disabled={busy || items.length === 0} onClick={() => void generateQuotation()}>
+            Generate quotation →
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -441,6 +444,7 @@ const st = {
   priced: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
   unpriced: { color: 'var(--warn, #d97706)', fontSize: 12 } as CSSProperties,
   btnGhost: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--fg)', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  btnGhostLink: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--fg)', borderRadius: 9, padding: '9px 14px', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
   btnPrimary: { border: 'none', background: 'var(--accent-grad, var(--accent))', color: 'var(--accent-ink, #fff)', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   bridge: { display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'space-between', marginTop: 16, padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' } as CSSProperties,
   quoteChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '4px 10px', color: 'var(--accent)', textDecoration: 'none' } as CSSProperties,

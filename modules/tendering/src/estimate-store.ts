@@ -10,5 +10,7 @@ export interface EstimateStore {
   /** One build-up per BOQ item. */
   getByBoqItem(tenantId: string, boqItemId: Id): Promise<RateBuildUp | null>;
   listByTender(tenantId: string, tenderId: Id): Promise<RateBuildUp[]>;
+  /** Every build-up in the tenant — the pricing-sheets hub folds these by tender. */
+  listByTenant(tenantId: string): Promise<RateBuildUp[]>;
   delete(id: Id): Promise<void>;
 }

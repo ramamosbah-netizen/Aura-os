@@ -33,6 +33,7 @@ export const NAV: NavGroup[] = [
       { label: 'Sales Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'CRM — leads & opportunities' },
       { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'CRM — customer quotes & pipeline' },
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals' },
+      { label: 'Pricing Sheets', href: '/tendering/pricing', glyph: '⊞', desc: 'Internal cost & resource breakdowns' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
       { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Delivery & execution' },
       { label: 'Projects Dashboard', href: '/projects/dashboard', glyph: '📊', desc: 'Portfolio value & counts by status' },

@@ -14,6 +14,7 @@ export * from './in-memory-bid-score-store';
 export * from './postgres-bid-score-store';
 export * from './bid-score.service';
 export * from './domain/estimate';
+export * from './domain/pricing-csv';
 export * from './estimate-store';
 export * from './in-memory-estimate-store';
 export * from './postgres-estimate-store';

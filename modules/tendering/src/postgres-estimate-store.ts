@@ -83,6 +83,14 @@ export class PostgresEstimateStore implements EstimateStore {
     return res.rows.map(rowToBuildUp);
   }
 
+  async listByTenant(tenantId: string): Promise<RateBuildUp[]> {
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_tendering_rate_buildups WHERE tenant_id = $1 ORDER BY created_at DESC`,
+      [tenantId],
+    );
+    return res.rows.map(rowToBuildUp);
+  }
+
   async delete(id: Id): Promise<void> {
     await this.pool.query(`DELETE FROM public.aura_tendering_rate_buildups WHERE id = $1`, [id]);
   }

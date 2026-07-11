@@ -89,6 +89,20 @@ export class EstimateService {
     return this.store.listByTender(tenantId, tenderId);
   }
 
+  /** Tender ids that have at least one build-up, newest activity first (the sheets hub). */
+  async tendersWithSheets(tenantId: Id): Promise<Id[]> {
+    const all = await this.store.listByTenant(tenantId);
+    const seen = new Set<Id>();
+    const out: Id[] = [];
+    for (const b of all) {
+      if (!seen.has(b.tenderId)) {
+        seen.add(b.tenderId);
+        out.push(b.tenderId);
+      }
+    }
+    return out;
+  }
+
   /**
    * Record that a client quotation was generated from this tender's pricing
    * (the API layer composes the CRM create; the tendering event lands here so

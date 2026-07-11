@@ -15,12 +15,15 @@ interface OppRow {
   value: string;
   stage: string;
   win_probability: string;
+  requires_tender: boolean | null;
+  owner_id: string | null;
+  next_action: string | null;
   close_date: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
-const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, close_date, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, close_date, requires_tender, owner_id, next_action, created_at, updated_at';
 
 function rowToOpportunity(r: OppRow): Opportunity {
   return {
@@ -34,6 +37,9 @@ function rowToOpportunity(r: OppRow): Opportunity {
     value: Number(r.value),
     stage: r.stage as OpportunityStage,
     winProbability: Number(r.win_probability),
+    requiresTender: r.requires_tender ?? true,
+    ownerId: r.owner_id,
+    nextAction: r.next_action,
     closeDate: r.close_date ? r.close_date.toISOString() : null,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
@@ -56,15 +62,15 @@ export class PostgresOpportunityStore implements OpportunityStore {
     await this.pool.query(
       `UPDATE public.aura_crm_opportunities
           SET title = $2, value = $3, stage = $4, win_probability = $5, close_date = $6,
-              account_id = $7, account_name = $8, updated_at = now()
+              account_id = $7, account_name = $8, requires_tender = $9, owner_id = $10, next_action = $11, updated_at = now()
         WHERE id = $1`,
-      [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate, o.accountId, o.accountName],
+      [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate, o.accountId, o.accountName, o.requiresTender, o.ownerId, o.nextAction],
     );
   }
 
   private insert(executor: Pool | PoolClient, o: Opportunity): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [
         o.id,
         o.tenantId,
@@ -77,6 +83,9 @@ export class PostgresOpportunityStore implements OpportunityStore {
         o.stage,
         o.winProbability,
         o.closeDate,
+        o.requiresTender,
+        o.ownerId,
+        o.nextAction,
         o.createdAt,
         o.updatedAt,
       ],

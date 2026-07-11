@@ -52,7 +52,7 @@ export class OpportunityService {
 
   async update(
     id: Id,
-    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName'>>,
+    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction'>>,
     actorId?: Id | null,
   ): Promise<Opportunity> {
     const existing = await this.store.get(id);
@@ -65,9 +65,12 @@ export class OpportunityService {
       this.access.assert(actorId, target);
     }
 
+    // Drop undefined keys — a sparse PATCH must never overwrite existing values
+    // (requires_tender is NOT NULL; an undefined would 500 at the store).
+    const defined = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
     const updated: Opportunity = {
       ...existing,
-      ...updates,
+      ...defined,
       updatedAt: new Date().toISOString(),
     };
 
@@ -90,6 +93,7 @@ export class OpportunityService {
         value: updated.value,
         accountId: updated.accountId,
         accountName: updated.accountName,
+        requiresTender: updated.requiresTender,
         oldStage: existing.stage,
         changes: updates,
       },

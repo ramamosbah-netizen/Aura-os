@@ -51,7 +51,9 @@ interface BuildUp {
   indirectPercent: number;
   indirectAmount: number;
   overheadPercent: number;
+  overheadAmount: number;
   profitPercent: number;
+  profitAmount: number;
   sellingRate: number;
 }
 interface Estimate {
@@ -262,48 +264,99 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
         </div>
       )}
 
-      {/* the sheet */}
+      {/* the sheet — every pricing vector as a column, like the original spreadsheet */}
       <div style={st.tableWrap}>
         <table style={st.table}>
           <thead>
             <tr>
-              {['Code', 'Activity / scope item', 'Unit', 'Qty', 'Cost / unit', 'Sell / unit', 'Line total', 'Margin', ''].map((h, i) => (
+              <th colSpan={4} style={st.thGroup}>Item</th>
+              <th colSpan={4} style={{ ...st.thGroup, borderLeft: '1px solid var(--border)' }}>Material</th>
+              <th colSpan={4} style={{ ...st.thGroup, borderLeft: '1px solid var(--border)' }}>Manpower (line)</th>
+              <th colSpan={4} style={{ ...st.thGroup, borderLeft: '1px solid var(--border)' }}>Plant · sub · other (line)</th>
+              <th colSpan={4} style={{ ...st.thGroup, borderLeft: '1px solid var(--border)' }}>Cost build-up</th>
+              <th colSpan={3} style={{ ...st.thGroup, borderLeft: '1px solid var(--border)' }}>Selling</th>
+              <th style={st.thGroup}></th>
+            </tr>
+            <tr>
+              {[
+                'Code', 'Activity / scope item', 'Unit', 'Qty',
+                'Supply/u', 'Wast %', 'Access.', 'Mat. total',
+                'Tech', 'Eng', 'PM', 'Total',
+                'Transport', 'Equip.', 'Subcon.', 'Other',
+                'Direct', 'Ind %', 'OH %', 'Profit %',
+                'Rate/u', 'Line total', 'Margin',
+                '',
+              ].map((h, i) => (
                 <th key={i} style={{ ...st.th, textAlign: i <= 1 ? 'left' : 'right' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && (
-              <tr><td colSpan={9} style={{ ...st.td, textAlign: 'center', color: 'var(--muted)', padding: 24 }}>
+              <tr><td colSpan={24} style={{ ...st.td, textAlign: 'center', color: 'var(--muted)', padding: 24 }}>
                 No BOQ items yet — add the scope on the tender page first.
               </td></tr>
             )}
             {items.map((item) => {
               const b = buildUps[item.id];
+              const r = b?.resources ?? null;
               const margin = b && b.sellingRate > 0 ? ((b.sellingRate - b.directCost) / b.sellingRate) * 100 : null;
               const isOpen = open === item.id;
+              const qty = item.quantity;
+              const man = (blk: ManpowerBlock): { total: number; hint: string } => ({
+                total: blk.count * blk.hours * blk.rate,
+                hint: `${blk.count} × ${blk.hours}h @ ${blk.rate}/h`,
+              });
+              const num = (v: number | null | undefined, opts?: { hint?: string; dim?: boolean }) =>
+                v === null || v === undefined ? (
+                  <span style={{ color: 'var(--muted)' }}>—</span>
+                ) : (
+                  <span title={opts?.hint} style={opts?.dim && v === 0 ? { color: 'var(--muted)' } : undefined}>{aed(v)}</span>
+                );
               return (
                 <FragmentRow key={item.id}>
                   <tr style={isOpen ? { background: 'var(--panel-2)' } : undefined}>
                     <td style={st.td}>{item.itemCode}</td>
-                    <td style={{ ...st.td, textAlign: 'left', maxWidth: 340 }}>{item.description}</td>
+                    <td style={{ ...st.td, textAlign: 'left', minWidth: 200, maxWidth: 300 }}>{item.description}</td>
                     <td style={{ ...st.td, textAlign: 'right' }}>{item.unit}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>{item.quantity}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>{b ? aed(b.directCost) : '—'}</td>
-                    <td style={{ ...st.td, textAlign: 'right', fontWeight: 600 }}>{b ? aed(b.sellingRate) : aed(item.rate)}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>{aed((b ? b.sellingRate : item.rate) * item.quantity)}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>
+                    <td style={{ ...st.td, textAlign: 'right' }}>{qty}</td>
+                    {/* material */}
+                    <td style={st.tdNum}>{num(r ? r.supplyUnitPrice : null)}</td>
+                    <td style={st.tdNum}>{r ? `${r.wastagePercent}%` : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                    <td style={st.tdNum}>{num(r ? r.accessories : null, { dim: true })}</td>
+                    <td style={{ ...st.tdNum, fontWeight: 600 }}>{num(r ? r.supplyUnitPrice * qty : null)}</td>
+                    {/* manpower */}
+                    <td style={st.tdNum}>{num(r ? man(r.technician).total : null, { hint: r ? man(r.technician).hint : undefined, dim: true })}</td>
+                    <td style={st.tdNum}>{num(r ? man(r.engineer).total : null, { hint: r ? man(r.engineer).hint : undefined, dim: true })}</td>
+                    <td style={st.tdNum}>{num(r ? man(r.projectManager).total : null, { hint: r ? man(r.projectManager).hint : undefined, dim: true })}</td>
+                    <td style={{ ...st.tdNum, fontWeight: 600 }}>
+                      {num(r ? man(r.technician).total + man(r.engineer).total + man(r.projectManager).total : null)}
+                    </td>
+                    {/* plant / sub / other */}
+                    <td style={st.tdNum}>{num(r ? r.transport : null, { dim: true })}</td>
+                    <td style={st.tdNum}>{num(r ? r.equipmentRent : null, { dim: true })}</td>
+                    <td style={st.tdNum}>{num(r ? r.subcontract : null, { dim: true })}</td>
+                    <td style={st.tdNum}>{num(r ? r.otherDirect : null, { dim: true })}</td>
+                    {/* cost build-up */}
+                    <td style={{ ...st.tdNum, fontWeight: 700 }}>{num(b ? b.directCost * qty : null)}</td>
+                    <td style={st.tdNum}>{b ? <span title={`AED ${aed((b.indirectAmount ?? 0) * qty)}`}>{b.indirectPercent ?? 0}%</span> : '—'}</td>
+                    <td style={st.tdNum}>{b ? <span title={`AED ${aed(b.overheadAmount * qty)}`}>{b.overheadPercent}%</span> : '—'}</td>
+                    <td style={st.tdNum}>{b ? <span title={`AED ${aed(b.profitAmount * qty)}`}>{b.profitPercent}%</span> : '—'}</td>
+                    {/* selling */}
+                    <td style={{ ...st.tdNum, fontWeight: 600 }}>{aed(b ? b.sellingRate : item.rate)}</td>
+                    <td style={{ ...st.tdNum, fontWeight: 700 }}>{aed((b ? b.sellingRate : item.rate) * qty)}</td>
+                    <td style={st.tdNum}>
                       {margin === null ? <span style={st.unpriced}>unpriced</span> : <span style={st.priced}>{margin.toFixed(1)}%</span>}
                     </td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>
+                    <td style={{ ...st.td, textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <button style={st.btnGhost} disabled={busy} onClick={() => (isOpen ? (setOpen(null), setDraft(null)) : startEdit(item))}>
-                        {isOpen ? 'Close' : b ? 'Edit breakdown' : 'Price this line'}
+                        {isOpen ? 'Close' : b ? 'Edit' : 'Price'}
                       </button>
                     </td>
                   </tr>
                   {isOpen && draft && (
                     <tr>
-                      <td colSpan={9} style={{ ...st.td, background: 'var(--panel-2)', padding: '14px 18px' }}>
+                      <td colSpan={24} style={{ ...st.td, background: 'var(--panel-2)', padding: '14px 18px' }}>
                         <SheetEditor item={item} draft={draft} setDraft={setDraft} preview={preview(item, draft)} busy={busy} onSave={() => void saveLine(item)} />
                       </td>
                     </tr>
@@ -460,9 +513,11 @@ const st = {
   ok: { padding: '10px 12px', border: '1px solid var(--good)', borderRadius: 10, color: 'var(--good)', marginBottom: 14, fontSize: 13 } as CSSProperties,
   totals: { display: 'flex', gap: 20, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 16 } as CSSProperties,
   tableWrap: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 880 } as CSSProperties,
-  th: { padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)' } as CSSProperties,
-  td: { padding: '9px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1720 } as CSSProperties,
+  thGroup: { padding: '8px 10px 2px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--accent)', textAlign: 'left' } as CSSProperties,
+  th: { padding: '4px 10px 8px', borderBottom: '1px solid var(--border)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', whiteSpace: 'nowrap' } as CSSProperties,
+  td: { padding: '8px 10px', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  tdNum: { padding: '8px 10px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' } as CSSProperties,
   priced: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
   unpriced: { color: 'var(--warn, #d97706)', fontSize: 12 } as CSSProperties,
   btnGhost: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--fg)', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' } as CSSProperties,

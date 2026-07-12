@@ -50,7 +50,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   const router = useRouter();
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [showClosed, setShowClosed] = useState(false);
+  const [tab, setTab] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [query, setQuery] = useState('');
   const [command, setCommand] = useState<CommandPayload | null>(null);
@@ -78,14 +78,13 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
 
   const filtered = useMemo(() => {
     let out = initialActivities;
-    if (!showClosed) out = out.filter((a) => a.status === 'open');
     if (typeFilter) out = out.filter((a) => a.type === typeFilter);
     const q = query.trim().toLowerCase();
     if (q) out = out.filter((a) => [a.subject, a.notes, a.relatedName, a.assigneeId].some((v) => v && v.toLowerCase().includes(q)));
     return out;
-  }, [initialActivities, showClosed, typeFilter, query]);
+  }, [initialActivities, typeFilter, query]);
 
-  /** Agenda buckets in display order. */
+  /** Work-center buckets — every open activity by urgency, plus a Completed tab. */
   const groups = useMemo(() => {
     const buckets: Array<{ key: string; label: string; tone?: 'bad' | 'accent'; items: Activity[] }> = [
       { key: 'overdue', label: 'Overdue', tone: 'bad', items: [] },
@@ -93,7 +92,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       { key: 'week', label: 'This week', items: [] },
       { key: 'later', label: 'Later', items: [] },
       { key: 'nodate', label: 'No due date', items: [] },
-      { key: 'closed', label: 'Completed / cancelled', items: [] },
+      { key: 'closed', label: 'Completed', items: [] },
     ];
     for (const a of filtered) {
       if (a.status !== 'open') buckets[5].items.push(a);
@@ -105,8 +104,13 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
     }
     const byDue = (x: Activity, y: Activity) => (x.dueDate ?? '9999') < (y.dueDate ?? '9999') ? -1 : 1;
     buckets.forEach((b) => b.items.sort(byDue));
-    return buckets.filter((b) => b.items.length > 0);
+    return buckets;
   }, [filtered, today, weekEnd]);
+
+  // Default to the most urgent non-empty bucket so the rep lands on what matters.
+  const defaultTab = useMemo(() => (groups.find((g) => g.items.length > 0) ?? groups[0]).key, [groups]);
+  const activeKey = tab || defaultTab;
+  const active = groups.find((g) => g.key === activeKey) ?? groups[0];
 
   const act = async (a: Activity, action: 'complete' | 'cancel' | 'reopen', body?: unknown): Promise<void> => {
     setBusy(true); setErr('');
@@ -192,28 +196,39 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
           <option value="">All types</option>
           {['call', 'email', 'meeting', 'note', 'task'].map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)' }}>
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} /> show closed
-        </label>
         <ExportButton filename="activities" rows={filtered as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'type' }, { key: 'subject' }, { key: 'relatedName' }, { key: 'assigneeId' }, { key: 'dueDate' }, { key: 'status' }, { key: 'outcome' }]} />
         {err && <span style={st.err}>{err}</span>}
       </div>
 
-      {groups.length === 0 && (
-        <p style={st.muted}>
-          {initialActivities.length === 0 ? 'Nothing logged yet — every call, meeting and task lives here.' : 'Nothing matches the filter.'}
-        </p>
-      )}
+      <div style={st.tabBar} role="tablist">
+        {groups.map((g) => {
+          const on = g.key === activeKey;
+          const tone = g.tone === 'bad' ? 'var(--bad)' : g.tone === 'accent' ? 'var(--accent)' : 'var(--fg)';
+          return (
+            <button key={g.key} type="button" role="tab" aria-selected={on} onClick={() => setTab(g.key)}
+              style={{ ...st.tab, ...(on ? { ...st.tabOn, color: tone, borderColor: tone } : {}) }}>
+              {g.label}
+              <span style={{ ...st.tabCount, ...(g.key === 'overdue' && g.items.length > 0 ? { background: 'var(--bad)', color: '#fff' } : {}) }}>{g.items.length}</span>
+            </button>
+          );
+        })}
+      </div>
 
-      {groups.map((g) => (
-        <section key={g.key} className="panel" style={{ marginBottom: 14 }}>
-          <div style={{ ...st.groupHead, color: g.tone === 'bad' ? 'var(--bad)' : g.tone === 'accent' ? 'var(--accent)' : 'var(--muted)' }}>
-            {g.label} <span style={st.groupCount}>{g.items.length}</span>
+      {active.items.length === 0 ? (
+        <p style={st.muted}>
+          {initialActivities.length === 0
+            ? 'Nothing logged yet — every call, meeting and task lives here.'
+            : `Nothing in ${active.label}. ${activeKey === 'overdue' ? 'You’re all caught up.' : ''}`}
+        </p>
+      ) : (
+        <section className="panel" style={{ marginBottom: 14 }}>
+          <div style={{ ...st.groupHead, color: active.tone === 'bad' ? 'var(--bad)' : active.tone === 'accent' ? 'var(--accent)' : 'var(--muted)' }}>
+            {active.label} <span style={st.groupCount}>{active.items.length}</span>
           </div>
           <table className="data-table">
             <tbody>
-              {g.items.map((a) => (
+              {active.items.map((a) => (
                 <Fragment key={a.id}>
                 <tr style={a.status !== 'open' ? { opacity: 0.7 } : undefined}>
                   <td style={{ width: 90 }}><span style={st.typeTag}>{TYPE_GLYPH[a.type] ?? '·'} {a.type}</span></td>
@@ -228,7 +243,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                       : <span style={{ color: 'var(--muted)' }}>—</span>}
                   </td>
                   <td style={{ width: 110, color: 'var(--muted)' }}>{a.assigneeId ?? '—'}</td>
-                  <td style={{ width: 110, color: g.key === 'overdue' ? 'var(--bad)' : 'var(--muted)', fontWeight: g.key === 'overdue' ? 700 : 400 }}>
+                  <td style={{ width: 110, color: active.key === 'overdue' ? 'var(--bad)' : 'var(--muted)', fontWeight: active.key === 'overdue' ? 700 : 400 }}>
                     {a.dueDate ? fmt(a.dueDate) : '—'}
                   </td>
                   <td style={{ width: 200, whiteSpace: 'nowrap' }}>
@@ -283,7 +298,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
             </tbody>
           </table>
         </section>
-      ))}
+      )}
     </>
   );
 }
@@ -307,6 +322,10 @@ const st = {
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 } as CSSProperties,
+  tabBar: { display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 0 12px', borderBottom: '1px solid var(--border)', paddingBottom: 8 } as CSSProperties,
+  tab: { display: 'inline-flex', alignItems: 'center', gap: 7, background: 'transparent', border: '1px solid transparent', borderRadius: 8, padding: '6px 11px', fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', cursor: 'pointer' } as CSSProperties,
+  tabOn: { background: 'var(--panel-2)', borderColor: 'var(--border)' } as CSSProperties,
+  tabCount: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 7px', fontSize: 11, fontWeight: 700, color: 'var(--muted)' } as CSSProperties,
   groupHead: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, padding: '10px 12px 4px' } as CSSProperties,
   groupCount: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 7px', fontSize: 11, color: 'var(--muted)' } as CSSProperties,
   typeTag: { fontSize: 11.5, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', textTransform: 'capitalize' } as CSSProperties,

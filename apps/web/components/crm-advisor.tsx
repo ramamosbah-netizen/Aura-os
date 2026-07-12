@@ -25,8 +25,8 @@ export default function CrmAdvisor() {
     return () => { alive = false; };
   }, []);
 
-  // Don't show the advisor on its own full-page view.
-  if (pathname?.startsWith('/crm/intelligence')) return null;
+  // Activities has its own inline Relationship-Intelligence panel — don't double up there.
+  if (pathname?.startsWith('/crm/activities')) return null;
   if (!loaded || !data || data.alerts.length === 0) return null;
 
   const alerts = data.alerts;
@@ -58,7 +58,7 @@ export default function CrmAdvisor() {
         ))}
       </div>
 
-      <a href="/crm/intelligence" style={st.footer}>Open Relationship Intelligence →</a>
+      <a href="/crm/activities" style={st.footer}>See all in Activities →</a>
     </aside>
   );
 }

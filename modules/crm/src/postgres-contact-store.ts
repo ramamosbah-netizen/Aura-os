@@ -15,6 +15,10 @@ interface Row {
   email: string | null;
   phone: string | null;
   is_primary: boolean;
+  stakeholder_role: string | null;
+  relationship_strength: string | null;
+  reports_to_id: string | null;
+  reports_to_name: string | null;
   status: string;
   owner_id: string | null;
   created_by: string | null;
@@ -22,7 +26,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, account_id, account_name, name, job_title, email, phone, is_primary, status, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, account_id, account_name, name, job_title, email, phone, is_primary, stakeholder_role, relationship_strength, reports_to_id, reports_to_name, status, owner_id, created_by, created_at';
 
 function rowToContact(r: Row): Contact {
   return {
@@ -36,6 +40,10 @@ function rowToContact(r: Row): Contact {
     email: r.email,
     phone: r.phone,
     isPrimary: r.is_primary,
+    stakeholderRole: (r.stakeholder_role as Contact['stakeholderRole']) ?? null,
+    relationshipStrength: (r.relationship_strength as Contact['relationshipStrength']) ?? null,
+    reportsToId: r.reports_to_id,
+    reportsToName: r.reports_to_name,
     status: r.status as Contact['status'],
     ownerId: r.owner_id,
     createdBy: r.created_by,
@@ -49,12 +57,14 @@ export class PostgresContactStore implements ContactStore {
 
   async save(c: Contact): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_crm_contacts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      `INSERT INTO public.aura_crm_contacts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (id) DO UPDATE SET
          account_id = EXCLUDED.account_id, account_name = EXCLUDED.account_name, name = EXCLUDED.name,
          job_title = EXCLUDED.job_title, email = EXCLUDED.email, phone = EXCLUDED.phone,
-         is_primary = EXCLUDED.is_primary, status = EXCLUDED.status, owner_id = EXCLUDED.owner_id`,
-      [c.id, c.tenantId, c.companyId, c.accountId, c.accountName, c.name, c.jobTitle, c.email, c.phone, c.isPrimary, c.status, c.ownerId, c.createdBy, c.createdAt],
+         is_primary = EXCLUDED.is_primary, stakeholder_role = EXCLUDED.stakeholder_role,
+         relationship_strength = EXCLUDED.relationship_strength, reports_to_id = EXCLUDED.reports_to_id,
+         reports_to_name = EXCLUDED.reports_to_name, status = EXCLUDED.status, owner_id = EXCLUDED.owner_id`,
+      [c.id, c.tenantId, c.companyId, c.accountId, c.accountName, c.name, c.jobTitle, c.email, c.phone, c.isPrimary, c.stakeholderRole, c.relationshipStrength, c.reportsToId, c.reportsToName, c.status, c.ownerId, c.createdBy, c.createdAt],
     );
   }
 

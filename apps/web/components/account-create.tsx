@@ -1,8 +1,13 @@
 import CreateDrawer from './ui/create-drawer';
 
-const STATUS_OPTIONS = [
-  { value: 'lead', label: 'Lead' },
-  { value: 'active', label: 'Active' },
+// The account is the persistent commercial PARTY — its state is the relationship,
+// not a lead funnel. Deals move through the pipeline; the account moves through this.
+const STAGE_OPTIONS = [
+  { value: 'prospect', label: 'Prospect' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'active_customer', label: 'Active Customer' },
+  { value: 'strategic', label: 'Strategic Account' },
+  { value: 'dormant', label: 'Dormant' },
   { value: 'inactive', label: 'Inactive' },
 ];
 
@@ -64,7 +69,7 @@ export function AccountEdit({ account }: {
       }}
       fields={[
         { name: 'name', label: 'Account name', kind: 'text', required: true, span: 2 },
-        { name: 'status', label: 'Status', kind: 'select', options: STATUS_OPTIONS },
+        { name: 'status', label: 'Relationship stage', kind: 'select', options: STAGE_OPTIONS },
         ...PROFILE_FIELDS,
       ]}
     />
@@ -80,7 +85,7 @@ export default function AccountCreate() {
       endpoint="/api/crm/accounts"
       fields={[
         { name: 'name', label: 'Account name', kind: 'text', required: true, placeholder: 'e.g. Emaar Properties', span: 2 },
-        { name: 'status', label: 'Status', kind: 'select', defaultValue: 'lead', options: STATUS_OPTIONS },
+        { name: 'status', label: 'Relationship stage', kind: 'select', defaultValue: 'prospect', options: STAGE_OPTIONS },
         ...PROFILE_FIELDS,
       ]}
     />

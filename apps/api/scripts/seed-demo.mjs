@@ -75,7 +75,7 @@ async function main() {
   // Accounts
   const accounts = [];
   for (const a of ACCOUNTS) {
-    accounts.push(await post('/crm/accounts', { ...a, status: 'active' }));
+    accounts.push(await post('/crm/accounts', { ...a, status: 'active_customer' }));
   }
   console.log(`✓ ${accounts.length} accounts`);
 

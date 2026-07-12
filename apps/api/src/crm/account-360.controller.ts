@@ -86,6 +86,121 @@ export class Account360Controller {
     return (await this.compose(id)).payload;
   }
 
+  /**
+   * The account PORTFOLIO — every relationship with its commercial roll-up and a
+   * derived health flag, in one call (the Accounts page is a portfolio manager,
+   * not a customer register). One pass over the tenant's chain records, grouped
+   * by accountId (invoices by the customer-name snapshot).
+   */
+  @Get('portfolio')
+  async portfolio(): Promise<Array<{
+    id: string;
+    name: string;
+    stage: string;
+    industry: string | null;
+    ownerId: string | null;
+    phone: string | null;
+    email: string | null;
+    source: string | null;
+    paymentTerms: string | null;
+    website: string | null;
+    billingAddress: string | null;
+    createdAt: string;
+    activeDeals: number;
+    pipelineValue: number;
+    openTenders: number;
+    quotations: number;
+    contracts: number;
+    contractedValue: number;
+    activeProjects: number;
+    outstandingAR: number;
+    overdueAR: number;
+    lastActivityAt: string | null;
+    health: 'healthy' | 'attention' | 'at_risk';
+    healthReasons: string[];
+    suggestedStage: string | null;
+  }>> {
+    const tenantId = this.tenant.get().tenantId;
+    const [accounts, opportunities, tenders, quotations, contracts, projects, activities, invoices] = await Promise.all([
+      this.accounts.list({ tenantId, limit: 2000 }),
+      this.opportunities.list({ tenantId, limit: 5000 }),
+      this.tenders.list({ tenantId, limit: 5000 }),
+      this.quotations.list({ tenantId, limit: 5000 }),
+      this.contracts.list({ tenantId, limit: 5000 }),
+      this.projects.list({ tenantId, limit: 5000 }),
+      this.activities.list({ tenantId, limit: 5000 }),
+      this.invoices.list({ tenantId, limit: 5000 }),
+    ]);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const staleBefore = new Date(Date.now() - 60 * 86400000).toISOString();
+
+    return accounts.map((a) => {
+      const opps = opportunities.filter((o) => o.accountId === a.id);
+      const openOpps = opps.filter((o) => o.stage !== 'won' && o.stage !== 'lost');
+      const accTenders = tenders.filter((t) => t.accountId === a.id);
+      const accQuotes = quotations.filter((q) => q.accountId === a.id);
+      const accContracts = contracts.filter((c) => c.accountId === a.id);
+      const accProjects = projects.filter((p) => p.accountId === a.id);
+      const accInvoices = invoices.filter((i) => i.customerName === a.name && i.status !== 'cancelled');
+      const accActivities = activities.filter((x) => x.relatedId === a.id);
+
+      const outstandingAR = r2(accInvoices.reduce((s, i) => s + (i.total - i.amountPaid), 0));
+      const overdueAR = r2(
+        accInvoices.filter((i) => i.status !== 'paid' && i.dueDate && i.dueDate < today).reduce((s, i) => s + (i.total - i.amountPaid), 0),
+      );
+      const activeContracts = accContracts.filter((c) => c.status === 'active');
+      const contractedValue = r2(accContracts.filter((c) => c.status !== 'cancelled').reduce((s, c) => s + c.value, 0));
+
+      const lastTouches = [
+        ...accActivities.map((x) => x.createdAt),
+        ...opps.map((o) => o.createdAt),
+        ...accTenders.map((t) => t.createdAt),
+        ...accQuotes.map((q) => q.createdAt),
+        ...accContracts.map((c) => c.createdAt),
+      ];
+      const lastActivityAt = lastTouches.length ? lastTouches.sort().at(-1)! : null;
+
+      const hasLiveBusiness = activeContracts.length > 0 || accProjects.some((p) => p.status === 'active') || openOpps.length > 0;
+      const healthReasons: string[] = [];
+      if (overdueAR > 0) healthReasons.push(`AED ${overdueAR} overdue receivables`);
+      if (hasLiveBusiness && !a.ownerId) healthReasons.push('no account owner assigned');
+      if (hasLiveBusiness && (!lastActivityAt || lastActivityAt < staleBefore)) healthReasons.push('no activity in 60 days');
+      const stageMismatch = accContracts.length > 0 && (a.status === 'prospect' || a.status === 'qualified');
+      if (stageMismatch) healthReasons.push('has contracts but still marked a prospect');
+
+      const health: 'healthy' | 'attention' | 'at_risk' = overdueAR > 0 ? 'at_risk' : healthReasons.length > 0 ? 'attention' : 'healthy';
+
+      return {
+        id: a.id,
+        name: a.name,
+        stage: a.status,
+        industry: a.industry,
+        ownerId: a.ownerId,
+        phone: a.phone,
+        email: a.email,
+        source: a.source,
+        paymentTerms: a.paymentTerms,
+        website: a.website,
+        billingAddress: a.billingAddress,
+        createdAt: a.createdAt,
+        activeDeals: openOpps.length,
+        pipelineValue: r2(openOpps.reduce((s, o) => s + o.value, 0)),
+        openTenders: accTenders.filter((t) => t.status === 'draft' || t.status === 'submitted').length,
+        quotations: accQuotes.length,
+        contracts: accContracts.length,
+        contractedValue,
+        activeProjects: accProjects.filter((p) => p.status === 'active' || p.status === 'planned').length,
+        outstandingAR,
+        overdueAR,
+        lastActivityAt,
+        health,
+        healthReasons,
+        suggestedStage: stageMismatch ? 'active_customer' : null,
+      };
+    });
+  }
+
   /** The accounts register as an Excel workbook (every profile column). */
   @Get('export.xlsx')
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

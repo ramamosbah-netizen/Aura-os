@@ -42,6 +42,8 @@ export interface Opportunity {
   ownerId: Id | null;
   /** The next concrete step the owner committed to (shown on the pipeline card). */
   nextAction: string | null;
+  /** When that next step is due (ISO date). Part of the Next-Action Invariant. */
+  nextActionDueDate: string | null;
   /** BANT qualification — how well we understand the deal (drives real probability). */
   budgetConfirmed: boolean;
   authorityConfirmed: boolean;
@@ -99,6 +101,7 @@ export interface NewOpportunity {
   requiresTender?: boolean;
   ownerId?: Id | null;
   nextAction?: string | null;
+  nextActionDueDate?: string | null;
   budgetConfirmed?: boolean;
   authorityConfirmed?: boolean;
   needConfirmed?: boolean;
@@ -125,6 +128,7 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     requiresTender: input.requiresTender ?? true,
     ownerId: input.ownerId ?? null,
     nextAction: input.nextAction?.trim() || null,
+    nextActionDueDate: input.nextActionDueDate ?? null,
     budgetConfirmed: input.budgetConfirmed ?? false,
     authorityConfirmed: input.authorityConfirmed ?? false,
     needConfirmed: input.needConfirmed ?? false,
@@ -135,6 +139,47 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/** Stages where a deal is still live and must obey the Next-Action Invariant. */
+export const OPPORTUNITY_ACTIVE_STAGES: readonly OpportunityStage[] = ['qualification', 'proposal', 'negotiation'];
+
+export type NextActionGap = 'no-next-action' | 'no-due-date' | 'no-owner' | 'overdue';
+
+export interface OpportunityAttention {
+  /** True for qualification/proposal/negotiation — won & lost are terminal. */
+  active: boolean;
+  /** Which parts of the Next-Action Invariant are unmet (empty when healthy). */
+  gaps: NextActionGap[];
+  /** Any gap on an active deal ⇒ surfaces under "Needs Attention". */
+  needsAttention: boolean;
+}
+
+/** The minimal opportunity shape the invariant reads — lets the web client's
+ * lean row type and the full domain entity share one predicate. */
+export interface NextActionCandidate {
+  stage: string;
+  nextAction?: string | null;
+  ownerId?: string | null;
+  nextActionDueDate?: string | null;
+}
+
+/**
+ * The **Next-Action Invariant** — the single source of truth: every ACTIVE
+ * opportunity must carry a Next Action + Due Date + Owner. Any missing piece —
+ * or a past-due date — flags the deal as "Needs Attention". Won/lost deals are
+ * terminal and never flagged. `now` is injectable for deterministic tests.
+ */
+export function opportunityAttention(opp: NextActionCandidate, now: Date = new Date()): OpportunityAttention {
+  const active = (OPPORTUNITY_ACTIVE_STAGES as readonly string[]).includes(opp.stage);
+  if (!active) return { active, gaps: [], needsAttention: false };
+  const today = now.toISOString().slice(0, 10);
+  const gaps: NextActionGap[] = [];
+  if (!opp.nextAction || !opp.nextAction.trim()) gaps.push('no-next-action');
+  if (!opp.ownerId) gaps.push('no-owner');
+  if (!opp.nextActionDueDate) gaps.push('no-due-date');
+  else if (opp.nextActionDueDate.slice(0, 10) < today) gaps.push('overdue');
+  return { active, gaps, needsAttention: gaps.length > 0 };
 }
 
 export const CRM_EVENT = {

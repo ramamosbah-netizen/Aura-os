@@ -15,6 +15,7 @@ interface Activity {
   dueDate: string | null;
   status: string;
   completedAt: string | null;
+  outcome: string | null;
   assigneeId: string | null;
   createdAt: string;
 }

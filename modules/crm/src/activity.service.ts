@@ -53,10 +53,10 @@ export class ActivityService {
     return updated;
   }
 
-  async complete(id: Id, at?: string): Promise<Activity> {
+  async complete(id: Id, at?: string, outcome?: string | null): Promise<Activity> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`activity ${id} not found`);
-    const updated = completeActivity(existing, at);
+    const updated = completeActivity(existing, at, outcome);
     await this.store.save(updated);
     await this.events.append([
       makeEvent({

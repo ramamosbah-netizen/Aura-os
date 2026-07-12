@@ -4,7 +4,22 @@ import { type Id, newId } from '@aura/shared';
 // deal chain (CRM → Tender → Contract → Project). Module-owned (not kernel), so this
 // lives in the module package, not @aura/shared.
 
-export type AccountStatus = 'lead' | 'active' | 'inactive';
+/**
+ * Relationship stage — the account is the PERSISTENT commercial party, so its
+ * state is the RELATIONSHIP, not a lead funnel:
+ * prospect → qualified → active_customer → strategic · dormant · inactive.
+ * (Deals move through the pipeline; the account moves through the relationship.)
+ */
+export type AccountStatus = 'prospect' | 'qualified' | 'active_customer' | 'strategic' | 'dormant' | 'inactive';
+
+export const RELATIONSHIP_STAGES: readonly AccountStatus[] = [
+  'prospect',
+  'qualified',
+  'active_customer',
+  'strategic',
+  'dormant',
+  'inactive',
+];
 
 export interface Account {
   id: Id;
@@ -49,7 +64,7 @@ export function makeAccount(input: NewAccount): Account {
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
     name: input.name.trim(),
-    status: input.status ?? 'lead',
+    status: input.status ?? 'prospect',
     industry: input.industry ?? null,
     website: input.website ?? null,
     phone: input.phone ?? null,

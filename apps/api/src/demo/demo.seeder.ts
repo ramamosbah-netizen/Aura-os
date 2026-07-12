@@ -61,9 +61,9 @@ export class DemoSeeder implements OnModuleInit {
 
   private async seed(): Promise<void> {
     // ── Deal chain ──────────────────────────────────────────────────────────
-    const emaar = await this.accounts.create({ tenantId: TENANT, name: 'Emaar Properties', status: 'active', industry: 'Real Estate' });
-    const dewa = await this.accounts.create({ tenantId: TENANT, name: 'DEWA', status: 'active', industry: 'Utilities' });
-    await this.accounts.create({ tenantId: TENANT, name: 'Nakheel Marinas', status: 'lead', industry: 'Marine & Leisure' });
+    const emaar = await this.accounts.create({ tenantId: TENANT, name: 'Emaar Properties', status: 'active_customer', industry: 'Real Estate' });
+    const dewa = await this.accounts.create({ tenantId: TENANT, name: 'DEWA', status: 'active_customer', industry: 'Utilities' });
+    await this.accounts.create({ tenantId: TENANT, name: 'Nakheel Marinas', status: 'prospect', industry: 'Marine & Leisure' });
 
     const wonTender = await this.tenders.create({
       tenantId: TENANT, title: 'Marina Tower — ELV & Security Package', reference: 'TND-2026-014',

@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 
-// Account 360 — the customer command center. The Account is the PERSISTENT
-// commercial party at the head of the deal chain; opportunities, tenders,
-// quotations, contracts and projects are the transactions that flow through it.
-// Header → profile → commercial summary → deal-chain strip → tabbed records → timeline.
+// Account 360 — the customer COMMAND CENTER. The Account is the persistent
+// commercial party every deal revolves around (the hub, not the first step).
+// Header (identity + relationship health) → snapshot (Commercial | Delivery &
+// Finance) → Commercial Portfolio (both deal routes, clickable) → tabs, where
+// Overview is a composite: health, exposure, upcoming actions, recent activity,
+// key contacts, profile.
 
 interface Account {
   id: string;
@@ -56,15 +58,19 @@ interface Payload {
   timeline: TimelineEntry[];
 }
 
-type Tab = 'overview' | 'contacts' | 'opportunities' | 'tenders' | 'quotations' | 'contracts' | 'projects' | 'activities' | 'financials' | 'timeline';
+type Tab = 'overview' | 'contacts' | 'opportunities' | 'tenders' | 'quotations' | 'contracts' | 'projects' | 'financials' | 'activity';
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 2 }).format(n);
 const d = (iso: string): string => new Date(iso).toLocaleDateString();
+const monthYear = (iso: string): string => new Date(iso).toLocaleDateString('en', { month: 'short', year: 'numeric' });
 
-const HEALTH: Record<string, { label: string; color: string }> = {
-  new: { label: 'New relationship', color: 'var(--muted)' },
-  good: { label: 'Healthy', color: 'var(--good)' },
-  watch: { label: 'Watch — overdue AR', color: 'var(--warn, #d97706)' },
+const STAGE_LABEL: Record<string, string> = {
+  prospect: 'Prospect',
+  qualified: 'Qualified',
+  active_customer: 'Active Customer',
+  strategic: 'Strategic Account',
+  dormant: 'Dormant',
+  inactive: 'Inactive',
 };
 
 const KIND_GLYPH: Record<string, string> = {
@@ -75,6 +81,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   const [data, setData] = useState<Payload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/accounts/${accountId}/summary`, { cache: 'no-store' });
@@ -89,11 +96,62 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     void load();
   }, [load]);
 
+  const patchAccount = useCallback(async (body: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      await fetch(`/api/crm/accounts/${accountId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }, [accountId, load]);
+
+  const assignToMe = useCallback(async () => {
+    setBusy(true);
+    try {
+      await fetch('/api/crm/accounts/assign-owner', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ accountId }),
+      });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }, [accountId, load]);
+
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading account…'}</p>;
 
   const { account: a, contacts, opportunities, tenders, quotations, contracts, projects, activities, receivables, summary, timeline } = data;
-  const mainContact = contacts[0] ?? null;
-  const health = HEALTH[summary.health];
+
+  // ── Relationship health (derived, with the WHY) ─────────────────────────
+  const openOpps = opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost');
+  const activeContracts = contracts.filter((c) => c.status === 'active');
+  const activeProjects = projects.filter((p) => p.status === 'active' || p.status === 'planned');
+  const liveBusiness = activeContracts.length > 0 || activeProjects.length > 0 || openOpps.length > 0;
+  const stageMismatch = contracts.length > 0 && (a.status === 'prospect' || a.status === 'qualified' || a.status === 'lead');
+  const healthReasons: string[] = [];
+  if (receivables.overdue > 0) healthReasons.push(`AED ${aed(receivables.overdue)} overdue receivables`);
+  if (liveBusiness && !a.ownerId) healthReasons.push('no account owner assigned');
+  if (stageMismatch) healthReasons.push('has contracts but still marked a prospect');
+  const health: 'healthy' | 'attention' | 'at_risk' = receivables.overdue > 0 ? 'at_risk' : healthReasons.length ? 'attention' : 'healthy';
+  const HEALTH = {
+    healthy: { dot: '🟢', label: 'Healthy', color: 'var(--good)' },
+    attention: { dot: '🟠', label: 'Attention Required', color: 'var(--warn, #d97706)' },
+    at_risk: { dot: '🔴', label: 'At Risk', color: 'var(--bad)' },
+  }[health];
+
+  const upcoming = activities
+    .filter((x) => x.status !== 'done' && x.status !== 'cancelled')
+    .sort((x, y) => (x.dueDate ?? '9999').localeCompare(y.dueDate ?? '9999'))
+    .slice(0, 6);
+
+  const tenderedQuotes = quotations.filter((q) => q.sourceTenderId).length;
+  const directQuotes = quotations.length - tenderedQuotes;
 
   const TABS: Array<{ id: Tab; label: string; count?: number }> = [
     { id: 'overview', label: 'Overview' },
@@ -103,77 +161,119 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     { id: 'quotations', label: 'Quotations', count: quotations.length },
     { id: 'contracts', label: 'Contracts', count: contracts.length },
     { id: 'projects', label: 'Projects', count: projects.length },
-    { id: 'activities', label: 'Activities', count: activities.length },
     { id: 'financials', label: 'Financials', count: receivables.invoiceCount },
-    { id: 'timeline', label: 'Timeline' },
+    { id: 'activity', label: 'Activity', count: activities.length },
   ];
 
-  const chain: Array<{ label: string; count: number; value?: number; href: string }> = [
-    { label: 'Opportunities', count: opportunities.length, value: summary.pipelineValue, href: '/crm/leads' },
-    { label: 'Tenders', count: tenders.length, href: '/tendering/tenders' },
-    { label: 'Quotations', count: quotations.length, href: '/crm/quotations' },
-    { label: 'Contracts', count: contracts.length, value: summary.wonValue, href: '/contracts/contracts' },
-    { label: 'Projects', count: projects.length, href: '/projects/projects' },
-  ];
+  const chip = (label: string, count: number, target: Tab, value?: number) => (
+    <button key={label} onClick={() => setTab(target)} style={{ ...st.chainNode, ...(count > 0 ? st.chainNodeActive : {}), cursor: 'pointer' }}>
+      {label} <b>{count}</b>
+      {value !== undefined && value > 0 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · {aed(value)}</span>}
+    </button>
+  );
+  const arrow = <span style={{ color: 'var(--muted)' }}>→</span>;
 
   return (
     <div>
-      {/* header */}
+      {/* ── Header: identity + relationship health ── */}
       <div style={st.header}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h1 style={st.h1}>{a.name}</h1>
-            <span style={st.statusPill}>{a.status}</span>
-            <span style={{ ...st.healthPill, color: health.color, borderColor: 'currentColor' }}>● {health.label}</span>
-          </div>
+          <h1 style={st.h1}>{a.name}</h1>
           <div style={st.subline}>
+            <span style={st.stagePill}>{STAGE_LABEL[a.status] ?? a.status}</span>
             {a.industry && <span>{a.industry}</span>}
-            {a.ownerId && <span>Owner: {a.ownerId}</span>}
-            <span>Client since {d(a.createdAt)}</span>
+            <span>Client since {monthYear(a.createdAt)}</span>
             {a.source && <span>Source: {a.source}</span>}
+            <span>
+              Owner:{' '}
+              {a.ownerId ?? <span style={{ color: 'var(--muted)' }}>Unassigned</span>}
+              {!a.ownerId && (
+                <button disabled={busy} onClick={() => void assignToMe()} style={st.inlineAction}>Assign to me</button>
+              )}
+            </span>
+          </div>
+          <div style={{ ...st.healthLine, color: HEALTH.color }}>
+            Relationship Health: {HEALTH.dot} {HEALTH.label}
+            {healthReasons.length > 0 && <span style={{ color: 'var(--muted)', fontWeight: 500 }}> — {healthReasons.join(' · ')}</span>}
+            {stageMismatch && (
+              <button disabled={busy} onClick={() => void patchAccount({ status: 'active_customer' })} style={st.inlineAction}>
+                Promote to Active Customer
+              </button>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <a href="/crm/leads" style={st.actionBtn}>+ Opportunity</a>
           <a href="/crm/quotations" style={st.actionBtn}>+ Quotation</a>
           <a href="/tendering/tenders" style={st.actionBtn}>+ Tender</a>
-          <a href="/crm/contacts" style={st.actionBtn}>+ Contact</a>
-          <a href={`/api/crm/accounts/${a.id}/dossier/xlsx`} style={st.actionBtn}>⤓ Excel</a>
-          <a href={`/crm/accounts/${a.id}/print`} style={st.actionBtn}>🖨 PDF</a>
+          <details style={{ position: 'relative' }}>
+            <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>Export ▾</summary>
+            <div style={st.menu}>
+              <a href={`/api/crm/accounts/${a.id}/dossier/xlsx`} style={st.menuItem}>⤓ Customer dossier (Excel)</a>
+              <a href={`/crm/accounts/${a.id}/print`} style={st.menuItem}>🖨 Customer dossier (PDF)</a>
+            </div>
+          </details>
+          <details style={{ position: 'relative' }}>
+            <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>More ▾</summary>
+            <div style={st.menu}>
+              <a href="/crm/contacts" style={st.menuItem}>+ Contact</a>
+              <a href="/crm/activities" style={st.menuItem}>+ Activity</a>
+              <a href="/finance/ar" style={st.menuItem}>Accounts receivable →</a>
+            </div>
+          </details>
         </div>
       </div>
 
-      {/* commercial summary */}
-      <div style={st.stats}>
-        <Stat label="Pipeline value" value={`AED ${aed(summary.pipelineValue)}`} />
-        <Stat label="Active opportunities" value={String(summary.activeOpportunities)} />
-        <Stat label="Tenders" value={`${summary.openTenders} open / ${summary.tenderCount}`} />
-        <Stat label="Quotations" value={String(summary.quotationCount)} />
-        <Stat label="Contracts" value={String(summary.contractCount)} />
-        <Stat label="Won value" value={`AED ${aed(summary.wonValue)}`} strong accent />
-        <Stat label="Projects" value={String(summary.projectCount)} />
-        <Stat
-          label="Outstanding AR"
-          value={`AED ${aed(summary.outstandingReceivables)}`}
-          strong
-          tone={receivables.overdue > 0 ? 'bad' : undefined}
-        />
+      {/* ── Account snapshot: Commercial | Delivery & Finance ── */}
+      <div style={st.snapshotRow}>
+        <div style={st.snapshotGroup}>
+          <div style={st.groupTitle}>Commercial</div>
+          <div style={st.groupStats}>
+            <Stat label="Open pipeline" value={`AED ${aed(summary.pipelineValue)}`} accent />
+            <Stat label="Active opportunities" value={String(summary.activeOpportunities)} />
+            <Stat label="Contracted value" value={`AED ${aed(summary.wonValue)}`} strong accent />
+            <Stat label="Active contracts" value={`${activeContracts.length} / ${contracts.length}`} />
+          </div>
+        </div>
+        <div style={st.snapshotGroup}>
+          <div style={st.groupTitle}>Delivery &amp; Finance</div>
+          <div style={st.groupStats}>
+            <Stat label="Active projects" value={`${activeProjects.length} / ${projects.length}`} />
+            <Stat label="Open tenders" value={`${summary.openTenders} / ${summary.tenderCount}`} />
+            <Stat label="Quotations" value={String(summary.quotationCount)} />
+            <Stat label="Outstanding AR" value={`AED ${aed(summary.outstandingReceivables)}`} strong tone={receivables.overdue > 0 ? 'bad' : undefined} />
+          </div>
+        </div>
       </div>
 
-      {/* deal-chain strip */}
+      {/* ── Commercial Portfolio: the account is the hub — both deal routes ── */}
       <div style={st.chain}>
-        <span style={st.chainAccount}>◆ {a.name}</span>
-        {chain.map((c) => (
-          <span key={c.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--muted)' }}>→</span>
-            <a href={c.href} style={{ ...st.chainNode, ...(c.count > 0 ? st.chainNodeActive : {}) }}>
-              {c.label} <b>{c.count}</b>
-              {c.value !== undefined && c.value > 0 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · {aed(c.value)}</span>}
-            </a>
-          </span>
-        ))}
+        <div style={st.chainTitle}>Commercial Portfolio</div>
+        <div style={st.chainRow}>
+          <span style={st.chainAccount}>◆ {a.name}</span>
+          <span style={st.routeLabel}>↳ tendered</span>
+          {chip('Opportunities', opportunities.length, 'opportunities', summary.pipelineValue)}
+          {arrow}
+          {chip('Tenders', tenders.length, 'tenders')}
+          {arrow}
+          {chip('Quotations', tenderedQuotes, 'quotations')}
+          {arrow}
+          {chip('Contracts', contracts.length, 'contracts', summary.wonValue)}
+          {arrow}
+          {chip('Projects', projects.length, 'projects')}
+        </div>
+        <div style={st.chainRow}>
+          <span style={{ ...st.chainAccount, visibility: 'hidden' }}>◆ {a.name}</span>
+          <span style={st.routeLabel}>↳ direct</span>
+          <span style={{ color: 'var(--muted)', fontSize: 12 }}>Opportunity</span>
+          {arrow}
+          {chip('Quotations', directQuotes, 'quotations')}
+          {arrow}
+          <span style={{ color: 'var(--muted)', fontSize: 12 }}>Contract → Project</span>
+        </div>
       </div>
 
-      {/* tabs */}
+      {/* ── Tabs ── */}
       <div style={st.tabs}>
         {TABS.map((t) => (
           <button key={t.id} style={{ ...st.tab, ...(tab === t.id ? st.tabOn : {}) }} onClick={() => setTab(t.id)}>
@@ -185,17 +285,95 @@ export default function Account360Client({ accountId }: { accountId: string }) {
 
       <section style={st.card}>
         {tab === 'overview' && (
-          <div style={st.overviewGrid}>
-            <Info label="Industry" value={a.industry} />
-            <Info label="Website" value={a.website} link />
-            <Info label="Main contact" value={mainContact ? `${mainContact.name}${mainContact.email ? ` · ${mainContact.email}` : ''}` : null} />
-            <Info label="Phone" value={a.phone ?? mainContact?.phone ?? null} />
-            <Info label="Email" value={a.email ?? mainContact?.email ?? null} />
-            <Info label="Billing address" value={a.billingAddress} wide />
-            <Info label="Account owner" value={a.ownerId} />
-            <Info label="Source" value={a.source} />
-            <Info label="Client since" value={d(a.createdAt)} />
-            <Info label="Credit / payment terms" value={a.paymentTerms} />
+          <div style={st.overviewCols}>
+            {/* Relationship health */}
+            <div style={st.oCard}>
+              <div style={st.oTitle}>Relationship Health</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: HEALTH.color, marginBottom: 6 }}>{HEALTH.dot} {HEALTH.label}</div>
+              {healthReasons.length === 0 ? (
+                <p style={st.oMuted}>No open issues — receivables current{a.ownerId ? ', owner assigned' : ''}.</p>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--fg)' }}>
+                  {healthReasons.map((r) => <li key={r} style={{ marginBottom: 3 }}>{r}</li>)}
+                </ul>
+              )}
+            </div>
+
+            {/* Financial exposure */}
+            <div style={st.oCard}>
+              <div style={st.oTitle}>Financial Exposure</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Stat label="Invoiced" value={`AED ${aed(receivables.invoiced)}`} />
+                <Stat label="Collected" value={`AED ${aed(receivables.paid)}`} />
+                <Stat label="Outstanding" value={`AED ${aed(receivables.outstanding)}`} strong />
+                <Stat label="Overdue" value={`AED ${aed(receivables.overdue)}`} strong tone={receivables.overdue > 0 ? 'bad' : undefined} />
+              </div>
+              <p style={{ ...st.oMuted, marginTop: 8 }}>
+                Terms: {a.paymentTerms ?? '—'} · <button onClick={() => setTab('financials')} style={st.linkBtn}>Financials →</button>
+              </p>
+            </div>
+
+            {/* Upcoming actions */}
+            <div style={st.oCard}>
+              <div style={st.oTitle}>Upcoming Actions</div>
+              {upcoming.length === 0 ? (
+                <p style={st.oMuted}>No open activities — <a href="/crm/activities" style={st.rowLink}>log the next step →</a></p>
+              ) : (
+                upcoming.map((x) => (
+                  <div key={x.id} style={st.tlRow}>
+                    <span style={{ ...st.tlDate, width: 74 }}>{x.dueDate ? d(x.dueDate) : 'no due'}</span>
+                    <span style={st.tlLabel}><b style={{ textTransform: 'capitalize' }}>{x.type}</b> · {x.subject}</span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Recent activity */}
+            <div style={st.oCard}>
+              <div style={st.oTitle}>Recent Activity</div>
+              {timeline.length === 0 ? (
+                <p style={st.oMuted}>Nothing yet.</p>
+              ) : (
+                timeline.slice(0, 8).map((t, i) => (
+                  <div key={i} style={st.tlRow}>
+                    <span style={st.tlGlyph}>{KIND_GLYPH[t.kind] ?? '·'}</span>
+                    <span style={st.tlDate}>{d(t.at)}</span>
+                    {t.href
+                      ? <a href={t.href} style={{ ...st.tlLabel, color: 'var(--fg)', textDecoration: 'none' }}>{t.label}</a>
+                      : <span style={st.tlLabel}>{t.label}</span>}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Key contacts */}
+            <div style={st.oCard}>
+              <div style={st.oTitle}>Key Contacts</div>
+              {contacts.length === 0 ? (
+                <p style={st.oMuted}>No contacts yet — <a href="/crm/contacts" style={st.rowLink}>add the people you deal with →</a></p>
+              ) : (
+                contacts.slice(0, 4).map((c) => (
+                  <div key={c.id} style={{ padding: '5px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                    <b>{c.name}</b>{c.role ? <span style={{ color: 'var(--muted)' }}> · {c.role}</span> : null}
+                    <div style={{ color: 'var(--muted)', fontSize: 12 }}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Profile */}
+            <div style={st.oCard}>
+              <div style={st.oTitle}>Account Profile</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Info label="Industry" value={a.industry} />
+                <Info label="Website" value={a.website} link />
+                <Info label="Phone" value={a.phone} />
+                <Info label="Email" value={a.email} />
+                <Info label="Billing address" value={a.billingAddress} wide />
+                <Info label="Source" value={a.source} />
+                <Info label="Client since" value={d(a.createdAt)} />
+              </div>
+            </div>
           </div>
         )}
 
@@ -232,9 +410,10 @@ export default function Account360Client({ accountId }: { accountId: string }) {
 
         {tab === 'quotations' && (
           <Table
-            cols={['Number', 'Status', 'Total', 'Issued', '']}
+            cols={['Number', 'Route', 'Status', 'Total', 'Issued', '']}
             rows={quotations.map((q) => [
               q.quoteNumber,
+              q.sourceTenderId ? 'Tendered' : 'Direct',
               <Pill key="s" text={q.status} />,
               `AED ${aed(q.total)}`,
               d(q.issueDate),
@@ -271,7 +450,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
           />
         )}
 
-        {tab === 'activities' && (
+        {tab === 'activity' && (
           <Table
             cols={['Type', 'Subject', 'Status', 'Due', 'Logged']}
             rows={activities.map((x) => [x.type, x.subject, <Pill key="s" text={x.status} />, x.dueDate ? d(x.dueDate) : '—', d(x.createdAt)])}
@@ -294,19 +473,6 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             </p>
           </div>
         )}
-
-        {tab === 'timeline' && (
-          <div>
-            {timeline.length === 0 && <p style={{ color: 'var(--muted)' }}>Nothing yet.</p>}
-            {timeline.map((t, i) => (
-              <div key={i} style={st.tlRow}>
-                <span style={st.tlGlyph}>{KIND_GLYPH[t.kind] ?? '·'}</span>
-                <span style={st.tlDate}>{d(t.at)}</span>
-                {t.href ? <a href={t.href} style={{ ...st.tlLabel, color: 'var(--fg)', textDecoration: 'none' }}>{t.label}</a> : <span style={st.tlLabel}>{t.label}</span>}
-              </div>
-            ))}
-          </div>
-        )}
       </section>
     </div>
   );
@@ -314,7 +480,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
 
 function Stat({ label, value, strong, accent, tone }: { label: string; value: string; strong?: boolean; accent?: boolean; tone?: 'bad' }) {
   return (
-    <div style={{ minWidth: 120 }}>
+    <div style={{ minWidth: 110 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: strong ? 16 : 14, fontWeight: strong ? 800 : 600, color: tone === 'bad' ? 'var(--bad)' : accent ? 'var(--accent)' : 'var(--fg)' }}>{value}</div>
     </div>
@@ -373,24 +539,38 @@ function Table({ cols, rows, empty }: { cols: string[]; rows: Array<Array<React.
 
 const st = {
   header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 } as CSSProperties,
-  h1: { fontSize: 24, margin: 0, color: 'var(--accent)' } as CSSProperties,
-  statusPill: { fontSize: 11.5, textTransform: 'capitalize', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px', color: 'var(--fg)' } as CSSProperties,
-  healthPill: { fontSize: 11.5, border: '1px solid', borderRadius: 999, padding: '3px 10px', fontWeight: 600 } as CSSProperties,
-  subline: { display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)', marginTop: 6 } as CSSProperties,
-  actionBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)' } as CSSProperties,
-  stats: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 12 } as CSSProperties,
-  chain: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 16px', border: '1px dashed var(--border)', borderRadius: 12, marginBottom: 14, fontSize: 12.5 } as CSSProperties,
+  h1: { fontSize: 26, margin: '0 0 6px', color: 'var(--accent)', letterSpacing: -0.4 } as CSSProperties,
+  stagePill: { fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px', color: 'var(--fg)', fontWeight: 700, background: 'var(--panel)' } as CSSProperties,
+  subline: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
+  healthLine: { marginTop: 8, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } as CSSProperties,
+  inlineAction: { marginLeft: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  actionBtn: { display: 'inline-block', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
+  menu: { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 6, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', gap: 2 } as CSSProperties,
+  menuItem: { display: 'block', padding: '7px 10px', borderRadius: 7, color: 'var(--fg)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600 } as CSSProperties,
+  snapshotRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 10, marginBottom: 12 } as CSSProperties,
+  snapshotGroup: { border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', padding: '12px 16px' } as CSSProperties,
+  groupTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--accent)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
+  groupStats: { display: 'flex', gap: 22, flexWrap: 'wrap' } as CSSProperties,
+  stats: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' } as CSSProperties,
+  chain: { padding: '10px 16px 12px', border: '1px dashed var(--border)', borderRadius: 12, marginBottom: 14 } as CSSProperties,
+  chainTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--accent)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
+  chainRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5, padding: '3px 0' } as CSSProperties,
   chainAccount: { fontWeight: 800, color: 'var(--accent)' } as CSSProperties,
-  chainNode: { border: '1px solid var(--border)', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)', textDecoration: 'none' } as CSSProperties,
+  routeLabel: { color: 'var(--muted)', fontSize: 11.5, fontStyle: 'italic', width: 66 } as CSSProperties,
+  chainNode: { border: '1px solid var(--border)', background: 'transparent', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)', textDecoration: 'none', fontSize: 12.5 } as CSSProperties,
   chainNodeActive: { color: 'var(--fg)', borderColor: 'var(--accent)' } as CSSProperties,
   tabs: { display: 'inline-flex', gap: 4, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, marginBottom: 12, flexWrap: 'wrap' } as CSSProperties,
   tab: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 } as CSSProperties,
   tabOn: { background: 'var(--accent-grad, var(--accent))', color: 'var(--accent-ink, #fff)', fontWeight: 700 } as CSSProperties,
   tabCount: { fontSize: 10, fontWeight: 800, background: 'rgba(0,0,0,0.18)', borderRadius: 999, padding: '1px 6px' } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 14, padding: 18, background: 'var(--panel)' } as CSSProperties,
-  overviewGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 } as CSSProperties,
+  overviewCols: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 } as CSSProperties,
+  oCard: { border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--panel-2, var(--panel))' } as CSSProperties,
+  oTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--muted)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
+  oMuted: { color: 'var(--muted)', fontSize: 12.5, margin: 0 } as CSSProperties,
+  linkBtn: { border: 'none', background: 'transparent', color: 'var(--accent)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', padding: 0 } as CSSProperties,
   rowLink: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, fontSize: 12.5 } as CSSProperties,
-  tlRow: { display: 'flex', alignItems: 'baseline', gap: 12, padding: '7px 4px', borderBottom: '1px solid var(--border)', fontSize: 13 } as CSSProperties,
+  tlRow: { display: 'flex', alignItems: 'baseline', gap: 10, padding: '6px 2px', borderBottom: '1px solid var(--border)', fontSize: 13 } as CSSProperties,
   tlGlyph: { color: 'var(--accent)', width: 16, textAlign: 'center', flexShrink: 0 } as CSSProperties,
   tlDate: { color: 'var(--muted)', fontSize: 12, width: 86, flexShrink: 0 } as CSSProperties,
   tlLabel: { minWidth: 0 } as CSSProperties,

@@ -5,7 +5,7 @@ describe('crm account model', () => {
   it('creates an account with sane defaults and a trimmed name', () => {
     const a = makeAccount({ tenantId: 't1', name: '  Acme Co  ' });
     expect(a.name).toBe('Acme Co');
-    expect(a.status).toBe('lead');
+    expect(a.status).toBe('prospect');
     expect(a.companyId).toBeNull();
     expect(a.industry).toBeNull();
     expect(a.ownerId).toBeNull();
@@ -18,13 +18,13 @@ describe('crm account model', () => {
       tenantId: 't1',
       companyId: 'c1',
       name: 'Globex',
-      status: 'active',
+      status: 'active_customer',
       industry: 'MEP',
       website: 'globex.example',
       ownerId: 'u1',
       createdBy: 'u1',
     });
-    expect(a.status).toBe('active');
+    expect(a.status).toBe('active_customer');
     expect(a.companyId).toBe('c1');
     expect(a.industry).toBe('MEP');
     expect(a.createdBy).toBe('u1');

@@ -26,6 +26,7 @@ class UpdateAccountDto {
   @IsOptional() @IsString() billingAddress?: string;
   @IsOptional() @IsString() source?: string;
   @IsOptional() @IsString() paymentTerms?: string;
+  @IsOptional() @IsString() ownerId?: string;
 }
 
 /**
@@ -97,6 +98,7 @@ export class CrmAccountsController {
         billingAddress: dto.billingAddress,
         source: dto.source,
         paymentTerms: dto.paymentTerms,
+        ownerId: dto.ownerId,
       });
     } catch (e) {
       const msg = (e as Error).message;

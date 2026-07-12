@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
-import { ActivityService, ContactService, OpportunityService } from '@aura/crm';
+import { ActivityService, ContactService, OpportunityService, ATTENTION_THRESHOLDS, lastActivityByRecord, isQuiet } from '@aura/crm';
 import type { Opportunity } from '@aura/shared';
 
 // Sales Pipeline Command Center — the sales manager's cockpit. Turns the raw
@@ -51,14 +51,9 @@ export class PipelineCommandController {
     const won90 = opps.filter((o) => o.stage === 'won' && o.updatedAt >= now90);
     const lost90 = opps.filter((o) => o.stage === 'lost' && o.updatedAt >= now90);
 
-    // Last activity per opportunity (from the activity stream).
-    const lastActivity = new Map<string, string>();
-    for (const a of activities) {
-      if (!a.relatedId) continue;
-      const at = a.completedAt ?? a.createdAt;
-      const prev = lastActivity.get(a.relatedId);
-      if (!prev || at > prev) lastActivity.set(a.relatedId, at);
-    }
+    // Last activity per record — shared with the activity & intelligence engines.
+    const now = new Date();
+    const lastActivity = lastActivityByRecord(activities);
     // Which accounts have a mapped decision-maker (for the "map the buyer" nudge).
     const accountsWithDM = new Set(
       contacts.filter((c) => c.stakeholderRole === 'decision_maker' && c.accountId).map((c) => c.accountId),
@@ -108,7 +103,7 @@ export class PipelineCommandController {
     // Stalled — open, no activity in 21+ days (or never), age 14+ days.
     const stalled = open
       .map((o) => ({ o, last: lastActivity.get(o.id) ?? null }))
-      .filter(({ o, last }) => daysBetween(o.createdAt) >= 14 && (last === null || daysBetween(last) >= 21))
+      .filter(({ last }) => isQuiet(last, ATTENTION_THRESHOLDS.opportunityIdleDays, now))
       .map(({ o, last }) => ({
         id: o.id, title: o.title, value: o.value, stage: o.stage, ownerId: o.ownerId,
         accountName: o.accountName, daysSinceActivity: last ? daysBetween(last) : null,
@@ -138,10 +133,11 @@ export class PipelineCommandController {
     for (const o of open) {
       const last = lastActivity.get(o.id) ?? null;
       const dsa = last ? daysBetween(last) : null;
+      const quiet = isQuiet(last, ATTENTION_THRESHOLDS.opportunityIdleDays, now);
       const qual = [o.budgetConfirmed, o.authorityConfirmed, o.needConfirmed, o.timelineConfirmed].filter(Boolean).length;
       const reasons: string[] = [];
       if (o.closeDate && o.closeDate < today) reasons.push('expected close date passed');
-      if (last === null || (dsa !== null && dsa >= 21)) reasons.push(last === null ? 'no activity ever logged' : `quiet for ${dsa} days`);
+      if (quiet) reasons.push(last === null ? 'no activity ever logged' : `quiet for ${dsa} days`);
       if (qual < 2) reasons.push(`weak qualification (${qual}/4)`);
       if (o.accountId && !accountsWithDM.has(o.accountId)) reasons.push('no decision-maker mapped');
       if (reasons.length === 0) continue;
@@ -149,7 +145,7 @@ export class PipelineCommandController {
       // Recommendation: act on the most actionable reason first.
       let recommendation: string;
       if (o.closeDate && o.closeDate < today) recommendation = 'Re-baseline the close date and confirm the deal is still live.';
-      else if (last === null || (dsa !== null && dsa >= 21)) recommendation = 'Log a touch — call or email the buyer to re-engage.';
+      else if (quiet) recommendation = 'Log a touch — call or email the buyer to re-engage.';
       else if (o.accountId && !accountsWithDM.has(o.accountId)) recommendation = 'Map the decision-maker at this account.';
       else recommendation = 'Qualify the deal — confirm budget, authority, need and timeline.';
 

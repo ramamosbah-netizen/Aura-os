@@ -1,6 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
-import { AccountService, ActivityService, OpportunityService, type Activity } from '@aura/crm';
+import { AccountService, ActivityService, OpportunityService, ATTENTION_THRESHOLDS, lastActivityByRecord, daysSince, isQuiet, type Activity } from '@aura/crm';
 
 // Commercial Activity command center — the "what needs my attention today" view.
 // Beyond the agenda (overdue / due), it detects RELATIONSHIP INACTIVITY: accounts
@@ -38,8 +38,8 @@ export class ActivityCommandController {
     @Query('oppStaleDays') oppStaleDays?: string,
   ): Promise<CommandPayload> {
     const tenantId = this.tenant.get().tenantId;
-    const acctStale = Number(accountStaleDays) > 0 ? Number(accountStaleDays) : 30;
-    const oppStale = Number(oppStaleDays) > 0 ? Number(oppStaleDays) : 14;
+    const acctStale = Number(accountStaleDays) > 0 ? Number(accountStaleDays) : ATTENTION_THRESHOLDS.accountIdleDays;
+    const oppStale = Number(oppStaleDays) > 0 ? Number(oppStaleDays) : ATTENTION_THRESHOLDS.opportunityIdleDays;
 
     const [activities, accounts, opportunities] = await Promise.all([
       this.activities.list({ tenantId, limit: 5000 }),
@@ -65,16 +65,9 @@ export class ActivityCommandController {
       .filter((a) => a.dueDate && a.dueDate < today)
       .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
 
-    // Last touch per related record (from the activity stream).
-    const lastByRelated = new Map<string, string>();
-    for (const a of activities) {
-      if (!a.relatedId) continue;
-      const prev = lastByRelated.get(a.relatedId);
-      const at = a.completedAt ?? a.createdAt;
-      if (!prev || at > prev) lastByRelated.set(a.relatedId, at);
-    }
-    const daysSince = (iso: string | null): number | null =>
-      iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null;
+    // Last touch per related record — shared with the intelligence & pipeline engines.
+    const now = new Date();
+    const lastByRelated = lastActivityByRecord(activities);
 
     const inactivity: AttentionItem[] = [];
 
@@ -82,8 +75,8 @@ export class ActivityCommandController {
     for (const acc of accounts) {
       if (acc.status === 'inactive' || acc.status === 'dormant') continue;
       const last = lastByRelated.get(acc.id) ?? null;
-      const ds = daysSince(last);
-      if (last === null || (ds !== null && ds >= acctStale)) {
+      const ds = daysSince(last, now);
+      if (isQuiet(last, acctStale, now)) {
         inactivity.push({
           kind: 'account', id: acc.id, name: acc.name,
           reason: last === null ? 'no activity ever logged' : `no activity in ${ds} days`,
@@ -96,8 +89,8 @@ export class ActivityCommandController {
     for (const o of opportunities) {
       if (o.stage === 'won' || o.stage === 'lost') continue;
       const last = lastByRelated.get(o.id) ?? null;
-      const ds = daysSince(last);
-      if (last === null || (ds !== null && ds >= oppStale)) {
+      const ds = daysSince(last, now);
+      if (isQuiet(last, oppStale, now)) {
         inactivity.push({
           kind: 'opportunity', id: o.id, name: o.title,
           reason: last === null ? 'no activity — never worked' : `no activity in ${ds} days`,

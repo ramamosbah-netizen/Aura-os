@@ -18,6 +18,7 @@ interface OppRow {
   requires_tender: boolean | null;
   owner_id: string | null;
   next_action: string | null;
+  next_action_due_date: string | null;
   budget_confirmed: boolean | null;
   authority_confirmed: boolean | null;
   need_confirmed: boolean | null;
@@ -30,7 +31,7 @@ interface OppRow {
   updated_at: Date;
 }
 
-const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, close_date, requires_tender, owner_id, next_action, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, close_date, requires_tender, owner_id, next_action, next_action_due_date, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, created_at, updated_at';
 
 function rowToOpportunity(r: OppRow): Opportunity {
   return {
@@ -47,6 +48,7 @@ function rowToOpportunity(r: OppRow): Opportunity {
     requiresTender: r.requires_tender ?? true,
     ownerId: r.owner_id,
     nextAction: r.next_action,
+    nextActionDueDate: r.next_action_due_date,
     budgetConfirmed: r.budget_confirmed ?? false,
     authorityConfirmed: r.authority_confirmed ?? false,
     needConfirmed: r.need_confirmed ?? false,
@@ -78,16 +80,16 @@ export class PostgresOpportunityStore implements OpportunityStore {
           SET title = $2, value = $3, stage = $4, win_probability = $5, close_date = $6,
               account_id = $7, account_name = $8, requires_tender = $9, owner_id = $10, next_action = $11,
               budget_confirmed = $12, authority_confirmed = $13, need_confirmed = $14, timeline_confirmed = $15,
-              competitors = $16, source = $17, loss_reason = $18, updated_at = now()
+              competitors = $16, source = $17, loss_reason = $18, next_action_due_date = $19, updated_at = now()
         WHERE id = $1`,
       [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate, o.accountId, o.accountName, o.requiresTender, o.ownerId, o.nextAction,
-       o.budgetConfirmed, o.authorityConfirmed, o.needConfirmed, o.timelineConfirmed, o.competitors, o.source, o.lossReason],
+       o.budgetConfirmed, o.authorityConfirmed, o.needConfirmed, o.timelineConfirmed, o.competitors, o.source, o.lossReason, o.nextActionDueDate],
     );
   }
 
   private insert(executor: Pool | PoolClient, o: Opportunity): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
       [
         o.id,
         o.tenantId,
@@ -103,6 +105,7 @@ export class PostgresOpportunityStore implements OpportunityStore {
         o.requiresTender,
         o.ownerId,
         o.nextAction,
+        o.nextActionDueDate,
         o.budgetConfirmed,
         o.authorityConfirmed,
         o.needConfirmed,

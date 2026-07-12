@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { opportunityAttention } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 
 // CRM · Sales Pipeline — the full sales cycle, with Lead and Opportunity kept
@@ -20,7 +21,8 @@ interface Lead {
 interface Opportunity {
   id: string; leadId: string | null; accountId: string | null; accountName: string | null;
   title: string; value: number; stage: string; winProbability: number; closeDate: string | null;
-  requiresTender?: boolean; ownerId?: string | null; nextAction?: string | null; createdAt: string;
+  requiresTender?: boolean; ownerId?: string | null; nextAction?: string | null;
+  nextActionDueDate?: string | null; createdAt: string;
 }
 interface Account { id: string; name: string; }
 interface Activity {
@@ -30,6 +32,9 @@ interface Activity {
 
 const OPP_STAGES = ['qualification', 'proposal', 'negotiation', 'won', 'lost'] as const;
 const ACTIVE_STAGES = ['qualification', 'proposal', 'negotiation'];
+const GAP_LABEL: Record<string, string> = {
+  'no-next-action': 'no next step', 'no-owner': 'no owner', 'no-due-date': 'no due date', overdue: 'overdue',
+};
 const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as const;
 
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
@@ -313,7 +318,8 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               ],
             },
             { name: 'competitors', label: 'Competitors', kind: 'text', placeholder: 'e.g. Rival ELV LLC, Acme Systems', span: 2, hint: 'Comma-separated — who else is bidding' },
-            { name: 'nextAction', label: 'Next action', kind: 'text', placeholder: 'e.g. Site survey Sunday', span: 2 },
+            { name: 'nextAction', label: 'Next action', kind: 'text', placeholder: 'e.g. Site survey Sunday' },
+            { name: 'nextActionDueDate', label: 'Next action due', kind: 'date', hint: 'Active deals need a next step, an owner & a due date — else they show as Needs Attention' },
           ]}
         />
       </div>
@@ -471,6 +477,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               {col.kind === 'opp' && col.opps!.map((o) => {
                 const stageIdx = OPP_STAGES.indexOf(o.stage as (typeof OPP_STAGES)[number]);
                 const direct = o.requiresTender === false;
+                const att = opportunityAttention(o);
                 return (
                   <div
                     key={o.id}
@@ -495,7 +502,14 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                       </button>
                       {o.ownerId && <span style={{ color: 'var(--muted)', fontSize: 11 }}>◆ {o.ownerId}</span>}
                     </div>
-                    {o.nextAction && <div style={s.nextAction}>Next: {o.nextAction}</div>}
+                    {o.nextAction && (
+                      <div style={s.nextAction}>Next: {o.nextAction}{o.nextActionDueDate && ` · due ${fmt(o.nextActionDueDate)}`}</div>
+                    )}
+                    {att.needsAttention && (
+                      <div style={s.attnBadge} title={`Next-Action Invariant unmet: ${att.gaps.map((g) => GAP_LABEL[g]).join(', ')}`}>
+                        ⚠ Needs attention — {att.gaps.map((g) => GAP_LABEL[g]).join(' · ')}
+                      </div>
+                    )}
                     <div style={s.cardActions}>
                       {ACTIVE_STAGES.includes(o.stage) && (
                         <>
@@ -738,4 +752,5 @@ const s = {
   cardBtn: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', fontSize: 11.5, padding: '3px 8px', cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   pathTag: { background: 'transparent', border: '1px dashed var(--border)', borderRadius: 999, fontSize: 10.5, padding: '2px 8px', cursor: 'pointer', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 } as CSSProperties,
   nextAction: { fontSize: 11.5, color: 'var(--accent)', background: 'rgba(255,193,7,0.05)', border: '1px dashed rgba(255,193,7,0.25)', borderRadius: 6, padding: '3px 7px' } as CSSProperties,
+  attnBadge: { fontSize: 11, fontWeight: 600, color: 'var(--bad)', background: 'rgba(220,53,69,0.08)', border: '1px solid rgba(220,53,69,0.3)', borderRadius: 6, padding: '3px 7px', marginTop: 4 } as CSSProperties,
 };

@@ -22,6 +22,7 @@ class CreateOpportunityDto {
   @IsOptional() requiresTender?: boolean | string;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
+  @IsOptional() @IsString() nextActionDueDate?: string;
   @IsOptional() budgetConfirmed?: boolean | string;
   @IsOptional() authorityConfirmed?: boolean | string;
   @IsOptional() needConfirmed?: boolean | string;
@@ -42,6 +43,7 @@ class UpdateOpportunityDto {
   @IsOptional() requiresTender?: boolean | string;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
+  @IsOptional() @IsString() nextActionDueDate?: string;
   @IsOptional() budgetConfirmed?: boolean | string;
   @IsOptional() authorityConfirmed?: boolean | string;
   @IsOptional() needConfirmed?: boolean | string;
@@ -98,6 +100,7 @@ export class CrmOpportunitiesController {
       requiresTender: coerceBool(dto.requiresTender),
       ownerId: dto.ownerId,
       nextAction: dto.nextAction,
+      nextActionDueDate: dto.nextActionDueDate,
       budgetConfirmed: coerceBool(dto.budgetConfirmed),
       authorityConfirmed: coerceBool(dto.authorityConfirmed),
       needConfirmed: coerceBool(dto.needConfirmed),

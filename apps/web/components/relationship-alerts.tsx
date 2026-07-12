@@ -25,6 +25,7 @@ const KIND_META: Record<string, { icon: string; label: string }> = {
   'no-decision-maker': { icon: '☖', label: 'No decision-maker' },
   'inactive-account': { icon: '💤', label: 'Quiet account' },
   'expiring-quote': { icon: '⏳', label: 'Expiring quote' },
+  'overdue-ar': { icon: '💰', label: 'Overdue payment' },
 };
 const SEV_COLOR: Record<string, string> = { high: 'var(--bad)', medium: 'var(--accent)', low: 'var(--muted)' };
 

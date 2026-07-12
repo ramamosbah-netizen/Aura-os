@@ -75,4 +75,23 @@ describe('Relationship Intelligence e2e (HTTP)', () => {
     expect(kinds).not.toContain('stalled-opportunity');
     expect(kinds).not.toContain('no-decision-maker');
   });
+
+  it('an overdue customer invoice raises an overdue-ar alert linked to its account', async () => {
+    const account = (await http.post('/api/v1/crm/accounts').send({ name: 'Debtor Corp' }).expect(201)).body;
+    const past = new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10);
+    const inv = (
+      await http.post('/api/v1/finance/customer-invoices')
+        .send({
+          invoiceNumber: 'INV-RI-1', customerName: 'Debtor Corp', issueDate: past, dueDate: past,
+          lines: [{ description: 'Services', quantity: 1, unitPrice: 5000, vatRate: 5 }],
+        })
+        .expect(201)
+    ).body;
+    await http.post(`/api/v1/finance/customer-invoices/${inv.id}/issue`).expect(201);
+
+    const ar = (await alertsFor(account.id)).find((a) => a.kind === 'overdue-ar');
+    expect(ar).toBeDefined();
+    expect(ar!.entity).toBe('account');
+    expect(ar!.reason).toMatch(/overdue/);
+  });
 });

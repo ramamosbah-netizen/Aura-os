@@ -1,21 +1,23 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { AccountService, ActivityService, ContactService, OpportunityService, QuotationService } from '@aura/crm';
+import { CustomerInvoiceService, balanceOf } from '@aura/finance';
 import { opportunityAttention } from '@aura/shared';
 
 // Relationship Intelligence — the CRM alert engine. It turns the data we already
 // hold into a single ranked list of "act on this now" signals: deals with no
 // next step (the Next-Action Invariant), relationships going quiet, deals with
-// no decision-maker, and quotes about to expire. Read-only; no new storage.
+// no decision-maker, quotes about to expire, and overdue receivables. Read-only;
+// no new storage.
 
-type AlertKind = 'no-next-action' | 'stalled-opportunity' | 'inactive-account' | 'no-decision-maker' | 'expiring-quote';
+type AlertKind = 'no-next-action' | 'stalled-opportunity' | 'inactive-account' | 'no-decision-maker' | 'expiring-quote' | 'overdue-ar';
 type Severity = 'high' | 'medium' | 'low';
 
 interface Alert {
   id: string;
   kind: AlertKind;
   severity: Severity;
-  entity: 'account' | 'opportunity' | 'quotation';
+  entity: 'account' | 'opportunity' | 'quotation' | 'invoice';
   entityId: string;
   name: string;
   reason: string;
@@ -37,6 +39,7 @@ export class RelationshipIntelligenceController {
     private readonly activities: ActivityService,
     private readonly contacts: ContactService,
     private readonly quotations: QuotationService,
+    private readonly customerInvoices: CustomerInvoiceService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -52,13 +55,16 @@ export class RelationshipIntelligenceController {
     const oppStale = Number(oppStaleDays) > 0 ? Number(oppStaleDays) : 14;
     const quoteWindow = Number(quoteExpiryDays) > 0 ? Number(quoteExpiryDays) : 7;
 
-    const [accounts, opportunities, activities, contacts, quotations] = await Promise.all([
+    const [accounts, opportunities, activities, contacts, quotations, invoices] = await Promise.all([
       this.accounts.list({ tenantId, limit: 2000 }),
       this.opportunities.list({ tenantId, limit: 5000 }),
       this.activities.list({ tenantId, limit: 5000 }),
       this.contacts.list({ tenantId, limit: 5000 }),
       this.quotations.list({ tenantId, limit: 5000 }),
+      this.customerInvoices.list({ tenantId, limit: 5000 }),
     ]);
+    // Customer invoices carry only a name snapshot — map it back to the account for a deep link.
+    const accountByName = new Map(accounts.map((a) => [a.name, a.id] as const));
 
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
@@ -162,6 +168,27 @@ export class RelationshipIntelligenceController {
           href: '/crm/quotations', at: q.validUntil,
         });
       }
+    }
+
+    // 6. Overdue receivables — issued/part-paid invoices past their due date with a balance.
+    for (const inv of invoices) {
+      if (inv.status !== 'issued' && inv.status !== 'partially_paid') continue;
+      if (!inv.dueDate || inv.dueDate.slice(0, 10) >= today) continue;
+      const balance = balanceOf(inv);
+      if (balance <= 0) continue;
+      const daysOverdue = daysSince(inv.dueDate) ?? 0;
+      const accountId = accountByName.get(inv.customerName);
+      alerts.push({
+        id: `overdue-ar:${inv.id}`, kind: 'overdue-ar',
+        severity: daysOverdue >= 30 ? 'high' : 'medium',
+        entity: accountId ? 'account' : 'invoice',
+        entityId: accountId ?? inv.id,
+        name: `${inv.invoiceNumber} · ${inv.customerName}`,
+        reason: `${inv.currency ?? 'AED'} ${balance.toLocaleString()} overdue ${daysOverdue} day${daysOverdue === 1 ? '' : 's'}`,
+        recommendation: 'Chase payment or send a reminder.',
+        href: accountId ? `/crm/accounts/${accountId}` : '/finance/ar-aging',
+        at: inv.dueDate,
+      });
     }
 
     // Rank: severity first, then soonest relevant date.

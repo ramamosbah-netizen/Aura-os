@@ -27,4 +27,5 @@ export * from './activity-store';
 export * from './in-memory-activity-store';
 export * from './postgres-activity-store';
 export * from './activity.service';
+export * from './attention';
 export * from './crm.module';

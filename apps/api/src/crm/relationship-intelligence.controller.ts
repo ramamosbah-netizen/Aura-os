@@ -1,6 +1,9 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
-import { AccountService, ActivityService, ContactService, OpportunityService, QuotationService } from '@aura/crm';
+import {
+  AccountService, ActivityService, ContactService, OpportunityService, QuotationService,
+  ATTENTION_THRESHOLDS, lastActivityByRecord, daysSince, isQuiet,
+} from '@aura/crm';
 import { CustomerInvoiceService, balanceOf } from '@aura/finance';
 import { opportunityAttention } from '@aura/shared';
 
@@ -8,7 +11,9 @@ import { opportunityAttention } from '@aura/shared';
 // hold into a single ranked list of "act on this now" signals: deals with no
 // next step (the Next-Action Invariant), relationships going quiet, deals with
 // no decision-maker, quotes about to expire, and overdue receivables. Read-only;
-// no new storage.
+// no new storage. The "gone quiet" thresholds + last-touch scan are shared with
+// the activity & pipeline command centers (modules/crm attention.ts) so the same
+// deal is never "stalled" in one view and healthy in another.
 
 type AlertKind = 'no-next-action' | 'stalled-opportunity' | 'inactive-account' | 'no-decision-maker' | 'expiring-quote' | 'overdue-ar';
 type Severity = 'high' | 'medium' | 'low';
@@ -51,9 +56,9 @@ export class RelationshipIntelligenceController {
     @Query('quoteExpiryDays') quoteExpiryDays?: string,
   ): Promise<{ counts: Record<string, number>; alerts: Alert[]; thresholds: Record<string, number> }> {
     const tenantId = this.tenant.get().tenantId;
-    const acctStale = Number(accountStaleDays) > 0 ? Number(accountStaleDays) : 60;
-    const oppStale = Number(oppStaleDays) > 0 ? Number(oppStaleDays) : 14;
-    const quoteWindow = Number(quoteExpiryDays) > 0 ? Number(quoteExpiryDays) : 7;
+    const acctStale = Number(accountStaleDays) > 0 ? Number(accountStaleDays) : ATTENTION_THRESHOLDS.accountIdleDays;
+    const oppStale = Number(oppStaleDays) > 0 ? Number(oppStaleDays) : ATTENTION_THRESHOLDS.opportunityIdleDays;
+    const quoteWindow = Number(quoteExpiryDays) > 0 ? Number(quoteExpiryDays) : ATTENTION_THRESHOLDS.quoteExpiryDays;
 
     const [accounts, opportunities, activities, contacts, quotations, invoices] = await Promise.all([
       this.accounts.list({ tenantId, limit: 2000 }),
@@ -68,17 +73,9 @@ export class RelationshipIntelligenceController {
 
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const daysSince = (iso: string | null): number | null =>
-      iso ? Math.floor((now.getTime() - new Date(iso).getTime()) / 86400000) : null;
 
-    // Last touch per related record, from the activity stream.
-    const lastByRelated = new Map<string, string>();
-    for (const a of activities) {
-      if (!a.relatedId) continue;
-      const at = a.completedAt ?? a.createdAt;
-      const prev = lastByRelated.get(a.relatedId);
-      if (!prev || at > prev) lastByRelated.set(a.relatedId, at);
-    }
+    // Last touch per related record — shared with the activity & pipeline engines.
+    const lastByRelated = lastActivityByRecord(activities);
     // Accounts that have a decision-maker among their stakeholders.
     const accountsWithDM = new Set(
       contacts.filter((c) => c.stakeholderRole === 'decision_maker' && c.accountId).map((c) => c.accountId as string),
@@ -105,8 +102,8 @@ export class RelationshipIntelligenceController {
     // 2. Open deals gone quiet — the real revenue risk.
     for (const o of openOpps) {
       const last = lastByRelated.get(o.id) ?? null;
-      const ds = daysSince(last);
-      if (last === null || (ds !== null && ds >= oppStale)) {
+      const ds = daysSince(last, now);
+      if (isQuiet(last, oppStale, now)) {
         alerts.push({
           id: `stalled-opportunity:${o.id}`, kind: 'stalled-opportunity',
           severity: ds !== null && ds >= oppStale * 2 ? 'high' : 'medium',
@@ -135,8 +132,8 @@ export class RelationshipIntelligenceController {
     for (const acc of accounts) {
       if (acc.status === 'inactive' || acc.status === 'dormant') continue;
       const last = lastByRelated.get(acc.id) ?? null;
-      const ds = daysSince(last);
-      if (last === null || (ds !== null && ds >= acctStale)) {
+      const ds = daysSince(last, now);
+      if (isQuiet(last, acctStale, now)) {
         alerts.push({
           id: `inactive-account:${acc.id}`, kind: 'inactive-account', severity: 'low',
           entity: 'account', entityId: acc.id, name: acc.name,
@@ -176,7 +173,7 @@ export class RelationshipIntelligenceController {
       if (!inv.dueDate || inv.dueDate.slice(0, 10) >= today) continue;
       const balance = balanceOf(inv);
       if (balance <= 0) continue;
-      const daysOverdue = daysSince(inv.dueDate) ?? 0;
+      const daysOverdue = daysSince(inv.dueDate, now) ?? 0;
       const accountId = accountByName.get(inv.customerName);
       alerts.push({
         id: `overdue-ar:${inv.id}`, kind: 'overdue-ar',

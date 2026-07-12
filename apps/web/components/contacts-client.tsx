@@ -4,6 +4,10 @@ import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
+import {
+  STAKEHOLDER_ROLE_LABEL, STAKEHOLDER_ROLE_OPTIONS,
+  STRENGTH_LABEL, STRENGTH_COLOR, STRENGTH_OPTIONS,
+} from './stakeholder-meta';
 
 // CRM · Contacts — the PEOPLE at each commercial party. A contact hangs off its
 // Account (reference + name snapshot); each account has at most one ★ primary
@@ -18,13 +22,15 @@ interface Contact {
   email: string | null;
   phone: string | null;
   isPrimary: boolean;
+  stakeholderRole: string | null;
+  relationshipStrength: string | null;
+  reportsToId: string | null;
+  reportsToName: string | null;
   status: string;
   ownerId: string | null;
   createdAt: string;
 }
 interface Account { id: string; name: string; }
-
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
 export default function ContactsClient({ initialContacts, initialAccounts }: {
   initialContacts: Contact[];
@@ -36,10 +42,14 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
 
   const contacts = useMemo(() => {
     let out = initialContacts;
     if (accountFilter) out = out.filter((c) => c.accountId === accountFilter);
+    if (roleFilter === 'champions') out = out.filter((c) => c.relationshipStrength === 'champion' || c.relationshipStrength === 'strong');
+    else if (roleFilter === 'unmapped') out = out.filter((c) => !c.stakeholderRole);
+    else if (roleFilter) out = out.filter((c) => c.stakeholderRole === roleFilter);
     const q = query.trim().toLowerCase();
     if (q) {
       out = out.filter((c) =>
@@ -47,7 +57,7 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
       );
     }
     return out;
-  }, [initialContacts, query, accountFilter]);
+  }, [initialContacts, query, accountFilter, roleFilter]);
 
   const kpi = useMemo(() => {
     const all = initialContacts;
@@ -58,7 +68,10 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
     const recent = all.filter((c) => c.createdAt >= monthAgo);
     const accountsWithContact = new Set(linked.map((c) => c.accountId));
     const uncovered = initialAccounts.filter((a) => !accountsWithContact.has(a.id)).length;
-    return { total: all.length, active: active.length, linked: linked.length, primaries: primaries.length, recent: recent.length, uncovered };
+    const decisionMakers = all.filter((c) => c.stakeholderRole === 'decision_maker').length;
+    const champions = all.filter((c) => c.relationshipStrength === 'champion' || c.relationshipStrength === 'strong').length;
+    const unmapped = all.filter((c) => !c.stakeholderRole).length;
+    return { total: all.length, active: active.length, linked: linked.length, primaries: primaries.length, recent: recent.length, uncovered, decisionMakers, champions, unmapped };
   }, [initialContacts, initialAccounts]);
 
   const patch = async (c: Contact, body: Record<string, unknown>, note?: string): Promise<void> => {
@@ -80,12 +93,27 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
   const accountName = (c: Contact): string =>
     c.accountName ?? initialAccounts.find((a) => a.id === c.accountId)?.name ?? 'Account';
 
+  const contactOptions = initialContacts.map((c) => ({ value: c.id, label: `${c.name}${c.jobTitle ? ` · ${c.jobTitle}` : ''}` }));
+
   const drawerFields = (forEdit: boolean) => [
     { name: 'name', label: 'Full name', kind: 'text' as const, required: true, placeholder: 'e.g. Khalid Mansoor', span: 2 as const },
     { name: 'jobTitle', label: 'Job title', kind: 'text' as const, placeholder: 'e.g. Procurement Manager' },
     {
       name: 'accountId', label: 'Account', kind: 'select' as const, labelField: 'accountName',
       placeholder: 'No linked account', options: accountOptions,
+    },
+    {
+      name: 'stakeholderRole', label: 'Stakeholder role', kind: 'select' as const,
+      placeholder: 'Role in the decision', options: STAKEHOLDER_ROLE_OPTIONS,
+      hint: 'Decision maker, influencer, technical, finance…',
+    },
+    {
+      name: 'relationshipStrength', label: 'Relationship', kind: 'select' as const,
+      placeholder: 'How strong is it?', options: STRENGTH_OPTIONS,
+    },
+    {
+      name: 'reportsToId', label: 'Reports to', kind: 'select' as const, labelField: 'reportsToName',
+      placeholder: 'Manager (optional)', options: contactOptions,
     },
     { name: 'email', label: 'Email', kind: 'text' as const, placeholder: 'name@company.com' },
     { name: 'phone', label: 'Phone', kind: 'text' as const, placeholder: '+971 …' },
@@ -97,11 +125,29 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
       {/* KPI strip */}
       <div style={st.cards}>
         <Kpi label="Total contacts" value={String(kpi.total)} />
-        <Kpi label="Active" value={String(kpi.active)} good />
-        <Kpi label="Linked to accounts" value={`${kpi.linked}/${kpi.total}`} />
-        <Kpi label="Primary contacts" value={String(kpi.primaries)} accent />
+        <Kpi label="Decision makers" value={String(kpi.decisionMakers)} accent />
+        <Kpi label="Champions / strong" value={String(kpi.champions)} good />
+        <Kpi label="Primary contacts" value={String(kpi.primaries)} />
+        <Kpi label="Role unmapped" value={String(kpi.unmapped)} bad={kpi.unmapped > 0} />
         <Kpi label="Accounts w/o contact" value={String(kpi.uncovered)} bad={kpi.uncovered > 0} />
-        <Kpi label="Added last 30 days" value={String(kpi.recent)} />
+      </div>
+
+      {/* smart views by stakeholder role */}
+      <div style={st.viewsRow}>
+        {[
+          { key: '', label: 'All' },
+          ...STAKEHOLDER_ROLE_OPTIONS,
+          { key: 'champions', value: 'champions', label: 'Champions' },
+          { key: 'unmapped', value: 'unmapped', label: 'Unmapped' },
+        ].map((v) => {
+          const val = 'value' in v ? (v.value as string) : '';
+          const active = roleFilter === val;
+          return (
+            <button key={v.label} onClick={() => setRoleFilter(val)} style={{ ...st.viewBtn, ...(active ? st.viewBtnActive : {}) }}>
+              {v.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* toolbar */}
@@ -123,7 +169,7 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
           {accountOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <ExportButton filename="contacts" rows={contacts as unknown as Array<Record<string, unknown>>}
-          columns={[{ key: 'name' }, { key: 'jobTitle' }, { key: 'accountName' }, { key: 'email' }, { key: 'phone' }, { key: 'isPrimary' }, { key: 'status' }, { key: 'ownerId' }]} />
+          columns={[{ key: 'name' }, { key: 'jobTitle' }, { key: 'accountName' }, { key: 'stakeholderRole' }, { key: 'relationshipStrength' }, { key: 'reportsToName' }, { key: 'email' }, { key: 'phone' }, { key: 'isPrimary' }, { key: 'status' }, { key: 'ownerId' }]} />
         {err && <span style={st.err}>{err}</span>}
         {msg && <span style={st.ok}>{msg}</span>}
       </div>
@@ -140,7 +186,7 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
             <table className="data-table" style={{ minWidth: 980 }}>
               <thead><tr>
                 <th style={{ width: 40 }}>★</th><th>Name</th><th>Job title</th><th>Account</th>
-                <th>Email</th><th>Phone</th><th>Status</th><th>Owner</th><th>Added</th><th>Actions</th>
+                <th>Role</th><th>Relationship</th><th>Email</th><th>Status</th><th>Actions</th>
               </tr></thead>
               <tbody>
                 {contacts.map((c) => (
@@ -156,15 +202,26 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
                         {c.isPrimary ? '★' : '☆'}
                       </button>
                     </td>
-                    <td style={{ fontWeight: 600 }}>{c.name}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      <a href={`/crm/contacts/${c.id}`} style={st.link}>{c.name}</a>
+                    </td>
                     <td style={{ color: 'var(--muted)' }}>{c.jobTitle ?? '—'}</td>
                     <td>
                       {c.accountId
                         ? <a href={`/crm/accounts/${c.accountId}`} style={st.link}>{accountName(c)}</a>
                         : <span style={{ color: 'var(--muted)' }}>—</span>}
                     </td>
+                    <td>
+                      {c.stakeholderRole
+                        ? <span className="badge">{STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole}</span>
+                        : <span style={{ color: 'var(--muted)' }}>—</span>}
+                    </td>
+                    <td>
+                      {c.relationshipStrength
+                        ? <span style={{ color: STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--muted)', fontWeight: 700, fontSize: 12.5 }}>{STRENGTH_LABEL[c.relationshipStrength] ?? c.relationshipStrength}</span>
+                        : <span style={{ color: 'var(--muted)' }}>—</span>}
+                    </td>
                     <td>{c.email ? <a href={`mailto:${c.email}`} style={st.link}>{c.email}</a> : '—'}</td>
-                    <td>{c.phone ? <a href={`tel:${c.phone}`} style={st.link}>{c.phone}</a> : '—'}</td>
                     <td>
                       <button
                         type="button"
@@ -177,8 +234,6 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
                         {c.status}
                       </button>
                     </td>
-                    <td style={{ color: 'var(--muted)' }}>{c.ownerId ?? '—'}</td>
-                    <td style={{ color: 'var(--muted)' }}>{fmt(c.createdAt)}</td>
                     <td>
                       <CreateDrawer
                         entity="Contact"
@@ -190,6 +245,9 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
                           name: c.name,
                           jobTitle: c.jobTitle ?? '',
                           accountId: c.accountId ?? '',
+                          stakeholderRole: c.stakeholderRole ?? '',
+                          relationshipStrength: c.relationshipStrength ?? '',
+                          reportsToId: c.reportsToId ?? '',
                           email: c.email ?? '',
                           phone: c.phone ?? '',
                         }}
@@ -220,6 +278,9 @@ const st = {
   card: { padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--panel)' } as CSSProperties,
   cardLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: 0.5 } as CSSProperties,
   cardVal: { fontSize: 18, fontWeight: 700, marginTop: 4 } as CSSProperties,
+  viewsRow: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 } as CSSProperties,
+  viewBtn: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 999, padding: '5px 12px', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  viewBtnActive: { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   toolbar: { display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' } as CSSProperties,
   search: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none', minWidth: 180 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,

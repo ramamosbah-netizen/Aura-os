@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Contact, type ContactStatus, ContactService } from '@aura/crm';
+import { type Contact, type ContactStatus, type RelationshipStrength, type StakeholderRole, ContactService } from '@aura/crm';
 
 class CreateContactDto {
   @IsString() name!: string;
@@ -12,6 +12,10 @@ class CreateContactDto {
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
+  @IsOptional() @IsString() stakeholderRole?: StakeholderRole;
+  @IsOptional() @IsString() relationshipStrength?: RelationshipStrength;
+  @IsOptional() @IsString() reportsToId?: string;
+  @IsOptional() @IsString() reportsToName?: string;
   @IsOptional() @IsString() status?: ContactStatus;
 }
 
@@ -23,6 +27,10 @@ class UpdateContactDto {
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
+  @IsOptional() @IsString() stakeholderRole?: StakeholderRole;
+  @IsOptional() @IsString() relationshipStrength?: RelationshipStrength;
+  @IsOptional() @IsString() reportsToId?: string;
+  @IsOptional() @IsString() reportsToName?: string;
   @IsOptional() @IsString() status?: ContactStatus;
   @IsOptional() @IsString() ownerId?: string;
 }
@@ -52,6 +60,10 @@ export class CrmContactsController {
       email: dto.email ?? null,
       phone: dto.phone ?? null,
       isPrimary: dto.isPrimary,
+      stakeholderRole: dto.stakeholderRole ?? null,
+      relationshipStrength: dto.relationshipStrength ?? null,
+      reportsToId: dto.reportsToId ?? null,
+      reportsToName: dto.reportsToName ?? null,
       status: dto.status,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,

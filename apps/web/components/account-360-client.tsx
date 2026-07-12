@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 
 // Account 360 — the customer COMMAND CENTER. The Account is the persistent
 // commercial party every deal revolves around (the hub, not the first step).
@@ -24,7 +25,7 @@ interface Account {
   ownerId: string | null;
   createdAt: string;
 }
-interface Contact { id: string; name: string; role?: string | null; email?: string | null; phone?: string | null; status?: string; createdAt: string }
+interface Contact { id: string; name: string; role?: string | null; jobTitle?: string | null; email?: string | null; phone?: string | null; status?: string; isPrimary?: boolean; stakeholderRole?: string | null; relationshipStrength?: string | null; reportsToId?: string | null; createdAt: string }
 interface Opportunity { id: string; title: string; value: number; stage: string; winProbability: number; closeDate: string | null; createdAt: string }
 interface TenderRec { id: string; title: string; reference: string | null; status: string; value: number; createdAt: string }
 interface QuotationRec { id: string; quoteNumber: string; status: string; total: number; issueDate: string; sourceTenderId?: string | null }
@@ -352,9 +353,11 @@ export default function Account360Client({ accountId }: { accountId: string }) {
               {contacts.length === 0 ? (
                 <p style={st.oMuted}>No contacts yet — <a href="/crm/contacts" style={st.rowLink}>add the people you deal with →</a></p>
               ) : (
-                contacts.slice(0, 4).map((c) => (
+                [...contacts].sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary)).slice(0, 4).map((c) => (
                   <div key={c.id} style={{ padding: '5px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                    <b>{c.name}</b>{c.role ? <span style={{ color: 'var(--muted)' }}> · {c.role}</span> : null}
+                    {c.isPrimary && <span style={{ color: 'var(--accent)' }}>★ </span>}
+                    <a href={`/crm/contacts/${c.id}`} style={st.rowLink}>{c.name}</a>
+                    {c.stakeholderRole ? <span style={{ color: 'var(--muted)' }}> · {STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole}</span> : c.jobTitle ? <span style={{ color: 'var(--muted)' }}> · {c.jobTitle}</span> : null}
                     <div style={{ color: 'var(--muted)', fontSize: 12 }}>{[c.email, c.phone].filter(Boolean).join(' · ') || '—'}</div>
                   </div>
                 ))
@@ -378,11 +381,45 @@ export default function Account360Client({ accountId }: { accountId: string }) {
         )}
 
         {tab === 'contacts' && (
-          <Table
-            cols={['Name', 'Role', 'Email', 'Phone', 'Added']}
-            rows={contacts.map((c) => [c.name, c.role ?? '—', c.email ?? '—', c.phone ?? '—', d(c.createdAt)])}
-            empty="No contacts yet — add the people you deal with at this client."
-          />
+          contacts.length === 0 ? (
+            <p style={{ color: 'var(--muted)', margin: 0, padding: 8 }}>No contacts yet — add the people you deal with at this client.</p>
+          ) : (
+            <div>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px' }}>
+                The stakeholder map — everyone involved in the buying decision at {a.name}, by role and relationship strength.
+              </p>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead><tr>
+                    {['', 'Name', 'Title', 'Stakeholder role', 'Relationship', 'Reports to', 'Email'].map((h, i) => (
+                      <th key={i} style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', textAlign: 'left' }}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {[...contacts].sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary)).map((c) => (
+                      <tr key={c.id}>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', color: 'var(--accent)' }}>{c.isPrimary ? '★' : ''}</td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)' }}>
+                          <a href={`/crm/contacts/${c.id}`} style={st.rowLink}>{c.name}</a>
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' }}>{c.jobTitle ?? c.role ?? '—'}</td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)' }}>
+                          {c.stakeholderRole ? <span style={{ fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px' }}>{STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', fontWeight: 700, color: c.relationshipStrength ? STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--muted)' : 'var(--muted)' }}>
+                          {c.relationshipStrength ? STRENGTH_LABEL[c.relationshipStrength] ?? c.relationshipStrength : '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' }}>
+                          {c.reportsToId ? contacts.find((p) => p.id === c.reportsToId)?.name ?? '—' : '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)' }}>{c.email ? <a href={`mailto:${c.email}`} style={st.rowLink}>{c.email}</a> : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
         )}
 
         {tab === 'opportunities' && (

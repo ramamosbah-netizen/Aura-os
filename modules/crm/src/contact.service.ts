@@ -46,7 +46,7 @@ export class ContactService {
    */
   async update(
     id: Id,
-    patch: Partial<Pick<Contact, 'name' | 'jobTitle' | 'email' | 'phone' | 'isPrimary' | 'status' | 'ownerId' | 'accountId' | 'accountName'>>,
+    patch: Partial<Pick<Contact, 'name' | 'jobTitle' | 'email' | 'phone' | 'isPrimary' | 'status' | 'ownerId' | 'accountId' | 'accountName' | 'stakeholderRole' | 'relationshipStrength' | 'reportsToId' | 'reportsToName'>>,
   ): Promise<Contact> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`contact ${id} not found`);

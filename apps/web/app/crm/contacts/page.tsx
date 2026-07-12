@@ -13,6 +13,10 @@ interface Contact {
   email: string | null;
   phone: string | null;
   isPrimary: boolean;
+  stakeholderRole: string | null;
+  relationshipStrength: string | null;
+  reportsToId: string | null;
+  reportsToName: string | null;
   status: string;
   ownerId: string | null;
   createdAt: string;
@@ -27,10 +31,11 @@ export default async function CrmContactsPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>CRM · Contacts</h1>
+      <h1 style={st.h1}>CRM · Contacts &amp; Stakeholders</h1>
       <p style={st.sub}>
-        The people at each commercial party. Every contact hangs off its account; the ★ primary
-        contact is what the Account 360 shows as the main contact — an account has at most one.
+        The people behind every deal — mapped as stakeholders: their role in the buying decision
+        (decision maker, influencer, technical, finance…), how strong the relationship is, and who
+        they report to. Open any contact for the full stakeholder 360.
       </p>
       <ContactsClient initialContacts={contacts ?? []} initialAccounts={accounts ?? []} />
     </div>

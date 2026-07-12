@@ -27,13 +27,18 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: 'Deal chain',
+    title: 'CRM',
     items: [
       { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'CRM — customers & prospects' },
       { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People at each account' },
       { label: 'Sales Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'CRM — leads & opportunities' },
       { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'CRM — customer quotes & pipeline' },
       { label: 'Activities', href: '/crm/activities', glyph: '☑', desc: 'Calls, meetings & tasks' },
+    ],
+  },
+  {
+    title: 'Deal chain',
+    items: [
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals' },
       { label: 'Pricing Sheets', href: '/tendering/pricing', glyph: '⊞', desc: 'Internal cost & resource breakdowns' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
@@ -139,6 +144,7 @@ export const ALL_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
  * show. Kept next to NAV so the two never drift.
  */
 export const GROUP_SUITE: Record<string, string> = {
+  CRM: 'suite.dealChain',
   'Deal chain': 'suite.dealChain',
   Operate: 'suite.operate',
   Intelligence: 'suite.intelligence',

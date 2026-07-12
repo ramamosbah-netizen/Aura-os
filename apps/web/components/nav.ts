@@ -29,11 +29,11 @@ export const NAV: NavGroup[] = [
   {
     title: 'CRM',
     items: [
-      { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'CRM — customers & prospects' },
-      { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People at each account' },
-      { label: 'Sales Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'CRM — leads & opportunities' },
-      { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'CRM — customer quotes & pipeline' },
-      { label: 'Activities', href: '/crm/activities', glyph: '☑', desc: 'Calls, meetings & tasks' },
+      { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'Companies & prospects — the relationship master' },
+      { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People & stakeholders at each account' },
+      { label: 'Sales Pipeline', href: '/crm/leads', glyph: '▽', desc: 'Leads & open opportunities through the funnel' },
+      { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'Customer quotes, revisions & win/loss' },
+      { label: 'Activities', href: '/crm/activities', glyph: '☑', desc: 'Calls, meetings, tasks & follow-ups' },
     ],
   },
   {

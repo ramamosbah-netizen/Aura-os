@@ -40,7 +40,7 @@ const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as con
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-type View = 'command' | 'board' | 'list' | 'forecast' | 'activities';
+type View = 'command' | 'board' | 'analytics' | 'list' | 'activities';
 
 interface PipelineCommand {
   kpis: { openDeals: number; openValue: number; weighted: number; avgDealSize: number; avgAgeDays: number; winRate: number | null; won90: number; wonValue90: number; lost90: number };
@@ -64,7 +64,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [command, setCommand] = useState<PipelineCommand | null>(null);
 
   useEffect(() => {
-    if (view !== 'command' || command) return;
+    if ((view !== 'command' && view !== 'analytics') || command) return;
     void fetch('/api/crm/opportunities/pipeline', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setCommand(d))
@@ -236,16 +236,6 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
     { key: 'lost', label: 'Lost', kind: 'opp', opps: lostOpps },
   ];
 
-  /* ── forecast view: weighted pipeline by expected close month ───────────── */
-  const byMonth = new Map<string, { deals: number; value: number; weighted: number }>();
-  for (const o of activeOpps) {
-    const key = o.closeDate ? o.closeDate.slice(0, 7) : 'unscheduled';
-    const row = byMonth.get(key) ?? { deals: 0, value: 0, weighted: 0 };
-    row.deals += 1; row.value += o.value; row.weighted += o.value * (o.winProbability / 100);
-    byMonth.set(key, row);
-  }
-  const forecastRows = [...byMonth.entries()].sort(([a], [b]) => (a === 'unscheduled' ? 1 : b === 'unscheduled' ? -1 : a < b ? -1 : 1));
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {err && <div style={s.errorBar}>{err}</div>}
@@ -265,9 +255,9 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
 
       {/* view switch + creates */}
       <div style={s.tabBar}>
-        {(['command', 'board', 'list', 'forecast', 'activities'] as View[]).map((v) => (
+        {(['command', 'board', 'analytics', 'list', 'activities'] as View[]).map((v) => (
           <button key={v} type="button" style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
-            {v === 'command' ? 'Command' : v[0].toUpperCase() + v.slice(1)}
+            {v === 'command' ? 'Overview' : v[0].toUpperCase() + v.slice(1)}
           </button>
         ))}
         <div style={{ flex: 1 }} />
@@ -365,73 +355,82 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 )}
               </section>
 
-              {/* Pipeline aging */}
-              <section style={s.cmdCard}>
-                <div style={s.cmdTitle}>Pipeline aging</div>
-                {command.aging.map((a) => {
-                  const max = Math.max(1, ...command.aging.map((x) => x.value));
-                  return (
-                    <div key={a.key} style={{ marginBottom: 8 }}>
-                      <div style={s.agingRow}><span>{a.label}</span><span style={{ color: 'var(--muted)' }}>{a.deals} · {money(a.value)}</span></div>
-                      <div style={s.agingTrack}><div style={{ ...s.agingFill, width: `${(a.value / max) * 100}%`, background: a.key === 'stale' ? 'var(--bad)' : a.key === 'aging' ? 'var(--warn, #d97706)' : 'var(--accent)' }} /></div>
-                    </div>
-                  );
-                })}
-              </section>
-
-              {/* Owner performance */}
-              <section style={s.cmdCard}>
-                <div style={s.cmdTitle}>Owner performance</div>
-                {command.owners.length === 0 ? <p style={s.muted}>No open deals.</p> : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                    <thead><tr>{['Owner', 'Open', 'Weighted', 'Win rate'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {command.owners.map((o) => (
-                        <tr key={o.ownerId}>
-                          <td style={s.cmdTd}>{o.ownerId === 'unassigned' ? <span style={{ color: 'var(--muted)' }}>Unassigned</span> : o.ownerId}</td>
-                          <td style={s.cmdTd}>{o.openDeals} · {money(o.openValue)}</td>
-                          <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(o.weighted)}</td>
-                          <td style={s.cmdTd}>{o.winRate === null ? '—' : `${o.winRate}%`}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </section>
-
-              {/* Weighted forecast by month */}
-              <section style={s.cmdCard}>
-                <div style={s.cmdTitle}>Weighted forecast by close month</div>
-                {command.forecastByMonth.length === 0 ? <p style={s.muted}>No active opportunities.</p> : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                    <thead><tr>{['Month', 'Deals', 'Value', 'Weighted'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {command.forecastByMonth.map((f) => (
-                        <tr key={f.month}>
-                          <td style={s.cmdTd}>{f.month === 'unscheduled' ? 'Unscheduled' : f.month}</td>
-                          <td style={s.cmdTd}>{f.deals}</td>
-                          <td style={s.cmdTd}>{money(f.value)}</td>
-                          <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(f.weighted)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </section>
-
-              {/* Stalled deals */}
-              <section style={s.cmdCard}>
-                <div style={s.cmdTitle}>Stalled deals — {command.stalled.length}</div>
-                {command.stalled.length === 0 ? <p style={s.muted}>Nothing stalled — every deal has recent movement.</p> : (
-                  command.stalled.slice(0, 8).map((d) => (
-                    <div key={d.id} style={s.stalledRow}>
-                      <a href={`/crm/opportunities/${d.id}`} style={s.link}>{d.title}</a>
-                      <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{money(d.value)} · {d.daysSinceActivity === null ? 'never touched' : `quiet ${d.daysSinceActivity}d`}</span>
-                    </div>
-                  ))
-                )}
-              </section>
             </div>
+            <p style={s.muted}>Work deals on the <button type="button" style={s.linkBtn} onClick={() => setView('board')}>Board</button> · deep-dive in <button type="button" style={s.linkBtn} onClick={() => setView('analytics')}>Analytics</button> (aging, owner performance, forecast by month & stalled deals).</p>
+          </div>
+        )
+      )}
+
+      {/* ── ANALYTICS ── the deep-dive, moved off the Overview to keep it focused */}
+      {view === 'analytics' && (
+        command === null ? <p style={s.muted}>Loading analytics…</p> : (
+          <div style={s.cmdGrid}>
+            {/* Pipeline aging */}
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Pipeline aging</div>
+              {command.aging.map((a) => {
+                const max = Math.max(1, ...command.aging.map((x) => x.value));
+                return (
+                  <div key={a.key} style={{ marginBottom: 8 }}>
+                    <div style={s.agingRow}><span>{a.label}</span><span style={{ color: 'var(--muted)' }}>{a.deals} · {money(a.value)}</span></div>
+                    <div style={s.agingTrack}><div style={{ ...s.agingFill, width: `${(a.value / max) * 100}%`, background: a.key === 'stale' ? 'var(--bad)' : a.key === 'aging' ? 'var(--warn, #d97706)' : 'var(--accent)' }} /></div>
+                  </div>
+                );
+              })}
+            </section>
+
+            {/* Owner performance */}
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Owner performance</div>
+              {command.owners.length === 0 ? <p style={s.muted}>No open deals.</p> : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr>{['Owner', 'Open', 'Weighted', 'Win rate'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {command.owners.map((o) => (
+                      <tr key={o.ownerId}>
+                        <td style={s.cmdTd}>{o.ownerId === 'unassigned' ? <span style={{ color: 'var(--muted)' }}>Unassigned</span> : o.ownerId}</td>
+                        <td style={s.cmdTd}>{o.openDeals} · {money(o.openValue)}</td>
+                        <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(o.weighted)}</td>
+                        <td style={s.cmdTd}>{o.winRate === null ? '—' : `${o.winRate}%`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+
+            {/* Weighted forecast by month */}
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Weighted forecast by close month</div>
+              {command.forecastByMonth.length === 0 ? <p style={s.muted}>No active opportunities.</p> : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr>{['Month', 'Deals', 'Value', 'Weighted'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {command.forecastByMonth.map((f) => (
+                      <tr key={f.month}>
+                        <td style={s.cmdTd}>{f.month === 'unscheduled' ? 'Unscheduled' : f.month}</td>
+                        <td style={s.cmdTd}>{f.deals}</td>
+                        <td style={s.cmdTd}>{money(f.value)}</td>
+                        <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(f.weighted)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+
+            {/* Stalled deals */}
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Stalled deals — {command.stalled.length}</div>
+              {command.stalled.length === 0 ? <p style={s.muted}>Nothing stalled — every deal has recent movement.</p> : (
+                command.stalled.slice(0, 8).map((d) => (
+                  <div key={d.id} style={s.stalledRow}>
+                    <a href={`/crm/opportunities/${d.id}`} style={s.link}>{d.title}</a>
+                    <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{money(d.value)} · {d.daysSinceActivity === null ? 'never touched' : `quiet ${d.daysSinceActivity}d`}</span>
+                  </div>
+                ))
+              )}
+            </section>
           </div>
         )
       )}
@@ -613,32 +612,6 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       )}
 
       {/* ── FORECAST ── */}
-      {view === 'forecast' && (
-        <div style={s.panel}>
-          <div style={s.panelTitle}>Weighted forecast by expected close</div>
-          {forecastRows.length === 0 ? <p style={s.muted}>No active opportunities to forecast.</p> : (
-            <table style={s.table}><thead><tr>
-              {['Month', 'Deals', 'Pipeline value', 'Weighted forecast'].map((h) => <th key={h} style={s.th}>{h}</th>)}
-            </tr></thead><tbody>
-              {forecastRows.map(([month, r]) => (
-                <tr key={month}>
-                  <td style={s.td}><strong>{month === 'unscheduled' ? 'No close date set' : new Date(month + '-01').toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</strong></td>
-                  <td style={s.td}>{r.deals}</td>
-                  <td style={s.td}>{money(r.value)}</td>
-                  <td style={{ ...s.td, color: 'var(--accent)', fontWeight: 700 }}>{money(r.weighted)}</td>
-                </tr>
-              ))}
-              <tr>
-                <td style={{ ...s.td, fontWeight: 800 }}>Total</td>
-                <td style={{ ...s.td, fontWeight: 800 }}>{activeOpps.length}</td>
-                <td style={{ ...s.td, fontWeight: 800 }}>{money(pipelineValue)}</td>
-                <td style={{ ...s.td, fontWeight: 800, color: 'var(--accent)' }}>{money(weighted)}</td>
-              </tr>
-            </tbody></table>
-          )}
-        </div>
-      )}
-
       {/* ── ACTIVITIES ── */}
       {view === 'activities' && (
         <div style={s.panel}>
@@ -714,6 +687,7 @@ const s = {
   agingFill: { height: '100%', borderRadius: 999 } as CSSProperties,
   stalledRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
+  linkBtn: { color: 'var(--accent)', fontWeight: 700, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' } as CSSProperties,
   tabBar: { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' } as CSSProperties,
   tab: { ...field, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
   tabActive: { ...field, cursor: 'pointer', fontWeight: 700, border: '1px solid var(--accent)', color: 'var(--accent)' } as CSSProperties,

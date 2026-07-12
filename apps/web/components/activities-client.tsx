@@ -1,9 +1,10 @@
 'use client';
 
-import { Fragment, type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { Fragment, type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
+import RelationshipAlerts from './relationship-alerts';
 
 // CRM · Activities — every interaction and to-do on the deal chain (call, email,
 // meeting, note, task), agenda-grouped by urgency: Overdue → Today → This week →
@@ -27,8 +28,6 @@ interface Activity {
 interface Account { id: string; name: string; }
 interface Contact { id: string; name: string; accountName: string | null; }
 interface Opportunity { id: string; title: string; }
-interface AttentionItem { kind: 'account' | 'opportunity'; id: string; name: string; reason: string; daysSince: number | null; href: string }
-interface CommandPayload { inactivity: AttentionItem[]; staleThresholdDays: { account: number; opportunity: number } }
 
 const TYPE_GLYPH: Record<string, string> = { call: '☎', email: '✉', meeting: '👥', note: '✎', task: '☑' };
 const RELATED_HREF: Record<string, (id: string) => string> = {
@@ -53,15 +52,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   const [tab, setTab] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [query, setQuery] = useState('');
-  const [command, setCommand] = useState<CommandPayload | null>(null);
   const [completing, setCompleting] = useState<{ id: string; outcome: string; fuOn: boolean; fuType: string; fuSubject: string; fuDate: string } | null>(null);
-
-  useEffect(() => {
-    void fetch('/api/crm/activities/command', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setCommand(d))
-      .catch(() => setCommand(null));
-  }, [initialActivities]);
 
   const today = new Date().toISOString().slice(0, 10);
   const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
@@ -155,24 +146,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
         <Kpi label="Completed (30d)" value={String(kpi.done30)} good />
       </div>
 
-      {command && command.inactivity.length > 0 && (
-        <section style={st.attention}>
-          <div style={st.attentionHead}>
-            ⚠ Needs attention — {command.inactivity.length} relationship{command.inactivity.length === 1 ? '' : 's'} going quiet
-            <span style={st.attentionSub}>accounts idle ≥ {command.staleThresholdDays.account}d · open deals idle ≥ {command.staleThresholdDays.opportunity}d</span>
-          </div>
-          <div style={st.attentionGrid}>
-            {command.inactivity.slice(0, 9).map((it) => (
-              <a key={`${it.kind}-${it.id}`} href={it.href} style={st.attentionCard}>
-                <span style={st.attentionKind}>{it.kind === 'account' ? '◆ Account' : '◎ Opportunity'}</span>
-                <span style={st.attentionName}>{it.name}</span>
-                <span style={st.attentionReason}>{it.reason}</span>
-              </a>
-            ))}
-          </div>
-          {command.inactivity.length > 9 && <div style={st.attentionMore}>+{command.inactivity.length - 9} more going quiet</div>}
-        </section>
-      )}
+      <RelationshipAlerts />
 
       <div style={st.toolbar}>
         <CreateDrawer

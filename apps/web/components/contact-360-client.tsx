@@ -6,6 +6,7 @@ import {
   STAKEHOLDER_ROLE_LABEL, STAKEHOLDER_ROLE_OPTIONS,
   STRENGTH_LABEL, STRENGTH_COLOR, STRENGTH_OPTIONS,
 } from './stakeholder-meta';
+import Timeline from './timeline';
 
 // Contact 360 — the stakeholder command center. Header (role + strength + account
 // hierarchy) → snapshot → stakeholder map (manager / reports / peers) → the deals
@@ -85,7 +86,7 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading contact…'}</p>;
 
-  const { contact: c, account, reportsTo, reports, peers, opportunities, tenders, quotations, contracts, projects, activities, summary, timeline } = data;
+  const { contact: c, account, reportsTo, reports, peers, opportunities, tenders, quotations, contracts, projects, activities, summary } = data;
   const roleLabel = c.stakeholderRole ? STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole : null;
   const strengthColor = c.relationshipStrength ? STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--muted)' : 'var(--muted)';
 
@@ -217,15 +218,10 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
               )}
             </div>
 
-            {/* Recent interactions */}
+            {/* Unified timeline — events + activities (standardized component) */}
             <div style={st.block}>
-              <div style={st.blockTitle}>Recent Interactions</div>
-              {timeline.length === 0 ? <p style={st.muted}>Nothing logged yet.</p> : timeline.slice(0, 8).map((t, i) => (
-                <div key={i} style={st.tlRow}>
-                  <span style={st.tlDate}>{d(t.at)}</span>
-                  {t.href ? <a href={t.href} style={{ ...st.link, textDecoration: 'none', color: 'var(--fg)' }}>{t.label}</a> : <span>{t.label}</span>}
-                </div>
-              ))}
+              <div style={st.blockTitle}>Timeline</div>
+              <Timeline recordId={c.id} />
             </div>
           </div>
         )}

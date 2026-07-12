@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
+import Timeline from './timeline';
 
 // Account 360 — the customer COMMAND CENTER. The Account is the persistent
 // commercial party every deal revolves around (the hub, not the first step).
@@ -74,9 +75,6 @@ const STAGE_LABEL: Record<string, string> = {
   inactive: 'Inactive',
 };
 
-const KIND_GLYPH: Record<string, string> = {
-  account: '◆', contact: '☎', opportunity: '◎', tender: '◳', quotation: '✎', contract: '▤', project: '▦', invoice: '¤',
-};
 
 export default function Account360Client({ accountId }: { accountId: string }) {
   const [data, setData] = useState<Payload | null>(null);
@@ -127,7 +125,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading account…'}</p>;
 
-  const { account: a, contacts, opportunities, tenders, quotations, contracts, projects, activities, receivables, summary, timeline } = data;
+  const { account: a, contacts, opportunities, tenders, quotations, contracts, projects, activities, receivables, summary } = data;
 
   // ── Relationship health (derived, with the WHY) ─────────────────────────
   const openOpps = opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost');
@@ -329,22 +327,10 @@ export default function Account360Client({ accountId }: { accountId: string }) {
               )}
             </div>
 
-            {/* Recent activity */}
+            {/* Unified timeline — events + activities (standardized component) */}
             <div style={st.oCard}>
-              <div style={st.oTitle}>Recent Activity</div>
-              {timeline.length === 0 ? (
-                <p style={st.oMuted}>Nothing yet.</p>
-              ) : (
-                timeline.slice(0, 8).map((t, i) => (
-                  <div key={i} style={st.tlRow}>
-                    <span style={st.tlGlyph}>{KIND_GLYPH[t.kind] ?? '·'}</span>
-                    <span style={st.tlDate}>{d(t.at)}</span>
-                    {t.href
-                      ? <a href={t.href} style={{ ...st.tlLabel, color: 'var(--fg)', textDecoration: 'none' }}>{t.label}</a>
-                      : <span style={st.tlLabel}>{t.label}</span>}
-                  </div>
-                ))
-              )}
+              <div style={st.oTitle}>Timeline</div>
+              <Timeline recordId={a.id} />
             </div>
 
             {/* Key contacts */}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
+import Timeline from './timeline';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -193,17 +194,11 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
           {o.nextAction && <p style={{ ...st.muted, marginTop: 8 }}>Next action: <b style={{ color: 'var(--fg)' }}>{o.nextAction}</b></p>}
         </div>
 
-        {/* activity */}
+        {/* unified timeline — events + activities in one feed */}
         <div style={{ ...st.block, gridColumn: '1 / -1' }}>
-          <div style={st.blockTitle}>Activity</div>
-          {activities.length === 0 ? <p style={st.muted}>No activities logged — <a href="/crm/activities" style={st.link}>log the next step →</a></p> : (
-            activities.map((a) => (
-              <div key={a.id} style={st.tlRow}>
-                <span style={st.tlDate}>{a.dueDate ? d(a.dueDate) : d(a.createdAt)}</span>
-                <span><b style={{ textTransform: 'capitalize' }}>{a.type}</b> · {a.subject} <span style={{ color: 'var(--muted)', textTransform: 'capitalize' }}>({a.status})</span></span>
-              </div>
-            ))
-          )}
+          <div style={st.blockTitle}>Timeline</div>
+          <Timeline recordId={o.id} />
+          {activities.length === 0 && <p style={st.muted}>No activities logged yet — <a href="/crm/activities" style={st.link}>log the next step →</a></p>}
         </div>
       </div>
     </div>

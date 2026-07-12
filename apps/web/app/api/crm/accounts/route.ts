@@ -1,27 +1,19 @@
 import { apiBase, authHeader } from '@/lib/api';
 
-// BFF: forward account creation to the Nest CRM API server-side.
+// BFF: forward account creation to the Nest CRM API server-side. The body is
+// passed through as-is — the API's CreateAccountDto is the validator, so the
+// BFF never silently drops fields the domain has since grown (it used to
+// whitelist 4 fields and swallowed the whole commercial profile).
 export async function POST(request: Request): Promise<Response> {
-  const body = (await request.json().catch(() => ({}))) as {
-    name?: unknown;
-    status?: unknown;
-    industry?: unknown;
-    website?: unknown;
-  };
-  const name = typeof body.name === 'string' ? body.name : '';
-  if (!name.trim()) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  if (typeof body.name !== 'string' || !body.name.trim()) {
     return Response.json({ error: 'name required' }, { status: 400 });
   }
   try {
     const res = await fetch(`${apiBase()}/api/v1/crm/accounts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({
-        name,
-        status: typeof body.status === 'string' ? body.status : undefined,
-        industry: typeof body.industry === 'string' ? body.industry : undefined,
-        website: typeof body.website === 'string' ? body.website : undefined,
-      }),
+      body: JSON.stringify(body),
       cache: 'no-store',
     });
     const data = await res.json().catch(() => ({}));

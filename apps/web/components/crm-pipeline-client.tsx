@@ -35,18 +35,36 @@ const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as con
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-type View = 'board' | 'list' | 'forecast' | 'activities';
+type View = 'command' | 'board' | 'list' | 'forecast' | 'activities';
+
+interface PipelineCommand {
+  kpis: { openDeals: number; openValue: number; weighted: number; avgDealSize: number; avgAgeDays: number; winRate: number | null; won90: number; wonValue90: number; lost90: number };
+  forecastByMonth: Array<{ month: string; deals: number; value: number; weighted: number }>;
+  aging: Array<{ key: string; label: string; deals: number; value: number }>;
+  stalled: Array<{ id: string; title: string; value: number; stage: string; ownerId: string | null; accountName: string | null; daysSinceActivity: number | null }>;
+  owners: Array<{ ownerId: string; openDeals: number; openValue: number; weighted: number; wonValue90: number; won90: number; lost90: number; winRate: number | null }>;
+  atRisk: Array<{ id: string; title: string; value: number; stage: string; ownerId: string | null; accountName: string | null; reasons: string[]; recommendation: string; daysSinceActivity: number | null }>;
+}
 
 export default function CrmPipelineClient({ initialLeads, initialOpportunities, initialAccounts }: {
   initialLeads: Lead[]; initialOpportunities: Opportunity[]; initialAccounts: Account[];
 }) {
   const router = useRouter();
-  const [view, setView] = useState<View>('board');
+  const [view, setView] = useState<View>('command');
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [forecast, setForecast] = useState<{ id: string; prob: number; reason: string } | null>(null);
   const [activities, setActivities] = useState<Activity[] | null>(null);
+  const [command, setCommand] = useState<PipelineCommand | null>(null);
+
+  useEffect(() => {
+    if (view !== 'command' || command) return;
+    void fetch('/api/crm/opportunities/pipeline', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setCommand(d))
+      .catch(() => setCommand(null));
+  }, [view, command]);
   // Native HTML5 drag & drop across board columns (buttons stay as the
   // keyboard-accessible fallback for the same moves).
   const [drag, setDrag] = useState<{ kind: 'lead' | 'opp'; id: string; from: string } | null>(null);
@@ -242,9 +260,9 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
 
       {/* view switch + creates */}
       <div style={s.tabBar}>
-        {(['board', 'list', 'forecast', 'activities'] as View[]).map((v) => (
+        {(['command', 'board', 'list', 'forecast', 'activities'] as View[]).map((v) => (
           <button key={v} type="button" style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
-            {v[0].toUpperCase() + v.slice(1)}
+            {v === 'command' ? 'Command' : v[0].toUpperCase() + v.slice(1)}
           </button>
         ))}
         <div style={{ flex: 1 }} />
@@ -299,6 +317,118 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
           ]}
         />
       </div>
+
+      {/* ── COMMAND ── the sales manager's cockpit */}
+      {view === 'command' && (
+        command === null ? <p style={s.muted}>Loading the pipeline command center…</p> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* portfolio KPIs */}
+            <div style={s.cmdKpiRow}>
+              <CmdKpi label="Open pipeline" value={money(command.kpis.openValue)} />
+              <CmdKpi label="Weighted forecast" value={money(command.kpis.weighted)} accent />
+              <CmdKpi label="Open deals" value={String(command.kpis.openDeals)} />
+              <CmdKpi label="Avg deal size" value={money(command.kpis.avgDealSize)} />
+              <CmdKpi label="Avg age" value={`${command.kpis.avgAgeDays}d`} />
+              <CmdKpi label="Win rate (90d)" value={command.kpis.winRate === null ? '—' : `${command.kpis.winRate}%`} accent />
+              <CmdKpi label="Won (90d)" value={`${command.kpis.won90} · ${money(command.kpis.wonValue90)}`} good />
+              <CmdKpi label="At risk" value={String(command.atRisk.length)} bad={command.atRisk.length > 0} />
+            </div>
+
+            <div style={s.cmdGrid}>
+              {/* At-risk deals + recommendations */}
+              <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
+                <div style={s.cmdTitle}>⚠ At-risk deals — {command.atRisk.length}</div>
+                {command.atRisk.length === 0 ? <p style={s.muted}>No at-risk deals — the pipeline is healthy.</p> : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                      <thead><tr>{['Deal', 'Value', 'Stage', 'Owner', 'Why at risk', 'Recommended next step'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {command.atRisk.slice(0, 12).map((d) => (
+                          <tr key={d.id}>
+                            <td style={s.cmdTd}><a href={`/crm/opportunities/${d.id}`} style={s.link}>{d.title}</a>{d.accountName && <div style={s.cmdSub}>{d.accountName}</div>}</td>
+                            <td style={{ ...s.cmdTd, fontWeight: 700, whiteSpace: 'nowrap' }}>{money(d.value)}</td>
+                            <td style={{ ...s.cmdTd, textTransform: 'capitalize' }}>{d.stage}</td>
+                            <td style={s.cmdTd}>{d.ownerId ?? <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                            <td style={s.cmdTd}>{d.reasons.map((r) => <span key={r} style={s.riskChip}>{r}</span>)}</td>
+                            <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 600 }}>{d.recommendation}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              {/* Pipeline aging */}
+              <section style={s.cmdCard}>
+                <div style={s.cmdTitle}>Pipeline aging</div>
+                {command.aging.map((a) => {
+                  const max = Math.max(1, ...command.aging.map((x) => x.value));
+                  return (
+                    <div key={a.key} style={{ marginBottom: 8 }}>
+                      <div style={s.agingRow}><span>{a.label}</span><span style={{ color: 'var(--muted)' }}>{a.deals} · {money(a.value)}</span></div>
+                      <div style={s.agingTrack}><div style={{ ...s.agingFill, width: `${(a.value / max) * 100}%`, background: a.key === 'stale' ? 'var(--bad)' : a.key === 'aging' ? 'var(--warn, #d97706)' : 'var(--accent)' }} /></div>
+                    </div>
+                  );
+                })}
+              </section>
+
+              {/* Owner performance */}
+              <section style={s.cmdCard}>
+                <div style={s.cmdTitle}>Owner performance</div>
+                {command.owners.length === 0 ? <p style={s.muted}>No open deals.</p> : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead><tr>{['Owner', 'Open', 'Weighted', 'Win rate'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {command.owners.map((o) => (
+                        <tr key={o.ownerId}>
+                          <td style={s.cmdTd}>{o.ownerId === 'unassigned' ? <span style={{ color: 'var(--muted)' }}>Unassigned</span> : o.ownerId}</td>
+                          <td style={s.cmdTd}>{o.openDeals} · {money(o.openValue)}</td>
+                          <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(o.weighted)}</td>
+                          <td style={s.cmdTd}>{o.winRate === null ? '—' : `${o.winRate}%`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+
+              {/* Weighted forecast by month */}
+              <section style={s.cmdCard}>
+                <div style={s.cmdTitle}>Weighted forecast by close month</div>
+                {command.forecastByMonth.length === 0 ? <p style={s.muted}>No active opportunities.</p> : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead><tr>{['Month', 'Deals', 'Value', 'Weighted'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {command.forecastByMonth.map((f) => (
+                        <tr key={f.month}>
+                          <td style={s.cmdTd}>{f.month === 'unscheduled' ? 'Unscheduled' : f.month}</td>
+                          <td style={s.cmdTd}>{f.deals}</td>
+                          <td style={s.cmdTd}>{money(f.value)}</td>
+                          <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(f.weighted)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+
+              {/* Stalled deals */}
+              <section style={s.cmdCard}>
+                <div style={s.cmdTitle}>Stalled deals — {command.stalled.length}</div>
+                {command.stalled.length === 0 ? <p style={s.muted}>Nothing stalled — every deal has recent movement.</p> : (
+                  command.stalled.slice(0, 8).map((d) => (
+                    <div key={d.id} style={s.stalledRow}>
+                      <a href={`/crm/opportunities/${d.id}`} style={s.link}>{d.title}</a>
+                      <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{money(d.value)} · {d.daysSinceActivity === null ? 'never touched' : `quiet ${d.daysSinceActivity}d`}</span>
+                    </div>
+                  ))
+                )}
+              </section>
+            </div>
+          </div>
+        )
+      )}
 
       {/* ── BOARD ── */}
       {view === 'board' && (
@@ -530,6 +660,15 @@ function Kpi({ label, value, accent, good }: { label: string; value: string; acc
   );
 }
 
+function CmdKpi({ label, value, accent, good, bad }: { label: string; value: string; accent?: boolean; good?: boolean; bad?: boolean }) {
+  return (
+    <div style={s.cmdKpi}>
+      <span style={s.cmdKpiLabel}>{label}</span>
+      <span style={{ ...s.cmdKpiVal, ...(accent ? { color: 'var(--accent)' } : {}), ...(good ? { color: 'var(--good)' } : {}), ...(bad ? { color: 'var(--bad)' } : {}) }}>{value}</span>
+    </div>
+  );
+}
+
 function statusColor(status: string): CSSProperties {
   const colors: Record<string, string> = { new: '#3b82f6', contacted: '#f59e0b', qualified: '#10b981', nurturing: '#8b5cf6', disqualified: '#ef4444' };
   return { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 6, background: (colors[status] ?? '#666') + '18', color: colors[status] ?? '#666', border: `1px solid ${(colors[status] ?? '#666')}33` };
@@ -545,6 +684,22 @@ const s = {
   kpiCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
   kpiLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 } as CSSProperties,
   kpiVal: { fontSize: 18, fontWeight: 700 } as CSSProperties,
+  cmdKpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 } as CSSProperties,
+  cmdKpi: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 } as CSSProperties,
+  cmdKpiLabel: { fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' } as CSSProperties,
+  cmdKpiVal: { fontSize: 17, fontWeight: 700, whiteSpace: 'nowrap' } as CSSProperties,
+  cmdGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 12 } as CSSProperties,
+  cmdCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' } as CSSProperties,
+  cmdTitle: { fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--accent)', marginBottom: 10 } as CSSProperties,
+  cmdTh: { textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid var(--border)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--muted)', whiteSpace: 'nowrap' } as CSSProperties,
+  cmdTd: { padding: '7px 8px', borderBottom: '1px solid var(--border)', verticalAlign: 'top' } as CSSProperties,
+  cmdSub: { fontSize: 11, color: 'var(--muted)', marginTop: 1 } as CSSProperties,
+  riskChip: { display: 'inline-block', fontSize: 10.5, background: 'color-mix(in srgb, var(--bad) 10%, transparent)', color: 'var(--bad)', border: '1px solid color-mix(in srgb, var(--bad) 30%, transparent)', borderRadius: 999, padding: '1px 7px', marginRight: 4, marginBottom: 3 } as CSSProperties,
+  agingRow: { display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 } as CSSProperties,
+  agingTrack: { height: 8, background: 'var(--panel-2, var(--border))', borderRadius: 999, overflow: 'hidden' } as CSSProperties,
+  agingFill: { height: '100%', borderRadius: 999 } as CSSProperties,
+  stalledRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
+  link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
   tabBar: { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' } as CSSProperties,
   tab: { ...field, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
   tabActive: { ...field, cursor: 'pointer', fontWeight: 700, border: '1px solid var(--accent)', color: 'var(--accent)' } as CSSProperties,

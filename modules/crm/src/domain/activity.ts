@@ -24,6 +24,8 @@ export interface Activity {
   dueDate: string | null;
   status: ActivityStatus;
   completedAt: string | null;
+  /** What happened — captured when the activity is logged/completed (the outcome). */
+  outcome: string | null;
   assigneeId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -40,6 +42,7 @@ export interface NewActivity {
   relatedName?: string | null;
   dueDate?: string | null;
   status?: ActivityStatus;
+  outcome?: string | null;
   assigneeId?: Id | null;
   createdBy?: Id | null;
 }
@@ -58,16 +61,18 @@ export function makeActivity(input: NewActivity): Activity {
     dueDate: input.dueDate ?? null,
     status: input.status ?? 'open',
     completedAt: null,
+    outcome: input.outcome?.trim() || null,
     assigneeId: input.assigneeId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };
 }
 
-/** Mark a task/activity complete (idempotent). */
-export function completeActivity(a: Activity, at?: string): Activity {
-  if (a.status === 'completed') return a;
-  return { ...a, status: 'completed', completedAt: at ?? new Date().toISOString() };
+/** Mark a task/activity complete (idempotent), optionally recording the outcome. */
+export function completeActivity(a: Activity, at?: string, outcome?: string | null): Activity {
+  const outcomePatch = outcome !== undefined && outcome !== null && outcome.trim() ? { outcome: outcome.trim() } : {};
+  if (a.status === 'completed') return { ...a, ...outcomePatch };
+  return { ...a, status: 'completed', completedAt: at ?? new Date().toISOString(), ...outcomePatch };
 }
 
 export function cancelActivity(a: Activity): Activity {

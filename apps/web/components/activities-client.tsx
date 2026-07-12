@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { Fragment, type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
@@ -20,18 +20,21 @@ interface Activity {
   dueDate: string | null;
   status: string;
   completedAt: string | null;
+  outcome: string | null;
   assigneeId: string | null;
   createdAt: string;
 }
 interface Account { id: string; name: string; }
 interface Contact { id: string; name: string; accountName: string | null; }
 interface Opportunity { id: string; title: string; }
+interface AttentionItem { kind: 'account' | 'opportunity'; id: string; name: string; reason: string; daysSince: number | null; href: string }
+interface CommandPayload { inactivity: AttentionItem[]; staleThresholdDays: { account: number; opportunity: number } }
 
 const TYPE_GLYPH: Record<string, string> = { call: '☎', email: '✉', meeting: '👥', note: '✎', task: '☑' };
 const RELATED_HREF: Record<string, (id: string) => string> = {
   account: (id) => `/crm/accounts/${id}`,
-  contact: () => '/crm/contacts',
-  opportunity: () => '/crm/leads',
+  contact: (id) => `/crm/contacts/${id}`,
+  opportunity: (id) => `/crm/opportunities/${id}`,
   lead: () => '/crm/leads',
   quotation: () => '/crm/quotations',
 };
@@ -50,6 +53,15 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   const [showClosed, setShowClosed] = useState(false);
   const [typeFilter, setTypeFilter] = useState('');
   const [query, setQuery] = useState('');
+  const [command, setCommand] = useState<CommandPayload | null>(null);
+  const [completing, setCompleting] = useState<{ id: string; outcome: string; fuOn: boolean; fuType: string; fuSubject: string; fuDate: string } | null>(null);
+
+  useEffect(() => {
+    void fetch('/api/crm/activities/command', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setCommand(d))
+      .catch(() => setCommand(null));
+  }, [initialActivities]);
 
   const today = new Date().toISOString().slice(0, 10);
   const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
@@ -96,14 +108,29 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
     return buckets.filter((b) => b.items.length > 0);
   }, [filtered, today, weekEnd]);
 
-  const act = async (a: Activity, action: 'complete' | 'cancel' | 'reopen'): Promise<void> => {
+  const act = async (a: Activity, action: 'complete' | 'cancel' | 'reopen', body?: unknown): Promise<void> => {
     setBusy(true); setErr('');
     try {
-      const res = await fetch(`/api/crm/activities/${a.id}/${action}`, { method: 'POST' });
+      const res = await fetch(`/api/crm/activities/${a.id}/${action}`, {
+        method: 'POST',
+        ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+      });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(d.message ?? d.error ?? 'Action failed'); return; }
       router.refresh();
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
+  };
+
+  /** Commit the outcome panel: complete the activity + optionally book a follow-up. */
+  const commitComplete = async (): Promise<void> => {
+    if (!completing) return;
+    const target = initialActivities.find((a) => a.id === completing.id);
+    if (!target) { setCompleting(null); return; }
+    const followUp = completing.fuOn && completing.fuSubject.trim()
+      ? { type: completing.fuType, subject: completing.fuSubject.trim(), dueDate: completing.fuDate || undefined }
+      : undefined;
+    await act(target, 'complete', { outcome: completing.outcome.trim() || undefined, followUp });
+    setCompleting(null);
   };
 
   // "Related to" select: one list across the chain; picking an option also fills
@@ -123,6 +150,25 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
         <Kpi label="Due this week" value={String(kpi.dueWeek)} />
         <Kpi label="Completed (30d)" value={String(kpi.done30)} good />
       </div>
+
+      {command && command.inactivity.length > 0 && (
+        <section style={st.attention}>
+          <div style={st.attentionHead}>
+            ⚠ Needs attention — {command.inactivity.length} relationship{command.inactivity.length === 1 ? '' : 's'} going quiet
+            <span style={st.attentionSub}>accounts idle ≥ {command.staleThresholdDays.account}d · open deals idle ≥ {command.staleThresholdDays.opportunity}d</span>
+          </div>
+          <div style={st.attentionGrid}>
+            {command.inactivity.slice(0, 9).map((it) => (
+              <a key={`${it.kind}-${it.id}`} href={it.href} style={st.attentionCard}>
+                <span style={st.attentionKind}>{it.kind === 'account' ? '◆ Account' : '◎ Opportunity'}</span>
+                <span style={st.attentionName}>{it.name}</span>
+                <span style={st.attentionReason}>{it.reason}</span>
+              </a>
+            ))}
+          </div>
+          {command.inactivity.length > 9 && <div style={st.attentionMore}>+{command.inactivity.length - 9} more going quiet</div>}
+        </section>
+      )}
 
       <div style={st.toolbar}>
         <CreateDrawer
@@ -150,7 +196,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
           <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} /> show closed
         </label>
         <ExportButton filename="activities" rows={filtered as unknown as Array<Record<string, unknown>>}
-          columns={[{ key: 'type' }, { key: 'subject' }, { key: 'relatedName' }, { key: 'assigneeId' }, { key: 'dueDate' }, { key: 'status' }]} />
+          columns={[{ key: 'type' }, { key: 'subject' }, { key: 'relatedName' }, { key: 'assigneeId' }, { key: 'dueDate' }, { key: 'status' }, { key: 'outcome' }]} />
         {err && <span style={st.err}>{err}</span>}
       </div>
 
@@ -168,11 +214,13 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
           <table className="data-table">
             <tbody>
               {g.items.map((a) => (
-                <tr key={a.id} style={a.status !== 'open' ? { opacity: 0.55 } : undefined}>
+                <Fragment key={a.id}>
+                <tr style={a.status !== 'open' ? { opacity: 0.7 } : undefined}>
                   <td style={{ width: 90 }}><span style={st.typeTag}>{TYPE_GLYPH[a.type] ?? '·'} {a.type}</span></td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{a.subject}</div>
                     {a.notes && <div style={st.notes}>{a.notes}</div>}
+                    {a.outcome && <div style={st.outcome}>→ {a.outcome}</div>}
                   </td>
                   <td style={{ width: 220 }}>
                     {a.relatedType && a.relatedId
@@ -186,7 +234,8 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                   <td style={{ width: 200, whiteSpace: 'nowrap' }}>
                     {a.status === 'open' && (
                       <>
-                        <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} disabled={busy} onClick={() => void act(a, 'complete')}>✓ Done</button>
+                        <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} disabled={busy}
+                          onClick={() => setCompleting({ id: a.id, outcome: '', fuOn: false, fuType: 'call', fuSubject: '', fuDate: '' })}>✓ Done</button>
                         <button type="button" className="btn btn-ghost" style={{ ...st.smBtn, marginLeft: 6 }} disabled={busy} onClick={() => void act(a, 'cancel')}>Cancel</button>
                       </>
                     )}
@@ -198,6 +247,38 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                     )}
                   </td>
                 </tr>
+                {completing?.id === a.id && (
+                  <tr>
+                    <td colSpan={6} style={st.outcomeCell}>
+                      <div style={st.outcomeForm}>
+                        <div style={st.outcomeRow}>
+                          <span style={st.outcomeLabel}>Outcome</span>
+                          <input autoFocus style={st.outcomeInput} placeholder="What happened on this call/meeting?"
+                            value={completing.outcome} onChange={(e) => setCompleting({ ...completing, outcome: e.target.value })} />
+                        </div>
+                        <label style={st.fuToggle}>
+                          <input type="checkbox" checked={completing.fuOn} onChange={(e) => setCompleting({ ...completing, fuOn: e.target.checked })} />
+                          Schedule a follow-up
+                        </label>
+                        {completing.fuOn && (
+                          <div style={st.outcomeRow}>
+                            <select style={st.fuSelect} value={completing.fuType} onChange={(e) => setCompleting({ ...completing, fuType: e.target.value })}>
+                              {['call', 'email', 'meeting', 'task'].map((t) => <option key={t} value={t}>{TYPE_GLYPH[t]} {t}</option>)}
+                            </select>
+                            <input style={{ ...st.outcomeInput, flex: 2 }} placeholder="Follow-up subject — e.g. Send revised quote"
+                              value={completing.fuSubject} onChange={(e) => setCompleting({ ...completing, fuSubject: e.target.value })} />
+                            <input type="date" style={st.fuDate} value={completing.fuDate} onChange={(e) => setCompleting({ ...completing, fuDate: e.target.value })} />
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} disabled={busy} onClick={() => void commitComplete()}>✓ Complete{completing.fuOn ? ' + follow-up' : ''}</button>
+                          <button type="button" className="btn btn-ghost" style={st.smBtn} disabled={busy} onClick={() => setCompleting(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -230,5 +311,23 @@ const st = {
   groupCount: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 7px', fontSize: 11, color: 'var(--muted)' } as CSSProperties,
   typeTag: { fontSize: 11.5, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', textTransform: 'capitalize' } as CSSProperties,
   notes: { fontSize: 12, color: 'var(--muted)', marginTop: 2, maxWidth: 520, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  outcome: { fontSize: 12, color: 'var(--good)', marginTop: 3, fontWeight: 600 } as CSSProperties,
   smBtn: { padding: '4px 10px', fontSize: 12 } as CSSProperties,
+  attention: { border: '1px solid var(--bad)', background: 'color-mix(in srgb, var(--bad) 6%, transparent)', borderRadius: 12, padding: '12px 14px', marginBottom: 18 } as CSSProperties,
+  attentionHead: { fontSize: 12.5, fontWeight: 800, color: 'var(--bad)', marginBottom: 10, display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' } as CSSProperties,
+  attentionSub: { fontSize: 11, fontWeight: 500, color: 'var(--muted)', textTransform: 'none', letterSpacing: 0 } as CSSProperties,
+  attentionGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 } as CSSProperties,
+  attentionCard: { display: 'flex', flexDirection: 'column', gap: 2, border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', background: 'var(--panel)', textDecoration: 'none' } as CSSProperties,
+  attentionKind: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' } as CSSProperties,
+  attentionName: { fontSize: 13, fontWeight: 700, color: 'var(--accent)' } as CSSProperties,
+  attentionReason: { fontSize: 11.5, color: 'var(--bad)' } as CSSProperties,
+  attentionMore: { fontSize: 11.5, color: 'var(--muted)', marginTop: 8 } as CSSProperties,
+  outcomeCell: { background: 'var(--panel-2, var(--panel))', padding: '10px 14px' } as CSSProperties,
+  outcomeForm: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 720 } as CSSProperties,
+  outcomeRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } as CSSProperties,
+  outcomeLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', width: 64 } as CSSProperties,
+  outcomeInput: { flex: 3, minWidth: 180, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '6px 10px', fontSize: 12.5 } as CSSProperties,
+  fuToggle: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
+  fuSelect: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '6px 8px', fontSize: 12.5, textTransform: 'capitalize' } as CSSProperties,
+  fuDate: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '6px 8px', fontSize: 12.5 } as CSSProperties,
 };

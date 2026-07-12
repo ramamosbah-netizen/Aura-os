@@ -14,6 +14,18 @@ class CreateActivityDto {
   @IsOptional() @IsString() status?: ActivityStatus;
   @IsOptional() @IsString() assigneeId?: string;
   @IsOptional() @IsString() relatedName?: string;
+  @IsOptional() @IsString() outcome?: string;
+}
+
+class FollowUpDto {
+  @IsString() type!: ActivityType;
+  @IsString() subject!: string;
+  @IsOptional() @IsString() dueDate?: string;
+}
+
+class CompleteActivityDto {
+  @IsOptional() @IsString() outcome?: string;
+  @IsOptional() followUp?: FollowUpDto;
 }
 
 /**
@@ -98,8 +110,29 @@ export class CrmActivitiesController {
     }
   }
 
+  /**
+   * Complete an activity, optionally recording the outcome and scheduling a
+   * follow-up task linked to the same record — the "log the call → what happened
+   * → book the next step" loop that keeps a relationship warm.
+   */
   @Post(':id/complete')
-  async complete(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
-    return await this.activities.complete(id);
+  async complete(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto?: CompleteActivityDto): Promise<Activity> {
+    const done = await this.activities.complete(id, undefined, dto?.outcome);
+    if (dto?.followUp?.subject?.trim() && dto.followUp.type) {
+      const ctx = this.tenant.get();
+      await this.activities.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        type: dto.followUp.type,
+        subject: dto.followUp.subject,
+        relatedType: done.relatedType,
+        relatedId: done.relatedId,
+        relatedName: done.relatedName,
+        dueDate: dto.followUp.dueDate ?? null,
+        assigneeId: done.assigneeId ?? ctx.actorId,
+        createdBy: ctx.actorId,
+      });
+    }
+    return done;
   }
 }

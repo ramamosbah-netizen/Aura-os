@@ -50,18 +50,28 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: 'Operate',
+    title: 'Procurement',
     items: [
       { label: 'Procurement Dashboard', href: '/procurement/dashboard', glyph: '📊', desc: 'PO spend & counts by status' },
       { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
       { label: 'Purchase requests', href: '/procurement/purchase-requests', glyph: '▤', desc: 'Procurement request & approval' },
       { label: 'RFQs', href: '/procurement/rfqs', glyph: '◷', desc: 'Vendor quotations & bid comparison' },
       { label: 'Purchase orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' },
+    ],
+  },
+  {
+    title: 'Inventory',
+    items: [
       { label: 'Goods receipts', href: '/inventory/grns', glyph: '▢', desc: 'Inventory — received vs POs' },
       { label: 'Inventory Dashboard', href: '/inventory/dashboard', glyph: '📊', desc: 'Stock value & counts by warehouse' },
       { label: 'Stock', href: '/inventory/stock', glyph: '▦', desc: 'Inventory — on-hand & movements' },
       { label: 'Transfers', href: '/inventory/transfers', glyph: '⇄', desc: 'Inventory — warehouse-to-warehouse' },
       { label: 'Valuation', href: '/inventory/valuation', glyph: '▣', desc: 'Inventory — stock value at moving-average cost (WAC)' },
+    ],
+  },
+  {
+    title: 'Site & Delivery',
+    items: [
       { label: 'Engineering', href: '/engineering', glyph: '⚙', desc: 'Shop drawings, RFIs, & submittals' },
       { label: 'Site Control', href: '/site/control', glyph: '▤', desc: 'Site diaries, delay logs, & material consumption' },
       { label: 'Site Instructions', href: '/site/instructions', glyph: '✋', desc: 'Formal site instructions (SI) with cost/time flags' },
@@ -70,6 +80,11 @@ export const NAV: NavGroup[] = [
       { label: 'Quality Control', href: '/quality/control', glyph: '✓', desc: 'Non-conformance reports, inspections, & snags' },
       { label: 'Inspection & Test Plans', href: '/quality/itps', glyph: '☑', desc: 'ITPs — hold/witness points & sign-off' },
       { label: 'Material Approvals', href: '/quality/material-approvals', glyph: '🧱', desc: 'MAR — material submittals & consultant approval' },
+    ],
+  },
+  {
+    title: 'People & Payroll',
+    items: [
       { label: 'HR Dashboard', href: '/hr/dashboard', glyph: '📊', desc: 'Headcount by department & distribution' },
       { label: 'HR & Payroll', href: '/hr/control', glyph: '👤', desc: 'Employee profiles, leave logs, & payroll processing' },
       { label: 'Gratuity (EOSB)', href: '/hr/eosb', glyph: '◷', desc: 'End-of-service benefit calculator' },
@@ -78,6 +93,11 @@ export const NAV: NavGroup[] = [
       { label: 'Expense Claims', href: '/hr/expense-claims', glyph: '🧾', desc: 'Employee reimbursements — submit, approve, pay' },
       { label: 'Staff Advances', href: '/hr/staff-advances', glyph: '💵', desc: 'Salary advances / loans with installment repayment' },
       { label: 'Document Expiry', href: '/hr/document-expiry', glyph: '🪪', desc: 'Visa & work-permit expiry compliance watch-list' },
+    ],
+  },
+  {
+    title: 'Fleet & Assets',
+    items: [
       { label: 'Fleet & Logistics', href: '/fleet/control', glyph: '🚚', desc: 'Vehicles, equipment fleet, fuel logs, & maintenance' },
       { label: 'Traffic Fines', href: '/fleet/fines', glyph: '🚦', desc: 'UAE fines — black points, driver liability, settlement' },
       { label: 'Salik (Tolls)', href: '/fleet/salik', glyph: '🛣', desc: 'Dubai road tolls — record, allocate to cost owner, dispute' },
@@ -85,14 +105,16 @@ export const NAV: NavGroup[] = [
       { label: 'Depreciation', href: '/assets/depreciation', glyph: '📉', desc: 'Asset depreciation schedule & net book value' },
       { label: 'AMC & Services', href: '/amc', glyph: '⚙', desc: 'Service contracts, support tickets, & SLA timers' },
       { label: 'Preventive Maintenance', href: '/amc/ppm', glyph: '♺', desc: 'PPM schedules & recurring visit generation' },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { label: 'Finance Dashboard', href: '/finance/dashboard', glyph: '📊', desc: 'Finance — KPIs & charts (aging, P&L, cost centres)' },
       { label: 'Invoices', href: '/finance/invoices', glyph: '◰', desc: 'Finance — supplier invoices' },
       { label: 'Customer Invoices', href: '/finance/customer-invoices', glyph: '◳', desc: 'Finance — client tax invoices & receipts (AR)' },
       { label: 'AR Aging', href: '/finance/ar-aging', glyph: '▦', desc: 'Finance — receivables aged by overdue bucket' },
       { label: 'AP Aging', href: '/finance/ap-aging', glyph: '▤', desc: 'Finance — payables aged by invoice-date bucket' },
-      { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
-      { label: 'Subcontract Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
-      { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
-      { label: 'Finance Dashboard', href: '/finance/dashboard', glyph: '📊', desc: 'Finance — KPIs & charts (aging, P&L, cost centres)' },
       { label: 'Ledger & COA', href: '/finance/ledger', glyph: '◳', desc: 'Finance — double-entry general ledger' },
       { label: 'Financial Statements', href: '/finance/statements', glyph: '▣', desc: 'Finance — P&L, balance sheet, cash flow & trial balance from the GL' },
       { label: 'Group Consolidation', href: '/finance/consolidation', glyph: '▦', desc: 'Finance — per-company + consolidated group financials' },
@@ -106,6 +128,14 @@ export const NAV: NavGroup[] = [
       { label: 'Bank Guarantees', href: '/finance/bank-guarantees', glyph: '◲', desc: 'Finance — bonds & guarantees with expiry tracking' },
       { label: 'Post-Dated Cheques', href: '/finance/post-dated-cheques', glyph: '✎', desc: 'Finance — PDC register, maturity watch-list & clear/bounce' },
       { label: 'Bank Reconciliation', href: '/finance/bank-reconciliation', glyph: '⇌', desc: 'Finance — match statement lines to payments' },
+    ],
+  },
+  {
+    title: 'Subcontracts',
+    items: [
+      { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
+      { label: 'Subcontract Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
+      { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
     ],
   },
   {
@@ -146,7 +176,13 @@ export const ALL_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
 export const GROUP_SUITE: Record<string, string> = {
   CRM: 'suite.dealChain',
   'Deal chain': 'suite.dealChain',
-  Operate: 'suite.operate',
+  Procurement: 'suite.operate',
+  Inventory: 'suite.operate',
+  'Site & Delivery': 'suite.operate',
+  'People & Payroll': 'suite.operate',
+  'Fleet & Assets': 'suite.operate',
+  Finance: 'suite.operate',
+  Subcontracts: 'suite.operate',
   Intelligence: 'suite.intelligence',
   Platform: 'suite.platform',
 };

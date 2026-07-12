@@ -22,6 +22,13 @@ class CreateOpportunityDto {
   @IsOptional() requiresTender?: boolean | string;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
+  @IsOptional() budgetConfirmed?: boolean | string;
+  @IsOptional() authorityConfirmed?: boolean | string;
+  @IsOptional() needConfirmed?: boolean | string;
+  @IsOptional() timelineConfirmed?: boolean | string;
+  @IsOptional() @IsString() competitors?: string;
+  @IsOptional() @IsString() source?: string;
+  @IsOptional() @IsString() lossReason?: string;
 }
 
 class UpdateOpportunityDto {
@@ -35,6 +42,13 @@ class UpdateOpportunityDto {
   @IsOptional() requiresTender?: boolean | string;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
+  @IsOptional() budgetConfirmed?: boolean | string;
+  @IsOptional() authorityConfirmed?: boolean | string;
+  @IsOptional() needConfirmed?: boolean | string;
+  @IsOptional() timelineConfirmed?: boolean | string;
+  @IsOptional() @IsString() competitors?: string;
+  @IsOptional() @IsString() source?: string;
+  @IsOptional() @IsString() lossReason?: string;
 }
 
 @Controller('crm/opportunities')
@@ -84,6 +98,13 @@ export class CrmOpportunitiesController {
       requiresTender: coerceBool(dto.requiresTender),
       ownerId: dto.ownerId,
       nextAction: dto.nextAction,
+      budgetConfirmed: coerceBool(dto.budgetConfirmed),
+      authorityConfirmed: coerceBool(dto.authorityConfirmed),
+      needConfirmed: coerceBool(dto.needConfirmed),
+      timelineConfirmed: coerceBool(dto.timelineConfirmed),
+      competitors: dto.competitors,
+      source: dto.source,
+      lossReason: dto.lossReason,
       actorId: ctx.actorId,
     });
   }
@@ -91,7 +112,14 @@ export class CrmOpportunitiesController {
   @Patch(':id')
   update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateOpportunityDto): Promise<Opportunity> {
     const ctx = this.tenant.get();
-    const patch = { ...dto, ...(dto.requiresTender !== undefined ? { requiresTender: coerceBool(dto.requiresTender) } : {}) };
+    const patch = {
+      ...dto,
+      ...(dto.requiresTender !== undefined ? { requiresTender: coerceBool(dto.requiresTender) } : {}),
+      ...(dto.budgetConfirmed !== undefined ? { budgetConfirmed: coerceBool(dto.budgetConfirmed) } : {}),
+      ...(dto.authorityConfirmed !== undefined ? { authorityConfirmed: coerceBool(dto.authorityConfirmed) } : {}),
+      ...(dto.needConfirmed !== undefined ? { needConfirmed: coerceBool(dto.needConfirmed) } : {}),
+      ...(dto.timelineConfirmed !== undefined ? { timelineConfirmed: coerceBool(dto.timelineConfirmed) } : {}),
+    };
     return this.opportunities.update(id, patch as Parameters<typeof this.opportunities.update>[1], ctx.actorId);
   }
 

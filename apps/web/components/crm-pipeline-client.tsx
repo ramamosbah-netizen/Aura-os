@@ -283,6 +283,18 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               ],
             },
             { name: 'ownerId', label: 'Owner', kind: 'text', placeholder: 'e.g. u-sales' },
+            {
+              name: 'source', label: 'Source', kind: 'select', placeholder: 'Where did it come from?',
+              options: [
+                { value: 'referral', label: 'Referral' },
+                { value: 'existing_client', label: 'Existing client' },
+                { value: 'campaign', label: 'Campaign' },
+                { value: 'cold_call', label: 'Cold call' },
+                { value: 'website', label: 'Website' },
+                { value: 'other', label: 'Other' },
+              ],
+            },
+            { name: 'competitors', label: 'Competitors', kind: 'text', placeholder: 'e.g. Rival ELV LLC, Acme Systems', span: 2, hint: 'Comma-separated — who else is bidding' },
             { name: 'nextAction', label: 'Next action', kind: 'text', placeholder: 'e.g. Site survey Sunday', span: 2 },
           ]}
         />
@@ -336,7 +348,9 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                     {...dragHandlers('opp', o.id, o.stage)}
                     title="Drag to another stage"
                   >
-                    <div style={s.cardTitle}>{o.title}</div>
+                    <div style={s.cardTitle}>
+                      <a href={`/crm/opportunities/${o.id}`} style={{ color: 'var(--fg)', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>{o.title}</a>
+                    </div>
                     {o.accountName && <div style={s.cardSub}>{o.accountName}</div>}
                     <div style={s.cardMetaRow}>
                       <b>{money(o.value)}</b>
@@ -398,7 +412,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               </tr></thead><tbody>
                 {opps.map((o) => (
                   <tr key={o.id} style={o.stage === 'won' ? { background: 'rgba(40,167,69,0.04)' } : o.stage === 'lost' ? { background: 'rgba(220,53,69,0.04)' } : undefined}>
-                    <td style={s.td}><strong>{o.title}</strong></td>
+                    <td style={s.td}><a href={`/crm/opportunities/${o.id}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 700 }}>{o.title}</a></td>
                     <td style={s.tdM}>{o.accountName ?? '—'}</td>
                     <td style={s.td}>{money(o.value)}</td>
                     <td style={s.td}>

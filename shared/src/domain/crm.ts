@@ -42,6 +42,17 @@ export interface Opportunity {
   ownerId: Id | null;
   /** The next concrete step the owner committed to (shown on the pipeline card). */
   nextAction: string | null;
+  /** BANT qualification — how well we understand the deal (drives real probability). */
+  budgetConfirmed: boolean;
+  authorityConfirmed: boolean;
+  needConfirmed: boolean;
+  timelineConfirmed: boolean;
+  /** Who else is bidding — freeform / comma-separated competitor names. */
+  competitors: string | null;
+  /** Where the opportunity came from (referral, existing client, campaign…). */
+  source: string | null;
+  /** Why we lost (win/loss intelligence) — set when the stage moves to lost. */
+  lossReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +99,13 @@ export interface NewOpportunity {
   requiresTender?: boolean;
   ownerId?: Id | null;
   nextAction?: string | null;
+  budgetConfirmed?: boolean;
+  authorityConfirmed?: boolean;
+  needConfirmed?: boolean;
+  timelineConfirmed?: boolean;
+  competitors?: string | null;
+  source?: string | null;
+  lossReason?: string | null;
 }
 
 export function makeOpportunity(input: NewOpportunity): Opportunity {
@@ -107,6 +125,13 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     requiresTender: input.requiresTender ?? true,
     ownerId: input.ownerId ?? null,
     nextAction: input.nextAction?.trim() || null,
+    budgetConfirmed: input.budgetConfirmed ?? false,
+    authorityConfirmed: input.authorityConfirmed ?? false,
+    needConfirmed: input.needConfirmed ?? false,
+    timelineConfirmed: input.timelineConfirmed ?? false,
+    competitors: input.competitors?.trim() || null,
+    source: input.source?.trim() || null,
+    lossReason: input.lossReason?.trim() || null,
     createdAt: now,
     updatedAt: now,
   };

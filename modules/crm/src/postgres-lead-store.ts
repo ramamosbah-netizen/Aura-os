@@ -21,6 +21,7 @@ interface LeadRow {
   next_activity_due: string | null;
   converted_opportunity_id: string | null;
   converted_at: Date | null;
+  signal_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -28,7 +29,7 @@ interface LeadRow {
 const COLS =
   'id, tenant_id, company_id, name, company_name, email, phone, status, source, ' +
   'assigned_to, assigned_at, first_responded_at, sla_first_response_hours, next_activity_due, ' +
-  'converted_opportunity_id, converted_at, created_at, updated_at';
+  'converted_opportunity_id, converted_at, signal_id, created_at, updated_at';
 
 function rowToLead(r: LeadRow): Lead {
   return {
@@ -48,6 +49,7 @@ function rowToLead(r: LeadRow): Lead {
     nextActivityDue: r.next_activity_due,
     convertedOpportunityId: r.converted_opportunity_id,
     convertedAt: r.converted_at ? r.converted_at.toISOString() : null,
+    signalId: r.signal_id,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
   };
@@ -80,21 +82,21 @@ export class PostgresLeadStore implements LeadStore {
           SET name = $2, company_name = $3, email = $4, phone = $5, status = $6, source = $7,
               assigned_to = $8, assigned_at = $9, first_responded_at = $10,
               sla_first_response_hours = $11, next_activity_due = $12,
-              converted_opportunity_id = $13, converted_at = $14, updated_at = now()
+              converted_opportunity_id = $13, converted_at = $14, signal_id = $15, updated_at = now()
         WHERE id = $1`,
       [l.id, l.name, l.companyName, l.email, l.phone, l.status, l.source,
        l.assignedTo, l.assignedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
-       l.convertedOpportunityId, l.convertedAt],
+       l.convertedOpportunityId, l.convertedAt, l.signalId],
     );
   }
 
   private insert(executor: Pool | PoolClient, l: Lead): Promise<unknown> {
     return executor.query(
       `INSERT INTO public.aura_crm_leads (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [l.id, l.tenantId, l.companyId, l.name, l.companyName, l.email, l.phone, l.status, l.source,
        l.assignedTo, l.assignedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
-       l.convertedOpportunityId, l.convertedAt, l.createdAt, l.updatedAt],
+       l.convertedOpportunityId, l.convertedAt, l.signalId, l.createdAt, l.updatedAt],
     );
   }
 

@@ -35,6 +35,9 @@ export interface Lead {
    * and can never convert again — the "cannot convert twice" invariant reads this. */
   convertedOpportunityId: Id | null;
   convertedAt: string | null;
+  /** Lineage: the Signal this lead was promoted from (null for directly-captured leads).
+   * Preserves source attribution back up the acquisition chain: Signal → Lead → Opportunity. */
+  signalId: Id | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -97,6 +100,7 @@ export interface NewLead {
   nextActivityDue?: string | null;
   convertedOpportunityId?: Id | null;
   convertedAt?: string | null;
+  signalId?: Id | null;
 }
 
 export function makeLead(input: NewLead): Lead {
@@ -118,6 +122,7 @@ export function makeLead(input: NewLead): Lead {
     nextActivityDue: input.nextActivityDue ?? null,
     convertedOpportunityId: input.convertedOpportunityId ?? null,
     convertedAt: input.convertedAt ?? null,
+    signalId: input.signalId ?? null,
     createdAt: now,
     updatedAt: now,
   };

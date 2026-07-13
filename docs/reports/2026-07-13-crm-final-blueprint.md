@@ -75,7 +75,7 @@ Wave 1 (Activity) & Wave 2 (Timeline) are **substantially done**. Re-sequenced b
 |---|---|---|---|---|
 | **S1** ✅ | **Lead OS foundation** | shared `leadAttention()` + Lead Center needs-attention view + SLA fields | 0156 | done (PR #86) |
 | **S2** ✅ | **Qualify & Convert hardening** | shared `resolveIdentity()` (name/email/phone → EXACT/PROBABLE/POSSIBLE), transactional idempotent `LeadConversionService`, lineage + "cannot convert twice" | 0157 | done |
-| S3 | Signal model + Opportunity Radar | `aura_crm_signals` (source/type/state/lineage), promote→lead | +1 | med |
+| **S3** ✅ | **Signal model + Opportunity Radar** | `aura_crm_signals` (source/type/state/lineage + dedupeKey), triage + transactional idempotent promote→lead, Radar cockpit | 0158 | done |
 | S4 | Opportunity depth | OpportunityStakeholder (opp-scoped) + Deal Team + Commitments | +2 | med |
 | S5 | Decisions/Assumptions/Open-Questions register | 1 lightweight table (polymorphic) | +1 | low |
 | S6 | Buying Journey + Pursue/Bid decision | buying_stage on opp + decision fields | +1 | low |

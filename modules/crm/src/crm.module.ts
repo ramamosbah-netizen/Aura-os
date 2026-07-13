@@ -31,6 +31,11 @@ import { InMemoryActivityStore } from './in-memory-activity-store';
 import { PostgresActivityStore } from './postgres-activity-store';
 import { ActivityService } from './activity.service';
 
+import { CRM_SIGNAL_STORE } from './signal-store';
+import { InMemorySignalStore } from './in-memory-signal-store';
+import { PostgresSignalStore } from './postgres-signal-store';
+import { SignalService } from './signal.service';
+
 import { LeadConversionService } from './lead-conversion.service';
 
 /**
@@ -78,14 +83,21 @@ import { LeadConversionService } from './lead-conversion.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresActivityStore(pool) : new InMemoryActivityStore(),
     },
+    {
+      provide: CRM_SIGNAL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSignalStore(pool) : new InMemorySignalStore(),
+    },
     AccountService,
     LeadService,
     OpportunityService,
     QuotationService,
     ContactService,
     ActivityService,
+    SignalService,
     LeadConversionService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, LeadConversionService],
+  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, LeadConversionService],
 })
 export class CrmModule {}

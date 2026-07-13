@@ -79,7 +79,7 @@ Wave 1 (Activity) & Wave 2 (Timeline) are **substantially done**. Re-sequenced b
 | **S4** ✅ | **Opportunity depth** | OpportunityStakeholder (+ coverage engine) + Deal Team + Commitments (+ overdue summary); Deal Depth panel on Opp 360 | 0159 | done |
 | **S5** ✅ | **Decisions/Assumptions/Open-Questions register** | 1 polymorphic `aura_crm_deal_register` table + `registerSummary` risk hook; folded into Deal Depth | 0160 | done |
 | **S6** ✅ | **Buying Journey + Pursue/Bid decision** | buying_stage + pursuit_* on opp; `buyingJourneyAlignment` (misalignment → pipeline at-risk) + `scorePursuit`/`recommendPursuit`; Journey panel on Opp 360 | 0161 | done |
-| S7 | Health + Risk engines (explainable) | shared `opportunityHealth()`/`opportunityRisks()` + risk table | +1 | med |
+| **S7** ✅ | **Health + Risk engine (explainable)** | pure `assessOpportunityHealth()` folds the 4 signals (S4 coverage, S4 commitments, S5 register, S6 journey) into a per-dimension band (🟢🟠🔴) + reasons; overall floored by the worst dimension; rides on `GET :id/depth`; Deal Health card on Opp 360 | 0 (composition) | done |
 | S8 | Forecast snapshots + slippage | `aura_crm_forecast_snapshots` | +1 | low |
 | S9 | Account growth signals (reactors) | contract-expiry/project-complete → deduped Signal | 0 (reuses S3) | med |
 

@@ -86,4 +86,27 @@ describe('OpportunityDepthService', () => {
     const q = await svc.addRegisterItem({ tenantId: 't1', relatedId: 'o1', kind: 'OPEN_QUESTION', statement: 'x' });
     await expect(svc.resolveRegisterItem(q.id, 'VALIDATED')).rejects.toThrow();
   });
+
+  it('composes an explainable health roll-up from the four signals (S7)', async () => {
+    const { svc } = harness();
+    // A bare opportunity: no stakeholders → relationship is CRITICAL, so the deal is CRITICAL.
+    const bare = await svc.depthFor('t1', 'o1');
+    expect(bare.health.band).toBe('CRITICAL');
+    expect(bare.health.reasons).toContain('no stakeholders mapped');
+
+    // Map the full committee → relationship recovers, and with no other issues the deal is HEALTHY.
+    await svc.addStakeholder({ tenantId: 't1', opportunityId: 'o1', contactName: 'Dana', role: 'DECISION_MAKER' });
+    await svc.addStakeholder({ tenantId: 't1', opportunityId: 'o1', contactName: 'Omar', role: 'ECONOMIC_BUYER' });
+    await svc.addStakeholder({ tenantId: 't1', opportunityId: 'o1', contactName: 'Sara', role: 'CHAMPION', isChampion: true });
+    const healthy = await svc.depthFor('t1', 'o1');
+    expect(healthy.health.band).toBe('HEALTHY');
+    expect(healthy.health.needsAttention).toBe(false);
+
+    // Passing the sales/buying stage in assesses the journey dimension: proposal vs. a buyer who
+    // has barely recognized the problem is HIGH-severity misalignment → drags the deal to CRITICAL.
+    const ahead = await svc.depthFor('t1', 'o1', { stage: 'proposal', buyingStage: 'PROBLEM_RECOGNIZED' });
+    const journey = ahead.health.dimensions.find((d) => d.key === 'journey');
+    expect(journey?.applicable).toBe(true);
+    expect(ahead.health.band).toBe('CRITICAL');
+  });
 });

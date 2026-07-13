@@ -12,15 +12,21 @@ interface Commitment { id: string; direction: string; description: string; dueAt
 interface CommitSummary { open: number; overdue: number; fulfilled: number; broken: number; needsAttention: boolean }
 interface RegisterItem { id: string; kind: string; statement: string; status: string; detail: string | null; dueAt: string | null; confidence: number | null }
 interface RegisterSummary { decisions: number; assumptions: number; openQuestions: number; open: number; unvalidatedAssumptions: number; invalidatedAssumptions: number; overdue: number; needsAttention: boolean }
+interface HealthDim { key: string; label: string; score: number; band: string; reasons: string[]; applicable: boolean }
+interface Health { score: number; band: string; dimensions: HealthDim[]; reasons: string[]; needsAttention: boolean }
 interface Depth {
   stakeholders: Stakeholder[]; coverage: Coverage; dealTeam: DealMember[];
   commitments: Commitment[]; commitmentSummary: CommitSummary;
   register: RegisterItem[]; registerSummary: RegisterSummary;
+  health: Health;
 }
 
 const S_ROLES = ['DECISION_MAKER', 'ECONOMIC_BUYER', 'CHAMPION', 'INFLUENCER', 'TECHNICAL_EVALUATOR', 'PROCUREMENT', 'FINANCE', 'EXECUTIVE_SPONSOR', 'END_USER', 'BLOCKER', 'OTHER'];
 const T_ROLES = ['OWNER', 'ACCOUNT_OWNER', 'SALES_MANAGER', 'PRESALES', 'ESTIMATION', 'PROCUREMENT', 'FINANCE', 'LEGAL', 'EXECUTIVE_SPONSOR', 'OTHER'];
 const scoreColor = (n: number): string => (n >= 80 ? '#16a34a' : n >= 50 ? '#d97706' : '#dc2626');
+const bandColor = (b: string): string => (b === 'HEALTHY' ? '#16a34a' : b === 'AT_RISK' ? '#d97706' : '#dc2626');
+const bandDot = (b: string): string => (b === 'HEALTHY' ? '🟢' : b === 'AT_RISK' ? '🟠' : '🔴');
+const bandLabel = (b: string): string => (b === 'HEALTHY' ? 'Healthy' : b === 'AT_RISK' ? 'At risk' : 'Critical');
 const isOverdue = (c: Commitment): boolean => c.status === 'OPEN' && !!c.dueAt && c.dueAt.slice(0, 10) < new Date().toISOString().slice(0, 10);
 
 export default function DealDepthPanel({ opportunityId }: { opportunityId: string }) {
@@ -49,10 +55,40 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
 
   if (!depth) return <section style={st.panel}><p style={st.empty}>Loading deal depth…</p></section>;
   const cov = depth.coverage;
+  const health = depth.health;
+  const dims = health.dimensions.filter((d) => d.applicable);
 
   return (
     <section style={st.panel}>
       <h2 style={st.h2}>Deal Depth</h2>
+
+      {/* Deal Health — the S7 roll-up of the four signals below. */}
+      <div style={st.healthCard}>
+        <div style={st.healthHead}>
+          <span style={{ ...st.healthBand, color: bandColor(health.band) }}>
+            {bandDot(health.band)} {bandLabel(health.band)}
+          </span>
+          <span style={{ ...st.healthScore, color: bandColor(health.band) }}>{health.score}<span style={st.healthOf}>/100</span></span>
+        </div>
+        <div style={st.dimGrid}>
+          {dims.map((d) => (
+            <div key={d.key} style={st.dimCard} title={d.reasons.join(' · ') || 'no issues'}>
+              <div style={st.dimTop}>
+                <span style={st.dimName}>{d.label}</span>
+                <span style={{ ...st.dimScore, color: bandColor(d.band) }}>{d.score}</span>
+              </div>
+              <div style={st.bar}><div style={{ ...st.barFill, width: `${d.score}%`, background: bandColor(d.band) }} /></div>
+              {d.reasons.length > 0 && <span style={st.dimReason}>{d.reasons[0]}</span>}
+            </div>
+          ))}
+        </div>
+        {health.reasons.length > 0 && (
+          <div style={st.whyRow}>
+            <span style={st.whyLabel}>Why:</span>
+            {health.reasons.slice(0, 4).map((r, i) => <span key={i} style={st.whyChip}>{r}</span>)}
+          </div>
+        )}
+      </div>
 
       {/* Stakeholders + coverage */}
       <div style={st.block}>
@@ -197,6 +233,22 @@ const st = {
   blockHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 } as CSSProperties,
   h3: { fontSize: 14, margin: '0 0 8px', fontWeight: 600 } as CSSProperties,
   score: { fontSize: 13, fontWeight: 700 } as CSSProperties,
+  healthCard: { border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel-2)', padding: 14, marginBottom: 4 } as CSSProperties,
+  healthHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 12 } as CSSProperties,
+  healthBand: { fontSize: 15, fontWeight: 700 } as CSSProperties,
+  healthScore: { fontSize: 22, fontWeight: 800, letterSpacing: -0.5 } as CSSProperties,
+  healthOf: { fontSize: 12, fontWeight: 600, color: 'var(--muted)' } as CSSProperties,
+  dimGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 } as CSSProperties,
+  dimCard: { display: 'flex', flexDirection: 'column', gap: 5 } as CSSProperties,
+  dimTop: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 } as CSSProperties,
+  dimName: { fontSize: 12, fontWeight: 600 } as CSSProperties,
+  dimScore: { fontSize: 13, fontWeight: 700 } as CSSProperties,
+  bar: { height: 5, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' } as CSSProperties,
+  barFill: { height: '100%', borderRadius: 3 } as CSSProperties,
+  dimReason: { fontSize: 10.5, color: 'var(--muted)' } as CSSProperties,
+  whyRow: { display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 } as CSSProperties,
+  whyLabel: { fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.3 } as CSSProperties,
+  whyChip: { fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'var(--panel)', border: '1px solid #d9770655', color: '#b45309' } as CSSProperties,
   chips: { display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 } as CSSProperties,
   gap: { fontSize: 11, padding: '2px 7px', borderRadius: 5, background: 'var(--panel-2)', border: '1px solid #dc262655', color: '#dc2626' } as CSSProperties,
   list: { listStyle: 'none', margin: '0 0 10px', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,

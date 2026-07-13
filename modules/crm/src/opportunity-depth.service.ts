@@ -7,6 +7,8 @@ import {
   type StakeholderCoverage, stakeholderCoverage, type CommitmentSummary, commitmentSummary,
   type DealRegisterItem, type NewDealRegisterItem, type RegisterStatus, type RegisterSummary,
   makeRegisterItem, resolveRegisterItem, registerSummary,
+  type BuyingStage, buyingJourneyAlignment,
+  type OpportunityHealth, assessOpportunityHealth,
   CRM_OPPORTUNITY_DEPTH_EVENT, CRM_REGISTER_EVENT,
 } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
@@ -20,6 +22,8 @@ export interface OpportunityDepth {
   commitmentSummary: CommitmentSummary;
   register: DealRegisterItem[];
   registerSummary: RegisterSummary;
+  /** The composed, explainable per-dimension health roll-up (S7). */
+  health: OpportunityHealth;
 }
 
 /** Opportunity execution depth — stakeholders, deal team, commitments. Events emitted on the
@@ -145,22 +149,33 @@ export class OpportunityDepthService {
   }
 
   /** The full depth payload for an Opportunity 360 — stakeholders + coverage, team, commitments,
-   * and the decisions/assumptions/open-questions register, each with its derived summary. */
-  async depthFor(tenantId: Id, opportunityId: Id): Promise<OpportunityDepth> {
+   * and the decisions/assumptions/open-questions register, each with its derived summary, plus the
+   * composed health roll-up. `opp` (sales + buying stage) is optional: without it the buying-journey
+   * dimension is simply not assessed and the health folds the remaining three signals. */
+  async depthFor(
+    tenantId: Id,
+    opportunityId: Id,
+    opp?: { stage: string; buyingStage: BuyingStage | null } | null,
+  ): Promise<OpportunityDepth> {
     const [stakeholders, dealTeam, commitments, register] = await Promise.all([
       this.store.listStakeholders({ tenantId, opportunityId }),
       this.store.listDealTeam({ tenantId, opportunityId }),
       this.store.listCommitments({ tenantId, relatedType: 'opportunity', relatedId: opportunityId }),
       this.store.listRegisterItems({ tenantId, relatedType: 'opportunity', relatedId: opportunityId }),
     ]);
+    const coverage = stakeholderCoverage(stakeholders);
+    const commitSummary = commitmentSummary(commitments);
+    const regSummary = registerSummary(register);
+    const alignment = buyingJourneyAlignment(opp?.stage ?? '', opp?.buyingStage ?? null);
     return {
       stakeholders,
-      coverage: stakeholderCoverage(stakeholders),
+      coverage,
       dealTeam,
       commitments,
-      commitmentSummary: commitmentSummary(commitments),
+      commitmentSummary: commitSummary,
       register,
-      registerSummary: registerSummary(register),
+      registerSummary: regSummary,
+      health: assessOpportunityHealth({ coverage, commitments: commitSummary, register: regSummary, alignment }),
     };
   }
 }

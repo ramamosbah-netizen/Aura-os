@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post 
 import { IsBoolean, IsInt, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
-  OpportunityDepthService, type OpportunityDepth,
+  OpportunityDepthService, type OpportunityDepth, OpportunityService,
 } from '@aura/crm';
 import type {
   OpportunityStakeholder, OpportunityDealMember, Commitment, DealRegisterItem,
@@ -65,12 +65,18 @@ class ResolveRegisterDto {
 export class OpportunityDepthController {
   constructor(
     private readonly depth: OpportunityDepthService,
+    private readonly opportunities: OpportunityService,
     private readonly tenant: TenantContext,
   ) {}
 
   @Get(':id/depth')
-  depthFor(@Param('id', ParseUuidOr404Pipe) id: string): Promise<OpportunityDepth> {
-    return this.depth.depthFor(this.tenant.get().tenantId, id);
+  async depthFor(@Param('id', ParseUuidOr404Pipe) id: string): Promise<OpportunityDepth> {
+    const tenantId = this.tenant.get().tenantId;
+    // Load the opportunity so the health roll-up can assess buying-journey alignment
+    // (our sales stage vs. the customer's buying stage). Tenant-mismatched → treated as absent.
+    const opp = await this.opportunities.get(id);
+    const stages = opp && opp.tenantId === tenantId ? { stage: opp.stage, buyingStage: opp.buyingStage } : null;
+    return this.depth.depthFor(tenantId, id, stages);
   }
 
   // ── Stakeholders ──

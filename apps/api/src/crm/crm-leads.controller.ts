@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams, type Lead, type LeadStatus, type LeadSource } from '@aura/shared';
 import { LeadService } from '@aura/crm';
@@ -20,6 +20,14 @@ class UpdateLeadDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() status?: LeadStatus;
   @IsOptional() @IsString() source?: LeadSource;
+  @IsOptional() @IsString() assignedTo?: string;
+  @IsOptional() @IsString() firstRespondedAt?: string;
+  @IsOptional() @IsInt() slaFirstResponseHours?: number;
+  @IsOptional() @IsString() nextActivityDue?: string;
+}
+
+class AssignLeadDto {
+  @IsString() assignedTo!: string;
 }
 
 @Controller('crm/leads')
@@ -50,6 +58,13 @@ export class CrmLeadsController {
   update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateLeadDto): Promise<Lead> {
     const ctx = this.tenant.get();
     return this.leads.update(id, dto, ctx.actorId);
+  }
+
+  @Patch(':id/assign')
+  assign(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AssignLeadDto): Promise<Lead> {
+    if (!dto?.assignedTo?.trim()) throw new BadRequestException('assignedTo is required');
+    const ctx = this.tenant.get();
+    return this.leads.assign(id, dto.assignedTo, ctx.actorId);
   }
 
   @Get()

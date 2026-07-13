@@ -2,9 +2,10 @@ import type { Pool } from 'pg';
 import type {
   Id, Commitment, CommitmentDirection, CommitmentStatus, InfluenceLevel, Sentiment,
   OpportunityDealMember, OpportunityStakeholder, StakeholderRole, DealTeamRole,
+  DealRegisterItem, RegisterKind, RegisterStatus,
 } from '@aura/shared';
 import type {
-  CommitmentFilter, DealTeamFilter, OpportunityDepthStore, StakeholderFilter,
+  CommitmentFilter, DealTeamFilter, OpportunityDepthStore, RegisterFilter, StakeholderFilter,
 } from './opportunity-depth-store';
 
 // Durable opportunity-depth collections on Postgres (migration 0159).
@@ -24,9 +25,16 @@ interface CRow {
   status: string; evidence: string | null; fulfilled_at: Date | null; created_at: Date; updated_at: Date;
 }
 
+interface RRow {
+  id: string; tenant_id: string; related_type: string; related_id: string; kind: string; statement: string;
+  status: string; detail: string | null; owner: string | null; due_at: string | null; confidence: number | null;
+  resolved_by: string | null; resolved_at: Date | null; created_at: Date; updated_at: Date;
+}
+
 const S_COLS = 'id, tenant_id, opportunity_id, contact_id, contact_name, role, influence, decision_power, sentiment, is_champion, is_primary, notes, created_at, updated_at';
 const T_COLS = 'id, tenant_id, opportunity_id, user_id, user_name, role, responsibility, active, joined_at';
 const C_COLS = 'id, tenant_id, related_type, related_id, direction, committed_by, committed_to, description, due_at, status, evidence, fulfilled_at, created_at, updated_at';
+const R_COLS = 'id, tenant_id, related_type, related_id, kind, statement, status, detail, owner, due_at, confidence, resolved_by, resolved_at, created_at, updated_at';
 
 const toStakeholder = (r: SRow): OpportunityStakeholder => ({
   id: r.id, tenantId: r.tenant_id, opportunityId: r.opportunity_id, contactId: r.contact_id, contactName: r.contact_name,
@@ -43,6 +51,13 @@ const toCommitment = (r: CRow): Commitment => ({
   direction: r.direction as CommitmentDirection, committedBy: r.committed_by, committedTo: r.committed_to,
   description: r.description, dueAt: r.due_at, status: r.status as CommitmentStatus, evidence: r.evidence,
   fulfilledAt: r.fulfilled_at ? r.fulfilled_at.toISOString() : null,
+  createdAt: r.created_at.toISOString(), updatedAt: r.updated_at.toISOString(),
+});
+const toRegisterItem = (r: RRow): DealRegisterItem => ({
+  id: r.id, tenantId: r.tenant_id, relatedType: r.related_type, relatedId: r.related_id,
+  kind: r.kind as RegisterKind, statement: r.statement, status: r.status as RegisterStatus, detail: r.detail,
+  owner: r.owner, dueAt: r.due_at, confidence: r.confidence, resolvedBy: r.resolved_by,
+  resolvedAt: r.resolved_at ? r.resolved_at.toISOString() : null,
   createdAt: r.created_at.toISOString(), updatedAt: r.updated_at.toISOString(),
 });
 
@@ -123,5 +138,29 @@ export class PostgresOpportunityDepthStore implements OpportunityDepthStore {
         ORDER BY created_at ASC`,
       [f.tenantId, f.relatedType ?? null, f.relatedId ?? null, f.status ?? null]);
     return r.rows.map(toCommitment);
+  }
+
+  async saveRegisterItem(i: DealRegisterItem): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO public.aura_crm_deal_register (${R_COLS})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       ON CONFLICT (id) DO UPDATE SET kind=EXCLUDED.kind, statement=EXCLUDED.statement, status=EXCLUDED.status,
+         detail=EXCLUDED.detail, owner=EXCLUDED.owner, due_at=EXCLUDED.due_at, confidence=EXCLUDED.confidence,
+         resolved_by=EXCLUDED.resolved_by, resolved_at=EXCLUDED.resolved_at, updated_at=now()`,
+      [i.id, i.tenantId, i.relatedType, i.relatedId, i.kind, i.statement, i.status, i.detail, i.owner,
+       i.dueAt, i.confidence, i.resolvedBy, i.resolvedAt, i.createdAt, i.updatedAt],
+    );
+  }
+  async getRegisterItem(id: Id): Promise<DealRegisterItem | null> {
+    const r = await this.pool.query<RRow>(`SELECT ${R_COLS} FROM public.aura_crm_deal_register WHERE id=$1`, [id]);
+    return r.rows.length ? toRegisterItem(r.rows[0]) : null;
+  }
+  async listRegisterItems(f: RegisterFilter): Promise<DealRegisterItem[]> {
+    const r = await this.pool.query<RRow>(
+      `SELECT ${R_COLS} FROM public.aura_crm_deal_register
+        WHERE tenant_id=$1 AND ($2::text IS NULL OR related_type=$2) AND ($3::text IS NULL OR related_id=$3)
+        ORDER BY created_at ASC`,
+      [f.tenantId, f.relatedType ?? null, f.relatedId ?? null]);
+    return r.rows.map(toRegisterItem);
   }
 }

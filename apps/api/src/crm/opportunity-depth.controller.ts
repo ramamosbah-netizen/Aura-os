@@ -1,12 +1,13 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
   OpportunityDepthService, type OpportunityDepth,
 } from '@aura/crm';
 import type {
-  OpportunityStakeholder, OpportunityDealMember, Commitment,
+  OpportunityStakeholder, OpportunityDealMember, Commitment, DealRegisterItem,
   StakeholderRole, InfluenceLevel, Sentiment, DealTeamRole, CommitmentDirection,
+  RegisterKind, RegisterStatus,
 } from '@aura/shared';
 
 class StakeholderDto {
@@ -46,6 +47,18 @@ class CommitmentDto {
 }
 class FulfilDto { @IsOptional() @IsString() evidence?: string }
 class TransitionDto { @IsString() to!: 'BROKEN' | 'CANCELLED' }
+class RegisterItemDto {
+  @IsString() kind!: RegisterKind;
+  @IsString() statement!: string;
+  @IsOptional() @IsString() detail?: string;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() dueAt?: string;
+  @IsOptional() @IsInt() confidence?: number;
+}
+class ResolveRegisterDto {
+  @IsString() to!: RegisterStatus;
+  @IsOptional() @IsString() detail?: string;
+}
 
 // Opportunity execution depth API — the buying committee, our deal team, and the promises made.
 @Controller('crm/opportunities')
@@ -106,5 +119,21 @@ export class OpportunityDepthController {
   transition(@Param('cid', ParseUuidOr404Pipe) cid: string, @Body() dto: TransitionDto): Promise<Commitment> {
     if (dto?.to !== 'BROKEN' && dto?.to !== 'CANCELLED') throw new BadRequestException('to must be BROKEN or CANCELLED');
     return this.depth.transitionCommitment(cid, dto.to, this.tenant.get().actorId);
+  }
+
+  // ── Deal register (decisions / assumptions / open questions) ──
+  @Post(':id/register')
+  addRegisterItem(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: RegisterItemDto): Promise<DealRegisterItem> {
+    if (!dto?.statement?.trim()) throw new BadRequestException('statement is required');
+    if (dto.kind !== 'DECISION' && dto.kind !== 'ASSUMPTION' && dto.kind !== 'OPEN_QUESTION') {
+      throw new BadRequestException('kind must be DECISION, ASSUMPTION or OPEN_QUESTION');
+    }
+    const ctx = this.tenant.get();
+    return this.depth.addRegisterItem({ tenantId: ctx.tenantId, relatedType: 'opportunity', relatedId: id, actorId: ctx.actorId, ...dto });
+  }
+  @Post(':id/register/:rid/resolve')
+  resolveRegisterItem(@Param('rid', ParseUuidOr404Pipe) rid: string, @Body() dto: ResolveRegisterDto): Promise<DealRegisterItem> {
+    if (!dto?.to?.trim()) throw new BadRequestException('to (target status) is required');
+    return this.depth.resolveRegisterItem(rid, dto.to, dto.detail, this.tenant.get().actorId);
   }
 }

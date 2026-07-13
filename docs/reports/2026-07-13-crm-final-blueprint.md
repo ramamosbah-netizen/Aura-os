@@ -81,7 +81,7 @@ Wave 1 (Activity) & Wave 2 (Timeline) are **substantially done**. Re-sequenced b
 | **S6** ✅ | **Buying Journey + Pursue/Bid decision** | buying_stage + pursuit_* on opp; `buyingJourneyAlignment` (misalignment → pipeline at-risk) + `scorePursuit`/`recommendPursuit`; Journey panel on Opp 360 | 0161 | done |
 | **S7** ✅ | **Health + Risk engine (explainable)** | pure `assessOpportunityHealth()` folds the 4 signals (S4 coverage, S4 commitments, S5 register, S6 journey) into a per-dimension band (🟢🟠🔴) + reasons; overall floored by the worst dimension; rides on `GET :id/depth`; Deal Health card on Opp 360 | 0 (composition) | done |
 | S8 | Forecast snapshots + slippage | `aura_crm_forecast_snapshots` | +1 | low |
-| S9 | Account growth signals (reactors) | contract-expiry/project-complete → deduped Signal | 0 (reuses S3) | med |
+| **S9** ✅ | **Account growth signals (reactors)** | `projectCompletionSignal`/`contractCompletionSignal` (shared) → `SignalService.create` on `projects.project.completed` / `contracts.contract.completed`; deduped (`growth-from-{project,contract}:<id>`) EXPANSION + RENEWAL_DUE Signals land on the S3 Radar — closes the acquisition loop back onto the installed base | 0 (reuses S3) | done |
 
 **Rule:** every deterministic rule (`leadAttention`, `opportunityHealth`, `opportunityRisks`) lives in
 `shared/src/domain/crm.ts` (or a sibling), consumed by API+UI+tests — never duplicated. Attention stays in

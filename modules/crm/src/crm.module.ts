@@ -36,6 +36,11 @@ import { InMemorySignalStore } from './in-memory-signal-store';
 import { PostgresSignalStore } from './postgres-signal-store';
 import { SignalService } from './signal.service';
 
+import { CRM_OPPORTUNITY_DEPTH_STORE } from './opportunity-depth-store';
+import { InMemoryOpportunityDepthStore } from './in-memory-opportunity-depth-store';
+import { PostgresOpportunityDepthStore } from './postgres-opportunity-depth-store';
+import { OpportunityDepthService } from './opportunity-depth.service';
+
 import { LeadConversionService } from './lead-conversion.service';
 
 /**
@@ -89,6 +94,12 @@ import { LeadConversionService } from './lead-conversion.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresSignalStore(pool) : new InMemorySignalStore(),
     },
+    {
+      provide: CRM_OPPORTUNITY_DEPTH_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresOpportunityDepthStore(pool) : new InMemoryOpportunityDepthStore(),
+    },
     AccountService,
     LeadService,
     OpportunityService,
@@ -96,8 +107,9 @@ import { LeadConversionService } from './lead-conversion.service';
     ContactService,
     ActivityService,
     SignalService,
+    OpportunityDepthService,
     LeadConversionService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, LeadConversionService],
+  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, LeadConversionService],
 })
 export class CrmModule {}

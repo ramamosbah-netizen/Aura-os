@@ -1,10 +1,13 @@
 # AURA CRM — Final Execution Blueprint & Gap Map
 
-**Date:** 2026-07-13 · **Branch:** claude/aura-commercial-os-layers-07ce4b · **Head:** d1a5264 (PR #85 merged)
-**Latest migration:** 0155 · **Directive:** "FINAL ENTERPRISE CRM BUILD DIRECTIVE" (Wave 0 discovery output)
+**Date:** 2026-07-13 · **Branch:** main · **Head:** ec51b3d (PR #93 merged)
+**Latest migration:** 0161 · **Directive:** "FINAL ENTERPRISE CRM BUILD DIRECTIVE" (Wave 0 discovery output)
 
 > Verified against the live tree, not from the directive. The directive assumes a thin CRM; the
 > repo is already a mature 5-page commercial system. This is an **evolution delta**, not a rebuild.
+>
+> **Status 2026-07-13:** slices **S1–S7 shipped** (PRs #86–#93). The acquisition→depth→decision→health
+> arc is complete; only **S8** (forecast snapshots) and **S9** (growth reactors) remain. Sections updated below.
 
 ---
 
@@ -15,8 +18,12 @@
 |---|---|---|
 | Account | `shared/src/domain/*` + `modules/crm/src/domain/account.ts`, `account.service.ts`, `postgres/in-memory-account-store` | RelationshipStage, commercial profile, portfolio rollup, Account 360 |
 | Contact | `modules/crm/src/domain/contact.ts` + services/stores | **stakeholderRole/strength/reports-to on Contact** (account-level buying role), Contact 360 |
-| Lead | `shared/src/domain/crm.ts:6` (`Lead`, `LeadStatus`, `LeadSource`) + `lead.service.ts`, stores | CRUD + convert-to-opportunity; **no attention, no SLA, no Lead Center** |
-| Opportunity | `shared/src/domain/crm.ts:22` + `opportunity.service.ts`, stores | Stage machine, BANT, competitors, source, lossReason, forecast, pipeline command center |
+| Lead | `shared/src/domain/crm.ts:6` + `lead.service.ts`, `LeadConversionService`, stores | CRUD, **`leadAttention()` SLA/stale gaps (S1)**, **transactional idempotent convert w/ lineage + `resolveIdentity` dedupe (S2)** |
+| Signal | `shared/src/domain/signal.ts` + `SignalService`, stores | **Acquisition entity (S3):** 11 sources/14 types/6 states, idempotent-on-dedupeKey, promote→lead w/ attribution; Opportunity Radar |
+| Opportunity | `shared/src/domain/crm.ts:22` + `opportunity.service.ts`, stores | Stage machine, BANT, competitors, source, lossReason, forecast, pipeline command center, **buying_stage + pursuit_* (S6)** |
+| Opportunity depth | `shared/src/domain/opportunity-depth.ts` + `OpportunityDepthService`, depth store | **(S4)** Stakeholders (+ `stakeholderCoverage`), Deal Team, Commitments (+ `commitmentSummary`); **(S5)** polymorphic deal register (+ `registerSummary`); **(S7)** `assessOpportunityHealth` roll-up — all on `depthFor()` |
+| Buying journey | `shared/src/domain/buying-journey.ts` | **(S6)** `buyingJourneyAlignment` (our stage ↔ buyer's), `scorePursuit`/`recommendPursuit` |
+| Health engine | `shared/src/domain/opportunity-health.ts` | **(S7)** pure `assessOpportunityHealth()` — 4 dimensions × band (🟢🟠🔴) + reasons, floored by worst |
 | Activity | `modules/crm/src/domain/activity.ts` + `activity.service.ts`, stores | type/status/outcome/relatedName, complete/cancel/reopen, Work Center + `/activities/command` |
 | Quotation | `modules/crm/src/domain/quotation.ts` + services | Lifecycle, revisions, convert-to-contract |
 | Attention engine | `modules/crm/src/attention.ts` | **SHARED** thresholds (account 30d / opp 14d / quote 7d), `lastActivityByRecord`, `isQuiet` |
@@ -26,11 +33,13 @@
 0005 accounts · 0044 leads+opps · 0065 quotations · 0080 opp↔account · 0097 contacts · 0098 activities ·
 0144 account commercial profile · 0145 opp pipeline fields · 0146 quotation lifecycle · 0147 activity related_name ·
 0151 account relationship stage · 0152 contact stakeholder · 0153 opp qualification (BANT) · 0154 activity outcome ·
-0155 opp next_action_due_date **(the "PR #78" invariant — MERGED)**
+0155 opp next_action_due_date **(the "PR #78" invariant)** ·
+**0156 lead SLA/assignment (S1) · 0157 lead convert lineage (S2) · 0158 `aura_crm_signals` (S3) · 0159 opp stakeholders/deal-team/commitments (S4) · 0160 `aura_crm_deal_register` (S5) · 0161 opp buying_stage + pursuit_* (S6)** · _S7 added no migration (pure composition)_
 
 ### Web IA (5 pages, LOCKED per memory `crm-final-ia`)
 Accounts (+360/print) · Contacts (+360) · Leads · Sales Pipeline (opportunities +360) · Activities.
-Ambient `CrmAdvisor` panel on every page. Routes: `api/crm/{accounts,contacts,leads,opportunities,activities,quotations,timeline,intelligence}`.
+Ambient `CrmAdvisor` panel on every page. Routes: `api/crm/{accounts,contacts,leads,opportunities,activities,quotations,timeline,intelligence,signals}`.
+Leads page now carries the **Lead Command** + **Opportunity Radar** panels (S1/S3); Opp 360 carries **Buying Journey** (S6), **Deal Depth** (S4/S5) and the **Deal Health** card (S7) — all within the locked 5-page IA (no new pages).
 Unified Timeline (`api/crm/timeline`) standardized on 360s. Relationship-Intelligence alerts folded into the 5 pages.
 
 ---
@@ -46,24 +55,24 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 | Unified Timeline (Wave 2) | ✅ | `api/crm/timeline` on 360s; event-driven consumption partial |
 | Next-Action Invariant (#78) | ✅ | `opportunityAttention()` shared, deterministic — **preserve as-is** |
 | Shared attention engine | ✅ | `attention.ts` single source (PR #85) |
-| Lead attention `leadAttention()` | ❌ | no SLA/stale/no-next-action gaps for leads |
-| Lead Center (Inbox/Mine/Needs-Attention/Nurture) | ❌ | single `/crm/leads` list only |
-| Qualify & Convert (transactional, lineage, dedupe) | 🟡 | convert exists; **no dedupe/identity resolution, no lineage assertions** |
-| Signal model + Opportunity Radar (Wave 8) | ❌ | no `signal` entity/table/radar |
-| Opportunity Stakeholder (opp-scoped) | 🟡 | buying role lives on **Contact** (account-level), not per-opportunity |
-| Deal Team | ❌ | none |
-| Commitment engine | ❌ | none |
-| Decisions / Assumptions / Open Questions | ❌ | none |
-| Customer Buying Journey (our stage ↔ buying stage) | ❌ | only our stage |
-| Pursue/No-Pursue & Bid/No-Bid | ❌ | none |
-| Health engine (dimensional, explainable) | ❌ | attention only, no health score |
-| Risk engine (opportunity risks) | ❌ | none |
-| Forecast engine + snapshots | 🟡 | forecast route + weighted pipeline; **no snapshots/slippage history** |
-| Pipeline Command Center | ✅ | KPIs, weighted, aging, stalled, at-risk (PR #76) |
-| Installed base / white-space / growth signals (Wave 9) | ❌ | none (AMC module separate) |
-| Source attribution lineage end-to-end | 🟡 | opp→tender→contract→project links exist; **no signal/lead first-touch chain** |
-| Duplicate/identity resolution | ❌ | none |
-| Intelligence layer (recommendations w/ evidence) | 🟡 | CrmAdvisor + intelligence/alerts; not full NBA/win-prob model |
+| Lead attention `leadAttention()` | ✅ | **S1** — UNASSIGNED/SLA_BREACHED/NO_NEXT_ACTIVITY/FOLLOW_UP_OVERDUE/STALE/QUALIFICATION_STALLED + severity (mig 0156) |
+| Lead Center (Inbox/Mine/Needs-Attention/Nurture) | ✅ | **S1** — Lead Command panel (All/Mine/Needs Attention/Nurture) on `/crm/leads`, within the locked 5-page IA |
+| Qualify & Convert (transactional, lineage, dedupe) | ✅ | **S2** — `resolveIdentity()` EXACT/PROBABLE/POSSIBLE + `LeadConversionService` (one tx, idempotent, lineage, cannot-convert-twice) (mig 0157) |
+| Signal model + Opportunity Radar (Wave 8) | ✅ | **S3** — `aura_crm_signals` + `SignalService` (idempotent dedupe, promote→lead w/ attribution) + Radar cockpit (mig 0158) |
+| Opportunity Stakeholder (opp-scoped) | ✅ | **S4** — `OpportunityStakeholder` (12 roles) + `stakeholderCoverage()` gaps/score (mig 0159) |
+| Deal Team | ✅ | **S4** — `OpportunityDealMember` (10 roles) (mig 0159) |
+| Commitment engine | ✅ | **S4** — `Commitment` OURS/THEIRS + `commitmentSummary` overdue/broken (mig 0159) |
+| Decisions / Assumptions / Open Questions | ✅ | **S5** — polymorphic `aura_crm_deal_register` + `registerSummary` risk hook (mig 0160) |
+| Customer Buying Journey (our stage ↔ buying stage) | ✅ | **S6** — `buyingJourneyAlignment` flags running ahead of the buyer → pipeline at-risk (mig 0161) |
+| Pursue/No-Pursue & Bid/No-Bid | ✅ | **S6** — `scorePursuit`/`recommendPursuit` (9 dimensions) + recorded decision (kept for NO_PURSUE) (mig 0161) |
+| Health engine (dimensional, explainable) | ✅ | **S7** — `assessOpportunityHealth()` folds 4 signals → per-dimension band + reasons, floored by worst (no mig) |
+| Risk engine (opportunity risks) | ✅ | **S7** — the health `reasons[]` are the explainable risk list; drivers per dimension |
+| Forecast engine + snapshots | 🟡 | forecast route + weighted pipeline; **snapshots/slippage history = S8 (next)** |
+| Pipeline Command Center | ✅ | KPIs, weighted, aging, stalled, at-risk (PR #76); at-risk now includes buying-journey misalignment (S6) |
+| Installed base / white-space / growth signals (Wave 9) | ❌ | **S9 (planned)** — contract-expiry/project-complete → deduped Signal (reuses S3) |
+| Source attribution lineage end-to-end | ✅ | **S2/S3** — signal→lead first-touch chain now stamped (signalId→lead.source→opp), plus opp→tender→contract→project |
+| Duplicate/identity resolution | ✅ | **S2** — `resolveIdentity()` (name/email/phone, public-domain aware, personMode) |
+| Intelligence layer (recommendations w/ evidence) | 🟡 | CrmAdvisor + intelligence/alerts + explainable health reasons (S7); not yet full NBA/win-prob model |
 
 ---
 
@@ -89,23 +98,24 @@ Wave 1 (Activity) & Wave 2 (Timeline) are **substantially done**. Re-sequenced b
 
 ---
 
-## 4. Immediate next slice — S1: Lead Operating System foundation
+## 4. Immediate next slice — S8: Forecast snapshots + slippage
 
-**Smallest safe vertical slice** (Wave 3 foundation; Wave 1/2 already exist):
+S1–S7 are shipped (§3). The next delta is **forecast history** — today the pipeline forecast is only ever
+"now"; there is no record of what we forecast last week, so slippage is invisible.
 
-1. `shared/src/domain/crm.ts`: add `leadAttention(lead, lastTouch, now)` → `{ active, gaps[], needsAttention, severity }`.
-   Gaps: `UNASSIGNED | NO_NEXT_ACTIVITY | FOLLOW_UP_OVERDUE | STALE | QUALIFICATION_STALLED`.
-   Reuse `attention.ts` `isQuiet`/`daysSince` for staleness. Mirror `opportunityAttention` shape.
-2. Migration (0156, additive nullable): `assigned_to`, `assigned_at`, `sla_first_response_hours`, `next_activity_due` on `aura_crm_leads`.
-3. `lead.service.ts`: expose attention over lead list (compose with activity last-touch, like pipeline does).
-4. Web: `/crm/leads` gains **Needs Attention** tab/filter (reuse pipeline attention UI pattern).
-5. Tests: `leadAttention` unit (each gap + terminal exemption) + in-memory E2E (assign → stale → surfaces).
+1. Migration (0162, new table `aura_crm_forecast_snapshots`): `id, tenant_id, taken_at, period (YYYY-MM), open_value, weighted_value, deal_count, committed_value` — an immutable weekly roll of the pipeline command-center numbers.
+2. `shared`: pure `diffForecast(prev, curr)` → per-period slippage (value moved out/in, deals slipped, weighted delta) with reasons. Deterministic, testable.
+3. `modules/crm`: `ForecastSnapshotService.capture()` (writes one snapshot from the current open pipeline) + `history()`; snapshot is append-only (no update/delete).
+4. API: `POST crm/opportunities/forecast/snapshot` (capture) + `GET .../forecast/history` (+ slippage vs. prior). Literal paths declared before `:id`.
+5. Web: slippage strip on the Pipeline Command Center (this-period vs. last snapshot: value slipped, deals moved).
+6. Tests: `diffForecast` unit + service E2E (capture → mutate pipeline → capture → history shows the slip).
 
-Verify: package build (`shared`, `crm`) + web typecheck + new unit/E2E. One focused PR.
+Verify: `turbo run typecheck` (the S5 CI-parity gate) + package builds + web typecheck + new unit/E2E; regen SDK (route drift gate). One focused PR.
 
 ---
 
 ## 5. Invariants to test (carry forward)
-Active opp requires Owner+NextAction+DueDate ✅(exists) · terminal exempt ✅ · lead convert preserves lineage(S2) ·
-lead not converted twice(S2) · completed activity requires completedAt ✅ · cross-tenant refs forbidden ✅(RLS) ·
-signal promotion preserves attribution(S3) · growth reactors idempotent(S9) · timeline no dup(✅) · high-impact mutations authorized.
+Active opp requires Owner+NextAction+DueDate ✅ · terminal exempt ✅ · lead convert preserves lineage ✅(S2) ·
+lead not converted twice ✅(S2) · completed activity requires completedAt ✅ · cross-tenant refs forbidden ✅(RLS) ·
+signal promotion preserves attribution ✅(S3) · commitment/register overdue surfaces in health ✅(S4/S5/S7) ·
+deal health floored by worst dimension ✅(S7) · growth reactors idempotent(S9, planned) · timeline no dup ✅ · high-impact mutations authorized ✅.

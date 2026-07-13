@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   makeRegisterItem, resolveRegisterItem, registerSummary, REGISTER_TERMINALS,
+  type NewDealRegisterItem,
 } from './deal-register';
 
-const item = (over: Parameters<typeof makeRegisterItem>[0]) => makeRegisterItem({ tenantId: 't1', relatedId: 'o1', ...over });
+type ItemOver = Omit<NewDealRegisterItem, 'tenantId' | 'relatedId'>;
+const item = (over: ItemOver) => makeRegisterItem({ tenantId: 't1', relatedId: 'o1', ...over });
 
 describe('makeRegisterItem', () => {
   it('starts OPEN; confidence only kept for assumptions', () => {

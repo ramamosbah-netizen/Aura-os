@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { ActivityService, ContactService, OpportunityService, ATTENTION_THRESHOLDS, lastActivityByRecord, isQuiet } from '@aura/crm';
-import type { Opportunity } from '@aura/shared';
+import { type Opportunity, buyingJourneyAlignment } from '@aura/shared';
 
 // Sales Pipeline Command Center — the sales manager's cockpit. Turns the raw
 // opportunity list into portfolio KPIs, a weighted forecast, pipeline aging,
@@ -136,15 +136,18 @@ export class PipelineCommandController {
       const quiet = isQuiet(last, ATTENTION_THRESHOLDS.opportunityIdleDays, now);
       const qual = [o.budgetConfirmed, o.authorityConfirmed, o.needConfirmed, o.timelineConfirmed].filter(Boolean).length;
       const reasons: string[] = [];
+      const alignment = buyingJourneyAlignment(o.stage, o.buyingStage);
       if (o.closeDate && o.closeDate < today) reasons.push('expected close date passed');
       if (quiet) reasons.push(last === null ? 'no activity ever logged' : `quiet for ${dsa} days`);
       if (qual < 2) reasons.push(`weak qualification (${qual}/4)`);
       if (o.accountId && !accountsWithDM.has(o.accountId)) reasons.push('no decision-maker mapped');
+      if (alignment.assessed && !alignment.aligned && alignment.reason) reasons.push(alignment.reason);
       if (reasons.length === 0) continue;
 
       // Recommendation: act on the most actionable reason first.
       let recommendation: string;
       if (o.closeDate && o.closeDate < today) recommendation = 'Re-baseline the close date and confirm the deal is still live.';
+      else if (alignment.assessed && !alignment.aligned) recommendation = 'Re-anchor to the customer’s buying stage before pushing the sale.';
       else if (quiet) recommendation = 'Log a touch — call or email the buyer to re-engage.';
       else if (o.accountId && !accountsWithDM.has(o.accountId)) recommendation = 'Map the decision-maker at this account.';
       else recommendation = 'Qualify the deal — confirm budget, authority, need and timeline.';

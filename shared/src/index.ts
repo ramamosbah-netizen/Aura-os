@@ -27,6 +27,7 @@ export * from './domain/identity-resolution';
 export * from './domain/signal';
 export * from './domain/opportunity-depth';
 export * from './domain/deal-register';
+export * from './domain/buying-journey';
 export * from './domain/crm';
 export * from './pagination';
 export * from './forms';

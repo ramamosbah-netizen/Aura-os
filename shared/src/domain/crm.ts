@@ -1,5 +1,6 @@
 import { type Id, newId } from './id';
 import { daysSince, hoursSince, isQuiet } from './attention-time';
+import type { BuyingStage, PursuitDecision, PursuitDimensions } from './buying-journey';
 
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified' | 'converted';
 export type LeadSource = 'website' | 'referral' | 'campaign' | 'cold_call' | 'other';
@@ -80,6 +81,17 @@ export interface Opportunity {
   source: string | null;
   /** Why we lost (win/loss intelligence) — set when the stage moves to lost. */
   lossReason: string | null;
+  /** Where the CUSTOMER is in their own buying process (vs. our sales stage). Misalignment = risk. */
+  buyingStage: BuyingStage | null;
+  /** The recorded Pursue / No-Pursue call (kept even when NO_PURSUE — never deleted). */
+  pursuitDecision: PursuitDecision | null;
+  /** 0–100 assessment score behind the decision. */
+  pursuitScore: number | null;
+  pursuitRationale: string | null;
+  pursuitDecidedBy: string | null;
+  pursuitDecidedAt: string | null;
+  /** The per-dimension assessment (strategicFit, winability, …) behind the score. */
+  pursuitDimensions: PursuitDimensions | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -270,6 +282,7 @@ export interface NewOpportunity {
   competitors?: string | null;
   source?: string | null;
   lossReason?: string | null;
+  buyingStage?: BuyingStage | null;
 }
 
 export function makeOpportunity(input: NewOpportunity): Opportunity {
@@ -297,6 +310,13 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     competitors: input.competitors?.trim() || null,
     source: input.source?.trim() || null,
     lossReason: input.lossReason?.trim() || null,
+    buyingStage: input.buyingStage ?? null,
+    pursuitDecision: null,
+    pursuitScore: null,
+    pursuitRationale: null,
+    pursuitDecidedBy: null,
+    pursuitDecidedAt: null,
+    pursuitDimensions: null,
     createdAt: now,
     updatedAt: now,
   };

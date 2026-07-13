@@ -1,7 +1,7 @@
 import { type Id, newId } from './id';
 import { daysSince, hoursSince, isQuiet } from './attention-time';
 
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified';
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified' | 'converted';
 export type LeadSource = 'website' | 'referral' | 'campaign' | 'cold_call' | 'other';
 
 export interface Lead {
@@ -31,6 +31,10 @@ export interface Lead {
    * this never becomes a second competing work system.
    */
   nextActivityDue: string | null;
+  /** Lineage: the opportunity this lead converted into. Set ⇒ the lead is terminal (converted)
+   * and can never convert again — the "cannot convert twice" invariant reads this. */
+  convertedOpportunityId: Id | null;
+  convertedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +95,8 @@ export interface NewLead {
   firstRespondedAt?: string | null;
   slaFirstResponseHours?: number | null;
   nextActivityDue?: string | null;
+  convertedOpportunityId?: Id | null;
+  convertedAt?: string | null;
 }
 
 export function makeLead(input: NewLead): Lead {
@@ -110,6 +116,8 @@ export function makeLead(input: NewLead): Lead {
     firstRespondedAt: input.firstRespondedAt ?? null,
     slaFirstResponseHours: input.slaFirstResponseHours ?? null,
     nextActivityDue: input.nextActivityDue ?? null,
+    convertedOpportunityId: input.convertedOpportunityId ?? null,
+    convertedAt: input.convertedAt ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -117,8 +125,9 @@ export function makeLead(input: NewLead): Lead {
 
 /** Statuses where a lead is still being actively worked and must obey lead attention. */
 export const LEAD_ACTIVE_STATUSES: readonly LeadStatus[] = ['new', 'contacted', 'qualified'];
-/** Terminal / parked statuses — exempt from attention (nurture is a deliberate hold). */
-export const LEAD_TERMINAL_STATUSES: readonly LeadStatus[] = ['nurturing', 'disqualified'];
+/** Terminal / parked statuses — exempt from attention (nurture is a deliberate hold,
+ * converted & disqualified are done). */
+export const LEAD_TERMINAL_STATUSES: readonly LeadStatus[] = ['nurturing', 'disqualified', 'converted'];
 /** Statuses still awaiting qualification (drives QUALIFICATION_STALLED). */
 const LEAD_PREQUALIFIED_STATUSES: readonly LeadStatus[] = ['new', 'contacted'];
 
@@ -333,6 +342,7 @@ export const CRM_EVENT = {
   leadCreated: 'crm.lead.created',
   leadUpdated: 'crm.lead.updated',
   leadAssigned: 'crm.lead.assigned',
+  leadConverted: 'crm.lead.converted',
   opportunityCreated: 'crm.opportunity.created',
   opportunityUpdated: 'crm.opportunity.updated',
   opportunityStageChanged: 'crm.opportunity.stage_changed',

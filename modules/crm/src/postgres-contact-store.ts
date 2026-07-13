@@ -1,6 +1,7 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Contact } from './domain/contact';
 import type { ContactFilter, ContactStore } from './contact-store';
 
@@ -56,7 +57,16 @@ export class PostgresContactStore implements ContactStore {
   constructor(private readonly pool: Pool) {}
 
   async save(c: Contact): Promise<void> {
-    await this.pool.query(
+    await this.upsert(this.pool, c);
+  }
+
+  async saveWithClient(tx: TxHandle | null, c: Contact): Promise<void> {
+    if (tx === null) return this.save(c);
+    await this.upsert(tx as PoolClient, c);
+  }
+
+  private upsert(executor: Pool | PoolClient, c: Contact): Promise<unknown> {
+    return executor.query(
       `INSERT INTO public.aura_crm_contacts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (id) DO UPDATE SET
          account_id = EXCLUDED.account_id, account_name = EXCLUDED.account_name, name = EXCLUDED.name,

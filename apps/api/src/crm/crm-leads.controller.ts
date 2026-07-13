@@ -1,8 +1,8 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsInt, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams, type Lead, type LeadStatus, type LeadSource } from '@aura/shared';
-import { LeadService } from '@aura/crm';
+import { parsePageParams, type Lead, type LeadStatus, type LeadSource, type OpportunityStage } from '@aura/shared';
+import { LeadService, LeadConversionService, type ConvertLeadResult, type ConvertPreview } from '@aura/crm';
 
 class CreateLeadDto {
   @IsString() name!: string;
@@ -30,10 +30,24 @@ class AssignLeadDto {
   @IsString() assignedTo!: string;
 }
 
+class ConvertLeadDto {
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsBoolean() createNewAccount?: boolean;
+  @IsOptional() @IsString() contactId?: string;
+  @IsOptional() @IsBoolean() createNewContact?: boolean;
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsInt() value?: number;
+  @IsOptional() @IsString() stage?: string;
+  @IsOptional() @IsBoolean() requiresTender?: boolean;
+  @IsOptional() @IsString() closeDate?: string;
+  @IsOptional() @IsString() ownerId?: string;
+}
+
 @Controller('crm/leads')
 export class CrmLeadsController {
   constructor(
     private readonly leads: LeadService,
+    private readonly conversion: LeadConversionService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -65,6 +79,24 @@ export class CrmLeadsController {
     if (!dto?.assignedTo?.trim()) throw new BadRequestException('assignedTo is required');
     const ctx = this.tenant.get();
     return this.leads.assign(id, dto.assignedTo, ctx.actorId);
+  }
+
+  /** Dry run — which Account/Contact would convert link vs. create (possible-duplicate check). */
+  @Get(':id/convert-preview')
+  convertPreview(@Param('id', ParseUuidOr404Pipe) id: string): Promise<ConvertPreview> {
+    return this.conversion.preview(id);
+  }
+
+  /** Qualify & Convert — transactional, idempotent, dedupe-protected Lead → Opportunity. */
+  @Post(':id/convert')
+  convert(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: ConvertLeadDto): Promise<ConvertLeadResult> {
+    const ctx = this.tenant.get();
+    const { title, value, stage, requiresTender, closeDate, ownerId, ...rest } = dto ?? {};
+    return this.conversion.convert(id, {
+      ...rest,
+      actorId: ctx.actorId,
+      opportunity: { title, value, stage: stage as OpportunityStage | undefined, requiresTender, closeDate, ownerId },
+    });
   }
 
   @Get()

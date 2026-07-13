@@ -1,5 +1,6 @@
 import type { Id, Page, PageParams } from '@aura/shared';
 import { paginate } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Contact } from './domain/contact';
 import type { ContactFilter, ContactStore } from './contact-store';
 
@@ -9,6 +10,10 @@ export class InMemoryContactStore implements ContactStore {
 
   async save(contact: Contact): Promise<void> {
     this.contacts.set(contact.id, { ...contact });
+  }
+
+  async saveWithClient(_tx: TxHandle | null, contact: Contact): Promise<void> {
+    return this.save(contact);
   }
 
   async get(id: Id): Promise<Contact | null> {

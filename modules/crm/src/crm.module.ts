@@ -31,6 +31,8 @@ import { InMemoryActivityStore } from './in-memory-activity-store';
 import { PostgresActivityStore } from './postgres-activity-store';
 import { ActivityService } from './activity.service';
 
+import { LeadConversionService } from './lead-conversion.service';
+
 /**
  * The CRM business module. Imports the kernel (CoreModule) for the event store,
  * access platform, and shared pg pool; picks a Postgres or in-memory account store
@@ -82,7 +84,8 @@ import { ActivityService } from './activity.service';
     QuotationService,
     ContactService,
     ActivityService,
+    LeadConversionService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService],
+  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, LeadConversionService],
 })
 export class CrmModule {}

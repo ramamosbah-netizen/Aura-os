@@ -18,6 +18,10 @@ export class InMemoryLeadStore implements LeadStore {
     this.leads.set(lead.id, { ...lead, updatedAt: new Date().toISOString() });
   }
 
+  async updateWithClient(_tx: TxHandle | null, lead: Lead): Promise<void> {
+    return this.update(lead);
+  }
+
   async get(id: Id): Promise<Lead | null> {
     const l = this.leads.get(id);
     return l ? { ...l } : null;

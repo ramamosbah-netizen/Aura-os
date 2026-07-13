@@ -73,8 +73,8 @@ Wave 1 (Activity) & Wave 2 (Timeline) are **substantially done**. Re-sequenced b
 
 | Order | Slice | Adds | Migration | Risk |
 |---|---|---|---|---|
-| **S1** | **Lead OS foundation** | shared `leadAttention()` + Lead Center needs-attention view + SLA fields | +1 additive | low |
-| S2 | Qualify & Convert hardening | identity resolution (name/email/phone), lineage assertions, idempotent convert | +1 | med |
+| **S1** ✅ | **Lead OS foundation** | shared `leadAttention()` + Lead Center needs-attention view + SLA fields | 0156 | done (PR #86) |
+| **S2** ✅ | **Qualify & Convert hardening** | shared `resolveIdentity()` (name/email/phone → EXACT/PROBABLE/POSSIBLE), transactional idempotent `LeadConversionService`, lineage + "cannot convert twice" | 0157 | done |
 | S3 | Signal model + Opportunity Radar | `aura_crm_signals` (source/type/state/lineage), promote→lead | +1 | med |
 | S4 | Opportunity depth | OpportunityStakeholder (opp-scoped) + Deal Team + Commitments | +2 | med |
 | S5 | Decisions/Assumptions/Open-Questions register | 1 lightweight table (polymorphic) | +1 | low |

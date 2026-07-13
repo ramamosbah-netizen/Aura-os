@@ -51,6 +51,16 @@ interface PipelineCommand {
   atRisk: Array<{ id: string; title: string; value: number; stage: string; ownerId: string | null; accountName: string | null; reasons: string[]; recommendation: string; daysSinceActivity: number | null }>;
 }
 
+interface ForecastHistory {
+  captures: Array<{ batchId: string; takenAt: string; totalOpen: number; totalWeighted: number; totalCommitted: number; totalDeals: number }>;
+  latestDiff: {
+    hasPrior: boolean; takenAtPrev: string | null; takenAtCurr: string | null;
+    totals: { prevWeighted: number; currWeighted: number; weightedDelta: number; prevDeals: number; currDeals: number; dealDelta: number };
+    byPeriod: Array<{ period: string; prevWeighted: number; currWeighted: number; weightedDelta: number; prevDeals: number; currDeals: number; dealDelta: number }>;
+    slippedValue: number; reasons: string[];
+  };
+}
+
 export default function CrmPipelineClient({ initialLeads, initialOpportunities, initialAccounts }: {
   initialLeads: Lead[]; initialOpportunities: Opportunity[]; initialAccounts: Account[];
 }) {
@@ -62,6 +72,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [forecast, setForecast] = useState<{ id: string; prob: number; reason: string } | null>(null);
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [command, setCommand] = useState<PipelineCommand | null>(null);
+  const [fcast, setFcast] = useState<ForecastHistory | null>(null);
 
   useEffect(() => {
     if ((view !== 'command' && view !== 'analytics') || command) return;
@@ -70,6 +81,26 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       .then((d) => setCommand(d))
       .catch(() => setCommand(null));
   }, [view, command]);
+
+  const loadForecast = (): void => {
+    void fetch('/api/crm/opportunities/forecast', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setFcast(d))
+      .catch(() => setFcast(null));
+  };
+  useEffect(() => {
+    if (view !== 'analytics' || fcast) return;
+    loadForecast();
+  }, [view, fcast]);
+
+  const captureSnapshot = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/crm/opportunities/forecast', { method: 'POST' });
+      if (res.ok) { setMsg('Forecast snapshot captured — slippage will show against the next capture.'); loadForecast(); }
+      else { const d = await res.json().catch(() => ({})); setErr(d.message ?? d.error ?? 'Capture failed'); }
+    } catch { setErr('API unreachable'); } finally { setBusy(false); }
+  };
   // Native HTML5 drag & drop across board columns (buttons stay as the
   // keyboard-accessible fallback for the same moves).
   const [drag, setDrag] = useState<{ kind: 'lead' | 'opp'; id: string; from: string } | null>(null);
@@ -419,6 +450,52 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               )}
             </section>
 
+            {/* Forecast slippage — snapshots over time */}
+            <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                <div style={{ ...s.cmdTitle, marginBottom: 0 }}>Forecast slippage</div>
+                <button type="button" style={s.btnSec} disabled={busy} onClick={() => void captureSnapshot()}>📸 Capture snapshot</button>
+              </div>
+              {fcast === null ? <p style={s.muted}>Loading forecast history…</p>
+                : fcast.captures.length === 0 ? <p style={s.muted}>No snapshots yet — capture one to start tracking how the forecast moves week over week.</p>
+                : (
+                  <>
+                    {!fcast.latestDiff.hasPrior
+                      ? <p style={s.muted}>One snapshot on record (captured {fmt(fcast.captures[0].takenAt)}). Capture again later to see slippage.</p>
+                      : (
+                        <>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                            <span style={s.slipTotal}>
+                              Weighted {fcast.latestDiff.totals.weightedDelta >= 0 ? '▲' : '▼'} {money(Math.abs(fcast.latestDiff.totals.weightedDelta))}
+                            </span>
+                            {fcast.latestDiff.slippedValue > 0 && <span style={s.riskChip}>slipped {money(fcast.latestDiff.slippedValue)}</span>}
+                            {fcast.latestDiff.reasons.map((r) => <span key={r} style={s.slipChip}>{r}</span>)}
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                            <thead><tr>{['Month', 'Prev weighted', 'Now weighted', 'Δ', 'Deals Δ'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {fcast.latestDiff.byPeriod.map((p) => (
+                                <tr key={p.period}>
+                                  <td style={s.cmdTd}>{p.period === 'unscheduled' ? 'Unscheduled' : p.period}</td>
+                                  <td style={s.cmdTd}>{money(p.prevWeighted)}</td>
+                                  <td style={s.cmdTd}>{money(p.currWeighted)}</td>
+                                  <td style={{ ...s.cmdTd, fontWeight: 700, color: p.weightedDelta < 0 ? 'var(--bad)' : p.weightedDelta > 0 ? 'var(--good)' : 'var(--muted)' }}>
+                                    {p.weightedDelta === 0 ? '—' : `${p.weightedDelta > 0 ? '+' : ''}${money(p.weightedDelta)}`}
+                                  </td>
+                                  <td style={{ ...s.cmdTd, color: p.dealDelta < 0 ? 'var(--bad)' : p.dealDelta > 0 ? 'var(--good)' : 'var(--muted)' }}>
+                                    {p.dealDelta === 0 ? '—' : `${p.dealDelta > 0 ? '+' : ''}${p.dealDelta}`}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
+                      )}
+                    <p style={{ ...s.muted, padding: '8px 0 0', fontSize: 11.5 }}>{fcast.captures.length} snapshot{fcast.captures.length === 1 ? '' : 's'} on record · latest {fmt(fcast.captures[0].takenAt)}</p>
+                  </>
+                )}
+            </section>
+
             {/* Stalled deals */}
             <section style={s.cmdCard}>
               <div style={s.cmdTitle}>Stalled deals — {command.stalled.length}</div>
@@ -682,6 +759,8 @@ const s = {
   cmdTd: { padding: '7px 8px', borderBottom: '1px solid var(--border)', verticalAlign: 'top' } as CSSProperties,
   cmdSub: { fontSize: 11, color: 'var(--muted)', marginTop: 1 } as CSSProperties,
   riskChip: { display: 'inline-block', fontSize: 10.5, background: 'color-mix(in srgb, var(--bad) 10%, transparent)', color: 'var(--bad)', border: '1px solid color-mix(in srgb, var(--bad) 30%, transparent)', borderRadius: 999, padding: '1px 7px', marginRight: 4, marginBottom: 3 } as CSSProperties,
+  slipTotal: { fontSize: 12.5, fontWeight: 800, color: 'var(--accent)', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px' } as CSSProperties,
+  slipChip: { display: 'inline-block', fontSize: 10.5, background: 'var(--panel-2)', color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', marginBottom: 3 } as CSSProperties,
   agingRow: { display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 } as CSSProperties,
   agingTrack: { height: 8, background: 'var(--panel-2, var(--border))', borderRadius: 999, overflow: 'hidden' } as CSSProperties,
   agingFill: { height: '100%', borderRadius: 999 } as CSSProperties,

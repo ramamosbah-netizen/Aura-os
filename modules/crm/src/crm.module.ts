@@ -41,6 +41,11 @@ import { InMemoryOpportunityDepthStore } from './in-memory-opportunity-depth-sto
 import { PostgresOpportunityDepthStore } from './postgres-opportunity-depth-store';
 import { OpportunityDepthService } from './opportunity-depth.service';
 
+import { CRM_FORECAST_SNAPSHOT_STORE } from './forecast-snapshot-store';
+import { InMemoryForecastSnapshotStore } from './in-memory-forecast-snapshot-store';
+import { PostgresForecastSnapshotStore } from './postgres-forecast-snapshot-store';
+import { ForecastSnapshotService } from './forecast-snapshot.service';
+
 import { LeadConversionService } from './lead-conversion.service';
 
 /**
@@ -100,6 +105,12 @@ import { LeadConversionService } from './lead-conversion.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresOpportunityDepthStore(pool) : new InMemoryOpportunityDepthStore(),
     },
+    {
+      provide: CRM_FORECAST_SNAPSHOT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresForecastSnapshotStore(pool) : new InMemoryForecastSnapshotStore(),
+    },
     AccountService,
     LeadService,
     OpportunityService,
@@ -108,8 +119,9 @@ import { LeadConversionService } from './lead-conversion.service';
     ActivityService,
     SignalService,
     OpportunityDepthService,
+    ForecastSnapshotService,
     LeadConversionService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, LeadConversionService],
+  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, LeadConversionService],
 })
 export class CrmModule {}

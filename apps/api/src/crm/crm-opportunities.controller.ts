@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams, type Opportunity, type OpportunityStage } from '@aura/shared';
+import { parsePageParams, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions } from '@aura/shared';
 import { type Quotation, OpportunityService, QuotationService } from '@aura/crm';
 
 /** The create drawer posts select values as strings — accept both. */
@@ -51,6 +51,13 @@ class UpdateOpportunityDto {
   @IsOptional() @IsString() competitors?: string;
   @IsOptional() @IsString() source?: string;
   @IsOptional() @IsString() lossReason?: string;
+  @IsOptional() @IsString() buyingStage?: BuyingStage;
+}
+
+class PursuitDto {
+  @IsString() decision!: PursuitDecision;
+  @IsOptional() @IsObject() dimensions?: PursuitDimensions;
+  @IsOptional() @IsString() rationale?: string;
 }
 
 @Controller('crm/opportunities')
@@ -129,6 +136,16 @@ export class CrmOpportunitiesController {
   @Post(':id/forecast')
   forecast(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ winProbability: number; reason: string }> {
     return this.opportunities.forecastWinProbability(id);
+  }
+
+  /** Record a Pursue / No-Pursue decision (scored from the assessment dimensions). */
+  @Post(':id/pursuit')
+  pursuit(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: PursuitDto): Promise<Opportunity> {
+    if (dto?.decision !== 'PURSUE' && dto?.decision !== 'NO_PURSUE') {
+      throw new BadRequestException('decision must be PURSUE or NO_PURSUE');
+    }
+    const ctx = this.tenant.get();
+    return this.opportunities.recordPursuit(id, { decision: dto.decision, dimensions: dto.dimensions, rationale: dto.rationale, actorId: ctx.actorId });
   }
 
   @Get()

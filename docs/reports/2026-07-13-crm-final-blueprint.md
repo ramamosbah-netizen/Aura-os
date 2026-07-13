@@ -89,7 +89,7 @@ Wave 1 (Activity) & Wave 2 (Timeline) are **substantially done**. Re-sequenced b
 | **S5** ✅ | **Decisions/Assumptions/Open-Questions register** | 1 polymorphic `aura_crm_deal_register` table + `registerSummary` risk hook; folded into Deal Depth | 0160 | done |
 | **S6** ✅ | **Buying Journey + Pursue/Bid decision** | buying_stage + pursuit_* on opp; `buyingJourneyAlignment` (misalignment → pipeline at-risk) + `scorePursuit`/`recommendPursuit`; Journey panel on Opp 360 | 0161 | done |
 | **S7** ✅ | **Health + Risk engine (explainable)** | pure `assessOpportunityHealth()` folds the 4 signals (S4 coverage, S4 commitments, S5 register, S6 journey) into a per-dimension band (🟢🟠🔴) + reasons; overall floored by the worst dimension; rides on `GET :id/depth`; Deal Health card on Opp 360 | 0 (composition) | done |
-| S8 | Forecast snapshots + slippage | `aura_crm_forecast_snapshots` | +1 | low |
+| **S8** ✅ | **Forecast snapshots + slippage** | append-only `aura_crm_forecast_snapshots` (per-period, batch-grouped) + pure `captureForecast`/`diffForecast`; `ForecastSnapshotService` capture/history; `forecast/{snapshot,history}` API; slippage card on the Pipeline Command Center | 0162 | done |
 | S9 | Account growth signals (reactors) | contract-expiry/project-complete → deduped Signal | 0 (reuses S3) | med |
 
 **Rule:** every deterministic rule (`leadAttention`, `opportunityHealth`, `opportunityRisks`) lives in

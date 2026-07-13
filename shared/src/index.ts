@@ -24,6 +24,7 @@ export * from './integration/webhook';
 export * from './integration/csv';
 export * from './domain/attention-time';
 export * from './domain/identity-resolution';
+export * from './domain/signal';
 export * from './domain/crm';
 export * from './pagination';
 export * from './forms';

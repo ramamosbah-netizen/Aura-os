@@ -1,5 +1,5 @@
 import type {
-  Id, Commitment, CommitmentStatus, OpportunityDealMember, OpportunityStakeholder,
+  Id, Commitment, CommitmentStatus, DealRegisterItem, OpportunityDealMember, OpportunityStakeholder,
 } from '@aura/shared';
 
 export const CRM_OPPORTUNITY_DEPTH_STORE = Symbol('CRM_OPPORTUNITY_DEPTH_STORE');
@@ -7,6 +7,7 @@ export const CRM_OPPORTUNITY_DEPTH_STORE = Symbol('CRM_OPPORTUNITY_DEPTH_STORE')
 export interface StakeholderFilter { tenantId: string; opportunityId?: string }
 export interface DealTeamFilter { tenantId: string; opportunityId?: string }
 export interface CommitmentFilter { tenantId: string; relatedType?: string; relatedId?: string; status?: CommitmentStatus }
+export interface RegisterFilter { tenantId: string; relatedType?: string; relatedId?: string }
 
 /** One store for the three opportunity-child collections (stakeholders, deal team, commitments).
  * Saves are upserts; writes are non-transactional (events emitted by the service, mirroring
@@ -25,4 +26,8 @@ export interface OpportunityDepthStore {
   saveCommitment(c: Commitment): Promise<void>;
   getCommitment(id: Id): Promise<Commitment | null>;
   listCommitments(filter: CommitmentFilter): Promise<Commitment[]>;
+
+  saveRegisterItem(i: DealRegisterItem): Promise<void>;
+  getRegisterItem(id: Id): Promise<DealRegisterItem | null>;
+  listRegisterItems(filter: RegisterFilter): Promise<DealRegisterItem[]>;
 }

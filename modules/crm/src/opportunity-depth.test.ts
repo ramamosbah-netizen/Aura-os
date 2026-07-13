@@ -62,4 +62,28 @@ describe('OpportunityDepthService', () => {
     await svc.fulfilCommitment(c.id);
     await expect(svc.fulfilCommitment(c.id)).rejects.toThrow();
   });
+
+  it('logs decisions/assumptions/questions and surfaces risk when one is invalidated', async () => {
+    const { svc } = harness();
+    await svc.addRegisterItem({ tenantId: 't1', relatedId: 'o1', kind: 'DECISION', statement: 'Use Hikvision' });
+    const assumption = await svc.addRegisterItem({ tenantId: 't1', relatedId: 'o1', kind: 'ASSUMPTION', statement: 'Reuse fiber', confidence: 60 });
+    await svc.addRegisterItem({ tenantId: 't1', relatedId: 'o1', kind: 'OPEN_QUESTION', statement: 'Who signs off?' });
+
+    let depth = await svc.depthFor('t1', 'o1');
+    expect(depth.register.length).toBe(3);
+    expect(depth.registerSummary).toMatchObject({ decisions: 1, assumptions: 1, openQuestions: 1, open: 3 });
+    expect(depth.registerSummary.needsAttention).toBe(false);
+
+    // The fiber assumption proves false → material deal risk.
+    await svc.resolveRegisterItem(assumption.id, 'INVALIDATED', 'survey found no spare fiber');
+    depth = await svc.depthFor('t1', 'o1');
+    expect(depth.registerSummary.invalidatedAssumptions).toBe(1);
+    expect(depth.registerSummary.needsAttention).toBe(true);
+  });
+
+  it('rejects an invalid register resolution for the kind', async () => {
+    const { svc } = harness();
+    const q = await svc.addRegisterItem({ tenantId: 't1', relatedId: 'o1', kind: 'OPEN_QUESTION', statement: 'x' });
+    await expect(svc.resolveRegisterItem(q.id, 'VALIDATED')).rejects.toThrow();
+  });
 });

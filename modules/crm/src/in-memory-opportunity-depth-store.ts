@@ -1,6 +1,6 @@
-import type { Id, Commitment, OpportunityDealMember, OpportunityStakeholder } from '@aura/shared';
+import type { Id, Commitment, DealRegisterItem, OpportunityDealMember, OpportunityStakeholder } from '@aura/shared';
 import type {
-  CommitmentFilter, DealTeamFilter, OpportunityDepthStore, StakeholderFilter,
+  CommitmentFilter, DealTeamFilter, OpportunityDepthStore, RegisterFilter, StakeholderFilter,
 } from './opportunity-depth-store';
 
 /** Phase-0 opportunity-depth store — in-memory (no-DB boots). */
@@ -8,6 +8,7 @@ export class InMemoryOpportunityDepthStore implements OpportunityDepthStore {
   private readonly stakeholders = new Map<string, OpportunityStakeholder>();
   private readonly dealTeam = new Map<string, OpportunityDealMember>();
   private readonly commitments = new Map<string, Commitment>();
+  private readonly register = new Map<string, DealRegisterItem>();
 
   async saveStakeholder(s: OpportunityStakeholder): Promise<void> { this.stakeholders.set(s.id, { ...s }); }
   async getStakeholder(id: Id): Promise<OpportunityStakeholder | null> {
@@ -41,6 +42,18 @@ export class InMemoryOpportunityDepthStore implements OpportunityDepthStore {
         && (!f.relatedType || c.relatedType === f.relatedType)
         && (!f.relatedId || c.relatedId === f.relatedId)
         && (!f.status || c.status === f.status))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async saveRegisterItem(i: DealRegisterItem): Promise<void> { this.register.set(i.id, { ...i }); }
+  async getRegisterItem(id: Id): Promise<DealRegisterItem | null> {
+    const i = this.register.get(id); return i ? { ...i } : null;
+  }
+  async listRegisterItems(f: RegisterFilter): Promise<DealRegisterItem[]> {
+    return [...this.register.values()]
+      .filter((i) => i.tenantId === f.tenantId
+        && (!f.relatedType || i.relatedType === f.relatedType)
+        && (!f.relatedId || i.relatedId === f.relatedId))
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }
 }

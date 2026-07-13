@@ -5,7 +5,9 @@ import {
   type OpportunityDealMember, type NewOpportunityDealMember, makeDealMember,
   type Commitment, type NewCommitment, makeCommitment, fulfilCommitment, transitionCommitment,
   type StakeholderCoverage, stakeholderCoverage, type CommitmentSummary, commitmentSummary,
-  CRM_OPPORTUNITY_DEPTH_EVENT,
+  type DealRegisterItem, type NewDealRegisterItem, type RegisterStatus, type RegisterSummary,
+  makeRegisterItem, resolveRegisterItem, registerSummary,
+  CRM_OPPORTUNITY_DEPTH_EVENT, CRM_REGISTER_EVENT,
 } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { CRM_OPPORTUNITY_DEPTH_STORE, type OpportunityDepthStore } from './opportunity-depth-store';
@@ -16,6 +18,8 @@ export interface OpportunityDepth {
   dealTeam: OpportunityDealMember[];
   commitments: Commitment[];
   commitmentSummary: CommitmentSummary;
+  register: DealRegisterItem[];
+  registerSummary: RegisterSummary;
 }
 
 /** Opportunity execution depth — stakeholders, deal team, commitments. Events emitted on the
@@ -113,12 +117,41 @@ export class OpportunityDepthService {
     return this.store.listCommitments({ tenantId, relatedType, relatedId });
   }
 
-  /** The full depth payload for an Opportunity 360 — stakeholders + coverage, team, commitments + summary. */
+  // ── Deal register (decisions / assumptions / open questions) ──
+  async addRegisterItem(input: NewDealRegisterItem & { actorId?: Id | null }): Promise<DealRegisterItem> {
+    const item = makeRegisterItem(input);
+    await this.store.saveRegisterItem(item);
+    await this.events.append([makeEvent({
+      type: CRM_REGISTER_EVENT.itemAdded, tenantId: item.tenantId, companyId: null,
+      actorId: input.actorId ?? null, aggregateType: 'crm.opportunity', aggregateId: item.relatedId,
+      payload: { itemId: item.id, kind: item.kind, statement: item.statement },
+    })]);
+    return item;
+  }
+  async resolveRegisterItem(id: Id, to: RegisterStatus, detail?: string | null, actorId?: Id | null): Promise<DealRegisterItem> {
+    const existing = await this.store.getRegisterItem(id);
+    if (!existing) throw new Error(`Register item ${id} not found`);
+    const next = resolveRegisterItem(existing, to, detail, actorId);
+    await this.store.saveRegisterItem(next);
+    await this.events.append([makeEvent({
+      type: CRM_REGISTER_EVENT.itemResolved, tenantId: next.tenantId, companyId: null,
+      actorId: actorId ?? null, aggregateType: 'crm.opportunity', aggregateId: next.relatedId,
+      payload: { itemId: next.id, kind: next.kind, status: next.status },
+    })]);
+    return next;
+  }
+  listRegisterItems(tenantId: Id, relatedType: string, relatedId: Id): Promise<DealRegisterItem[]> {
+    return this.store.listRegisterItems({ tenantId, relatedType, relatedId });
+  }
+
+  /** The full depth payload for an Opportunity 360 — stakeholders + coverage, team, commitments,
+   * and the decisions/assumptions/open-questions register, each with its derived summary. */
   async depthFor(tenantId: Id, opportunityId: Id): Promise<OpportunityDepth> {
-    const [stakeholders, dealTeam, commitments] = await Promise.all([
+    const [stakeholders, dealTeam, commitments, register] = await Promise.all([
       this.store.listStakeholders({ tenantId, opportunityId }),
       this.store.listDealTeam({ tenantId, opportunityId }),
       this.store.listCommitments({ tenantId, relatedType: 'opportunity', relatedId: opportunityId }),
+      this.store.listRegisterItems({ tenantId, relatedType: 'opportunity', relatedId: opportunityId }),
     ]);
     return {
       stakeholders,
@@ -126,6 +159,8 @@ export class OpportunityDepthService {
       dealTeam,
       commitments,
       commitmentSummary: commitmentSummary(commitments),
+      register,
+      registerSummary: registerSummary(register),
     };
   }
 }

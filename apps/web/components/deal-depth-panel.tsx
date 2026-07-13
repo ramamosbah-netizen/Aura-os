@@ -10,9 +10,12 @@ interface Coverage { count: number; gaps: string[]; score: number; needsAttentio
 interface DealMember { id: string; userId: string; userName: string | null; role: string; responsibility: string | null }
 interface Commitment { id: string; direction: string; description: string; dueAt: string | null; status: string }
 interface CommitSummary { open: number; overdue: number; fulfilled: number; broken: number; needsAttention: boolean }
+interface RegisterItem { id: string; kind: string; statement: string; status: string; detail: string | null; dueAt: string | null; confidence: number | null }
+interface RegisterSummary { decisions: number; assumptions: number; openQuestions: number; open: number; unvalidatedAssumptions: number; invalidatedAssumptions: number; overdue: number; needsAttention: boolean }
 interface Depth {
   stakeholders: Stakeholder[]; coverage: Coverage; dealTeam: DealMember[];
   commitments: Commitment[]; commitmentSummary: CommitSummary;
+  register: RegisterItem[]; registerSummary: RegisterSummary;
 }
 
 const S_ROLES = ['DECISION_MAKER', 'ECONOMIC_BUYER', 'CHAMPION', 'INFLUENCER', 'TECHNICAL_EVALUATOR', 'PROCUREMENT', 'FINANCE', 'EXECUTIVE_SPONSOR', 'END_USER', 'BLOCKER', 'OTHER'];
@@ -26,6 +29,7 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
   const [sForm, setSForm] = useState({ contactName: '', role: 'DECISION_MAKER' });
   const [tForm, setTForm] = useState({ userName: '', role: 'PRESALES' });
   const [cForm, setCForm] = useState({ direction: 'OURS', description: '', dueAt: '' });
+  const [rForm, setRForm] = useState({ kind: 'DECISION', statement: '' });
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/opportunities/${opportunityId}/depth`, { cache: 'no-store' });
@@ -139,6 +143,49 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
             onClick={() => { void post('commitments', { ...cForm, dueAt: cForm.dueAt || undefined }); setCForm({ direction: 'OURS', description: '', dueAt: '' }); }}>Add</button>
         </div>
       </div>
+
+      {/* Decisions / Assumptions / Open Questions */}
+      <div style={st.block}>
+        <div style={st.blockHead}>
+          <h3 style={st.h3}>Decisions · Assumptions · Questions</h3>
+          <span style={st.meta}>
+            {depth.registerSummary.open} open
+            {depth.registerSummary.invalidatedAssumptions > 0 ? <b style={st.overdueTag}> · {depth.registerSummary.invalidatedAssumptions} invalidated</b> : null}
+            {depth.registerSummary.overdue > 0 ? <b style={st.overdueTag}> · {depth.registerSummary.overdue} overdue</b> : null}
+          </span>
+        </div>
+        {depth.register.length > 0 && (
+          <ul style={st.list}>
+            {depth.register.map((r) => (
+              <li key={r.id} style={st.row}>
+                <span style={st.kindChip}>{r.kind === 'OPEN_QUESTION' ? 'question' : r.kind.toLowerCase()}</span>
+                <span style={{ ...st.name, textDecoration: r.status !== 'OPEN' ? 'line-through' : 'none' }}>{r.statement}</span>
+                {r.status === 'OPEN'
+                  ? (r.kind === 'ASSUMPTION'
+                      ? <>
+                          <button style={st.smallBtn} disabled={busy} onClick={() => void post(`register/${r.id}/resolve`, { to: 'VALIDATED' })}>Validate</button>
+                          <button style={st.smallBtn} disabled={busy} onClick={() => void post(`register/${r.id}/resolve`, { to: 'INVALIDATED' })}>Invalidate</button>
+                        </>
+                      : <button style={st.smallBtn} disabled={busy}
+                          onClick={() => void post(`register/${r.id}/resolve`, { to: r.kind === 'DECISION' ? 'DECIDED' : 'RESOLVED' })}>
+                          {r.kind === 'DECISION' ? 'Decide' : 'Resolve'}
+                        </button>)
+                  : <span style={{ ...st.statusTag, color: r.status === 'INVALIDATED' ? '#dc2626' : 'var(--muted)' }}>{r.status.toLowerCase()}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div style={st.form}>
+          <select style={st.sel} value={rForm.kind} onChange={(e) => setRForm({ ...rForm, kind: e.target.value })}>
+            <option value="DECISION">decision</option>
+            <option value="ASSUMPTION">assumption</option>
+            <option value="OPEN_QUESTION">question</option>
+          </select>
+          <input style={st.input} placeholder="Statement / question" value={rForm.statement} onChange={(e) => setRForm({ ...rForm, statement: e.target.value })} />
+          <button style={st.btn} disabled={busy || !rForm.statement.trim()}
+            onClick={() => { void post('register', { ...rForm }); setRForm({ kind: 'DECISION', statement: '' }); }}>Add</button>
+        </div>
+      </div>
     </section>
   );
 }
@@ -157,6 +204,7 @@ const st = {
   name: { fontWeight: 600 } as CSSProperties,
   roleChip: { fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--panel-2)', border: '1px solid var(--border)', textTransform: 'capitalize' } as CSSProperties,
   dirChip: { fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--panel-2)', border: '1px solid var(--border)', textTransform: 'uppercase', color: 'var(--muted)' } as CSSProperties,
+  kindChip: { fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--panel-2)', border: '1px solid var(--border)', textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: 0.3 } as CSSProperties,
   meta: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   overdueTag: { color: '#dc2626' } as CSSProperties,
   statusTag: { fontSize: 11, color: 'var(--muted)', textTransform: 'capitalize' } as CSSProperties,

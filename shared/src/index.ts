@@ -22,6 +22,7 @@ export * from './workflow/workflow';
 export * from './workflow/saga';
 export * from './integration/webhook';
 export * from './integration/csv';
+export * from './domain/attention-time';
 export * from './domain/crm';
 export * from './pagination';
 export * from './forms';

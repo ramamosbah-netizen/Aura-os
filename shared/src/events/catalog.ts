@@ -41,6 +41,10 @@ export const EVENT_CATALOG: EventTypeDef[] = [
   { type: 'crm.opportunity.pursuit_decided', module: 'crm', description: 'Pursue / No-Pursue decision recorded on a CRM opportunity', severity: 'INFO' },
   { type: 'crm.forecast.snapshot_captured', module: 'crm', description: 'Weighted pipeline forecast captured as an immutable snapshot', severity: 'INFO' },
   { type: 'crm.commercial_baseline.locked', module: 'crm', description: 'Immutable approved-price baseline locked on quotation approval', severity: 'INFO' },
+  { type: 'crm.requirement.added', module: 'crm', description: 'Pre-award requirement captured on an opportunity', severity: 'INFO' },
+  { type: 'crm.solution_scope.created', module: 'crm', description: 'Pre-award solution scope created on an opportunity', severity: 'INFO' },
+  { type: 'crm.solution_scope.approved', module: 'crm', description: 'Solution scope approved — priceable baseline for the direct-sale path', severity: 'INFO' },
+  { type: 'crm.solution_scope.quoted', module: 'crm', description: 'Quotation generated from an approved solution scope', severity: 'INFO' },
 
   // ── Estimating / Tendering ──────────────────────────────────────────────
   { type: 'estimating.tender.registered', module: 'estimating', description: 'Tender registered', severity: 'INFO' },

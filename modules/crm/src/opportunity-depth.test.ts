@@ -25,6 +25,27 @@ describe('OpportunityDepthService', () => {
     expect(after.coverage.score).toBe(100);
   });
 
+  it('logs an explicit risk that surfaces in the risk summary and drags health down', async () => {
+    const { svc, events } = harness();
+    const k = await svc.addRisk({ tenantId: 't1', opportunityId: 'o1', title: 'Incumbent lock-in', type: 'COMPETITIVE', likelihood: 'high', impact: 'high' });
+    expect(k.severity).toBe('CRITICAL');
+    expect(events.append).toHaveBeenCalled();
+
+    const depth = await svc.depthFor('t1', 'o1');
+    expect(depth.risks.length).toBe(1);
+    expect(depth.riskSummary).toMatchObject({ open: 1, openCritical: 1, needsAttention: true });
+    const dim = depth.health.dimensions.find((d) => d.key === 'risks')!;
+    expect(dim.applicable).toBe(true);
+    expect(depth.health.band).toBe('CRITICAL');
+
+    // Accepting the risk clears it from the open count and lifts the risks dimension.
+    await svc.setRiskStatus(k.id, 'ACCEPTED');
+    const after = await svc.depthFor('t1', 'o1');
+    expect(after.riskSummary.open).toBe(0);
+    expect(after.health.dimensions.find((d) => d.key === 'risks')!.applicable).toBe(true); // total>0 but none open
+    expect(after.riskSummary.needsAttention).toBe(false);
+  });
+
   it('scopes children to their opportunity', async () => {
     const { svc } = harness();
     await svc.addStakeholder({ tenantId: 't1', opportunityId: 'o1', contactName: 'A' });

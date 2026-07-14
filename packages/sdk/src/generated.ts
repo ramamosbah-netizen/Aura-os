@@ -1025,6 +1025,21 @@ export class AuraSdk {
     return this.http.request('POST', `/crm/opportunities/${encodeURIComponent(id)}/requirements`, body, undefined, opts);
   }
 
+  /** POST /api/v1/crm/opportunities/{id}/risks */
+  opportunityDepthAddRisk(id: string, body?: unknown, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('POST', `/crm/opportunities/${encodeURIComponent(id)}/risks`, body, undefined, opts);
+  }
+
+  /** PATCH /api/v1/crm/opportunities/{id}/risks/{kid} */
+  opportunityDepthUpdateRisk(id: string, kid: string, body?: unknown, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('PATCH', `/crm/opportunities/${encodeURIComponent(id)}/risks/${encodeURIComponent(kid)}`, body, undefined, opts);
+  }
+
+  /** POST /api/v1/crm/opportunities/{id}/risks/{kid}/status */
+  opportunityDepthSetRiskStatus(id: string, kid: string, body?: unknown, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('POST', `/crm/opportunities/${encodeURIComponent(id)}/risks/${encodeURIComponent(kid)}/status`, body, undefined, opts);
+  }
+
   /** GET /api/v1/crm/opportunities/{id}/scopes */
   preAwardListScopes(id: string, opts?: RequestOptions): Promise<unknown> {
     return this.http.request('GET', `/crm/opportunities/${encodeURIComponent(id)}/scopes`, undefined, undefined, opts);

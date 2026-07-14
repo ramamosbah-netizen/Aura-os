@@ -3,9 +3,10 @@ import type {
   Id, Commitment, CommitmentDirection, CommitmentStatus, InfluenceLevel, Sentiment,
   OpportunityDealMember, OpportunityStakeholder, StakeholderRole, DealTeamRole,
   DealRegisterItem, RegisterKind, RegisterStatus,
+  OpportunityRisk, RiskType, RiskLikelihood, RiskImpact, RiskSeverity, RiskStatus,
 } from '@aura/shared';
 import type {
-  CommitmentFilter, DealTeamFilter, OpportunityDepthStore, RegisterFilter, StakeholderFilter,
+  CommitmentFilter, DealTeamFilter, OpportunityDepthStore, RegisterFilter, RiskFilter, StakeholderFilter,
 } from './opportunity-depth-store';
 
 // Durable opportunity-depth collections on Postgres (migration 0159).
@@ -30,11 +31,17 @@ interface RRow {
   status: string; detail: string | null; owner: string | null; due_at: string | null; confidence: number | null;
   resolved_by: string | null; resolved_at: Date | null; created_at: Date; updated_at: Date;
 }
+interface KRow {
+  id: string; tenant_id: string; opportunity_id: string; type: string; title: string; description: string | null;
+  likelihood: string; impact: string; severity: string; evidence: string | null; owner: string | null;
+  mitigation: string | null; target_date: string | null; status: string; created_at: Date; updated_at: Date;
+}
 
 const S_COLS = 'id, tenant_id, opportunity_id, contact_id, contact_name, role, influence, decision_power, sentiment, is_champion, is_primary, notes, created_at, updated_at';
 const T_COLS = 'id, tenant_id, opportunity_id, user_id, user_name, role, responsibility, active, joined_at';
 const C_COLS = 'id, tenant_id, related_type, related_id, direction, committed_by, committed_to, description, due_at, status, evidence, fulfilled_at, created_at, updated_at';
 const R_COLS = 'id, tenant_id, related_type, related_id, kind, statement, status, detail, owner, due_at, confidence, resolved_by, resolved_at, created_at, updated_at';
+const K_COLS = 'id, tenant_id, opportunity_id, type, title, description, likelihood, impact, severity, evidence, owner, mitigation, target_date, status, created_at, updated_at';
 
 const toStakeholder = (r: SRow): OpportunityStakeholder => ({
   id: r.id, tenantId: r.tenant_id, opportunityId: r.opportunity_id, contactId: r.contact_id, contactName: r.contact_name,
@@ -58,6 +65,13 @@ const toRegisterItem = (r: RRow): DealRegisterItem => ({
   kind: r.kind as RegisterKind, statement: r.statement, status: r.status as RegisterStatus, detail: r.detail,
   owner: r.owner, dueAt: r.due_at, confidence: r.confidence, resolvedBy: r.resolved_by,
   resolvedAt: r.resolved_at ? r.resolved_at.toISOString() : null,
+  createdAt: r.created_at.toISOString(), updatedAt: r.updated_at.toISOString(),
+});
+const toRisk = (r: KRow): OpportunityRisk => ({
+  id: r.id, tenantId: r.tenant_id, opportunityId: r.opportunity_id, type: r.type as RiskType, title: r.title,
+  description: r.description, likelihood: r.likelihood as RiskLikelihood, impact: r.impact as RiskImpact,
+  severity: r.severity as RiskSeverity, evidence: r.evidence, owner: r.owner, mitigation: r.mitigation,
+  targetDate: r.target_date, status: r.status as RiskStatus,
   createdAt: r.created_at.toISOString(), updatedAt: r.updated_at.toISOString(),
 });
 
@@ -162,5 +176,29 @@ export class PostgresOpportunityDepthStore implements OpportunityDepthStore {
         ORDER BY created_at ASC`,
       [f.tenantId, f.relatedType ?? null, f.relatedId ?? null]);
     return r.rows.map(toRegisterItem);
+  }
+
+  async saveRisk(k: OpportunityRisk): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO public.aura_crm_opportunity_risks (${K_COLS})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       ON CONFLICT (id) DO UPDATE SET type=EXCLUDED.type, title=EXCLUDED.title, description=EXCLUDED.description,
+         likelihood=EXCLUDED.likelihood, impact=EXCLUDED.impact, severity=EXCLUDED.severity, evidence=EXCLUDED.evidence,
+         owner=EXCLUDED.owner, mitigation=EXCLUDED.mitigation, target_date=EXCLUDED.target_date, status=EXCLUDED.status,
+         updated_at=now()`,
+      [k.id, k.tenantId, k.opportunityId, k.type, k.title, k.description, k.likelihood, k.impact, k.severity,
+       k.evidence, k.owner, k.mitigation, k.targetDate, k.status, k.createdAt, k.updatedAt],
+    );
+  }
+  async getRisk(id: Id): Promise<OpportunityRisk | null> {
+    const r = await this.pool.query<KRow>(`SELECT ${K_COLS} FROM public.aura_crm_opportunity_risks WHERE id=$1`, [id]);
+    return r.rows.length ? toRisk(r.rows[0]) : null;
+  }
+  async listRisks(f: RiskFilter): Promise<OpportunityRisk[]> {
+    const r = await this.pool.query<KRow>(
+      `SELECT ${K_COLS} FROM public.aura_crm_opportunity_risks
+        WHERE tenant_id=$1 AND ($2::text IS NULL OR opportunity_id=$2) ORDER BY created_at ASC`,
+      [f.tenantId, f.opportunityId ?? null]);
+    return r.rows.map(toRisk);
   }
 }

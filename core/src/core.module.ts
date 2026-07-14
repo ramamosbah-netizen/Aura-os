@@ -157,8 +157,9 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     },
     {
       provide: OutboxRelay,
-      inject: [PG_POOL, EventBus],
-      useFactory: (pool: Pool | null, bus: EventBus) => new OutboxRelay(pool, bus),
+      inject: [PG_POOL, EventBus, TenantContext],
+      useFactory: (pool: Pool | null, bus: EventBus, tenant: TenantContext) =>
+        new OutboxRelay(pool, bus, tenant),
     },
     { provide: DOCUMENT_STORAGE, useFactory: () => documentStorageFromEnv(() => new LocalDocumentStorage()) },
     {

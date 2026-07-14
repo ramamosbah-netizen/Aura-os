@@ -62,7 +62,26 @@ async function main() {
     await client.end();
     process.exit(1);
   }
-  console.log('✓ every tenant-scoped business table has RLS enabled + FORCED + a policy.');
+
+  // Deny-all guard (R1 activation closure): ANY `aura_*` table (tenant-scoped or not) with RLS
+  // ENABLED but ZERO policies is a trap — `ENABLE` applies to every non-owner role, so under the
+  // enforced `aura_app` role that table denies ALL rows (breaking the relay, auth, webhooks, …).
+  // A legitimate system/pre-tenant table must have RLS DISABLED, not enabled-without-a-policy.
+  const { rows: allRls } = await client.query(`
+    SELECT c.relname AS table, c.relrowsecurity AS rls_enabled,
+           (SELECT count(*) FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=c.relname) AS policies
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relkind='r' AND c.relname LIKE 'aura_%'`);
+  const denyAll = allRls.filter((r) => r.rls_enabled && Number(r.policies) === 0);
+  if (denyAll.length > 0) {
+    console.error(`\n✗ ${denyAll.length} table(s) have RLS ENABLED with no policy — DENY-ALL under the non-owner app role:`);
+    for (const v of denyAll) console.error(`  - ${v.table}`);
+    console.error('\nGive the table a policy (tenant or parent-join), or DISABLE ROW LEVEL SECURITY if it is a system/pre-tenant table.');
+    await client.end();
+    process.exit(1);
+  }
+
+  console.log('✓ every tenant-scoped business table has RLS enabled + FORCED + a policy; no enabled-but-unpolicied (deny-all) tables.');
   await client.end();
 }
 main().catch((e) => { console.error('✗ RLS fitness error:', e.message); process.exit(1); });

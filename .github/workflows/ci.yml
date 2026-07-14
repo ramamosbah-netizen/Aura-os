@@ -129,6 +129,49 @@ jobs:
       - name: Seed the demo dataset through the live API
         run: AURA_API_URL=http://localhost:4300 node apps/api/scripts/seed-demo.mjs
 
+      # ── R1 activation closure ──────────────────────────────────────────────────────────
+      # The steps above run as the DB owner (BYPASSRLS), which proves nothing about enforcement.
+      # Here we ACTIVATE the enforced role: grant `aura_app` LOGIN, boot the built API pointed at
+      # it, run a representative business write through the full spine (create → event append →
+      # outbox relay → tenant-scoped write + read-back), and prove DB-level fail-closed + that the
+      # runtime role genuinely cannot bypass RLS. This is the runtime proof R1's DoD requires.
+      - name: R1 activation — grant aura_app LOGIN
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER ROLE aura_app LOGIN PASSWORD 'aura_app_ci';"
+
+      - name: R1 activation — boot the API as aura_app and run a business flow
+        run: |
+          cd apps/api
+          APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"
+          DATABASE_URL="$APP_URL" PORT=4400 nohup node dist/main.js > api-app.log 2>&1 &
+          echo $! > api-app.pid
+          for i in $(seq 1 60); do curl -sf http://localhost:4400/api/v1/health > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:4400/api/v1/health || { echo '--- api-app.log'; cat api-app.log; exit 1; }
+          # representative spine write under aura_app (open mode → dev-tenant)
+          resp=$(curl -sf -X POST http://localhost:4400/api/v1/crm/accounts \
+            -H 'content-type: application/json' \
+            -d '{"name":"RLS Activation Co","status":"prospect","industry":"Test"}') \
+            || { echo '::error::business create failed under aura_app'; cat api-app.log; exit 1; }
+          echo "$resp"
+          echo "$resp" | grep -q '"id"' || { echo '::error::create returned no id under aura_app'; cat api-app.log; exit 1; }
+          # read it back — exercises the tenant-scoped read pool under aura_app
+          curl -sf "http://localhost:4400/api/v1/crm/accounts" | grep -q 'RLS Activation Co' \
+            || { echo '::error::tenant-scoped read failed under aura_app'; cat api-app.log; exit 1; }
+
+      - name: R1 activation — DB-level fail-closed + no-bypass proof under aura_app
+        run: |
+          APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"
+          scoped=$(psql "$APP_URL" -tAc "SELECT set_config('app.current_tenant_id','dev-tenant',false); SELECT count(*) FROM public.aura_crm_accounts;" | tail -n1)
+          closed=$(psql "$APP_URL" -tAc "SELECT set_config('app.current_tenant_id','',false); SELECT count(*) FROM public.aura_crm_accounts;" | tail -n1)
+          echo "aura_app: dev-tenant rows=$scoped · no-context rows=$closed"
+          test "$scoped" -gt 0 || { echo '::error::aura_app cannot read its own tenant rows'; exit 1; }
+          test "$closed" = "0" || { echo '::error::RLS not fail-closed under aura_app (rows visible with no context)'; exit 1; }
+          bypass=$(psql "$APP_URL" -tAc "SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname=current_user;" | tail -n1)
+          test "$bypass" = "f" || { echo '::error::runtime role can bypass RLS'; exit 1; }
+
+      - name: R1 activation — stop the aura_app API
+        if: always()
+        run: kill "$(cat apps/api/api-app.pid)" 2>/dev/null || true
+
       - name: Freeze the source (stop the API) before backup
         run: |
           kill "$(cat apps/api/api.pid)" || true
@@ -156,7 +199,9 @@ jobs:
 
       - name: API log on failure
         if: failure()
-        run: cat apps/api/api.log || true
+        run: |
+          echo '=== owner API (api.log) ==='; cat apps/api/api.log || true
+          echo '=== aura_app API (api-app.log) ==='; cat apps/api/api-app.log || true
 
   # P0 #3: secret scanning — fail the build when a credential-shaped string lands in
   # the diff. Rotation/revocation procedure: docs/runbooks/secrets-rotation.md.

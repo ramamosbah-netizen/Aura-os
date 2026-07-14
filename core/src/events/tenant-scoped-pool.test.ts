@@ -80,4 +80,62 @@ describe('TenantScopedPool', () => {
     expect(binds[0].params?.[1]).toBe('t-A');
     expect(binds[1].params?.[1]).toBe('t-B');
   });
+
+  // connect() is the seam used by callers that own their own BEGIN/COMMIT (numbering engine,
+  // journal/document/event stores, projection engine). It must bind the tenant just like query().
+  describe('connect()', () => {
+    it('binds the bound request tenant to the session GUC on the checked-out client', async () => {
+      const { pool, client, calls } = fakePool();
+      const tenant = new TenantContext();
+      const wrapped = new TenantScopedPool(pool, tenant);
+
+      await tenant.run({ tenantId: 't-A', companyId: 'c-1', actorId: null }, async () => {
+        const c = await wrapped.connect();
+        expect(c).toBe(client);
+      });
+
+      const set = setConfigCall(calls);
+      expect(set?.params).toEqual(['app.current_tenant_id', 't-A', 'app.current_company_id', 'c-1']);
+    });
+
+    it('FAILS CLOSED: connect() with no bound scope binds an empty tenant', async () => {
+      const { pool, calls } = fakePool();
+      const wrapped = new TenantScopedPool(pool, new TenantContext());
+
+      await wrapped.connect();
+
+      expect(setConfigCall(calls)?.params).toEqual(['app.current_tenant_id', '', 'app.current_company_id', '']);
+    });
+
+    it('resets the GUC before the physical connection is released back to the pool (no leak)', async () => {
+      const { pool, client, calls, released } = fakePool();
+      const tenant = new TenantContext();
+      const wrapped = new TenantScopedPool(pool, tenant);
+
+      const c = await tenant.run({ tenantId: 't-A', companyId: null, actorId: null }, () => wrapped.connect());
+      c.release();
+      // release() defers the raw release until the async reset completes.
+      await new Promise((r) => setImmediate(r));
+
+      const idxReset = calls.findIndex((c2) => c2.sql.includes("set_config('app.current_tenant_id', ''"));
+      expect(idxReset).toBeGreaterThan(-1); // reset ran
+      expect(released()).toBe(1); // physical connection returned exactly once
+      void client;
+    });
+
+    it('an error release (truthy arg) discards the connection without a reset round-trip', async () => {
+      const { pool, calls, released } = fakePool();
+      const tenant = new TenantContext();
+      const wrapped = new TenantScopedPool(pool, tenant);
+
+      const c = await tenant.run({ tenantId: 't-A', companyId: null, actorId: null }, () => wrapped.connect());
+      const before = calls.length;
+      c.release(new Error('broken'));
+      await new Promise((r) => setImmediate(r));
+
+      // no reset query issued (connection is being destroyed), but still released once
+      expect(calls.slice(before).some((c2) => c2.sql.includes('set_config'))).toBe(false);
+      expect(released()).toBe(1);
+    });
+  });
 });

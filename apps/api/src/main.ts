@@ -9,6 +9,7 @@ import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, metrics } from 
 import { readSecret } from '@aura/shared';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
+import { MigrationGateService } from './health/migration-gate.service';
 import { AccessDeniedFilter } from './auth/access-denied.filter';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -75,6 +76,30 @@ async function bootstrap(): Promise<void> {
       metrics.inc('http_request_duration_ms_count', { status: cls });
     });
     next();
+  });
+
+  // Migration deploy-gate (R2 / G-P0-2): if the DB schema is behind this build's migrations,
+  // refuse business routes with a loud 503 rather than 500-ing deep in a handler against a
+  // missing column. Health/metrics/docs stay reachable so the degraded state is observable.
+  const migrationGate = app.get(MigrationGateService);
+  const GATE_ALLOW = ['/api/v1/health', '/api/v1/metrics', '/api/docs'];
+  app.use((req: IncomingMessage, res: ServerResponse, next: () => void): void => {
+    if (!migrationGate.isDegraded()) return next();
+    const path = (req.url ?? '').split('?')[0];
+    if (GATE_ALLOW.some((p) => path === p || path.startsWith(`${p}/`))) return next();
+    const s = migrationGate.getStatus();
+    res.statusCode = 503;
+    res.setHeader('content-type', 'application/json');
+    res.setHeader('retry-after', '30');
+    res.end(
+      JSON.stringify({
+        statusCode: 503,
+        error: 'Service Unavailable',
+        code: 'SCHEMA_MIGRATION_PENDING',
+        message: `database schema is behind the application; ${s.pending.length} migration(s) pending`,
+        pending: s.pending,
+      }),
+    );
   });
 
   // OTLP metrics push (gap #6) — no-op unless OTLP_METRICS_URL is configured. Refreshes the

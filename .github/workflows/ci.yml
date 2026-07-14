@@ -172,6 +172,39 @@ jobs:
         if: always()
         run: kill "$(cat apps/api/api-app.pid)" 2>/dev/null || true
 
+      # ── R2 migration deploy-gate (G-P0-2) ──────────────────────────────────────────────
+      # Prove the boot-time schema-drift gate: un-record the latest migration in the ledger so the
+      # code is "ahead" of the DB, boot the built API, and assert it goes health-degraded (503) and
+      # refuses business routes (503 SCHEMA_MIGRATION_PENDING) instead of 500-ing on a missing
+      # column. The ledger row is restored before any assertion so later backup/restore steps see a
+      # consistent DB regardless of outcome. (Only the ledger entry is touched — the schema is not.)
+      - name: R2 deploy-gate — pending migration ⇒ degraded + business routes refused
+        run: |
+          cd apps/api
+          latest=$(psql "$DATABASE_URL" -tAc "SELECT filename FROM public.aura_migrations ORDER BY filename DESC LIMIT 1" | tr -d '[:space:]')
+          echo "Simulating drift by un-recording latest migration: $latest"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DELETE FROM public.aura_migrations WHERE filename='$latest';"
+          PORT=4500 nohup node dist/main.js > api-gate.log 2>&1 &
+          echo $! > api-gate.pid
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4500/api/v1/health || true)
+            [ "$code" != "000" ] && break; sleep 1
+          done
+          health_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4500/api/v1/health)
+          health_body=$(curl -s http://localhost:4500/api/v1/health)
+          biz_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:4500/api/v1/crm/accounts -H 'content-type: application/json' -d '{"name":"gate","status":"prospect"}')
+          biz_body=$(curl -s -X POST http://localhost:4500/api/v1/crm/accounts -H 'content-type: application/json' -d '{"name":"gate","status":"prospect"}')
+          echo "health: $health_code $health_body"
+          echo "business: $biz_code $biz_body"
+          kill "$(cat api-gate.pid)" 2>/dev/null || true
+          # restore the ledger BEFORE asserting so a failed assertion can't corrupt later steps
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_migrations(filename) VALUES('$latest') ON CONFLICT DO NOTHING;"
+          test "$health_code" = "503" || { echo "::error::health not degraded (got $health_code)"; cat api-gate.log; exit 1; }
+          echo "$health_body" | grep -q 'degraded' || { echo '::error::health body is not degraded'; exit 1; }
+          test "$biz_code" = "503" || { echo "::error::business route not refused (got $biz_code)"; cat api-gate.log; exit 1; }
+          echo "$biz_body" | grep -q 'SCHEMA_MIGRATION_PENDING' || { echo '::error::business refusal code missing'; exit 1; }
+          echo "✓ deploy-gate: degraded health + business routes refused while a migration is pending"
+
       - name: Freeze the source (stop the API) before backup
         run: |
           kill "$(cat apps/api/api.pid)" || true
@@ -201,6 +234,7 @@ jobs:
         if: failure()
         run: |
           echo '=== owner API (api.log) ==='; cat apps/api/api.log || true
+          echo '=== deploy-gate API (api-gate.log) ==='; cat apps/api/api-gate.log || true
           echo '=== aura_app API (api-app.log) ==='; cat apps/api/api-app.log || true
 
   # P0 #3: secret scanning — fail the build when a credential-shaped string lands in

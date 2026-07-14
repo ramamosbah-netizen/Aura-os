@@ -41,6 +41,13 @@ Events/Reactors · Tests · Definition of Done.
 ## Wave 1 — Authoritative commercial truth (the front-half fix)
 
 ### Slice R3 — Commercial Baseline + governed approval (P1, G-P1-1 + G-P1-2)
+> **Status — core shipped:** governance gate (`send` requires `approved`, `quotation.ts`), immutable
+> `aura_crm_commercial_baselines` locked on approval (mig `0165`), contract links the baseline + defaults its
+> value from it, `commercialVariance` drift detector, baseline read API + web indicator. **Deferred to a
+> follow-up** (they depend on cost plumbing not yet wired — R5 territory): margin/discount **threshold →
+> workflow approval**, and cost-build-up **versioning** (tendering `estimate.service.ts` still replaces on
+> re-estimate). Those are additive on top of this baseline.
+
 - **Objective:** an immutable approved price/margin snapshot, and a real approval gate.
 - **Outcome:** nothing is sent unapproved; contract value traces to an approved baseline; pricing history retained.
 - **Dependencies:** R1.

@@ -176,18 +176,25 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
                       <td style={{ whiteSpace: 'nowrap', color: expiredDate ? 'var(--bad)' : expiring ? 'var(--warn, #d97706)' : 'var(--muted)' }}>
                         {q.validUntil ?? '—'}{expiring ? ' ⚠' : ''}{expiredDate ? ' ✗' : ''}
                       </td>
-                      <td><span className={badgeKind[q.status] ?? 'badge'}>{q.status.replace(/_/g, ' ')}</span></td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span className={badgeKind[q.status] ?? 'badge'}>{q.status.replace(/_/g, ' ')}</span>
+                        {['approved', 'sent', 'under_negotiation', 'accepted'].includes(q.status) && (
+                          <span title={`Commercial baseline locked at AED ${aed(q.total)} on approval`} style={{ marginLeft: 6, color: 'var(--good)' }}>🔒</span>
+                        )}
+                      </td>
                       <td style={{ color: 'var(--muted)' }}>{q.ownerId ?? '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {/* R3 governance: a quote cannot be sent until it is approved (which locks
+                              the commercial baseline). Draft offers Review or a direct Approve. */}
                           {q.status === 'draft' && (
                             <>
                               <button type="button" className="btn" style={st.smBtn} onClick={() => act(q.id, 'submit_review')}>Review →</button>
-                              <button type="button" className="btn btn-primary" style={st.smBtn} onClick={() => act(q.id, 'send')}>Send</button>
+                              <button type="button" className="btn btn-primary" style={st.smBtn} onClick={() => act(q.id, 'approve')}>Approve ✓</button>
                             </>
                           )}
                           {q.status === 'internal_review' && <button type="button" className="btn btn-primary" style={st.smBtn} onClick={() => act(q.id, 'approve')}>Approve ✓</button>}
-                          {q.status === 'approved' && <button type="button" className="btn btn-primary" style={st.smBtn} onClick={() => act(q.id, 'send')}>Send</button>}
+                          {q.status === 'approved' && <button type="button" className="btn btn-primary" style={st.smBtn} onClick={() => act(q.id, 'send')} title="Sends the approved quote (baseline locked)">Send</button>}
                           {q.status === 'sent' && <button type="button" className="btn" style={st.smBtn} onClick={() => act(q.id, 'negotiate')}>Negotiate</button>}
                           {(q.status === 'sent' || q.status === 'under_negotiation') && (
                             <>

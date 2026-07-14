@@ -12,6 +12,8 @@ import {
   reviseQuotation,
 } from './domain/quotation';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
+import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
+import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
 
 export { QUOTATION_ACTIONS, type QuotationAction };
 
@@ -25,6 +27,7 @@ export class QuotationService {
 
   constructor(
     @Inject(CRM_QUOTATION_STORE) private readonly store: QuotationStore,
+    @Inject(CRM_COMMERCIAL_BASELINE_STORE) private readonly baselines: CommercialBaselineStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
   ) {}
 
@@ -46,7 +49,7 @@ export class QuotationService {
     return q;
   }
 
-  async changeStatus(id: Id, action: QuotationAction): Promise<Quotation> {
+  async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null): Promise<Quotation> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
     const updated = applyQuotationAction(q, action);
@@ -56,13 +59,37 @@ export class QuotationService {
     await this.events.append([
       makeEvent({
         type: eventType,
-        tenantId: q.tenantId, companyId: q.companyId, actorId: null,
+        tenantId: q.tenantId, companyId: q.companyId, actorId,
         aggregateType: 'crm.quotation', aggregateId: id,
         payload: { quoteNumber: q.quoteNumber, total: q.total, status: updated.status, action },
       }),
     ]);
     this.logger.log(`Quotation ${q.quoteNumber} (rev ${q.revision}) ${action} → ${updated.status}`);
+
+    // Governance (R3): approval locks the immutable Commercial Baseline — the approved-price snapshot
+    // the Contract will reference. Idempotent: only the first approval of this quotation locks one.
+    if (action === 'approve') {
+      const existing = await this.baselines.getByQuotation(updated.tenantId, updated.id);
+      if (!existing) {
+        const baseline = makeCommercialBaseline(updated, actorId);
+        await this.baselines.save(baseline);
+        await this.events.append([
+          makeEvent({
+            type: COMMERCIAL_BASELINE_EVENT.locked,
+            tenantId: updated.tenantId, companyId: updated.companyId, actorId,
+            aggregateType: 'crm.commercial_baseline', aggregateId: baseline.id,
+            payload: { quotationId: updated.id, quoteNumber: updated.quoteNumber, total: baseline.total },
+          }),
+        ]);
+        this.logger.log(`Commercial baseline locked for ${updated.quoteNumber}: total ${baseline.total} (${baseline.id})`);
+      }
+    }
     return updated;
+  }
+
+  /** The locked approved-price baseline for a quotation (null until it has been approved). */
+  getBaseline(tenantId: Id, quotationId: Id): Promise<CommercialBaseline | null> {
+    return this.baselines.getByQuotation(tenantId, quotationId);
   }
 
   /** Supersede + copy: the old record becomes 'revised', a new draft carries revision+1. */

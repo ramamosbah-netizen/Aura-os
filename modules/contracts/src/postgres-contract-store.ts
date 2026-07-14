@@ -17,13 +17,14 @@ interface Row {
   account_name: string | null;
   status: string;
   value: string | number;
+  commercial_baseline_id: string | null;
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
-  'id, tenant_id, company_id, title, reference, tender_id, tender_title, account_id, account_name, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, title, reference, tender_id, tender_title, account_id, account_name, status, value, commercial_baseline_id, owner_id, created_by, created_at';
 
 function rowToContract(r: Row): Contract {
   return {
@@ -38,6 +39,7 @@ function rowToContract(r: Row): Contract {
     accountName: r.account_name,
     status: r.status as Contract['status'],
     value: Number(r.value),
+    commercialBaselineId: r.commercial_baseline_id,
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
@@ -59,8 +61,8 @@ export class PostgresContractStore implements ContractStore {
 
   private insert(executor: Pool | PoolClient, c: Contract): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_contracts_contracts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [c.id, c.tenantId, c.companyId, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.ownerId, c.createdBy, c.createdAt],
+      `INSERT INTO public.aura_contracts_contracts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      [c.id, c.tenantId, c.companyId, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.commercialBaselineId, c.ownerId, c.createdBy, c.createdAt],
     );
   }
 

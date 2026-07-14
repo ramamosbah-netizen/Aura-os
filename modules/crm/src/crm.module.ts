@@ -23,6 +23,10 @@ import { QuotationService } from './quotation.service';
 import { CRM_COMMERCIAL_BASELINE_STORE } from './commercial-baseline-store';
 import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline-store';
 import { PostgresCommercialBaselineStore } from './postgres-commercial-baseline-store';
+import { CRM_PRE_AWARD_STORE } from './pre-award-store';
+import { InMemoryPreAwardStore } from './in-memory-pre-award-store';
+import { PostgresPreAwardStore } from './postgres-pre-award-store';
+import { PreAwardService } from './pre-award.service';
 
 import { CRM_CONTACT_STORE } from './contact-store';
 import { InMemoryContactStore } from './in-memory-contact-store';
@@ -85,6 +89,12 @@ import { LeadConversionService } from './lead-conversion.service';
         pool ? new PostgresCommercialBaselineStore(pool) : new InMemoryCommercialBaselineStore(),
     },
     {
+      provide: CRM_PRE_AWARD_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPreAwardStore(pool) : new InMemoryPreAwardStore(),
+    },
+    {
       provide: CRM_QUOTATION_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -129,8 +139,9 @@ import { LeadConversionService } from './lead-conversion.service';
     SignalService,
     OpportunityDepthService,
     ForecastSnapshotService,
+    PreAwardService,
     LeadConversionService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, LeadConversionService],
+  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
 })
 export class CrmModule {}

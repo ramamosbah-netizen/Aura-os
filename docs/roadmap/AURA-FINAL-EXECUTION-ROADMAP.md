@@ -63,6 +63,14 @@ Events/Reactors · Tests · Definition of Done.
 - **DoD:** governance enforced server-side; baseline immutable; contract shows linkage.
 
 ### Slice R4 — Pre-award discovery: Requirement → Survey → Solution → Scope→BOQ (P1, G-P1-3)
+> **Status — core shipped:** `Requirement` + `SolutionScope` (structured scope lines) on the opportunity
+> (mig `0166`, RLS+FORCE+policy); a scope has a draft→approved gate; an **approved scope generates a
+> governed Quotation** (`scopeLinesToQuotationLines` → `QuotationService`, which runs the R3 approve→baseline
+> gate) — so the **direct-sale path now starts from a signed-off structured scope, not free-form**. API nested
+> on the opportunity + Pre-Award panel on Opp 360. **Deferred:** the **Site Survey** entity (a capture artifact
+> that informs scope, not on the pricing critical path), and **tender-path scope→tender-BOQ** (needs decoupling
+> `BOQ` from `tenderId` — a tendering change; the tender pricing sheet already exists for that path).
+
 - **Objective:** capture the technical front-half and derive a priceable BOQ (incl. direct-sale).
 - **Outcome:** bids/quotes start from structured scope, not spreadsheets.
 - **Dependencies:** R3 (baseline consumes scope).

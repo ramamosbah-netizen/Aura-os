@@ -24,6 +24,20 @@ export class ProjectionEngine implements OnModuleInit {
     });
   }
 
+  /**
+   * Bind an event's tenant to the transaction-local RLS GUC on `client`, so a projection's
+   * write to a tenant-scoped read-model table satisfies the policy under the enforced `aura_app`
+   * role. Projections run on the outbox relay's connection (live) or a rebuild stream (replay) —
+   * neither is a request — so the tenant must come from the event itself, per event. `is_local`
+   * = true keeps it scoped to the current transaction and self-resets on COMMIT/ROLLBACK.
+   */
+  private async bindEventTenant(client: PoolClient, event: DomainEvent): Promise<void> {
+    await client.query('SELECT set_config($1, $2, true), set_config($3, $4, true)', [
+      'app.current_tenant_id', event.tenantId ?? '',
+      'app.current_company_id', event.companyId ?? '',
+    ]);
+  }
+
   register(projection: Projection): void {
     if (this.projections.has(projection.name)) {
       throw new Error(`Projection ${projection.name} is already registered.`);
@@ -79,6 +93,9 @@ export class ProjectionEngine implements OnModuleInit {
       let lastOccurredAt: string | null = null;
 
       for (const event of events) {
+        // Rebuild streams events across every tenant on one system connection; re-scope the RLS
+        // GUC to each event's tenant before its write so isolation holds under `aura_app`.
+        await this.bindEventTenant(client, event);
         await projection.handle(event, client);
         lastEventId = event.id;
         lastOccurredAt = event.occurredAt;
@@ -140,6 +157,10 @@ export class ProjectionEngine implements OnModuleInit {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // The relay already restored the event's tenant into TenantContext (which connect() binds
+      // at the session level), but bind it transaction-locally too so a projection's write is
+      // RLS-scoped to the event's tenant regardless of ambient state — belt and suspenders.
+      await this.bindEventTenant(client, event);
 
       for (const projection of this.projections.values()) {
         // Fetch current checkpoint status of the projection

@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import type { Pool } from 'pg';
 import { EventBus } from './event-bus';
 import { EVENT_COLUMNS, type EventRow, rowToEvent } from './postgres-event-store';
+import { TenantContext } from '../tenancy/tenant-context';
 
 const POLL_MS = Number(process.env.OUTBOX_POLL_MS ?? 1000);
 const BATCH = Number(process.env.OUTBOX_BATCH ?? 100);
@@ -16,6 +17,12 @@ const MAX_ATTEMPTS = Number(process.env.OUTBOX_MAX_ATTEMPTS ?? 5);
  *
  * A handler failure increments `attempts` and leaves the row unprocessed to retry next
  * tick; after OUTBOX_MAX_ATTEMPTS it is dead-lettered (processed_at stamped, error kept).
+ *
+ * The relay polls `aura_events` cross-tenant on the system connection (that table is excluded
+ * from tenant RLS — see migration 0163), but each event is **tenant-bound**: before publishing
+ * it restores the event's tenant into {@link TenantContext} via `run()`, so the reactor,
+ * projection and webhook writes it triggers carry that tenant and satisfy RLS under the
+ * enforced `aura_app` role. Without this, every async downstream write would fail closed.
  */
 @Injectable()
 export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
@@ -26,6 +33,7 @@ export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly pool: Pool | null,
     private readonly bus: EventBus,
+    private readonly tenant: TenantContext,
   ) {}
 
   onModuleInit(): void {
@@ -60,7 +68,17 @@ export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
       for (const row of rows) {
         const event = rowToEvent(row);
         try {
-          await this.bus.publish(event);
+          // Restore the event's tenant so downstream reactor/projection/webhook writes are
+          // RLS-scoped to it (this worker runs outside any request, so nothing else binds it).
+          await this.tenant.run(
+            {
+              tenantId: event.tenantId,
+              companyId: event.companyId ?? null,
+              actorId: event.actorId ?? null,
+              correlationId: event.correlationId ?? null,
+            },
+            () => this.bus.publish(event),
+          );
           await client.query(
             'UPDATE public.aura_events SET processed_at = now(), processing_error = NULL WHERE id = $1',
             [event.id],

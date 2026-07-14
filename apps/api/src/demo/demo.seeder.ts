@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { TenantContext } from '@aura/core';
 import { AccountService } from '@aura/crm';
 import { TenderService } from '@aura/tendering';
 import { ContractService } from '@aura/contracts';
@@ -35,6 +36,7 @@ export class DemoSeeder implements OnModuleInit {
     private readonly subcontracts: SubcontractsService,
     private readonly hr: HrService,
     private readonly quality: QualityService,
+    private readonly tenant: TenantContext,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -44,19 +46,25 @@ export class DemoSeeder implements OnModuleInit {
 
   /** Idempotent demo seed — used by DEMO_SEED boot and the admin data page (§2.9). */
   async runIfEmpty(): Promise<{ seeded: boolean; reason?: string }> {
-    try {
-      const existing = await this.accounts.list({ tenantId: TENANT, limit: 1 });
-      if (existing.length > 0) {
-        this.logger.log('Demo seed skipped — tenant already has data.');
-        return { seeded: false, reason: 'tenant already has data' };
+    // Bind the demo tenant for the whole operation: boot (onModuleInit) runs outside any request,
+    // so without this the existence-check reads and the seed writes would carry no tenant context
+    // and fail closed under the enforced `aura_app` role. The admin-endpoint path already has a
+    // request tenant, but binding TENANT here keeps the seed writing to 'dev-tenant' consistently.
+    return this.tenant.run({ tenantId: TENANT, companyId: null, actorId: null }, async () => {
+      try {
+        const existing = await this.accounts.list({ tenantId: TENANT, limit: 1 });
+        if (existing.length > 0) {
+          this.logger.log('Demo seed skipped — tenant already has data.');
+          return { seeded: false, reason: 'tenant already has data' };
+        }
+        await this.seed();
+        this.logger.log('Demo company seeded (accounts → tenders → contract → project → operate loop + HR/Quality inbox items).');
+        return { seeded: true };
+      } catch (e) {
+        this.logger.warn(`Demo seed failed (continuing without it): ${(e as Error).message}`);
+        return { seeded: false, reason: (e as Error).message };
       }
-      await this.seed();
-      this.logger.log('Demo company seeded (accounts → tenders → contract → project → operate loop + HR/Quality inbox items).');
-      return { seeded: true };
-    } catch (e) {
-      this.logger.warn(`Demo seed failed (continuing without it): ${(e as Error).message}`);
-      return { seeded: false, reason: (e as Error).message };
-    }
+    });
   }
 
   private async seed(): Promise<void> {

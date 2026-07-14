@@ -3,7 +3,7 @@ import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
 import { ProjectService, WbsService, CbsService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
-import { TenderService } from '@aura/tendering';
+import { TenderService, EstimateSourcingService } from '@aura/tendering';
 import { AccountService, SignalService } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
@@ -46,6 +46,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly pos: PurchaseOrderService,
     private readonly purchaseRequests: PurchaseRequestService,
     private readonly tenders: TenderService,
+    private readonly estimateSourcing: EstimateSourcingService,
     private readonly accounts: AccountService,
     private readonly signals: SignalService,
     private readonly customerInvoices: CustomerInvoiceService,
@@ -735,6 +736,30 @@ export class CrossModuleSubscriber implements OnModuleInit {
         this.logger.log(`⚡ asset.disposed → posted GL ${ref} for ${assetName} (proceeds: ${proceeds}, bookValue: ${bookValue}, gainLoss: ${gainLoss})`);
       } catch (err) {
         this.logger.error(`Failed to post asset disposal GL from asset.disposed: ${err}`);
+      }
+    });
+
+    // ── Bid-time sourcing (R5): RFQ awarded → restamp sourced estimate components ──
+    // A build-up component sourced from this RFQ is repriced to the awarded quote's amount, so the
+    // tender estimate stays consistent with the real supplier price. EstimateSourcingService owns
+    // the link + recompute; it no-ops when nothing was sourced from the RFQ.
+    this.bus.subscribe('procurement.rfq.awarded', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const quoteId = p.quoteId as string | undefined;
+        const amount = Number(p.amount) || 0;
+        if (!quoteId || amount <= 0) return;
+        const n = await this.estimateSourcing.restampFromAward({
+          tenantId: e.tenantId,
+          rfqId: e.aggregateId,
+          quoteId,
+          supplierName: (p.supplier as string) ?? 'Supplier',
+          amount,
+          actorId: e.actorId,
+        });
+        if (n > 0) this.logger.log(`⚡ rfq.awarded → restamped ${n} sourced estimate component(s) to ${amount}`);
+      } catch (err) {
+        this.logger.error(`Failed to restamp sourced estimates from rfq.awarded: ${err}`);
       }
     });
 

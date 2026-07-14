@@ -98,6 +98,15 @@ jobs:
           echo "$out" | tail -n 2
           echo "$out" | grep -q "0 applied" || { echo "::error::migration rerun applied files — the chain is not idempotent"; exit 1; }
 
+      # R1 (G-P0-1): tenant-isolation enforcement. The fitness check fails if any tenant-scoped
+      # business table is missing RLS/FORCE/policy; the isolation test proves the policy denies
+      # cross-tenant access under a real NON-BYPASSRLS role.
+      - name: RLS fitness — every tenant-scoped table is protected
+        run: node apps/api/scripts/rls-fitness.mjs
+
+      - name: RLS isolation — cross-tenant access is denied under a non-bypass role
+        run: node apps/api/scripts/rls-isolation-test.mjs
+
       - name: Build the API (workspace deps included)
         run: pnpm exec turbo run build --filter=@aura/api...
 

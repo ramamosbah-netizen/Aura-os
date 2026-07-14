@@ -31,6 +31,22 @@ export class TenantContext {
     return this.als.getStore() ?? DEV_DEFAULT;
   }
 
+  /**
+   * The tenant id bound to the ACTIVE request scope, or `null` when there is none.
+   * Unlike `get()`, this does NOT fall back to the dev default — RLS callers (the
+   * tenant-scoped pool + the tx runner) use it to **fail closed**: with no bound
+   * tenant they set the `app.current_tenant_id` GUC empty, so the RLS policies
+   * (`tenant_id = current_tenant_id()`, which is NULL when unset) match no rows.
+   */
+  boundTenantId(): Id | null {
+    return this.als.getStore()?.tenantId ?? null;
+  }
+
+  /** The company id bound to the active request scope, or `null` when there is none. */
+  boundCompanyId(): Id | null {
+    return this.als.getStore()?.companyId ?? null;
+  }
+
   /** Mutate the bound context (no-op outside a run scope). */
   set(info: Partial<TenantInfo>): void {
     const store = this.als.getStore();

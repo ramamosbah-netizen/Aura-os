@@ -28,11 +28,14 @@ export class PostgresTxRunner implements TxRunner {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const ctx = this.tenant.get();
-      // Set the session config parameters local to the transaction block
-      await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', ctx.tenantId]);
-      await client.query('SELECT set_config($1, $2, true)', ['app.current_company_id', ctx.companyId ?? '']);
-      
+      // Bind the tenant GUC transaction-locally for the RLS policies. Fail closed: use the
+      // BOUND request tenant (not the dev default) so a write outside any request scope sets
+      // an empty tenant and RLS denies it, rather than silently writing as 'dev-tenant'.
+      const tid = this.tenant.boundTenantId() ?? '';
+      const cid = this.tenant.boundCompanyId() ?? '';
+      await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', tid]);
+      await client.query('SELECT set_config($1, $2, true)', ['app.current_company_id', cid]);
+
       const result = await fn(client);
       await client.query('COMMIT');
       return result;

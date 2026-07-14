@@ -171,6 +171,7 @@ function buildHarness() {
     noop, // PurchaseOrderService
     mockPurchaseRequests,
     tenders,
+    { restampFromAward: async () => 0 } as any, // EstimateSourcingService (R5)
     noop, // AccountService (CRM)
     mockSignals, // SignalService (CRM)
     customerInvoices,

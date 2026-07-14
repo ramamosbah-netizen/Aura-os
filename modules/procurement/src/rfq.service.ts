@@ -116,7 +116,9 @@ export class RfqService {
         actorId: actorId ?? null,
         aggregateType: 'procurement.rfq',
         aggregateId: rfq.id,
-        payload: { title: rfq.title, supplier: winner.supplierName, amount: winner.amount },
+        // quoteId lets the tendering estimate-sourcing reactor restamp components sourced from
+        // this RFQ to the awarded price (R5 / G-P1-4).
+        payload: { title: rfq.title, quoteId: winner.id, supplier: winner.supplierName, amount: winner.amount },
       }),
     ]);
     this.logger.log(`RFQ ${rfq.title} (${rfq.id}) awarded to ${winner.supplierName} @ ${winner.amount}`);

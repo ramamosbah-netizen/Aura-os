@@ -20,6 +20,9 @@ import { CRM_QUOTATION_STORE } from './quotation-store';
 import { InMemoryQuotationStore } from './in-memory-quotation-store';
 import { PostgresQuotationStore } from './postgres-quotation-store';
 import { QuotationService } from './quotation.service';
+import { CRM_COMMERCIAL_BASELINE_STORE } from './commercial-baseline-store';
+import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline-store';
+import { PostgresCommercialBaselineStore } from './postgres-commercial-baseline-store';
 
 import { CRM_CONTACT_STORE } from './contact-store';
 import { InMemoryContactStore } from './in-memory-contact-store';
@@ -74,6 +77,12 @@ import { LeadConversionService } from './lead-conversion.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresOpportunityStore(pool) : new InMemoryOpportunityStore(),
+    },
+    {
+      provide: CRM_COMMERCIAL_BASELINE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCommercialBaselineStore(pool) : new InMemoryCommercialBaselineStore(),
     },
     {
       provide: CRM_QUOTATION_STORE,

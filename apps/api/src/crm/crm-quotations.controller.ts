@@ -33,6 +33,9 @@ export class CrmQuotationsController {
     if (!q) throw new NotFoundException(`quotation ${id} not found`);
     if (q.status !== 'accepted') throw new BadRequestException(`quotation must be 'accepted' to convert (is '${q.status}')`);
     const ctx = this.tenant.get();
+    // R3: the contract inherits the locked Commercial Baseline (approved price) — its value defaults
+    // from the baseline total so the contract is provably tied to what was approved, not re-invented.
+    const baseline = await this.quotations.getBaseline(ctx.tenantId, q.id);
     const contract = await this.contracts.create(
       {
         tenantId: ctx.tenantId,
@@ -40,7 +43,8 @@ export class CrmQuotationsController {
         title: `Contract from ${q.quoteNumber} — ${q.customerName}`,
         accountId: q.accountId,
         accountName: q.customerName,
-        value: q.total,
+        value: baseline ? baseline.total : q.total,
+        commercialBaselineId: baseline?.id ?? null,
         status: 'draft',
         createdBy: ctx.actorId,
       },
@@ -119,11 +123,18 @@ export class CrmQuotationsController {
     return found;
   }
 
+  /** The locked Commercial Baseline (approved-price snapshot) for this quotation, or null. */
+  @Get(':id/baseline')
+  async baseline(@Param('id') id: string) {
+    return (await this.quotations.getBaseline(this.tenant.get().tenantId, id)) ?? null;
+  }
+
   @Patch(':id/status')
   async changeStatus(@Param('id') id: string, @Body() dto: { action: QuotationAction }): Promise<Quotation> {
     if (!QUOTATION_ACTIONS.includes(dto?.action)) {
       throw new BadRequestException(`action must be one of ${QUOTATION_ACTIONS.join(', ')}`);
     }
-    return await this.quotations.changeStatus(id, dto.action);
+    // Pass the actor so approval records who locked the commercial baseline (R3 governance).
+    return await this.quotations.changeStatus(id, dto.action, this.tenant.get().actorId);
   }
 }

@@ -34,25 +34,41 @@ describe('makeQuotation', () => {
   });
 });
 
+// R3 governance: a quotation must be APPROVED before it can be sent to a customer.
+const approve = (q: ReturnType<typeof makeQuotation>) => applyQuotationAction(q, 'approve');
+const toSent = () => sendQuotation(approve(makeQuotation(base)));
+
 describe('lifecycle', () => {
-  it('draft → sent → accepted', () => {
-    let q = sendQuotation(makeQuotation(base));
+  it('draft → approve → sent → accepted', () => {
+    let q = toSent();
     expect(q.status).toBe('sent');
     q = acceptQuotation(q);
     expect(q.status).toBe('accepted');
   });
   it('can reject a sent quote', () => {
-    expect(rejectQuotation(sendQuotation(makeQuotation(base))).status).toBe('rejected');
+    expect(rejectQuotation(toSent()).status).toBe('rejected');
   });
   it('cannot accept a draft (must send first)', () => {
     expect(() => acceptQuotation(makeQuotation(base))).toThrow('cannot accept from status draft');
   });
   it('can expire a draft or sent quote', () => {
     expect(expireQuotation(makeQuotation(base)).status).toBe('expired');
-    expect(expireQuotation(sendQuotation(makeQuotation(base))).status).toBe('expired');
+    expect(expireQuotation(toSent()).status).toBe('expired');
   });
   it('cannot expire an accepted quote', () => {
-    expect(() => expireQuotation(acceptQuotation(sendQuotation(makeQuotation(base))))).toThrow('cannot expire');
+    expect(() => expireQuotation(acceptQuotation(toSent()))).toThrow('cannot expire');
+  });
+});
+
+describe('commercial governance (R3): cannot send unapproved', () => {
+  it('cannot send straight from draft — approval is required', () => {
+    expect(() => sendQuotation(makeQuotation(base))).toThrow('cannot send from status draft');
+  });
+  it('approve is allowed directly from draft (one-step authorized sign-off)', () => {
+    expect(approve(makeQuotation(base)).status).toBe('approved');
+  });
+  it('send is allowed once approved', () => {
+    expect(sendQuotation(approve(makeQuotation(base))).status).toBe('sent');
   });
 });
 
@@ -72,12 +88,12 @@ describe('extended lifecycle (review/negotiation/revisions)', () => {
 
   it('cancel works from any open status but not after acceptance', () => {
     expect(applyQuotationAction(makeQuotation(base), 'cancel').status).toBe('cancelled');
-    const accepted = applyQuotationAction(applyQuotationAction(makeQuotation(base), 'send'), 'accept');
+    const accepted = applyQuotationAction(toSent(), 'accept');
     expect(() => applyQuotationAction(accepted, 'cancel')).toThrow('cannot cancel from status accepted');
   });
 
   it('revise supersedes the sent quote and drafts Rev n+1 with the same number and lines', () => {
-    const sent = applyQuotationAction(makeQuotation(base), 'send');
+    const sent = toSent();
     const { superseded, next } = reviseQuotation(sent);
     expect(superseded.status).toBe('revised');
     expect(next.status).toBe('draft');

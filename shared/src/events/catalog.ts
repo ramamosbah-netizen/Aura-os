@@ -40,6 +40,7 @@ export const EVENT_CATALOG: EventTypeDef[] = [
   { type: 'crm.opportunity.buying_stage_changed', module: 'crm', description: 'Customer buying stage updated on a CRM opportunity', severity: 'INFO' },
   { type: 'crm.opportunity.pursuit_decided', module: 'crm', description: 'Pursue / No-Pursue decision recorded on a CRM opportunity', severity: 'INFO' },
   { type: 'crm.forecast.snapshot_captured', module: 'crm', description: 'Weighted pipeline forecast captured as an immutable snapshot', severity: 'INFO' },
+  { type: 'crm.commercial_baseline.locked', module: 'crm', description: 'Immutable approved-price baseline locked on quotation approval', severity: 'INFO' },
 
   // ── Estimating / Tendering ──────────────────────────────────────────────
   { type: 'estimating.tender.registered', module: 'estimating', description: 'Tender registered', severity: 'INFO' },

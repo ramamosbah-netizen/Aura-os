@@ -22,6 +22,9 @@ export interface Contract {
   status: ContractStatus;
   /** Awarded contract value. */
   value: number;
+  /** The locked Commercial Baseline (approved-price snapshot) this contract was created from —
+   * reference, not join. Present when the contract came from an approved quotation (R3). */
+  commercialBaselineId: Id | null;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -38,6 +41,7 @@ export interface NewContract {
   accountName?: string | null;
   status?: ContractStatus;
   value?: number;
+  commercialBaselineId?: Id | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
@@ -55,6 +59,7 @@ export function makeContract(input: NewContract): Contract {
     accountName: input.accountName ?? null,
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    commercialBaselineId: input.commercialBaselineId ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

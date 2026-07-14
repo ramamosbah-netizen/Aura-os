@@ -6,6 +6,7 @@ import { InMemoryEventStore } from './events/in-memory-event-store';
 import { PostgresEventStore } from './events/postgres-event-store';
 import { OutboxRelay } from './events/outbox-relay';
 import { PG_POOL, createPgPool } from './events/pg-pool';
+import { TenantScopedPool } from './events/tenant-scoped-pool';
 import { TX_RUNNER, PostgresTxRunner, NullTxRunner } from './events/tx';
 import { TenantContext } from './tenancy/tenant-context';
 import { AccessService } from './identity/access.service';
@@ -130,7 +131,18 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     EntityRegistryService,
     ApprovalMatrixService,
     WorkflowOrchestratorService,
-    { provide: PG_POOL, useFactory: createPgPool },
+    {
+      // The shared pool is tenant-scoped: every pooled query binds the request's tenant to
+      // the RLS `app.current_tenant_id` GUC (reads included) and resets it on release, so
+      // isolation holds even for direct `pool.query` reads and pooled connections never leak
+      // tenant context. Structurally a Pool for the subset the codebase uses.
+      provide: PG_POOL,
+      inject: [TenantContext],
+      useFactory: (tenant: TenantContext): Pool | null => {
+        const raw = createPgPool();
+        return raw ? (new TenantScopedPool(raw, tenant) as unknown as Pool) : null;
+      },
+    },
     {
       provide: TX_RUNNER,
       inject: [PG_POOL, TenantContext],

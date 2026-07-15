@@ -2,10 +2,10 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import {
   AccountService, ActivityService, ContactService, OpportunityService, QuotationService,
-  ATTENTION_THRESHOLDS, lastActivityByRecord, daysSince, isQuiet,
+  ATTENTION_THRESHOLDS, lastActivityByRecord, nextOpenActivityByRecord, daysSince, isQuiet,
 } from '@aura/crm';
 import { CustomerInvoiceService, balanceOf } from '@aura/finance';
-import { opportunityAttention } from '@aura/shared';
+import { opportunityAttention, resolveNextAction } from '@aura/shared';
 
 // Relationship Intelligence — the CRM alert engine. It turns the data we already
 // hold into a single ranked list of "act on this now" signals: deals with no
@@ -76,6 +76,8 @@ export class RelationshipIntelligenceController {
 
     // Last touch per related record — shared with the activity & pipeline engines.
     const lastByRelated = lastActivityByRecord(activities);
+    // G2: the next OPEN activity is what the next action IS — derived, not read from a column.
+    const nextByRelated = nextOpenActivityByRecord(activities);
     // Accounts that have a decision-maker among their stakeholders.
     const accountsWithDM = new Set(
       contacts.filter((c) => c.stakeholderRole === 'decision_maker' && c.accountId).map((c) => c.accountId as string),
@@ -86,15 +88,21 @@ export class RelationshipIntelligenceController {
 
     // 1. Next-Action Invariant breaches (reuses the shared predicate from #78).
     for (const o of openOpps) {
-      const att = opportunityAttention(o, now);
+      const next = nextByRelated.get(o.id);
+      const facts = next
+        ? { nextActionSubject: next.subject, nextActionDueIso: next.dueIso, nextActionOwnerId: next.assigneeId }
+        : {};
+      const att = opportunityAttention(o, facts, now);
       if (att.needsAttention) {
+        const resolved = resolveNextAction(o, facts);
         alerts.push({
           id: `no-next-action:${o.id}`, kind: 'no-next-action',
           severity: att.gaps.includes('overdue') ? 'high' : 'medium',
           entity: 'opportunity', entityId: o.id, name: o.title,
           reason: att.gaps.map((g) => GAP_TEXT[g]).join(', '),
           recommendation: 'Set a next step, owner and due date.',
-          href: `/crm/opportunities/${o.id}`, at: o.nextActionDueDate,
+          // Show the date the deal was actually judged on, not the stale column.
+          href: `/crm/opportunities/${o.id}`, at: resolved.dueDate,
         });
       }
     }

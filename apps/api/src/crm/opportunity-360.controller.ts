@@ -10,8 +10,15 @@ import {
   type Activity,
   type Contact,
   type Quotation,
+  nextOpenActivityByRecord,
 } from '@aura/crm';
-import type { Opportunity } from '@aura/shared';
+import {
+  opportunityAttention,
+  resolveNextAction,
+  type Opportunity,
+  type OpportunityAttention,
+  type ResolvedNextAction,
+} from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
 import { ContractService, type Contract } from '@aura/contracts';
 import { ProjectService, type Project } from '@aura/projects';
@@ -44,6 +51,14 @@ interface Opportunity360Payload {
   route: 'tender' | 'direct';
   progression: ProgressionStep[];
   outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number };
+  /**
+   * G2 — the next action RESOLVED server-side from the activity stream (the columns are only the
+   * fallback). Exposed so the UI renders the same next action the invariant judged the deal on,
+   * instead of re-deriving the rule and becoming a second truth.
+   */
+  nextAction: ResolvedNextAction;
+  /** The Next-Action Invariant verdict for this deal, computed on the same resolved facts. */
+  attention: OpportunityAttention;
 }
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
@@ -110,6 +125,13 @@ export class Opportunity360Controller {
 
     const status: 'open' | 'won' | 'lost' = opp.stage === 'won' ? 'won' : opp.stage === 'lost' ? 'lost' : 'open';
 
+    // G2: the next open activity on THIS opportunity is the next action. Completing it hands the
+    // next action to whatever is scheduled after it — no column to maintain by hand.
+    const next = nextOpenActivityByRecord(activities).get(id);
+    const facts = next
+      ? { nextActionSubject: next.subject, nextActionDueIso: next.dueIso, nextActionOwnerId: next.assigneeId }
+      : {};
+
     return {
       opportunity: opp,
       account,
@@ -123,6 +145,8 @@ export class Opportunity360Controller {
       route,
       progression,
       outcome: { status, lossReason: opp.lossReason, contractedValue },
+      nextAction: resolveNextAction(opp, facts),
+      attention: opportunityAttention(opp, facts),
     };
   }
 }

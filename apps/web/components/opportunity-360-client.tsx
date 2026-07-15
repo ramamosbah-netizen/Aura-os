@@ -29,6 +29,9 @@ interface Payload {
   route: 'tender' | 'direct';
   progression: Step[];
   outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number };
+  /** G2 — resolved server-side from the activity stream; render this, never re-derive the rule. */
+  nextAction: { subject: string | null; dueDate: string | null; ownerId: string | null; fromActivity: boolean };
+  attention: { active: boolean; gaps: string[]; needsAttention: boolean };
 }
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
@@ -67,7 +70,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, activities, qualification, route, progression, outcome } = data;
+  const { opportunity: o, account, stakeholders, activities, qualification, route, progression, outcome, nextAction } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)' },
     won: { label: 'Won', color: 'var(--good)' },
@@ -191,7 +194,15 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
             </>
           )}
           {outcome.status === 'open' && <p style={st.muted}>Move the stage to Won or Lost to capture the outcome.</p>}
-          {o.nextAction && <p style={{ ...st.muted, marginTop: 8 }}>Next action: <b style={{ color: 'var(--fg)' }}>{o.nextAction}</b></p>}
+          {/* G2: the server resolved this from the next open activity (falling back to the legacy
+              column). Rendering the resolved value keeps the screen and the invariant in agreement. */}
+          {nextAction.subject && (
+            <p style={{ ...st.muted, marginTop: 8 }}>
+              Next action: <b style={{ color: 'var(--fg)' }}>{nextAction.subject}</b>
+              {nextAction.dueDate && <> · due {d(nextAction.dueDate)}</>}
+              {nextAction.fromActivity && <span style={st.fromActivity} title="Derived from the next open activity — complete it and this moves automatically">from activity</span>}
+            </p>
+          )}
         </div>
 
         {/* unified timeline — events + activities in one feed */}
@@ -224,6 +235,8 @@ function Stat({ label, value, accent, tone }: { label: string; value: string; ac
 }
 
 const st = {
+  /** Marks a next action that is projected from the activity stream rather than a typed column. */
+  fromActivity: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid var(--border)', borderRadius: 999, padding: '1px 7px' } as CSSProperties,
   header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 } as CSSProperties,
   h1: { fontSize: 25, margin: '0 0 6px', color: 'var(--accent)', letterSpacing: -0.4 } as CSSProperties,
   subline: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,

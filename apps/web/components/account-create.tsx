@@ -11,6 +11,20 @@ const STAGE_OPTIONS = [
   { value: 'inactive', label: 'Inactive' },
 ];
 
+// G6 — what the party IS, orthogonal to the relationship stage. The graph
+// ("this consultant influences that developer") needs the node typed first.
+const PARTY_OPTIONS = [
+  { value: 'end_client', label: 'End Client' },
+  { value: 'consultant', label: 'Consultant' },
+  { value: 'main_contractor', label: 'Main Contractor' },
+  { value: 'developer', label: 'Developer' },
+  { value: 'supplier', label: 'Supplier' },
+  { value: 'partner', label: 'Partner' },
+  { value: 'subcontractor', label: 'Subcontractor' },
+  { value: 'government', label: 'Government Entity' },
+  { value: 'other', label: 'Other' },
+];
+
 const SOURCE_OPTIONS = [
   { value: 'referral', label: 'Referral' },
   { value: 'exhibition', label: 'Exhibition / event' },
@@ -45,7 +59,7 @@ const PROFILE_FIELDS = [
 /** Row-level "Edit" — opens the same drawer prefilled, PATCHes the account. */
 export function AccountEdit({ account }: {
   account: {
-    id: string; name: string; status: string; industry: string | null; website?: string | null;
+    id: string; name: string; status: string; partyType?: string | null; industry: string | null; website?: string | null;
     phone?: string | null; email?: string | null; billingAddress?: string | null;
     source?: string | null; paymentTerms?: string | null;
   };
@@ -59,6 +73,7 @@ export function AccountEdit({ account }: {
       initialValues={{
         name: account.name,
         status: account.status,
+        partyType: account.partyType ?? '',
         industry: account.industry ?? '',
         website: account.website ?? '',
         phone: account.phone ?? '',
@@ -70,6 +85,7 @@ export function AccountEdit({ account }: {
       fields={[
         { name: 'name', label: 'Account name', kind: 'text', required: true, span: 2 },
         { name: 'status', label: 'Relationship stage', kind: 'select', options: STAGE_OPTIONS },
+        { name: 'partyType', label: 'Party type', kind: 'select', options: PARTY_OPTIONS, placeholder: 'What IS this party?' },
         ...PROFILE_FIELDS,
       ]}
     />
@@ -86,6 +102,7 @@ export default function AccountCreate() {
       fields={[
         { name: 'name', label: 'Account name', kind: 'text', required: true, placeholder: 'e.g. Emaar Properties', span: 2 },
         { name: 'status', label: 'Relationship stage', kind: 'select', defaultValue: 'prospect', options: STAGE_OPTIONS },
+        { name: 'partyType', label: 'Party type', kind: 'select', options: PARTY_OPTIONS, placeholder: 'What IS this party?' },
         ...PROFILE_FIELDS,
       ]}
     />

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 import Timeline from './timeline';
+import RelationshipGraphPanel from './relationship-graph-panel';
 
 // Account 360 — the customer COMMAND CENTER. The Account is the persistent
 // commercial party every deal revolves around (the hub, not the first step).
@@ -16,6 +17,7 @@ interface Account {
   id: string;
   name: string;
   status: string;
+  partyType: string | null;
   industry: string | null;
   website: string | null;
   phone: string | null;
@@ -75,6 +77,18 @@ const STAGE_LABEL: Record<string, string> = {
   inactive: 'Inactive',
 };
 
+// G6 — what the party IS, shown beside the relationship stage in the header.
+const PARTY_LABEL: Record<string, string> = {
+  end_client: 'End Client',
+  consultant: 'Consultant',
+  main_contractor: 'Main Contractor',
+  developer: 'Developer',
+  supplier: 'Supplier',
+  partner: 'Partner',
+  subcontractor: 'Subcontractor',
+  government: 'Government',
+  other: 'Other',
+};
 
 export default function Account360Client({ accountId }: { accountId: string }) {
   const [data, setData] = useState<Payload | null>(null);
@@ -180,6 +194,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
           <h1 style={st.h1}>{a.name}</h1>
           <div style={st.subline}>
             <span style={st.stagePill}>{STAGE_LABEL[a.status] ?? a.status}</span>
+            {a.partyType && <span style={st.stagePill}>{PARTY_LABEL[a.partyType] ?? a.partyType}</span>}
             {a.industry && <span>{a.industry}</span>}
             <span>Client since {monthYear(a.createdAt)}</span>
             {a.source && <span>Source: {a.source}</span>}
@@ -331,6 +346,12 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             <div style={st.oCard}>
               <div style={st.oTitle}>Timeline</div>
               <Timeline recordId={a.id} />
+            </div>
+
+            {/* G6 — related parties: who surrounds this account, and leads naming it */}
+            <div style={st.oCard}>
+              <div style={st.oTitle}>Related Parties</div>
+              <RelationshipGraphPanel accountId={a.id} />
             </div>
 
             {/* Key contacts */}

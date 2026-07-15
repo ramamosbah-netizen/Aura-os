@@ -97,6 +97,7 @@ export class Account360Controller {
     id: string;
     name: string;
     stage: string;
+    partyType: string | null;
     industry: string | null;
     ownerId: string | null;
     phone: string | null;
@@ -175,6 +176,7 @@ export class Account360Controller {
         id: a.id,
         name: a.name,
         stage: a.status,
+        partyType: a.partyType,
         industry: a.industry,
         ownerId: a.ownerId,
         phone: a.phone,
@@ -214,6 +216,7 @@ export class Account360Controller {
         rows.map((a) => ({
           Name: a.name,
           Status: a.status,
+          'Party type': a.partyType ?? '',
           Industry: a.industry ?? '',
           Website: a.website ?? '',
           Phone: a.phone ?? '',

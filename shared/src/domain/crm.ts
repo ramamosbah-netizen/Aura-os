@@ -346,20 +346,73 @@ export interface NextActionCandidate {
 }
 
 /**
+ * G2 — the next action, DERIVED from the Activity stream by the caller (Activity is the one work
+ * system; shared imports no module). Exactly mirrors LeadActivityFacts, which has always worked
+ * this way — this closes the asymmetry where the Lead half of the CRM projected its next action
+ * from Activity while the Opportunity half kept a second, hand-maintained truth.
+ *
+ * Passing no facts keeps the legacy column behaviour, so every existing caller is unaffected until
+ * it opts in. Where facts ARE supplied they WIN: the columns become a projection/cache of the next
+ * open activity, never a competing fact.
+ */
+export interface OpportunityActivityFacts {
+  /** Subject of the next open activity — becomes the Next Action. */
+  nextActionSubject?: string | null;
+  /** Due date of the next open activity (ISO). */
+  nextActionDueIso?: string | null;
+  /** Assignee of the next open activity — the person the work is actually on. */
+  nextActionOwnerId?: Id | null;
+}
+
+/** What the invariant resolved to — so callers can SHOW the same next action they were judged on. */
+export interface ResolvedNextAction {
+  subject: string | null;
+  dueDate: string | null;
+  ownerId: string | null;
+  /** True when it came from the Activity stream rather than the legacy columns. */
+  fromActivity: boolean;
+}
+
+/**
+ * Resolve the next action for an opportunity: the next open Activity wins; the legacy columns are
+ * the fallback for records with no scheduled activity yet. One place decides, so the predicate and
+ * every read model agree on what the next action IS.
+ */
+export function resolveNextAction(opp: NextActionCandidate, facts: OpportunityActivityFacts = {}): ResolvedNextAction {
+  const fromActivity = Boolean(facts.nextActionSubject ?? facts.nextActionDueIso);
+  return {
+    subject: facts.nextActionSubject ?? opp.nextAction ?? null,
+    dueDate: facts.nextActionDueIso ?? opp.nextActionDueDate ?? null,
+    // The activity's assignee owns the work; fall back to the deal owner.
+    ownerId: facts.nextActionOwnerId ?? opp.ownerId ?? null,
+    fromActivity,
+  };
+}
+
+/**
  * The **Next-Action Invariant** — the single source of truth: every ACTIVE
  * opportunity must carry a Next Action + Due Date + Owner. Any missing piece —
  * or a past-due date — flags the deal as "Needs Attention". Won/lost deals are
  * terminal and never flagged. `now` is injectable for deterministic tests.
+ *
+ * G2: `facts` (the next open Activity) take precedence over the stored columns, so completing an
+ * activity and scheduling the next one moves the invariant automatically. Owner stays the deal's
+ * own `ownerId` for the no-owner gap — a deal with unassigned work is still an unowned deal.
  */
-export function opportunityAttention(opp: NextActionCandidate, now: Date = new Date()): OpportunityAttention {
+export function opportunityAttention(
+  opp: NextActionCandidate,
+  facts: OpportunityActivityFacts = {},
+  now: Date = new Date(),
+): OpportunityAttention {
   const active = (OPPORTUNITY_ACTIVE_STAGES as readonly string[]).includes(opp.stage);
   if (!active) return { active, gaps: [], needsAttention: false };
   const today = now.toISOString().slice(0, 10);
+  const next = resolveNextAction(opp, facts);
   const gaps: NextActionGap[] = [];
-  if (!opp.nextAction || !opp.nextAction.trim()) gaps.push('no-next-action');
+  if (!next.subject || !next.subject.trim()) gaps.push('no-next-action');
   if (!opp.ownerId) gaps.push('no-owner');
-  if (!opp.nextActionDueDate) gaps.push('no-due-date');
-  else if (opp.nextActionDueDate.slice(0, 10) < today) gaps.push('overdue');
+  if (!next.dueDate) gaps.push('no-due-date');
+  else if (next.dueDate.slice(0, 10) < today) gaps.push('overdue');
   return { active, gaps, needsAttention: gaps.length > 0 };
 }
 

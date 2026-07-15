@@ -1,14 +1,20 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Activity, type ActivityType, type ActivityStatus, type ActivityRelatedType, ActivityService } from '@aura/crm';
+import {
+  type Activity, type ActivityType, type ActivityStatus, type ActivityRelatedType,
+  ACTIVITY_RELATED_TYPES, ActivityService,
+} from '@aura/crm';
 
 class CreateActivityDto {
   @IsString() type!: ActivityType;
   @IsString() subject!: string;
   @IsOptional() @IsString() notes?: string;
-  @IsOptional() @IsString() relatedType?: ActivityRelatedType;
+  // G1: the related-type union is enforced at the edge, not just in TypeScript — a typo'd
+  // relatedType would otherwise persist and silently drop the activity out of every view that
+  // filters by it. The list is the domain's, so widening the chain never needs a change here.
+  @IsOptional() @IsIn(ACTIVITY_RELATED_TYPES as readonly string[]) relatedType?: ActivityRelatedType;
   @IsOptional() @IsString() relatedId?: string;
   @IsOptional() @IsString() dueDate?: string;
   @IsOptional() @IsString() status?: ActivityStatus;

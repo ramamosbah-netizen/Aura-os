@@ -122,7 +122,7 @@ export class CrmQuotationsController {
     return this.quotations.listRevisions(this.tenant.get().tenantId, id);
   }
 
-  /** Internal cost & margin sheet for this revision. */
+  /** Internal rate build-up (cost factors → direct/indirect → margin) for this revision. */
   @Get(':id/pricing')
   async getPricing(@Param('id') id: string) {
     try {
@@ -132,11 +132,11 @@ export class CrmQuotationsController {
     }
   }
 
-  /** Save per-line unit costs for this revision; returns the recomputed sheet. */
+  /** Save the per-line cost build-up for this revision; returns the recomputed sheet. */
   @Put(':id/pricing')
-  async setPricing(@Param('id') id: string, @Body() dto: { unitCosts?: number[] }) {
+  async setPricing(@Param('id') id: string, @Body() dto: unknown) {
     try {
-      return await this.quotations.setPricing(id, Array.isArray(dto?.unitCosts) ? dto.unitCosts : []);
+      return await this.quotations.setPricing(id, dto);
     } catch {
       throw new NotFoundException(`quotation ${id} not found`);
     }

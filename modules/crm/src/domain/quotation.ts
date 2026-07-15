@@ -1,4 +1,6 @@
 import { type Id, newId } from '@aura/shared';
+// Type-only (erased at compile) — no runtime cycle with quotation-pricing.
+import type { QuotationPricingInput } from './quotation-pricing';
 
 /**
  * Customer Quotation — the pre-sales quote issued to a prospect/customer (the deal-chain step
@@ -41,11 +43,6 @@ export interface NewQuotationLine {
   quantity: number;
   unitPrice: number;
   vatRate?: number;
-}
-
-/** Internal cost sheet persisted per revision — unit costs index-aligned to `lines`. */
-export interface QuotationPricingInput {
-  unitCosts: number[];
 }
 
 export interface Quotation {
@@ -247,8 +244,8 @@ export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Qu
     issueDate: new Date().toISOString().slice(0, 10),
     validUntil: q.validUntil,
     lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })),
-    // Carry the internal cost sheet into the new revision — costs rarely reset between revisions.
-    pricing: q.pricing ? { unitCosts: [...q.pricing.unitCosts] } : null,
+    // Carry the internal build-up into the new revision — costs rarely reset between revisions.
+    pricing: q.pricing ? { lines: q.pricing.lines.map((l) => ({ ...l })) } : null,
     createdBy: q.createdBy,
   });
   return { superseded: { ...q, status: 'revised' }, next };

@@ -2,68 +2,136 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 
-// Quotation pricing sheet — editable internal cost per line; margin derived
-// against the fixed quoted sell price. Mirrors modules/crm computeQuotationPricing
-// so the on-screen numbers match the server sheet; Save PUTs the unit costs.
+// Quotation pricing sheet — the full internal rate build-up. Every cost factor is
+// editable; material → labour → other directs roll to DIRECT COST, then indirect
+// (overhead %) → TOTAL COST. The quoted sell price is fixed, so profit/margin/
+// markup fall out. Mirrors modules/crm computeQuotationPricing so the on-screen
+// numbers match the server sheet exactly.
+
+export interface ManpowerBlock { count: number; hours: number; rate: number }
+export interface ManpowerLine extends ManpowerBlock { manHours: number; total: number }
 
 export interface PricingLine {
-  description: string; quantity: number; unitCost: number; unitPrice: number;
-  costTotal: number; sellTotal: number; marginAmount: number;
+  description: string; quantity: number;
+  supplyUnitPrice: number; supplyTotal: number;
+  wastagePercent: number; wastageTotal: number;
+  accessories: number; materialTotal: number;
+  technician: ManpowerLine; engineer: ManpowerLine; projectManager: ManpowerLine;
+  labourTotal: number;
+  transport: number; equipmentRent: number; subcontract: number; otherDirect: number;
+  directCost: number; indirectPercent: number; indirectCost: number;
+  costTotal: number; unitCostTotal: number;
+  unitPrice: number; sellTotal: number; profit: number;
   marginPercent: number | null; markupPercent: number | null;
 }
 export interface PricingSheet {
-  lines: PricingLine[]; totalCost: number; totalSell: number; marginAmount: number; marginPercent: number | null;
+  lines: PricingLine[];
+  totalSupply: number; totalWastage: number; totalAccessories: number; totalMaterial: number;
+  totalLabour: number; totalTransport: number; totalEquipment: number; totalSubcontract: number;
+  totalOtherDirect: number; totalDirect: number; totalIndirect: number;
+  totalCost: number; totalSell: number; profit: number;
+  marginPercent: number | null; markupPercent: number | null;
 }
 
-const money = (n: number): string => `AED ${Number(n).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const round2 = (n: number): number => Math.round(n * 100) / 100;
-const pct = (n: number | null): string => (n === null ? '—' : `${n}%`);
-const marginColor = (n: number | null): string => (n === null ? 'var(--muted)' : n < 15 ? 'var(--bad)' : n < 30 ? 'var(--accent)' : 'var(--good)');
+/** The editable factors, mirrored from the domain input type. */
+interface Buildup {
+  supplyUnitPrice: number; wastagePercent: number; accessories: number;
+  technician: ManpowerBlock; engineer: ManpowerBlock; projectManager: ManpowerBlock;
+  transport: number; equipmentRent: number; subcontract: number; otherDirect: number;
+  indirectPercent: number;
+}
 
-function compute(lines: PricingLine[], costs: number[]): PricingSheet {
-  const rows = lines.map((l, i) => {
-    const unitCost = Number(costs[i] ?? 0);
-    const costTotal = round2(l.quantity * unitCost);
+const r2 = (n: number): number => Math.round(n * 100) / 100;
+const money = (n: number): string => n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (n: number | null): string => (n === null ? '—' : `${n}%`);
+const marginColor = (n: number | null): string => (n === null ? 'var(--muted)' : n < 0 ? 'var(--bad)' : n < 15 ? 'var(--bad)' : n < 30 ? 'var(--accent)' : 'var(--good)');
+
+const toBuildup = (l: PricingLine): Buildup => ({
+  supplyUnitPrice: l.supplyUnitPrice, wastagePercent: l.wastagePercent, accessories: l.accessories,
+  technician: { count: l.technician.count, hours: l.technician.hours, rate: l.technician.rate },
+  engineer: { count: l.engineer.count, hours: l.engineer.hours, rate: l.engineer.rate },
+  projectManager: { count: l.projectManager.count, hours: l.projectManager.hours, rate: l.projectManager.rate },
+  transport: l.transport, equipmentRent: l.equipmentRent, subcontract: l.subcontract,
+  otherDirect: l.otherDirect, indirectPercent: l.indirectPercent,
+});
+
+const mp = (b: ManpowerBlock): ManpowerLine => {
+  const manHours = r2(b.count * b.hours);
+  return { ...b, manHours, total: r2(manHours * b.rate) };
+};
+
+/** Client-side mirror of the domain compile — keeps the grid live before saving. */
+function compute(lines: PricingLine[], builds: Buildup[]): PricingSheet {
+  const rows: PricingLine[] = lines.map((l, i) => {
+    const b = builds[i];
+    const supplyTotal = r2(l.quantity * b.supplyUnitPrice);
+    const wastageTotal = r2(supplyTotal * (b.wastagePercent / 100));
+    const materialTotal = r2(supplyTotal + wastageTotal + b.accessories);
+    const technician = mp(b.technician), engineer = mp(b.engineer), projectManager = mp(b.projectManager);
+    const labourTotal = r2(technician.total + engineer.total + projectManager.total);
+    const directCost = r2(materialTotal + labourTotal + b.transport + b.equipmentRent + b.subcontract + b.otherDirect);
+    const indirectCost = r2(directCost * (b.indirectPercent / 100));
+    const costTotal = r2(directCost + indirectCost);
     const sellTotal = l.sellTotal;
-    const marginAmount = round2(sellTotal - costTotal);
+    const profit = r2(sellTotal - costTotal);
     return {
-      ...l, unitCost, costTotal, marginAmount,
-      marginPercent: sellTotal > 0 ? round2((marginAmount / sellTotal) * 100) : null,
-      markupPercent: costTotal > 0 ? round2((marginAmount / costTotal) * 100) : null,
+      ...l, supplyUnitPrice: b.supplyUnitPrice, supplyTotal, wastagePercent: b.wastagePercent, wastageTotal,
+      accessories: b.accessories, materialTotal, technician, engineer, projectManager, labourTotal,
+      transport: b.transport, equipmentRent: b.equipmentRent, subcontract: b.subcontract, otherDirect: b.otherDirect,
+      directCost, indirectPercent: b.indirectPercent, indirectCost, costTotal,
+      unitCostTotal: l.quantity > 0 ? r2(costTotal / l.quantity) : 0,
+      profit,
+      marginPercent: sellTotal > 0 ? r2((profit / sellTotal) * 100) : null,
+      markupPercent: costTotal > 0 ? r2((profit / costTotal) * 100) : null,
     };
   });
-  const totalCost = round2(rows.reduce((s, r) => s + r.costTotal, 0));
-  const totalSell = round2(rows.reduce((s, r) => s + r.sellTotal, 0));
-  const marginAmount = round2(totalSell - totalCost);
-  return { lines: rows, totalCost, totalSell, marginAmount, marginPercent: totalSell > 0 ? round2((marginAmount / totalSell) * 100) : null };
+  const sum = (p: (r: PricingLine) => number): number => r2(rows.reduce((s, r) => s + p(r), 0));
+  const totalCost = sum((r) => r.costTotal), totalSell = sum((r) => r.sellTotal);
+  const profit = r2(totalSell - totalCost);
+  return {
+    lines: rows,
+    totalSupply: sum((r) => r.supplyTotal), totalWastage: sum((r) => r.wastageTotal),
+    totalAccessories: sum((r) => r.accessories), totalMaterial: sum((r) => r.materialTotal),
+    totalLabour: sum((r) => r.labourTotal), totalTransport: sum((r) => r.transport),
+    totalEquipment: sum((r) => r.equipmentRent), totalSubcontract: sum((r) => r.subcontract),
+    totalOtherDirect: sum((r) => r.otherDirect), totalDirect: sum((r) => r.directCost),
+    totalIndirect: sum((r) => r.indirectCost), totalCost, totalSell, profit,
+    marginPercent: totalSell > 0 ? r2((profit / totalSell) * 100) : null,
+    markupPercent: totalCost > 0 ? r2((profit / totalCost) * 100) : null,
+  };
 }
 
 export default function QuotationPricingClient({ id, customerName, status, initialSheet }: {
   id: string; customerName: string; status: string; initialSheet: PricingSheet;
 }) {
-  const [costs, setCosts] = useState<number[]>(initialSheet.lines.map((l) => l.unitCost));
-  const [saved, setSaved] = useState<number[]>(initialSheet.lines.map((l) => l.unitCost));
+  const [builds, setBuilds] = useState<Buildup[]>(initialSheet.lines.map(toBuildup));
+  const [saved, setSaved] = useState<string>(JSON.stringify(initialSheet.lines.map(toBuildup)));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const sheet = useMemo(() => compute(initialSheet.lines, costs), [initialSheet.lines, costs]);
-  const dirty = costs.some((c, i) => c !== saved[i]);
+  const sheet = useMemo(() => compute(initialSheet.lines, builds), [initialSheet.lines, builds]);
+  const dirty = JSON.stringify(builds) !== saved;
 
-  const setCost = (i: number, v: string): void => {
-    const n = Number(v);
-    setCosts((prev) => prev.map((c, j) => (j === i ? (Number.isFinite(n) && n >= 0 ? n : 0) : c)));
-  };
+  const set = (i: number, patch: Partial<Buildup>): void =>
+    setBuilds((prev) => prev.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+  const setMan = (i: number, role: 'technician' | 'engineer' | 'projectManager', patch: Partial<ManpowerBlock>): void =>
+    setBuilds((prev) => prev.map((b, j) => (j === i ? { ...b, [role]: { ...b[role], ...patch } } : b)));
+  const n = (v: string): number => { const x = Number(v); return Number.isFinite(x) && x >= 0 ? x : 0; };
 
   const save = async (): Promise<void> => {
     setBusy(true); setMsg('');
     try {
       const res = await fetch(`/api/crm/quotations/${id}/pricing`, {
-        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ unitCosts: costs }),
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lines: builds }),
       });
       if (!res.ok) { setMsg('Save failed'); return; }
-      setSaved([...costs]); setMsg('Saved ✓');
+      setSaved(JSON.stringify(builds)); setMsg('Saved ✓');
     } catch { setMsg('API unreachable'); } finally { setBusy(false); }
   };
+
+  const Num = ({ v, on, w = 62 }: { v: number; on: (s: string) => void; w?: number }) => (
+    <input type="number" min={0} step="0.01" value={v} onChange={(e) => on(e.target.value)} style={{ ...st.input, width: w }} />
+  );
 
   return (
     <div>
@@ -72,59 +140,143 @@ export default function QuotationPricingClient({ id, customerName, status, initi
         <div style={{ flex: 1 }} />
         {msg && <span style={{ fontSize: 12.5, color: msg.includes('✓') ? 'var(--good)' : 'var(--bad)' }}>{msg}</span>}
         <button type="button" onClick={() => void save()} disabled={busy || !dirty}
-          style={{ ...st.save, ...(dirty && !busy ? {} : st.saveDisabled) }}>Save costs</button>
+          style={{ ...st.save, ...(dirty && !busy ? {} : st.saveDisabled) }}>Save build-up</button>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
+      <div style={st.scroll}>
         <table style={st.table}>
-          <thead><tr>
-            {['Description', 'Qty', 'Unit cost', 'Unit sell', 'Cost total', 'Sell total', 'Margin', 'Markup'].map((h, i) => (
-              <th key={h} style={{ ...st.th, textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>
-            ))}
-          </tr></thead>
+          <thead>
+            <tr>
+              <th style={{ ...st.grp, ...st.stick, textAlign: 'left' }}>Line</th>
+              <th style={st.grp} colSpan={5}>Material</th>
+              <th style={{ ...st.grp, ...st.grpAlt }} colSpan={4}>Labour (technician)</th>
+              <th style={st.grp} colSpan={4}>Engineering</th>
+              <th style={{ ...st.grp, ...st.grpAlt }} colSpan={4}>Project management</th>
+              <th style={st.grp}>Labour</th>
+              <th style={{ ...st.grp, ...st.grpAlt }} colSpan={4}>Other directs</th>
+              <th style={st.grp} colSpan={2}>Direct</th>
+              <th style={{ ...st.grp, ...st.grpAlt }} colSpan={2}>Indirect</th>
+              <th style={st.grp} colSpan={2}>Cost</th>
+              <th style={{ ...st.grp, ...st.grpSell }} colSpan={5}>Sell &amp; margin</th>
+            </tr>
+            <tr>
+              <th style={{ ...st.th, ...st.stick, textAlign: 'left' }}>Description</th>
+              <th style={st.th}>Qty</th>
+              <th style={st.th}>Unit cost</th>
+              <th style={st.th}>Supply total</th>
+              <th style={st.th}>Wastage %</th>
+              <th style={st.th}>Wastage</th>
+              <th style={st.th}>Acc.</th>
+              <th style={st.th}>No.</th><th style={st.th}>Hrs</th><th style={st.th}>Rate</th><th style={st.th}>Total labour</th>
+              <th style={st.th}>No.</th><th style={st.th}>Hrs</th><th style={st.th}>Rate</th><th style={st.th}>Eng. total</th>
+              <th style={st.th}>No.</th><th style={st.th}>Hrs</th><th style={st.th}>Rate</th><th style={st.th}>PM total</th>
+              <th style={st.th}>Total labour</th>
+              <th style={st.th}>Transport</th><th style={st.th}>Equipment</th><th style={st.th}>Subcontr.</th><th style={st.th}>Other</th>
+              <th style={st.th}>Direct cost</th><th style={st.th}>Unit cost (all-in)</th>
+              <th style={st.th}>Ind. %</th><th style={st.th}>Indirect</th>
+              <th style={st.th}>Cost total</th><th style={st.th}>Profit</th>
+              <th style={st.th}>Unit sell</th><th style={st.th}>Sell total</th><th style={st.th}>Margin</th><th style={st.th}>Markup</th>
+              <th style={st.th} />
+            </tr>
+          </thead>
           <tbody>
-            {sheet.lines.map((l, i) => (
-              <tr key={i}>
-                <td style={st.td}>{l.description}</td>
-                <td style={st.tdR}>{l.quantity}</td>
-                <td style={st.tdR}>
-                  <input type="number" min={0} step="0.01" value={costs[i]} onChange={(e) => setCost(i, e.target.value)} style={st.input} />
-                </td>
-                <td style={st.tdR}>{money(l.unitPrice)}</td>
-                <td style={st.tdR}>{money(l.costTotal)}</td>
-                <td style={st.tdR}>{money(l.sellTotal)}</td>
-                <td style={{ ...st.tdR, color: marginColor(l.marginPercent), fontWeight: 700 }}>{pct(l.marginPercent)}</td>
-                <td style={{ ...st.tdR, color: 'var(--muted)' }}>{pct(l.markupPercent)}</td>
-              </tr>
-            ))}
+            {sheet.lines.map((l, i) => {
+              const b = builds[i];
+              return (
+                <tr key={i}>
+                  <td style={{ ...st.td, ...st.stickCell }}>{l.description}</td>
+                  <td style={st.tdR}>{l.quantity}</td>
+                  <td style={st.tdI}><Num v={b.supplyUnitPrice} on={(s) => set(i, { supplyUnitPrice: n(s) })} /></td>
+                  <td style={st.tdC}>{money(l.supplyTotal)}</td>
+                  <td style={st.tdI}><Num v={b.wastagePercent} on={(s) => set(i, { wastagePercent: n(s) })} w={52} /></td>
+                  <td style={st.tdC}>{money(l.wastageTotal)}</td>
+                  <td style={st.tdI}><Num v={b.accessories} on={(s) => set(i, { accessories: n(s) })} /></td>
+
+                  <td style={st.tdI}><Num v={b.technician.count} on={(s) => setMan(i, 'technician', { count: n(s) })} w={44} /></td>
+                  <td style={st.tdI}><Num v={b.technician.hours} on={(s) => setMan(i, 'technician', { hours: n(s) })} w={48} /></td>
+                  <td style={st.tdI}><Num v={b.technician.rate} on={(s) => setMan(i, 'technician', { rate: n(s) })} w={52} /></td>
+                  <td style={st.tdC}>{money(l.technician.total)}</td>
+
+                  <td style={st.tdI}><Num v={b.engineer.count} on={(s) => setMan(i, 'engineer', { count: n(s) })} w={44} /></td>
+                  <td style={st.tdI}><Num v={b.engineer.hours} on={(s) => setMan(i, 'engineer', { hours: n(s) })} w={48} /></td>
+                  <td style={st.tdI}><Num v={b.engineer.rate} on={(s) => setMan(i, 'engineer', { rate: n(s) })} w={52} /></td>
+                  <td style={st.tdC}>{money(l.engineer.total)}</td>
+
+                  <td style={st.tdI}><Num v={b.projectManager.count} on={(s) => setMan(i, 'projectManager', { count: n(s) })} w={44} /></td>
+                  <td style={st.tdI}><Num v={b.projectManager.hours} on={(s) => setMan(i, 'projectManager', { hours: n(s) })} w={48} /></td>
+                  <td style={st.tdI}><Num v={b.projectManager.rate} on={(s) => setMan(i, 'projectManager', { rate: n(s) })} w={52} /></td>
+                  <td style={st.tdC}>{money(l.projectManager.total)}</td>
+
+                  <td style={{ ...st.tdC, fontWeight: 700 }}>{money(l.labourTotal)}</td>
+
+                  <td style={st.tdI}><Num v={b.transport} on={(s) => set(i, { transport: n(s) })} /></td>
+                  <td style={st.tdI}><Num v={b.equipmentRent} on={(s) => set(i, { equipmentRent: n(s) })} /></td>
+                  <td style={st.tdI}><Num v={b.subcontract} on={(s) => set(i, { subcontract: n(s) })} /></td>
+                  <td style={st.tdI}><Num v={b.otherDirect} on={(s) => set(i, { otherDirect: n(s) })} /></td>
+
+                  <td style={{ ...st.tdC, fontWeight: 700 }}>{money(l.directCost)}</td>
+                  <td style={st.tdC}>{money(l.unitCostTotal)}</td>
+                  <td style={st.tdI}><Num v={b.indirectPercent} on={(s) => set(i, { indirectPercent: n(s) })} w={52} /></td>
+                  <td style={st.tdC}>{money(l.indirectCost)}</td>
+                  <td style={{ ...st.tdC, fontWeight: 800 }}>{money(l.costTotal)}</td>
+                  <td style={{ ...st.tdC, color: marginColor(l.marginPercent), fontWeight: 700 }}>{money(l.profit)}</td>
+
+                  <td style={st.tdR}>{money(l.unitPrice)}</td>
+                  <td style={{ ...st.tdR, fontWeight: 700 }}>{money(l.sellTotal)}</td>
+                  <td style={{ ...st.tdR, color: marginColor(l.marginPercent), fontWeight: 800 }}>{pct(l.marginPercent)}</td>
+                  <td style={{ ...st.tdR, color: 'var(--muted)' }}>{pct(l.markupPercent)}</td>
+                  <td style={st.td} />
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={4} style={{ ...st.tdR, fontWeight: 800 }}>Totals</td>
-              <td style={{ ...st.tdR, fontWeight: 800 }}>{money(sheet.totalCost)}</td>
-              <td style={{ ...st.tdR, fontWeight: 800 }}>{money(sheet.totalSell)}</td>
-              <td style={{ ...st.tdR, fontWeight: 800, color: marginColor(sheet.marginPercent) }}>{pct(sheet.marginPercent)}</td>
-              <td style={st.tdR} />
+              <td style={{ ...st.tf, ...st.stickCell, textAlign: 'left' }}>Totals</td>
+              <td style={st.tf} />
+              <td style={st.tf} /><td style={st.tf}>{money(sheet.totalSupply)}</td>
+              <td style={st.tf} /><td style={st.tf}>{money(sheet.totalWastage)}</td><td style={st.tf}>{money(sheet.totalAccessories)}</td>
+              <td style={st.tf} /><td style={st.tf} /><td style={st.tf} /><td style={st.tf} />
+              <td style={st.tf} /><td style={st.tf} /><td style={st.tf} /><td style={st.tf} />
+              <td style={st.tf} /><td style={st.tf} /><td style={st.tf} /><td style={st.tf} />
+              <td style={st.tf}>{money(sheet.totalLabour)}</td>
+              <td style={st.tf}>{money(sheet.totalTransport)}</td><td style={st.tf}>{money(sheet.totalEquipment)}</td>
+              <td style={st.tf}>{money(sheet.totalSubcontract)}</td><td style={st.tf}>{money(sheet.totalOtherDirect)}</td>
+              <td style={st.tf}>{money(sheet.totalDirect)}</td><td style={st.tf} />
+              <td style={st.tf} /><td style={st.tf}>{money(sheet.totalIndirect)}</td>
+              <td style={st.tf}>{money(sheet.totalCost)}</td>
+              <td style={{ ...st.tf, color: marginColor(sheet.marginPercent) }}>{money(sheet.profit)}</td>
+              <td style={st.tf} /><td style={st.tf}>{money(sheet.totalSell)}</td>
+              <td style={{ ...st.tf, color: marginColor(sheet.marginPercent) }}>{pct(sheet.marginPercent)}</td>
+              <td style={{ ...st.tf, color: 'var(--muted)' }}>{pct(sheet.markupPercent)}</td>
+              <td style={st.tf} />
             </tr>
           </tfoot>
         </table>
       </div>
 
       <div style={st.summary}>
-        <Stat label="Total cost" value={money(sheet.totalCost)} />
-        <Stat label="Total sell" value={money(sheet.totalSell)} />
-        <Stat label="Gross margin" value={money(sheet.marginAmount)} />
-        <Stat label="Blended margin" value={pct(sheet.marginPercent)} tone={marginColor(sheet.marginPercent)} />
+        <Stat label="Material" value={money(sheet.totalMaterial)} />
+        <Stat label="Labour" value={money(sheet.totalLabour)} />
+        <Stat label="Transport + equipment" value={money(sheet.totalTransport + sheet.totalEquipment)} />
+        <Stat label="Subcontract" value={money(sheet.totalSubcontract)} />
+        <Stat label="Direct cost" value={money(sheet.totalDirect)} />
+        <Stat label="Indirect" value={money(sheet.totalIndirect)} />
+        <Stat label="Total cost" value={money(sheet.totalCost)} strong />
+        <Stat label="Total sell" value={money(sheet.totalSell)} strong />
+        <Stat label="Profit" value={money(sheet.profit)} tone={marginColor(sheet.marginPercent)} />
+        <Stat label="Margin" value={pct(sheet.marginPercent)} tone={marginColor(sheet.marginPercent)} strong />
+        <Stat label="Markup" value={pct(sheet.markupPercent)} />
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Stat({ label, value, tone, strong }: { label: string; value: string; tone?: string; strong?: boolean }) {
   return (
-    <div style={st.stat}>
+    <div style={{ minWidth: 104 }}>
       <div style={st.statLabel}>{label}</div>
-      <div style={{ ...st.statValue, ...(tone ? { color: tone } : {}) }}>{value}</div>
+      <div style={{ ...st.statValue, ...(strong ? { fontSize: 17 } : {}), ...(tone ? { color: tone } : {}) }}>{value}</div>
     </div>
   );
 }
@@ -134,13 +286,21 @@ const st: Record<string, CSSProperties> = {
   customer: { fontSize: 12.5, color: 'var(--muted)' },
   save: { border: '1px solid var(--accent)', borderRadius: 9, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, color: 'var(--accent)', background: 'transparent', cursor: 'pointer' },
   saveDisabled: { opacity: 0.45, cursor: 'default', borderColor: 'var(--border)', color: 'var(--muted)' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  th: { padding: '7px 8px', borderBottom: '1px solid var(--border)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' },
-  td: { padding: '8px', borderBottom: '1px solid var(--border)' },
-  tdR: { padding: '8px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap' },
-  input: { width: 92, boxSizing: 'border-box', textAlign: 'right', background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--fg)', padding: '5px 8px', fontSize: 12.5 },
-  summary: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginTop: 16 },
-  stat: { minWidth: 110 },
-  statLabel: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 3 },
-  statValue: { fontSize: 17, fontWeight: 800 },
+  scroll: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' },
+  table: { borderCollapse: 'collapse', fontSize: 12, whiteSpace: 'nowrap' },
+  grp: { padding: '6px 8px', borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--accent)', background: 'var(--panel-2, var(--panel))', textAlign: 'center' },
+  grpAlt: { color: 'var(--muted)' },
+  grpSell: { color: 'var(--good)' },
+  th: { padding: '5px 7px', borderBottom: '1px solid var(--border)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--muted)', textAlign: 'right', fontWeight: 700 },
+  stick: { position: 'sticky', left: 0, zIndex: 2, background: 'var(--panel-2, var(--panel))', minWidth: 170 },
+  stickCell: { position: 'sticky', left: 0, zIndex: 1, background: 'var(--panel)', minWidth: 170, fontWeight: 600 },
+  td: { padding: '4px 7px', borderBottom: '1px solid var(--border)' },
+  tdR: { padding: '4px 7px', borderBottom: '1px solid var(--border)', textAlign: 'right' },
+  tdC: { padding: '4px 7px', borderBottom: '1px solid var(--border)', textAlign: 'right', color: 'var(--muted)' },
+  tdI: { padding: '2px 4px', borderBottom: '1px solid var(--border)', textAlign: 'right' },
+  input: { boxSizing: 'border-box', textAlign: 'right', background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--fg)', padding: '4px 6px', fontSize: 12 },
+  tf: { padding: '7px', borderTop: '2px solid var(--border)', textAlign: 'right', fontWeight: 800, background: 'var(--panel-2, var(--panel))' },
+  summary: { display: 'flex', gap: 20, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginTop: 16 },
+  statLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 3 },
+  statValue: { fontSize: 14.5, fontWeight: 700 },
 };

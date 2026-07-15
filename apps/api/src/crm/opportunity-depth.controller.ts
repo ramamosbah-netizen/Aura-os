@@ -5,9 +5,9 @@ import {
   OpportunityDepthService, type OpportunityDepth, OpportunityService,
 } from '@aura/crm';
 import type {
-  OpportunityStakeholder, OpportunityDealMember, Commitment, DealRegisterItem,
+  OpportunityStakeholder, OpportunityDealMember, Commitment, DealRegisterItem, OpportunityRisk,
   StakeholderRole, InfluenceLevel, Sentiment, DealTeamRole, CommitmentDirection,
-  RegisterKind, RegisterStatus,
+  RegisterKind, RegisterStatus, RiskType, RiskLikelihood, RiskImpact, RiskStatus,
 } from '@aura/shared';
 
 class StakeholderDto {
@@ -59,6 +59,29 @@ class ResolveRegisterDto {
   @IsString() to!: RegisterStatus;
   @IsOptional() @IsString() detail?: string;
 }
+class RiskDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() type?: RiskType;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() likelihood?: RiskLikelihood;
+  @IsOptional() @IsString() impact?: RiskImpact;
+  @IsOptional() @IsString() evidence?: string;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() mitigation?: string;
+  @IsOptional() @IsString() targetDate?: string;
+}
+class UpdateRiskDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() type?: RiskType;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() likelihood?: RiskLikelihood;
+  @IsOptional() @IsString() impact?: RiskImpact;
+  @IsOptional() @IsString() evidence?: string;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() mitigation?: string;
+  @IsOptional() @IsString() targetDate?: string;
+}
+class RiskStatusDto { @IsString() status!: RiskStatus }
 
 // Opportunity execution depth API — the buying committee, our deal team, and the promises made.
 @Controller('crm/opportunities')
@@ -141,5 +164,23 @@ export class OpportunityDepthController {
   resolveRegisterItem(@Param('rid', ParseUuidOr404Pipe) rid: string, @Body() dto: ResolveRegisterDto): Promise<DealRegisterItem> {
     if (!dto?.to?.trim()) throw new BadRequestException('to (target status) is required');
     return this.depth.resolveRegisterItem(rid, dto.to, dto.detail, this.tenant.get().actorId);
+  }
+
+  // ── Risk register ──
+  @Post(':id/risks')
+  addRisk(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: RiskDto): Promise<OpportunityRisk> {
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    const ctx = this.tenant.get();
+    return this.depth.addRisk({ tenantId: ctx.tenantId, opportunityId: id, actorId: ctx.actorId, ...dto });
+  }
+  @Patch(':id/risks/:kid')
+  updateRisk(@Param('kid', ParseUuidOr404Pipe) kid: string, @Body() dto: UpdateRiskDto): Promise<OpportunityRisk> {
+    return this.depth.updateRisk(kid, dto);
+  }
+  @Post(':id/risks/:kid/status')
+  setRiskStatus(@Param('kid', ParseUuidOr404Pipe) kid: string, @Body() dto: RiskStatusDto): Promise<OpportunityRisk> {
+    const valid = ['OPEN', 'MITIGATING', 'RESOLVED', 'ACCEPTED'];
+    if (!valid.includes(dto?.status)) throw new BadRequestException(`status must be one of ${valid.join(', ')}`);
+    return this.depth.setRiskStatus(kid, dto.status, this.tenant.get().actorId);
   }
 }

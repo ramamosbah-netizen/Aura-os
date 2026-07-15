@@ -8,8 +8,10 @@ import {
   type DealRegisterItem, type NewDealRegisterItem, type RegisterStatus, type RegisterSummary,
   makeRegisterItem, resolveRegisterItem, registerSummary,
   type BuyingStage, buyingJourneyAlignment,
+  type OpportunityRisk, type NewOpportunityRisk, type RiskStatus, type RiskSummary,
+  makeRisk, updateRisk, setRiskStatus, riskSummary,
   type OpportunityHealth, assessOpportunityHealth,
-  CRM_OPPORTUNITY_DEPTH_EVENT, CRM_REGISTER_EVENT,
+  CRM_OPPORTUNITY_DEPTH_EVENT, CRM_REGISTER_EVENT, CRM_RISK_EVENT,
 } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { CRM_OPPORTUNITY_DEPTH_STORE, type OpportunityDepthStore } from './opportunity-depth-store';
@@ -22,7 +24,9 @@ export interface OpportunityDepth {
   commitmentSummary: CommitmentSummary;
   register: DealRegisterItem[];
   registerSummary: RegisterSummary;
-  /** The composed, explainable per-dimension health roll-up (S7). */
+  risks: OpportunityRisk[];
+  riskSummary: RiskSummary;
+  /** The composed, explainable per-dimension health roll-up (S7 + risk register). */
   health: OpportunityHealth;
 }
 
@@ -148,6 +152,43 @@ export class OpportunityDepthService {
     return this.store.listRegisterItems({ tenantId, relatedType, relatedId });
   }
 
+  // ── Risk register ──
+  async addRisk(input: NewOpportunityRisk & { actorId?: Id | null }): Promise<OpportunityRisk> {
+    const k = makeRisk(input);
+    await this.store.saveRisk(k);
+    await this.events.append([makeEvent({
+      type: CRM_RISK_EVENT.added, tenantId: k.tenantId, companyId: null,
+      actorId: input.actorId ?? null, aggregateType: 'crm.opportunity', aggregateId: k.opportunityId,
+      payload: { riskId: k.id, type: k.type, severity: k.severity, title: k.title },
+    })]);
+    return k;
+  }
+  async updateRisk(
+    id: Id,
+    patch: Partial<Pick<OpportunityRisk, 'type' | 'title' | 'description' | 'likelihood' | 'impact' | 'evidence' | 'owner' | 'mitigation' | 'targetDate'>>,
+  ): Promise<OpportunityRisk> {
+    const existing = await this.store.getRisk(id);
+    if (!existing) throw new Error(`Risk ${id} not found`);
+    const next = updateRisk(existing, patch);
+    await this.store.saveRisk(next);
+    return next;
+  }
+  async setRiskStatus(id: Id, status: RiskStatus, actorId?: Id | null): Promise<OpportunityRisk> {
+    const existing = await this.store.getRisk(id);
+    if (!existing) throw new Error(`Risk ${id} not found`);
+    const next = setRiskStatus(existing, status);
+    await this.store.saveRisk(next);
+    await this.events.append([makeEvent({
+      type: CRM_RISK_EVENT.statusChanged, tenantId: next.tenantId, companyId: null,
+      actorId: actorId ?? null, aggregateType: 'crm.opportunity', aggregateId: next.opportunityId,
+      payload: { riskId: next.id, status: next.status, severity: next.severity },
+    })]);
+    return next;
+  }
+  listRisks(tenantId: Id, opportunityId: Id): Promise<OpportunityRisk[]> {
+    return this.store.listRisks({ tenantId, opportunityId });
+  }
+
   /** The full depth payload for an Opportunity 360 — stakeholders + coverage, team, commitments,
    * and the decisions/assumptions/open-questions register, each with its derived summary, plus the
    * composed health roll-up. `opp` (sales + buying stage) is optional: without it the buying-journey
@@ -157,15 +198,17 @@ export class OpportunityDepthService {
     opportunityId: Id,
     opp?: { stage: string; buyingStage: BuyingStage | null } | null,
   ): Promise<OpportunityDepth> {
-    const [stakeholders, dealTeam, commitments, register] = await Promise.all([
+    const [stakeholders, dealTeam, commitments, register, risks] = await Promise.all([
       this.store.listStakeholders({ tenantId, opportunityId }),
       this.store.listDealTeam({ tenantId, opportunityId }),
       this.store.listCommitments({ tenantId, relatedType: 'opportunity', relatedId: opportunityId }),
       this.store.listRegisterItems({ tenantId, relatedType: 'opportunity', relatedId: opportunityId }),
+      this.store.listRisks({ tenantId, opportunityId }),
     ]);
     const coverage = stakeholderCoverage(stakeholders);
     const commitSummary = commitmentSummary(commitments);
     const regSummary = registerSummary(register);
+    const rskSummary = riskSummary(risks);
     const alignment = buyingJourneyAlignment(opp?.stage ?? '', opp?.buyingStage ?? null);
     return {
       stakeholders,
@@ -175,7 +218,9 @@ export class OpportunityDepthService {
       commitmentSummary: commitSummary,
       register,
       registerSummary: regSummary,
-      health: assessOpportunityHealth({ coverage, commitments: commitSummary, register: regSummary, alignment }),
+      risks,
+      riskSummary: rskSummary,
+      health: assessOpportunityHealth({ coverage, commitments: commitSummary, register: regSummary, alignment, risks: rskSummary }),
     };
   }
 }

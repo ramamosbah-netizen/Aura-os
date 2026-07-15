@@ -1,6 +1,7 @@
 import type { StakeholderCoverage, StakeholderCoverageGap, CommitmentSummary } from './opportunity-depth';
 import type { RegisterSummary } from './deal-register';
 import type { BuyingAlignment } from './buying-journey';
+import type { RiskSummary } from './opportunity-risk';
 
 // Opportunity Health + Risk (S7) — the composition slice. S4/S5/S6 each gather ONE kind of
 // evidence about a deal (who's behind it, what was promised, what we're betting on, where the
@@ -11,7 +12,7 @@ import type { BuyingAlignment } from './buying-journey';
 
 export type DealHealthBand = 'HEALTHY' | 'AT_RISK' | 'CRITICAL'; // 🟢 🟠 🔴
 
-export type DealHealthDimensionKey = 'relationship' | 'commitments' | 'register' | 'journey';
+export type DealHealthDimensionKey = 'relationship' | 'commitments' | 'register' | 'journey' | 'risks';
 
 export interface DealHealthDimension {
   key: DealHealthDimensionKey;
@@ -35,12 +36,14 @@ export interface OpportunityHealth {
   needsAttention: boolean;
 }
 
-/** The four deal signals, each already summarised by its own S4/S5/S6 engine. */
+/** The deal signals, each already summarised by its own engine. `risks` is optional so existing
+ * callers keep working; when present it adds an explicit-risk-register dimension. */
 export interface DealHealthInputs {
   coverage: StakeholderCoverage;
   commitments: CommitmentSummary;
   register: RegisterSummary;
   alignment: BuyingAlignment;
+  risks?: RiskSummary;
 }
 
 const clamp = (n: number): number => Math.max(0, Math.min(100, Math.round(n)));
@@ -104,10 +107,27 @@ function journeyDimension(a: BuyingAlignment): DealHealthDimension {
   return { key: 'journey', label: 'Buying Journey', score, band: dealHealthBand(score), reasons: a.reason ? [a.reason] : [], applicable: true };
 }
 
+/** Risks = the explicit risk register. Open CRITICAL/HIGH risks drive attention; unassessable
+ * (excluded) when no risk register exists for the deal. */
+function risksDimension(rs: RiskSummary): DealHealthDimension {
+  if (rs.total === 0) {
+    return { key: 'risks', label: 'Risks', score: 100, band: 'HEALTHY', reasons: [], applicable: false };
+  }
+  let score = 100;
+  const reasons: string[] = [];
+  if (rs.openCritical > 0) { score -= rs.openCritical * 35; reasons.push(plural(rs.openCritical, 'critical risk') + ' open'); }
+  if (rs.openHigh > 0) { score -= rs.openHigh * 20; reasons.push(plural(rs.openHigh, 'high risk') + ' open'); }
+  score = clamp(score);
+  // A single open CRITICAL/HIGH risk floors the band regardless of score — a critical risk should
+  // never read as merely amber.
+  const floor: DealHealthBand = rs.openCritical > 0 ? 'CRITICAL' : rs.openHigh > 0 ? 'AT_RISK' : 'HEALTHY';
+  return { key: 'risks', label: 'Risks', score, band: mostSevere(dealHealthBand(score), floor), reasons, applicable: true };
+}
+
 /**
- * Fold the four deal signals into one explainable health assessment. Overall score is the mean
- * of the applicable dimensions; overall band is never rosier than the single worst dimension, so
- * one critical signal (e.g. no buyer mapped) can't hide behind three healthy ones.
+ * Fold the deal signals into one explainable health assessment. Overall score is the mean of the
+ * applicable dimensions; overall band is never rosier than the single worst dimension, so one
+ * critical signal (e.g. no buyer mapped, or an open critical risk) can't hide behind healthy ones.
  */
 export function assessOpportunityHealth(input: DealHealthInputs): OpportunityHealth {
   const dimensions = [
@@ -115,6 +135,7 @@ export function assessOpportunityHealth(input: DealHealthInputs): OpportunityHea
     commitmentsDimension(input.commitments),
     registerDimension(input.register),
     journeyDimension(input.alignment),
+    risksDimension(input.risks ?? { total: 0, open: 0, mitigating: 0, openCritical: 0, openHigh: 0, needsAttention: false }),
   ];
   const applicable = dimensions.filter((d) => d.applicable);
   const score = applicable.length ? clamp(applicable.reduce((s, d) => s + d.score, 0) / applicable.length) : 100;

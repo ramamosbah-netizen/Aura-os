@@ -14,10 +14,13 @@ interface RegisterItem { id: string; kind: string; statement: string; status: st
 interface RegisterSummary { decisions: number; assumptions: number; openQuestions: number; open: number; unvalidatedAssumptions: number; invalidatedAssumptions: number; overdue: number; needsAttention: boolean }
 interface HealthDim { key: string; label: string; score: number; band: string; reasons: string[]; applicable: boolean }
 interface Health { score: number; band: string; dimensions: HealthDim[]; reasons: string[]; needsAttention: boolean }
+interface Risk { id: string; type: string; title: string; likelihood: string; impact: string; severity: string; status: string; owner: string | null; mitigation: string | null }
+interface RiskSummary { total: number; open: number; mitigating: number; openCritical: number; openHigh: number; needsAttention: boolean }
 interface Depth {
   stakeholders: Stakeholder[]; coverage: Coverage; dealTeam: DealMember[];
   commitments: Commitment[]; commitmentSummary: CommitSummary;
   register: RegisterItem[]; registerSummary: RegisterSummary;
+  risks: Risk[]; riskSummary: RiskSummary;
   health: Health;
 }
 
@@ -36,6 +39,7 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
   const [tForm, setTForm] = useState({ userName: '', role: 'PRESALES' });
   const [cForm, setCForm] = useState({ direction: 'OURS', description: '', dueAt: '' });
   const [rForm, setRForm] = useState({ kind: 'DECISION', statement: '' });
+  const [kForm, setKForm] = useState({ title: '', type: 'COMMERCIAL', likelihood: 'medium', impact: 'medium' });
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/opportunities/${opportunityId}/depth`, { cache: 'no-store' });
@@ -222,6 +226,50 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
             onClick={() => { void post('register', { ...rForm }); setRForm({ kind: 'DECISION', statement: '' }); }}>Add</button>
         </div>
       </div>
+
+      {/* Risk register */}
+      <div style={st.block}>
+        <div style={st.blockHead}>
+          <h3 style={st.h3}>Risks</h3>
+          <span style={st.meta}>
+            {depth.riskSummary.open} open
+            {depth.riskSummary.openCritical > 0 ? <b style={st.overdueTag}> · {depth.riskSummary.openCritical} critical</b> : null}
+            {depth.riskSummary.openHigh > 0 ? <b style={{ color: '#d97706' }}> · {depth.riskSummary.openHigh} high</b> : null}
+          </span>
+        </div>
+        {depth.risks.length > 0 && (
+          <ul style={st.list}>
+            {depth.risks.map((k) => (
+              <li key={k.id} style={st.row}>
+                <span style={{ ...st.sevChip, color: bandColor(k.severity === 'CRITICAL' ? 'CRITICAL' : k.severity === 'HIGH' ? 'AT_RISK' : 'HEALTHY') }}>{k.severity.toLowerCase()}</span>
+                <span style={{ ...st.name, textDecoration: k.status === 'RESOLVED' || k.status === 'ACCEPTED' ? 'line-through' : 'none' }}>
+                  {k.title}<span style={st.riskType}> · {k.type.toLowerCase()}</span>
+                </span>
+                <select style={st.dimSel} value={k.status} onChange={(e) => void post(`risks/${k.id}/status`, { status: e.target.value })}>
+                  <option value="OPEN">open</option>
+                  <option value="MITIGATING">mitigating</option>
+                  <option value="RESOLVED">resolved</option>
+                  <option value="ACCEPTED">accepted</option>
+                </select>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div style={st.form}>
+          <input style={st.input} placeholder="Risk (what could go wrong)" value={kForm.title} onChange={(e) => setKForm({ ...kForm, title: e.target.value })} />
+          <select style={st.sel} value={kForm.type} onChange={(e) => setKForm({ ...kForm, type: e.target.value })}>
+            {['COMMERCIAL', 'RELATIONSHIP', 'COMPETITIVE', 'TECHNICAL', 'TIMELINE', 'COMPLIANCE', 'CUSTOMER', 'DELIVERY', 'OTHER'].map((t) => <option key={t} value={t}>{t.toLowerCase()}</option>)}
+          </select>
+          <select style={st.dimSel} title="likelihood" value={kForm.likelihood} onChange={(e) => setKForm({ ...kForm, likelihood: e.target.value })}>
+            {['low', 'medium', 'high'].map((v) => <option key={v} value={v}>L: {v}</option>)}
+          </select>
+          <select style={st.dimSel} title="impact" value={kForm.impact} onChange={(e) => setKForm({ ...kForm, impact: e.target.value })}>
+            {['low', 'medium', 'high'].map((v) => <option key={v} value={v}>I: {v}</option>)}
+          </select>
+          <button style={st.btn} disabled={busy || !kForm.title.trim()}
+            onClick={() => { void post('risks', { ...kForm }); setKForm({ title: '', type: 'COMMERCIAL', likelihood: 'medium', impact: 'medium' }); }}>Add</button>
+        </div>
+      </div>
     </section>
   );
 }
@@ -257,6 +305,9 @@ const st = {
   roleChip: { fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--panel-2)', border: '1px solid var(--border)', textTransform: 'capitalize' } as CSSProperties,
   dirChip: { fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--panel-2)', border: '1px solid var(--border)', textTransform: 'uppercase', color: 'var(--muted)' } as CSSProperties,
   kindChip: { fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--panel-2)', border: '1px solid var(--border)', textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: 0.3 } as CSSProperties,
+  sevChip: { fontSize: 10, padding: '1px 6px', borderRadius: 4, border: '1px solid currentColor', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.3, flexShrink: 0 } as CSSProperties,
+  riskType: { color: 'var(--muted)', fontWeight: 400, textTransform: 'capitalize' } as CSSProperties,
+  dimSel: { fontSize: 11.5, padding: '3px 6px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--fg)' } as CSSProperties,
   meta: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   overdueTag: { color: '#dc2626' } as CSSProperties,
   statusTag: { fontSize: 11, color: 'var(--muted)', textTransform: 'capitalize' } as CSSProperties,

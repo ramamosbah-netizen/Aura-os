@@ -30,6 +30,7 @@ export * from './domain/deal-register';
 export * from './domain/buying-journey';
 export * from './domain/lead-qualification';
 export * from './domain/elv-context';
+export * from './domain/stage-gate';
 export * from './domain/opportunity-risk';
 export * from './domain/opportunity-health';
 export * from './domain/forecast-snapshot';

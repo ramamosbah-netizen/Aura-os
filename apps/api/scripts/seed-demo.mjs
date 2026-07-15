@@ -79,6 +79,19 @@ async function main() {
   }
   console.log(`✓ ${accounts.length} accounts`);
 
+  // A named contact per account. G5's proposal gate needs someone to propose TO — and an account
+  // with no people was never realistic demo data in the first place.
+  const CONTACT_NAMES = ['Fatima Al Zaabi', 'Omar Haddad', 'Priya Nair', 'James Okoro', 'Nadia Aziz', 'Yusuf Rahman'];
+  for (let i = 0; i < accounts.length; i++) {
+    await post('/crm/contacts', {
+      name: CONTACT_NAMES[i % CONTACT_NAMES.length],
+      accountId: accounts[i].id,
+      jobTitle: 'Projects Manager',
+      isPrimary: true,
+    });
+  }
+  console.log(`✓ ${accounts.length} contacts`);
+
   // Leads
   for (const l of LEADS) {
     await post('/crm/leads', { ...l, status: 'new' });
@@ -96,9 +109,33 @@ async function main() {
       value,
       stage: 'qualification',
       winProbability: 30,
+      // G5: advancing past qualification needs a confirmed need — set it up front for the deals
+      // that are meant to have progressed.
+      needConfirmed: stage !== 'qualification',
     });
+    // G5: you cannot negotiate a proposal you never sent. Raise the quote against the deal,
+    // approve it and send it — the same path a user walks.
+    if (stage === 'negotiation') {
+      const quote = await post('/crm/quotations', {
+        quoteNumber: `QT-SEED-${opp.id.slice(0, 6)}`,
+        customerName: acct.name,
+        accountId: acct.id,
+        sourceOpportunityId: opp.id,
+        issueDate: new Date().toISOString().slice(0, 10),
+        lines: [{ description: title, quantity: 1, unitPrice: value, vatRate: 5 }],
+      });
+      await patch(`/crm/quotations/${quote.id}/status`, { action: 'approve' });
+      await patch(`/crm/quotations/${quote.id}/status`, { action: 'send' });
+    }
+
     if (stage !== 'qualification') {
-      await patch(`/crm/opportunities/${opp.id}`, { stage });
+      // G5: the stage gate demands evidence — demo data must satisfy the same invariants as real
+      // data, or the seed quietly manufactures exactly the unqualified wins the gate exists to stop.
+      const gate =
+        stage === 'won' ? { winReason: 'Best technical fit and existing relationship' }
+        : stage === 'lost' ? { lossReason: 'Price' }
+        : {};
+      await patch(`/crm/opportunities/${opp.id}`, { stage, ...gate });
       if (stage === 'won') won++;
     }
   }

@@ -204,7 +204,9 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
       accountId: 'acct-1',
       accountName: 'Acme Developments LLC',
     });
-    await h.opportunities.update(opp.id, { stage: 'won' });
+    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
+    // unaffected by it, but a win must still explain itself.
+    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
 
     const tenders = await h.tenders.list();
     expect(tenders).toHaveLength(1);
@@ -233,7 +235,9 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
 
   it('is idempotent: re-delivered award/sign events do not duplicate downstream records', async () => {
     const opp = await h.opportunities.create({ tenantId, title: 'Idem Job', value: 500 });
-    await h.opportunities.update(opp.id, { stage: 'won' });
+    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
+    // unaffected by it, but a win must still explain itself.
+    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
     const tender = (await h.tenders.list())[0];
 
     // Award the tender twice (simulates an at-least-once outbox re-delivery).
@@ -248,14 +252,18 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(await h.projects.list({ contractId: contract.id })).toHaveLength(1);
 
     // And re-winning the same opportunity must not spawn a second tender.
-    await h.opportunities.update(opp.id, { stage: 'won' });
+    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
+    // unaffected by it, but a win must still explain itself.
+    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
     expect(await h.tenders.list()).toHaveLength(1);
   });
 
   it('raises deduped growth Signals when a project and its contract complete (S9 account growth loop)', async () => {
     // Build the full chain to a live project.
     const opp = await h.opportunities.create({ tenantId, title: 'Downtown ELV', value: 800_000, accountId: 'acct-9', accountName: 'Nakheel PJSC' });
-    await h.opportunities.update(opp.id, { stage: 'won' });
+    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
+    // unaffected by it, but a win must still explain itself.
+    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
     const tender = (await h.tenders.list())[0];
     await h.tenders.changeStatus(tender.id, 'won');
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
@@ -350,8 +358,12 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
   });
 
   it('seeds the auto-created project with a root WBS node + CBS from the tender BOQ', async () => {
-    const opp = await h.opportunities.create({ tenantId, title: 'BOQ Job', value: 0 });
-    await h.opportunities.update(opp.id, { stage: 'won' });
+    // G5: value 0 was fine when nothing checked it; the win gate now refuses it (a win of 0 is not
+    // a win). The BOQ/CBS assertions below are about the tender's items, not this figure.
+    const opp = await h.opportunities.create({ tenantId, title: 'BOQ Job', value: 250_000 });
+    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
+    // unaffected by it, but a win must still explain itself.
+    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
     const tender = (await h.tenders.list())[0];
 
     // Give the tender a BOQ; this also recalculates its value.

@@ -104,6 +104,7 @@ export class PostgresQuotationStore implements QuotationStore {
     add('status', filter.status);
     add('account_id', filter.accountId);
     add('source_tender_id', filter.sourceTenderId);
+    add('source_opportunity_id', filter.sourceOpportunityId);
     add('quote_number', filter.quoteNumber);
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }

@@ -112,6 +112,12 @@ export interface Opportunity {
   source: string | null;
   /** Why we lost (win/loss intelligence) — set when the stage moves to lost. */
   lossReason: string | null;
+  /**
+   * G5 — why we WON, required by the stage gate to enter `won` (§40.3). Losses teach you what to
+   * fix; wins teach you what to repeat and how to price. The asymmetry of recording only one was
+   * backwards.
+   */
+  winReason: string | null;
   /** Where the CUSTOMER is in their own buying process (vs. our sales stage). Misalignment = risk. */
   buyingStage: BuyingStage | null;
   /** The recorded Pursue / No-Pursue call (kept even when NO_PURSUE — never deleted). */
@@ -344,6 +350,7 @@ export interface NewOpportunity {
   competitors?: string | null;
   source?: string | null;
   lossReason?: string | null;
+  winReason?: string | null;
   buyingStage?: BuyingStage | null;
 }
 
@@ -372,6 +379,7 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     competitors: input.competitors?.trim() || null,
     source: input.source?.trim() || null,
     lossReason: input.lossReason?.trim() || null,
+    winReason: input.winReason?.trim() || null,
     buyingStage: input.buyingStage ?? null,
     pursuitDecision: null,
     pursuitScore: null,

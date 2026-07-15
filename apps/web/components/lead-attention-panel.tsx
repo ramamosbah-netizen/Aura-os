@@ -3,9 +3,10 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Lead OS "Needs Attention" cockpit — surfaces which leads need work now, with the
-// EXACT reasons (not just a red badge). Views: All / Mine / Needs Attention / Nurture.
-// Fed by /api/crm/leads/command; attention is computed server-side by shared leadAttention().
+// Lead OS cockpit — surfaces which leads need work now, with the EXACT reasons (not just
+// a red badge). Views: All / Mine / Needs Attention / Nurture / Converted / Disqualified,
+// plus Sources — the per-channel funnel (arrived → converted/died, and how fast).
+// Fed by /api/crm/leads/command; attention + source performance are computed server-side.
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
 type Gap =
@@ -34,11 +35,22 @@ interface Row {
     gaps: Array<{ key: string; label: string; value: number | null }>;
   };
 }
-interface Counts { all: number; mine: number; needsAttention: number; nurture: number }
-export interface LeadCommand { generatedAt: string; counts: Counts; leads: Row[] }
+interface Counts { all: number; mine: number; needsAttention: number; nurture: number; converted: number; disqualified: number }
+/** G7 — one source's funnel, derived server-side from the leads themselves. */
+interface SourcePerformance {
+  source: string;
+  total: number;
+  active: number;
+  converted: number;
+  disqualified: number;
+  nurturing: number;
+  needsAttention: number;
+  conversionRate: number;
+  avgAgeDays: number;
+}
+export interface LeadCommand { generatedAt: string; counts: Counts; sources: SourcePerformance[]; leads: Row[] }
 
-type View = 'all' | 'mine' | 'attention' | 'nurture';
-const NURTURE = new Set(['nurturing', 'disqualified']);
+type View = 'all' | 'mine' | 'attention' | 'nurture' | 'converted' | 'disqualified' | 'sources';
 
 const GAP_LABEL: Record<Gap, string> = {
   UNASSIGNED: 'Unassigned',
@@ -71,7 +83,8 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
   const [view, setView] = useState<View>('attention');
   const [convert, setConvert] = useState<Record<string, ConvertState>>({});
   const rows = data?.leads ?? [];
-  const counts = data?.counts ?? { all: 0, mine: 0, needsAttention: 0, nurture: 0 };
+  const counts = data?.counts ?? { all: 0, mine: 0, needsAttention: 0, nurture: 0, converted: 0, disqualified: 0 };
+  const sources = data?.sources ?? [];
 
   const setC = (id: string, s: ConvertState | null): void =>
     setConvert((prev) => {
@@ -110,11 +123,15 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
     }
   };
 
+  // G7 — Converted and Disqualified are views of their own; Nurture is parked-but-alive only.
   const shown = useMemo(() => {
     switch (view) {
       case 'mine': return rows.filter((r) => r.assignedToMe);
       case 'attention': return rows.filter((r) => r.attention.needsAttention);
-      case 'nurture': return rows.filter((r) => NURTURE.has(r.status));
+      case 'nurture': return rows.filter((r) => r.status === 'nurturing');
+      case 'converted': return rows.filter((r) => r.status === 'converted');
+      case 'disqualified': return rows.filter((r) => r.status === 'disqualified');
+      case 'sources': return [];
       default: return rows;
     }
   }, [rows, view]);
@@ -124,6 +141,9 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
     { key: 'mine', label: 'Mine', n: counts.mine },
     { key: 'attention', label: 'Needs Attention', n: counts.needsAttention },
     { key: 'nurture', label: 'Nurture', n: counts.nurture },
+    { key: 'converted', label: 'Converted', n: counts.converted },
+    { key: 'disqualified', label: 'Disqualified', n: counts.disqualified },
+    { key: 'sources', label: 'Sources', n: sources.length },
   ];
 
   return (
@@ -145,6 +165,8 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
 
       {data === null ? (
         <p style={st.empty}>Lead command unavailable.</p>
+      ) : view === 'sources' ? (
+        <SourcesTable sources={sources} />
       ) : shown.length === 0 ? (
         <p style={st.empty}>Nothing here — all clear.</p>
       ) : (
@@ -195,6 +217,41 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
         </ul>
       )}
     </section>
+  );
+}
+
+/** G7 — Sources & Performance: which channels produce work, which produce records. */
+function SourcesTable({ sources }: { sources: SourcePerformance[] }) {
+  if (sources.length === 0) return <p style={st.empty}>No leads yet — no sources to measure.</p>;
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={st.srcTable}>
+        <thead>
+          <tr>
+            {['Source', 'Leads', 'Active', 'Converted', 'Disqualified', 'Nurture', 'Needs Attention', 'Conversion', 'Avg Age'].map((h) => (
+              <th key={h} style={st.srcTh}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sources.map((s) => (
+            <tr key={s.source}>
+              <td style={{ ...st.srcTd, fontWeight: 600, textTransform: s.source === 'unknown' ? 'none' : 'capitalize' }}>
+                {s.source === 'unknown' ? <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>not recorded</span> : s.source.replace(/_/g, ' ')}
+              </td>
+              <td style={st.srcTdNum}>{s.total}</td>
+              <td style={st.srcTdNum}>{s.active || '—'}</td>
+              <td style={{ ...st.srcTdNum, color: s.converted ? 'var(--good)' : undefined, fontWeight: s.converted ? 700 : 400 }}>{s.converted || '—'}</td>
+              <td style={{ ...st.srcTdNum, color: s.disqualified ? 'var(--bad)' : undefined }}>{s.disqualified || '—'}</td>
+              <td style={st.srcTdNum}>{s.nurturing || '—'}</td>
+              <td style={{ ...st.srcTdNum, color: s.needsAttention ? '#d97706' : undefined }}>{s.needsAttention || '—'}</td>
+              <td style={{ ...st.srcTdNum, fontWeight: 700 }}>{s.conversionRate}%</td>
+              <td style={st.srcTdNum}>{s.avgAgeDays}d</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -275,4 +332,8 @@ const st = {
   dupNote: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   busy: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   err: { fontSize: 12, color: '#dc2626' } as CSSProperties,
+  srcTable: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
+  srcTh: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, padding: '8px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' } as CSSProperties,
+  srcTd: { padding: '8px 10px', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  srcTdNum: { padding: '8px 10px', borderBottom: '1px solid var(--border)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } as CSSProperties,
 };

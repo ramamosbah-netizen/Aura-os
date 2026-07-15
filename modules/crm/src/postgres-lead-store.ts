@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id, Lead, LeadStatus, LeadSource, Page, PageParams } from '@aura/shared';
+import type { Id, Lead, LeadStatus, LeadSource, LeadQualificationDimensions, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { LeadFilter, LeadStore } from './lead-store';
@@ -22,6 +22,10 @@ interface LeadRow {
   converted_opportunity_id: string | null;
   converted_at: Date | null;
   signal_id: string | null;
+  qualification_dimensions: LeadQualificationDimensions | string | null;
+  qualification_notes: string | null;
+  qualification_assessed_at: Date | null;
+  qualification_assessed_by: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -29,7 +33,9 @@ interface LeadRow {
 const COLS =
   'id, tenant_id, company_id, name, company_name, email, phone, status, source, ' +
   'assigned_to, assigned_at, first_responded_at, sla_first_response_hours, next_activity_due, ' +
-  'converted_opportunity_id, converted_at, signal_id, created_at, updated_at';
+  'converted_opportunity_id, converted_at, signal_id, ' +
+  'qualification_dimensions, qualification_notes, qualification_assessed_at, qualification_assessed_by, ' +
+  'created_at, updated_at';
 
 function rowToLead(r: LeadRow): Lead {
   return {
@@ -50,6 +56,15 @@ function rowToLead(r: LeadRow): Lead {
     convertedOpportunityId: r.converted_opportunity_id,
     convertedAt: r.converted_at ? r.converted_at.toISOString() : null,
     signalId: r.signal_id,
+    // jsonb comes back parsed from pg, but a text-typed column or a driver quirk yields a string —
+    // the quotation store hit exactly this, so parse defensively rather than trust the shape.
+    qualificationDimensions:
+      typeof r.qualification_dimensions === 'string'
+        ? (JSON.parse(r.qualification_dimensions) as LeadQualificationDimensions)
+        : (r.qualification_dimensions ?? null),
+    qualificationNotes: r.qualification_notes,
+    qualificationAssessedAt: r.qualification_assessed_at ? r.qualification_assessed_at.toISOString() : null,
+    qualificationAssessedBy: r.qualification_assessed_by,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
   };
@@ -82,21 +97,30 @@ export class PostgresLeadStore implements LeadStore {
           SET name = $2, company_name = $3, email = $4, phone = $5, status = $6, source = $7,
               assigned_to = $8, assigned_at = $9, first_responded_at = $10,
               sla_first_response_hours = $11, next_activity_due = $12,
-              converted_opportunity_id = $13, converted_at = $14, signal_id = $15, updated_at = now()
+              converted_opportunity_id = $13, converted_at = $14, signal_id = $15,
+              qualification_dimensions = $16, qualification_notes = $17,
+              qualification_assessed_at = $18, qualification_assessed_by = $19, updated_at = now()
         WHERE id = $1`,
       [l.id, l.name, l.companyName, l.email, l.phone, l.status, l.source,
        l.assignedTo, l.assignedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
-       l.convertedOpportunityId, l.convertedAt, l.signalId],
+       l.convertedOpportunityId, l.convertedAt, l.signalId,
+       l.qualificationDimensions ? JSON.stringify(l.qualificationDimensions) : null,
+       l.qualificationNotes, l.qualificationAssessedAt, l.qualificationAssessedBy],
     );
   }
 
   private insert(executor: Pool | PoolClient, l: Lead): Promise<unknown> {
+    // The placeholders are positional against COLS — widening COLS without widening these silently
+    // writes values into the wrong columns, so the two must be edited together.
     return executor.query(
       `INSERT INTO public.aura_crm_leads (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
       [l.id, l.tenantId, l.companyId, l.name, l.companyName, l.email, l.phone, l.status, l.source,
        l.assignedTo, l.assignedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
-       l.convertedOpportunityId, l.convertedAt, l.signalId, l.createdAt, l.updatedAt],
+       l.convertedOpportunityId, l.convertedAt, l.signalId,
+       l.qualificationDimensions ? JSON.stringify(l.qualificationDimensions) : null,
+       l.qualificationNotes, l.qualificationAssessedAt, l.qualificationAssessedBy,
+       l.createdAt, l.updatedAt],
     );
   }
 

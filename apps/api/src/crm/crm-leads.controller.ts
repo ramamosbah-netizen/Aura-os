@@ -1,7 +1,10 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsBoolean, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsInt, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams, type Lead, type LeadStatus, type LeadSource, type OpportunityStage } from '@aura/shared';
+import {
+  parsePageParams, assessLeadQualification,
+  type Lead, type LeadStatus, type LeadSource, type OpportunityStage, type LeadQualificationAssessment,
+} from '@aura/shared';
 import { LeadService, LeadConversionService, type ConvertLeadResult, type ConvertPreview } from '@aura/crm';
 
 class CreateLeadDto {
@@ -28,6 +31,13 @@ class UpdateLeadDto {
 
 class AssignLeadDto {
   @IsString() assignedTo!: string;
+}
+
+class AssessLeadDto {
+  /** Partial map of the eight 0–100 dimensions; unknown keys are dropped by the domain
+   * normalizer, and an explicit null clears a dimension back to unrated. */
+  @IsOptional() @IsObject() dimensions?: Record<string, number | null>;
+  @IsOptional() @IsString() notes?: string;
 }
 
 class ConvertLeadDto {
@@ -79,6 +89,36 @@ export class CrmLeadsController {
     if (!dto?.assignedTo?.trim()) throw new BadRequestException('assignedTo is required');
     const ctx = this.tenant.get();
     return this.leads.assign(id, dto.assignedTo, ctx.actorId);
+  }
+
+  /**
+   * G3 — record the qualification assessment and get the verdict back.
+   * Dimensions merge (qualification is learned piecemeal); the engine recommends, it never
+   * changes status — qualifying stays a human act via PATCH :id { status }.
+   */
+  @Patch(':id/qualification')
+  assess(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: AssessLeadDto,
+  ): Promise<{ lead: Lead; assessment: LeadQualificationAssessment }> {
+    const ctx = this.tenant.get();
+    return this.leads.assess(id, { dimensions: dto?.dimensions, notes: dto?.notes }, ctx.actorId);
+  }
+
+  /** The current verdict — derived from the stored dimensions, never a cached score. */
+  @Get(':id/qualification')
+  async qualification(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+  ): Promise<{ dimensions: Record<string, number>; notes: string | null; assessedAt: string | null; assessedBy: string | null; assessment: LeadQualificationAssessment }> {
+    const lead = await this.leads.get(id);
+    if (!lead) throw new NotFoundException(`lead ${id} not found`);
+    return {
+      dimensions: (lead.qualificationDimensions ?? {}) as Record<string, number>,
+      notes: lead.qualificationNotes,
+      assessedAt: lead.qualificationAssessedAt,
+      assessedBy: lead.qualificationAssessedBy,
+      assessment: assessLeadQualification(lead.qualificationDimensions ?? {}),
+    };
   }
 
   /** Dry run — which Account/Contact would convert link vs. create (possible-duplicate check). */

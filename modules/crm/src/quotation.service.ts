@@ -11,7 +11,7 @@ import {
   makeQuotation,
   reviseQuotation,
 } from './domain/quotation';
-import { type QuotationPricingSheet, computeQuotationPricing, normalizeUnitCosts } from './domain/quotation-pricing';
+import { type QuotationPricingSheet, computeQuotationPricing, normalizePricingInput } from './domain/quotation-pricing';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
@@ -131,20 +131,23 @@ export class QuotationService {
     return all.sort((a, b) => a.revision - b.revision);
   }
 
-  /** The internal cost & margin sheet for this revision (zero-cost default until priced). */
+  /** The internal rate build-up sheet for this revision (all-zero until priced). */
   async getPricing(id: Id): Promise<QuotationPricingSheet> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
-    return computeQuotationPricing(q.lines, q.pricing?.unitCosts ?? []);
+    return computeQuotationPricing(q.lines, q.pricing);
   }
 
-  /** Persist per-line unit costs for this revision; returns the recomputed sheet. */
-  async setPricing(id: Id, unitCosts: number[]): Promise<QuotationPricingSheet> {
+  /**
+   * Persist the per-line cost build-up for this revision; returns the recomputed
+   * sheet. Accepts the legacy lean shape (`{ unitCosts }`) — normalize lifts it.
+   */
+  async setPricing(id: Id, input: unknown): Promise<QuotationPricingSheet> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
-    const costs = normalizeUnitCosts(q.lines.length, unitCosts);
-    await this.store.save({ ...q, pricing: { unitCosts: costs } });
-    return computeQuotationPricing(q.lines, costs);
+    const lines = normalizePricingInput(q.lines.length, input);
+    await this.store.save({ ...q, pricing: { lines } });
+    return computeQuotationPricing(q.lines, { lines });
   }
 
   /** Quotations generated from a tender's pricing sheet. */

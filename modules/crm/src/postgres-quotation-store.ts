@@ -1,7 +1,8 @@
 import type { Pool } from 'pg';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
-import type { Quotation, QuotationLine, QuotationPricingInput } from './domain/quotation';
+import type { Quotation, QuotationLine } from './domain/quotation';
+import type { QuotationPricingInput } from './domain/quotation-pricing';
 import type { QuotationFilter, QuotationStore } from './quotation-store';
 
 interface Row {

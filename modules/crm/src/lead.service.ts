@@ -49,7 +49,16 @@ export class LeadService {
 
   async update(
     id: Id,
-    updates: Partial<Pick<Lead, 'name' | 'companyName' | 'email' | 'phone' | 'status' | 'source' | 'assignedTo' | 'assignedAt' | 'firstRespondedAt' | 'slaFirstResponseHours' | 'nextActivityDue'>>,
+    updates: Partial<
+      Pick<
+        Lead,
+        | 'name' | 'companyName' | 'email' | 'phone' | 'status' | 'source' | 'assignedTo' | 'assignedAt'
+        | 'firstRespondedAt' | 'slaFirstResponseHours' | 'nextActivityDue'
+        // G4 — the ELV commercial context, captured whenever it is learned.
+        | 'requirement' | 'systems' | 'sector' | 'projectName' | 'projectLocation' | 'consultant'
+        | 'mainContractor' | 'estimatedValue' | 'projectStage' | 'expectedTimeline'
+      >
+    >,
     actorId?: Id | null,
   ): Promise<Lead> {
     const existing = await this.store.get(id);

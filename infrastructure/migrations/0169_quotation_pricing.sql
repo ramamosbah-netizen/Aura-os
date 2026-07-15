@@ -1,5 +1,5 @@
 -- ============================================================
--- AURA OS — migration 0156: quotation pricing sheet
+-- AURA OS — migration 0169: quotation pricing sheet
 -- ------------------------------------------------------------
 -- Each quotation revision keeps its own INTERNAL cost sheet — per-line unit
 -- costs, index-aligned to `lines` — so margin can be derived against the quoted

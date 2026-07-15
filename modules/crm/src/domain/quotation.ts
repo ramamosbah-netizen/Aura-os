@@ -1,6 +1,7 @@
 import { type Id, newId } from '@aura/shared';
-// Type-only (erased at compile) — no runtime cycle with quotation-pricing.
-import type { QuotationPricingInput } from './quotation-pricing';
+// quotation-pricing has only a type-only dep back on this file, so this value
+// import is one-way at runtime — no cycle.
+import { type QuotationPricingInput, emptyPricingLine } from './quotation-pricing';
 
 /**
  * Customer Quotation — the pre-sales quote issued to a prospect/customer (the deal-chain step
@@ -28,6 +29,21 @@ export const OPEN_QUOTATION_STATUSES: readonly QuotationStatus[] = [
   'sent',
   'under_negotiation',
 ];
+
+/**
+ * Governance — the internal pricing sheet is only editable while the quotation is
+ * still being worked up. Approval is the commitment point (it also locks the
+ * immutable Commercial Baseline, R3), so from `approved` onwards the build-up
+ * that justified the price is FROZEN: read, export and print only. Re-pricing
+ * means raising a new revision, which starts as a draft with the sheet carried
+ * forward and editable again.
+ */
+export const PRICING_EDITABLE_STATUSES: readonly QuotationStatus[] = ['draft', 'internal_review'];
+
+/** True once the build-up is frozen (approved → sent → … and every terminal state). */
+export function isPricingLocked(q: Pick<Quotation, 'status'>): boolean {
+  return !PRICING_EDITABLE_STATUSES.includes(q.status);
+}
 
 export interface QuotationLine {
   description: string;
@@ -152,7 +168,9 @@ export function makeQuotation(input: NewQuotation): Quotation {
     subtotal,
     vatTotal,
     total,
-    pricing: input.pricing ?? null,
+    // A quotation is born with its pricing sheet: one empty build-up per line,
+    // ready to cost. It is never null, so "open the sheet" always works.
+    pricing: input.pricing ?? { lines: lines.map(() => emptyPricingLine()) },
     status: 'draft',
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

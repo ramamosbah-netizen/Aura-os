@@ -174,6 +174,9 @@ function buildHarness() {
     { restampFromAward: async () => 0 } as any, // EstimateSourcingService (R5)
     noop, // AccountService (CRM)
     mockSignals, // SignalService (CRM)
+    // QuotationService (CRM) — the award reactor asks it whether a tender's quotation is already
+    // committed, so a frozen estimate is never silently restamped. No quotes here → nothing frozen.
+    { listBySourceTender: async () => [] } as any,
     customerInvoices,
     mockSupplierInvoices, // InvoiceService (AP)
     mockFinanceAccounts, // AccountService (Finance) — GL account resolver

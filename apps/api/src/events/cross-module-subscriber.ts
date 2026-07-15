@@ -4,7 +4,7 @@ import { ContractService } from '@aura/contracts';
 import { ProjectService, WbsService, CbsService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService } from '@aura/tendering';
-import { AccountService, SignalService } from '@aura/crm';
+import { AccountService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } from '@aura/shared';
@@ -49,6 +49,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly estimateSourcing: EstimateSourcingService,
     private readonly accounts: AccountService,
     private readonly signals: SignalService,
+    private readonly quotations: QuotationService,
     private readonly customerInvoices: CustomerInvoiceService,
     private readonly supplierInvoices: InvoiceService,
     private readonly financeAccounts: FinanceAccountService,
@@ -756,6 +757,20 @@ export class CrossModuleSubscriber implements OnModuleInit {
           supplierName: (p.supplier as string) ?? 'Supplier',
           amount,
           actorId: e.actorId,
+          // Governance: never restamp the costing behind a quotation already committed to the
+          // client — an award must not silently rewrite a price we are standing behind. CRM owns
+          // this rule; tendering has it passed in (ADR-0011).
+          isTenderCommitted: async (tenderId) => {
+            const generated = await this.quotations.listBySourceTender(e.tenantId, tenderId);
+            const committed = generated.filter((q) => isQuotationCommitted(q));
+            if (committed.length > 0) {
+              this.logger.log(
+                `⚡ rfq.awarded → estimate for tender ${tenderId} left frozen: ` +
+                  `${committed.map((q) => `${q.quoteNumber} (${q.status})`).join(', ')} committed`,
+              );
+            }
+            return committed.length > 0;
+          },
         });
         if (n > 0) this.logger.log(`⚡ rfq.awarded → restamped ${n} sourced estimate component(s) to ${amount}`);
       } catch (err) {

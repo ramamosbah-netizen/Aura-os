@@ -98,6 +98,12 @@ export class EstimateSourcingService {
    * Award reactor: an RFQ was awarded, so every component sourced from that RFQ is restamped to
    * the awarded price and the linked build-up re-priced. A component whose build-up has since been
    * rebuilt (id gone) has its now-orphan link dropped. Returns how many components were restamped.
+   *
+   * `isTenderCommitted` is the governance seam: an estimate whose quotation is already committed
+   * to the client is frozen, and an award must NOT silently rewrite the costing behind a price we
+   * are standing behind. The predicate is passed IN because that rule is CRM's to know — tendering
+   * does not depend on CRM (ADR-0011), the same way the quote amount is passed in rather than
+   * reaching into procurement. Omitted (e.g. in unit tests) → no gate.
    */
   async restampFromAward(args: {
     tenantId: Id;
@@ -106,6 +112,7 @@ export class EstimateSourcingService {
     supplierName: string;
     amount: number;
     actorId?: Id | null;
+    isTenderCommitted?: (tenderId: Id) => Promise<boolean>;
   }): Promise<number> {
     const links = await this.sources.listByRfq(args.tenantId, args.rfqId);
     let restamped = 0;
@@ -117,6 +124,9 @@ export class EstimateSourcingService {
         await this.sources.remove(args.tenantId, link.buildUpId, link.componentId);
         continue;
       }
+      // Frozen costing: leave the estimate and the link untouched, so the sheet keeps showing the
+      // price it was committed at. The live-quote drift shows up as `stale` on the sources view.
+      if (args.isTenderCommitted && (await args.isTenderCommitted(buildUp.tenderId))) continue;
       if (Math.abs(component.unitCost - args.amount) > 1e-9 || link.quoteId !== args.quoteId) {
         const updated = withComponentUnitCost(buildUp, link.componentId, args.amount);
         await this.estimates.save(updated);

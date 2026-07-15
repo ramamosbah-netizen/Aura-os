@@ -45,6 +45,29 @@ export function isPricingLocked(q: Pick<Quotation, 'status'>): boolean {
   return !PRICING_EDITABLE_STATUSES.includes(q.status);
 }
 
+/**
+ * Statuses where the quote is a LIVE commitment to the client — a price we are
+ * currently standing behind. Distinct from `isPricingLocked`, which asks whether
+ * THIS record's own sheet is frozen (true for `revised` and every dead state too,
+ * because those are historical records that must never be rewritten).
+ *
+ * This asks a different question: does a commitment still stand? A superseded
+ * (`revised`) quote does not — its successor carries the commitment. Nor do the
+ * dead ends (`rejected`/`expired`/`cancelled`). Upstream estimates use this to
+ * decide whether the costing behind a live price may still be re-worked.
+ */
+export const COMMITTED_QUOTATION_STATUSES: readonly QuotationStatus[] = [
+  'approved',
+  'sent',
+  'under_negotiation',
+  'accepted',
+];
+
+/** True while this quotation still represents a price committed to the client. */
+export function isQuotationCommitted(q: Pick<Quotation, 'status'>): boolean {
+  return COMMITTED_QUOTATION_STATUSES.includes(q.status);
+}
+
 export interface QuotationLine {
   description: string;
   quantity: number;

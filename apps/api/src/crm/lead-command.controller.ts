@@ -3,10 +3,12 @@ import { TenantContext } from '@aura/core';
 import { ActivityService, LeadService, lastActivityByRecord } from '@aura/crm';
 import {
   leadAttention,
+  assessLeadQualification,
   LEAD_TERMINAL_STATUSES,
   type Lead,
   type LeadAttention,
   type LeadActivityFacts,
+  type LeadQualificationAssessment,
 } from '@aura/shared';
 
 // Lead Command — the Lead OS "Needs Attention" cockpit. Turns the raw lead list into
@@ -28,6 +30,12 @@ interface LeadCommandRow {
   lastActivityIso: string | null;
   nextActivityDueIso: string | null;
   attention: LeadAttention;
+  /**
+   * G3 — the qualification verdict, derived from the stored dimensions on every read (never a
+   * cached score). `attention` says whether anyone is WORKING the lead; this says whether the
+   * lead is WORTH working. The Lead Center needs both to be useful.
+   */
+  qualification: LeadQualificationAssessment;
 }
 
 const daysBetween = (iso: string): number => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -89,6 +97,7 @@ export class LeadCommandController {
         lastActivityIso: facts.lastTouchIso ?? null,
         nextActivityDueIso: facts.nextActivityDueIso ?? null,
         attention: leadAttention(l, facts, now),
+        qualification: assessLeadQualification(l.qualificationDimensions ?? {}),
       };
     });
 

@@ -1,6 +1,7 @@
 import { type Id, newId } from './id';
 import { daysSince, hoursSince, isQuiet } from './attention-time';
 import type { BuyingStage, PursuitDecision, PursuitDimensions } from './buying-journey';
+import type { LeadQualificationDimensions } from './lead-qualification';
 
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified' | 'converted';
 export type LeadSource = 'website' | 'referral' | 'campaign' | 'cold_call' | 'other';
@@ -39,6 +40,18 @@ export interface Lead {
   /** Lineage: the Signal this lead was promoted from (null for directly-captured leads).
    * Preserves source attribution back up the acquisition chain: Signal → Lead → Opportunity. */
   signalId: Id | null;
+  /**
+   * G3 — the qualification assessment (the eight 0–100 dimensions). Null/absent keys mean UNRATED,
+   * never zero. The score and recommendation are NOT stored: they are pure functions of this map
+   * (assessLeadQualification), so caching them would recreate the second-truth problem G2 removed
+   * from opportunity.nextAction. The human's decision is the lead's `status`.
+   */
+  qualificationDimensions: LeadQualificationDimensions | null;
+  /** The qualifier's reasoning behind the numbers. */
+  qualificationNotes: string | null;
+  /** Governance: a score with no author cannot be challenged. */
+  qualificationAssessedAt: string | null;
+  qualificationAssessedBy: Id | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +126,10 @@ export interface NewLead {
   convertedOpportunityId?: Id | null;
   convertedAt?: string | null;
   signalId?: Id | null;
+  qualificationDimensions?: LeadQualificationDimensions | null;
+  qualificationNotes?: string | null;
+  qualificationAssessedAt?: string | null;
+  qualificationAssessedBy?: Id | null;
 }
 
 export function makeLead(input: NewLead): Lead {
@@ -135,6 +152,12 @@ export function makeLead(input: NewLead): Lead {
     convertedOpportunityId: input.convertedOpportunityId ?? null,
     convertedAt: input.convertedAt ?? null,
     signalId: input.signalId ?? null,
+    // Unassessed by default — which assessLeadQualification honestly reports as score 0 /
+    // LOW confidence / REVIEW, rather than pretending a fresh lead has been judged.
+    qualificationDimensions: input.qualificationDimensions ?? null,
+    qualificationNotes: input.qualificationNotes ?? null,
+    qualificationAssessedAt: input.qualificationAssessedAt ?? null,
+    qualificationAssessedBy: input.qualificationAssessedBy ?? null,
     createdAt: now,
     updatedAt: now,
   };

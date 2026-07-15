@@ -24,6 +24,15 @@ interface Row {
   lastActivityIso: string | null;
   nextActivityDueIso: string | null;
   attention: { active: boolean; needsAttention: boolean; severity: Severity | null; gaps: Gap[] };
+  /** G3 — derived server-side from the stored dimensions. `attention` = is anyone working it;
+   * this = is it worth working. Two independent questions, both needed to triage a lead. */
+  qualification: {
+    score: number;
+    confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+    coverage: { rated: number; total: number };
+    recommendation: 'QUALIFY' | 'NURTURE' | 'DISQUALIFY' | 'REVIEW';
+    gaps: Array<{ key: string; label: string; value: number | null }>;
+  };
 }
 interface Counts { all: number; mine: number; needsAttention: number; nurture: number }
 export interface LeadCommand { generatedAt: string; counts: Counts; leads: Row[] }
@@ -40,6 +49,20 @@ const GAP_LABEL: Record<Gap, string> = {
   QUALIFICATION_STALLED: 'Qualification stalled',
 };
 const SEV_COLOR: Record<Severity, string> = { HIGH: '#dc2626', MEDIUM: '#d97706', LOW: 'var(--muted)' };
+
+/** G3 verdicts. REVIEW is not a failure — it means "go and find out", which is real work. */
+const REC_LABEL: Record<string, string> = {
+  QUALIFY: 'qualify',
+  NURTURE: 'nurture',
+  DISQUALIFY: 'disqualify',
+  REVIEW: 'needs review',
+};
+const REC_STYLE: Record<string, CSSProperties> = {
+  QUALIFY: { color: 'var(--good)' },
+  DISQUALIFY: { color: 'var(--bad)' },
+  NURTURE: { color: 'var(--muted)' },
+  REVIEW: { color: 'var(--accent)' },
+};
 
 type ConvertState = { phase: 'preview' | 'busy' | 'error'; dupConfidence?: string; message?: string };
 
@@ -138,6 +161,17 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
                   <span style={st.status}>{r.status}</span>
                   <span>· {r.ageDays}d old</span>
                   <span>· {r.assignedTo ? (r.assignedToMe ? 'mine' : 'assigned') : 'unassigned'}</span>
+                  {/* Score and confidence always travel together: 90/100 from one rated dimension
+                      is not the same fact as 90 from eight, and must never look identical. */}
+                  {r.qualification && r.qualification.coverage.rated > 0 && (
+                    <span
+                      style={{ ...st.qual, ...(REC_STYLE[r.qualification.recommendation] ?? {}) }}
+                      title={`${r.qualification.coverage.rated}/${r.qualification.coverage.total} dimensions rated · ${r.qualification.confidence} confidence${r.qualification.gaps.length ? ` · gaps: ${r.qualification.gaps.map((g) => g.label).join(', ')}` : ''}`}
+                    >
+                      · {r.qualification.score}/100 {REC_LABEL[r.qualification.recommendation]}
+                    </span>
+                  )}
+                  {r.qualification && r.qualification.coverage.rated === 0 && <span style={st.unassessed}>· not qualified yet</span>}
                 </div>
                 {r.attention.gaps.length > 0 && (
                   <div style={st.chips}>
@@ -212,6 +246,9 @@ function ConvertControl({
 }
 
 const st = {
+  /** The qualification verdict, hoverable for the reasons — a number nobody can interrogate gets ignored. */
+  qual: { fontWeight: 700, cursor: 'help' } as CSSProperties,
+  unassessed: { color: 'var(--muted)', fontStyle: 'italic' } as CSSProperties,
   panel: { border: '1px solid var(--border)', borderRadius: 10, background: 'var(--panel)', padding: 16, marginBottom: 22 } as CSSProperties,
   head: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,
   h2: { fontSize: 16, margin: 0, letterSpacing: -0.3 } as CSSProperties,

@@ -3,11 +3,11 @@ import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
 import { ProjectService, WbsService, CbsService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
-import { TenderService } from '@aura/tendering';
-import { AccountService } from '@aura/crm';
+import { TenderService, EstimateSourcingService } from '@aura/tendering';
+import { AccountService, SignalService } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
-import type { DomainEvent } from '@aura/shared';
+import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } from '@aura/shared';
 
 /**
  * Cross-module event subscriber — the reactor that wires the deal chain.
@@ -46,7 +46,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly pos: PurchaseOrderService,
     private readonly purchaseRequests: PurchaseRequestService,
     private readonly tenders: TenderService,
+    private readonly estimateSourcing: EstimateSourcingService,
     private readonly accounts: AccountService,
+    private readonly signals: SignalService,
     private readonly customerInvoices: CustomerInvoiceService,
     private readonly supplierInvoices: InvoiceService,
     private readonly financeAccounts: FinanceAccountService,
@@ -109,6 +111,55 @@ export class CrossModuleSubscriber implements OnModuleInit {
         this.logger.log(`⚡ project.completed → contract "${contract.title}" completed (deal chain closed)`);
       } catch (err) {
         this.logger.error(`Failed to complete contract from project.completed: ${err}`);
+      }
+    });
+
+    // ── Account growth loop (S9): Project completed → growth Signal on the Radar ──
+    // Closes the acquisition loop back onto the installed base. A delivered project is the warmest
+    // growth pipeline there is — an opening for follow-on scope, cross-sell, or a service attach.
+    // We drop an EXPANSION Signal on the Opportunity Radar (S3); SignalService.create is idempotent
+    // on dedupeKey, so an outbox retry or re-completion never re-emits.
+    this.bus.subscribe('projects.project.completed', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        // The payload lacks the account snapshot — fetch the project for it.
+        const project = await this.projects.get(e.aggregateId);
+        const signal = projectCompletionSignal({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          projectId: e.aggregateId,
+          projectTitle: (project?.title as string) ?? (p.title as string) ?? null,
+          accountId: project?.accountId ?? null,
+          accountName: project?.accountName ?? null,
+          value: project?.value ?? (p.value as number) ?? null,
+        });
+        await this.signals.create({ ...signal, actorId: null });
+        this.logger.log(`⚡ project.completed → growth Signal "${signal.title}" on the Radar (account ${signal.accountName ?? 'unknown'})`);
+      } catch (err) {
+        this.logger.error(`Failed to raise growth signal from project.completed: ${err}`);
+      }
+    });
+
+    // ── Account growth loop (S9): Contract completed → renewal Signal on the Radar ──
+    // A completed contract is the trigger to pursue renewal / AMC / the next phase before the
+    // relationship cools. RENEWAL_DUE Signal, deduped by contract id.
+    this.bus.subscribe('contracts.contract.completed', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const account = p.account as { id: string; name: string | null } | null;
+        const signal = contractCompletionSignal({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          contractId: e.aggregateId,
+          contractTitle: (p.title as string) ?? null,
+          accountId: account?.id ?? null,
+          accountName: account?.name ?? null,
+          value: (p.value as number) ?? null,
+        });
+        await this.signals.create({ ...signal, actorId: null });
+        this.logger.log(`⚡ contract.completed → renewal Signal "${signal.title}" on the Radar (account ${signal.accountName ?? 'unknown'})`);
+      } catch (err) {
+        this.logger.error(`Failed to raise renewal signal from contract.completed: ${err}`);
       }
     });
 
@@ -685,6 +736,30 @@ export class CrossModuleSubscriber implements OnModuleInit {
         this.logger.log(`⚡ asset.disposed → posted GL ${ref} for ${assetName} (proceeds: ${proceeds}, bookValue: ${bookValue}, gainLoss: ${gainLoss})`);
       } catch (err) {
         this.logger.error(`Failed to post asset disposal GL from asset.disposed: ${err}`);
+      }
+    });
+
+    // ── Bid-time sourcing (R5): RFQ awarded → restamp sourced estimate components ──
+    // A build-up component sourced from this RFQ is repriced to the awarded quote's amount, so the
+    // tender estimate stays consistent with the real supplier price. EstimateSourcingService owns
+    // the link + recompute; it no-ops when nothing was sourced from the RFQ.
+    this.bus.subscribe('procurement.rfq.awarded', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const quoteId = p.quoteId as string | undefined;
+        const amount = Number(p.amount) || 0;
+        if (!quoteId || amount <= 0) return;
+        const n = await this.estimateSourcing.restampFromAward({
+          tenantId: e.tenantId,
+          rfqId: e.aggregateId,
+          quoteId,
+          supplierName: (p.supplier as string) ?? 'Supplier',
+          amount,
+          actorId: e.actorId,
+        });
+        if (n > 0) this.logger.log(`⚡ rfq.awarded → restamped ${n} sourced estimate component(s) to ${amount}`);
+      } catch (err) {
+        this.logger.error(`Failed to restamp sourced estimates from rfq.awarded: ${err}`);
       }
     });
 

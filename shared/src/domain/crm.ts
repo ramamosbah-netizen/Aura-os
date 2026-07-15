@@ -1,6 +1,8 @@
 import { type Id, newId } from './id';
+import { daysSince, hoursSince, isQuiet } from './attention-time';
+import type { BuyingStage, PursuitDecision, PursuitDimensions } from './buying-journey';
 
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified';
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified' | 'converted';
 export type LeadSource = 'website' | 'referral' | 'campaign' | 'cold_call' | 'other';
 
 export interface Lead {
@@ -13,6 +15,30 @@ export interface Lead {
   phone: string | null;
   status: LeadStatus;
   source: LeadSource | null;
+  /** Who owns qualification of this lead (the Lead OS execution owner). */
+  assignedTo: Id | null;
+  /** When it was assigned — the clock the first-response SLA runs against. */
+  assignedAt: string | null;
+  /** The explicit first-response fact: when we first meaningfully engaged the lead.
+   * SLA breach is only measurable because this is recorded (or derived from the first
+   * Activity touch after assignment). Null ⇒ we have not responded yet. */
+  firstRespondedAt: string | null;
+  /** First-response SLA target in hours; null falls back to LEAD_ATTENTION.slaFirstResponseHours. */
+  slaFirstResponseHours: number | null;
+  /**
+   * PROJECTION / compatibility cache of the next open follow-up's due date. Activity is the
+   * long-term source of truth for follow-up work; leadAttention() takes the next-activity fact
+   * as a DERIVED input (composed from the Activity stream) rather than reading this column, so
+   * this never becomes a second competing work system.
+   */
+  nextActivityDue: string | null;
+  /** Lineage: the opportunity this lead converted into. Set ⇒ the lead is terminal (converted)
+   * and can never convert again — the "cannot convert twice" invariant reads this. */
+  convertedOpportunityId: Id | null;
+  convertedAt: string | null;
+  /** Lineage: the Signal this lead was promoted from (null for directly-captured leads).
+   * Preserves source attribution back up the acquisition chain: Signal → Lead → Opportunity. */
+  signalId: Id | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +81,17 @@ export interface Opportunity {
   source: string | null;
   /** Why we lost (win/loss intelligence) — set when the stage moves to lost. */
   lossReason: string | null;
+  /** Where the CUSTOMER is in their own buying process (vs. our sales stage). Misalignment = risk. */
+  buyingStage: BuyingStage | null;
+  /** The recorded Pursue / No-Pursue call (kept even when NO_PURSUE — never deleted). */
+  pursuitDecision: PursuitDecision | null;
+  /** 0–100 assessment score behind the decision. */
+  pursuitScore: number | null;
+  pursuitRationale: string | null;
+  pursuitDecidedBy: string | null;
+  pursuitDecidedAt: string | null;
+  /** The per-dimension assessment (strategicFit, winability, …) behind the score. */
+  pursuitDimensions: PursuitDimensions | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +105,14 @@ export interface NewLead {
   phone?: string | null;
   status?: LeadStatus;
   source?: LeadSource | null;
+  assignedTo?: Id | null;
+  assignedAt?: string | null;
+  firstRespondedAt?: string | null;
+  slaFirstResponseHours?: number | null;
+  nextActivityDue?: string | null;
+  convertedOpportunityId?: Id | null;
+  convertedAt?: string | null;
+  signalId?: Id | null;
 }
 
 export function makeLead(input: NewLead): Lead {
@@ -82,9 +127,137 @@ export function makeLead(input: NewLead): Lead {
     phone: input.phone?.trim() ?? null,
     status: input.status ?? 'new',
     source: input.source ?? null,
+    assignedTo: input.assignedTo ?? null,
+    assignedAt: input.assignedAt ?? null,
+    firstRespondedAt: input.firstRespondedAt ?? null,
+    slaFirstResponseHours: input.slaFirstResponseHours ?? null,
+    nextActivityDue: input.nextActivityDue ?? null,
+    convertedOpportunityId: input.convertedOpportunityId ?? null,
+    convertedAt: input.convertedAt ?? null,
+    signalId: input.signalId ?? null,
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/** Statuses where a lead is still being actively worked and must obey lead attention. */
+export const LEAD_ACTIVE_STATUSES: readonly LeadStatus[] = ['new', 'contacted', 'qualified'];
+/** Terminal / parked statuses — exempt from attention (nurture is a deliberate hold,
+ * converted & disqualified are done). */
+export const LEAD_TERMINAL_STATUSES: readonly LeadStatus[] = ['nurturing', 'disqualified', 'converted'];
+/** Statuses still awaiting qualification (drives QUALIFICATION_STALLED). */
+const LEAD_PREQUALIFIED_STATUSES: readonly LeadStatus[] = ['new', 'contacted'];
+
+/** One shared threshold set for lead attention (hours/days). Change here, change everywhere. */
+export const LEAD_ATTENTION = {
+  /** Default first-response SLA when a lead carries no explicit target. */
+  slaFirstResponseHours: 24,
+  /** No touch in this many days ⇒ STALE. */
+  staleDays: 7,
+  /** Still not qualified this many days after creation ⇒ QUALIFICATION_STALLED. */
+  qualificationStalledDays: 21,
+} as const;
+
+export type LeadAttentionGap =
+  | 'UNASSIGNED'
+  | 'SLA_BREACHED'
+  | 'NO_NEXT_ACTIVITY'
+  | 'FOLLOW_UP_OVERDUE'
+  | 'STALE'
+  | 'QUALIFICATION_STALLED';
+
+export type LeadAttentionSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface LeadAttention {
+  /** True for new/contacted/qualified — nurture & disqualified are exempt. */
+  active: boolean;
+  /** Which discipline gaps are open (empty when healthy). */
+  gaps: LeadAttentionGap[];
+  /** Any gap on an active lead ⇒ surfaces under "Needs Attention". */
+  needsAttention: boolean;
+  /** Highest severity across the open gaps, or null when none. */
+  severity: LeadAttentionSeverity | null;
+}
+
+/** Facts the predicate needs but cannot read itself — DERIVED from the Activity stream by the
+ * caller (Activity is the source of truth for follow-up work), keeping shared free of module deps. */
+export interface LeadActivityFacts {
+  /** Most-recent activity touch on this lead (ISO), or null when never touched. */
+  lastTouchIso?: string | null;
+  /** Due date of the next open follow-up activity (ISO), or null when none is scheduled. */
+  nextActivityDueIso?: string | null;
+  /** When we first responded (ISO) — the explicit first-response fact for SLA. */
+  firstRespondedIso?: string | null;
+}
+
+const GAP_SEVERITY: Record<LeadAttentionGap, LeadAttentionSeverity> = {
+  SLA_BREACHED: 'HIGH',
+  FOLLOW_UP_OVERDUE: 'HIGH',
+  UNASSIGNED: 'MEDIUM',
+  STALE: 'MEDIUM',
+  QUALIFICATION_STALLED: 'MEDIUM',
+  NO_NEXT_ACTIVITY: 'LOW',
+};
+const SEVERITY_RANK: Record<LeadAttentionSeverity, number> = { LOW: 1, MEDIUM: 2, HIGH: 3 };
+
+/** The minimal lead shape the predicate reads. */
+export interface LeadAttentionCandidate {
+  status: string;
+  assignedTo?: Id | null;
+  assignedAt?: string | null;
+  firstRespondedAt?: string | null;
+  slaFirstResponseHours?: number | null;
+  createdAt: string;
+}
+
+/**
+ * **Lead attention** — the single deterministic source of truth for "which leads need work
+ * now". Mirrors opportunityAttention(): terminal/parked leads are exempt; every active lead is
+ * checked for assignment, first-response SLA, follow-up discipline, staleness and qualification
+ * progress. Follow-up facts are passed in (derived from the Activity stream) so Activity stays
+ * the one work system and shared imports no module. `now` is injectable for deterministic tests.
+ */
+export function leadAttention(
+  lead: LeadAttentionCandidate,
+  facts: LeadActivityFacts = {},
+  now: Date = new Date(),
+): LeadAttention {
+  const active = (LEAD_ACTIVE_STATUSES as readonly string[]).includes(lead.status);
+  if (!active) return { active, gaps: [], needsAttention: false, severity: null };
+
+  const today = now.toISOString().slice(0, 10);
+  const firstResponded = facts.firstRespondedIso ?? lead.firstRespondedAt ?? null;
+  const gaps: LeadAttentionGap[] = [];
+
+  if (!lead.assignedTo) gaps.push('UNASSIGNED');
+
+  // SLA: assigned, not yet responded, and past the (per-lead or default) first-response window.
+  if (lead.assignedTo && firstResponded === null) {
+    const slaHours = lead.slaFirstResponseHours ?? LEAD_ATTENTION.slaFirstResponseHours;
+    const elapsed = hoursSince(lead.assignedAt ?? null, now);
+    if (elapsed !== null && elapsed >= slaHours) gaps.push('SLA_BREACHED');
+  }
+
+  const nextDue = facts.nextActivityDueIso ?? null;
+  if (nextDue === null) gaps.push('NO_NEXT_ACTIVITY');
+  else if (nextDue.slice(0, 10) < today) gaps.push('FOLLOW_UP_OVERDUE');
+
+  const lastTouch = facts.lastTouchIso ?? null;
+  if (isQuiet(lastTouch, LEAD_ATTENTION.staleDays, now)) gaps.push('STALE');
+
+  if (
+    (LEAD_PREQUALIFIED_STATUSES as readonly string[]).includes(lead.status) &&
+    (daysSince(lead.createdAt, now) ?? 0) >= LEAD_ATTENTION.qualificationStalledDays
+  ) {
+    gaps.push('QUALIFICATION_STALLED');
+  }
+
+  const severity = gaps.reduce<LeadAttentionSeverity | null>((hi, g) => {
+    const s = GAP_SEVERITY[g];
+    return hi === null || SEVERITY_RANK[s] > SEVERITY_RANK[hi] ? s : hi;
+  }, null);
+
+  return { active, gaps, needsAttention: gaps.length > 0, severity };
 }
 
 export interface NewOpportunity {
@@ -109,6 +282,7 @@ export interface NewOpportunity {
   competitors?: string | null;
   source?: string | null;
   lossReason?: string | null;
+  buyingStage?: BuyingStage | null;
 }
 
 export function makeOpportunity(input: NewOpportunity): Opportunity {
@@ -136,6 +310,13 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     competitors: input.competitors?.trim() || null,
     source: input.source?.trim() || null,
     lossReason: input.lossReason?.trim() || null,
+    buyingStage: input.buyingStage ?? null,
+    pursuitDecision: null,
+    pursuitScore: null,
+    pursuitRationale: null,
+    pursuitDecidedBy: null,
+    pursuitDecidedAt: null,
+    pursuitDimensions: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -185,6 +366,8 @@ export function opportunityAttention(opp: NextActionCandidate, now: Date = new D
 export const CRM_EVENT = {
   leadCreated: 'crm.lead.created',
   leadUpdated: 'crm.lead.updated',
+  leadAssigned: 'crm.lead.assigned',
+  leadConverted: 'crm.lead.converted',
   opportunityCreated: 'crm.opportunity.created',
   opportunityUpdated: 'crm.opportunity.updated',
   opportunityStageChanged: 'crm.opportunity.stage_changed',

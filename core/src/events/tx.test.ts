@@ -18,6 +18,9 @@ function fakePool() {
 
 const mockTenant = {
   get: () => ({ tenantId: 't1', companyId: 'c1', actorId: 'u1' }),
+  // The tx runner binds the RLS GUC from the BOUND request context (fail-closed).
+  boundTenantId: () => 't1',
+  boundCompanyId: () => 'c1',
 } as unknown as TenantContext;
 
 describe('PostgresTxRunner', () => {

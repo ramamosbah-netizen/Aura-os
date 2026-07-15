@@ -43,7 +43,11 @@ export class LeadService {
     return lead;
   }
 
-  async update(id: Id, updates: Partial<Pick<Lead, 'name' | 'companyName' | 'email' | 'phone' | 'status' | 'source'>>, actorId?: Id | null): Promise<Lead> {
+  async update(
+    id: Id,
+    updates: Partial<Pick<Lead, 'name' | 'companyName' | 'email' | 'phone' | 'status' | 'source' | 'assignedTo' | 'assignedAt' | 'firstRespondedAt' | 'slaFirstResponseHours' | 'nextActivityDue'>>,
+    actorId?: Id | null,
+  ): Promise<Lead> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`Lead ${id} not found`);
 
@@ -76,6 +80,41 @@ export class LeadService {
     });
 
     this.logger.log(`Lead updated: ${updated.name} (${updated.id})`);
+    return updated;
+  }
+
+  /** Assign a lead to an owner — stamps the SLA clock (assignedAt) and emits crm.lead.assigned. */
+  async assign(id: Id, assignedTo: Id, actorId?: Id | null): Promise<Lead> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`Lead ${id} not found`);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
+      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      this.access.assert(actorId, target);
+    }
+
+    const now = new Date().toISOString();
+    // (Re)assigning resets the first-response clock; a fresh owner owns a fresh SLA.
+    const updated: Lead = { ...existing, assignedTo, assignedAt: now, updatedAt: now };
+
+    const event = makeEvent({
+      type: CRM_EVENT.leadAssigned,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: actorId ?? null,
+      aggregateType: 'crm.lead',
+      aggregateId: updated.id,
+      payload: { assignedTo, assignedAt: now },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.store.update(updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Lead assigned: ${updated.name} (${updated.id}) → ${assignedTo}`);
     return updated;
   }
 

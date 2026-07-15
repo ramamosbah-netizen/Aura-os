@@ -11,6 +11,9 @@ export type CostType = 'material' | 'labour' | 'plant' | 'subcontract' | 'other'
 export const COST_TYPES: readonly CostType[] = ['material', 'labour', 'plant', 'subcontract', 'other'];
 
 export interface CostComponent {
+  /** Stable id so a component can be sourced from a supplier quote (R5). Assigned by
+   *  `makeRateBuildUp`; optional because build-ups persisted before R5 predate it. */
+  id?: Id;
   costType: CostType;
   description: string;
   /** Resource quantity consumed per unit of the BOQ item. */
@@ -235,7 +238,7 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
     const unitCost = Number(c.unitCost) || 0;
     if (quantity < 0) throw new Error('component quantity cannot be negative');
     if (unitCost < 0) throw new Error('component unitCost cannot be negative');
-    return { costType: c.costType, description: c.description.trim(), quantity, unitCost, amount: r2(quantity * unitCost) };
+    return { id: newId(), costType: c.costType, description: c.description.trim(), quantity, unitCost, amount: r2(quantity * unitCost) };
   });
 
   const figures = computeBuildUp(components, overheadPercent, profitPercent, indirectPercent);
@@ -255,6 +258,26 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };
+}
+
+/**
+ * Bid-time sourcing (R5): set ONE component's unit cost from a supplier quote and re-derive the
+ * build-up (component amount → direct cost → indirect/overhead/profit → selling rate). Pure — the
+ * caller persists the returned build-up and records the source-link separately. Throws if the
+ * component id isn't in this build-up (e.g. a build-up rebuilt since it was sourced).
+ */
+export function withComponentUnitCost(buildUp: RateBuildUp, componentId: Id, unitCost: number): RateBuildUp {
+  const uc = Number(unitCost);
+  if (!Number.isFinite(uc) || uc < 0) throw new Error('sourced unit cost cannot be negative');
+  let found = false;
+  const components = buildUp.components.map((c) => {
+    if (c.id !== componentId) return c;
+    found = true;
+    return { ...c, unitCost: uc, amount: r2(c.quantity * uc) };
+  });
+  if (!found) throw new Error(`component ${componentId} not found in build-up ${buildUp.id}`);
+  const figures = computeBuildUp(components, buildUp.overheadPercent, buildUp.profitPercent, buildUp.indirectPercent);
+  return { ...buildUp, components, ...figures };
 }
 
 // ── Tender-level estimate (fold build-ups over the BOQ) ─────────────────────
@@ -335,4 +358,8 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
 export const TENDER_ESTIMATE_EVENT = {
   rateBuilt: 'tendering.estimate.rate_built',
   quotationGenerated: 'tendering.quotation.generated',
+  // Bid-time sourcing (R5): a build-up component priced from / repriced against a supplier quote.
+  componentSourced: 'tendering.estimate.component_sourced',
+  sourceRestamped: 'tendering.estimate.source_restamped',
+  sourceCleared: 'tendering.estimate.source_cleared',
 } as const;

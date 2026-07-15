@@ -163,10 +163,16 @@ export function makeQuotation(input: NewQuotation): Quotation {
 }
 
 /* ── Lifecycle ────────────────────────────────────────────────────────────
- * Draft → Internal Review → Approved → Sent → Under Negotiation →
+ * Draft → (Internal Review) → Approved → Sent → Under Negotiation →
  * Accepted / Rejected / Expired / Cancelled (+ Revised when superseded by a
- * new revision). `send` is also allowed straight from draft so small quotes
- * skip the review step.
+ * new revision).
+ *
+ * COMMERCIAL GOVERNANCE (R3 / G-P1-2): a quotation can NO LONGER be sent to a
+ * customer straight from draft — `send` requires `approved`. Approval is the
+ * governed gate (an authorized action; it locks an immutable Commercial Baseline).
+ * Small quotes are still one step: `approve` is allowed directly from draft (the
+ * authorized approver's sign-off IS the review), or two steps via `submit_review`.
+ * The invariant is simply: nothing reaches a customer unapproved.
  */
 
 export type QuotationAction =
@@ -181,8 +187,8 @@ export type QuotationAction =
 
 const TRANSITIONS: Record<QuotationAction, { from: readonly QuotationStatus[]; to: QuotationStatus }> = {
   submit_review: { from: ['draft'], to: 'internal_review' },
-  approve: { from: ['internal_review'], to: 'approved' },
-  send: { from: ['draft', 'approved'], to: 'sent' },
+  approve: { from: ['draft', 'internal_review'], to: 'approved' },
+  send: { from: ['approved'], to: 'sent' },
   negotiate: { from: ['sent'], to: 'under_negotiation' },
   accept: { from: ['sent', 'under_negotiation'], to: 'accepted' },
   reject: { from: ['sent', 'under_negotiation'], to: 'rejected' },

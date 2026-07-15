@@ -21,6 +21,7 @@ import { FleetModule } from '@aura/fleet';
 import { AssetsModule } from '@aura/assets';
 import { TemplatesModule } from './templates/templates.module';
 import { HealthController } from './health/health.controller';
+import { MigrationGateService } from './health/migration-gate.service';
 import { EventsController } from './events/events.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { WorkflowController } from './workflow/workflow.controller';
@@ -29,6 +30,8 @@ import { AiController } from './ai/ai.controller';
 import { Account360Controller } from './crm/account-360.controller';
 import { CrmAccountsController } from './crm/crm-accounts.controller';
 import { CrmLeadsController } from './crm/crm-leads.controller';
+import { LeadCommandController } from './crm/lead-command.controller';
+import { CrmSignalsController } from './crm/crm-signals.controller';
 import { CrmContactsController } from './crm/crm-contacts.controller';
 import { Contact360Controller } from './crm/contact-360.controller';
 import { CrmActivitiesController } from './crm/crm-activities.controller';
@@ -37,7 +40,10 @@ import { CrmOpportunitiesController } from './crm/crm-opportunities.controller';
 import { CrmTimelineController } from './crm/crm-timeline.controller';
 import { RelationshipIntelligenceController } from './crm/relationship-intelligence.controller';
 import { Opportunity360Controller } from './crm/opportunity-360.controller';
+import { OpportunityDepthController } from './crm/opportunity-depth.controller';
+import { PreAwardController } from './crm/pre-award.controller';
 import { PipelineCommandController } from './crm/pipeline-command.controller';
+import { ForecastController } from './crm/forecast.controller';
 import { CrmQuotationsController } from './crm/crm-quotations.controller';
 import { TenderingController } from './tendering/tendering.controller';
 import { BidScoresController } from './tendering/bid-scores.controller';
@@ -122,8 +128,8 @@ import { CommsService } from './comms/comms.service';
  */
 @Module({
   imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, CrmActivitiesController, Opportunity360Controller, PipelineCommandController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
-  providers: [SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService,
+  controllers: [HealthController, EventsController, DocumentsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmSignalsController, LeadCommandController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, CrmActivitiesController, Opportunity360Controller, OpportunityDepthController, PreAwardController, PipelineCommandController, ForecastController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
+  providers: [MigrationGateService, SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService,
     // Global permission guard — enforces @Permissions(...) on any handler. No-op until auth
     // is turned on (staged pass-through); undeclared handlers always pass.
     { provide: APP_GUARD, useClass: PermissionsGuard },

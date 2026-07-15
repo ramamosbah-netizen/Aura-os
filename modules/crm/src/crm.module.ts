@@ -20,6 +20,13 @@ import { CRM_QUOTATION_STORE } from './quotation-store';
 import { InMemoryQuotationStore } from './in-memory-quotation-store';
 import { PostgresQuotationStore } from './postgres-quotation-store';
 import { QuotationService } from './quotation.service';
+import { CRM_COMMERCIAL_BASELINE_STORE } from './commercial-baseline-store';
+import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline-store';
+import { PostgresCommercialBaselineStore } from './postgres-commercial-baseline-store';
+import { CRM_PRE_AWARD_STORE } from './pre-award-store';
+import { InMemoryPreAwardStore } from './in-memory-pre-award-store';
+import { PostgresPreAwardStore } from './postgres-pre-award-store';
+import { PreAwardService } from './pre-award.service';
 
 import { CRM_CONTACT_STORE } from './contact-store';
 import { InMemoryContactStore } from './in-memory-contact-store';
@@ -30,6 +37,23 @@ import { CRM_ACTIVITY_STORE } from './activity-store';
 import { InMemoryActivityStore } from './in-memory-activity-store';
 import { PostgresActivityStore } from './postgres-activity-store';
 import { ActivityService } from './activity.service';
+
+import { CRM_SIGNAL_STORE } from './signal-store';
+import { InMemorySignalStore } from './in-memory-signal-store';
+import { PostgresSignalStore } from './postgres-signal-store';
+import { SignalService } from './signal.service';
+
+import { CRM_OPPORTUNITY_DEPTH_STORE } from './opportunity-depth-store';
+import { InMemoryOpportunityDepthStore } from './in-memory-opportunity-depth-store';
+import { PostgresOpportunityDepthStore } from './postgres-opportunity-depth-store';
+import { OpportunityDepthService } from './opportunity-depth.service';
+
+import { CRM_FORECAST_SNAPSHOT_STORE } from './forecast-snapshot-store';
+import { InMemoryForecastSnapshotStore } from './in-memory-forecast-snapshot-store';
+import { PostgresForecastSnapshotStore } from './postgres-forecast-snapshot-store';
+import { ForecastSnapshotService } from './forecast-snapshot.service';
+
+import { LeadConversionService } from './lead-conversion.service';
 
 /**
  * The CRM business module. Imports the kernel (CoreModule) for the event store,
@@ -59,6 +83,18 @@ import { ActivityService } from './activity.service';
         pool ? new PostgresOpportunityStore(pool) : new InMemoryOpportunityStore(),
     },
     {
+      provide: CRM_COMMERCIAL_BASELINE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCommercialBaselineStore(pool) : new InMemoryCommercialBaselineStore(),
+    },
+    {
+      provide: CRM_PRE_AWARD_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPreAwardStore(pool) : new InMemoryPreAwardStore(),
+    },
+    {
       provide: CRM_QUOTATION_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -76,13 +112,36 @@ import { ActivityService } from './activity.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresActivityStore(pool) : new InMemoryActivityStore(),
     },
+    {
+      provide: CRM_SIGNAL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSignalStore(pool) : new InMemorySignalStore(),
+    },
+    {
+      provide: CRM_OPPORTUNITY_DEPTH_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresOpportunityDepthStore(pool) : new InMemoryOpportunityDepthStore(),
+    },
+    {
+      provide: CRM_FORECAST_SNAPSHOT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresForecastSnapshotStore(pool) : new InMemoryForecastSnapshotStore(),
+    },
     AccountService,
     LeadService,
     OpportunityService,
     QuotationService,
     ContactService,
     ActivityService,
+    SignalService,
+    OpportunityDepthService,
+    ForecastSnapshotService,
+    PreAwardService,
+    LeadConversionService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService],
+  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
 })
 export class CrmModule {}

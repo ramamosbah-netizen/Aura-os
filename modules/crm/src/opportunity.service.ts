@@ -2,6 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AiService } from '@aura/core';
 import { CRM_EVENT, type Opportunity, type OpportunityStage, type NewOpportunity, makeOpportunity } from '@aura/shared';
+import {
+  type PursuitDecision, type PursuitDimensions, scorePursuit, CRM_JOURNEY_EVENT,
+} from '@aura/shared';
 import { CRM_OPPORTUNITY_STORE, type OpportunityFilter, type OpportunityStore } from './opportunity-store';
 
 @Injectable()
@@ -52,7 +55,7 @@ export class OpportunityService {
 
   async update(
     id: Id,
-    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason'>>,
+    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason' | 'buyingStage'>>,
     actorId?: Id | null,
   ): Promise<Opportunity> {
     const existing = await this.store.get(id);
@@ -105,6 +108,52 @@ export class OpportunityService {
     });
 
     this.logger.log(`Opportunity updated: ${updated.title} (${updated.id})`);
+    return updated;
+  }
+
+  /** Record a Pursue / No-Pursue decision — computes the score from the assessment dimensions and
+   * stamps who decided + when. The decision is kept even when NO_PURSUE (a rejected pursuit is
+   * history, not a delete). */
+  async recordPursuit(
+    id: Id,
+    input: { decision: PursuitDecision; dimensions?: PursuitDimensions | null; rationale?: string | null; actorId?: Id | null },
+  ): Promise<Opportunity> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`Opportunity ${id} not found`);
+
+    if (input.actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
+      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      this.access.assert(input.actorId, target);
+    }
+
+    const now = new Date().toISOString();
+    const dimensions = input.dimensions ?? null;
+    const updated: Opportunity = {
+      ...existing,
+      pursuitDecision: input.decision,
+      pursuitScore: dimensions ? scorePursuit(dimensions) : existing.pursuitScore,
+      pursuitDimensions: dimensions ?? existing.pursuitDimensions,
+      pursuitRationale: input.rationale?.trim() || existing.pursuitRationale,
+      pursuitDecidedBy: input.actorId ?? null,
+      pursuitDecidedAt: now,
+      updatedAt: now,
+    };
+
+    const event = makeEvent({
+      type: CRM_JOURNEY_EVENT.pursuitDecided,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId: input.actorId ?? null,
+      aggregateType: 'crm.opportunity', aggregateId: updated.id,
+      payload: { decision: updated.pursuitDecision, score: updated.pursuitScore },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.store.update(updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Pursuit decided: ${updated.title} (${updated.id}) → ${updated.pursuitDecision} (score ${updated.pursuitScore})`);
     return updated;
   }
 

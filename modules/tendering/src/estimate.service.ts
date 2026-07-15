@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { TENDER_ESTIMATE_EVENT, type NewRateBuildUp, type RateBuildUp, type TenderEstimate, compileResourceBreakdown, makeRateBuildUp, summariseEstimate } from './domain/estimate';
 import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
+import { ESTIMATE_SOURCE_STORE, type EstimateSourceStore } from './estimate-source-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
 
 /**
@@ -19,6 +20,8 @@ export class EstimateService {
     @Inject(ESTIMATE_STORE) private readonly store: EstimateStore,
     @Inject(BOQ_STORE) private readonly boqStore: BOQStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Optional so unit tests that construct EstimateService directly need not supply it.
+    @Optional() @Inject(ESTIMATE_SOURCE_STORE) private readonly sourceStore: EstimateSourceStore | null = null,
   ) {}
 
   /**
@@ -45,7 +48,12 @@ export class EstimateService {
     const buildUp = makeRateBuildUp({ ...resolved, tenderId: boq.tenderId });
 
     const existing = await this.store.getByBoqItem(input.tenantId, input.boqItemId);
-    if (existing) await this.store.delete(existing.id);
+    if (existing) {
+      await this.store.delete(existing.id);
+      // Rebuilding replaces the build-up (new id + fresh component ids), so any bid-time
+      // sources on the old one are orphaned — drop them rather than leave dangling links.
+      await this.sourceStore?.removeByBuildUp(input.tenantId, existing.id);
+    }
     await this.store.save(buildUp);
 
     if (options.applyToBoq) {

@@ -46,6 +46,12 @@ describe('quotation pricing sheet e2e (HTTP)', () => {
       }).expect(201)
     ).body;
 
+  /** R3 governance: draft → approved → sent (send is only legal from approved). */
+  const sendQuote = async (id: string): Promise<void> => {
+    await http.patch(`/api/v1/crm/quotations/${id}/status`).send({ action: 'approve' }).expect(200);
+    await http.patch(`/api/v1/crm/quotations/${id}/status`).send({ action: 'send' }).expect(200);
+  };
+
   it('an unpriced quotation reads as 100% margin (no costs yet)', async () => {
     const q = await newQuote('QT-P-1');
     const sheet = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
@@ -80,7 +86,9 @@ describe('quotation pricing sheet e2e (HTTP)', () => {
   it('each revision has its own sheet, carried forward then independently editable', async () => {
     const q = await newQuote('QT-P-3');
     await http.put(`/api/v1/crm/quotations/${q.id}/pricing`).send({ unitCosts: [450, 8] }).expect(200);
-    await http.patch(`/api/v1/crm/quotations/${q.id}/status`).send({ action: 'send' }).expect(200);
+    // R3 governance: a quote must be approved before it can be sent (and only a
+    // sent/negotiating quote is revisable).
+    await sendQuote(q.id);
 
     const rev1 = (await http.post(`/api/v1/crm/quotations/${q.id}/revise`).expect(201)).body;
     expect(rev1.revision).toBe(1);
@@ -99,7 +107,7 @@ describe('quotation pricing sheet e2e (HTTP)', () => {
 
   it('the revision chain lists every revision of the quote number, oldest first', async () => {
     const q = await newQuote('QT-P-4');
-    await http.patch(`/api/v1/crm/quotations/${q.id}/status`).send({ action: 'send' }).expect(200);
+    await sendQuote(q.id);
     await http.post(`/api/v1/crm/quotations/${q.id}/revise`).expect(201);
 
     const chain = (await http.get(`/api/v1/crm/quotations/${q.id}/revisions`).expect(200)).body as Array<{ revision: number; status: string }>;

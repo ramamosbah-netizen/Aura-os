@@ -147,6 +147,19 @@ function buildHarness() {
     },
   } as any;
 
+  // SignalService (CRM) — records growth signals; idempotent on dedupeKey (mirrors the real create).
+  const createdSignals: any[] = [];
+  const mockSignals = {
+    create: async (input: any) => {
+      if (input.dedupeKey && createdSignals.some((s) => s.dedupeKey === input.dedupeKey)) {
+        return createdSignals.find((s) => s.dedupeKey === input.dedupeKey);
+      }
+      const signal = { id: `sig-${createdSignals.length + 1}`, status: 'NEW', ...input };
+      createdSignals.push(signal);
+      return signal;
+    },
+  } as any;
+
   const subscriber = new CrossModuleSubscriber(
     bus,
     contracts,
@@ -158,7 +171,9 @@ function buildHarness() {
     noop, // PurchaseOrderService
     mockPurchaseRequests,
     tenders,
+    { restampFromAward: async () => 0 } as any, // EstimateSourcingService (R5)
     noop, // AccountService (CRM)
+    mockSignals, // SignalService (CRM)
     customerInvoices,
     mockSupplierInvoices, // InvoiceService (AP)
     mockFinanceAccounts, // AccountService (Finance) — GL account resolver
@@ -167,7 +182,7 @@ function buildHarness() {
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, createdSignals };
 }
 
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
@@ -232,6 +247,38 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     // And re-winning the same opportunity must not spawn a second tender.
     await h.opportunities.update(opp.id, { stage: 'won' });
     expect(await h.tenders.list()).toHaveLength(1);
+  });
+
+  it('raises deduped growth Signals when a project and its contract complete (S9 account growth loop)', async () => {
+    // Build the full chain to a live project.
+    const opp = await h.opportunities.create({ tenantId, title: 'Downtown ELV', value: 800_000, accountId: 'acct-9', accountName: 'Nakheel PJSC' });
+    await h.opportunities.update(opp.id, { stage: 'won' });
+    const tender = (await h.tenders.list())[0];
+    await h.tenders.changeStatus(tender.id, 'won');
+    const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
+    await h.contracts.changeStatus(contract.id, 'active');
+    const project = (await h.projects.list({ contractId: contract.id }))[0];
+    await h.projects.changeStatus(project.id, 'active'); // planned → active before it can complete
+
+    // Complete the project → the growth loop fires: an EXPANSION signal on the project, AND (via the
+    // deal-chain close project.completed → contract completed) a RENEWAL_DUE signal on the contract.
+    await h.projects.changeStatus(project.id, 'completed');
+
+    const bySource = (src: string) => h.createdSignals.filter((s: any) => s.source === src);
+    expect(bySource('PROJECT_LIFECYCLE')).toHaveLength(1);
+    expect(bySource('PROJECT_LIFECYCLE')[0].type).toBe('EXPANSION');
+    expect(bySource('PROJECT_LIFECYCLE')[0].accountName).toBe('Nakheel PJSC');
+    expect(bySource('PROJECT_LIFECYCLE')[0].dedupeKey).toBe(`growth-from-project:${project.id}`);
+    expect(bySource('CONTRACT_LIFECYCLE')).toHaveLength(1);
+    expect(bySource('CONTRACT_LIFECYCLE')[0].type).toBe('RENEWAL_DUE');
+
+    // Re-delivery of the same project.completed event must not raise a second growth signal.
+    await h.events.append([makeEvent({
+      type: 'projects.project.completed', tenantId, companyId: null, actorId: null,
+      aggregateType: 'projects.project', aggregateId: project.id,
+      payload: { title: project.title, status: 'completed', contractId: contract.id, value: project.value },
+    })]);
+    expect(bySource('PROJECT_LIFECYCLE')).toHaveLength(1); // deduped on growth-from-project:<id>
   });
 
   it('auto-drafts a Variation from an approved cost-impacting design change (Engineering → Commercial)', async () => {

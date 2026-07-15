@@ -1,19 +1,23 @@
-import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Post } from '@nestjs/common';
 import { NumberingService, ParseUuidOr404Pipe, SettingsService, TenantContext } from '@aura/core';
 import { toCsv } from '@aura/shared';
 import {
   EstimateService,
+  EstimateSourcingService,
   PRICING_SHEET_CSV_COLUMNS,
   PRICING_SUMMARY_CSV_COLUMNS,
   TenderService,
+  isSourceStale,
   pricingSheetCsvRows,
   type BOQItem,
+  type EstimateSource,
   type RateBuildUp,
   type ResourceBreakdown,
   type TenderEstimate,
   type Tender,
 } from '@aura/tendering';
 import { QuotationService, type NewQuotationLine, type Quotation } from '@aura/crm';
+import { RfqService } from '@aura/procurement';
 
 /** One pricing-sheet summary row (the hub + the summary CSV share it). */
 interface SheetSummary {
@@ -47,6 +51,8 @@ export class TenderPricingController {
   constructor(
     private readonly tenders: TenderService,
     private readonly estimates: EstimateService,
+    private readonly estimateSourcing: EstimateSourcingService,
+    private readonly rfqs: RfqService,
     private readonly quotations: QuotationService,
     private readonly numbering: NumberingService,
     private readonly settings: SettingsService,
@@ -187,6 +193,81 @@ export class TenderPricingController {
     } catch (err) {
       throw new BadRequestException(err instanceof Error ? err.message : 'pricing failed');
     }
+  }
+
+  /**
+   * Bid-time sourcing (R5): price ONE build-up component from a procurement RFQ quote. Resolves
+   * the quote (procurement owns it), stamps its unit cost onto the component and re-prices the
+   * build-up. `changing the quote restamps` is handled by the award reactor.
+   */
+  @Post(':id/pricing/buildups/:buildUpId/components/:componentId/source')
+  async sourceComponent(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('buildUpId', ParseUuidOr404Pipe) buildUpId: string,
+    @Param('componentId', ParseUuidOr404Pipe) componentId: string,
+    @Body() dto: { rfqId?: string; quoteId?: string },
+  ): Promise<RateBuildUp> {
+    await this.tenderOr404(id);
+    const ctx = this.tenant.get();
+    if (!dto?.rfqId || !dto?.quoteId) throw new BadRequestException('rfqId and quoteId are required');
+    const quote = await this.resolveQuote(dto.rfqId, dto.quoteId);
+    try {
+      const { buildUp } = await this.estimateSourcing.source({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId ?? null,
+        buildUpId,
+        componentId,
+        rfqId: dto.rfqId,
+        quoteId: dto.quoteId,
+        supplierName: quote.supplierName,
+        quoteAmount: quote.amount,
+        actorId: ctx.actorId ?? null,
+      });
+      return buildUp;
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'sourcing failed');
+    }
+  }
+
+  /** Un-source a component: revert to its pre-source rate and drop the link. */
+  @Delete(':id/pricing/buildups/:buildUpId/components/:componentId/source')
+  async unsourceComponent(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('buildUpId', ParseUuidOr404Pipe) buildUpId: string,
+    @Param('componentId', ParseUuidOr404Pipe) componentId: string,
+  ): Promise<{ ok: true }> {
+    await this.tenderOr404(id);
+    const ctx = this.tenant.get();
+    await this.estimateSourcing.unsource(ctx.tenantId, buildUpId, componentId, ctx.actorId ?? null);
+    return { ok: true };
+  }
+
+  /** Every sourced component on this tender, each flagged stale when the live quote has drifted. */
+  @Get(':id/pricing/sources')
+  async sources(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+  ): Promise<Array<EstimateSource & { liveQuoteAmount: number | null; stale: boolean }>> {
+    await this.tenderOr404(id);
+    const ctx = this.tenant.get();
+    const links = await this.estimateSourcing.listByTender(ctx.tenantId, id);
+    // Resolve live quote amounts once per RFQ.
+    const liveByQuote = new Map<string, number | null>();
+    for (const rfqId of new Set(links.map((l) => l.rfqId))) {
+      const withQuotes = await this.rfqs.getWithQuotes(rfqId);
+      for (const q of withQuotes?.quotes ?? []) liveByQuote.set(q.id, q.amount);
+    }
+    return links.map((l) => {
+      const liveQuoteAmount = liveByQuote.has(l.quoteId) ? (liveByQuote.get(l.quoteId) ?? null) : null;
+      return { ...l, liveQuoteAmount, stale: isSourceStale(l, liveQuoteAmount) };
+    });
+  }
+
+  /** Resolve an RFQ quote to its amount + supplier (procurement owns the RFQ). */
+  private async resolveQuote(rfqId: string, quoteId: string): Promise<{ amount: number; supplierName: string }> {
+    const withQuotes = await this.rfqs.getWithQuotes(rfqId);
+    const quote = withQuotes?.quotes.find((q) => q.id === quoteId);
+    if (!quote || quote.tenantId !== this.tenant.get().tenantId) throw new NotFoundException(`quote ${quoteId} not found on RFQ ${rfqId}`);
+    return { amount: quote.amount, supplierName: quote.supplierName };
   }
 
   /**

@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import CrmPipelineClient from '../../../components/crm-pipeline-client';
+import LeadAttentionPanel, { type LeadCommand } from '../../../components/lead-attention-panel';
+import OpportunityRadarPanel, { type RadarData } from '../../../components/opportunity-radar-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,10 +36,12 @@ interface Account {
 }
 
 export default async function CrmLeadsPage() {
-  const [leads, opportunities, accounts] = await Promise.all([
+  const [leads, opportunities, accounts, leadCommand, radar] = await Promise.all([
     getJson<Lead[]>('/api/crm/leads'),
     getJson<Opportunity[]>('/api/crm/opportunities'),
     getJson<Account[]>('/api/crm/accounts'),
+    getJson<LeadCommand>('/api/crm/leads/command'),
+    getJson<RadarData>('/api/crm/signals/radar'),
   ]);
 
   return (
@@ -48,6 +52,10 @@ export default async function CrmLeadsPage() {
         After a win the deal chain is optional per deal — tender/estimation for bid work, or a
         direct quotation for direct sales, AMC renewals and variations.
       </p>
+
+      <OpportunityRadarPanel data={radar ?? null} />
+
+      <LeadAttentionPanel data={leadCommand ?? null} />
 
       <CrmPipelineClient
         initialLeads={leads ?? []}

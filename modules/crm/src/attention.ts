@@ -2,6 +2,11 @@
 // "when has a record gone quiet". The activity command center, the pipeline
 // command center and the relationship-intelligence alert engine all compose these
 // so the same deal is never "stalled" in one view and healthy in another.
+//
+// The deterministic time math (daysSince/hoursSince/isQuiet) lives in @aura/shared so
+// shared domain predicates (leadAttention, opportunityAttention) can reuse it without a
+// module dependency; re-exported here so existing '@aura/crm' consumers are unchanged.
+export { daysSince, hoursSince, isQuiet } from '@aura/shared';
 
 /** One shared threshold set (days). Change here, change everywhere. */
 export const ATTENTION_THRESHOLDS = {
@@ -32,14 +37,3 @@ export function lastActivityByRecord(activities: ActivityTouch[]): Map<string, s
   return m;
 }
 
-/** Whole days since an ISO timestamp, or null when there is none. */
-export function daysSince(iso: string | null, now: Date = new Date()): number | null {
-  return iso === null ? null : Math.floor((now.getTime() - new Date(iso).getTime()) / 86400000);
-}
-
-/** Quiet = never touched, or last touch older than the threshold. */
-export function isQuiet(lastAt: string | null, thresholdDays: number, now: Date = new Date()): boolean {
-  if (lastAt === null) return true;
-  const ds = daysSince(lastAt, now);
-  return ds !== null && ds >= thresholdDays;
-}

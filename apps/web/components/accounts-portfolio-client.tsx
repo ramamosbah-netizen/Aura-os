@@ -10,6 +10,7 @@ export interface PortfolioRow {
   id: string;
   name: string;
   stage: string;
+  partyType: string | null;
   industry: string | null;
   ownerId: string | null;
   phone: string | null;
@@ -50,6 +51,19 @@ const STAGE_COLOR: Record<string, string> = {
   strategic: 'var(--accent)',
   dormant: 'var(--warn, #d97706)',
   inactive: 'var(--muted)',
+};
+
+// G6 — what the party IS (the relationship stage says what it's worth right now).
+const PARTY_LABEL: Record<string, string> = {
+  end_client: 'End Client',
+  consultant: 'Consultant',
+  main_contractor: 'Main Contractor',
+  developer: 'Developer',
+  supplier: 'Supplier',
+  partner: 'Partner',
+  subcontractor: 'Subcontractor',
+  government: 'Government',
+  other: 'Other',
 };
 
 const HEALTH = {
@@ -115,6 +129,7 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
       .filter((r) => !needle
         || r.name.toLowerCase().includes(needle)
         || (r.industry ?? '').toLowerCase().includes(needle)
+        || (r.partyType ?? '').toLowerCase().includes(needle)
         || (r.ownerId ?? '').toLowerCase().includes(needle))
       .sort((a, b) => (b.contractedValue + b.pipelineValue) - (a.contractedValue + a.pipelineValue));
   }, [all, views, view, q]);
@@ -230,7 +245,10 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
                   <tr key={r.id}>
                     <td style={st.td}>
                       <a href={`/crm/accounts/${r.id}`} style={st.nameLink}>{r.name}</a>
-                      <div style={st.subCell}>{r.industry ?? '—'}</div>
+                      <div style={st.subCell}>
+                        {r.partyType ? <span style={st.partyTag}>{PARTY_LABEL[r.partyType] ?? r.partyType}</span> : null}
+                        {r.industry ?? '—'}
+                      </div>
                     </td>
                     <td style={st.td}>
                       <span style={{ ...st.stageTag, color: STAGE_COLOR[r.stage] ?? 'var(--fg)', borderColor: 'var(--border)' }}>
@@ -280,7 +298,7 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
                     <td style={{ ...st.td, color: 'var(--muted)', fontSize: 12.5, whiteSpace: 'nowrap' }}>{ago(r.lastActivityAt)}</td>
                     <td style={st.td}>
                       <AccountEdit account={{
-                        id: r.id, name: r.name, status: r.stage, industry: r.industry, website: r.website,
+                        id: r.id, name: r.name, status: r.stage, partyType: r.partyType, industry: r.industry, website: r.website,
                         phone: r.phone, email: r.email, billingAddress: r.billingAddress,
                         source: r.source, paymentTerms: r.paymentTerms,
                       }} />
@@ -319,6 +337,7 @@ const st = {
   tdNum: { padding: '10px 10px', borderBottom: '1px solid var(--border)', verticalAlign: 'top', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } as CSSProperties,
   nameLink: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
   subCell: { color: 'var(--muted)', fontSize: 11.5, marginTop: 2 } as CSSProperties,
+  partyTag: { display: 'inline-block', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid var(--border)', borderRadius: 5, padding: '0 5px', marginRight: 6 } as CSSProperties,
   stageTag: { display: 'inline-block', fontSize: 12, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', fontWeight: 600, whiteSpace: 'nowrap' } as CSSProperties,
   fixBtn: { display: 'block', marginTop: 4, border: '1px dashed var(--accent)', background: 'transparent', color: 'var(--accent)', borderRadius: 6, padding: '1px 7px', fontSize: 11, cursor: 'pointer' } as CSSProperties,
   assignBtn: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,

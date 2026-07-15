@@ -21,12 +21,43 @@ export const RELATIONSHIP_STAGES: readonly AccountStatus[] = [
   'inactive',
 ];
 
+/**
+ * Party type — what the account IS, orthogonal to `status` (what the relationship
+ * is worth right now). ELV deals move through a web of parties: the consultant
+ * specifies, the main contractor buys, the developer owns. The graph (G6) needs
+ * the node typed before an edge like "influences" can mean anything.
+ */
+export type PartyType =
+  | 'end_client'
+  | 'consultant'
+  | 'main_contractor'
+  | 'developer'
+  | 'supplier'
+  | 'partner'
+  | 'subcontractor'
+  | 'government'
+  | 'other';
+
+export const PARTY_TYPES: readonly PartyType[] = [
+  'end_client',
+  'consultant',
+  'main_contractor',
+  'developer',
+  'supplier',
+  'partner',
+  'subcontractor',
+  'government',
+  'other',
+];
+
 export interface Account {
   id: Id;
   tenantId: Id;
   companyId: Id | null;
   name: string;
   status: AccountStatus;
+  /** What the party IS (consultant, developer, …). Null = not classified yet, never guessed. */
+  partyType: PartyType | null;
   industry: string | null;
   website: string | null;
   /** Main phone/email for the party (a contact can refine these). */
@@ -47,6 +78,7 @@ export interface NewAccount {
   companyId?: Id | null;
   name: string;
   status?: AccountStatus;
+  partyType?: PartyType | null;
   industry?: string | null;
   website?: string | null;
   phone?: string | null;
@@ -65,6 +97,7 @@ export function makeAccount(input: NewAccount): Account {
     companyId: input.companyId ?? null,
     name: input.name.trim(),
     status: input.status ?? 'prospect',
+    partyType: input.partyType ?? null,
     industry: input.industry ?? null,
     website: input.website ?? null,
     phone: input.phone ?? null,
@@ -83,4 +116,6 @@ export const CRM_EVENT = {
   accountCreated: 'crm.account.created',
   accountUpdated: 'crm.account.updated',
   accountStatusChanged: 'crm.account.status_changed',
+  accountLinked: 'crm.account.linked',
+  accountUnlinked: 'crm.account.unlinked',
 } as const;

@@ -1,12 +1,24 @@
-import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsOptional, IsString } from 'class-validator';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Account, type AccountStatus, AccountService } from '@aura/crm';
+import {
+  ACCOUNT_RELATIONSHIP_TYPES,
+  PARTY_TYPES,
+  type Account,
+  type AccountGraph,
+  type AccountRelationship,
+  type AccountRelationshipType,
+  type AccountStatus,
+  type PartyType,
+  AccountRelationshipService,
+  AccountService,
+} from '@aura/crm';
 
 class CreateAccountDto {
   @IsString() name!: string;
   @IsOptional() @IsString() status?: AccountStatus;
+  @IsOptional() @IsIn(PARTY_TYPES) partyType?: PartyType;
   @IsOptional() @IsString() industry?: string;
   @IsOptional() @IsString() website?: string;
   @IsOptional() @IsString() phone?: string;
@@ -19,6 +31,7 @@ class CreateAccountDto {
 class UpdateAccountDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() status?: AccountStatus;
+  @IsOptional() @IsIn(PARTY_TYPES) partyType?: PartyType;
   @IsOptional() @IsString() industry?: string;
   @IsOptional() @IsString() website?: string;
   @IsOptional() @IsString() phone?: string;
@@ -29,6 +42,12 @@ class UpdateAccountDto {
   @IsOptional() @IsString() ownerId?: string;
 }
 
+class LinkAccountDto {
+  @IsUUID() toAccountId!: string;
+  @IsIn(ACCOUNT_RELATIONSHIP_TYPES) type!: AccountRelationshipType;
+  @IsOptional() @IsString() notes?: string;
+}
+
 /**
  * CRM accounts API. Stamps tenant/actor from the request context and delegates to
  * the module's AccountService — the controller holds no business logic.
@@ -37,6 +56,7 @@ class UpdateAccountDto {
 export class CrmAccountsController {
   constructor(
     private readonly accounts: AccountService,
+    private readonly graph: AccountRelationshipService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -49,6 +69,7 @@ export class CrmAccountsController {
       companyId: ctx.companyId,
       name: dto.name,
       status: dto.status,
+      partyType: dto.partyType,
       industry: dto.industry,
       website: dto.website,
       phone: dto.phone,
@@ -91,6 +112,7 @@ export class CrmAccountsController {
       return await this.accounts.update(id, {
         name: dto.name,
         status: dto.status,
+        partyType: dto.partyType,
         industry: dto.industry,
         website: dto.website,
         phone: dto.phone,
@@ -104,6 +126,52 @@ export class CrmAccountsController {
       const msg = (e as Error).message;
       if (msg.includes('not found')) throw new NotFoundException(msg);
       throw new BadRequestException(msg);
+    }
+  }
+
+  // ---- G6: the relationship graph ------------------------------------------------
+
+  /** Record a directed edge from this account to another ("influences", "consultant for", …). */
+  @Post(':id/relationships')
+  async link(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: LinkAccountDto): Promise<AccountRelationship> {
+    const ctx = this.tenant.get();
+    try {
+      return await this.graph.link({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        fromAccountId: id,
+        toAccountId: dto.toAccountId,
+        type: dto.type,
+        notes: dto.notes,
+        createdBy: ctx.actorId,
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
+  }
+
+  /** The account's neighbourhood: every edge (both directions) + leads naming this account. */
+  @Get(':id/relationships')
+  async relationships(@Param('id', ParseUuidOr404Pipe) id: string): Promise<AccountGraph> {
+    try {
+      return await this.graph.graphFor(id, this.tenant.get().tenantId);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
+  @Delete(':id/relationships/:relId')
+  async unlink(
+    @Param('id', ParseUuidOr404Pipe) _id: string,
+    @Param('relId', ParseUuidOr404Pipe) relId: string,
+  ): Promise<{ deleted: true }> {
+    try {
+      await this.graph.unlink(relId, this.tenant.get().tenantId);
+      return { deleted: true };
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
     }
   }
 }

@@ -53,6 +53,11 @@ import { InMemoryForecastSnapshotStore } from './in-memory-forecast-snapshot-sto
 import { PostgresForecastSnapshotStore } from './postgres-forecast-snapshot-store';
 import { ForecastSnapshotService } from './forecast-snapshot.service';
 
+import { CRM_ACCOUNT_RELATIONSHIP_STORE } from './account-relationship-store';
+import { InMemoryAccountRelationshipStore } from './in-memory-account-relationship-store';
+import { PostgresAccountRelationshipStore } from './postgres-account-relationship-store';
+import { AccountRelationshipService } from './account-relationship.service';
+
 import { LeadConversionService } from './lead-conversion.service';
 
 /**
@@ -130,7 +135,14 @@ import { LeadConversionService } from './lead-conversion.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresForecastSnapshotStore(pool) : new InMemoryForecastSnapshotStore(),
     },
+    {
+      provide: CRM_ACCOUNT_RELATIONSHIP_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresAccountRelationshipStore(pool) : new InMemoryAccountRelationshipStore(),
+    },
     AccountService,
+    AccountRelationshipService,
     LeadService,
     OpportunityService,
     QuotationService,
@@ -142,6 +154,6 @@ import { LeadConversionService } from './lead-conversion.service';
     PreAwardService,
     LeadConversionService,
   ],
-  exports: [AccountService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
+  exports: [AccountService, AccountRelationshipService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
 })
 export class CrmModule {}

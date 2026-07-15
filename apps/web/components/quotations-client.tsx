@@ -152,7 +152,7 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
                     <tr key={q.id} style={q.status === 'revised' ? { opacity: 0.55 } : undefined}>
                       <td style={{ color: 'var(--muted)' }}>{q.issueDate}</td>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {q.quoteNumber}
+                        <a href={`/crm/quotations/${q.id}`} style={st.link}>{q.quoteNumber}</a>
                         {rev > 0 && <span style={st.revTag}>Rev {rev}</span>}
                         {q.terms && (
                           <button type="button" style={st.termsBtn} title="Commercial terms" onClick={() => setOpenTerms(openTerms === q.id ? null : q.id)}>§</button>
@@ -204,7 +204,8 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
                           {OPEN_STATUSES.includes(q.status) && (
                             <button type="button" className="btn btn-ghost" style={st.smBtn} onClick={() => act(q.id, 'cancel')}>Cancel</button>
                           )}
-                          <a className="btn btn-ghost" style={st.smBtn} href={`/crm/quotations/${q.id}/print`}>🖨</a>
+                          <a className="btn btn-ghost" style={st.smBtn} href={`/crm/quotations/${q.id}/pricing`} title="Internal pricing sheet">⊞</a>
+                          <a className="btn btn-ghost" style={st.smBtn} href={`/crm/quotations/${q.id}/print`} title="Export PDF">🖨</a>
                         </div>
                       </td>
                     </tr>

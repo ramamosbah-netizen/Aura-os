@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { FormCustomValuesService, FormOverridesService, TenantContext } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
@@ -110,6 +110,32 @@ export class CrmQuotationsController {
       { tenantId: this.tenant.get().tenantId, status, accountId },
       parsePageParams(limit, offset),
     );
+  }
+
+  /** All revisions of this quotation (same quote number), oldest first. */
+  @Get(':id/revisions')
+  revisions(@Param('id') id: string): Promise<Quotation[]> {
+    return this.quotations.listRevisions(this.tenant.get().tenantId, id);
+  }
+
+  /** Internal cost & margin sheet for this revision. */
+  @Get(':id/pricing')
+  async getPricing(@Param('id') id: string) {
+    try {
+      return await this.quotations.getPricing(id);
+    } catch {
+      throw new NotFoundException(`quotation ${id} not found`);
+    }
+  }
+
+  /** Save per-line unit costs for this revision; returns the recomputed sheet. */
+  @Put(':id/pricing')
+  async setPricing(@Param('id') id: string, @Body() dto: { unitCosts?: number[] }) {
+    try {
+      return await this.quotations.setPricing(id, Array.isArray(dto?.unitCosts) ? dto.unitCosts : []);
+    } catch {
+      throw new NotFoundException(`quotation ${id} not found`);
+    }
   }
 
   @Get(':id')

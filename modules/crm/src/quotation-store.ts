@@ -8,6 +8,8 @@ export interface QuotationFilter {
   status?: QuotationStatus;
   accountId?: string;
   sourceTenderId?: string;
+  /** All revisions of one quote share a number — used to fetch the revision chain. */
+  quoteNumber?: string;
   limit?: number;
 }
 

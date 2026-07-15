@@ -43,6 +43,11 @@ export interface NewQuotationLine {
   vatRate?: number;
 }
 
+/** Internal cost sheet persisted per revision — unit costs index-aligned to `lines`. */
+export interface QuotationPricingInput {
+  unitCosts: number[];
+}
+
 export interface Quotation {
   id: Id;
   tenantId: Id;
@@ -69,6 +74,8 @@ export interface Quotation {
   subtotal: number;
   vatTotal: number;
   total: number;
+  /** Internal cost sheet (this revision only); null until priced. */
+  pricing: QuotationPricingInput | null;
   status: QuotationStatus;
   createdAt: string;
   createdBy: Id | null;
@@ -90,6 +97,7 @@ export interface NewQuotation {
   issueDate: string;
   validUntil?: string | null;
   lines: NewQuotationLine[];
+  pricing?: QuotationPricingInput | null;
   createdBy?: Id | null;
 }
 
@@ -147,6 +155,7 @@ export function makeQuotation(input: NewQuotation): Quotation {
     subtotal,
     vatTotal,
     total,
+    pricing: input.pricing ?? null,
     status: 'draft',
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
@@ -232,6 +241,8 @@ export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Qu
     issueDate: new Date().toISOString().slice(0, 10),
     validUntil: q.validUntil,
     lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })),
+    // Carry the internal cost sheet into the new revision — costs rarely reset between revisions.
+    pricing: q.pricing ? { unitCosts: [...q.pricing.unitCosts] } : null,
     createdBy: q.createdBy,
   });
   return { superseded: { ...q, status: 'revised' }, next };

@@ -81,6 +81,9 @@ interface Payload {
   estimate: Estimate | null;
   rates: { technician: number; engineer: number; projectManager: number };
   quotations: GeneratedQuotation[];
+  /** Governance — server-owned; the sheet freezes once a generated quotation is committed. */
+  locked: boolean;
+  lockedBy: Array<{ id: string; quoteNumber: string; revision: number; status: string }>;
 }
 
 interface SheetDraft {
@@ -124,7 +127,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading pricing sheet…'}</p>;
 
-  const { items, buildUps, estimate, rates, quotations } = data;
+  const { items, buildUps, estimate, rates, quotations, locked, lockedBy } = data;
 
   const startEdit = (item: BOQItem): void => {
     const b = buildUps[item.id];
@@ -242,6 +245,20 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
       {err && <div style={st.err}>{err}</div>}
       {msg && <div style={st.ok}>{msg}</div>}
 
+      {locked && (
+        <div style={st.lockBar}>
+          🔒 <b>Pricing sheet locked</b> —{' '}
+          {lockedBy.map((q) => `${q.quoteNumber} Rev ${q.revision} (${q.status.replace('_', ' ')})`).join(', ')}{' '}
+          {lockedBy.length === 1 ? 'was' : 'were'} generated from this estimate and{' '}
+          {lockedBy.length === 1 ? 'is' : 'are'} committed to the client. The costing behind a committed price is
+          immutable — read and export only.{' '}
+          {lockedBy.every((q) => q.status === 'accepted')
+            ? 'An accepted price is the basis of the contract; change it through a contract variation.'
+            : 'To re-price, raise a quotation revision.'}{' '}
+          <a href="/crm/quotations" style={st.lockLink}>Open quotations</a>
+        </div>
+      )}
+
       {/* totals bar — the estimate folded over the BOQ */}
       {estimate && (
         <div style={st.totals}>
@@ -297,14 +314,15 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
                     </td>
                     <td style={{ ...st.td, textAlign: 'right' }}>
                       <button style={st.btnGhost} disabled={busy} onClick={() => (isOpen ? (setOpen(null), setDraft(null)) : startEdit(item))}>
-                        {isOpen ? 'Close' : b ? 'Edit breakdown' : 'Price this line'}
+                        {isOpen ? 'Close' : locked ? 'View breakdown' : b ? 'Edit breakdown' : 'Price this line'}
                       </button>
                     </td>
                   </tr>
                   {isOpen && draft && (
                     <tr>
                       <td colSpan={9} style={{ ...st.td, background: 'var(--panel-2)', padding: '14px 18px' }}>
-                        <SheetEditor item={item} draft={draft} setDraft={setDraft} preview={preview(item, draft)} busy={busy} onSave={() => void saveLine(item)} />
+                        <SheetEditor item={item} draft={draft} setDraft={setDraft} preview={preview(item, draft)} busy={busy}
+                          locked={locked} onSave={() => void saveLine(item)} />
                       </td>
                     </tr>
                   )}
@@ -379,6 +397,7 @@ function SheetEditor({
   setDraft,
   preview,
   busy,
+  locked,
   onSave,
 }: {
   item: BOQItem;
@@ -386,11 +405,14 @@ function SheetEditor({
   setDraft: (d: SheetDraft) => void;
   preview: { direct: number; indirect: number; overhead: number; profit: number; selling: number; sellingRate: number; margin: number };
   busy: boolean;
+  locked: boolean;
   onSave: () => void;
 }) {
   const set = (k: keyof SheetDraft) => (v: string) => setDraft({ ...draft, [k]: v });
+  // A locked sheet stays readable — every factor still shows, but a disabled fieldset takes the
+  // whole build-up out of reach in one move (and tells assistive tech the same thing).
   return (
-    <div style={{ display: 'grid', gap: 12, textAlign: 'left' }}>
+    <fieldset disabled={locked} style={{ display: 'grid', gap: 12, textAlign: 'left', border: 'none', margin: 0, padding: 0, minInlineSize: 'auto' }}>
       <div style={ed.groupRow}>
         <div style={ed.group}>
           <div style={ed.groupTitle}>Material</div>
@@ -448,14 +470,17 @@ function SheetEditor({
             Sell AED {new Intl.NumberFormat().format(Math.round(preview.selling * 100) / 100)}
             {' '}({new Intl.NumberFormat().format(Math.round(preview.sellingRate * 100) / 100)}/{item.unit} · {preview.margin.toFixed(1)}%)
           </span>
-          <button style={st.btnPrimary} disabled={busy} onClick={onSave}>Save line</button>
+          {!locked && <button style={st.btnPrimary} disabled={busy} onClick={onSave}>Save line</button>}
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
 const st = {
+  // Same lock bar as the quotation sheet — one governance state should read the same everywhere.
+  lockBar: { display: 'block', fontSize: 12.5, lineHeight: 1.5, color: 'var(--fg)', background: 'rgba(255,193,7,0.07)', border: '1px solid rgba(255,193,7,0.35)', borderRadius: 10, padding: '10px 13px', marginBottom: 12 } as CSSProperties,
+  lockLink: { color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   err: { padding: '10px 12px', border: '1px solid var(--bad)', borderRadius: 10, color: 'var(--bad)', marginBottom: 14, fontSize: 13 } as CSSProperties,
   ok: { padding: '10px 12px', border: '1px solid var(--good)', borderRadius: 10, color: 'var(--good)', marginBottom: 14, fontSize: 13 } as CSSProperties,
   totals: { display: 'flex', gap: 20, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 16 } as CSSProperties,

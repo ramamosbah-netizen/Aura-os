@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Header, NotFoundException, Param, Post } from '@nestjs/common';
 import { NumberingService, ParseUuidOr404Pipe, SettingsService, TenantContext } from '@aura/core';
 import { toCsv } from '@aura/shared';
 import {
@@ -16,7 +16,7 @@ import {
   type TenderEstimate,
   type Tender,
 } from '@aura/tendering';
-import { QuotationService, type NewQuotationLine, type Quotation } from '@aura/crm';
+import { QuotationService, isQuotationCommitted, type NewQuotationLine, type Quotation } from '@aura/crm';
 import { RfqService } from '@aura/procurement';
 
 /** One pricing-sheet summary row (the hub + the summary CSV share it). */
@@ -63,6 +63,38 @@ export class TenderPricingController {
     const tender = await this.tenders.get(id);
     if (!tender || tender.tenantId !== this.tenant.get().tenantId) throw new NotFoundException(`tender ${id} not found`);
     return tender;
+  }
+
+  /**
+   * Governance — this estimate is the costing that justifies the quotation generated from it.
+   * Once that quotation is a live commitment to the client (approved onwards, mirroring the
+   * quotation sheet's own lock), the costing behind it is FROZEN: re-working it would rewrite
+   * the justification for a price we are already standing behind. Re-price the sanctioned way —
+   * raise a quotation revision, which starts as a draft.
+   *
+   * Dead quotes (rejected/expired/cancelled) and superseded ones (`revised`) hold no live
+   * commitment, so the estimate stays open for the next bid.
+   *
+   * The rule lives here in the composition layer, not in @aura/tendering: tendering must not
+   * depend on CRM (ADR-0011) — the same seam R5 uses to keep it decoupled from procurement.
+   */
+  private async assertEstimateNotCommitted(tenderId: string): Promise<void> {
+    const generated = await this.quotations.listBySourceTender(this.tenant.get().tenantId, tenderId);
+    const committed = generated.filter((q) => isQuotationCommitted(q));
+    if (committed.length === 0) return;
+    const which = committed.map((q) => `${q.quoteNumber} Rev ${q.revision} (${q.status.replace('_', ' ')})`).join(', ');
+    // A revision is only legal from sent/under_negotiation (and the dead states) — never from
+    // `accepted`, where the price is already the basis of a contract. Point each case at the route
+    // that actually exists rather than at advice that would 400.
+    const onlyAccepted = committed.every((q) => q.status === 'accepted');
+    const route = onlyAccepted
+      ? 'an accepted price is the basis of the contract — change it through a contract variation'
+      : 'raise a quotation revision to re-price';
+    throw new ConflictException(
+      `tender pricing sheet is locked: ${which} ${committed.length === 1 ? 'was' : 'were'} generated from this ` +
+        `estimate and ${committed.length === 1 ? 'is' : 'are'} committed to the client — the costing behind a ` +
+        `committed price is immutable. To change it, ${route}.`,
+    );
   }
 
   /** Default hourly rates for the sheet (admin-configurable module settings; CSV-era fallbacks). */
@@ -145,6 +177,10 @@ export class TenderPricingController {
     estimate: TenderEstimate | null;
     rates: { technician: number; engineer: number; projectManager: number };
     quotations: Array<Pick<Quotation, 'id' | 'quoteNumber' | 'status' | 'total' | 'issueDate'>>;
+    /** Governance state, server-owned — the UI renders it, it never re-derives the rule. */
+    locked: boolean;
+    /** Which committed quotations froze the sheet (empty when open). */
+    lockedBy: Array<Pick<Quotation, 'id' | 'quoteNumber' | 'revision' | 'status'>>;
   }> {
     const ctx = this.tenant.get();
     const tender = await this.tenderOr404(id);
@@ -155,6 +191,7 @@ export class TenderPricingController {
       this.hourlyRates(ctx.tenantId),
       this.quotations.listBySourceTender(ctx.tenantId, id),
     ]);
+    const committed = generated.filter((q) => isQuotationCommitted(q));
     return {
       tender,
       items,
@@ -162,6 +199,8 @@ export class TenderPricingController {
       estimate,
       rates,
       quotations: generated.map((q) => ({ id: q.id, quoteNumber: q.quoteNumber, status: q.status, total: q.total, issueDate: q.issueDate })),
+      locked: committed.length > 0,
+      lockedBy: committed.map((q) => ({ id: q.id, quoteNumber: q.quoteNumber, revision: q.revision, status: q.status })),
     };
   }
 
@@ -173,6 +212,7 @@ export class TenderPricingController {
     @Body() dto: { resources?: Partial<ResourceBreakdown>; indirectPercent?: number; overheadPercent?: number; profitPercent?: number; notes?: string },
   ): Promise<RateBuildUp> {
     await this.tenderOr404(id);
+    await this.assertEstimateNotCommitted(id);
     if (!dto?.resources || typeof dto.resources !== 'object') throw new BadRequestException('resources breakdown is required');
     const ctx = this.tenant.get();
     try {
@@ -208,6 +248,7 @@ export class TenderPricingController {
     @Body() dto: { rfqId?: string; quoteId?: string },
   ): Promise<RateBuildUp> {
     await this.tenderOr404(id);
+    await this.assertEstimateNotCommitted(id);
     const ctx = this.tenant.get();
     if (!dto?.rfqId || !dto?.quoteId) throw new BadRequestException('rfqId and quoteId are required');
     const quote = await this.resolveQuote(dto.rfqId, dto.quoteId);
@@ -237,6 +278,7 @@ export class TenderPricingController {
     @Param('componentId', ParseUuidOr404Pipe) componentId: string,
   ): Promise<{ ok: true }> {
     await this.tenderOr404(id);
+    await this.assertEstimateNotCommitted(id);
     const ctx = this.tenant.get();
     await this.estimateSourcing.unsource(ctx.tenantId, buildUpId, componentId, ctx.actorId ?? null);
     return { ok: true };

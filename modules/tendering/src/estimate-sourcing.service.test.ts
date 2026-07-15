@@ -80,6 +80,44 @@ describe('EstimateSourcingService', () => {
     expect(ctx.types).toContain('tendering.estimate.source_restamped');
   });
 
+  it('an award must NOT restamp the costing behind a committed quotation', async () => {
+    const materialId = ctx.buildUp.components[0].id!;
+    await ctx.svc.source({
+      tenantId: TENANT, buildUpId: ctx.buildUp.id, componentId: materialId,
+      rfqId: 'rfq1', quoteId: 'q1', supplierName: 'Gulf Cables', quoteAmount: 150,
+    });
+
+    // The tender's quotation is committed to the client, so the estimate is frozen. Awarding the
+    // RFQ must leave it alone — otherwise the award silently rewrites the justification for a
+    // price we are already standing behind. (The predicate is CRM's rule, passed in — ADR-0011.)
+    const n = await ctx.svc.restampFromAward({
+      tenantId: TENANT, rfqId: 'rfq1', quoteId: 'q2', supplierName: 'Emirates Cables', amount: 120,
+      isTenderCommitted: async () => true,
+    });
+    expect(n).toBe(0);
+
+    const saved = await ctx.estimates.get(ctx.buildUp.id);
+    expect(saved?.components[0].unitCost).toBe(150); // still the sourced price, not the award
+    expect(ctx.types).not.toContain('tendering.estimate.source_restamped');
+    // The link is preserved too — the sources view flags the drift as stale rather than hiding it.
+    const link = await ctx.sources.getByComponent(TENANT, ctx.buildUp.id, materialId);
+    expect(link).toMatchObject({ quoteId: 'q1', sourcedUnitCost: 150 });
+  });
+
+  it('an uncommitted tender still restamps (the predicate gates, it does not disable)', async () => {
+    const materialId = ctx.buildUp.components[0].id!;
+    await ctx.svc.source({
+      tenantId: TENANT, buildUpId: ctx.buildUp.id, componentId: materialId,
+      rfqId: 'rfq1', quoteId: 'q1', supplierName: 'Gulf Cables', quoteAmount: 150,
+    });
+    const n = await ctx.svc.restampFromAward({
+      tenantId: TENANT, rfqId: 'rfq1', quoteId: 'q2', supplierName: 'Emirates Cables', amount: 120,
+      isTenderCommitted: async () => false,
+    });
+    expect(n).toBe(1);
+    expect((await ctx.estimates.get(ctx.buildUp.id))?.components[0].unitCost).toBe(120);
+  });
+
   it('award with no sourced components is a no-op', async () => {
     const n = await ctx.svc.restampFromAward({ tenantId: TENANT, rfqId: 'rfq-unrelated', quoteId: 'q9', supplierName: 'X', amount: 99 });
     expect(n).toBe(0);

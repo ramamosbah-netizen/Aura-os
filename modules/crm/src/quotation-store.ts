@@ -8,6 +8,8 @@ export interface QuotationFilter {
   status?: QuotationStatus;
   accountId?: string;
   sourceTenderId?: string;
+  /** Quotes raised from one opportunity — the G5 stage gate asks 'is there a proposal yet?'. */
+  sourceOpportunityId?: string;
   /** All revisions of one quote share a number — used to fetch the revision chain. */
   quoteNumber?: string;
   limit?: number;

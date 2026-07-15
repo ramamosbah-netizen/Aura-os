@@ -1,8 +1,8 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions } from '@aura/shared';
-import { type Quotation, OpportunityService, QuotationService } from '@aura/crm';
+import { parsePageParams, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
+import { type Quotation, ContactService, OpportunityService, QuotationService } from '@aura/crm';
 
 /** The create drawer posts select values as strings — accept both. */
 function coerceBool(v: boolean | string | undefined): boolean | undefined {
@@ -30,6 +30,7 @@ class CreateOpportunityDto {
   @IsOptional() @IsString() competitors?: string;
   @IsOptional() @IsString() source?: string;
   @IsOptional() @IsString() lossReason?: string;
+  @IsOptional() @IsString() winReason?: string;
 }
 
 class UpdateOpportunityDto {
@@ -51,6 +52,9 @@ class UpdateOpportunityDto {
   @IsOptional() @IsString() competitors?: string;
   @IsOptional() @IsString() source?: string;
   @IsOptional() @IsString() lossReason?: string;
+  // G5 — the winning context the `won` gate requires (§40.3). Sent in the same PATCH as the
+  // stage, which is why the gate checks the post-patch record.
+  @IsOptional() @IsString() winReason?: string;
   @IsOptional() @IsString() buyingStage?: BuyingStage;
 }
 
@@ -65,6 +69,7 @@ export class CrmOpportunitiesController {
   constructor(
     private readonly opportunities: OpportunityService,
     private readonly quotations: QuotationService,
+    private readonly contacts: ContactService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -115,12 +120,37 @@ export class CrmOpportunitiesController {
       competitors: dto.competitors,
       source: dto.source,
       lossReason: dto.lossReason,
+      winReason: dto.winReason,
       actorId: ctx.actorId,
     });
   }
 
+  /**
+   * G5 — evidence for the stage gate. Quotations and stakeholders live outside the opportunity
+   * aggregate, so the composition layer gathers them (ADR-0011) and the domain rule stays pure.
+   * Only gathered on an actual stage change: an ordinary PATCH must not pay for two extra reads.
+   */
+  private async stageEvidence(opp: Opportunity, tenantId: string): Promise<StageEvidence> {
+    const [quotes, contacts] = await Promise.all([
+      this.quotations.list({ tenantId, sourceOpportunityId: opp.id }),
+      // "Someone to propose to" = a named contact on the deal's account, which is what Opportunity
+      // 360 already presents as the stakeholders. The per-deal buying committee (S6) would be the
+      // stricter source, but reading it costs five queries and would block deals that legitimately
+      // have a known contact and no formal committee yet. G6 (relationship graph) is where per-deal
+      // decision-maker coverage gets real teeth; this gate only refuses proposing to NOBODY.
+      opp.accountId ? this.contacts.list({ tenantId, accountId: opp.accountId }) : Promise.resolve([]),
+    ]);
+    return {
+      hasStakeholder: contacts.length > 0,
+      hasQuotation: quotes.length > 0,
+      // "Submitted" means it actually reached the client: a draft or an internal review is not a
+      // proposal. Anything past `sent` (negotiation/accepted/revised) has by definition been sent.
+      quotationSubmitted: quotes.some((q) => q.status !== 'draft' && q.status !== 'internal_review'),
+    };
+  }
+
   @Patch(':id')
-  update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateOpportunityDto): Promise<Opportunity> {
+  async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateOpportunityDto): Promise<Opportunity> {
     const ctx = this.tenant.get();
     const patch = {
       ...dto,
@@ -130,7 +160,14 @@ export class CrmOpportunitiesController {
       ...(dto.needConfirmed !== undefined ? { needConfirmed: coerceBool(dto.needConfirmed) } : {}),
       ...(dto.timelineConfirmed !== undefined ? { timelineConfirmed: coerceBool(dto.timelineConfirmed) } : {}),
     };
-    return this.opportunities.update(id, patch as Parameters<typeof this.opportunities.update>[1], ctx.actorId);
+    // Only a stage change pays for the evidence reads.
+    let evidence: StageEvidence = {};
+    if (dto.stage) {
+      const current = await this.opportunities.get(id);
+      if (!current) throw new NotFoundException(`opportunity ${id} not found`);
+      evidence = await this.stageEvidence(current, ctx.tenantId);
+    }
+    return this.opportunities.update(id, patch as Parameters<typeof this.opportunities.update>[1], ctx.actorId, evidence);
   }
 
   @Post(':id/forecast')

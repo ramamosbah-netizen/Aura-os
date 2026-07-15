@@ -81,10 +81,14 @@ describe('Next-Action Invariant e2e (HTTP)', () => {
 
   it('won & lost deals are terminal — never flagged even when bare', async () => {
     const opp = (
-      await http.post('/api/v1/crm/opportunities').send({ title: 'Closed deal' }).expect(201)
+      // G5: a win must carry a final value (a win of 0 is not a win). 'Bare' here means bare of
+      // a NEXT ACTION — which is what this test is about — not bare of commercial facts.
+      await http.post('/api/v1/crm/opportunities').send({ title: 'Closed deal', value: 250_000 }).expect(201)
     ).body as Opportunity;
 
-    await http.patch(`/api/v1/crm/opportunities/${opp.id}`).send({ stage: 'won' }).expect(200);
+    // G5: the win gate needs the winning context; the deal is still 'bare' of a NEXT ACTION,
+    // which is what this test is actually about.
+    await http.patch(`/api/v1/crm/opportunities/${opp.id}`).send({ stage: 'won', winReason: 'Incumbent advantage' }).expect(200);
     const won = opportunityAttention(await get(opp.id));
     expect(won.active).toBe(false);
     expect(won.needsAttention).toBe(false);

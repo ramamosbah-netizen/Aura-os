@@ -26,6 +26,7 @@ interface OppRow {
   competitors: string | null;
   source: string | null;
   loss_reason: string | null;
+  win_reason: string | null;
   buying_stage: string | null;
   pursuit_decision: string | null;
   pursuit_score: number | null;
@@ -38,7 +39,7 @@ interface OppRow {
   updated_at: Date;
 }
 
-const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, close_date, requires_tender, owner_id, next_action, next_action_due_date, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, buying_stage, pursuit_decision, pursuit_score, pursuit_rationale, pursuit_decided_by, pursuit_decided_at, pursuit_dimensions, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, close_date, requires_tender, owner_id, next_action, next_action_due_date, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, win_reason, buying_stage, pursuit_decision, pursuit_score, pursuit_rationale, pursuit_decided_by, pursuit_decided_at, pursuit_dimensions, created_at, updated_at';
 
 function rowToOpportunity(r: OppRow): Opportunity {
   return {
@@ -63,6 +64,7 @@ function rowToOpportunity(r: OppRow): Opportunity {
     competitors: r.competitors,
     source: r.source,
     lossReason: r.loss_reason,
+    winReason: r.win_reason,
     buyingStage: (r.buying_stage as BuyingStage | null) ?? null,
     pursuitDecision: (r.pursuit_decision as PursuitDecision | null) ?? null,
     pursuitScore: r.pursuit_score,
@@ -96,18 +98,20 @@ export class PostgresOpportunityStore implements OpportunityStore {
               budget_confirmed = $12, authority_confirmed = $13, need_confirmed = $14, timeline_confirmed = $15,
               competitors = $16, source = $17, loss_reason = $18, next_action_due_date = $19,
               buying_stage = $20, pursuit_decision = $21, pursuit_score = $22, pursuit_rationale = $23,
-              pursuit_decided_by = $24, pursuit_decided_at = $25, pursuit_dimensions = $26, updated_at = now()
+              pursuit_decided_by = $24, pursuit_decided_at = $25, pursuit_dimensions = $26, win_reason = $27, updated_at = now()
         WHERE id = $1`,
       [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate, o.accountId, o.accountName, o.requiresTender, o.ownerId, o.nextAction,
        o.budgetConfirmed, o.authorityConfirmed, o.needConfirmed, o.timelineConfirmed, o.competitors, o.source, o.lossReason, o.nextActionDueDate,
        o.buyingStage, o.pursuitDecision, o.pursuitScore, o.pursuitRationale, o.pursuitDecidedBy, o.pursuitDecidedAt,
-       o.pursuitDimensions ? JSON.stringify(o.pursuitDimensions) : null],
+       o.pursuitDimensions ? JSON.stringify(o.pursuitDimensions) : null, o.winReason],
     );
   }
 
   private insert(executor: Pool | PoolClient, o: Opportunity): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)`,
+      // Positional against COLS: adding a column here without adding its $N and its param writes
+      // every following value into the wrong column. All three edit together, always.
+      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)`,
       [
         o.id,
         o.tenantId,
@@ -131,6 +135,7 @@ export class PostgresOpportunityStore implements OpportunityStore {
         o.competitors,
         o.source,
         o.lossReason,
+        o.winReason,
         o.buyingStage,
         o.pursuitDecision,
         o.pursuitScore,

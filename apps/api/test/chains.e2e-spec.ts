@@ -59,7 +59,8 @@ describe('business-chain e2e (HTTP)', () => {
         .send({ title: 'Marina Tower ELV', value: 750_000, accountId: account.id, accountName: account.name })
         .expect(201)
     ).body;
-    await http.patch(`/api/v1/crm/opportunities/${opp.id}`).send({ stage: 'won' }).expect(200);
+    // G5: a win must carry its final value + winning reason (§40.3) — the value came from create.
+    await http.patch(`/api/v1/crm/opportunities/${opp.id}`).send({ stage: 'won', winReason: 'Best technical fit' }).expect(200);
 
     // 2. Reactor auto-drafts the tender, carrying title/value/account down.
     const tenders = await eventually(async () =>

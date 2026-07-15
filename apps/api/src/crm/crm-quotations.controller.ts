@@ -10,6 +10,13 @@ class CreateQuotationDto {
   @IsString() customerName!: string;
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() contactName?: string;
+  /**
+   * Provenance: the opportunity this quote answers. The column and the store filter always
+   * existed, but the create API never accepted it — so a quote raised the ordinary way could
+   * never link back to its deal, and only the tender path or R4's scope flow set it. G5's
+   * negotiation gate ('is there a proposal yet?') is what surfaced the gap.
+   */
+  @IsOptional() @IsString() sourceOpportunityId?: string;
   @IsString() issueDate!: string;
   @IsOptional() @IsString() validUntil?: string;
   @IsArray() lines!: NewQuotationLine[];
@@ -89,6 +96,7 @@ export class CrmQuotationsController {
       customerName: dto.customerName,
       accountId: dto.accountId ?? null,
       contactName: dto.contactName ?? null,
+      sourceOpportunityId: dto.sourceOpportunityId ?? null,
       issueDate: dto.issueDate,
       validUntil: dto.validUntil ?? null,
       lines: dto.lines,

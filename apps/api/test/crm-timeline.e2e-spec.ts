@@ -32,8 +32,15 @@ describe('Unified Timeline e2e (HTTP)', () => {
   });
 
   it('merges the opportunity’s events and its activities into one feed', async () => {
+    // G5: entering `proposal` needs a confirmed need and someone to propose TO, so this deal is
+    // set up the way a real one would be — an account with a named contact.
+    const account = (await http.post('/api/v1/crm/accounts').send({ name: 'Skyline Developments' }).expect(201)).body;
+    await http.post('/api/v1/crm/contacts').send({ name: 'Nadia Aziz', accountId: account.id }).expect(201);
     const opp = (
-      await http.post('/api/v1/crm/opportunities').send({ title: 'Skyline ELV', value: 400_000 }).expect(201)
+      await http
+        .post('/api/v1/crm/opportunities')
+        .send({ title: 'Skyline ELV', value: 400_000, accountId: account.id, accountName: account.name, needConfirmed: true })
+        .expect(201)
     ).body;
     // A stage change → emits a domain event on the aggregate.
     await http.patch(`/api/v1/crm/opportunities/${opp.id}`).send({ stage: 'proposal' }).expect(200);

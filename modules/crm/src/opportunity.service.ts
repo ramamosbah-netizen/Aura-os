@@ -4,6 +4,7 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, 
 import { CRM_EVENT, type Opportunity, type OpportunityStage, type NewOpportunity, makeOpportunity } from '@aura/shared';
 import {
   type PursuitDecision, type PursuitDimensions, scorePursuit, CRM_JOURNEY_EVENT,
+  checkStageTransition, stageGateMessage, type StageEvidence,
 } from '@aura/shared';
 import { CRM_OPPORTUNITY_STORE, type OpportunityFilter, type OpportunityStore } from './opportunity-store';
 
@@ -55,8 +56,14 @@ export class OpportunityService {
 
   async update(
     id: Id,
-    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason' | 'buyingStage'>>,
+    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason' | 'winReason' | 'buyingStage'>>,
     actorId?: Id | null,
+    /**
+     * G5 — evidence for the stage gate (quotations/stakeholders live outside this aggregate, so
+     * the composition layer supplies them, exactly like G2's activity facts). Omitted ⇒ unproven,
+     * never satisfied.
+     */
+    evidence: StageEvidence = {},
   ): Promise<Opportunity> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`Opportunity ${id} not found`);
@@ -78,6 +85,22 @@ export class OpportunityService {
     };
 
     const isStageChange = updates.stage && updates.stage !== existing.stage;
+
+    // G5 — a commercial stage transition must carry its evidence (§40.6).
+    //
+    // The candidate carries the POST-patch FIELDS but the PRE-patch STAGE, and both halves matter:
+    //  - post-patch fields, because setting the win reason and the stage in ONE patch is the
+    //    natural way to close a deal; gating on stored fields would refuse it for lacking a reason
+    //    the same request supplies.
+    //  - pre-patch stage, because `updated.stage` is already the destination — passing it whole
+    //    makes the gate read `to === opp.stage` and wave every transition through as a no-op.
+    //    That silently made this gate inert until an e2e proved a win still landed with no reason.
+    if (isStageChange) {
+      const to = updates.stage as OpportunityStage;
+      const check = checkStageTransition({ ...updated, stage: existing.stage }, to, evidence);
+      if (!check.allowed) throw new Error(stageGateMessage(to, check.gaps));
+    }
+
     const eventType = isStageChange ? CRM_EVENT.opportunityStageChanged : CRM_EVENT.opportunityUpdated;
 
     const event = makeEvent({

@@ -38,6 +38,7 @@ create index if not exists idx_crm_acct_rel_from on public.aura_crm_account_rela
 create index if not exists idx_crm_acct_rel_to   on public.aura_crm_account_relationships (tenant_id, to_account_id);
 
 alter table public.aura_crm_account_relationships enable row level security;
+alter table public.aura_crm_account_relationships force row level security;
 
 do $$ begin
   if not exists (

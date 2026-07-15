@@ -29,7 +29,10 @@ create table if not exists public.aura_crm_opportunity_risks (
 create index if not exists idx_crm_opp_risks on public.aura_crm_opportunity_risks (tenant_id, opportunity_id);
 create index if not exists idx_crm_opp_risks_open on public.aura_crm_opportunity_risks (tenant_id, status, severity);
 
+-- RLS enabled + FORCED + policy, per the R1 fitness gate (apps/api/scripts/rls-fitness.mjs).
+-- FORCE matters: without it the table owner bypasses its own policy, so isolation isn't enforced.
 alter table public.aura_crm_opportunity_risks enable row level security;
+alter table public.aura_crm_opportunity_risks force  row level security;
 
 do $$ begin
   if not exists (

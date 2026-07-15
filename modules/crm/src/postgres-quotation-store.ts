@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
-import type { Quotation, QuotationLine } from './domain/quotation';
+import type { Quotation, QuotationLine, QuotationPricingInput } from './domain/quotation';
 import type { QuotationFilter, QuotationStore } from './quotation-store';
 
 interface Row {
@@ -25,6 +25,7 @@ interface Row {
   subtotal: string | number;
   vat_total: string | number;
   total: string | number;
+  pricing: QuotationPricingInput | string | null;
   status: string;
   created_by: string | null;
   created_at: Date | string;
@@ -32,7 +33,7 @@ interface Row {
 
 const COLS =
   'id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, revision, parent_quotation_id, converted_contract_id, ' +
-  'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, status, created_by, created_at';
+  'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, pricing, status, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 function rowTo(r: Row): Quotation {
@@ -58,6 +59,7 @@ function rowTo(r: Row): Quotation {
     subtotal: Number(r.subtotal),
     vatTotal: Number(r.vat_total),
     total: Number(r.total),
+    pricing: typeof r.pricing === 'string' ? (JSON.parse(r.pricing) as QuotationPricingInput) : (r.pricing ?? null),
     status: r.status as Quotation['status'],
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
@@ -70,14 +72,15 @@ export class PostgresQuotationStore implements QuotationStore {
   async save(q: Quotation): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_crm_quotations
-        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, pricing, status, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, terms = EXCLUDED.terms, owner_id = EXCLUDED.owner_id,
-         converted_contract_id = EXCLUDED.converted_contract_id, valid_until = EXCLUDED.valid_until`,
+         converted_contract_id = EXCLUDED.converted_contract_id, valid_until = EXCLUDED.valid_until,
+         pricing = EXCLUDED.pricing`,
       [
         q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.sourceTenderId, q.sourceOpportunityId, q.ownerId, q.terms, q.revision, q.parentQuotationId, q.convertedContractId, q.issueDate, q.validUntil,
-        JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.status, q.createdBy, q.createdAt,
+        JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.pricing ? JSON.stringify(q.pricing) : null, q.status, q.createdBy, q.createdAt,
       ],
     );
   }
@@ -100,6 +103,7 @@ export class PostgresQuotationStore implements QuotationStore {
     add('status', filter.status);
     add('account_id', filter.accountId);
     add('source_tender_id', filter.sourceTenderId);
+    add('quote_number', filter.quoteNumber);
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 

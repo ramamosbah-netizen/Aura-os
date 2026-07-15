@@ -11,6 +11,7 @@ import {
   makeQuotation,
   reviseQuotation,
 } from './domain/quotation';
+import { type QuotationPricingSheet, computeQuotationPricing, normalizeUnitCosts } from './domain/quotation-pricing';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
@@ -120,6 +121,30 @@ export class QuotationService {
 
   get(id: Id): Promise<Quotation | null> {
     return this.store.get(id);
+  }
+
+  /** All revisions of a quotation (same quote number), oldest revision first. */
+  async listRevisions(tenantId: string, id: Id): Promise<Quotation[]> {
+    const q = await this.store.get(id);
+    if (!q) return [];
+    const all = await this.store.list({ tenantId, quoteNumber: q.quoteNumber, limit: 100 });
+    return all.sort((a, b) => a.revision - b.revision);
+  }
+
+  /** The internal cost & margin sheet for this revision (zero-cost default until priced). */
+  async getPricing(id: Id): Promise<QuotationPricingSheet> {
+    const q = await this.store.get(id);
+    if (!q) throw new Error(`quotation ${id} not found`);
+    return computeQuotationPricing(q.lines, q.pricing?.unitCosts ?? []);
+  }
+
+  /** Persist per-line unit costs for this revision; returns the recomputed sheet. */
+  async setPricing(id: Id, unitCosts: number[]): Promise<QuotationPricingSheet> {
+    const q = await this.store.get(id);
+    if (!q) throw new Error(`quotation ${id} not found`);
+    const costs = normalizeUnitCosts(q.lines.length, unitCosts);
+    await this.store.save({ ...q, pricing: { unitCosts: costs } });
+    return computeQuotationPricing(q.lines, costs);
   }
 
   /** Quotations generated from a tender's pricing sheet. */

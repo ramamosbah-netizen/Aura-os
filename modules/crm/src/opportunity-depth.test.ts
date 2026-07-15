@@ -34,15 +34,17 @@ describe('OpportunityDepthService', () => {
     const depth = await svc.depthFor('t1', 'o1');
     expect(depth.risks.length).toBe(1);
     expect(depth.riskSummary).toMatchObject({ open: 1, openCritical: 1, needsAttention: true });
-    const dim = depth.health.dimensions.find((d) => d.key === 'risks')!;
+    // The open critical COMPETITIVE risk lands on the competitive dimension and BLOCKS the deal.
+    const dim = depth.health.dimensions.find((d) => d.key === 'competitive')!;
     expect(dim.applicable).toBe(true);
-    expect(depth.health.band).toBe('CRITICAL');
+    expect(dim.reasons.join(' ')).toContain('Incumbent lock-in');
+    expect(depth.health.state).toBe('BLOCKED');
 
-    // Accepting the risk clears it from the open count and lifts the risks dimension.
+    // Accepting the risk clears it from the open count and un-blocks the deal.
     await svc.setRiskStatus(k.id, 'ACCEPTED');
     const after = await svc.depthFor('t1', 'o1');
     expect(after.riskSummary.open).toBe(0);
-    expect(after.health.dimensions.find((d) => d.key === 'risks')!.applicable).toBe(true); // total>0 but none open
+    expect(after.health.state).not.toBe('BLOCKED');
     expect(after.riskSummary.needsAttention).toBe(false);
   });
 
@@ -108,26 +110,48 @@ describe('OpportunityDepthService', () => {
     await expect(svc.resolveRegisterItem(q.id, 'VALIDATED')).rejects.toThrow();
   });
 
-  it('composes an explainable health roll-up from the four signals (S7)', async () => {
+  it('composes the five-dimension health roll-up from the deal facts', async () => {
     const { svc } = harness();
-    // A bare opportunity: no stakeholders → relationship is CRITICAL, so the deal is CRITICAL.
-    const bare = await svc.depthFor('t1', 'o1');
+    // Deal facts for a worked, commercially-real deal — the health engine reads these plus
+    // whatever the depth stores hold.
+    const worked = {
+      stage: 'negotiation',
+      buyingStage: null,
+      ownerId: 'u1',
+      nextAction: 'Send revised BOQ',
+      nextActionDueDate: new Date(Date.now() + 5 * 86400000).toISOString(),
+      value: 250_000,
+      closeDate: new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10),
+      competitors: 'Incumbent Co',
+    };
+    const lastTouch = new Date().toISOString();
+
+    // No stakeholders → relationship is CRITICAL, so the deal is AT_RISK with the reason named.
+    const bare = await svc.depthFor('t1', 'o1', worked, lastTouch);
     expect(bare.health.band).toBe('CRITICAL');
+    expect(bare.health.state).toBe('AT_RISK');
     expect(bare.health.reasons).toContain('no stakeholders mapped');
 
-    // Map the full committee → relationship recovers, and with no other issues the deal is HEALTHY.
+    // Map the full committee → relationship recovers; with facts healthy the deal is ON_TRACK.
     await svc.addStakeholder({ tenantId: 't1', opportunityId: 'o1', contactName: 'Dana', role: 'DECISION_MAKER' });
     await svc.addStakeholder({ tenantId: 't1', opportunityId: 'o1', contactName: 'Omar', role: 'ECONOMIC_BUYER' });
     await svc.addStakeholder({ tenantId: 't1', opportunityId: 'o1', contactName: 'Sara', role: 'CHAMPION', isChampion: true });
-    const healthy = await svc.depthFor('t1', 'o1');
+    const healthy = await svc.depthFor('t1', 'o1', worked, lastTouch);
     expect(healthy.health.band).toBe('HEALTHY');
+    expect(healthy.health.state).toBe('ON_TRACK');
     expect(healthy.health.needsAttention).toBe(false);
 
-    // Passing the sales/buying stage in assesses the journey dimension: proposal vs. a buyer who
-    // has barely recognized the problem is HIGH-severity misalignment → drags the deal to CRITICAL.
-    const ahead = await svc.depthFor('t1', 'o1', { stage: 'proposal', buyingStage: 'PROBLEM_RECOGNIZED' });
-    const journey = ahead.health.dimensions.find((d) => d.key === 'journey');
-    expect(journey?.applicable).toBe(true);
+    // Proposal vs. a buyer who has barely recognized the problem is HIGH-severity misalignment —
+    // it lands on the DECISION dimension and drags the deal down.
+    const ahead = await svc.depthFor('t1', 'o1', { ...worked, stage: 'proposal', buyingStage: 'PROBLEM_RECOGNIZED' }, lastTouch);
+    const decision = ahead.health.dimensions.find((d) => d.key === 'decision');
+    expect(decision?.applicable).toBe(true);
+    expect(decision?.band).toBe('CRITICAL');
     expect(ahead.health.band).toBe('CRITICAL');
+
+    // Without deal facts the same deal honestly reads unworked: execution gaps + STALE.
+    const bareFacts = await svc.depthFor('t1', 'o1');
+    expect(bareFacts.health.state).toBe('STALE');
+    expect(bareFacts.health.reasons).toContain('no owner assigned');
   });
 });

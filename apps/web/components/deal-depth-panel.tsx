@@ -13,7 +13,7 @@ interface CommitSummary { open: number; overdue: number; fulfilled: number; brok
 interface RegisterItem { id: string; kind: string; statement: string; status: string; detail: string | null; dueAt: string | null; confidence: number | null }
 interface RegisterSummary { decisions: number; assumptions: number; openQuestions: number; open: number; unvalidatedAssumptions: number; invalidatedAssumptions: number; overdue: number; needsAttention: boolean }
 interface HealthDim { key: string; label: string; score: number; band: string; reasons: string[]; applicable: boolean }
-interface Health { score: number; band: string; dimensions: HealthDim[]; reasons: string[]; needsAttention: boolean }
+interface Health { score: number; band: string; state: string; stateReason: string | null; dimensions: HealthDim[]; reasons: string[]; needsAttention: boolean }
 interface Risk { id: string; type: string; title: string; likelihood: string; impact: string; severity: string; status: string; owner: string | null; mitigation: string | null }
 interface RiskSummary { total: number; open: number; mitigating: number; openCritical: number; openHigh: number; needsAttention: boolean }
 interface Depth {
@@ -30,6 +30,14 @@ const scoreColor = (n: number): string => (n >= 80 ? '#16a34a' : n >= 50 ? '#d97
 const bandColor = (b: string): string => (b === 'HEALTHY' ? '#16a34a' : b === 'AT_RISK' ? '#d97706' : '#dc2626');
 const bandDot = (b: string): string => (b === 'HEALTHY' ? '🟢' : b === 'AT_RISK' ? '🟠' : '🔴');
 const bandLabel = (b: string): string => (b === 'HEALTHY' ? 'Healthy' : b === 'AT_RISK' ? 'At risk' : 'Critical');
+/** The five-state verdict — what KIND of trouble, not just how much (stale ≠ blocked). */
+const STATE_META: Record<string, { dot: string; label: string; color: string }> = {
+  ON_TRACK: { dot: '🟢', label: 'On track', color: '#16a34a' },
+  NEEDS_ATTENTION: { dot: '🟠', label: 'Needs attention', color: '#d97706' },
+  AT_RISK: { dot: '🔴', label: 'At risk', color: '#dc2626' },
+  BLOCKED: { dot: '⛔', label: 'Blocked', color: '#dc2626' },
+  STALE: { dot: '💤', label: 'Stale', color: '#6b7280' },
+};
 const isOverdue = (c: Commitment): boolean => c.status === 'OPEN' && !!c.dueAt && c.dueAt.slice(0, 10) < new Date().toISOString().slice(0, 10);
 
 export default function DealDepthPanel({ opportunityId }: { opportunityId: string }) {
@@ -66,14 +74,16 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
     <section style={st.panel}>
       <h2 style={st.h2}>Deal Depth</h2>
 
-      {/* Deal Health — the S7 roll-up of the four signals below. */}
+      {/* Deal Health — the five-dimension roll-up (Execution / Relationship / Commercial /
+          Competitive / Decision) with the five-state verdict. */}
       <div style={st.healthCard}>
         <div style={st.healthHead}>
-          <span style={{ ...st.healthBand, color: bandColor(health.band) }}>
-            {bandDot(health.band)} {bandLabel(health.band)}
+          <span style={{ ...st.healthBand, color: (STATE_META[health.state] ?? STATE_META.ON_TRACK).color }}>
+            {(STATE_META[health.state] ?? STATE_META.ON_TRACK).dot} {(STATE_META[health.state] ?? STATE_META.ON_TRACK).label}
           </span>
           <span style={{ ...st.healthScore, color: bandColor(health.band) }}>{health.score}<span style={st.healthOf}>/100</span></span>
         </div>
+        {health.stateReason && <div style={st.stateReason}>{health.stateReason}</div>}
         <div style={st.dimGrid}>
           {dims.map((d) => (
             <div key={d.key} style={st.dimCard} title={d.reasons.join(' · ') || 'no issues'}>
@@ -283,6 +293,7 @@ const st = {
   score: { fontSize: 13, fontWeight: 700 } as CSSProperties,
   healthCard: { border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel-2)', padding: 14, marginBottom: 4 } as CSSProperties,
   healthHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 12 } as CSSProperties,
+  stateReason: { fontSize: 12, color: 'var(--muted)', margin: '-8px 0 10px' } as CSSProperties,
   healthBand: { fontSize: 15, fontWeight: 700 } as CSSProperties,
   healthScore: { fontSize: 22, fontWeight: 800, letterSpacing: -0.5 } as CSSProperties,
   healthOf: { fontSize: 12, fontWeight: 600, color: 'var(--muted)' } as CSSProperties,

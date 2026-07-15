@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post 
 import { IsBoolean, IsInt, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
-  OpportunityDepthService, type OpportunityDepth, OpportunityService,
+  ActivityService, OpportunityDepthService, type OpportunityDepth, OpportunityService,
 } from '@aura/crm';
 import type {
   OpportunityStakeholder, OpportunityDealMember, Commitment, DealRegisterItem, OpportunityRisk,
@@ -89,17 +89,35 @@ export class OpportunityDepthController {
   constructor(
     private readonly depth: OpportunityDepthService,
     private readonly opportunities: OpportunityService,
+    private readonly activities: ActivityService,
     private readonly tenant: TenantContext,
   ) {}
 
   @Get(':id/depth')
   async depthFor(@Param('id', ParseUuidOr404Pipe) id: string): Promise<OpportunityDepth> {
     const tenantId = this.tenant.get().tenantId;
-    // Load the opportunity so the health roll-up can assess buying-journey alignment
-    // (our sales stage vs. the customer's buying stage). Tenant-mismatched → treated as absent.
-    const opp = await this.opportunities.get(id);
-    const stages = opp && opp.tenantId === tenantId ? { stage: opp.stage, buyingStage: opp.buyingStage } : null;
-    return this.depth.depthFor(tenantId, id, stages);
+    // Load the opportunity (deal facts for the health dimensions) and its Activity stream
+    // (execution recency — Activity stays the one source of truth for whether the deal is
+    // being worked). Tenant-mismatched → treated as absent.
+    const [opp, activities] = await Promise.all([
+      this.opportunities.get(id),
+      this.activities.list({ tenantId, relatedType: 'opportunity', relatedId: id, limit: 500 }),
+    ]);
+    const facts = opp && opp.tenantId === tenantId
+      ? {
+          stage: opp.stage,
+          buyingStage: opp.buyingStage,
+          ownerId: opp.ownerId,
+          nextAction: opp.nextAction,
+          nextActionDueDate: opp.nextActionDueDate,
+          value: opp.value,
+          closeDate: opp.closeDate,
+          competitors: opp.competitors,
+        }
+      : null;
+    const touches = activities.map((a) => a.completedAt ?? a.createdAt);
+    const lastActivityIso = touches.length ? touches.sort().at(-1)! : null;
+    return this.depth.depthFor(tenantId, id, facts, lastActivityIso);
   }
 
   // ── Stakeholders ──

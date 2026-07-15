@@ -191,12 +191,24 @@ export class OpportunityDepthService {
 
   /** The full depth payload for an Opportunity 360 — stakeholders + coverage, team, commitments,
    * and the decisions/assumptions/open-questions register, each with its derived summary, plus the
-   * composed health roll-up. `opp` (sales + buying stage) is optional: without it the buying-journey
-   * dimension is simply not assessed and the health folds the remaining three signals. */
+   * composed health roll-up. `opp` carries the deal facts the five health dimensions read (stage,
+   * ownership, next action, value, close date, competitors); optional so existing callers keep
+   * working — absent facts simply read as gaps or leave a dimension unassessed. `lastActivityIso`
+   * is the newest activity touching the deal, projected by the caller from the Activity stream. */
   async depthFor(
     tenantId: Id,
     opportunityId: Id,
-    opp?: { stage: string; buyingStage: BuyingStage | null } | null,
+    opp?: {
+      stage: string;
+      buyingStage: BuyingStage | null;
+      ownerId?: string | null;
+      nextAction?: string | null;
+      nextActionDueDate?: string | null;
+      value?: number;
+      closeDate?: string | null;
+      competitors?: string | null;
+    } | null,
+    lastActivityIso?: string | null,
   ): Promise<OpportunityDepth> {
     const [stakeholders, dealTeam, commitments, register, risks] = await Promise.all([
       this.store.listStakeholders({ tenantId, opportunityId }),
@@ -220,7 +232,22 @@ export class OpportunityDepthService {
       registerSummary: regSummary,
       risks,
       riskSummary: rskSummary,
-      health: assessOpportunityHealth({ coverage, commitments: commitSummary, register: regSummary, alignment, risks: rskSummary }),
+      health: assessOpportunityHealth({
+        stage: opp?.stage ?? '',
+        execution: {
+          hasOwner: !!opp?.ownerId,
+          hasNextAction: !!opp?.nextAction?.trim(),
+          nextActionDueIso: opp?.nextActionDueDate ?? null,
+          lastActivityIso: lastActivityIso ?? null,
+        },
+        coverage,
+        commercial: { value: opp?.value ?? 0, closeDateIso: opp?.closeDate ?? null },
+        competitorsNamed: !!opp?.competitors?.trim(),
+        alignment,
+        commitments: commitSummary,
+        register: regSummary,
+        risks,
+      }),
     };
   }
 }

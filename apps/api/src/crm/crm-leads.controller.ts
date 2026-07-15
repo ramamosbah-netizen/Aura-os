@@ -1,13 +1,34 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsBoolean, IsInt, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
-  parsePageParams, assessLeadQualification,
+  parsePageParams, assessLeadQualification, contextCompleteness,
+  ELV_SYSTEMS, ELV_SECTORS, PROJECT_STAGES,
   type Lead, type LeadStatus, type LeadSource, type OpportunityStage, type LeadQualificationAssessment,
+  type ElvSystem, type ElvSector, type ProjectStage,
 } from '@aura/shared';
 import { LeadService, LeadConversionService, type ConvertLeadResult, type ConvertPreview } from '@aura/crm';
 
-class CreateLeadDto {
+/**
+ * G4 — the ELV commercial context. Shared by create and update because context is captured
+ * whenever it is learned: on the call that creates the lead, or three calls later.
+ * `systems` and the enums are validated against the domain lists (@IsIn), so a typo cannot
+ * persist and silently drop the lead out of every view that filters by it.
+ */
+class ElvContextDto {
+  @IsOptional() @IsString() requirement?: string;
+  @IsOptional() @IsArray() @IsIn(ELV_SYSTEMS as readonly string[], { each: true }) systems?: ElvSystem[];
+  @IsOptional() @IsIn(ELV_SECTORS as readonly string[]) sector?: ElvSector;
+  @IsOptional() @IsString() projectName?: string;
+  @IsOptional() @IsString() projectLocation?: string;
+  @IsOptional() @IsString() consultant?: string;
+  @IsOptional() @IsString() mainContractor?: string;
+  @IsOptional() @IsNumber() estimatedValue?: number;
+  @IsOptional() @IsIn(PROJECT_STAGES as readonly string[]) projectStage?: ProjectStage;
+  @IsOptional() @IsString() expectedTimeline?: string;
+}
+
+class CreateLeadDto extends ElvContextDto {
   @IsString() name!: string;
   @IsOptional() @IsString() companyName?: string;
   @IsOptional() @IsString() email?: string;
@@ -16,7 +37,7 @@ class CreateLeadDto {
   @IsOptional() @IsString() source?: LeadSource;
 }
 
-class UpdateLeadDto {
+class UpdateLeadDto extends ElvContextDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() companyName?: string;
   @IsOptional() @IsString() email?: string;
@@ -74,6 +95,19 @@ export class CrmLeadsController {
       phone: dto.phone,
       status: dto.status,
       source: dto.source,
+      // G4 — the ELV commercial context, captured on the call that creates the lead. Listed
+      // explicitly (not spread) because this handler maps field-by-field: anything omitted here is
+      // silently dropped, which is exactly how a whole context can vanish without an error.
+      requirement: dto.requirement,
+      systems: dto.systems,
+      sector: dto.sector,
+      projectName: dto.projectName,
+      projectLocation: dto.projectLocation,
+      consultant: dto.consultant,
+      mainContractor: dto.mainContractor,
+      estimatedValue: dto.estimatedValue,
+      projectStage: dto.projectStage,
+      expectedTimeline: dto.expectedTimeline,
       actorId: ctx.actorId,
     });
   }

@@ -2,6 +2,7 @@ import { type Id, newId } from './id';
 import { daysSince, hoursSince, isQuiet } from './attention-time';
 import type { BuyingStage, PursuitDecision, PursuitDimensions } from './buying-journey';
 import type { LeadQualificationDimensions } from './lead-qualification';
+import type { ElvSector, ElvSystem, ProjectStage } from './elv-context';
 
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified' | 'converted';
 export type LeadSource = 'website' | 'referral' | 'campaign' | 'cold_call' | 'other';
@@ -52,6 +53,23 @@ export interface Lead {
   /** Governance: a score with no author cannot be challenged. */
   qualificationAssessedAt: string | null;
   qualificationAssessedBy: Id | null;
+  /**
+   * G4 — what the job actually IS: requirement, ELV systems, sector, project, consultant/main
+   * contractor, rough value, project stage, expected timeline. Flattened onto the Lead rather than
+   * nested so it stays one row, one read, and every column is independently filterable.
+   * See ElvCommercialContext for why consultant/mainContractor are text until G6.
+   */
+  requirement: string | null;
+  systems: ElvSystem[] | null;
+  sector: ElvSector | null;
+  projectName: string | null;
+  projectLocation: string | null;
+  consultant: string | null;
+  mainContractor: string | null;
+  /** A lead-stage estimate, NOT a committed opportunity value. */
+  estimatedValue: number | null;
+  projectStage: ProjectStage | null;
+  expectedTimeline: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -130,6 +148,16 @@ export interface NewLead {
   qualificationNotes?: string | null;
   qualificationAssessedAt?: string | null;
   qualificationAssessedBy?: Id | null;
+  requirement?: string | null;
+  systems?: ElvSystem[] | null;
+  sector?: ElvSector | null;
+  projectName?: string | null;
+  projectLocation?: string | null;
+  consultant?: string | null;
+  mainContractor?: string | null;
+  estimatedValue?: number | null;
+  projectStage?: ProjectStage | null;
+  expectedTimeline?: string | null;
 }
 
 export function makeLead(input: NewLead): Lead {
@@ -158,6 +186,17 @@ export function makeLead(input: NewLead): Lead {
     qualificationNotes: input.qualificationNotes ?? null,
     qualificationAssessedAt: input.qualificationAssessedAt ?? null,
     qualificationAssessedBy: input.qualificationAssessedBy ?? null,
+    // Context is captured as it is learned — a lead phoned in with only a name is still a lead.
+    requirement: input.requirement?.trim() ?? null,
+    systems: input.systems ?? null,
+    sector: input.sector ?? null,
+    projectName: input.projectName?.trim() ?? null,
+    projectLocation: input.projectLocation?.trim() ?? null,
+    consultant: input.consultant?.trim() ?? null,
+    mainContractor: input.mainContractor?.trim() ?? null,
+    estimatedValue: input.estimatedValue ?? null,
+    projectStage: input.projectStage ?? null,
+    expectedTimeline: input.expectedTimeline?.trim() ?? null,
     createdAt: now,
     updatedAt: now,
   };

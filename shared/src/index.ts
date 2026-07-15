@@ -29,6 +29,7 @@ export * from './domain/opportunity-depth';
 export * from './domain/deal-register';
 export * from './domain/buying-journey';
 export * from './domain/lead-qualification';
+export * from './domain/elv-context';
 export * from './domain/opportunity-risk';
 export * from './domain/opportunity-health';
 export * from './domain/forecast-snapshot';

@@ -3,6 +3,7 @@ import {
   type AccessTarget, type Id, type OrgLevel, makeEvent,
   CRM_EVENT, type Lead, type Opportunity, type OpportunityStage, makeOpportunity,
   resolveIdentity, type IdentityResolution, type MatchConfidence, type IdentityMatch,
+  elvSystemLabel,
 } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_LEAD_STORE, type LeadStore } from './lead-store';
@@ -198,8 +199,15 @@ export class LeadConversionService {
       leadId: lead.id,
       accountId,
       accountName,
-      title: input.opportunity?.title?.trim() || (lead.companyName ? `${lead.companyName} — ${lead.name}` : lead.name),
-      value: input.opportunity?.value,
+      // G4: a lead that names its project titles the opportunity after it — "Marina Hotel — CCTV"
+      // is what people call the deal, not "Emaar — Layla Hassan".
+      title:
+        input.opportunity?.title?.trim() ||
+        (lead.projectName ? `${lead.projectName}${lead.systems?.length ? ` — ${lead.systems.map(elvSystemLabel).join(' + ')}` : ''}` : null) ||
+        (lead.companyName ? `${lead.companyName} — ${lead.name}` : lead.name),
+      // G4: the lead's estimate seeds the opportunity value when the converter did not state one.
+      // It is an ESTIMATE becoming a starting point, never overriding an explicit decision.
+      value: input.opportunity?.value ?? lead.estimatedValue ?? undefined,
       stage: input.opportunity?.stage ?? 'qualification',
       requiresTender: input.opportunity?.requiresTender ?? true,
       closeDate: input.opportunity?.closeDate ?? null,

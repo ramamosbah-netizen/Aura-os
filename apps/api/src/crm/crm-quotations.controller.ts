@@ -122,24 +122,21 @@ export class CrmQuotationsController {
     return this.quotations.listRevisions(this.tenant.get().tenantId, id);
   }
 
-  /** Internal rate build-up (cost factors → direct/indirect → margin) for this revision. */
+  /** Internal rate build-up (cost factors → direct/indirect → margin) + lock state. */
   @Get(':id/pricing')
-  async getPricing(@Param('id') id: string) {
-    try {
-      return await this.quotations.getPricing(id);
-    } catch {
-      throw new NotFoundException(`quotation ${id} not found`);
-    }
+  getPricing(@Param('id') id: string) {
+    // Domain errors flow to the taxonomy filter: "not found" → 404.
+    return this.quotations.getPricing(id);
   }
 
-  /** Save the per-line cost build-up for this revision; returns the recomputed sheet. */
+  /**
+   * Save the per-line cost build-up for this revision.
+   * Refused with 409 once the quotation is approved — the sheet is locked
+   * (the taxonomy filter classifies the "only … can be re-priced" guard).
+   */
   @Put(':id/pricing')
-  async setPricing(@Param('id') id: string, @Body() dto: unknown) {
-    try {
-      return await this.quotations.setPricing(id, dto);
-    } catch {
-      throw new NotFoundException(`quotation ${id} not found`);
-    }
+  setPricing(@Param('id') id: string, @Body() dto: unknown) {
+    return this.quotations.setPricing(id, dto);
   }
 
   @Get(':id')

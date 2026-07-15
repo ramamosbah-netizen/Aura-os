@@ -8,10 +8,11 @@ import {
   type NewQuotation,
   type QuotationAction,
   applyQuotationAction,
+  isPricingLocked,
   makeQuotation,
   reviseQuotation,
 } from './domain/quotation';
-import { type QuotationPricingSheet, computeQuotationPricing, normalizePricingInput } from './domain/quotation-pricing';
+import { type QuotationPricingView, computeQuotationPricing, normalizePricingInput } from './domain/quotation-pricing';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
@@ -131,23 +132,45 @@ export class QuotationService {
     return all.sort((a, b) => a.revision - b.revision);
   }
 
-  /** The internal rate build-up sheet for this revision (all-zero until priced). */
-  async getPricing(id: Id): Promise<QuotationPricingSheet> {
+  /** The internal rate build-up for this revision, plus whether it's frozen. */
+  async getPricing(id: Id): Promise<QuotationPricingView> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
-    return computeQuotationPricing(q.lines, q.pricing);
+    return {
+      ...computeQuotationPricing(q.lines, q.pricing),
+      locked: isPricingLocked(q),
+      status: q.status,
+      quoteNumber: q.quoteNumber,
+      revision: q.revision,
+    };
   }
 
   /**
    * Persist the per-line cost build-up for this revision; returns the recomputed
    * sheet. Accepts the legacy lean shape (`{ unitCosts }`) — normalize lifts it.
+   *
+   * Governance: refused once the quotation is approved — the build-up that
+   * justified the approved price is immutable. Re-price by raising a revision.
    */
-  async setPricing(id: Id, input: unknown): Promise<QuotationPricingSheet> {
+  async setPricing(id: Id, input: unknown): Promise<QuotationPricingView> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
+    if (isPricingLocked(q)) {
+      throw new Error(
+        `pricing sheet is locked: only a draft or in-review quotation can be re-priced — ` +
+          `${q.quoteNumber} Rev ${q.revision} is ${q.status}. Raise a revision to re-price.`,
+      );
+    }
     const lines = normalizePricingInput(q.lines.length, input);
     await this.store.save({ ...q, pricing: { lines } });
-    return computeQuotationPricing(q.lines, { lines });
+    this.logger.log(`Pricing sheet saved for ${q.quoteNumber} Rev ${q.revision}`);
+    return {
+      ...computeQuotationPricing(q.lines, { lines }),
+      locked: false,
+      status: q.status,
+      quoteNumber: q.quoteNumber,
+      revision: q.revision,
+    };
   }
 
   /** Quotations generated from a tender's pricing sheet. */

@@ -1,4 +1,4 @@
-import type { QuotationLine } from './quotation';
+import type { QuotationLine, QuotationStatus } from './quotation';
 
 // Quotation pricing sheet — the INTERNAL rate build-up behind a client quotation
 // revision: every cost factor that makes up the line, rolled to direct cost →
@@ -106,6 +106,15 @@ export interface QuotationPricingSheet {
   profit: number;
   marginPercent: number | null;
   markupPercent: number | null;
+}
+
+/** The sheet as the API serves it — the numbers plus its governance state. */
+export interface QuotationPricingView extends QuotationPricingSheet {
+  /** Frozen once the quotation is approved (see isPricingLocked); read/export/print only. */
+  locked: boolean;
+  status: QuotationStatus;
+  quoteNumber: string;
+  revision: number;
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;

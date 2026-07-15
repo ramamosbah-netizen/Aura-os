@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import ExportButton from './export-button';
 
 // Quotation pricing sheet — the full internal rate build-up. Every cost factor is
 // editable; material → labour → other directs roll to DIRECT COST, then indirect
@@ -31,6 +32,11 @@ export interface PricingSheet {
   totalOtherDirect: number; totalDirect: number; totalIndirect: number;
   totalCost: number; totalSell: number; profit: number;
   marginPercent: number | null; markupPercent: number | null;
+  /** Governance: frozen once the quotation is approved — read/export/print only. */
+  locked: boolean;
+  status: string;
+  quoteNumber: string;
+  revision: number;
 }
 
 /** The editable factors, mirrored from the domain input type. */
@@ -61,8 +67,8 @@ const mp = (b: ManpowerBlock): ManpowerLine => {
 };
 
 /** Client-side mirror of the domain compile — keeps the grid live before saving. */
-function compute(lines: PricingLine[], builds: Buildup[]): PricingSheet {
-  const rows: PricingLine[] = lines.map((l, i) => {
+function compute(base: PricingSheet, builds: Buildup[]): PricingSheet {
+  const rows: PricingLine[] = base.lines.map((l, i) => {
     const b = builds[i];
     const supplyTotal = r2(l.quantity * b.supplyUnitPrice);
     const wastageTotal = r2(supplyTotal * (b.wastagePercent / 100));
@@ -98,6 +104,8 @@ function compute(lines: PricingLine[], builds: Buildup[]): PricingSheet {
     totalIndirect: sum((r) => r.indirectCost), totalCost, totalSell, profit,
     marginPercent: totalSell > 0 ? r2((profit / totalSell) * 100) : null,
     markupPercent: totalCost > 0 ? r2((profit / totalCost) * 100) : null,
+    // Governance state is server-owned — carry it through untouched.
+    locked: base.locked, status: base.status, quoteNumber: base.quoteNumber, revision: base.revision,
   };
 }
 
@@ -109,8 +117,9 @@ export default function QuotationPricingClient({ id, customerName, status, initi
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const sheet = useMemo(() => compute(initialSheet.lines, builds), [initialSheet.lines, builds]);
-  const dirty = JSON.stringify(builds) !== saved;
+  const sheet = useMemo(() => compute(initialSheet, builds), [initialSheet, builds]);
+  const locked = initialSheet.locked;
+  const dirty = !locked && JSON.stringify(builds) !== saved;
 
   const set = (i: number, patch: Partial<Buildup>): void =>
     setBuilds((prev) => prev.map((b, j) => (j === i ? { ...b, ...patch } : b)));
@@ -129,18 +138,49 @@ export default function QuotationPricingClient({ id, customerName, status, initi
     } catch { setMsg('API unreachable'); } finally { setBusy(false); }
   };
 
-  const Num = ({ v, on, w = 62 }: { v: number; on: (s: string) => void; w?: number }) => (
-    <input type="number" min={0} step="0.01" value={v} onChange={(e) => on(e.target.value)} style={{ ...st.input, width: w }} />
-  );
+  // Locked sheets render their factors as plain figures — no inputs at all.
+  const Num = ({ v, on, w = 62 }: { v: number; on: (s: string) => void; w?: number }) =>
+    locked
+      ? <span style={st.ro}>{v === 0 ? '—' : money(v)}</span>
+      : <input type="number" min={0} step="0.01" value={v} onChange={(e) => on(e.target.value)} style={{ ...st.input, width: w }} />;
+
+  const exportRows = sheet.lines.map((l) => ({
+    description: l.description, quantity: l.quantity,
+    supplyUnitPrice: l.supplyUnitPrice, supplyTotal: l.supplyTotal,
+    wastagePercent: l.wastagePercent, wastageTotal: l.wastageTotal, accessories: l.accessories,
+    materialTotal: l.materialTotal,
+    technicianHours: l.technician.manHours, technicianTotal: l.technician.total,
+    engineerHours: l.engineer.manHours, engineerTotal: l.engineer.total,
+    pmHours: l.projectManager.manHours, pmTotal: l.projectManager.total,
+    labourTotal: l.labourTotal, transport: l.transport, equipmentRent: l.equipmentRent,
+    subcontract: l.subcontract, otherDirect: l.otherDirect,
+    directCost: l.directCost, indirectPercent: l.indirectPercent, indirectCost: l.indirectCost,
+    costTotal: l.costTotal, unitCostTotal: l.unitCostTotal,
+    unitPrice: l.unitPrice, sellTotal: l.sellTotal, profit: l.profit,
+    marginPercent: l.marginPercent, markupPercent: l.markupPercent,
+  }));
 
   return (
     <div>
+      {locked && (
+        <div style={st.lockBar}>
+          🔒 <b>Pricing sheet locked</b> — {sheet.quoteNumber} Rev {sheet.revision} is <b>{status.replace('_', ' ')}</b>.
+          The build-up behind an approved price is immutable. Export or print it below;
+          to re-price, <a href={`/crm/quotations/${id}`} style={st.lockLink}>raise a revision</a>.
+        </div>
+      )}
+
       <div style={st.toolbar}>
         <span style={st.customer}>{customerName} · <span style={{ textTransform: 'capitalize' }}>{status.replace('_', ' ')}</span></span>
         <div style={{ flex: 1 }} />
         {msg && <span style={{ fontSize: 12.5, color: msg.includes('✓') ? 'var(--good)' : 'var(--bad)' }}>{msg}</span>}
-        <button type="button" onClick={() => void save()} disabled={busy || !dirty}
-          style={{ ...st.save, ...(dirty && !busy ? {} : st.saveDisabled) }}>Save build-up</button>
+        <ExportButton filename={`pricing-${sheet.quoteNumber}-rev${sheet.revision}`} rows={exportRows as unknown as Array<Record<string, unknown>>}
+          columns={Object.keys(exportRows[0] ?? {}).map((key) => ({ key }))} />
+        <a href={`/crm/quotations/${id}/pricing/print`} target="_blank" rel="noreferrer" style={st.printBtn}>🖨 Print</a>
+        {!locked && (
+          <button type="button" onClick={() => void save()} disabled={busy || !dirty}
+            style={{ ...st.save, ...(dirty && !busy ? {} : st.saveDisabled) }}>Save build-up</button>
+        )}
       </div>
 
       <div style={st.scroll}>
@@ -282,8 +322,12 @@ function Stat({ label, value, tone, strong }: { label: string; value: string; to
 }
 
 const st: Record<string, CSSProperties> = {
-  toolbar: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 },
+  toolbar: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 },
   customer: { fontSize: 12.5, color: 'var(--muted)' },
+  lockBar: { display: 'block', fontSize: 12.5, lineHeight: 1.5, color: 'var(--fg)', background: 'rgba(255,193,7,0.07)', border: '1px solid rgba(255,193,7,0.35)', borderRadius: 10, padding: '10px 13px', marginBottom: 12 },
+  lockLink: { color: 'var(--accent)', fontWeight: 700 },
+  ro: { fontSize: 12, color: 'var(--fg)' },
+  printBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', background: 'var(--panel)', textDecoration: 'none' },
   save: { border: '1px solid var(--accent)', borderRadius: 9, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, color: 'var(--accent)', background: 'transparent', cursor: 'pointer' },
   saveDisabled: { opacity: 0.45, cursor: 'default', borderColor: 'var(--border)', color: 'var(--muted)' },
   scroll: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' },

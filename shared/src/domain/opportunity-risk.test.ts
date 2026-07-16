@@ -54,31 +54,39 @@ describe('riskSummary', () => {
   });
 });
 
-describe('health engine — risks dimension', () => {
+describe('health engine — explicit risks weigh on their home dimension', () => {
+  // A worked, commercially-real deal: only the risk register varies per test.
   const healthy = {
+    stage: 'negotiation',
+    execution: { hasOwner: true, hasNextAction: true, nextActionDueIso: '2026-07-20T00:00:00Z', lastActivityIso: '2026-07-14T00:00:00Z' },
     coverage: stakeholderCoverage([{ id: 's', tenantId: 't', opportunityId: 'o', contactId: null, contactName: 'Jane', role: 'DECISION_MAKER', influence: 'high', decisionPower: true, sentiment: 'champion', isChampion: true, isPrimary: true, notes: null, createdAt: '', updatedAt: '' }]),
+    commercial: { value: 100_000, closeDateIso: '2026-09-30' },
+    competitorsNamed: true,
     commitments: commitmentSummary([]),
     register: registerSummary([]),
     alignment: buyingJourneyAlignment('won', null), // not assessed
+    now: new Date('2026-07-15T00:00:00Z'),
   };
 
-  it('an open critical risk drops overall health to CRITICAL', () => {
-    const rs = riskSummary([risk({ likelihood: 'high', impact: 'high' })]);
-    const h = assessOpportunityHealth({ ...healthy, risks: rs });
-    const dim = h.dimensions.find((d) => d.key === 'risks')!;
-    expect(dim.applicable).toBe(true);
-    expect(dim.band).toBe('CRITICAL');
-    expect(h.band).toBe('CRITICAL'); // worst dimension floors the overall band
-    expect(h.reasons.some((r) => /critical risk/.test(r))).toBe(true);
+  it('an open critical commercial risk makes the deal BLOCKED and floors the band', () => {
+    const r = risk({ type: 'COMMERCIAL', likelihood: 'high', impact: 'high' }); // CRITICAL
+    const h = assessOpportunityHealth({ ...healthy, risks: [r] });
+    const com = h.dimensions.find((d) => d.key === 'commercial')!;
+    expect(com.reasons.some((x) => /critical commercial risk/.test(x))).toBe(true);
+    expect(h.state).toBe('BLOCKED');
+    expect(h.stateReason).toContain('Budget may be cut');
   });
 
-  it('the risks dimension is not applicable when there is no risk register', () => {
-    const h = assessOpportunityHealth({ ...healthy, risks: riskSummary([]) });
-    expect(h.dimensions.find((d) => d.key === 'risks')!.applicable).toBe(false);
+  // NB: the fixture's one-person committee legitimately dents the relationship dimension,
+  // so these assert the absence of RISK trouble, not a perfect deal.
+  it('no risk register → no risk reasons and no BLOCKED verdict', () => {
+    const h = assessOpportunityHealth({ ...healthy, risks: [] });
+    expect(h.state).not.toBe('BLOCKED');
+    expect(h.reasons.some((x) => /risk/.test(x))).toBe(false);
   });
 
   it('stays backward-compatible when risks input is omitted', () => {
     const h = assessOpportunityHealth(healthy);
-    expect(h.dimensions.find((d) => d.key === 'risks')!.applicable).toBe(false);
+    expect(h.state).not.toBe('BLOCKED');
   });
 });

@@ -3,7 +3,7 @@ import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem } from '@aura/tendering';
+import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS } from '@aura/tendering';
 import * as xlsx from 'xlsx';
 
 class CreateTenderDto {
@@ -24,6 +24,16 @@ class UpdateTenderDto {
   @IsOptional() @IsString() accountName?: string;
   @IsOptional() @IsNumber() value?: number;
   @IsOptional() @IsString() submissionDeadline?: string;
+}
+
+class SubmitTenderDto {
+  @IsOptional() @IsString() method?: string;
+  @IsOptional() @IsString() portal?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() submittedAt?: string;
+  @IsOptional() @IsString() addendaAcknowledged?: string;
+  @IsOptional() @IsString() validUntil?: string;
+  @IsOptional() @IsString() notes?: string;
 }
 
 /** Tendering API — stamps tenant/actor from context, delegates to TenderService. */
@@ -87,6 +97,43 @@ export class TenderingController {
     const found = await this.tenders.get(id);
     if (!found) throw new NotFoundException(`tender ${id} not found`);
     return this.tenders.changeStatus(id, dto.status);
+  }
+
+  /**
+   * POST /api/tendering/tenders/:id/submit — T2: the `→ submitted` transition WITH its facts
+   * (method, portal, reference, addenda acknowledged, validity). Same gate as the status route;
+   * on an already-submitted tender this records a resubmission (a second record, not an edit).
+   */
+  @Post(':id/submit')
+  async submit(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: SubmitTenderDto,
+  ): Promise<{ tender: Tender; submission: TenderSubmission }> {
+    if (dto.method !== undefined && !SUBMISSION_METHODS.includes(dto.method as SubmissionMethod)) {
+      throw new BadRequestException(`method must be one of: ${SUBMISSION_METHODS.join(', ')}`);
+    }
+    const found = await this.tenders.get(id);
+    if (!found) throw new NotFoundException(`tender ${id} not found`);
+    const ctx = this.tenant.get();
+    return this.tenders.submit(id, {
+      method: (dto.method as SubmissionMethod) ?? null,
+      portal: dto.portal ?? null,
+      reference: dto.reference ?? null,
+      submittedAt: dto.submittedAt ?? null,
+      addendaAcknowledged: dto.addendaAcknowledged ?? null,
+      validUntil: dto.validUntil ?? null,
+      notes: dto.notes ?? null,
+      submittedBy: ctx.actorId,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  /** GET /api/tendering/tenders/:id/submissions — the submission records, latest first. */
+  @Get(':id/submissions')
+  async submissions(@Param('id', ParseUuidOr404Pipe) id: string): Promise<TenderSubmission[]> {
+    const found = await this.tenders.get(id);
+    if (!found) throw new NotFoundException(`tender ${id} not found`);
+    return this.tenders.listSubmissions(this.tenant.get().tenantId, id);
   }
 
   @Get()

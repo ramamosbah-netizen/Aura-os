@@ -3,10 +3,12 @@ import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
 import { checkTenderTransition, tenderGateMessage, type TenderGateEvidence } from './domain/tender-gate';
+import { makeTenderSubmission, type NewTenderSubmission, type TenderSubmission } from './domain/submission';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
 import { BID_SCORE_STORE, type BidScoreStore } from './bid-score-store';
 import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
+import { SUBMISSION_STORE, type SubmissionStore } from './submission-store';
 import { type BOQ, type BOQItem, makeBOQ, makeBOQItem, type NewBOQItem } from './domain/boq';
 
 const CREATE_TENDER = 'tendering.tender.create';
@@ -31,6 +33,7 @@ export class TenderService implements OnModuleInit {
     // The lifecycle gate reads these — the bid decision and the priced estimate — as evidence.
     @Inject(BID_SCORE_STORE) private readonly bidScores: BidScoreStore,
     @Inject(ESTIMATE_STORE) private readonly estimates: EstimateStore,
+    @Inject(SUBMISSION_STORE) private readonly submissions: SubmissionStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
@@ -73,6 +76,21 @@ export class TenderService implements OnModuleInit {
           },
         });
         await this.store.createWithClient(tx, tender);
+        // T2 invariant — every tender at/past `submitted` carries a submission record. A tender
+        // BORN submitted (the deal-chain reactor's auto-tender from a won opportunity) gets its
+        // record here, in the same tx; command idempotency keeps a retry from writing a second.
+        if (tender.status === 'submitted' || tender.status === 'won' || tender.status === 'lost') {
+          await this.submissions.saveWithClient(tx, makeTenderSubmission({
+            tenantId: tender.tenantId,
+            companyId: tender.companyId,
+            tenderId: tender.id,
+            tenderTitle: tender.title,
+            submittedBy: tender.createdBy,
+            submittedValue: tender.value,
+            notes: 'Recorded automatically — tender was created already submitted (deal chain).',
+            createdBy: tender.createdBy,
+          }));
+        }
         await this.events.appendWithClient(tx, [event]);
         this.logger.log(`Tender created: ${tender.title} (${tender.id}) value=${tender.value}`);
         return tender;
@@ -129,14 +147,16 @@ export class TenderService implements OnModuleInit {
   /** Gather the facts the lifecycle gate needs from the sibling records — the bid decision and
    * whether anything is priced. Kept here so the gate stays pure and the caller stays simple. */
   async tenderEvidence(tenantId: Id, tenderId: Id): Promise<TenderGateEvidence> {
-    const [scores, buildUps] = await Promise.all([
+    const [scores, buildUps, subs] = await Promise.all([
       this.bidScores.list({ tenantId, tenderId }),
       this.estimates.listByTender(tenantId, tenderId),
+      this.submissions.list({ tenantId, tenderId, limit: 1 }),
     ]);
     const latest = [...scores].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
     return {
       bidRecommendation: latest?.recommendation ?? null,
       hasPricedEstimate: buildUps.some((b) => b.sellingRate > 0),
+      hasSubmission: subs.length > 0,
     };
   }
 
@@ -147,6 +167,11 @@ export class TenderService implements OnModuleInit {
    * `awarded` on a win (which drives Contract auto-creation) — that trigger cross-module automation.
    */
   async changeStatus(id: Id, status: TenderStatus): Promise<Tender> {
+    // T2 — `submitted` is not a plain status flip: it is the submission fact being recorded.
+    // Routing the flip through submit() keeps the invariant (submitted ⇒ a record exists) true
+    // by construction; a status-only caller just gets a record with no channel details.
+    if (status === 'submitted') return (await this.submit(id)).tender;
+
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`tender ${id} not found`);
 
@@ -158,7 +183,7 @@ export class TenderService implements OnModuleInit {
 
     const eventType = status === 'won' ? TENDER_EVENT.awarded
       : status === 'lost' ? TENDER_EVENT.lost
-      : status === 'submitted' ? TENDER_EVENT.submitted
+      // `submitted` never reaches here — the early return above routes it through submit().
       : status === 'declined' ? TENDER_EVENT.declined
       // Entering `estimating` IS the go/conditional bid decision being acted on (§2.2 bid.decided);
       // `priced` is the quote being priced (§2.2 quote.priced).
@@ -192,6 +217,75 @@ export class TenderService implements OnModuleInit {
     });
     this.logger.log(`Tender ${updated.title} → ${status}`);
     return updated;
+  }
+
+  /**
+   * T2 — submit the bid: the `→ submitted` transition WITH its facts. Runs the same gate as any
+   * transition, then commits the status change, the TenderSubmission record and the `submitted`
+   * event in one tx. Calling it on an already-submitted tender records a RESUBMISSION (a second
+   * fact — e.g. against a later addendum), never an edit of the first.
+   */
+  async submit(
+    id: Id,
+    details: Omit<NewTenderSubmission, 'tenantId' | 'companyId' | 'tenderId' | 'tenderTitle' | 'submittedValue'> = {},
+  ): Promise<{ tender: Tender; submission: TenderSubmission }> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`tender ${id} not found`);
+
+    const evidence = await this.tenderEvidence(existing.tenantId, id);
+    const check = checkTenderTransition(existing, 'submitted', evidence);
+    if (!check.allowed) throw new Error(tenderGateMessage('submitted', check.gaps));
+
+    const submission = makeTenderSubmission({
+      ...details,
+      tenantId: existing.tenantId,
+      companyId: existing.companyId,
+      tenderId: existing.id,
+      tenderTitle: existing.title,
+      // The offer as it stands right now — a snapshot later BOQ edits cannot rewrite.
+      submittedValue: existing.value,
+    });
+    const updated: Tender = { ...existing, status: 'submitted' };
+
+    const event = makeEvent({
+      type: TENDER_EVENT.submitted,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: submission.submittedBy,
+      aggregateType: 'tendering.tender',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title,
+        status: updated.status,
+        value: updated.value,
+        submission: {
+          id: submission.id,
+          submittedAt: submission.submittedAt,
+          submittedBy: submission.submittedBy,
+          method: submission.method,
+          portal: submission.portal,
+          reference: submission.reference,
+          submittedValue: submission.submittedValue,
+        },
+        account: updated.accountId
+          ? { id: updated.accountId, name: updated.accountName }
+          : null,
+      },
+    });
+
+    // Atomic: the record, the status and the event are one fact — none may exist without the others.
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.submissions.saveWithClient(handle, submission);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Tender ${updated.title} submitted (${submission.method}${submission.reference ? ` ref=${submission.reference}` : ''}) value=${submission.submittedValue}`);
+    return { tender: updated, submission };
+  }
+
+  /** The submission records on a tender, latest first. */
+  listSubmissions(tenantId: Id, tenderId: Id): Promise<TenderSubmission[]> {
+    return this.submissions.list({ tenantId, tenderId });
   }
 
   get(id: Id): Promise<Tender | null> {

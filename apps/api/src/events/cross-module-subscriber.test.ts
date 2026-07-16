@@ -13,7 +13,7 @@ import {
   TenantContext,
 } from '@aura/core';
 import { OpportunityService, InMemoryOpportunityStore } from '@aura/crm';
-import { TenderService, InMemoryTenderStore, InMemoryBOQStore, InMemoryBidScoreStore, InMemoryEstimateStore } from '@aura/tendering';
+import { TenderService, InMemoryTenderStore, InMemoryBOQStore, InMemoryBidScoreStore, InMemoryEstimateStore, InMemorySubmissionStore } from '@aura/tendering';
 import { ContractService, InMemoryContractStore } from '@aura/contracts';
 import {
   ProjectService,
@@ -66,6 +66,7 @@ function buildHarness() {
     new InMemoryBOQStore(),
     new InMemoryBidScoreStore(),
     new InMemoryEstimateStore(),
+    new InMemorySubmissionStore(),
     events,
     tx,
     commands,

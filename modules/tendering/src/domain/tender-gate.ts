@@ -30,6 +30,8 @@ export interface TenderGateEvidence {
   bidRecommendation?: BidRecommendation | null;
   /** True when at least one BOQ item carries a priced rate (sellingRate > 0). */
   hasPricedEstimate?: boolean;
+  /** True when a TenderSubmission record exists (T2) — the fact of a bid going out the door. */
+  hasSubmission?: boolean;
 }
 
 export type TenderGap =
@@ -103,9 +105,11 @@ export function checkTenderTransition(
   }
 
   if (to === 'won' || to === 'lost') {
-    // The submission is the milestone that makes a win or loss meaningful; T2 will add a proper
-    // submission record, at which point this can read that instead of the state.
-    if (tender.status !== 'submitted') {
+    // T2 — the gate reads the submission RECORD, not the status label. Every route into
+    // `submitted` writes one, so for governed tenders the two agree; the record additionally
+    // survives a retreat (a bid once submitted stays submitted in fact, even while the estimate
+    // is being reworked), which is exactly when the label would lie.
+    if (!evidence.hasSubmission) {
       gaps.push(gap('NOT_SUBMITTED', 'Only a submitted bid can be won or lost — record the submission first.'));
     }
   }

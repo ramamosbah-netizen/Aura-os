@@ -29,6 +29,7 @@ export * from './domain/submission';
 export * from './submission-store';
 export * from './in-memory-submission-store';
 export * from './postgres-submission-store';
+export * from './domain/boq-import';
 export * from './domain/clarification';
 export * from './clarification-store';
 export * from './in-memory-clarification-store';

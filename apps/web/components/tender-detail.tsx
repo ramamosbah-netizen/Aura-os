@@ -86,6 +86,8 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
   const [importing, setImporting] = useState(false);
   const [importStep, setImportStep] = useState('');
   const [uploadingExcel, setUploadingExcel] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
 
   // Load BOQ on mount
   useEffect(() => {
@@ -243,22 +245,10 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
     setImporting(true);
     setErr(null);
 
-    const steps = [
-      'Initializing AURA AI Document Intelligence...',
-      'Scanning document layouts & tables...',
-      'Extracting Bill of Quantities hierarchy...',
-      'Parsing item codes, descriptions, units, and quantities...',
-      'Cross-referencing historical MEP cost databases for pricing validations...',
-      'Structuring final BOQ line items...',
-    ];
+    setImportStep('Parsing pasted BOQ lines…');
 
-    for (let i = 0; i < steps.length; i++) {
-      setImportStep(steps[i]);
-      await new Promise((resolve) => setTimeout(resolve, 800));
-    }
-
-    // Mock parsed items from rawText or standard mock if text is empty
-    let parsedItems = [];
+    // Parse pasted CSV/tab lines — what does not parse is reported, never invented.
+    const parsedItems = [];
     if (rawText.trim()) {
       // Simple CSV/tab parser
       const lines = rawText.split('\n');
@@ -278,16 +268,11 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
       }
     }
 
-    // Fallback if no text provided
     if (parsedItems.length === 0) {
-      parsedItems = [
-        { itemCode: '1.1', description: 'Site Mobilization & Temp Facilities', unit: 'LS', quantity: 1, rate: 45000, ifcGuid: null },
-        { itemCode: '1.2.1', description: 'Excavation in soft ground', unit: 'm3', quantity: 1200, rate: 35, ifcGuid: 'IFC-EXT-001' },
-        { itemCode: '1.2.2', description: 'Shoring wall system installation', unit: 'sqm', quantity: 450, rate: 220, ifcGuid: 'IFC-SHOR-99' },
-        { itemCode: '2.1', description: 'C35 Concrete in foundations', unit: 'm3', quantity: 650, rate: 380, ifcGuid: 'IFC-CONC-FND' },
-        { itemCode: '2.2', description: 'High tensile reinforcing steel bars', unit: 'ton', quantity: 48, rate: 4100, ifcGuid: 'IFC-REBAR-48' },
-        { itemCode: '3.1', description: '100mm Blockwork partition walls', unit: 'sqm', quantity: 890, rate: 95, ifcGuid: null },
-      ];
+      setErr('Nothing parseable — paste lines as: code, description, unit, quantity, rate[, ifcGuid]. No data is ever invented.');
+      setImporting(false);
+      setImportStep('');
+      return;
     }
 
     try {
@@ -296,17 +281,17 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           boqId: boq.id,
+          mode: replaceExisting ? 'replace' : 'append',
           items: parsedItems,
         }),
       });
 
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'AI BOQ Import failed');
-      }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || d.error || 'BOQ import failed');
 
       setRawText('');
       setShowImportModal(false);
+      setImportNote(`Imported ${d.items?.length ?? 0} line(s)${d.replaced ? ` (replaced ${d.replaced} existing)` : ''}.`);
       await fetchBOQ();
       router.refresh();
     } catch (e: any) {
@@ -325,18 +310,22 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('boqId', boq.id);
+      formData.append('mode', replaceExisting ? 'replace' : 'append');
 
       const res = await fetch(`/api/tendering/tenders/${tender.id}/boq/upload`, {
         method: 'POST',
         body: formData,
       });
 
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to upload BOQ Excel file');
-      }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || d.error || 'Failed to upload BOQ Excel file');
 
       setShowImportModal(false);
+      setImportNote(
+        `Imported ${d.items?.length ?? 0} line(s) from the sheet (header on row ${d.headerRow})` +
+          (d.replaced ? `, replaced ${d.replaced} existing` : '') +
+          (d.issues?.length ? `. ${d.issues.length} row(s) need attention: ${d.issues.slice(0, 5).map((i: { row: number; problem: string }) => `row ${i.row} — ${i.problem}`).join('; ')}${d.issues.length > 5 ? '…' : ''}` : '.'),
+      );
       await fetchBOQ();
       router.refresh();
     } catch (e: any) {
@@ -401,6 +390,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
       </section>
 
       {err && <div style={s.errorBar}>{err}</div>}
+      {importNote && <div style={{ ...s.errorBar, borderColor: 'var(--good, #10b981)', color: 'var(--good, #10b981)' }}>{importNote}</div>}
 
       {/* BOQ SECTION */}
       <section style={s.boqSection}>
@@ -695,6 +685,10 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
                     <label htmlFor="excel-upload-file-input" style={s.btnAccent}>
                       Select Excel File
                     </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, fontSize: 12.5, color: 'var(--muted)', justifyContent: 'center' }}>
+                      <input type="checkbox" checked={replaceExisting} onChange={(e) => setReplaceExisting(e.target.checked)} />
+                      Replace the existing BOQ (clears current items — their estimates go with them)
+                    </label>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: 'var(--muted)' }}>
@@ -704,8 +698,9 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
                   </div>
 
                   <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-                    Copy-paste raw text from a BOQ PDF/Excel sheet, or click **Run AI Extraction** to simulate 
-                    the structural parsing of the tender document.
+                    Copy-paste raw BOQ lines (code, description, unit, quantity, rate[, ifcGuid]) from a
+                    PDF or spreadsheet — only what parses is imported, nothing is invented. PDF/OCR file
+                    extraction is a later slice.
                   </p>
                   <textarea
                     style={s.textarea}

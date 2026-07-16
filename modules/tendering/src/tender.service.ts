@@ -387,12 +387,33 @@ export class TenderService implements OnModuleInit {
     await this.recalculateTenderValue(tenantId, existing.boqId);
   }
 
+  /**
+   * Bulk-import BOQ items (T5). `replace: true` clears the existing BOQ first — and each
+   * cleared item takes its rate build-up and bid-time source links with it (the T3 no-orphans
+   * rule), because a replaced scope's old estimates describe lines that no longer exist.
+   * Default is append (a second sheet adds to the bill). The tender value recomputes once.
+   */
   async importBOQItems(
     tenantId: string,
     companyId: string | null,
     boqId: Id,
     itemsInput: Array<Omit<NewBOQItem, 'tenantId' | 'companyId' | 'boqId'>>,
-  ): Promise<BOQItem[]> {
+    options: { replace?: boolean } = {},
+  ): Promise<{ items: BOQItem[]; replaced: number }> {
+    let replaced = 0;
+    if (options.replace) {
+      const existing = await this.boqStore.getBOQItems(tenantId, boqId);
+      for (const item of existing) {
+        const buildUp = await this.estimates.getByBoqItem(tenantId, item.id);
+        if (buildUp) {
+          await this.estimates.delete(buildUp.id);
+          await this.estimateSources?.removeByBuildUp(tenantId, buildUp.id);
+        }
+        await this.boqStore.deleteBOQItem(tenantId, item.id);
+      }
+      replaced = existing.length;
+    }
+
     const createdItems: BOQItem[] = [];
     for (const itemInput of itemsInput) {
       const item = makeBOQItem({
@@ -405,7 +426,7 @@ export class TenderService implements OnModuleInit {
       createdItems.push(item);
     }
     await this.recalculateTenderValue(tenantId, boqId);
-    return createdItems;
+    return { items: createdItems, replaced };
   }
 
   /** Recompute the tender's value from its BOQ totals. Public because the estimate engine calls

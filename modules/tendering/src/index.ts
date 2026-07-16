@@ -1,5 +1,6 @@
 // @aura/tendering — the Tendering business module (deal chain: CRM → Tender → …).
 export * from './domain/tender';
+export * from './domain/tender-gate';
 export * from './domain/boq';
 export * from './tender-store';
 export * from './boq-store';

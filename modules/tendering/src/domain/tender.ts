@@ -4,7 +4,25 @@ import { type Id, newId } from '@aura/shared';
 // client opportunity: the second link in the deal chain (CRM → Tender → Contract →
 // Project). It REFERENCES a CRM account by id + a name snapshot — never a DB join.
 
-export type TenderStatus = 'draft' | 'submitted' | 'won' | 'lost';
+// T1 — the governed tender lifecycle (vision §2.2). The old set was `draft/submitted/won/lost`,
+// which let a tender jump straight to `won` with no bid decision, no priced estimate and no
+// submission on record. The intermediate states make those milestones real; the transition
+// invariants that enforce them live in `tender-gate.ts`. `declined` is a terminal no-bid outcome
+// (we chose not to bid) — captured, never deleted, so lessons survive. Old values keep their
+// meaning, so the change is additive for existing rows and consumers.
+export type TenderStatus =
+  | 'draft'        // registered — an invitation/opportunity logged, not yet assessed
+  | 'qualifying'   // under Bid/No-Bid assessment
+  | 'estimating'   // decided to bid (go/conditional) — building the estimate
+  | 'priced'       // the estimate is priced, ready for review/submission
+  | 'submitted'    // the bid has been submitted to the client
+  | 'won'
+  | 'lost'
+  | 'declined';    // decided NOT to bid (no-go) — terminal, kept for the record
+
+export const TENDER_STATUSES: readonly TenderStatus[] = [
+  'draft', 'qualifying', 'estimating', 'priced', 'submitted', 'won', 'lost', 'declined',
+];
 
 export interface Tender {
   id: Id;
@@ -61,11 +79,17 @@ export function makeTender(input: NewTender): Tender {
   };
 }
 
-/** Tendering events on the spine. */
+/** Tendering events on the spine.
+ * `bidDecided` and `priced` are the vision's `estimating.bid.decided` / `estimating.quote.priced`
+ * (§2.2). They keep the `tendering.` prefix every other tender event uses — the schema was never
+ * renamed to `estimating`, and consistency inside the codebase beats matching an aspirational name. */
 export const TENDER_EVENT = {
   created: 'tendering.tender.created',
   updated: 'tendering.tender.updated',
+  bidDecided: 'tendering.tender.bid_decided',
+  priced: 'tendering.tender.priced',
   submitted: 'tendering.tender.submitted',
   awarded: 'tendering.tender.awarded',
   lost: 'tendering.tender.lost',
+  declined: 'tendering.tender.declined',
 } as const;

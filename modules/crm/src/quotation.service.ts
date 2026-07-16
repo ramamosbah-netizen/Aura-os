@@ -94,6 +94,12 @@ export class QuotationService {
     return this.baselines.getByQuotation(tenantId, quotationId);
   }
 
+  /** Every locked baseline for a tenant — one read for the source-to-margin funnel (C5), which
+   * traces contracts back to their deals through the baseline they were priced from. */
+  listBaselines(tenantId: Id, limit = 5000): Promise<CommercialBaseline[]> {
+    return this.baselines.list(tenantId, limit);
+  }
+
   /** Supersede + copy: the old record becomes 'revised', a new draft carries revision+1. */
   async revise(id: Id): Promise<Quotation> {
     const q = await this.store.get(id);

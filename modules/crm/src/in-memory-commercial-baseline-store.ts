@@ -13,6 +13,14 @@ export class InMemoryCommercialBaselineStore implements CommercialBaselineStore 
     const b = this.rows.get(id);
     return b ? { ...b, lines: b.lines.map((l) => ({ ...l })) } : null;
   }
+  async list(tenantId: Id, limit = 5000): Promise<CommercialBaseline[]> {
+    return [...this.rows.values()]
+      .filter((b) => b.tenantId === tenantId)
+      .sort((a, b) => (a.lockedAt < b.lockedAt ? 1 : -1))
+      .slice(0, limit)
+      .map((b) => ({ ...b, lines: b.lines.map((l) => ({ ...l })) }));
+  }
+
   async getByQuotation(tenantId: Id, quotationId: Id): Promise<CommercialBaseline | null> {
     const matches = [...this.rows.values()]
       .filter((b) => b.tenantId === tenantId && b.quotationId === quotationId)

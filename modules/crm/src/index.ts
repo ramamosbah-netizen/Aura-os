@@ -62,4 +62,5 @@ export * from './installed-base.service';
 export * from './lead-conversion.service';
 export * from './attention';
 export * from './my-day';
+export * from './source-funnel';
 export * from './crm.module';

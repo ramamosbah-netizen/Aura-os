@@ -4,11 +4,13 @@ import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Activity, type ActivityType, type ActivityStatus, type ActivityRelatedType,
-  ACTIVITY_RELATED_TYPES, ActivityService,
+  ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, ActivityService,
 } from '@aura/crm';
 
 class CreateActivityDto {
-  @IsString() type!: ActivityType;
+  // G10 — same edge rule as relatedType: a typo'd type would persist and silently vanish from
+  // every type-filtered view. The list is the domain's, so widening the vocabulary is one edit.
+  @IsIn(ACTIVITY_TYPES as readonly string[]) type!: ActivityType;
   @IsString() subject!: string;
   @IsOptional() @IsString() notes?: string;
   // G1: the related-type union is enforced at the edge, not just in TypeScript — a typo'd
@@ -24,7 +26,7 @@ class CreateActivityDto {
 }
 
 class FollowUpDto {
-  @IsString() type!: ActivityType;
+  @IsIn(ACTIVITY_TYPES as readonly string[]) type!: ActivityType;
   @IsString() subject!: string;
   @IsOptional() @IsString() dueDate?: string;
 }
@@ -104,6 +106,16 @@ export class CrmActivitiesController {
       return await this.activities.cancel(id);
     } catch (err) {
       throw new BadRequestException(err instanceof Error ? err.message : 'cancel failed');
+    }
+  }
+
+  /** G11 — begin work on a planned activity (site visits span hours; started ≠ scheduled). */
+  @Post(':id/start')
+  async start(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
+    try {
+      return await this.activities.start(id);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'start failed');
     }
   }
 

@@ -2,7 +2,7 @@ import { apiBase, authHeader } from '@/lib/api';
 
 // BFF: activity workflow actions — complete / cancel / reopen.
 
-const ACTIONS = new Set(['complete', 'cancel', 'reopen']);
+const ACTIONS = new Set(['complete', 'cancel', 'reopen', 'start']);
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; action: string }> }): Promise<Response> {
   const { id, action } = await params;

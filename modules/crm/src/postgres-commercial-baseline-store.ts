@@ -72,6 +72,14 @@ export class PostgresCommercialBaselineStore implements CommercialBaselineStore 
     return res.rows.length ? rowTo(res.rows[0]) : null;
   }
 
+  async list(tenantId: Id, limit = 5000): Promise<CommercialBaseline[]> {
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_commercial_baselines
+       WHERE tenant_id = $1 ORDER BY locked_at DESC LIMIT $2`,
+      [tenantId, limit]);
+    return res.rows.map(rowTo);
+  }
+
   async getByQuotation(tenantId: Id, quotationId: Id): Promise<CommercialBaseline | null> {
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_crm_commercial_baselines

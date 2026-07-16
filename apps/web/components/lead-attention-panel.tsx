@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
 type Gap =
-  | 'UNASSIGNED' | 'SLA_BREACHED' | 'NO_NEXT_ACTIVITY'
+  | 'UNASSIGNED' | 'ASSIGNMENT_NOT_ACCEPTED' | 'SLA_BREACHED' | 'NO_NEXT_ACTIVITY'
   | 'FOLLOW_UP_OVERDUE' | 'STALE' | 'QUALIFICATION_STALLED';
 
 interface Row {
@@ -21,6 +21,7 @@ interface Row {
   source: string | null;
   assignedTo: string | null;
   assignedToMe: boolean;
+  accepted: boolean;
   ageDays: number;
   lastActivityIso: string | null;
   nextActivityDueIso: string | null;
@@ -54,6 +55,7 @@ type View = 'all' | 'mine' | 'attention' | 'nurture' | 'converted' | 'disqualifi
 
 const GAP_LABEL: Record<Gap, string> = {
   UNASSIGNED: 'Unassigned',
+  ASSIGNMENT_NOT_ACCEPTED: 'Not accepted',
   SLA_BREACHED: 'SLA breached',
   NO_NEXT_ACTIVITY: 'No next activity',
   FOLLOW_UP_OVERDUE: 'Follow-up overdue',
@@ -183,6 +185,15 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
                   <span style={st.status}>{r.status}</span>
                   <span>· {r.ageDays}d old</span>
                   <span>· {r.assignedTo ? (r.assignedToMe ? 'mine' : 'assigned') : 'unassigned'}</span>
+                  {/* G9 — routing isn't ownership until the assignee says "I have it". */}
+                  {r.assignedToMe && !r.accepted && (
+                    <button
+                      style={st.acceptBtn}
+                      onClick={() => void fetch(`/api/crm/leads/${r.id}/accept`, { method: 'POST' }).then(() => router.refresh())}
+                    >
+                      ✓ Accept
+                    </button>
+                  )}
                   {/* Score and confidence always travel together: 90/100 from one rated dimension
                       is not the same fact as 90 from eight, and must never look identical. */}
                   {r.qualification && r.qualification.coverage.rated > 0 && (
@@ -305,6 +316,7 @@ function ConvertControl({
 const st = {
   /** The qualification verdict, hoverable for the reasons — a number nobody can interrogate gets ignored. */
   qual: { fontWeight: 700, cursor: 'help' } as CSSProperties,
+  acceptBtn: { fontSize: 11, padding: '1px 8px', borderRadius: 5, border: '1px solid var(--good)', background: 'transparent', color: 'var(--good)', cursor: 'pointer' } as CSSProperties,
   unassessed: { color: 'var(--muted)', fontStyle: 'italic' } as CSSProperties,
   panel: { border: '1px solid var(--border)', borderRadius: 10, background: 'var(--panel)', padding: 16, marginBottom: 22 } as CSSProperties,
   head: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,

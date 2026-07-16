@@ -7,6 +7,7 @@
 // shared domain predicates (leadAttention, opportunityAttention) can reuse it without a
 // module dependency; re-exported here so existing '@aura/crm' consumers are unchanged.
 export { daysSince, hoursSince, isQuiet } from '@aura/shared';
+import { isLiveActivity } from './domain/activity';
 
 /** One shared threshold set (days). Change here, change everywhere. */
 export const ATTENTION_THRESHOLDS = {
@@ -67,7 +68,7 @@ export interface NextOpenActivity {
 export function nextOpenActivityByRecord(activities: OpenActivityCandidate[]): Map<string, NextOpenActivity> {
   const m = new Map<string, NextOpenActivity>();
   for (const a of activities) {
-    if (!a.relatedId || a.status !== 'open') continue;
+    if (!a.relatedId || !isLiveActivity(a.status)) continue; // in-progress work is still the next action
     const prev = m.get(a.relatedId);
     if (!prev) {
       m.set(a.relatedId, { subject: a.subject, dueIso: a.dueDate, assigneeId: a.assigneeId });

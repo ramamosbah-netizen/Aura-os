@@ -29,6 +29,9 @@ export const NAV: NavGroup[] = [
   {
     title: 'CRM',
     items: [
+      // First, because it is where the day starts. Not a sixth entity page — the locked CRM IA is
+      // about where records LIVE; this is a view onto records that live elsewhere.
+      { label: 'My Day', href: '/crm/my-day', glyph: '◐', desc: 'My meetings, work, leads & deals today' },
       { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'CRM — customers & prospects' },
       { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People at each account' },
       { label: 'Sales Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'CRM — leads & opportunities' },

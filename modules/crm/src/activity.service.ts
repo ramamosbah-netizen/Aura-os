@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
-import { CRM_ACTIVITY_EVENT, type Activity, type NewActivity, cancelActivity, completeActivity, makeActivity, reopenActivity } from './domain/activity';
+import { CRM_ACTIVITY_EVENT, type Activity, type NewActivity, cancelActivity, completeActivity, makeActivity, reopenActivity, startActivity } from './domain/activity';
 import { CRM_ACTIVITY_STORE, type ActivityFilter, type ActivityStore } from './activity-store';
 
 /**
@@ -41,6 +41,16 @@ export class ActivityService {
     const updated = cancelActivity(existing);
     await this.store.save(updated);
     this.logger.log(`Activity cancelled: ${updated.subject} (${id})`);
+    return updated;
+  }
+
+  /** G11 — begin work: open → in_progress, stamping startedAt. */
+  async start(id: Id): Promise<Activity> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`activity ${id} not found`);
+    const updated = startActivity(existing);
+    await this.store.save(updated);
+    this.logger.log(`Activity started: ${updated.subject} (${id})`);
     return updated;
   }
 

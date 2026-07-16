@@ -40,7 +40,36 @@ const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as con
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-type View = 'command' | 'board' | 'analytics' | 'list' | 'activities';
+type View = 'command' | 'board' | 'analytics' | 'sources' | 'list' | 'activities';
+
+/** C5 / G15 (§29) — Source → Wins → Contract Value → Actual Margin. Every money field names the
+ * subset it was measured over; nulls mean "not measured yet", never zero. */
+interface SourceMargin {
+  source: string;
+  opportunities: number;
+  won: number;
+  wonValue: number;
+  lost: number;
+  open: number;
+  winRate: number | null;
+  contractValue: number;
+  contracted: number;
+  measured: number;
+  measuredRevenue: number;
+  actualCost: number | null;
+  actualMargin: number | null;
+  marginPercent: number | null;
+  measurementNote: string;
+}
+interface SourceFunnel {
+  sources: SourceMargin[];
+  totals: {
+    opportunities: number; won: number; wonValue: number; contractValue: number;
+    measured: number; measuredRevenue: number; actualCost: number | null;
+    actualMargin: number | null; marginPercent: number | null;
+  };
+  coverage: { wonNotContracted: number; contractedNotMeasured: number; measuredPercent: number | null };
+}
 
 interface PipelineCommand {
   kpis: { openDeals: number; openValue: number; weighted: number; avgDealSize: number; avgAgeDays: number; winRate: number | null; won90: number; wonValue90: number; lost90: number };
@@ -75,6 +104,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [command, setCommand] = useState<PipelineCommand | null>(null);
   const [fcast, setFcast] = useState<ForecastHistory | null>(null);
+  const [funnel, setFunnel] = useState<SourceFunnel | null>(null);
 
   useEffect(() => {
     if ((view !== 'command' && view !== 'analytics') || command) return;
@@ -90,6 +120,14 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       .then((d) => setFcast(d))
       .catch(() => setFcast(null));
   };
+  useEffect(() => {
+    if (view !== 'sources' || funnel) return;
+    void fetch('/api/crm/source-funnel', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setFunnel(d))
+      .catch(() => setFunnel(null));
+  }, [view, funnel]);
+
   useEffect(() => {
     if (view !== 'analytics' || fcast) return;
     loadForecast();
@@ -288,7 +326,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
 
       {/* view switch + creates */}
       <div style={s.tabBar}>
-        {(['command', 'board', 'analytics', 'list', 'activities'] as View[]).map((v) => (
+        {(['command', 'board', 'analytics', 'sources', 'list', 'activities'] as View[]).map((v) => (
           <button key={v} type="button" style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
             {v === 'command' ? 'Overview' : v[0].toUpperCase() + v.slice(1)}
           </button>
@@ -523,6 +561,88 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                     <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{money(d.value)} · {d.daysSinceActivity === null ? 'never touched' : `quiet ${d.daysSinceActivity}d`}</span>
                   </div>
                 ))
+              )}
+            </section>
+          </div>
+        )
+      )}
+
+      {/* ── SOURCES → MARGIN (C5 / G15, §29) ── */}
+      {view === 'sources' && (
+        funnel === null ? <p style={s.muted}>Loading the source funnel…</p> : (
+          <div style={s.cmdGrid}>
+            <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
+              <div style={s.cmdTitle}>Source → Wins → Contract Value → Actual Margin</div>
+              <p style={s.muted}>
+                Margin is only ever computed over deals that were <strong>won, contracted, delivered
+                and costed</strong>. A win that hasn&apos;t been delivered yet has no margin — which is
+                not the same as a margin of zero, so it reads &ldquo;—&rdquo; and says why.
+              </p>
+              <div style={{ ...s.cmdKpiRow, marginTop: 10 }}>
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Won</span>
+                  <span style={s.kpiVal}>{funnel.totals.won} · {money(funnel.totals.wonValue)}</span>
+                </div>
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Contract value</span>
+                  <span style={s.kpiVal}>{money(funnel.totals.contractValue)}</span>
+                </div>
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Actual margin</span>
+                  <span style={{ ...s.kpiVal, color: 'var(--accent)' }}>
+                    {funnel.totals.actualMargin === null ? '—' : money(funnel.totals.actualMargin)}
+                    {funnel.totals.marginPercent !== null && ` · ${funnel.totals.marginPercent}%`}
+                  </span>
+                </div>
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Margin covers</span>
+                  <span style={s.kpiVal}>
+                    {funnel.coverage.measuredPercent === null ? '—' : `${funnel.coverage.measuredPercent}% of wins`}
+                  </span>
+                </div>
+              </div>
+              {(funnel.coverage.wonNotContracted > 0 || funnel.coverage.contractedNotMeasured > 0) && (
+                <p style={{ ...s.muted, marginTop: 8 }}>
+                  Not yet measurable: {funnel.coverage.wonNotContracted} win(s) without a contract
+                  {' · '}{funnel.coverage.contractedNotMeasured} contract(s) with no recorded cost.
+                </p>
+              )}
+            </section>
+
+            <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
+              <div style={s.cmdTitle}>By source</div>
+              {funnel.sources.length === 0 ? <p style={s.muted}>No deals yet — nothing to attribute.</p> : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead>
+                      <tr>
+                        {['Source', 'Deals', 'Won', 'Win rate', 'Contract value', 'Measured on', 'Actual cost', 'Actual margin', ''].map((h) => (
+                          <th key={h} style={s.cmdTh}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {funnel.sources.map((r) => (
+                        <tr key={r.source}>
+                          <td style={s.cmdTd}>
+                            {r.source === 'unknown' ? <span style={{ color: 'var(--muted)' }}>Unattributed</span> : r.source.replace(/_/g, ' ')}
+                          </td>
+                          <td style={s.cmdTd}>{r.opportunities} · {r.open} open</td>
+                          <td style={s.cmdTd}>{r.won} · {money(r.wonValue)}</td>
+                          <td style={s.cmdTd}>{r.winRate === null ? '—' : `${r.winRate}%`}</td>
+                          <td style={s.cmdTd}>{r.contractValue > 0 ? money(r.contractValue) : '—'}</td>
+                          {/* The revenue the margin is a margin ON — never the full won value. */}
+                          <td style={s.cmdTd}>{r.measured > 0 ? `${r.measured} of ${r.won} · ${money(r.measuredRevenue)}` : '—'}</td>
+                          <td style={s.cmdTd}>{r.actualCost === null ? '—' : money(r.actualCost)}</td>
+                          <td style={{ ...s.cmdTd, fontWeight: 700, color: r.actualMargin === null ? 'var(--muted)' : r.actualMargin < 0 ? 'var(--bad)' : 'var(--accent)' }}>
+                            {r.actualMargin === null ? '—' : `${money(r.actualMargin)}${r.marginPercent === null ? '' : ` · ${r.marginPercent}%`}`}
+                          </td>
+                          <td style={{ ...s.cmdTd, color: 'var(--muted)', fontSize: 11 }}>{r.measurementNote}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </section>
           </div>

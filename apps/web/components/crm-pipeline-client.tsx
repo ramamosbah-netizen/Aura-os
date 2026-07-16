@@ -40,7 +40,7 @@ const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as con
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-type View = 'command' | 'board' | 'analytics' | 'sources' | 'list' | 'activities';
+type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list' | 'activities';
 
 /** C5 / G15 (§29) — Source → Wins → Contract Value → Actual Margin. Every money field names the
  * subset it was measured over; nulls mean "not measured yet", never zero. */
@@ -61,6 +61,24 @@ interface SourceMargin {
   marginPercent: number | null;
   measurementNote: string;
 }
+/** C6 (§7 exec) — why we win, why we lose, and how exposed the book is. Deliberately does NOT
+ * repeat owner performance: the Overview tab owns that, and one owner may not have two win rates. */
+interface ReasonRow { reason: string | null; deals: number; value: number; percent: number }
+interface ExecutiveCrm {
+  period: { days: number; from: string };
+  decided: { won: number; lost: number; wonValue: number; lostValue: number; winRate: number | null; valueWinRate: number | null };
+  winReasons: ReasonRow[];
+  lossReasons: ReasonRow[];
+  competitors: Array<{ name: string; lostDeals: number; lostValue: number }>;
+  concentration: {
+    top: Array<{ accountId: string; accountName: string; wonValue: number; percent: number }>;
+    topAccountPercent: number | null;
+    topThreePercent: number | null;
+    accounts: number;
+  };
+  coverage: { winsWithoutReason: number; lossesWithoutReason: number; decidedWithoutAccount: number };
+}
+
 interface SourceFunnel {
   sources: SourceMargin[];
   totals: {
@@ -105,6 +123,8 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [command, setCommand] = useState<PipelineCommand | null>(null);
   const [fcast, setFcast] = useState<ForecastHistory | null>(null);
   const [funnel, setFunnel] = useState<SourceFunnel | null>(null);
+  const [execDays, setExecDays] = useState(365);
+  const [execData, setExecData] = useState<ExecutiveCrm | null>(null);
 
   useEffect(() => {
     if ((view !== 'command' && view !== 'analytics') || command) return;
@@ -120,6 +140,15 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       .then((d) => setFcast(d))
       .catch(() => setFcast(null));
   };
+  useEffect(() => {
+    if (view !== 'executive') return;
+    setExecData(null);
+    void fetch(`/api/crm/executive?days=${execDays}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setExecData(d))
+      .catch(() => setExecData(null));
+  }, [view, execDays]);
+
   useEffect(() => {
     if (view !== 'sources' || funnel) return;
     void fetch('/api/crm/source-funnel', { cache: 'no-store' })
@@ -326,7 +355,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
 
       {/* view switch + creates */}
       <div style={s.tabBar}>
-        {(['command', 'board', 'analytics', 'sources', 'list', 'activities'] as View[]).map((v) => (
+        {(['command', 'board', 'analytics', 'sources', 'executive', 'list', 'activities'] as View[]).map((v) => (
           <button key={v} type="button" style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
             {v === 'command' ? 'Overview' : v[0].toUpperCase() + v.slice(1)}
           </button>
@@ -563,6 +592,146 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 ))
               )}
             </section>
+          </div>
+        )
+      )}
+
+      {/* ── EXECUTIVE (C6, §7) ── */}
+      {view === 'executive' && (
+        execData === null ? <p style={s.muted}>Loading the executive read…</p> : (
+          <div style={s.cmdGrid}>
+            <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <div style={s.cmdTitle}>Decided in the last {execData.period.days} days</div>
+                <div style={{ flex: 1 }} />
+                {[90, 365, 730].map((d) => (
+                  <button key={d} type="button" style={execDays === d ? s.tabActive : s.tab} onClick={() => setExecDays(d)}>
+                    {d === 365 ? '1 year' : d === 730 ? '2 years' : '90 days'}
+                  </button>
+                ))}
+              </div>
+              <div style={s.cmdKpiRow}>
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Won</span>
+                  <span style={s.kpiVal}>{execData.decided.won} · {money(execData.decided.wonValue)}</span>
+                </div>
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Lost</span>
+                  <span style={s.kpiVal}>{execData.decided.lost} · {money(execData.decided.lostValue)}</span>
+                </div>
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Win rate (deals)</span>
+                  <span style={s.kpiVal}>{execData.decided.winRate === null ? '—' : `${execData.decided.winRate}%`}</span>
+                </div>
+                {/* Winning the small ones is not winning — the value rate is the honest second number. */}
+                <div style={s.cmdKpi}>
+                  <span style={s.kpiLabel}>Win rate (value)</span>
+                  <span style={{ ...s.kpiVal, color: 'var(--accent)' }}>
+                    {execData.decided.valueWinRate === null ? '—' : `${execData.decided.valueWinRate}%`}
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Why we win</div>
+              {execData.winReasons.length === 0 ? <p style={s.muted}>Nothing won in this window.</p> : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr>{['Reason', 'Deals', 'Value'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {execData.winReasons.map((r) => (
+                      <tr key={r.reason ?? 'unrecorded'}>
+                        <td style={s.cmdTd}>
+                          {r.reason ?? <span style={{ color: 'var(--bad)' }}>not recorded</span>}
+                        </td>
+                        <td style={s.cmdTd}>{r.deals} · {r.percent}%</td>
+                        <td style={s.cmdTd}>{money(r.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Why we lose</div>
+              {execData.lossReasons.length === 0 ? <p style={s.muted}>Nothing lost in this window.</p> : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr>{['Reason', 'Deals', 'Value'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {execData.lossReasons.map((r) => (
+                      <tr key={r.reason ?? 'unrecorded'}>
+                        <td style={s.cmdTd}>
+                          {r.reason ?? <span style={{ color: 'var(--bad)' }}>not recorded</span>}
+                        </td>
+                        <td style={s.cmdTd}>{r.deals} · {r.percent}%</td>
+                        <td style={s.cmdTd}>{money(r.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Named on deals we lost</div>
+              {execData.competitors.length === 0 ? <p style={s.muted}>No competitors named on any loss.</p> : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr>{['Competitor', 'Losses', 'Value'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {execData.competitors.map((c) => (
+                      <tr key={c.name}>
+                        <td style={s.cmdTd}>{c.name}</td>
+                        <td style={s.cmdTd}>{c.lostDeals}</td>
+                        <td style={s.cmdTd}>{money(c.lostValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p style={{ ...s.muted, padding: '8px 0 0', fontSize: 11 }}>
+                Being named on a loss isn&apos;t proof they won it — it&apos;s who we said we were up against.
+              </p>
+            </section>
+
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Revenue concentration</div>
+              {execData.concentration.top.length === 0 ? <p style={s.muted}>Nothing won in this window.</p> : (
+                <>
+                  <p style={{ ...s.muted, padding: '0 0 8px' }}>
+                    Top client is <strong>{execData.concentration.topAccountPercent}%</strong> of won value
+                    {execData.concentration.topThreePercent !== null && `; top 3 are ${execData.concentration.topThreePercent}%`}
+                    {' '}across {execData.concentration.accounts} account{execData.concentration.accounts === 1 ? '' : 's'}.
+                  </p>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead><tr>{['Account', 'Won', 'Share'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {execData.concentration.top.map((t) => (
+                        <tr key={t.accountId}>
+                          <td style={s.cmdTd}>{t.accountName}</td>
+                          <td style={s.cmdTd}>{money(t.wonValue)}</td>
+                          <td style={{ ...s.cmdTd, fontWeight: 700 }}>{t.percent}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </section>
+
+            {(execData.coverage.winsWithoutReason > 0 ||
+              execData.coverage.lossesWithoutReason > 0 ||
+              execData.coverage.decidedWithoutAccount > 0) && (
+              <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
+                <div style={s.cmdTitle}>What this read could not see</div>
+                <p style={{ ...s.muted, padding: 0 }}>
+                  {execData.coverage.winsWithoutReason} win(s) and {execData.coverage.lossesWithoutReason} loss(es)
+                  carry no recorded reason{execData.coverage.decidedWithoutAccount > 0 &&
+                    `; ${execData.coverage.decidedWithoutAccount} decided deal(s) have no account, so they cannot enter the concentration table`}.
+                  {' '}The percentages above are honest about the deals they can see — these are the ones they cannot.
+                </p>
+              </section>
+            )}
           </div>
         )
       )}

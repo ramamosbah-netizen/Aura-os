@@ -3,7 +3,7 @@ import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService } from '@aura/tendering';
+import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
 import * as xlsx from 'xlsx';
 
 class CreateTenderDto {
@@ -301,86 +301,63 @@ export class TenderingController {
     return this.tenders.deleteBOQItem(ctx.tenantId, itemId);
   }
 
+  /** JSON bulk import (the paste-text path). `mode: 'replace'` clears the existing BOQ first. */
   @Post(':id/boq/import')
   async importBOQ(
     @Param('id', ParseUuidOr404Pipe) id: string,
-    @Body() dto: { boqId: string; items: Array<{ itemCode: string; description: string; unit: string; quantity: number; rate: number; ifcGuid?: string }> },
-  ): Promise<BOQItem[]> {
+    @Body() dto: { boqId: string; mode?: 'append' | 'replace'; items: Array<{ itemCode: string; description: string; unit: string; quantity: number; rate: number; ifcGuid?: string }> },
+  ): Promise<{ items: BOQItem[]; replaced: number }> {
     if (!dto.boqId) throw new BadRequestException('boqId is required');
-    if (!Array.isArray(dto.items)) throw new BadRequestException('items must be an array');
+    if (!Array.isArray(dto.items) || dto.items.length === 0) throw new BadRequestException('items must be a non-empty array');
+    if (dto.mode !== undefined && dto.mode !== 'append' && dto.mode !== 'replace') {
+      throw new BadRequestException("mode must be 'append' or 'replace'");
+    }
 
     const ctx = this.tenant.get();
-    return this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, dto.boqId, dto.items);
+    return this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, dto.boqId, dto.items, { replace: dto.mode === 'replace' });
   }
 
+  /**
+   * T5 — Excel BOQ import. The workbook's first sheet is parsed by the domain parser
+   * (header-row scan, synonym columns, cleaned numbers, per-row issues — see
+   * `domain/boq-import.ts`). `dryRun=true` returns the parse WITHOUT importing (the preview);
+   * `mode=replace` clears the existing BOQ first (each cleared item takes its build-up along).
+   */
   @Post(':id/boq/upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadBOQ(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body('boqId') boqId: string,
-    @UploadedFile() file: any,
-  ): Promise<BOQItem[]> {
+    @Body('mode') mode: string | undefined,
+    @Body('dryRun') dryRun: string | undefined,
+    @UploadedFile() file: { buffer: Buffer } | undefined,
+  ): Promise<{ items: BOQItem[]; replaced: number; issues: BoqImportResult['issues']; headerRow: number } | (BoqImportResult & { dryRun: true })> {
     if (!file) throw new BadRequestException('file is required');
     if (!boqId) throw new BadRequestException('boqId is required');
+    if (mode !== undefined && mode !== 'append' && mode !== 'replace') {
+      throw new BadRequestException("mode must be 'append' or 'replace'");
+    }
 
+    let parsed: BoqImportResult;
     try {
       const workbook = xlsx.read(file.buffer, { type: 'buffer' });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const rows = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
-
-      if (rows.length < 2) {
-        throw new BadRequestException('Spreadsheet is empty or has no data rows');
-      }
-
-      const headers = (rows[0] as any[]).map(h => String(h || '').trim().toLowerCase());
-      
-      const colIdx = {
-        itemCode: headers.findIndex(h => h.includes('code') || h.includes('item') || h.includes('no.')),
-        description: headers.findIndex(h => h.includes('desc') || h.includes('particular') || h.includes('title')),
-        unit: headers.findIndex(h => h.includes('unit')),
-        quantity: headers.findIndex(h => h.includes('qty') || h.includes('quant')),
-        rate: headers.findIndex(h => h.includes('rate') || h.includes('price')),
-        ifcGuid: headers.findIndex(h => h.includes('guid') || h.includes('ifc')),
-      };
-
-      if (colIdx.itemCode === -1 || colIdx.description === -1 || colIdx.unit === -1 || colIdx.quantity === -1 || colIdx.rate === -1) {
-        throw new BadRequestException('Could not detect necessary columns: Code, Description, Unit, Quantity, and Rate must be present.');
-      }
-
-      const items: Array<{ itemCode: string; description: string; unit: string; quantity: number; rate: number; ifcGuid?: string }> = [];
-
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-
-        const itemCode = String(row[colIdx.itemCode] || '').trim();
-        const description = String(row[colIdx.description] || '').trim();
-        const unit = String(row[colIdx.unit] || '').trim();
-        const quantityVal = row[colIdx.quantity];
-        const rateVal = row[colIdx.rate];
-        const ifcGuidVal = colIdx.ifcGuid !== -1 ? row[colIdx.ifcGuid] : null;
-
-        if (!itemCode && !description) continue;
-
-        const quantity = parseFloat(quantityVal) || 0;
-        const rate = parseFloat(rateVal) || 0;
-        const ifcGuid = ifcGuidVal ? String(ifcGuidVal).trim() : undefined;
-
-        items.push({
-          itemCode,
-          description,
-          unit,
-          quantity,
-          rate,
-          ifcGuid,
-        });
-      }
-
-      const ctx = this.tenant.get();
-      return this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, boqId, items);
-    } catch (err: any) {
-      throw new BadRequestException(err.message || 'Failed to parse Excel file');
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) throw new Error('the workbook has no sheets — an .xlsx file with at least one sheet is required');
+      const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+      parsed = parseBoqRows(rows);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'Failed to parse the Excel file');
     }
+    if (parsed.items.length === 0) {
+      throw new BadRequestException(
+        `no importable rows found (header on row ${parsed.headerRow}; ${parsed.issues.length} issue(s): ${parsed.issues.slice(0, 3).map((i) => `row ${i.row} — ${i.problem}`).join('; ')})`,
+      );
+    }
+
+    if (dryRun === 'true') return { ...parsed, dryRun: true };
+
+    const ctx = this.tenant.get();
+    const result = await this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, boqId, parsed.items, { replace: mode === 'replace' });
+    return { ...result, issues: parsed.issues, headerRow: parsed.headerRow };
   }
 }

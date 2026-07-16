@@ -174,6 +174,19 @@ export class CrmOpportunitiesController {
     return this.opportunities.update(id, patch as Parameters<typeof this.opportunities.update>[1], ctx.actorId, evidence);
   }
 
+  /** §14 — merge Win Plan fields (unknown keys dropped, whitespace → null); returns derived,
+   * size-aware coverage. Never a gate: small deals legitimately carry a two-line plan. */
+  @Patch(':id/win-plan')
+  async winPlan(@Param('id', ParseUuidOr404Pipe) id: string, @Body() patch: Record<string, string | null>) {
+    try {
+      return await this.opportunities.updateWinPlan(id, patch ?? {});
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
+  }
+
   @Post(':id/forecast')
   forecast(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ winProbability: number; reason: string }> {
     return this.opportunities.forecastWinProbability(id);

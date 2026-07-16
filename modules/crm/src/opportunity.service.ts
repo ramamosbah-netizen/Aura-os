@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AiService } from '@aura/core';
-import { CRM_EVENT, type Opportunity, type OpportunityStage, type NewOpportunity, makeOpportunity } from '@aura/shared';
+import { CRM_EVENT, type Opportunity, type OpportunityStage, type NewOpportunity, makeOpportunity, mergeWinPlan, winPlanCoverage, type WinPlan, type WinPlanCoverage } from '@aura/shared';
 import {
   type PursuitDecision, type PursuitDimensions, scorePursuit, CRM_JOURNEY_EVENT,
   checkStageTransition, stageGateMessage, type StageEvidence,
@@ -52,6 +52,20 @@ export class OpportunityService {
 
     this.logger.log(`Opportunity created: ${opportunity.title} (${opportunity.id})`);
     return opportunity;
+  }
+
+  /**
+   * §14 — merge a Win Plan patch (only known keys survive, whitespace → null) and return the
+   * updated deal with the derived coverage. Coverage is judged against deal SIZE: a small deal
+   * with the need and the play recorded reads complete; a strategic one expects the full plan.
+   */
+  async updateWinPlan(id: Id, patch: Partial<Record<keyof WinPlan, string | null>>): Promise<{ opportunity: Opportunity; coverage: WinPlanCoverage }> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`Opportunity ${id} not found`);
+    const updated: Opportunity = { ...existing, winPlan: mergeWinPlan(existing.winPlan, patch), updatedAt: new Date().toISOString() };
+    await this.store.update(updated);
+    this.logger.log(`Win plan updated: ${updated.title} (${updated.id})`);
+    return { opportunity: updated, coverage: winPlanCoverage(updated.winPlan, updated.value) };
   }
 
   async update(

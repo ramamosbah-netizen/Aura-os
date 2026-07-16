@@ -142,6 +142,9 @@ export interface Opportunity {
   pursuitDecidedAt: string | null;
   /** The per-dimension assessment (strategicFit, winability, …) behind the score. */
   pursuitDimensions: PursuitDimensions | null;
+  /** §14 — the deal STRATEGY (need, criteria, differentiation, win strategy, …). All optional;
+   * coverage is derived per read against deal size (winPlanCoverage), never stored or gated. */
+  winPlan: import('./win-plan').WinPlan | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -417,6 +420,7 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     pursuitDecidedBy: null,
     pursuitDecidedAt: null,
     pursuitDimensions: null,
+    winPlan: null,
     createdAt: now,
     updatedAt: now,
   };

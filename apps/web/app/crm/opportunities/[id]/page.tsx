@@ -4,6 +4,7 @@ import RecordChrome from '../../../../components/record-chrome';
 import Opportunity360Client from '../../../../components/opportunity-360-client';
 import BuyingJourneyPanel from '../../../../components/buying-journey-panel';
 import DealDepthPanel from '../../../../components/deal-depth-panel';
+import WinPlanPanel from '../../../../components/win-plan-panel';
 import PreAwardPanel from '../../../../components/pre-award-panel';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
       <Opportunity360Client opportunityId={opp.id} />
       <PreAwardPanel opportunityId={opp.id} />
       <BuyingJourneyPanel opportunityId={opp.id} />
+      <WinPlanPanel opportunityId={opp.id} />
       <DealDepthPanel opportunityId={opp.id} />
     </div>
   );

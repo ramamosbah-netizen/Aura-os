@@ -35,12 +35,13 @@ interface OppRow {
   pursuit_decided_by: string | null;
   pursuit_decided_at: Date | null;
   pursuit_dimensions: PursuitDimensions | null;
+  win_plan: Opportunity['winPlan'];
   close_date: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
-const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, forecast_category, close_date, requires_tender, owner_id, next_action, next_action_due_date, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, win_reason, buying_stage, pursuit_decision, pursuit_score, pursuit_rationale, pursuit_decided_by, pursuit_decided_at, pursuit_dimensions, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, forecast_category, close_date, requires_tender, owner_id, next_action, next_action_due_date, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, win_reason, buying_stage, pursuit_decision, pursuit_score, pursuit_rationale, pursuit_decided_by, pursuit_decided_at, pursuit_dimensions, win_plan, created_at, updated_at';
 
 function rowToOpportunity(r: OppRow): Opportunity {
   return {
@@ -74,6 +75,7 @@ function rowToOpportunity(r: OppRow): Opportunity {
     pursuitDecidedBy: r.pursuit_decided_by,
     pursuitDecidedAt: r.pursuit_decided_at ? r.pursuit_decided_at.toISOString() : null,
     pursuitDimensions: r.pursuit_dimensions,
+    winPlan: r.win_plan ?? null,
     closeDate: r.close_date ? r.close_date.toISOString() : null,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
@@ -100,12 +102,13 @@ export class PostgresOpportunityStore implements OpportunityStore {
               budget_confirmed = $12, authority_confirmed = $13, need_confirmed = $14, timeline_confirmed = $15,
               competitors = $16, source = $17, loss_reason = $18, next_action_due_date = $19,
               buying_stage = $20, pursuit_decision = $21, pursuit_score = $22, pursuit_rationale = $23,
-              pursuit_decided_by = $24, pursuit_decided_at = $25, pursuit_dimensions = $26, win_reason = $27, updated_at = now()
+              pursuit_decided_by = $24, pursuit_decided_at = $25, pursuit_dimensions = $26, win_reason = $27, win_plan = $29, updated_at = now()
         WHERE id = $1`,
       [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate, o.accountId, o.accountName, o.requiresTender, o.ownerId, o.nextAction,
        o.budgetConfirmed, o.authorityConfirmed, o.needConfirmed, o.timelineConfirmed, o.competitors, o.source, o.lossReason, o.nextActionDueDate,
        o.buyingStage, o.pursuitDecision, o.pursuitScore, o.pursuitRationale, o.pursuitDecidedBy, o.pursuitDecidedAt,
-       o.pursuitDimensions ? JSON.stringify(o.pursuitDimensions) : null, o.winReason, o.forecastCategory],
+       o.pursuitDimensions ? JSON.stringify(o.pursuitDimensions) : null, o.winReason, o.forecastCategory,
+       o.winPlan ? JSON.stringify(o.winPlan) : null],
     );
   }
 
@@ -113,7 +116,7 @@ export class PostgresOpportunityStore implements OpportunityStore {
     return executor.query(
       // Positional against COLS: adding a column here without adding its $N and its param writes
       // every following value into the wrong column. All three edit together, always.
-      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)`,
+      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)`,
       [
         o.id,
         o.tenantId,
@@ -146,6 +149,7 @@ export class PostgresOpportunityStore implements OpportunityStore {
         o.pursuitDecidedBy,
         o.pursuitDecidedAt,
         o.pursuitDimensions ? JSON.stringify(o.pursuitDimensions) : null,
+        o.winPlan ? JSON.stringify(o.winPlan) : null,
         o.createdAt,
         o.updatedAt,
       ],

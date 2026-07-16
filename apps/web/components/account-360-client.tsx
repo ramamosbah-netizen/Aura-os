@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 import Timeline from './timeline';
 import RelationshipGraphPanel from './relationship-graph-panel';
+import InstalledBasePanel from './installed-base-panel';
 
 // Account 360 — the customer COMMAND CENTER. The Account is the persistent
 // commercial party every deal revolves around (the hub, not the first step).
@@ -352,6 +353,12 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             <div style={st.oCard}>
               <div style={st.oTitle}>Related Parties</div>
               <RelationshipGraphPanel accountId={a.id} />
+            </div>
+
+            {/* §26 — what the customer HAS, whose it is, and what to sell next */}
+            <div style={{ ...st.oCard, gridColumn: '1 / -1' }}>
+              <div style={st.oTitle}>Installed Base &amp; White Space</div>
+              <InstalledBasePanel accountId={a.id} />
             </div>
 
             {/* Key contacts */}

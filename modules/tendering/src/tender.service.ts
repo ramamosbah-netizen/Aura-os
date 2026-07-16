@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
@@ -9,6 +9,7 @@ import { BOQ_STORE, type BOQStore } from './boq-store';
 import { BID_SCORE_STORE, type BidScoreStore } from './bid-score-store';
 import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
 import { SUBMISSION_STORE, type SubmissionStore } from './submission-store';
+import { ESTIMATE_SOURCE_STORE, type EstimateSourceStore } from './estimate-source-store';
 import { type BOQ, type BOQItem, makeBOQ, makeBOQItem, type NewBOQItem } from './domain/boq';
 
 const CREATE_TENDER = 'tendering.tender.create';
@@ -39,6 +40,9 @@ export class TenderService implements OnModuleInit {
     private readonly commands: CommandBus,
     private readonly numbering: NumberingService,
     private readonly audit: AuditService,
+    // T3 — deleting a BOQ item takes its build-up along; the build-up's bid-time source links go
+    // with it. Optional (and LAST) so directly-constructed test services need not supply it.
+    @Optional() @Inject(ESTIMATE_SOURCE_STORE) private readonly estimateSources: EstimateSourceStore | null = null,
   ) {}
 
   onModuleInit(): void {
@@ -337,6 +341,18 @@ export class TenderService implements OnModuleInit {
     const existing = await this.boqStore.getBOQItem(tenantId, id);
     if (!existing) throw new Error(`BOQ item ${id} not found`);
 
+    // T3 — the estimate is the UNIQUE author of a priced item's rate. Once a build-up exists,
+    // a hand-typed rate would silently diverge from the governed roll-up; the only ways to
+    // reprice are re-estimating or removing the estimate. ("only … can" phrasing → 409.)
+    if (patch.rate !== undefined && Number(patch.rate) !== existing.rate) {
+      const buildUp = await this.estimates.getByBoqItem(tenantId, id);
+      if (buildUp) {
+        throw new Error(
+          `only the estimate can reprice BOQ item ${existing.itemCode} — it carries a rate build-up (selling rate ${buildUp.sellingRate}); rebuild the estimate to change the rate, or delete the build-up to hand-price the item`,
+        );
+      }
+    }
+
     const quantity = patch.quantity !== undefined ? Number(patch.quantity) : existing.quantity;
     const rate = patch.rate !== undefined ? Number(patch.rate) : existing.rate;
 
@@ -360,6 +376,13 @@ export class TenderService implements OnModuleInit {
   async deleteBOQItem(tenantId: string, id: Id): Promise<void> {
     const existing = await this.boqStore.getBOQItem(tenantId, id);
     if (!existing) return;
+    // T3 — one build-up per BOQ item means no orphans: the item's build-up (and that build-up's
+    // bid-time source links) leave with it.
+    const buildUp = await this.estimates.getByBoqItem(tenantId, id);
+    if (buildUp) {
+      await this.estimates.delete(buildUp.id);
+      await this.estimateSources?.removeByBuildUp(tenantId, buildUp.id);
+    }
     await this.boqStore.deleteBOQItem(tenantId, id);
     await this.recalculateTenderValue(tenantId, existing.boqId);
   }
@@ -385,7 +408,10 @@ export class TenderService implements OnModuleInit {
     return createdItems;
   }
 
-  private async recalculateTenderValue(tenantId: string, boqId: Id): Promise<void> {
+  /** Recompute the tender's value from its BOQ totals. Public because the estimate engine calls
+   * it after writing a governed selling rate onto an item (T3) — the tender value must follow the
+   * roll-up the moment the roll-up lands, not on the next unrelated BOQ edit. */
+  async recalculateTenderValue(tenantId: string, boqId: Id): Promise<void> {
     const boq = await this.boqStore.findBOQ(tenantId, boqId);
     if (!boq) return;
 

@@ -29,7 +29,14 @@ interface Account { id: string; name: string; }
 interface Contact { id: string; name: string; accountName: string | null; }
 interface Opportunity { id: string; title: string; }
 
-const TYPE_GLYPH: Record<string, string> = { call: '☎', email: '✉', meeting: '👥', note: '✎', task: '☑' };
+const TYPE_GLYPH: Record<string, string> = {
+  call: '☎', email: '✉', meeting: '👥', note: '✎', task: '☑',
+  follow_up: '↻', whatsapp: '🟢', site_visit: '📍', technical_discovery: '🔍', demo: '🖥', presentation: '📊', reminder: '⏰',
+};
+/** G10 — the full activity vocabulary (WhatsApp and site visits are how ELV deals actually move). */
+const ALL_TYPES = ['call', 'email', 'meeting', 'note', 'task', 'follow_up', 'whatsapp', 'site_visit', 'technical_discovery', 'demo', 'presentation', 'reminder'];
+/** G11 — open reads "planned"; in-progress work is still LIVE work. */
+const isLive = (s: string): boolean => s === 'open' || s === 'in_progress';
 const RELATED_HREF: Record<string, (id: string) => string> = {
   account: (id) => `/crm/accounts/${id}`,
   contact: (id) => `/crm/contacts/${id}`,
@@ -58,7 +65,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
   const kpi = useMemo(() => {
-    const open = initialActivities.filter((a) => a.status === 'open');
+    const open = initialActivities.filter((a) => isLive(a.status));
     const overdue = open.filter((a) => a.dueDate && a.dueDate < today);
     const dueToday = open.filter((a) => a.dueDate === today);
     const dueWeek = open.filter((a) => a.dueDate && a.dueDate > today && a.dueDate <= weekEnd);
@@ -86,7 +93,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       { key: 'closed', label: 'Completed', items: [] },
     ];
     for (const a of filtered) {
-      if (a.status !== 'open') buckets[5].items.push(a);
+      if (!isLive(a.status)) buckets[5].items.push(a);
       else if (!a.dueDate) buckets[4].items.push(a);
       else if (a.dueDate < today) buckets[0].items.push(a);
       else if (a.dueDate === today) buckets[1].items.push(a);
@@ -103,7 +110,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   const activeKey = tab || defaultTab;
   const active = groups.find((g) => g.key === activeKey) ?? groups[0];
 
-  const act = async (a: Activity, action: 'complete' | 'cancel' | 'reopen', body?: unknown): Promise<void> => {
+  const act = async (a: Activity, action: 'complete' | 'cancel' | 'reopen' | 'start', body?: unknown): Promise<void> => {
     setBusy(true); setErr('');
     try {
       const res = await fetch(`/api/crm/activities/${a.id}/${action}`, {
@@ -156,7 +163,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
           fields={[
             {
               name: 'type', label: 'Type', kind: 'select', defaultValue: 'task',
-              options: ['call', 'email', 'meeting', 'note', 'task'].map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t}` })),
+              options: ALL_TYPES.map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
             },
             { name: 'subject', label: 'Subject', kind: 'text', required: true, placeholder: 'e.g. Follow up on QT-2026-001', span: 2 },
             { name: 'relatedId', label: 'Related to', kind: 'select', placeholder: 'Nothing linked', options: relatedOptions },
@@ -204,8 +211,8 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
             <tbody>
               {active.items.map((a) => (
                 <Fragment key={a.id}>
-                <tr style={a.status !== 'open' ? { opacity: 0.7 } : undefined}>
-                  <td style={{ width: 90 }}><span style={st.typeTag}>{TYPE_GLYPH[a.type] ?? '·'} {a.type}</span></td>
+                <tr style={!isLive(a.status) ? { opacity: 0.7 } : undefined}>
+                  <td style={{ width: 90 }}><span style={st.typeTag}>{TYPE_GLYPH[a.type] ?? '·'} {a.type.replace(/_/g, ' ')}</span></td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{a.subject}</div>
                     {a.notes && <div style={st.notes}>{a.notes}</div>}
@@ -221,14 +228,17 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                     {a.dueDate ? fmt(a.dueDate) : '—'}
                   </td>
                   <td style={{ width: 200, whiteSpace: 'nowrap' }}>
-                    {a.status === 'open' && (
+                    {isLive(a.status) && (
                       <>
-                        <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} disabled={busy}
+                        {a.status === 'open'
+                          ? <button type="button" className="btn btn-ghost" style={st.smBtn} disabled={busy} onClick={() => void act(a, 'start')}>▶ Start</button>
+                          : <span className="badge badge-accent" style={{ marginRight: 6 }}>in progress</span>}
+                        <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)', marginLeft: 6 }} disabled={busy}
                           onClick={() => setCompleting({ id: a.id, outcome: '', fuOn: false, fuType: 'call', fuSubject: '', fuDate: '' })}>✓ Done</button>
                         <button type="button" className="btn btn-ghost" style={{ ...st.smBtn, marginLeft: 6 }} disabled={busy} onClick={() => void act(a, 'cancel')}>Cancel</button>
                       </>
                     )}
-                    {a.status !== 'open' && (
+                    {!isLive(a.status) && (
                       <>
                         <span className={a.status === 'completed' ? 'badge badge-good' : 'badge badge-bad'}>{a.status}</span>
                         <button type="button" className="btn btn-ghost" style={{ ...st.smBtn, marginLeft: 6 }} disabled={busy} onClick={() => void act(a, 'reopen')}>↺ Reopen</button>
@@ -252,7 +262,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                         {completing.fuOn && (
                           <div style={st.outcomeRow}>
                             <select style={st.fuSelect} value={completing.fuType} onChange={(e) => setCompleting({ ...completing, fuType: e.target.value })}>
-                              {['call', 'email', 'meeting', 'task'].map((t) => <option key={t} value={t}>{TYPE_GLYPH[t]} {t}</option>)}
+                              {ALL_TYPES.map((t) => <option key={t} value={t}>{TYPE_GLYPH[t]} {t.replace(/_/g, ' ')}</option>)}
                             </select>
                             <input style={{ ...st.outcomeInput, flex: 2 }} placeholder="Follow-up subject — e.g. Send revised quote"
                               value={completing.fuSubject} onChange={(e) => setCompleting({ ...completing, fuSubject: e.target.value })} />

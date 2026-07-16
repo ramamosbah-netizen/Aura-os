@@ -26,8 +26,25 @@ describe('leadAttention — terminal exemption', () => {
     expect(a.severity).toBeNull();
   });
 
-  it.each(['new', 'contacted', 'qualified'] as LeadStatus[])('treats %s as active', (status) => {
+  it.each(['new', 'verified', 'assigned', 'contacted', 'qualifying', 'qualified'] as LeadStatus[])('treats %s as active', (status) => {
     expect(leadAttention(healthyLead({ status }), freshFacts, NOW).active).toBe(true);
+  });
+});
+
+describe('leadAttention — G9 assignment acceptance', () => {
+  it('ASSIGNMENT_NOT_ACCEPTED once the acceptance window passes with no acknowledgement', () => {
+    // Assigned 9h ago (> the 8h window), never accepted.
+    const a = leadAttention(healthyLead({ assignedAt: iso('2026-07-13T03:00:00Z'), acceptedAt: null }), freshFacts, NOW);
+    expect(a.gaps).toContain('ASSIGNMENT_NOT_ACCEPTED');
+    expect(LEAD_ATTENTION.acceptanceHours).toBe(8);
+  });
+
+  it('acceptance retires the gap; inside the window there is no gap yet', () => {
+    const accepted = leadAttention(
+      healthyLead({ assignedAt: iso('2026-07-13T03:00:00Z'), acceptedAt: iso('2026-07-13T04:00:00Z') }), freshFacts, NOW);
+    expect(accepted.gaps).not.toContain('ASSIGNMENT_NOT_ACCEPTED');
+    // healthyLead is assigned 3h ago and unaccepted — still inside the window.
+    expect(leadAttention(healthyLead(), freshFacts, NOW).gaps).not.toContain('ASSIGNMENT_NOT_ACCEPTED');
   });
 });
 

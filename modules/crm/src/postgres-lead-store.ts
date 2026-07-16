@@ -16,6 +16,7 @@ interface LeadRow {
   source: string | null;
   assigned_to: string | null;
   assigned_at: Date | null;
+  accepted_at: Date | null;
   first_responded_at: Date | null;
   sla_first_response_hours: number | null;
   next_activity_due: string | null;
@@ -42,7 +43,7 @@ interface LeadRow {
 
 const COLS =
   'id, tenant_id, company_id, name, company_name, email, phone, status, source, ' +
-  'assigned_to, assigned_at, first_responded_at, sla_first_response_hours, next_activity_due, ' +
+  'assigned_to, assigned_at, accepted_at, first_responded_at, sla_first_response_hours, next_activity_due, ' +
   'converted_opportunity_id, converted_at, signal_id, ' +
   'qualification_dimensions, qualification_notes, qualification_assessed_at, qualification_assessed_by, ' +
   'requirement, systems, sector, project_name, project_location, consultant, main_contractor, ' +
@@ -62,6 +63,7 @@ function rowToLead(r: LeadRow): Lead {
     source: r.source as LeadSource | null,
     assignedTo: r.assigned_to,
     assignedAt: r.assigned_at ? r.assigned_at.toISOString() : null,
+    acceptedAt: r.accepted_at ? r.accepted_at.toISOString() : null,
     firstRespondedAt: r.first_responded_at ? r.first_responded_at.toISOString() : null,
     slaFirstResponseHours: r.sla_first_response_hours,
     nextActivityDue: r.next_activity_due,
@@ -119,7 +121,7 @@ export class PostgresLeadStore implements LeadStore {
     return executor.query(
       `UPDATE public.aura_crm_leads
           SET name = $2, company_name = $3, email = $4, phone = $5, status = $6, source = $7,
-              assigned_to = $8, assigned_at = $9, first_responded_at = $10,
+              assigned_to = $8, assigned_at = $9, accepted_at = $30, first_responded_at = $10,
               sla_first_response_hours = $11, next_activity_due = $12,
               converted_opportunity_id = $13, converted_at = $14, signal_id = $15,
               qualification_dimensions = $16, qualification_notes = $17,
@@ -136,7 +138,7 @@ export class PostgresLeadStore implements LeadStore {
        l.qualificationNotes, l.qualificationAssessedAt, l.qualificationAssessedBy,
        l.requirement, l.systems ? JSON.stringify(l.systems) : null, l.sector, l.projectName,
        l.projectLocation, l.consultant, l.mainContractor, l.estimatedValue, l.projectStage,
-       l.expectedTimeline],
+       l.expectedTimeline, l.acceptedAt],
     );
   }
 
@@ -146,9 +148,9 @@ export class PostgresLeadStore implements LeadStore {
     return executor.query(
       `INSERT INTO public.aura_crm_leads (${COLS})
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
-               $24,$25,$26,$27,$28,$29,$30,$31,$32,$33)`,
+               $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)`,
       [l.id, l.tenantId, l.companyId, l.name, l.companyName, l.email, l.phone, l.status, l.source,
-       l.assignedTo, l.assignedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
+       l.assignedTo, l.assignedAt, l.acceptedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
        l.convertedOpportunityId, l.convertedAt, l.signalId,
        l.qualificationDimensions ? JSON.stringify(l.qualificationDimensions) : null,
        l.qualificationNotes, l.qualificationAssessedAt, l.qualificationAssessedBy,

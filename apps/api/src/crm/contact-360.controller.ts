@@ -93,7 +93,7 @@ export class Contact360Controller {
       }));
 
     const openOpps = opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost');
-    const openActivities = activities.filter((x) => x.status === 'open');
+    const openActivities = activities.filter((x) => x.status === 'open' || x.status === 'in_progress');
     const lastInteractionAt = activities.length
       ? activities.map((x) => x.createdAt).sort().at(-1)!
       : null;

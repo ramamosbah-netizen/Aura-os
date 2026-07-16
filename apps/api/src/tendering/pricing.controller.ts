@@ -31,6 +31,7 @@ interface SheetSummary {
   directCost: number;
   indirect: number;
   overhead: number;
+  risk: number;
   profit: number;
   sellingValue: number;
   unpricedBoqValue: number;
@@ -128,6 +129,7 @@ export class TenderPricingController {
         directCost: estimate.totalDirectCost,
         indirect: estimate.totalIndirect,
         overhead: estimate.totalOverhead,
+        risk: estimate.totalRisk,
         profit: estimate.totalProfit,
         sellingValue: estimate.totalSellingValue,
         unpricedBoqValue: estimate.unpricedBoqValue,
@@ -209,7 +211,7 @@ export class TenderPricingController {
   async priceItem(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('itemId', ParseUuidOr404Pipe) itemId: string,
-    @Body() dto: { resources?: Partial<ResourceBreakdown>; indirectPercent?: number; overheadPercent?: number; profitPercent?: number; notes?: string },
+    @Body() dto: { resources?: Partial<ResourceBreakdown>; indirectPercent?: number; overheadPercent?: number; riskPercent?: number; profitPercent?: number; notes?: string },
   ): Promise<RateBuildUp> {
     await this.tenderOr404(id);
     await this.assertEstimateNotCommitted(id);
@@ -224,6 +226,7 @@ export class TenderPricingController {
           resources: dto.resources as ResourceBreakdown,
           indirectPercent: dto.indirectPercent,
           overheadPercent: dto.overheadPercent,
+          riskPercent: dto.riskPercent,
           profitPercent: dto.profitPercent,
           notes: dto.notes ?? null,
           createdBy: ctx.actorId ?? null,

@@ -3,8 +3,11 @@ import type { BOQItem } from './boq';
 
 // Tendering domain — framework-free. A RateBuildUp is the estimator's cost build-up
 // behind a BOQ item's rate: direct-cost components (material, labour, plant,
-// subcontract) per unit, plus overhead and profit percentages, producing the selling
-// rate. One build-up per BOQ item; the tender estimate folds build-ups over the BOQ.
+// subcontract) per unit, plus the four named layers of §2.2 — indirect (preliminaries),
+// overhead, risk (contingency) and profit — producing the selling rate. The bid price is
+// this governed roll-up, never a hand figure. ONE build-up per BOQ item (unique — enforced
+// by the service's replace-on-rebuild AND the DB unique index); the tender estimate folds
+// build-ups over the BOQ.
 
 export type CostType = 'material' | 'labour' | 'plant' | 'subcontract' | 'other';
 
@@ -76,14 +79,18 @@ export interface RateBuildUp {
   /** Indirect/preliminaries % on direct cost (mobilization, supervision, site setup). */
   indirectPercent: number;
   overheadPercent: number;
+  /** Risk/contingency % on the full cost base (T3) — priced exposure, not padding hidden in rates. */
+  riskPercent: number;
   profitPercent: number;
   /** directCost × indirectPercent. */
   indirectAmount: number;
   /** directCost × overheadPercent. */
   overheadAmount: number;
-  /** (directCost + indirect + overhead) × profitPercent — profit is marked up on total cost. */
+  /** (directCost + indirect + overhead) × riskPercent — contingency over the whole cost base. */
+  riskAmount: number;
+  /** (directCost + indirect + overhead + risk) × profitPercent — profit is marked up on total cost. */
   profitAmount: number;
-  /** directCost + indirect + overhead + profit — the rate the BOQ item should carry. */
+  /** directCost + indirect + overhead + risk + profit — the rate the BOQ item should carry. */
   sellingRate: number;
   notes: string | null;
   createdAt: string;
@@ -100,6 +107,7 @@ export interface NewRateBuildUp {
   resources?: ResourceBreakdown | null;
   indirectPercent?: number;
   overheadPercent?: number;
+  riskPercent?: number;
   profitPercent?: number;
   notes?: string | null;
   createdBy?: Id | null;
@@ -198,24 +206,30 @@ export function compileResourceBreakdown(
 
 /**
  * Pure engine: components + percentages → per-unit cost figures.
- * direct → + indirect % (preliminaries) → + overhead % → + profit % on the total cost.
+ * direct → + indirect % (preliminaries) → + overhead % → + risk % (contingency, on the whole
+ * cost base) → + profit % on the total cost including risk. With riskPercent 0 the figures are
+ * exactly the pre-T3 ones, so existing build-ups re-derive unchanged.
  */
 export function computeBuildUp(
   components: CostComponent[],
   overheadPercent: number,
   profitPercent: number,
   indirectPercent = 0,
-): Pick<RateBuildUp, 'directCost' | 'indirectAmount' | 'overheadAmount' | 'profitAmount' | 'sellingRate'> {
+  riskPercent = 0,
+): Pick<RateBuildUp, 'directCost' | 'indirectAmount' | 'overheadAmount' | 'riskAmount' | 'profitAmount' | 'sellingRate'> {
   const directCost = r2(components.reduce((s, c) => s + c.amount, 0));
   const indirectAmount = r2(directCost * (indirectPercent / 100));
   const overheadAmount = r2(directCost * (overheadPercent / 100));
-  const profitAmount = r2((directCost + indirectAmount + overheadAmount) * (profitPercent / 100));
+  const costBase = directCost + indirectAmount + overheadAmount;
+  const riskAmount = r2(costBase * (riskPercent / 100));
+  const profitAmount = r2((costBase + riskAmount) * (profitPercent / 100));
   return {
     directCost,
     indirectAmount,
     overheadAmount,
+    riskAmount,
     profitAmount,
-    sellingRate: r2(directCost + indirectAmount + overheadAmount + profitAmount),
+    sellingRate: r2(costBase + riskAmount + profitAmount),
   };
 }
 
@@ -226,9 +240,11 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
   }
   const indirectPercent = Number(input.indirectPercent) || 0;
   const overheadPercent = Number(input.overheadPercent) || 0;
+  const riskPercent = Number(input.riskPercent) || 0;
   const profitPercent = Number(input.profitPercent) || 0;
   if (indirectPercent < 0) throw new Error('indirectPercent cannot be negative');
   if (overheadPercent < 0) throw new Error('overheadPercent cannot be negative');
+  if (riskPercent < 0) throw new Error('riskPercent cannot be negative');
   if (profitPercent < 0) throw new Error('profitPercent cannot be negative');
 
   const components: CostComponent[] = input.components.map((c) => {
@@ -241,7 +257,7 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
     return { id: newId(), costType: c.costType, description: c.description.trim(), quantity, unitCost, amount: r2(quantity * unitCost) };
   });
 
-  const figures = computeBuildUp(components, overheadPercent, profitPercent, indirectPercent);
+  const figures = computeBuildUp(components, overheadPercent, profitPercent, indirectPercent, riskPercent);
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -253,6 +269,7 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
     ...figures,
     indirectPercent,
     overheadPercent,
+    riskPercent,
     profitPercent,
     notes: input.notes?.trim() || null,
     createdAt: new Date().toISOString(),
@@ -276,7 +293,7 @@ export function withComponentUnitCost(buildUp: RateBuildUp, componentId: Id, uni
     return { ...c, unitCost: uc, amount: r2(c.quantity * uc) };
   });
   if (!found) throw new Error(`component ${componentId} not found in build-up ${buildUp.id}`);
-  const figures = computeBuildUp(components, buildUp.overheadPercent, buildUp.profitPercent, buildUp.indirectPercent);
+  const figures = computeBuildUp(components, buildUp.overheadPercent, buildUp.profitPercent, buildUp.indirectPercent, buildUp.riskPercent);
   return { ...buildUp, components, ...figures };
 }
 
@@ -294,6 +311,8 @@ export interface TenderEstimate {
   /** Σ indirect/preliminaries (mobilization, supervision, site setup) over estimated items. */
   totalIndirect: number;
   totalOverhead: number;
+  /** Σ risk/contingency over estimated items — the tender's priced exposure (T3). */
+  totalRisk: number;
   totalProfit: number;
   /** Σ sellingRate × quantity over estimated items. */
   totalSellingValue: number;
@@ -311,6 +330,7 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
   let totalDirectCost = 0;
   let totalIndirect = 0;
   let totalOverhead = 0;
+  let totalRisk = 0;
   let totalProfit = 0;
   let totalSellingValue = 0;
   let unpricedBoqValue = 0;
@@ -327,6 +347,7 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
     totalDirectCost += b.directCost * item.quantity;
     totalIndirect += (b.indirectAmount ?? 0) * item.quantity;
     totalOverhead += b.overheadAmount * item.quantity;
+    totalRisk += (b.riskAmount ?? 0) * item.quantity;
     totalProfit += b.profitAmount * item.quantity;
     totalSellingValue += b.sellingRate * item.quantity;
   }
@@ -334,6 +355,7 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
   totalDirectCost = r2(totalDirectCost);
   totalIndirect = r2(totalIndirect);
   totalOverhead = r2(totalOverhead);
+  totalRisk = r2(totalRisk);
   totalProfit = r2(totalProfit);
   totalSellingValue = r2(totalSellingValue);
   unpricedBoqValue = r2(unpricedBoqValue);
@@ -347,6 +369,7 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
     totalDirectCost,
     totalIndirect,
     totalOverhead,
+    totalRisk,
     totalProfit,
     totalSellingValue,
     unpricedBoqValue,

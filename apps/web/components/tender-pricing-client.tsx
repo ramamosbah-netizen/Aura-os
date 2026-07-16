@@ -51,6 +51,7 @@ interface BuildUp {
   indirectPercent: number;
   indirectAmount: number;
   overheadPercent: number;
+  riskPercent: number;
   profitPercent: number;
   sellingRate: number;
 }
@@ -61,6 +62,7 @@ interface Estimate {
   totalDirectCost: number;
   totalIndirect: number;
   totalOverhead: number;
+  totalRisk: number;
   totalProfit: number;
   totalSellingValue: number;
   unpricedBoqValue: number;
@@ -99,6 +101,7 @@ interface SheetDraft {
   otherDirect: string;
   indirectPercent: string;
   overheadPercent: string;
+  riskPercent: string;
   profitPercent: string;
 }
 
@@ -151,6 +154,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
       otherDirect: String(r?.otherDirect ?? ''),
       indirectPercent: String(b?.indirectPercent ?? 0),
       overheadPercent: String(b?.overheadPercent ?? 10),
+      riskPercent: String(b?.riskPercent ?? 0),
       profitPercent: String(b?.profitPercent ?? 15),
     });
     setOpen(item.id);
@@ -173,9 +177,12 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
       supply + wastage + n(d.accessories) + n(d.transport) + n(d.equipmentRent) + manpower + n(d.subcontract) + n(d.otherDirect);
     const indirect = direct * (n(d.indirectPercent) / 100);
     const overhead = direct * (n(d.overheadPercent) / 100);
-    const profit = (direct + indirect + overhead) * (n(d.profitPercent) / 100);
-    const selling = direct + indirect + overhead + profit;
-    return { direct, indirect, overhead, profit, selling, sellingRate: selling / qty, margin: selling > 0 ? ((overhead + profit) / selling) * 100 : 0 };
+    // Risk (contingency) prices over the whole cost base; profit marks up the base including risk —
+    // the same order the server's computeBuildUp uses.
+    const risk = (direct + indirect + overhead) * (n(d.riskPercent) / 100);
+    const profit = (direct + indirect + overhead + risk) * (n(d.profitPercent) / 100);
+    const selling = direct + indirect + overhead + risk + profit;
+    return { direct, indirect, overhead, risk, profit, selling, sellingRate: selling / qty, margin: selling > 0 ? ((overhead + profit) / selling) * 100 : 0 };
   };
 
   const saveLine = async (item: BOQItem): Promise<void> => {
@@ -201,6 +208,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           },
           indirectPercent: n(draft.indirectPercent),
           overheadPercent: n(draft.overheadPercent),
+          riskPercent: n(draft.riskPercent),
           profitPercent: n(draft.profitPercent),
         }),
       });
@@ -270,6 +278,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           <Stat label="Direct cost" value={`AED ${aed(estimate.totalDirectCost)}`} strong />
           <Stat label="Indirect" value={`AED ${aed(estimate.totalIndirect ?? 0)}`} />
           <Stat label="Overhead" value={`AED ${aed(estimate.totalOverhead)}`} />
+          <Stat label="Risk" value={`AED ${aed(estimate.totalRisk ?? 0)}`} />
           <Stat label="Profit" value={`AED ${aed(estimate.totalProfit)}`} />
           <Stat label="Selling value" value={`AED ${aed(estimate.totalSellingValue)}`} strong />
           {estimate.unpricedBoqValue > 0 && <Stat label="Unpriced BOQ" value={`AED ${aed(estimate.unpricedBoqValue)}`} />}
@@ -403,7 +412,7 @@ function SheetEditor({
   item: BOQItem;
   draft: SheetDraft;
   setDraft: (d: SheetDraft) => void;
-  preview: { direct: number; indirect: number; overhead: number; profit: number; selling: number; sellingRate: number; margin: number };
+  preview: { direct: number; indirect: number; overhead: number; risk: number; profit: number; selling: number; sellingRate: number; margin: number };
   busy: boolean;
   locked: boolean;
   onSave: () => void;
@@ -459,12 +468,14 @@ function SheetEditor({
       <div style={{ display: 'flex', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
         <Field label="Indirect % (prelims)" value={draft.indirectPercent} onChange={set('indirectPercent')} width={70} />
         <Field label="Overhead %" value={draft.overheadPercent} onChange={set('overheadPercent')} width={70} />
+        <Field label="Risk %" value={draft.riskPercent} onChange={set('riskPercent')} width={70} />
         <Field label="Profit %" value={draft.profitPercent} onChange={set('profitPercent')} width={70} />
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 18, fontSize: 12.5, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>Direct <b>AED {new Intl.NumberFormat().format(Math.round(preview.direct * 100) / 100)}</b></span>
           <span>+Indirect <b>{new Intl.NumberFormat().format(Math.round(preview.indirect * 100) / 100)}</b></span>
           <span>+OH <b>{new Intl.NumberFormat().format(Math.round(preview.overhead * 100) / 100)}</b></span>
+          <span>+Risk <b>{new Intl.NumberFormat().format(Math.round(preview.risk * 100) / 100)}</b></span>
           <span>+Profit <b>{new Intl.NumberFormat().format(Math.round(preview.profit * 100) / 100)}</b></span>
           <span style={{ color: 'var(--accent)', fontWeight: 800 }}>
             Sell AED {new Intl.NumberFormat().format(Math.round(preview.selling * 100) / 100)}

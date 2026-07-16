@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
+import {
+  STAKEHOLDER_ROLE_LABEL, STAKEHOLDER_ROLE_OPTIONS,
+  STRENGTH_LABEL, STRENGTH_COLOR, STRENGTH_OPTIONS,
+} from './stakeholder-meta';
+import CreateDrawer from './ui/create-drawer';
 import Timeline from './timeline';
 import RelationshipGraphPanel from './relationship-graph-panel';
 import InstalledBasePanel from './installed-base-panel';
@@ -138,9 +142,40 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     }
   }, [accountId, load]);
 
+  // Contacts are managed inline from the Account 360 — set-primary, deactivate,
+  // etc. — then the whole account summary reloads so counts and the header
+  // primary contact stay in sync.
+  const patchContact = useCallback(async (id: string, body: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      await fetch(`/api/crm/contacts/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }, [load]);
+
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading account…'}</p>;
 
   const { account: a, contacts, opportunities, tenders, quotations, contracts, projects, activities, receivables, summary } = data;
+
+  // Contact drawer fields — the account is fixed to this page, so accountId is a
+  // locked single-option select (guarantees it lands in the POST payload without
+  // asking the user to pick the account they're already looking at).
+  const contactFields = (selfId?: string) => [
+    { name: 'name', label: 'Full name', kind: 'text' as const, required: true, placeholder: 'e.g. Khalid Mansoor', span: 2 as const },
+    { name: 'jobTitle', label: 'Job title', kind: 'text' as const, placeholder: 'e.g. Procurement Manager' },
+    { name: 'accountId', label: 'Account', kind: 'select' as const, options: [{ value: a.id, label: a.name }] },
+    { name: 'stakeholderRole', label: 'Stakeholder role', kind: 'select' as const, placeholder: 'Role in the decision', options: STAKEHOLDER_ROLE_OPTIONS, hint: 'Decision maker, influencer, technical, finance…' },
+    { name: 'relationshipStrength', label: 'Relationship', kind: 'select' as const, placeholder: 'How strong is it?', options: STRENGTH_OPTIONS },
+    { name: 'reportsToId', label: 'Reports to', kind: 'select' as const, placeholder: 'Manager (optional)', options: contacts.filter((p) => p.id !== selfId).map((p) => ({ value: p.id, label: `${p.name}${p.jobTitle ? ` · ${p.jobTitle}` : ''}` })) },
+    { name: 'email', label: 'Email', kind: 'text' as const, placeholder: 'name@company.com' },
+    { name: 'phone', label: 'Phone', kind: 'text' as const, placeholder: '+971 …' },
+  ];
 
   // ── Relationship health (derived, with the WHY) ─────────────────────────
   const openOpps = opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost');
@@ -231,7 +266,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
           <details style={{ position: 'relative' }}>
             <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>More ▾</summary>
             <div style={st.menu}>
-              <a href="/crm/contacts" style={st.menuItem}>+ Contact</a>
+              <button type="button" onClick={() => setTab('contacts')} style={{ ...st.menuItem, background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%' }}>+ Contact</button>
               <a href="/crm/activities" style={st.menuItem}>+ Activity</a>
               <a href="/finance/ar" style={st.menuItem}>Accounts receivable →</a>
             </div>
@@ -365,7 +400,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             <div style={st.oCard}>
               <div style={st.oTitle}>Key Contacts</div>
               {contacts.length === 0 ? (
-                <p style={st.oMuted}>No contacts yet — <a href="/crm/contacts" style={st.rowLink}>add the people you deal with →</a></p>
+                <p style={st.oMuted}>No contacts yet — <button type="button" onClick={() => setTab('contacts')} style={{ ...st.rowLink, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}>add the people you deal with →</button></p>
               ) : (
                 [...contacts].sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary)).slice(0, 4).map((c) => (
                   <div key={c.id} style={{ padding: '5px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
@@ -395,45 +430,106 @@ export default function Account360Client({ accountId }: { accountId: string }) {
         )}
 
         {tab === 'contacts' && (
-          contacts.length === 0 ? (
-            <p style={{ color: 'var(--muted)', margin: 0, padding: 8 }}>No contacts yet — add the people you deal with at this client.</p>
-          ) : (
-            <div>
-              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px' }}>
-                The stakeholder map — everyone involved in the buying decision at {a.name}, by role and relationship strength.
+          <div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, margin: '0 0 12px' }}>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0, maxWidth: 640 }}>
+                The stakeholder map — everyone involved in the buying decision at {a.name}, by role and relationship
+                strength. Add, edit and manage the people right here; the ★ primary contact shows on the account header.
               </p>
+              <div style={{ flexShrink: 0 }}>
+                <CreateDrawer
+                  entity="Contact"
+                  buttonLabel="Add contact"
+                  subtitle={`A person at ${a.name} — added straight to this account.`}
+                  endpoint="/api/crm/contacts"
+                  fields={contactFields()}
+                  initialValues={{ accountId: a.id }}
+                  onSaved={() => void load()}
+                />
+              </div>
+            </div>
+            {contacts.length === 0 ? (
+              <p style={{ color: 'var(--muted)', margin: 0, padding: '8px 0' }}>No contacts yet — add the people you deal with at this client.</p>
+            ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead><tr>
-                    {['', 'Name', 'Title', 'Stakeholder role', 'Relationship', 'Reports to', 'Email'].map((h, i) => (
+                    {['', 'Name', 'Title', 'Stakeholder role', 'Relationship', 'Reports to', 'Email', 'Actions'].map((h, i) => (
                       <th key={i} style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', textAlign: 'left' }}>{h}</th>
                     ))}
                   </tr></thead>
                   <tbody>
-                    {[...contacts].sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary)).map((c) => (
-                      <tr key={c.id}>
-                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', color: 'var(--accent)' }}>{c.isPrimary ? '★' : ''}</td>
-                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)' }}>
+                    {[...contacts].sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary)).map((c) => {
+                      const isActive = c.status !== 'inactive';
+                      const td = { padding: '9px 10px', borderBottom: '1px solid var(--border)' } as CSSProperties;
+                      return (
+                      <tr key={c.id} style={isActive ? undefined : { opacity: 0.55 }}>
+                        <td style={{ ...td, color: 'var(--accent)' }}>
+                          <button
+                            type="button"
+                            title={c.isPrimary ? 'Primary contact — click to unset' : 'Make primary contact (demotes the current one)'}
+                            disabled={busy}
+                            onClick={() => void patchContact(c.id, { isPrimary: !c.isPrimary })}
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 15, color: c.isPrimary ? 'var(--accent)' : 'var(--muted)', padding: 0, lineHeight: 1 }}
+                          >
+                            {c.isPrimary ? '★' : '☆'}
+                          </button>
+                        </td>
+                        <td style={td}>
                           <a href={`/crm/contacts/${c.id}`} style={st.rowLink}>{c.name}</a>
                         </td>
-                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' }}>{c.jobTitle ?? c.role ?? '—'}</td>
-                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ ...td, color: 'var(--muted)' }}>{c.jobTitle ?? c.role ?? '—'}</td>
+                        <td style={td}>
                           {c.stakeholderRole ? <span style={{ fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px' }}>{STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
                         </td>
-                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', fontWeight: 700, color: c.relationshipStrength ? STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--muted)' : 'var(--muted)' }}>
+                        <td style={{ ...td, fontWeight: 700, color: c.relationshipStrength ? STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--muted)' : 'var(--muted)' }}>
                           {c.relationshipStrength ? STRENGTH_LABEL[c.relationshipStrength] ?? c.relationshipStrength : '—'}
                         </td>
-                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' }}>
+                        <td style={{ ...td, color: 'var(--muted)' }}>
                           {c.reportsToId ? contacts.find((p) => p.id === c.reportsToId)?.name ?? '—' : '—'}
                         </td>
-                        <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--border)' }}>{c.email ? <a href={`mailto:${c.email}`} style={st.rowLink}>{c.email}</a> : '—'}</td>
+                        <td style={td}>{c.email ? <a href={`mailto:${c.email}`} style={st.rowLink}>{c.email}</a> : '—'}</td>
+                        <td style={td}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            {c.email && <a href={`mailto:${c.email}`} title="Email" style={st.rowLink}>✉</a>}
+                            {c.phone && <a href={`tel:${c.phone}`} title="Call" style={st.rowLink}>☎</a>}
+                            <CreateDrawer
+                              entity="Contact"
+                              mode="edit"
+                              subtitle="Update this person's details."
+                              endpoint={`/api/crm/contacts/${c.id}`}
+                              fields={contactFields(c.id)}
+                              initialValues={{
+                                name: c.name,
+                                jobTitle: c.jobTitle ?? '',
+                                accountId: a.id,
+                                stakeholderRole: c.stakeholderRole ?? '',
+                                relationshipStrength: c.relationshipStrength ?? '',
+                                reportsToId: c.reportsToId ?? '',
+                                email: c.email ?? '',
+                                phone: c.phone ?? '',
+                              }}
+                              onSaved={() => void load()}
+                            />
+                            <button
+                              type="button"
+                              title={isActive ? 'Deactivate — the person has left / is no longer a contact' : 'Reactivate this contact'}
+                              disabled={busy}
+                              onClick={() => void patchContact(c.id, { status: isActive ? 'inactive' : 'active' })}
+                              style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: 11.5, color: 'var(--muted)', padding: '3px 8px' }}
+                            >
+                              {isActive ? 'Deactivate' : 'Reactivate'}
+                            </button>
+                          </span>
+                        </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-            </div>
-          )
+            )}
+          </div>
         )}
 
         {tab === 'opportunities' && (

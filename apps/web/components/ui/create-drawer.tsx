@@ -63,9 +63,12 @@ interface Props {
   mode?: 'create' | 'edit';
   /** current record values to prefill in edit mode, keyed by field name */
   initialValues?: Record<string, string>;
+  /** called after a successful save, before router.refresh() — lets client-fetched
+   *  hosts (e.g. Account 360) reload their own data instead of relying on refresh */
+  onSaved?: (payload: Record<string, unknown>) => void;
 }
 
-export default function CreateDrawer({ entity, subtitle, endpoint, fields, buttonLabel, mode = 'create', initialValues }: Props) {
+export default function CreateDrawer({ entity, subtitle, endpoint, fields, buttonLabel, mode = 'create', initialValues, onSaved }: Props) {
   const schema = useMemo<FormSchema>(
     () => ({
       id: `legacy.${entity.toLowerCase().replace(/\s+/g, '-')}`,
@@ -78,5 +81,5 @@ export default function CreateDrawer({ entity, subtitle, endpoint, fields, butto
     [entity, endpoint, subtitle, fields],
   );
 
-  return <FormDrawer schema={schema} mode={mode} initialValues={initialValues} buttonLabel={buttonLabel} />;
+  return <FormDrawer schema={schema} mode={mode} initialValues={initialValues} buttonLabel={buttonLabel} onSaved={onSaved} />;
 }

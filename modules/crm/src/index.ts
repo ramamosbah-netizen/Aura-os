@@ -61,4 +61,5 @@ export * from './postgres-installed-base-store';
 export * from './installed-base.service';
 export * from './lead-conversion.service';
 export * from './attention';
+export * from './my-day';
 export * from './crm.module';

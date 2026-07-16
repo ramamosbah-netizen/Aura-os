@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import AccountCreate, { AccountEdit } from './account-create';
+
+interface TeamUser { username: string; role?: string; roleLabel?: string; isAdmin?: boolean }
 
 // The Account Portfolio — every commercial relationship with its roll-up.
 // Mirrors the API's GET /crm/accounts/portfolio payload.
@@ -97,6 +99,34 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
   const [view, setView] = useState<ViewKey>('all');
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  // Ownership is a workspace username; "me" comes from /workspace/me (the session
+  // `sub` passed from the server need not equal the username and is null in dev).
+  const [me, setMe] = useState<TeamUser | null>(null);
+  const [team, setTeam] = useState<TeamUser[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      const [meRes, teamRes] = await Promise.all([
+        fetch('/api/workspace/me', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/workspace/users', { cache: 'no-store' }).catch(() => null),
+      ]);
+      if (meRes?.ok) {
+        const m = (await meRes.json().catch(() => null)) as TeamUser | null;
+        if (m && m.username) setMe(m);
+      }
+      if (teamRes?.ok) {
+        const t = (await teamRes.json().catch(() => [])) as TeamUser[];
+        if (Array.isArray(t)) setTeam(t);
+      }
+    })();
+  }, []);
+
+  const myId = me?.username ?? currentUserId;
+  const canManage = !!me && (me.isAdmin === true || /manager|executive|admin|lead/i.test(me.roleLabel ?? ''));
+  const ownerLabel = (username: string): string => {
+    const u = team.find((t) => t.username === username);
+    return u?.roleLabel ? `${username} · ${u.roleLabel}` : username;
+  };
 
   const all = useMemo(() => rows ?? [], [rows]);
 
@@ -113,13 +143,13 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
 
   const views: Array<{ key: ViewKey; label: string; match: (r: PortfolioRow) => boolean }> = useMemo(() => [
     { key: 'all', label: 'All Accounts', match: () => true },
-    { key: 'mine', label: 'My Accounts', match: (r) => !!currentUserId && r.ownerId === currentUserId },
+    { key: 'mine', label: 'My Accounts', match: (r) => !!myId && r.ownerId === myId },
     { key: 'prospects', label: 'Prospects', match: (r) => r.stage === 'prospect' || r.stage === 'qualified' },
     { key: 'active', label: 'Active Customers', match: (r) => r.stage === 'active_customer' },
     { key: 'strategic', label: 'Strategic', match: (r) => r.stage === 'strategic' },
     { key: 'at_risk', label: 'At Risk', match: (r) => r.health === 'at_risk' },
     { key: 'dormant', label: 'Dormant', match: (r) => r.stage === 'dormant' || r.stage === 'inactive' },
-  ], [currentUserId]);
+  ], [myId]);
 
   const visible = useMemo(() => {
     const match = views.find((v) => v.key === view)?.match ?? (() => true);
@@ -148,19 +178,9 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
     }
   }
 
-  async function assignToMe(id: string) {
-    setBusy(id);
-    try {
-      await fetch('/api/crm/accounts/assign-owner', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accountId: id }),
-      });
-      router.refresh();
-    } finally {
-      setBusy(null);
-    }
-  }
+  // Assign ownership by stamping the username straight through the account PATCH.
+  // The old assign-owner BFF needed a session cookie that dev lacks, so it 401'd.
+  const assignOwner = (id: string, ownerId: string | null) => patchAccount(id, { ownerId });
 
   return (
     <div style={st.page}>
@@ -266,18 +286,34 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
                       ) : null}
                     </td>
                     <td style={st.td}>
-                      {r.ownerId ? (
-                        <span style={{ fontSize: 12.5 }}>{r.ownerId}</span>
-                      ) : (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {r.ownerId ? (
+                          <span style={{ fontSize: 12.5 }}>{ownerLabel(r.ownerId)}</span>
+                        ) : (
                           <span style={{ color: 'var(--muted)', fontSize: 12.5 }}>Unassigned</span>
-                          {currentUserId ? (
-                            <button disabled={busy === r.id} onClick={() => assignToMe(r.id)} style={st.assignBtn}>
-                              Assign to me
-                            </button>
-                          ) : null}
-                        </span>
-                      )}
+                        )}
+                        {myId && r.ownerId !== myId ? (
+                          <button disabled={busy === r.id} onClick={() => void assignOwner(r.id, myId)} style={st.assignBtn}>
+                            Assign to me
+                          </button>
+                        ) : null}
+                        {canManage ? (
+                          <select
+                            value={r.ownerId ?? ''}
+                            disabled={busy === r.id}
+                            onChange={(e) => void assignOwner(r.id, e.target.value || null)}
+                            style={st.ownerSelect}
+                            title="Assign owner — admin / manager"
+                          >
+                            <option value="">Unassigned</option>
+                            {team.map((u) => (
+                              <option key={u.username} value={u.username}>
+                                {u.roleLabel ? `${u.username} · ${u.roleLabel}` : u.username}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                      </span>
                     </td>
                     <td style={st.tdNum}>{r.activeDeals || '—'}</td>
                     <td style={st.tdNum}>{r.pipelineValue ? money(r.pipelineValue) : '—'}</td>
@@ -341,4 +377,5 @@ const st = {
   stageTag: { display: 'inline-block', fontSize: 12, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', fontWeight: 600, whiteSpace: 'nowrap' } as CSSProperties,
   fixBtn: { display: 'block', marginTop: 4, border: '1px dashed var(--accent)', background: 'transparent', color: 'var(--accent)', borderRadius: 6, padding: '1px 7px', fontSize: 11, cursor: 'pointer' } as CSSProperties,
   assignBtn: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  ownerSelect: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--fg)', borderRadius: 6, padding: '2px 6px', fontSize: 11.5, cursor: 'pointer', maxWidth: 190 } as CSSProperties,
 };

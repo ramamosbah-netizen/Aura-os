@@ -4,16 +4,25 @@ import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   ACCOUNT_RELATIONSHIP_TYPES,
+  AMC_STATUSES,
+  INSTALLED_PROVIDERS,
   PARTY_TYPES,
   type Account,
   type AccountGraph,
   type AccountRelationship,
   type AccountRelationshipType,
   type AccountStatus,
+  type AmcStatus,
+  type GrowthScanResult,
+  type InstalledBaseItem,
+  type InstalledBaseView,
+  type InstalledProvider,
   type PartyType,
   AccountRelationshipService,
   AccountService,
+  InstalledBaseService,
 } from '@aura/crm';
+import { ELV_SYSTEMS, type ElvSystem } from '@aura/shared';
 
 class CreateAccountDto {
   @IsString() name!: string;
@@ -42,6 +51,32 @@ class UpdateAccountDto {
   @IsOptional() @IsString() ownerId?: string;
 }
 
+class InstalledBaseDto {
+  @IsIn(ELV_SYSTEMS) system!: ElvSystem;
+  @IsOptional() @IsString() siteName?: string;
+  @IsOptional() @IsIn(INSTALLED_PROVIDERS) provider?: InstalledProvider;
+  @IsOptional() @IsString() competitorName?: string;
+  @IsOptional() @IsString() installedAt?: string;
+  @IsOptional() @IsString() warrantyExpiresAt?: string;
+  @IsOptional() @IsIn(AMC_STATUSES) amcStatus?: AmcStatus;
+  @IsOptional() @IsString() amcExpiresAt?: string;
+  @IsOptional() @IsString() projectId?: string;
+  @IsOptional() @IsString() notes?: string;
+}
+
+class InstalledBasePatchDto {
+  @IsOptional() @IsIn(ELV_SYSTEMS) system?: ElvSystem;
+  @IsOptional() @IsString() siteName?: string;
+  @IsOptional() @IsIn(INSTALLED_PROVIDERS) provider?: InstalledProvider;
+  @IsOptional() @IsString() competitorName?: string;
+  @IsOptional() @IsString() installedAt?: string;
+  @IsOptional() @IsString() warrantyExpiresAt?: string;
+  @IsOptional() @IsIn(AMC_STATUSES) amcStatus?: AmcStatus;
+  @IsOptional() @IsString() amcExpiresAt?: string;
+  @IsOptional() @IsString() projectId?: string;
+  @IsOptional() @IsString() notes?: string;
+}
+
 class LinkAccountDto {
   @IsUUID() toAccountId!: string;
   @IsIn(ACCOUNT_RELATIONSHIP_TYPES) type!: AccountRelationshipType;
@@ -57,6 +92,7 @@ export class CrmAccountsController {
   constructor(
     private readonly accounts: AccountService,
     private readonly graph: AccountRelationshipService,
+    private readonly installedBase: InstalledBaseService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -126,6 +162,68 @@ export class CrmAccountsController {
       const msg = (e as Error).message;
       if (msg.includes('not found')) throw new NotFoundException(msg);
       throw new BadRequestException(msg);
+    }
+  }
+
+  // ---- C3 (§26): installed base & white-space -------------------------------------
+
+  /** The register + derived coverage board + current growth findings, one read. */
+  @Get(':id/installed-base')
+  async installedBaseView(@Param('id', ParseUuidOr404Pipe) id: string): Promise<InstalledBaseView> {
+    try {
+      return await this.installedBase.viewFor(this.tenant.get().tenantId, id);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
+  @Post(':id/installed-base')
+  async addInstalled(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: InstalledBaseDto): Promise<InstalledBaseItem> {
+    const ctx = this.tenant.get();
+    try {
+      return await this.installedBase.add({ tenantId: ctx.tenantId, companyId: ctx.companyId, accountId: id, ...dto, createdBy: ctx.actorId });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
+  }
+
+  @Patch(':id/installed-base/:itemId')
+  async patchInstalled(
+    @Param('id', ParseUuidOr404Pipe) _id: string,
+    @Param('itemId', ParseUuidOr404Pipe) itemId: string,
+    @Body() dto: InstalledBasePatchDto,
+  ): Promise<InstalledBaseItem> {
+    try {
+      return await this.installedBase.patch(itemId, this.tenant.get().tenantId, dto);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
+  @Delete(':id/installed-base/:itemId')
+  async removeInstalled(
+    @Param('id', ParseUuidOr404Pipe) _id: string,
+    @Param('itemId', ParseUuidOr404Pipe) itemId: string,
+  ): Promise<{ deleted: true }> {
+    try {
+      await this.installedBase.remove(itemId, this.tenant.get().tenantId);
+      return { deleted: true };
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
+  /** §26's law in one route: findings become deduplicated SIGNALS on the radar — a re-scan
+   * raises nothing new until the facts change. Never auto-creates opportunities. */
+  @Post(':id/installed-base/scan')
+  async growthScan(@Param('id', ParseUuidOr404Pipe) id: string): Promise<GrowthScanResult> {
+    const ctx = this.tenant.get();
+    try {
+      return await this.installedBase.scan(ctx.tenantId, id, ctx.actorId);
+    } catch (e) {
+      throw new NotFoundException((e as Error).message);
     }
   }
 

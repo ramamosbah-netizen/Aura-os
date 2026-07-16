@@ -49,7 +49,7 @@ export class ActivityCommandController {
 
     const today = new Date().toISOString().slice(0, 10);
     const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-    const open = activities.filter((a) => a.status === 'open');
+    const open = activities.filter((a) => a.status === 'open' || a.status === 'in_progress');
     const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString();
 
     const counts = {

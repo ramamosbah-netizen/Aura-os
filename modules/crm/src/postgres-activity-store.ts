@@ -16,6 +16,7 @@ interface Row {
   related_name: string | null;
   due_date: string | null;
   status: string;
+  started_at: Date | string | null;
   completed_at: Date | string | null;
   outcome: string | null;
   assignee_id: string | null;
@@ -24,7 +25,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, type, subject, notes, related_type, related_id, related_name, due_date, status, completed_at, outcome, assignee_id, created_by, created_at';
+  'id, tenant_id, company_id, type, subject, notes, related_type, related_id, related_name, due_date, status, started_at, completed_at, outcome, assignee_id, created_by, created_at';
 
 function rowToActivity(r: Row): Activity {
   return {
@@ -39,6 +40,7 @@ function rowToActivity(r: Row): Activity {
     relatedName: r.related_name,
     dueDate: r.due_date,
     status: r.status as Activity['status'],
+    startedAt: r.started_at instanceof Date ? r.started_at.toISOString() : (r.started_at ? String(r.started_at) : null),
     completedAt: r.completed_at instanceof Date ? r.completed_at.toISOString() : (r.completed_at ? String(r.completed_at) : null),
     outcome: r.outcome,
     assigneeId: r.assignee_id,
@@ -53,12 +55,12 @@ export class PostgresActivityStore implements ActivityStore {
 
   async save(a: Activity): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_crm_activities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      `INSERT INTO public.aura_crm_activities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (id) DO UPDATE SET
          subject = EXCLUDED.subject, notes = EXCLUDED.notes, due_date = EXCLUDED.due_date,
-         status = EXCLUDED.status, completed_at = EXCLUDED.completed_at, outcome = EXCLUDED.outcome,
+         status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, outcome = EXCLUDED.outcome,
          assignee_id = EXCLUDED.assignee_id`,
-      [a.id, a.tenantId, a.companyId, a.type, a.subject, a.notes, a.relatedType, a.relatedId, a.relatedName, a.dueDate, a.status, a.completedAt, a.outcome, a.assigneeId, a.createdBy, a.createdAt],
+      [a.id, a.tenantId, a.companyId, a.type, a.subject, a.notes, a.relatedType, a.relatedId, a.relatedName, a.dueDate, a.status, a.startedAt, a.completedAt, a.outcome, a.assigneeId, a.createdBy, a.createdAt],
     );
   }
 

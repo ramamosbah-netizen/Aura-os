@@ -125,6 +125,18 @@ export class CrmLeadsController {
     return this.leads.assign(id, dto.assignedTo, ctx.actorId);
   }
 
+  /** G9 — the assignee acknowledges the lead ("I have it"). Retires ASSIGNMENT_NOT_ACCEPTED. */
+  @Post(':id/accept')
+  async accept(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Lead> {
+    try {
+      return await this.leads.accept(id);
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
+  }
+
   /**
    * G3 — record the qualification assessment and get the verdict back.
    * Dimensions merge (qualification is learned piecemeal); the engine recommends, it never

@@ -4,7 +4,14 @@ import type { BuyingStage, PursuitDecision, PursuitDimensions } from './buying-j
 import type { LeadQualificationDimensions } from './lead-qualification';
 import type { ElvSector, ElvSystem, ProjectStage } from './elv-context';
 
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'nurturing' | 'disqualified' | 'converted';
+/**
+ * G8 — the full §5 lifecycle. `verified` (a real inquiry, not spam), `assigned` (routed to an
+ * owner), `qualifying` (actively being assessed) slot between the original states; all three are
+ * ACTIVE statuses, so every existing lead and every existing rule keeps working unchanged.
+ */
+export type LeadStatus =
+  | 'new' | 'verified' | 'assigned' | 'contacted' | 'qualifying' | 'qualified'
+  | 'nurturing' | 'disqualified' | 'converted';
 export type LeadSource = 'website' | 'referral' | 'campaign' | 'cold_call' | 'other';
 
 export interface Lead {
@@ -21,6 +28,8 @@ export interface Lead {
   assignedTo: Id | null;
   /** When it was assigned — the clock the first-response SLA runs against. */
   assignedAt: string | null;
+  /** G9 — when the assignee acknowledged the assignment (null = not yet accepted). */
+  acceptedAt: string | null;
   /** The explicit first-response fact: when we first meaningfully engaged the lead.
    * SLA breach is only measurable because this is recorded (or derived from the first
    * Activity touch after assignment). Null ⇒ we have not responded yet. */
@@ -148,6 +157,7 @@ export interface NewLead {
   source?: LeadSource | null;
   assignedTo?: Id | null;
   assignedAt?: string | null;
+  acceptedAt?: string | null;
   firstRespondedAt?: string | null;
   slaFirstResponseHours?: number | null;
   nextActivityDue?: string | null;
@@ -184,6 +194,7 @@ export function makeLead(input: NewLead): Lead {
     source: input.source ?? null,
     assignedTo: input.assignedTo ?? null,
     assignedAt: input.assignedAt ?? null,
+    acceptedAt: input.acceptedAt ?? null,
     firstRespondedAt: input.firstRespondedAt ?? null,
     slaFirstResponseHours: input.slaFirstResponseHours ?? null,
     nextActivityDue: input.nextActivityDue ?? null,
@@ -213,17 +224,19 @@ export function makeLead(input: NewLead): Lead {
 }
 
 /** Statuses where a lead is still being actively worked and must obey lead attention. */
-export const LEAD_ACTIVE_STATUSES: readonly LeadStatus[] = ['new', 'contacted', 'qualified'];
+export const LEAD_ACTIVE_STATUSES: readonly LeadStatus[] = ['new', 'verified', 'assigned', 'contacted', 'qualifying', 'qualified'];
 /** Terminal / parked statuses — exempt from attention (nurture is a deliberate hold,
  * converted & disqualified are done). */
 export const LEAD_TERMINAL_STATUSES: readonly LeadStatus[] = ['nurturing', 'disqualified', 'converted'];
 /** Statuses still awaiting qualification (drives QUALIFICATION_STALLED). */
-const LEAD_PREQUALIFIED_STATUSES: readonly LeadStatus[] = ['new', 'contacted'];
+const LEAD_PREQUALIFIED_STATUSES: readonly LeadStatus[] = ['new', 'verified', 'assigned', 'contacted', 'qualifying'];
 
 /** One shared threshold set for lead attention (hours/days). Change here, change everywhere. */
 export const LEAD_ATTENTION = {
   /** Default first-response SLA when a lead carries no explicit target. */
   slaFirstResponseHours: 24,
+  /** Assigned but not acknowledged by the assignee within this many hours ⇒ ASSIGNMENT_NOT_ACCEPTED. */
+  acceptanceHours: 8,
   /** No touch in this many days ⇒ STALE. */
   staleDays: 7,
   /** Still not qualified this many days after creation ⇒ QUALIFICATION_STALLED. */
@@ -232,6 +245,7 @@ export const LEAD_ATTENTION = {
 
 export type LeadAttentionGap =
   | 'UNASSIGNED'
+  | 'ASSIGNMENT_NOT_ACCEPTED'
   | 'SLA_BREACHED'
   | 'NO_NEXT_ACTIVITY'
   | 'FOLLOW_UP_OVERDUE'
@@ -266,6 +280,7 @@ const GAP_SEVERITY: Record<LeadAttentionGap, LeadAttentionSeverity> = {
   SLA_BREACHED: 'HIGH',
   FOLLOW_UP_OVERDUE: 'HIGH',
   UNASSIGNED: 'MEDIUM',
+  ASSIGNMENT_NOT_ACCEPTED: 'MEDIUM',
   STALE: 'MEDIUM',
   QUALIFICATION_STALLED: 'MEDIUM',
   NO_NEXT_ACTIVITY: 'LOW',
@@ -277,6 +292,8 @@ export interface LeadAttentionCandidate {
   status: string;
   assignedTo?: Id | null;
   assignedAt?: string | null;
+  /** G9 — when the assignee ACKNOWLEDGED the assignment. Routing isn't ownership until accepted. */
+  acceptedAt?: string | null;
   firstRespondedAt?: string | null;
   slaFirstResponseHours?: number | null;
   createdAt: string;
@@ -302,6 +319,13 @@ export function leadAttention(
   const gaps: LeadAttentionGap[] = [];
 
   if (!lead.assignedTo) gaps.push('UNASSIGNED');
+
+  // G9 — the 7th §8 reason: routed to someone who never picked it up. A lead can be "assigned"
+  // in the system and owned by nobody in reality; acceptance is the fact that closes that gap.
+  if (lead.assignedTo && !lead.acceptedAt) {
+    const elapsed = hoursSince(lead.assignedAt ?? null, now);
+    if (elapsed !== null && elapsed >= LEAD_ATTENTION.acceptanceHours) gaps.push('ASSIGNMENT_NOT_ACCEPTED');
+  }
 
   // SLA: assigned, not yet responded, and past the (per-lead or default) first-response window.
   if (lead.assignedTo && firstResponded === null) {

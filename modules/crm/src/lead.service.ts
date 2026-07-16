@@ -109,8 +109,9 @@ export class LeadService {
     }
 
     const now = new Date().toISOString();
-    // (Re)assigning resets the first-response clock; a fresh owner owns a fresh SLA.
-    const updated: Lead = { ...existing, assignedTo, assignedAt: now, updatedAt: now };
+    // (Re)assigning resets the first-response clock AND the acceptance fact —
+    // a fresh owner owns a fresh SLA and must acknowledge the lead themselves.
+    const updated: Lead = { ...existing, assignedTo, assignedAt: now, acceptedAt: null, updatedAt: now };
 
     const event = makeEvent({
       type: CRM_EVENT.leadAssigned,
@@ -128,6 +129,22 @@ export class LeadService {
     });
 
     this.logger.log(`Lead assigned: ${updated.name} (${updated.id}) → ${assignedTo}`);
+    return updated;
+  }
+
+  /**
+   * G9 — the assignee ACKNOWLEDGES the assignment. Routing isn't ownership until someone says
+   * "I have it"; this fact is what retires the ASSIGNMENT_NOT_ACCEPTED attention reason.
+   * Idempotent: accepting an already-accepted lead keeps the original timestamp.
+   */
+  async accept(id: Id): Promise<Lead> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`Lead ${id} not found`);
+    if (!existing.assignedTo) throw new Error('cannot accept an unassigned lead'); // "cannot" → 400 in the taxonomy
+    if (existing.acceptedAt) return existing;
+    const updated: Lead = { ...existing, acceptedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await this.store.update(updated);
+    this.logger.log(`Lead accepted: ${updated.name} (${updated.id}) by ${updated.assignedTo}`);
     return updated;
   }
 

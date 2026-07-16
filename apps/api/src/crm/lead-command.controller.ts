@@ -29,6 +29,8 @@ interface LeadCommandRow {
   source: string | null;
   assignedTo: string | null;
   assignedToMe: boolean;
+  /** G9 — false while the assignee hasn't acknowledged the lead (drives the Accept affordance). */
+  accepted: boolean;
   createdAt: string;
   ageDays: number;
   lastActivityIso: string | null;
@@ -88,7 +90,7 @@ export class LeadCommandController {
     const firstResponse = new Map<string, string>();
     for (const a of leadActivities) {
       if (!a.relatedId) continue;
-      if (a.status === 'open' && a.dueDate) {
+      if ((a.status === 'open' || a.status === 'in_progress') && a.dueDate) {
         const prev = nextDue.get(a.relatedId);
         if (!prev || a.dueDate < prev) nextDue.set(a.relatedId, a.dueDate);
       }
@@ -112,6 +114,7 @@ export class LeadCommandController {
         source: l.source,
         assignedTo: l.assignedTo,
         assignedToMe: me !== null && l.assignedTo === me,
+        accepted: !!l.acceptedAt,
         createdAt: l.createdAt,
         ageDays: daysBetween(l.createdAt),
         lastActivityIso: facts.lastTouchIso ?? null,

@@ -4,8 +4,33 @@ import { type Id, newId } from '@aura/shared';
 // meeting, note, task) attached to something in the deal chain by type + id reference. Tasks
 // carry a due date and completion state.
 
-export type ActivityType = 'call' | 'email' | 'meeting' | 'note' | 'task';
-export type ActivityStatus = 'open' | 'completed' | 'cancelled';
+/**
+ * G10 — the full §17 vocabulary. WhatsApp and site visits are how ELV deals actually move in
+ * this market; recording them as generic "note" made the two most common touches invisible to
+ * every engine that reads the stream (attention, health, source performance).
+ */
+export type ActivityType =
+  | 'call' | 'email' | 'meeting' | 'note' | 'task'
+  | 'follow_up' | 'whatsapp' | 'site_visit' | 'technical_discovery' | 'demo' | 'presentation' | 'reminder';
+
+/** Every legal type, for validation at the API edge and for UI pickers. */
+export const ACTIVITY_TYPES: readonly ActivityType[] = [
+  'call', 'email', 'meeting', 'note', 'task',
+  'follow_up', 'whatsapp', 'site_visit', 'technical_discovery', 'demo', 'presentation', 'reminder',
+];
+
+/**
+ * G11 — `open` means PLANNED (the UI labels it so); `in_progress` is the §18 addition: a site
+ * visit that has STARTED is a different fact from one on the calendar, and field work spans
+ * hours. OVERDUE / TODAY / THIS_WEEK stay derived from `dueDate`, never persisted.
+ */
+export type ActivityStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
+
+/** Statuses where the work is still LIVE — every "open work" read must use this, not `=== 'open'`,
+ * or in-progress work silently vanishes from next-action projections and attention. */
+export const ACTIVITY_OPEN_STATUSES: readonly ActivityStatus[] = ['open', 'in_progress'];
+export const isLiveActivity = (status: string): boolean =>
+  (ACTIVITY_OPEN_STATUSES as readonly string[]).includes(status);
 
 /**
  * What an activity can be about (G1 — Universal Activity).
@@ -57,6 +82,8 @@ export interface Activity {
   /** Tasks: when it is due and who owns it. */
   dueDate: string | null;
   status: ActivityStatus;
+  /** G11 — when work actually began (set by startActivity; null while still planned). */
+  startedAt: string | null;
   completedAt: string | null;
   /** What happened — captured when the activity is logged/completed (the outcome). */
   outcome: string | null;
@@ -94,6 +121,7 @@ export function makeActivity(input: NewActivity): Activity {
     relatedName: input.relatedName?.trim() || null,
     dueDate: input.dueDate ?? null,
     status: input.status ?? 'open',
+    startedAt: null,
     completedAt: null,
     outcome: input.outcome?.trim() || null,
     assigneeId: input.assigneeId ?? null,
@@ -102,19 +130,27 @@ export function makeActivity(input: NewActivity): Activity {
   };
 }
 
+/** G11 — begin work on a planned activity (idempotent while already in progress). */
+export function startActivity(a: Activity, at?: string): Activity {
+  if (a.status === 'in_progress') return a;
+  if (a.status !== 'open') throw new Error(`cannot start from status ${a.status}`);
+  return { ...a, status: 'in_progress', startedAt: at ?? new Date().toISOString() };
+}
+
 /** Mark a task/activity complete (idempotent), optionally recording the outcome. */
 export function completeActivity(a: Activity, at?: string, outcome?: string | null): Activity {
   const outcomePatch = outcome !== undefined && outcome !== null && outcome.trim() ? { outcome: outcome.trim() } : {};
   if (a.status === 'completed') return { ...a, ...outcomePatch };
+  if (a.status === 'cancelled') throw new Error('cannot complete a cancelled activity');
   return { ...a, status: 'completed', completedAt: at ?? new Date().toISOString(), ...outcomePatch };
 }
 
 export function cancelActivity(a: Activity): Activity {
-  if (a.status !== 'open') throw new Error(`cannot cancel from status ${a.status}`);
+  if (a.status !== 'open' && a.status !== 'in_progress') throw new Error(`cannot cancel from status ${a.status}`);
   return { ...a, status: 'cancelled' };
 }
 
-/** Completed/cancelled back to open — plans change. */
+/** Completed/cancelled back to open — plans change. Started time is history; it stays. */
 export function reopenActivity(a: Activity): Activity {
   if (a.status === 'open') throw new Error('activity is already open');
   return { ...a, status: 'open', completedAt: null };

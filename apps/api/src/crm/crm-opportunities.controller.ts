@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
+import { FORECAST_CATEGORIES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
 import { type Quotation, ContactService, OpportunityService, QuotationService } from '@aura/crm';
 
 /** The create drawer posts select values as strings — accept both. */
@@ -18,6 +18,8 @@ class CreateOpportunityDto {
   @IsOptional() @IsNumber() value?: number;
   @IsOptional() @IsString() stage?: OpportunityStage;
   @IsOptional() @IsNumber() winProbability?: number;
+  /** §23 — explicit commitment call; CLOSED is earned by the stage, never posted. */
+  @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() requiresTender?: boolean | string;
   @IsOptional() @IsString() ownerId?: string;
@@ -40,6 +42,7 @@ class UpdateOpportunityDto {
   @IsOptional() @IsNumber() value?: number;
   @IsOptional() @IsString() stage?: OpportunityStage;
   @IsOptional() @IsNumber() winProbability?: number;
+  @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() requiresTender?: boolean | string;
   @IsOptional() @IsString() ownerId?: string;
@@ -108,6 +111,7 @@ export class CrmOpportunitiesController {
       value: dto.value,
       stage: dto.stage,
       winProbability: dto.winProbability,
+      forecastCategory: dto.forecastCategory,
       closeDate: dto.closeDate,
       requiresTender: coerceBool(dto.requiresTender),
       ownerId: dto.ownerId,

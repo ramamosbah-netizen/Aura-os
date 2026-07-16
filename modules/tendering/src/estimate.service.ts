@@ -5,6 +5,7 @@ import { TENDER_ESTIMATE_EVENT, type NewRateBuildUp, type RateBuildUp, type Tend
 import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
 import { ESTIMATE_SOURCE_STORE, type EstimateSourceStore } from './estimate-source-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
+import { TenderService } from './tender.service';
 
 /**
  * Estimate service — the cost engine behind tender pricing. Owns
@@ -22,6 +23,11 @@ export class EstimateService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     // Optional so unit tests that construct EstimateService directly need not supply it.
     @Optional() @Inject(ESTIMATE_SOURCE_STORE) private readonly sourceStore: EstimateSourceStore | null = null,
+    // T3 — applying a selling rate to the BOQ must pull the tender value with it (the value is
+    // the roll-up, not a stale figure). Optional for the same direct-construction reason; the
+    // explicit @Inject token is REQUIRED — a union-typed param erases the metadata and Nest
+    // would silently inject null (the platform's known @Optional gotcha).
+    @Optional() @Inject(TenderService) private readonly tenders: TenderService | null = null,
   ) {}
 
   /**
@@ -64,6 +70,9 @@ export class EstimateService {
         totalAmount: Math.round(item.quantity * rate * 100) / 100,
         updatedAt: new Date().toISOString(),
       });
+      // The tender value is the roll-up — it follows the applied rate immediately (T3). Before
+      // this, the value went stale until the next unrelated BOQ edit happened to recompute it.
+      await this.tenders?.recalculateTenderValue(input.tenantId, item.boqId);
     }
 
     await this.events.append([

@@ -5,7 +5,11 @@ import { type CostComponent, type RateBuildUp, type TenderEstimate, EstimateServ
 interface BuildRateDto {
   boqItemId: string;
   components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
+  /** Indirect/preliminaries % on direct cost. */
+  indirectPercent?: number;
   overheadPercent?: number;
+  /** Risk/contingency % on the full cost base (T3). */
+  riskPercent?: number;
   profitPercent?: number;
   notes?: string;
   /** Write the selling rate back onto the BOQ item. */
@@ -34,7 +38,9 @@ export class EstimatesController {
           companyId: ctx.companyId,
           boqItemId: dto.boqItemId,
           components: dto.components,
+          indirectPercent: dto.indirectPercent,
           overheadPercent: dto.overheadPercent,
+          riskPercent: dto.riskPercent,
           profitPercent: dto.profitPercent,
           notes: dto.notes ?? null,
           createdBy: ctx.actorId,

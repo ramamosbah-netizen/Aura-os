@@ -36,6 +36,23 @@ describe('rate build-up engine', () => {
     expect(sellingRate).toBe(directCost);
   });
 
+  it('risk (contingency) prices over the full cost base; profit marks up the base including risk (T3)', () => {
+    const b = makeRateBuildUp({ ...base, indirectPercent: 5, riskPercent: 4 });
+    // direct 365 → indirect 18.25 (5%) → overhead 36.5 (10%) → cost base 419.75
+    expect(b.riskAmount).toBe(16.79); // 4% of 419.75
+    expect(b.profitAmount).toBe(34.92); // 8% of 436.54 (base + risk)
+    expect(b.sellingRate).toBe(471.46); // 419.75 + 16.79 + 34.92
+    expect(b.riskPercent).toBe(4);
+  });
+
+  it('riskPercent 0 reproduces the pre-T3 figures exactly — existing build-ups are untouched', () => {
+    const before = makeRateBuildUp(base);
+    const after = makeRateBuildUp({ ...base, riskPercent: 0 });
+    expect(after.sellingRate).toBe(before.sellingRate);
+    expect(after.profitAmount).toBe(before.profitAmount);
+    expect(after.riskAmount).toBe(0);
+  });
+
   it('rejects empty components, bad cost types and negative numbers', () => {
     expect(() => makeRateBuildUp({ ...base, components: [] })).toThrow(/component/);
     expect(() =>
@@ -51,6 +68,7 @@ describe('rate build-up engine', () => {
       }),
     ).toThrow(/negative/);
     expect(() => makeRateBuildUp({ ...base, overheadPercent: -5 })).toThrow(/negative/);
+    expect(() => makeRateBuildUp({ ...base, riskPercent: -1 })).toThrow(/negative/);
   });
 });
 

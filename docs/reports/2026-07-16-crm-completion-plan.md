@@ -1,5 +1,8 @@
 # CRM Completion Sprint — the plan, verified against the live tree
 
+> **✅ COMPLETE — 2026-07-16.** All nine C-slices (C1–C9) are merged to `main`. The CRM is in
+> Feature Freeze. Closing declaration: [2026-07-16-crm-feature-freeze.md](2026-07-16-crm-feature-freeze.md).
+
 **Date:** 2026-07-16 · **Decision:** the ONLY current goal is finishing CRM 100%, then Feature Freeze.
 **Baseline:** `main` after PR#119 (health dimensions) merged; PR#120 (forecast categories) green/open.
 

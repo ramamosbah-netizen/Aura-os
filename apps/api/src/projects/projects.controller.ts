@@ -35,6 +35,8 @@ import {
   type SchedulePlan,
   ScheduleService,
 } from '@aura/projects';
+import { AccountService } from '@aura/crm';
+import { resolveAccountSnapshot } from '../common/account-snapshot';
 
 class CreateProjectDto {
   @IsString() title!: string;
@@ -106,13 +108,14 @@ export class ProjectsController {
     private readonly closeouts: CloseoutService,
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
+    private readonly accounts: AccountService,
     private readonly tenant: TenantContext,
   ) {}
 
   // ── PROJECTS ─────────────────────────────────────────────────────────────
 
   @Post('projects')
-  createProject(@Body() dto: CreateProjectDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Project> {
+  async createProject(@Body() dto: CreateProjectDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Project> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.projects.create({
@@ -123,7 +126,7 @@ export class ProjectsController {
       contractId: dto.contractId ?? null,
       contractTitle: dto.contractTitle ?? null,
       accountId: dto.accountId ?? null,
-      accountName: dto.accountName ?? null,
+      accountName: await resolveAccountSnapshot(this.accounts, dto.accountId, dto.accountName),
       status: dto.status,
       value: dto.value,
       ownerId: ctx.actorId,

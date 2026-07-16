@@ -2,7 +2,8 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { FORECAST_CATEGORIES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
-import { type Quotation, ContactService, OpportunityService, QuotationService } from '@aura/crm';
+import { type Quotation, AccountService, ContactService, OpportunityService, QuotationService } from '@aura/crm';
+import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
 /** The create drawer posts select values as strings — accept both. */
 function coerceBool(v: boolean | string | undefined): boolean | undefined {
@@ -73,6 +74,7 @@ export class CrmOpportunitiesController {
     private readonly opportunities: OpportunityService,
     private readonly quotations: QuotationService,
     private readonly contacts: ContactService,
+    private readonly accounts: AccountService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -98,7 +100,7 @@ export class CrmOpportunitiesController {
   }
 
   @Post()
-  create(@Body() dto: CreateOpportunityDto): Promise<Opportunity> {
+  async create(@Body() dto: CreateOpportunityDto): Promise<Opportunity> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.opportunities.create({
@@ -106,7 +108,9 @@ export class CrmOpportunitiesController {
       companyId: ctx.companyId,
       leadId: dto.leadId,
       accountId: dto.accountId,
-      accountName: dto.accountName,
+      // The deal is the head of the chain: this snapshot is what the auto-created tender copies
+      // from the `opportunityCreated` payload, so leaving it null strands the whole chain.
+      accountName: await resolveAccountSnapshot(this.accounts, dto.accountId, dto.accountName),
       title: dto.title,
       value: dto.value,
       stage: dto.stage,
@@ -158,6 +162,7 @@ export class CrmOpportunitiesController {
     const ctx = this.tenant.get();
     const patch = {
       ...dto,
+      ...(await accountSnapshotPatch(this.accounts, dto.accountId, dto.accountName)),
       ...(dto.requiresTender !== undefined ? { requiresTender: coerceBool(dto.requiresTender) } : {}),
       ...(dto.budgetConfirmed !== undefined ? { budgetConfirmed: coerceBool(dto.budgetConfirmed) } : {}),
       ...(dto.authorityConfirmed !== undefined ? { authorityConfirmed: coerceBool(dto.authorityConfirmed) } : {}),

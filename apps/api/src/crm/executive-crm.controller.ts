@@ -28,10 +28,11 @@ export class ExecutiveCrmController {
       this.opportunities.list({ tenantId, limit: 5000 }),
       this.accounts.list({ tenantId, limit: 2000 }),
     ]);
-    // The deal's accountName is a SNAPSHOT and is only written when the caller supplies it — a deal
-    // created with just an accountId carries none. The snapshot still wins when present (it is what
-    // the account was called at the time), but a concentration table that reads "a9e246c3-…" is
-    // worthless to an exec, so fall back to what the account is called now.
+    // The snapshot wins when present (it is what the account was called at the time); this falls
+    // back to the current name because a concentration table that reads "a9e246c3-…" is worthless
+    // to an exec. The creates now resolve the snapshot and 0181 backfilled the rows written before
+    // they did, so this should never fire — it is kept because the cost is nil (the accounts are
+    // already loaded to group the table) and the failure it prevents lands in front of an exec.
     const nameById = new Map(accounts.map((a) => [a.id, a.name]));
 
     return executiveCrm(

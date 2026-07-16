@@ -44,6 +44,8 @@ type View = 'command' | 'board' | 'analytics' | 'list' | 'activities';
 
 interface PipelineCommand {
   kpis: { openDeals: number; openValue: number; weighted: number; avgDealSize: number; avgAgeDays: number; winRate: number | null; won90: number; wonValue90: number; lost90: number };
+  /** §23 — PIPELINE / BEST_CASE / COMMIT / CLOSED, always all four. */
+  categories: Array<{ category: string; deals: number; value: number; weighted: number }>;
   forecastByMonth: Array<{ month: string; deals: number; value: number; weighted: number }>;
   aging: Array<{ key: string; label: string; deals: number; value: number }>;
   stalled: Array<{ id: string; title: string; value: number; stage: string; ownerId: string | null; accountName: string | null; daysSinceActivity: number | null }>;
@@ -360,6 +362,21 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               <CmdKpi label="Won (90d)" value={`${command.kpis.won90} · ${money(command.kpis.wonValue90)}`} good />
               <CmdKpi label="At risk" value={String(command.atRisk.length)} bad={command.atRisk.length > 0} />
             </div>
+
+            {/* §23 forecast categories — the management commitment ladder */}
+            {command.categories && (
+              <div style={s.cmdKpiRow}>
+                {command.categories.map((c) => (
+                  <CmdKpi
+                    key={c.category}
+                    label={c.category === 'BEST_CASE' ? 'Best case' : c.category.charAt(0) + c.category.slice(1).toLowerCase()}
+                    value={`${c.deals} · ${money(c.value)}`}
+                    accent={c.category === 'COMMIT'}
+                    good={c.category === 'CLOSED'}
+                  />
+                ))}
+              </div>
+            )}
 
             <div style={s.cmdGrid}>
               {/* At-risk deals + recommendations */}

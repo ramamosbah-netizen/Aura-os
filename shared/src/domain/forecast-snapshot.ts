@@ -32,10 +32,16 @@ export interface ForecastableOpp {
   value: number;
   winProbability: number;
   closeDate: string | null;
+  /** §23 — an explicit human COMMIT call beats the confidence threshold. */
+  forecastCategory?: import('./forecast-category').ForecastCategory | null;
 }
 
-/** Deals at/above this win probability count as "committed" (the classic commit bucket). */
+/** Deals at/above this confidence count as "committed" when no explicit category call exists. */
 export const COMMIT_THRESHOLD = 70;
+
+/** §23: committed = an explicit COMMIT call, or confidence at/above threshold when uncalled. */
+const isCommitted = (o: ForecastableOpp): boolean =>
+  o.forecastCategory ? o.forecastCategory === 'COMMIT' : o.winProbability >= COMMIT_THRESHOLD;
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 const isActive = (o: ForecastableOpp): boolean => o.stage !== 'won' && o.stage !== 'lost';
@@ -58,7 +64,7 @@ export function summarizeForecastByPeriod(opps: ForecastableOpp[]): PeriodForeca
     const row = byPeriod.get(period) ?? { period, openValue: 0, weightedValue: 0, committedValue: 0, dealCount: 0 };
     row.openValue += o.value;
     row.weightedValue += o.value * (o.winProbability / 100);
-    if (o.winProbability >= COMMIT_THRESHOLD) row.committedValue += o.value;
+    if (isCommitted(o)) row.committedValue += o.value;
     row.dealCount += 1;
     byPeriod.set(period, row);
   }

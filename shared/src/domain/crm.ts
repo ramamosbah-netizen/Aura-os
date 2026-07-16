@@ -88,7 +88,11 @@ export interface Opportunity {
   title: string;
   value: number;
   stage: OpportunityStage;
+  /** The SALESPERSON's confidence (§23) — always was the hand-set number. Stage probability is
+   * derived from `stage` and the model's read is advisory; see forecast-category.ts. */
   winProbability: number; // 0 to 100
+  /** Explicit forecast commitment call (PIPELINE/BEST_CASE/COMMIT). Null = derive from confidence. */
+  forecastCategory: import('./forecast-category').ForecastCategory | null;
   closeDate: string | null;
   /**
    * Whether winning this deal needs a Tender/Estimation. The deal chain is
@@ -338,6 +342,7 @@ export interface NewOpportunity {
   value?: number;
   stage?: OpportunityStage;
   winProbability?: number;
+  forecastCategory?: import('./forecast-category').ForecastCategory | null;
   closeDate?: string | null;
   requiresTender?: boolean;
   ownerId?: Id | null;
@@ -367,6 +372,7 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     stage: input.stage ?? 'qualification',
     winProbability: Number.isFinite(input.winProbability) ? Number(input.winProbability) : 20.0,
+    forecastCategory: input.forecastCategory ?? null,
     closeDate: input.closeDate ?? null,
     requiresTender: input.requiresTender ?? true,
     ownerId: input.ownerId ?? null,

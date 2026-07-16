@@ -56,7 +56,7 @@ export class OpportunityService {
 
   async update(
     id: Id,
-    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason' | 'winReason' | 'buyingStage'>>,
+    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'forecastCategory' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason' | 'winReason' | 'buyingStage'>>,
     actorId?: Id | null,
     /**
      * G5 — evidence for the stage gate (quotations/stakeholders live outside this aggregate, so

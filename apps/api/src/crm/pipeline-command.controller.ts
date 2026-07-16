@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { ActivityService, ContactService, OpportunityService, ATTENTION_THRESHOLDS, lastActivityByRecord, isQuiet } from '@aura/crm';
-import { type Opportunity, buyingJourneyAlignment } from '@aura/shared';
+import { type Opportunity, buyingJourneyAlignment, rollupByCategory } from '@aura/shared';
 
 // Sales Pipeline Command Center — the sales manager's cockpit. Turns the raw
 // opportunity list into portfolio KPIs, a weighted forecast, pipeline aging,
@@ -75,6 +75,11 @@ export class PipelineCommandController {
       wonValue90: r2(won90.reduce((s, o) => s + o.value, 0)),
       lost90: lost90.length,
     };
+
+    // §23 forecast categories — PIPELINE / BEST_CASE / COMMIT from the explicit call or the
+    // confidence derivation, CLOSED = won value. All four rows always present; a zero COMMIT
+    // is a statement, not an omission.
+    const categories = rollupByCategory(opps);
 
     // Weighted forecast by expected-close month.
     const byMonth = new Map<string, { deals: number; value: number; weighted: number }>();
@@ -159,6 +164,6 @@ export class PipelineCommandController {
     }
     atRisk.sort((a, b) => (b.value * b.reasons.length) - (a.value * a.reasons.length));
 
-    return { kpis, forecastByMonth, aging, stalled, owners, atRisk };
+    return { kpis, categories, forecastByMonth, aging, stalled, owners, atRisk };
   }
 }

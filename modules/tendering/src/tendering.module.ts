@@ -20,6 +20,9 @@ import { ESTIMATE_SOURCE_STORE } from './estimate-source-store';
 import { InMemoryEstimateSourceStore } from './in-memory-estimate-source-store';
 import { PostgresEstimateSourceStore } from './postgres-estimate-source-store';
 import { EstimateSourcingService } from './estimate-sourcing.service';
+import { SUBMISSION_STORE } from './submission-store';
+import { InMemorySubmissionStore } from './in-memory-submission-store';
+import { PostgresSubmissionStore } from './postgres-submission-store';
 import { TENDER_OUTCOME_STORE } from './win-loss-store';
 import { InMemoryTenderOutcomeStore } from './in-memory-win-loss-store';
 import { PostgresTenderOutcomeStore } from './postgres-win-loss-store';
@@ -46,6 +49,12 @@ import { WinLossService } from './win-loss.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresBidScoreStore(pool) : new InMemoryBidScoreStore(),
+    },
+    {
+      provide: SUBMISSION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSubmissionStore(pool) : new InMemorySubmissionStore(),
     },
     {
       provide: ESTIMATE_STORE,

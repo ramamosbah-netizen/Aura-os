@@ -73,15 +73,25 @@ describe('→ submitted is the strict gate — decision AND price AND value', ()
   });
 });
 
-describe('won / lost can only follow a submission', () => {
+describe('won / lost can only follow a submission — the RECORD, not the status label (T2)', () => {
   it('blocks winning a bid that was never submitted', () => {
     expect(codes('priced', 'won', { bidRecommendation: 'go', hasPricedEstimate: true })).toEqual(['NOT_SUBMITTED']);
     expect(codes('draft', 'lost')).toEqual(['NOT_SUBMITTED']);
   });
 
-  it('allows won and lost straight from submitted', () => {
-    expect(allowed('submitted', 'won')).toBe(true);
-    expect(allowed('submitted', 'lost')).toBe(true);
+  it('the status label alone is not evidence — a `submitted` tender with no record is blocked', () => {
+    expect(codes('submitted', 'won')).toEqual(['NOT_SUBMITTED']);
+    expect(codes('submitted', 'lost')).toEqual(['NOT_SUBMITTED']);
+  });
+
+  it('allows won and lost when a submission record exists', () => {
+    expect(allowed('submitted', 'won', { hasSubmission: true })).toBe(true);
+    expect(allowed('submitted', 'lost', { hasSubmission: true })).toBe(true);
+  });
+
+  it('the record survives a retreat — a bid reworked after submission can still be won', () => {
+    // Retreating submitted → priced does not un-submit the bid that is on the client's desk.
+    expect(allowed('priced', 'won', { hasSubmission: true })).toBe(true);
   });
 });
 
@@ -103,7 +113,8 @@ describe('the whole happy path walks cleanly', () => {
     expect(allowed('qualifying', 'estimating', { bidRecommendation: 'go' })).toBe(true);
     expect(allowed('estimating', 'priced', go)).toBe(true);
     expect(allowed('priced', 'submitted', go)).toBe(true);
-    expect(allowed('submitted', 'won', go)).toBe(true);
+    // Crossing the submitted gate writes the submission record — the won gate reads it.
+    expect(allowed('submitted', 'won', { ...go, hasSubmission: true })).toBe(true);
   });
 });
 

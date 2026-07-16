@@ -9,9 +9,27 @@ interface Tender {
   reference: string | null;
   accountName: string | null;
   status: 'draft' | 'submitted' | 'won' | 'lost';
+  source?: string | null;
+  submissionDeadline?: string | null;
   value: number;
   createdAt: string;
 }
+
+// T4 — the register's Q&A/change trail on this tender.
+interface Clarification {
+  id: string;
+  kind: 'clarification' | 'addendum';
+  reference: string | null;
+  title: string;
+  body: string | null;
+  issuedAt: string;
+  responseDue: string | null;
+  answer: string | null;
+  answeredAt: string | null;
+  deadlineExtendedTo: string | null;
+}
+
+const SOURCE_LABELS: Record<string, string> = { invitation: 'Invitation to bid', public: 'Public advertisement', private: 'Private / single-source', opportunity: 'From opportunity' };
 
 interface BOQ {
   id: string;
@@ -338,6 +356,8 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
             <h1 style={s.title}>{tender.title}</h1>
             <p style={s.subtitle}>
               Customer: <strong>{tender.accountName ?? '—'}</strong> | Created: {new Date(tender.createdAt).toLocaleDateString()}
+              {tender.source && <> | Source: <strong>{SOURCE_LABELS[tender.source] ?? tender.source}</strong></>}
+              {tender.submissionDeadline && <> | Deadline: <strong>{tender.submissionDeadline}</strong></>}
             </p>
           </div>
           <div style={s.headerStats}>
@@ -617,6 +637,9 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
           )}
         </div>
       </section>
+
+      {/* CLARIFICATIONS & ADDENDA (T4) */}
+      <ClarificationsPanel tenderId={tender.id} onDeadlineMoved={() => router.refresh()} />
 
       {/* AI IMPORT DIALOG MODAL */}
       {showImportModal && (
@@ -1130,3 +1153,149 @@ const s = {
     animation: 'spin 0.8s linear infinite',
   } as CSSProperties,
 };
+
+/** T4 — Clarifications & addenda: record the Q&A/change traffic, answer/acknowledge it, and
+ * see an addendum's deadline extension reflected on the tender (the server mirrors it). */
+function ClarificationsPanel({ tenderId, onDeadlineMoved }: { tenderId: string; onDeadlineMoved: () => void }) {
+  const [records, setRecords] = useState<Clarification[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [kind, setKind] = useState<'clarification' | 'addendum'>('clarification');
+  const [reference, setReference] = useState('');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [responseDue, setResponseDue] = useState('');
+  const [deadlineExtendedTo, setDeadlineExtendedTo] = useState('');
+  const [answerDraft, setAnswerDraft] = useState<Record<string, string>>({});
+
+  const load = async (): Promise<void> => {
+    const res = await fetch(`/api/tendering/tenders/${tenderId}/clarifications`, { cache: 'no-store' });
+    if (res.ok) setRecords(await res.json());
+  };
+  useEffect(() => { void load(); }, [tenderId]);
+
+  const add = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/tendering/tenders/${tenderId}/clarifications`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          title,
+          reference: reference || undefined,
+          body: body || undefined,
+          responseDue: responseDue || undefined,
+          deadlineExtendedTo: kind === 'addendum' && deadlineExtendedTo ? deadlineExtendedTo : undefined,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(d.message ?? d.error ?? 'Failed to record'); return; }
+      setAdding(false); setTitle(''); setReference(''); setBody(''); setResponseDue('');
+      const moved = Boolean(deadlineExtendedTo);
+      setDeadlineExtendedTo('');
+      await load();
+      if (moved) onDeadlineMoved();
+    } finally { setBusy(false); }
+  };
+
+  const answer = async (c: Clarification): Promise<void> => {
+    const text = answerDraft[c.id]?.trim();
+    if (!text) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/tendering/tenders/${tenderId}/clarifications/${c.id}/answer`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ answer: text }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(d.message ?? d.error ?? 'Failed'); return; }
+      setAnswerDraft((m) => ({ ...m, [c.id]: '' }));
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  const open = records.filter((c) => !c.answeredAt).length;
+  const input: CSSProperties = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '7px 10px', fontSize: 13, outline: 'none' };
+
+  return (
+    <section style={s.boqSection}>
+      <div style={s.sectionHeader}>
+        <h2 style={s.sectionTitle}>
+          Clarifications & Addenda{records.length > 0 && <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · {records.length} on record{open > 0 ? `, ${open} open` : ''}</span>}
+        </h2>
+        <button style={s.btnSecondary} onClick={() => setAdding((v) => !v)}>{adding ? 'Close' : '+ Record'}</button>
+      </div>
+
+      {err && <div style={s.errorBar}>{err}</div>}
+
+      {adding && (
+        <div style={{ display: 'grid', gap: 10, padding: '12px 0', borderBottom: '1px solid var(--border)', marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <select style={input} value={kind} onChange={(e) => setKind(e.target.value as 'clarification' | 'addendum')}>
+              <option value="clarification">Clarification (RFI we raised)</option>
+              <option value="addendum">Addendum (client-issued change)</option>
+            </select>
+            <input style={input} placeholder={kind === 'addendum' ? 'Ref e.g. ADD-02' : 'Ref e.g. RFI-04'} value={reference} onChange={(e) => setReference(e.target.value)} />
+            <input style={{ ...input, flex: 1, minWidth: 220 }} placeholder="Subject (required)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <textarea style={{ ...input, minHeight: 56 }} placeholder={kind === 'addendum' ? 'What changed?' : 'The question…'} value={body} onChange={(e) => setBody(e.target.value)} />
+          <div style={{ display: 'flex', gap: 14, alignItems: 'end', flexWrap: 'wrap' }}>
+            <label style={{ display: 'grid', gap: 3, fontSize: 11.5, color: 'var(--muted)' }}>
+              Response due
+              <input type="date" style={input} value={responseDue} onChange={(e) => setResponseDue(e.target.value)} />
+            </label>
+            {kind === 'addendum' && (
+              <label style={{ display: 'grid', gap: 3, fontSize: 11.5, color: 'var(--muted)' }}>
+                Deadline extended to (moves the tender deadline)
+                <input type="date" style={input} value={deadlineExtendedTo} onChange={(e) => setDeadlineExtendedTo(e.target.value)} />
+              </label>
+            )}
+            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: '#fff' }} disabled={busy || !title.trim()} onClick={() => void add()}>
+              Record {kind}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {records.length === 0 ? (
+        <p style={{ color: 'var(--muted)', fontSize: 13, margin: '8px 0' }}>None on record — RFIs you raise and addenda the client issues live here; a submission acknowledges addenda by these references.</p>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {records.map((c) => (
+            <div key={c.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: c.kind === 'addendum' ? 'var(--accent)' : 'var(--muted)' }}>
+                  {c.kind === 'addendum' ? '▲ Addendum' : '? Clarification'}
+                </span>
+                {c.reference && <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: 'var(--muted)' }}>{c.reference}</span>}
+                <strong style={{ fontSize: 13.5 }}>{c.title}</strong>
+                <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
+                  issued {c.issuedAt}{c.responseDue && !c.answeredAt ? ` · due ${c.responseDue}` : ''}
+                </span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: c.answeredAt ? 'var(--good, #10b981)' : 'var(--warn, #d97706)' }}>
+                  {c.answeredAt ? (c.kind === 'addendum' ? 'acknowledged' : 'answered') : 'open'}
+                </span>
+              </div>
+              {c.body && <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--fg)' }}>{c.body}</p>}
+              {c.deadlineExtendedTo && <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--accent)' }}>Deadline extended to {c.deadlineExtendedTo} — mirrored onto the tender.</p>}
+              {c.answer ? (
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}><b>{c.kind === 'addendum' ? 'Acknowledgement' : 'Answer'}:</b> {c.answer}</p>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <input style={{ ...input, flex: 1 }} placeholder={c.kind === 'addendum' ? 'Acknowledge — what we did about it…' : 'The answer…'}
+                    value={answerDraft[c.id] ?? ''} onChange={(e) => setAnswerDraft((m) => ({ ...m, [c.id]: e.target.value }))} />
+                  <button style={s.btnSecondary} disabled={busy || !(answerDraft[c.id] ?? '').trim()} onClick={() => void answer(c)}>
+                    {c.kind === 'addendum' ? 'Acknowledge' : 'Answer'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}

@@ -6,7 +6,7 @@ interface AccountLite {
 }
 
 /** Row-level "Edit" — opens the drawer prefilled, PATCHes the tender. */
-export function TenderEdit({ tender }: { tender: { id: string; title: string; reference?: string | null; value: number; submissionDeadline?: string | null } }) {
+export function TenderEdit({ tender }: { tender: { id: string; title: string; reference?: string | null; source?: string | null; value: number; submissionDeadline?: string | null } }) {
   return (
     <CreateDrawer
       mode="edit"
@@ -16,12 +16,25 @@ export function TenderEdit({ tender }: { tender: { id: string; title: string; re
       initialValues={{
         title: tender.title,
         reference: tender.reference ?? '',
+        source: tender.source ?? '',
         value: tender.value ? String(tender.value) : '',
         submissionDeadline: tender.submissionDeadline ?? '',
       }}
       fields={[
         { name: 'title', label: 'Tender title', kind: 'text', required: true, span: 2 },
         { name: 'reference', label: 'Reference', kind: 'text' },
+        {
+          name: 'source',
+          label: 'Source',
+          kind: 'select',
+          placeholder: 'Unclassified',
+          options: [
+            { value: 'invitation', label: 'Invitation to bid' },
+            { value: 'public', label: 'Public advertisement' },
+            { value: 'private', label: 'Private / single-source' },
+            { value: 'opportunity', label: 'From opportunity' },
+          ],
+        },
         { name: 'value', label: 'Value (AED)', kind: 'number' },
         { name: 'submissionDeadline', label: 'Submission deadline', kind: 'date' },
       ]}
@@ -39,6 +52,18 @@ export default function TenderCreate({ accounts }: { accounts: AccountLite[] }) 
       fields={[
         { name: 'title', label: 'Tender title', kind: 'text', required: true, placeholder: 'e.g. Marina Tower — ELV package', span: 2 },
         { name: 'reference', label: 'Reference', kind: 'text', placeholder: 'e.g. TDR-2026-001' },
+        {
+          name: 'source',
+          label: 'Source',
+          kind: 'select',
+          placeholder: 'Unclassified',
+          hint: 'Where this tender came from (the register groups by it)',
+          options: [
+            { value: 'invitation', label: 'Invitation to bid' },
+            { value: 'public', label: 'Public advertisement' },
+            { value: 'private', label: 'Private / single-source' },
+          ],
+        },
         {
           name: 'status',
           label: 'Status',

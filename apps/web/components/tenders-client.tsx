@@ -16,6 +16,7 @@ interface Tender {
   accountId: string | null;
   accountName: string | null;
   status: string;
+  source: string | null;
   value: number;
   submissionDeadline: string | null;
   sourceOpportunityId: string | null;
@@ -26,6 +27,10 @@ interface AccountLite { id: string; name: string; }
 interface SheetSummary { tenderId: string; pricedItems: number; boqItems: number; marginPercent: number; }
 interface QuotationLite { id: string; sourceTenderId: string | null; quoteNumber: string; status: string; }
 interface ContractLite { id: string; tenderId: string | null; status: string; }
+
+/** The pre-submission statuses still racing the deadline (the T1 lifecycle's active rungs). */
+const ACTIVE_STATUSES = ['draft', 'qualifying', 'estimating', 'priced'];
+const SOURCE_LABELS: Record<string, string> = { invitation: 'Invitation', public: 'Public', private: 'Private', opportunity: 'Opportunity' };
 
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
@@ -42,6 +47,7 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
 
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
@@ -63,15 +69,15 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
 
   const kpi = useMemo(() => {
     const sum = (list: Tender[]) => list.reduce((s, t) => s + t.value, 0);
-    const draft = tenders.filter((t) => t.status === 'draft');
+    const active = tenders.filter((t) => ACTIVE_STATUSES.includes(t.status));
     const submitted = tenders.filter((t) => t.status === 'submitted');
     const won = tenders.filter((t) => t.status === 'won');
     const lost = tenders.filter((t) => t.status === 'lost');
-    const dueSoon = tenders.filter((t) => t.status === 'draft' && t.submissionDeadline && t.submissionDeadline >= today && t.submissionDeadline <= soon);
+    const dueSoon = tenders.filter((t) => ACTIVE_STATUSES.includes(t.status) && t.submissionDeadline && t.submissionDeadline >= today && t.submissionDeadline <= soon);
     const decided = won.length + lost.length;
     const priced = tenders.filter((t) => (sheetByTender.get(t.id)?.pricedItems ?? 0) > 0);
     return {
-      draftValue: sum(draft),
+      activeValue: sum(active),
       submittedValue: sum(submitted),
       wonValue: sum(won),
       winRate: decided > 0 ? Math.round((won.length / decided) * 100) : null,
@@ -83,10 +89,11 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
   const filtered = useMemo(() => {
     let out = tenders;
     if (statusFilter) out = out.filter((t) => t.status === statusFilter);
+    if (sourceFilter) out = out.filter((t) => (sourceFilter === 'unclassified' ? !t.source : t.source === sourceFilter));
     const q = query.trim().toLowerCase();
     if (q) out = out.filter((t) => [t.title, t.reference, t.accountName, t.ownerId].some((v) => v && v.toLowerCase().includes(q)));
     return out;
-  }, [tenders, query, statusFilter]);
+  }, [tenders, query, statusFilter, sourceFilter]);
 
   const setStatus = async (t: Tender, status: string): Promise<void> => {
     setBusy(true); setErr('');
@@ -105,7 +112,7 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
   return (
     <>
       <div style={st.cards}>
-        <Kpi label="Draft (preparing)" value={money(kpi.draftValue)} />
+        <Kpi label="In preparation" value={money(kpi.activeValue)} />
         <Kpi label="Submitted (awaiting)" value={money(kpi.submittedValue)} accent />
         <Kpi label="Won value" value={money(kpi.wonValue)} good />
         <Kpi label="Win rate" value={kpi.winRate === null ? '—' : `${kpi.winRate}%`} accent />
@@ -113,12 +120,29 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
         <Kpi label="Priced (sheets)" value={kpi.priced} />
       </div>
 
+      {/* T4 — the register's source tabs (vision: Invitations · Opportunities · Public · Private) */}
+      <div style={st.tabs}>
+        {[
+          ['', 'All'],
+          ['invitation', 'Invitations'],
+          ['opportunity', 'Opportunities'],
+          ['public', 'Public'],
+          ['private', 'Private'],
+          ['unclassified', 'Unclassified'],
+        ].map(([v, label]) => (
+          <button key={v} onClick={() => setSourceFilter(v)}
+            style={{ ...st.tab, ...(sourceFilter === v ? st.tabActive : {}) }}>
+            {label}{v ? ` (${tenders.filter((t) => (v === 'unclassified' ? !t.source : t.source === v)).length})` : ` (${tenders.length})`}
+          </button>
+        ))}
+      </div>
+
       <div style={st.toolbar}>
         <TenderCreate accounts={accounts} />
         <input style={st.search} placeholder="Search title, ref, account…" value={query} onChange={(e) => setQuery(e.target.value)} />
         <select style={st.search} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">All statuses</option>
-          {['draft', 'submitted', 'won', 'lost'].map((s) => <option key={s} value={s}>{s}</option>)}
+          {['draft', 'qualifying', 'estimating', 'priced', 'submitted', 'won', 'lost', 'declined'].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <a href="/tendering/pricing" style={st.linkBtn}>⊞ Pricing sheets</a>
         {err && <span style={st.err}>{err}</span>}
@@ -139,8 +163,9 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
                   const sheet = sheetByTender.get(t.id);
                   const quotes = quotesByTender.get(t.id) ?? [];
                   const contract = contractByTender.get(t.id);
-                  const overdue = t.status === 'draft' && t.submissionDeadline && t.submissionDeadline < today;
-                  const dueSoon = t.status === 'draft' && t.submissionDeadline && t.submissionDeadline >= today && t.submissionDeadline <= soon;
+                  const active = ACTIVE_STATUSES.includes(t.status);
+                  const overdue = active && t.submissionDeadline && t.submissionDeadline < today;
+                  const dueSoon = active && t.submissionDeadline && t.submissionDeadline >= today && t.submissionDeadline <= soon;
                   return (
                     <tr key={t.id} style={t.status === 'lost' ? { opacity: 0.6 } : undefined}>
                       <td>
@@ -153,9 +178,11 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
                           : <span style={{ color: 'var(--muted)' }}>{t.accountName ?? '—'}</span>}
                       </td>
                       <td>
-                        {t.sourceOpportunityId
-                          ? <a href="/crm/leads" style={st.chip} title="Auto-created from a won opportunity">◎ Opportunity</a>
-                          : <span style={{ color: 'var(--muted)' }}>direct</span>}
+                        {t.source === 'opportunity' || t.sourceOpportunityId
+                          ? <a href="/crm/leads" style={st.chip} title="Grown out of the CRM pipeline">◎ Opportunity</a>
+                          : t.source
+                            ? <span style={st.chip}>{SOURCE_LABELS[t.source] ?? t.source}</span>
+                            : <span style={{ color: 'var(--muted)' }}>unclassified</span>}
                       </td>
                       <td style={{ fontWeight: 600 }}>{money(t.value)}</td>
                       <td style={{ whiteSpace: 'nowrap', color: overdue ? 'var(--bad)' : dueSoon ? 'var(--warn, #d97706)' : 'var(--muted)', fontWeight: overdue || dueSoon ? 700 : 400 }}>
@@ -184,7 +211,7 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
                       <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{fmt(t.createdAt)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                          {t.status === 'draft' && <button className="btn btn-primary" style={st.smBtn} disabled={busy} onClick={() => void setStatus(t, 'submitted')}>Submit →</button>}
+                          {ACTIVE_STATUSES.includes(t.status) && <button className="btn btn-primary" style={st.smBtn} disabled={busy} onClick={() => void setStatus(t, 'submitted')} title="Runs the submission gate — bid decision, priced estimate and value must be on record">Submit →</button>}
                           {t.status === 'submitted' && (
                             <>
                               <button className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} disabled={busy} onClick={() => void setStatus(t, 'won')}>Won ✓</button>
@@ -221,6 +248,9 @@ const st = {
   cardLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: 0.5 } as CSSProperties,
   cardVal: { fontSize: 18, fontWeight: 700, marginTop: 4 } as CSSProperties,
   toolbar: { display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' } as CSSProperties,
+  tabs: { display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' } as CSSProperties,
+  tab: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', borderRadius: 999, padding: '5px 13px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  tabActive: { color: 'var(--accent)', borderColor: 'var(--accent)', background: 'var(--panel)' } as CSSProperties,
   search: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none', minWidth: 170 } as CSSProperties,
   linkBtn: { border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none' } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,

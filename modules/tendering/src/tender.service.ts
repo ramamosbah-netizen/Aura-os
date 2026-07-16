@@ -126,7 +126,7 @@ export class TenderService implements OnModuleInit {
   }
 
   /** Update mutable fields on a tender (title, value, etc). */
-  async update(id: Id, patch: Partial<Pick<Tender, 'title' | 'reference' | 'value' | 'accountId' | 'accountName' | 'ownerId' | 'submissionDeadline'>>): Promise<Tender> {
+  async update(id: Id, patch: Partial<Pick<Tender, 'title' | 'reference' | 'value' | 'accountId' | 'accountName' | 'ownerId' | 'submissionDeadline' | 'source'>>): Promise<Tender> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`tender ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));

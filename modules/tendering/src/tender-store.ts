@@ -8,6 +8,8 @@ export const TENDER_STORE = Symbol('TENDER_STORE');
 export interface TenderFilter {
   tenantId?: string;
   status?: string;
+  /** Register classification (T4): invitation / public / private / opportunity. */
+  source?: string;
   accountId?: string;
   limit?: number;
 }

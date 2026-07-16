@@ -84,7 +84,11 @@ export class CrossModuleSubscriber implements OnModuleInit {
             accountId: (p.accountId as string) ?? null,
             accountName: (p.accountName as string) ?? null,
             value: (p.value as number) ?? 0,
-            status: 'draft',
+            // T1 — a tender born from an ALREADY-WON opportunity is not a fresh competitive bid: the
+            // deal was won at the CRM level, so the bid it represents has effectively been submitted
+            // and won. Creating it `submitted` (not `draft`) lets the award flow past the lifecycle
+            // gate — which exists to govern real, manual tenders, not this programmatic formality.
+            status: 'submitted',
             sourceOpportunityId: e.aggregateId,
           },
           // Idempotency: the outbox is at-least-once, so a re-delivered (or re-won)

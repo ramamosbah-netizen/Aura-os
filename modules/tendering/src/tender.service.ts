@@ -2,8 +2,11 @@ import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
+import { checkTenderTransition, tenderGateMessage, type TenderGateEvidence } from './domain/tender-gate';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
+import { BID_SCORE_STORE, type BidScoreStore } from './bid-score-store';
+import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
 import { type BOQ, type BOQItem, makeBOQ, makeBOQItem, type NewBOQItem } from './domain/boq';
 
 const CREATE_TENDER = 'tendering.tender.create';
@@ -25,6 +28,9 @@ export class TenderService implements OnModuleInit {
   constructor(
     @Inject(TENDER_STORE) private readonly store: TenderStore,
     @Inject(BOQ_STORE) private readonly boqStore: BOQStore,
+    // The lifecycle gate reads these — the bid decision and the priced estimate — as evidence.
+    @Inject(BID_SCORE_STORE) private readonly bidScores: BidScoreStore,
+    @Inject(ESTIMATE_STORE) private readonly estimates: EstimateStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
@@ -120,18 +126,44 @@ export class TenderService implements OnModuleInit {
     return updated;
   }
 
+  /** Gather the facts the lifecycle gate needs from the sibling records — the bid decision and
+   * whether anything is priced. Kept here so the gate stays pure and the caller stays simple. */
+  async tenderEvidence(tenantId: Id, tenderId: Id): Promise<TenderGateEvidence> {
+    const [scores, buildUps] = await Promise.all([
+      this.bidScores.list({ tenantId, tenderId }),
+      this.estimates.listByTender(tenantId, tenderId),
+    ]);
+    const latest = [...scores].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+    return {
+      bidRecommendation: latest?.recommendation ?? null,
+      hasPricedEstimate: buildUps.some((b) => b.sellingRate > 0),
+    };
+  }
+
   /**
-   * Transition a tender's status. Emits specific events like `tender.awarded`
-   * that trigger cross-module automation (e.g. auto-create a Contract).
+   * Transition a tender's status. T1 — the transition is GOVERNED: `checkTenderTransition` refuses
+   * an illegal jump (e.g. `draft → submitted` with no bid decision or nothing priced) before any
+   * write happens. Emits specific events — `bid_decided` on committing to bid, `priced` on pricing,
+   * `awarded` on a win (which drives Contract auto-creation) — that trigger cross-module automation.
    */
   async changeStatus(id: Id, status: TenderStatus): Promise<Tender> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`tender ${id} not found`);
+
+    const evidence = await this.tenderEvidence(existing.tenantId, id);
+    const check = checkTenderTransition(existing, status, evidence);
+    if (!check.allowed) throw new Error(tenderGateMessage(status, check.gaps));
+
     const updated: Tender = { ...existing, status };
 
     const eventType = status === 'won' ? TENDER_EVENT.awarded
       : status === 'lost' ? TENDER_EVENT.lost
       : status === 'submitted' ? TENDER_EVENT.submitted
+      : status === 'declined' ? TENDER_EVENT.declined
+      // Entering `estimating` IS the go/conditional bid decision being acted on (§2.2 bid.decided);
+      // `priced` is the quote being priced (§2.2 quote.priced).
+      : status === 'estimating' ? TENDER_EVENT.bidDecided
+      : status === 'priced' ? TENDER_EVENT.priced
       : TENDER_EVENT.updated;
 
     const event = makeEvent({
@@ -145,6 +177,8 @@ export class TenderService implements OnModuleInit {
         title: updated.title,
         status: updated.status,
         value: updated.value,
+        // The decision that gated this move — so a subscriber to bid_decided sees go vs conditional.
+        bidRecommendation: evidence.bidRecommendation ?? null,
         account: updated.accountId
           ? { id: updated.accountId, name: updated.accountName }
           : null,

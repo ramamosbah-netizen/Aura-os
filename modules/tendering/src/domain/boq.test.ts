@@ -3,6 +3,8 @@ import { makeBOQ, makeBOQItem } from './boq';
 import { TenderService } from '../tender.service';
 import { InMemoryTenderStore } from '../in-memory-tender-store';
 import { InMemoryBOQStore } from '../in-memory-boq-store';
+import { InMemoryBidScoreStore } from '../in-memory-bid-score-store';
+import { InMemoryEstimateStore } from '../in-memory-estimate-store';
 import { type EventStore, type NumberingService, type AuditService, type TxRunner, type CommandBus, type Command, type CommandDefinition } from '@aura/core';
 
 /** Minimal in-process CommandBus stand-in: runs validate + handler directly (no DB/authz). */
@@ -92,7 +94,10 @@ describe('tendering BOQ and BOQItem models', () => {
 describe('TenderService BOQ Integration Workflows', () => {
   const tenderStore = new InMemoryTenderStore();
   const boqStore = new InMemoryBOQStore();
-  
+  // T1 — the tender service now reads the bid score and estimate to gate status transitions.
+  const bidScoreStore = new InMemoryBidScoreStore();
+  const estimateStore = new InMemoryEstimateStore();
+
   // Mock dependencies
   const mockEvents = {
     append: vi.fn().mockResolvedValue(undefined),
@@ -102,7 +107,7 @@ describe('TenderService BOQ Integration Workflows', () => {
   const mockAudit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
   const mockTx = { run: (fn: (h: unknown) => unknown) => fn(null) } as unknown as TxRunner;
 
-  const service = new TenderService(tenderStore, boqStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
+  const service = new TenderService(tenderStore, boqStore, bidScoreStore, estimateStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit);
   service.onModuleInit();
 
   it('performs closed-loop recalculation of tender value when BOQ items change', async () => {

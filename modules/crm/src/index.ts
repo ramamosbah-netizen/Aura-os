@@ -65,4 +65,5 @@ export * from './my-day';
 export * from './source-funnel';
 export * from './executive-crm';
 export * from './automation';
+export * from './deal-brief';
 export * from './crm.module';

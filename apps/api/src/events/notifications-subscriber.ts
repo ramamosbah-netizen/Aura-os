@@ -56,6 +56,37 @@ export class NotificationsSubscriber implements OnModuleInit {
       void raise(e, `SLA breach (L${p.escalationLevel ?? 1}): ${p.ticketNumber ?? ''}`.trim(), `AMC ticket "${p.title ?? ''}" (${p.priority ?? ''}) has breached its SLA (due ${p.slaDueAt ?? ''}). Escalated to level ${p.escalationLevel ?? 1}.`, 'amc', 'amc.ticket');
     });
 
-    this.logger.log('Notification subscribers registered (po.approved, ipc.certified, period.closed, tender.awarded, registration.expiring, amc.sla_breached)');
+    // C7 — the CRM half of the stream, which had never been wired here. Event-driven facts only:
+    // the time-based ones (SLA breach, overdue follow-up) cannot be events because nothing happens
+    // when nothing happens — the sweep at POST /crm/automation/run raises those.
+    // The lead events carry ids, not names (payload: { assignedTo, assignedAt } and
+    // { opportunityId, accountId, ... }) — so these bodies say what the payload actually knows
+    // rather than interpolating fields that would render as "undefined". The notification links to
+    // the record by refId; the record is where the name lives.
+    this.bus.subscribe('crm.lead.assigned', (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      void raise(e, 'Lead assigned', `A lead was assigned to ${p.assignedTo ?? 'someone'}. The first-response clock starts now.`, 'crm', 'crm.lead');
+    });
+
+    this.bus.subscribe('crm.lead.converted', (e: DomainEvent) => {
+      void raise(e, 'Lead converted', 'A lead was qualified and became an opportunity.', 'crm', 'crm.lead');
+    });
+
+    this.bus.subscribe('crm.opportunity.stage_changed', (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      // Only the terminal moves are news. A deal walking through the pipeline IS the pipeline
+      // working; notifying on every step is how people learn to ignore notifications.
+      const stage = String(p.stage ?? '');
+      if (stage !== 'won' && stage !== 'lost') return;
+      void raise(
+        e,
+        `Deal ${stage}: ${p.title ?? ''}`.trim(),
+        `${p.title ?? 'A deal'}${p.accountName ? ` (${p.accountName})` : ''} — value ${p.value ?? 0} — was marked ${stage}.`,
+        'crm',
+        'crm.opportunity',
+      );
+    });
+
+    this.logger.log('Notification subscribers registered (po.approved, ipc.certified, period.closed, tender.awarded, registration.expiring, amc.sla_breached, crm.lead.assigned, crm.lead.converted, crm.opportunity.stage_changed)');
   }
 }

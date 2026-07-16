@@ -202,6 +202,15 @@ export class PlatformAdminController {
           { type: 'tendering.tender.awarded', title: 'Tender won' },
           { type: 'fleet.vehicle.registration_expiring', title: 'Vehicle registration expiring' },
           { type: 'amc.ticket.sla_breached', title: 'AMC ticket SLA breached' },
+          { type: 'crm.lead.assigned', title: 'CRM lead assigned' },
+          { type: 'crm.lead.converted', title: 'CRM lead converted' },
+          { type: 'crm.opportunity.stage_changed', title: 'CRM deal won or lost' },
+          // Raised by the C7 sweep (POST /crm/automation/run), not by the event bus — they are
+          // time-based facts, so nothing emits them. Listed here so an admin can silence them
+          // through the same switch as everything else.
+          { type: 'crm.automation.sla_breached', title: 'CRM lead first-response SLA breached' },
+          { type: 'crm.automation.assignment_not_accepted', title: 'CRM lead assignment not accepted' },
+          { type: 'crm.automation.follow_up_overdue', title: 'CRM follow-up overdue' },
         ].map(async (e) => ({ ...e, rule: await setting(`notify.rule.${e.type}`) })),
       ),
     };

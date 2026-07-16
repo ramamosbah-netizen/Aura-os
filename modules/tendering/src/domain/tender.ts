@@ -24,6 +24,17 @@ export const TENDER_STATUSES: readonly TenderStatus[] = [
   'draft', 'qualifying', 'estimating', 'priced', 'submitted', 'won', 'lost', 'declined',
 ];
 
+// T4 — the register's source classification (vision §2.2: "Invitations · Opportunities ·
+// Public · Private"). WHERE the tender came from, orthogonal to where it stands (status):
+//   invitation  — the client invited us to bid
+//   public      — an open/public advertisement or portal listing
+//   private     — a privately negotiated / single-source approach
+//   opportunity — grown out of our own CRM pipeline (the deal-chain auto-tender)
+// Nullable on the aggregate: an unclassified legacy row shows as such rather than guessing.
+export type TenderSource = 'invitation' | 'public' | 'private' | 'opportunity';
+
+export const TENDER_SOURCES: readonly TenderSource[] = ['invitation', 'public', 'private', 'opportunity'];
+
 export interface Tender {
   id: Id;
   tenantId: Id;
@@ -34,6 +45,8 @@ export interface Tender {
   accountId: Id | null;
   accountName: string | null;
   status: TenderStatus;
+  /** Register classification — where the tender came from (null = unclassified legacy row). */
+  source: TenderSource | null;
   /** Estimated bid value. */
   value: number;
   /** Client submission deadline (YYYY-MM-DD) — the date the bid must be in. */
@@ -53,6 +66,7 @@ export interface NewTender {
   accountId?: Id | null;
   accountName?: string | null;
   status?: TenderStatus;
+  source?: TenderSource | null;
   value?: number;
   submissionDeadline?: string | null;
   sourceOpportunityId?: Id | null;
@@ -70,6 +84,8 @@ export function makeTender(input: NewTender): Tender {
     accountId: input.accountId ?? null,
     accountName: input.accountName ?? null,
     status: input.status ?? 'draft',
+    // A tender born from an opportunity classifies itself; everything else is the caller's call.
+    source: input.source ?? (input.sourceOpportunityId ? 'opportunity' : null),
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     submissionDeadline: input.submissionDeadline ?? null,
     sourceOpportunityId: input.sourceOpportunityId ?? null,

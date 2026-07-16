@@ -3,7 +3,7 @@ import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS } from '@aura/tendering';
+import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService } from '@aura/tendering';
 import * as xlsx from 'xlsx';
 
 class CreateTenderDto {
@@ -12,6 +12,7 @@ class CreateTenderDto {
   @IsOptional() @IsString() accountId?: string | null;
   @IsOptional() @IsString() accountName?: string | null;
   @IsOptional() @IsString() status?: TenderStatus;
+  @IsOptional() @IsString() source?: TenderSource;
   @IsOptional() @IsNumber() value?: number;
   @IsOptional() @IsString() submissionDeadline?: string;
   @IsOptional() @IsString() sourceOpportunityId?: string;
@@ -22,9 +23,26 @@ class UpdateTenderDto {
   @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() accountName?: string;
+  @IsOptional() @IsString() source?: TenderSource;
   @IsOptional() @IsNumber() value?: number;
   @IsOptional() @IsString() submissionDeadline?: string;
 }
+
+class CreateClarificationDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() kind?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() body?: string;
+  @IsOptional() @IsString() issuedAt?: string;
+  @IsOptional() @IsString() responseDue?: string;
+  @IsOptional() @IsString() deadlineExtendedTo?: string;
+}
+
+const assertSource = (source?: string): void => {
+  if (source !== undefined && !TENDER_SOURCES.includes(source as TenderSource)) {
+    throw new BadRequestException(`source must be one of: ${TENDER_SOURCES.join(', ')}`);
+  }
+};
 
 class SubmitTenderDto {
   @IsOptional() @IsString() method?: string;
@@ -41,12 +59,14 @@ class SubmitTenderDto {
 export class TenderingController {
   constructor(
     private readonly tenders: TenderService,
+    private readonly clarifications: ClarificationService,
     private readonly tenant: TenantContext,
   ) {}
 
   @Post()
   create(@Body() dto: CreateTenderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Tender> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    assertSource(dto.source);
     const ctx = this.tenant.get();
     return this.tenders.create({
       tenantId: ctx.tenantId,
@@ -56,6 +76,7 @@ export class TenderingController {
       accountId: dto.accountId ?? null,
       accountName: dto.accountName ?? null,
       status: dto.status,
+      source: dto.source,
       value: dto.value,
       submissionDeadline: dto.submissionDeadline,
       sourceOpportunityId: dto.sourceOpportunityId,
@@ -67,10 +88,12 @@ export class TenderingController {
   /** PATCH /api/tendering/tenders/:id — update mutable fields (title, reference, value, account). */
   @Patch(':id')
   async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateTenderDto): Promise<Tender> {
+    assertSource(dto.source);
     try {
       return await this.tenders.update(id, {
         title: dto.title,
         reference: dto.reference,
+        source: dto.source,
         value: dto.value,
         accountId: dto.accountId,
         accountName: dto.accountName,
@@ -136,9 +159,74 @@ export class TenderingController {
     return this.tenders.listSubmissions(this.tenant.get().tenantId, id);
   }
 
+  /**
+   * T4 — clarifications & addenda: the Q&A/change traffic on a tender. An addendum with
+   * `deadlineExtendedTo` also moves the tender's submission deadline.
+   */
+  @Post(':id/clarifications')
+  async addClarification(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: CreateClarificationDto,
+  ): Promise<TenderClarification> {
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    if (dto.kind !== undefined && !CLARIFICATION_KINDS.includes(dto.kind as ClarificationKind)) {
+      throw new BadRequestException(`kind must be one of: ${CLARIFICATION_KINDS.join(', ')}`);
+    }
+    const found = await this.tenders.get(id);
+    if (!found) throw new NotFoundException(`tender ${id} not found`);
+    const ctx = this.tenant.get();
+    return this.clarifications.record({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      tenderId: id,
+      kind: (dto.kind as ClarificationKind) ?? null,
+      reference: dto.reference ?? null,
+      title: dto.title,
+      body: dto.body ?? null,
+      issuedAt: dto.issuedAt ?? null,
+      responseDue: dto.responseDue ?? null,
+      deadlineExtendedTo: dto.deadlineExtendedTo ?? null,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  /** The clarification/addendum trail, latest first. `?open=true` filters to unanswered. */
+  @Get(':id/clarifications')
+  async listClarifications(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Query('kind') kind?: string,
+    @Query('open') open?: string,
+  ): Promise<TenderClarification[]> {
+    const found = await this.tenders.get(id);
+    if (!found) throw new NotFoundException(`tender ${id} not found`);
+    return this.clarifications.list({ tenantId: this.tenant.get().tenantId, tenderId: id, kind, open: open === 'true' });
+  }
+
+  /** Answer a clarification / acknowledge an addendum. */
+  @Patch(':id/clarifications/:clarificationId/answer')
+  async answerClarification(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('clarificationId', ParseUuidOr404Pipe) clarificationId: string,
+    @Body() dto: { answer?: string },
+  ): Promise<TenderClarification> {
+    if (!dto?.answer?.trim()) throw new BadRequestException('answer is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.clarifications.answer(ctx.tenantId, clarificationId, dto.answer, ctx.actorId);
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw e;
+    }
+  }
+
   @Get()
-  list(@Query('status') status?: string, @Query('accountId') accountId?: string): Promise<Tender[]> {
-    return this.tenders.list({ status, accountId, limit: 100 });
+  list(
+    @Query('status') status?: string,
+    @Query('accountId') accountId?: string,
+    @Query('source') source?: string,
+  ): Promise<Tender[]> {
+    return this.tenders.list({ status, accountId, source, limit: 100 });
   }
 
   @Get('paged')

@@ -13,6 +13,7 @@ interface Tender {
   status: string;
   value: number;
   submissionDeadline: string | null;
+  source: string | null;
   sourceOpportunityId: string | null;
   ownerId: string | null;
   createdAt: string;

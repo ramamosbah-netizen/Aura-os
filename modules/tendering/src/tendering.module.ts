@@ -23,6 +23,10 @@ import { EstimateSourcingService } from './estimate-sourcing.service';
 import { SUBMISSION_STORE } from './submission-store';
 import { InMemorySubmissionStore } from './in-memory-submission-store';
 import { PostgresSubmissionStore } from './postgres-submission-store';
+import { CLARIFICATION_STORE } from './clarification-store';
+import { InMemoryClarificationStore } from './in-memory-clarification-store';
+import { PostgresClarificationStore } from './postgres-clarification-store';
+import { ClarificationService } from './clarification.service';
 import { TENDER_OUTCOME_STORE } from './win-loss-store';
 import { InMemoryTenderOutcomeStore } from './in-memory-win-loss-store';
 import { PostgresTenderOutcomeStore } from './postgres-win-loss-store';
@@ -57,6 +61,12 @@ import { WinLossService } from './win-loss.service';
         pool ? new PostgresSubmissionStore(pool) : new InMemorySubmissionStore(),
     },
     {
+      provide: CLARIFICATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresClarificationStore(pool) : new InMemoryClarificationStore(),
+    },
+    {
       provide: ESTIMATE_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -79,7 +89,8 @@ import { WinLossService } from './win-loss.service';
     EstimateService,
     EstimateSourcingService,
     WinLossService,
+    ClarificationService,
   ],
-  exports: [TenderService, BidScoreService, EstimateService, EstimateSourcingService, WinLossService],
+  exports: [TenderService, BidScoreService, EstimateService, EstimateSourcingService, WinLossService, ClarificationService],
 })
 export class TenderingModule {}

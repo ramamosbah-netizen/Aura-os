@@ -9,9 +9,10 @@ import BuyingJourneyPanel from './buying-journey-panel';
 import WinPlanPanel from './win-plan-panel';
 import DealDepthPanel from './deal-depth-panel';
 import {
-  RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, SituationBand, useTab,
+  RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, useTab,
+  RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordWorkflowGate, RecordOutcome,
   type Tone, type KpiItem, type MetaItem, type TabDef, type Insight,
-  type HealthState, type NextBestAction, type StageGateView,
+  type HealthState, type NextBestAction, type WorkflowGateView,
 } from './crm/record-shell';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
@@ -45,7 +46,7 @@ interface Payload {
   nextAction: { subject: string | null; dueDate: string | null; ownerId: string | null; fromActivity: boolean };
   attention: { active: boolean; gaps: string[]; needsAttention: boolean };
   /** G5 — the next-stage gate, resolved server-side. Rendered as-is; the client never re-derives it. */
-  stageGate: StageGateView | null;
+  stageGate: WorkflowGateView | null;
 }
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
@@ -240,14 +241,14 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: qualification.score < 2 ? 'warn' : 'good' }} actions={actions} />}
       kpis={kpis}
       situation={
-        <SituationBand
-          situation={situationText}
-          health={health}
-          missing={missing}
-          gate={stageGate ?? undefined}
-          action={nba}
-          outcome={outcome.status === 'open' ? { onSelect: logOutcome, busy, note: outcomeNote } : undefined}
-        />
+        <RecordBand tone={health.tone}>
+          <RecordSituation situation={situationText} />
+          {nba && <RecordNextAction action={nba} />}
+          <RecordHealth health={health} />
+          <RecordMissing items={missing} />
+          {stageGate && <RecordWorkflowGate gate={stageGate} />}
+          {outcome.status === 'open' && <RecordOutcome outcome={{ onSelect: logOutcome, busy, note: outcomeNote }} />}
+        </RecordBand>
       }
       tabs={tabs}
       activeTab={tab}

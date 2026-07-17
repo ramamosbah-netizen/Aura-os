@@ -152,18 +152,32 @@ export function InsightsPanel({ title = 'Insights & next actions', insights }: {
   );
 }
 
-// ── Situation Band — the Universal Object experience (Phase 1) ───────────────────────
-// Every record answers the three questions ABOVE the fold: what is happening (Situation),
-// why it matters now (Business Health), what is blocking progress (Missing Information),
-// and the ONE thing to do (Next Best Action). The Outcome Loop then captures what happened
-// so no record ever goes dead. This primitive only RENDERS facts the domain already owns.
+// ── Universal Object Shell — the band primitives ─────────────────────────────────────
+// Every record answers the key questions ABOVE the fold: what is happening (Situation),
+// why it matters now (Health), what is blocking progress (Missing), whether the record
+// may advance (WorkflowGate), the ONE thing to do (NextAction), and what happened
+// (Outcome). Each is an INDEPENDENT primitive composed inside <RecordBand> — reorder,
+// omit, or add per entity:
+//
+//   <RecordBand tone={health.tone}>
+//     <RecordSituation situation={…} />
+//     <RecordNextAction action={…} />
+//     <RecordHealth health={…} />
+//     <RecordMissing items={…} />
+//     <RecordWorkflowGate gate={…} />
+//     <RecordOutcome outcome={…} />
+//   </RecordBand>
+//
+// New capabilities (Compliance, AI read, …) are added as NEW primitives — never as
+// props on a growing band component. Primitives only RENDER facts the domain owns.
 export interface HealthState { label: string; tone: Tone; reasons?: string[] }
 export interface NextBestAction { label: string; hint?: string; onClick?: () => void; href?: string }
-// Stage gate — what must be TRUE to advance to the next state. A Universal Object Shell primitive:
-// every entity with a lifecycle (opportunity, quotation, contract, project…) exposes one. The verdict
-// is always resolved SERVER-SIDE and passed in; this only renders it, so a preview can never disagree
-// with enforcement. `gaps` is empty when the gate is clear.
-export interface StageGateView { nextStage?: string; label: string; allowed: boolean; gaps: string[] }
+// Workflow gate — what must be TRUE to advance to the next state, whatever "state" means
+// for the entity: a pipeline stage (opportunity), a document lifecycle (quotation, contract,
+// PO, invoice), an approval step (variation, RFI, NCR). The verdict is always resolved
+// SERVER-SIDE and passed in; this only renders it, so a preview can never disagree with
+// enforcement. `gaps` is empty when the gate is clear.
+export interface WorkflowGateView { nextStage?: string; label: string; allowed: boolean; gaps: string[] }
 export interface OutcomeChoice { id: string; label: string; tone?: Tone }
 export interface OutcomeLoop {
   onSelect: (choiceId: string) => void | Promise<void>;
@@ -179,11 +193,61 @@ const DEFAULT_OUTCOMES: OutcomeChoice[] = [
   { id: 'reschedule', label: 'Reschedule', tone: 'accent' },
 ];
 
-// Stage-gate primitive — renders the server's verdict for the next lifecycle transition. Reused by
-// every 360 that has stages; the caller passes `summary.stageGate` straight through.
-export function RecordStageGate({ gate }: { gate: StageGateView }) {
+// The band container. A flex-wrap row: RecordSituation (flex) and RecordNextAction sit
+// side by side on the first line; every other primitive is a full-width separated row.
+export function RecordBand({ tone = 'accent', children }: { tone?: Tone; children: ReactNode }) {
+  return <section style={{ ...rs.sBand, borderLeftColor: toneColor(tone) }}>{children}</section>;
+}
+
+export function RecordSituation({ situation }: { situation: ReactNode }) {
   return (
-    <div style={rs.sSplit}>
+    <div style={{ flex: 1, minWidth: 240 }}>
+      <div style={rs.sLabel}>Situation</div>
+      <div style={rs.sText}>{situation}</div>
+    </div>
+  );
+}
+
+export function RecordNextAction({ action }: { action: NextBestAction }) {
+  return (
+    <div style={rs.sActionBox}>
+      <div style={rs.sLabel}>Next best action</div>
+      {action.href
+        ? <a href={action.href} style={{ ...rs.primaryBtn, textDecoration: 'none', display: 'inline-block' }}>{action.label}</a>
+        : <button type="button" onClick={action.onClick} style={rs.primaryBtn}>{action.label}</button>}
+      {action.hint && <div style={rs.sActionHint}>{action.hint}</div>}
+    </div>
+  );
+}
+
+export function RecordHealth({ health }: { health: HealthState }) {
+  return (
+    <div style={rs.sRow}>
+      <div style={rs.sHealthRow}>
+        <span style={{ ...rs.sHealthPill, color: toneColor(health.tone), borderColor: toneColor(health.tone) }}>{health.label}</span>
+        {health.reasons && health.reasons.length > 0 && <span style={rs.sReasons}>{health.reasons.join(' · ')}</span>}
+      </div>
+    </div>
+  );
+}
+
+export function RecordMissing({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={rs.sRow}>
+      <span style={rs.sLabel}>Missing to progress</span>
+      <div style={rs.sChips}>
+        {items.map((m) => <span key={m} style={rs.sMissChip}>✕ {m}</span>)}
+      </div>
+    </div>
+  );
+}
+
+// Workflow-gate primitive — renders the server's verdict for the next transition. Reused by
+// every 360 with a lifecycle; the caller passes the summary's gate view straight through.
+export function RecordWorkflowGate({ gate }: { gate: WorkflowGateView }) {
+  return (
+    <div style={rs.sRow}>
       <span style={rs.sLabel}>Gate to {gate.label}</span>
       {gate.allowed ? (
         <div style={rs.sGateOk}>✓ Clear to advance</div>
@@ -196,76 +260,30 @@ export function RecordStageGate({ gate }: { gate: StageGateView }) {
   );
 }
 
-export function SituationBand({
-  situation, health, missing = [], gate, action, outcome,
-}: {
-  situation: ReactNode;
-  health?: HealthState;
-  missing?: string[];
-  gate?: StageGateView;
-  action?: NextBestAction;
-  outcome?: OutcomeLoop;
-}) {
+export function RecordOutcome({ outcome }: { outcome: OutcomeLoop }) {
   const [logging, setLogging] = useState(false);
   return (
-    <section style={{ ...rs.sBand, borderLeftColor: toneColor(health?.tone ?? 'accent') }}>
-      <div style={rs.sMain}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={rs.sLabel}>Situation</div>
-          <div style={rs.sText}>{situation}</div>
-          {health && (
-            <div style={rs.sHealthRow}>
-              <span style={{ ...rs.sHealthPill, color: toneColor(health.tone), borderColor: toneColor(health.tone) }}>{health.label}</span>
-              {health.reasons && health.reasons.length > 0 && <span style={rs.sReasons}>{health.reasons.join(' · ')}</span>}
-            </div>
-          )}
-        </div>
-        {action && (
-          <div style={rs.sActionBox}>
-            <div style={rs.sLabel}>Next best action</div>
-            {action.href
-              ? <a href={action.href} style={{ ...rs.primaryBtn, textDecoration: 'none', display: 'inline-block' }}>{action.label}</a>
-              : <button type="button" onClick={action.onClick} style={rs.primaryBtn}>{action.label}</button>}
-            {action.hint && <div style={rs.sActionHint}>{action.hint}</div>}
-          </div>
-        )}
-      </div>
-
-      {missing.length > 0 && (
-        <div style={rs.sSplit}>
-          <span style={rs.sLabel}>Missing to progress</span>
+    <div style={rs.sRow}>
+      {outcome.note ? (
+        <span style={rs.sOutcomeNote}>✓ {outcome.note}</span>
+      ) : logging ? (
+        <>
+          <span style={rs.sLabel}>What happened?</span>
           <div style={rs.sChips}>
-            {missing.map((m) => <span key={m} style={rs.sMissChip}>✕ {m}</span>)}
+            {(outcome.choices ?? DEFAULT_OUTCOMES).map((c) => (
+              <button key={c.id} type="button" disabled={outcome.busy}
+                onClick={() => { void outcome.onSelect(c.id); setLogging(false); }}
+                style={{ ...rs.sOutcomeChip, color: toneColor(c.tone), borderColor: toneColor(c.tone) }}>
+                {c.label}
+              </button>
+            ))}
+            <button type="button" style={rs.sOutcomeCancel} onClick={() => setLogging(false)}>cancel</button>
           </div>
-        </div>
+        </>
+      ) : (
+        <button type="button" style={rs.sLogBtn} onClick={() => setLogging(true)}>＋ Log what happened</button>
       )}
-
-      {gate && <RecordStageGate gate={gate} />}
-
-      {outcome && (
-        <div style={rs.sSplit}>
-          {outcome.note ? (
-            <span style={rs.sOutcomeNote}>✓ {outcome.note}</span>
-          ) : logging ? (
-            <>
-              <span style={rs.sLabel}>What happened?</span>
-              <div style={rs.sChips}>
-                {(outcome.choices ?? DEFAULT_OUTCOMES).map((c) => (
-                  <button key={c.id} type="button" disabled={outcome.busy}
-                    onClick={() => { void outcome.onSelect(c.id); setLogging(false); }}
-                    style={{ ...rs.sOutcomeChip, color: toneColor(c.tone), borderColor: toneColor(c.tone) }}>
-                    {c.label}
-                  </button>
-                ))}
-                <button type="button" style={rs.sOutcomeCancel} onClick={() => setLogging(false)}>cancel</button>
-              </div>
-            </>
-          ) : (
-            <button type="button" style={rs.sLogBtn} onClick={() => setLogging(true)}>＋ Log what happened</button>
-          )}
-        </div>
-      )}
-    </section>
+    </div>
   );
 }
 
@@ -335,17 +353,16 @@ const rs: Record<string, CSSProperties> = {
   aiDot: { width: 8, height: 8, borderRadius: 999, background: 'var(--accent)', boxShadow: '0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent)' },
   insight: { borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: 'var(--accent)', padding: '6px 0 6px 10px', marginBottom: 10 },
   insightAction: { display: 'inline-block', marginTop: 4, background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'none' },
-  // Situation Band (Universal Object experience)
-  sBand: { border: '1px solid var(--border)', borderLeftWidth: 3, borderLeftStyle: 'solid', borderRadius: 14, padding: '14px 16px', background: 'var(--panel)', marginBottom: 16 },
-  sMain: { display: 'flex', gap: 16, alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' },
+  // Universal Object band (RecordBand + its independent primitives)
+  sBand: { border: '1px solid var(--border)', borderLeftWidth: 3, borderLeftStyle: 'solid', borderRadius: 14, padding: '14px 16px', background: 'var(--panel)', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' },
   sLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   sText: { fontSize: 14.5, fontWeight: 600, lineHeight: 1.4 },
-  sHealthRow: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 },
+  sHealthRow: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' },
   sHealthPill: { borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '2px 11px', fontSize: 12, fontWeight: 700 },
   sReasons: { fontSize: 12, color: 'var(--muted)' },
   sActionBox: { textAlign: 'right', flexShrink: 0, minWidth: 150 },
   sActionHint: { fontSize: 11.5, color: 'var(--muted)', marginTop: 5, maxWidth: 220 },
-  sSplit: { marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' },
+  sRow: { width: '100%', paddingTop: 12, borderTop: '1px solid var(--border)' },
   sChips: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 },
   sMissChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', color: 'var(--bad)', background: 'color-mix(in srgb, var(--bad) 8%, transparent)' },
   sGateOk: { fontSize: 12.5, color: 'var(--good)', fontWeight: 600, marginTop: 6 },

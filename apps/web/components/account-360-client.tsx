@@ -8,7 +8,8 @@ import {
 } from './stakeholder-meta';
 import CreateDrawer from './ui/create-drawer';
 import {
-  RecordHeader, KpiRow, RecordTabs, ActionButton, SituationBand,
+  RecordHeader, KpiRow, RecordTabs, ActionButton,
+  RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordOutcome,
   type Tone, type KpiItem, type MetaItem, type TabDef,
   type HealthState, type NextBestAction,
 } from './crm/record-shell';
@@ -377,13 +378,13 @@ export default function Account360Client({ accountId }: { accountId: string }) {
       ] as KpiItem[]} />
 
       {/* ── Universal Object Shell — Situation / Health / Missing / Next Best Action ── */}
-      <SituationBand
-        situation={situationText}
-        health={bandHealth}
-        missing={missing}
-        action={nba}
-        outcome={{ onSelect: logOutcome, busy, note: outcomeNote }}
-      />
+      <RecordBand tone={bandHealth?.tone}>
+        <RecordSituation situation={situationText} />
+        {nba && <RecordNextAction action={nba} />}
+        {bandHealth && <RecordHealth health={bandHealth} />}
+        <RecordMissing items={missing} />
+        <RecordOutcome outcome={{ onSelect: logOutcome, busy, note: outcomeNote }} />
+      </RecordBand>
 
       {/* ── Commercial Portfolio: the account is the hub — both deal routes ── */}
       <div style={st.chain}>

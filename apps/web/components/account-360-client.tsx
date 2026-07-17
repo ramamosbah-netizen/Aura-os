@@ -34,6 +34,7 @@ interface Account {
   createdAt: string;
 }
 interface Contact { id: string; name: string; role?: string | null; jobTitle?: string | null; email?: string | null; phone?: string | null; status?: string; isPrimary?: boolean; stakeholderRole?: string | null; relationshipStrength?: string | null; reportsToId?: string | null; createdAt: string }
+interface TeamUser { username: string; role?: string; roleLabel?: string; isAdmin?: boolean }
 interface Opportunity { id: string; title: string; value: number; stage: string; winProbability: number; closeDate: string | null; createdAt: string }
 interface TenderRec { id: string; title: string; reference: string | null; status: string; value: number; createdAt: string }
 interface QuotationRec { id: string; quoteNumber: string; status: string; total: number; issueDate: string; sourceTenderId?: string | null }
@@ -100,6 +101,11 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [busy, setBusy] = useState(false);
+  // Identity for ownership: the account owner is stored as a workspace username
+  // (e.g. "u-pm"), so "me" comes from /workspace/me — NOT the session `sub`, which
+  // need not equal the username and is absent in the dev pass-through.
+  const [me, setMe] = useState<TeamUser | null>(null);
+  const [team, setTeam] = useState<TeamUser[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/accounts/${accountId}/summary`, { cache: 'no-store' });
@@ -113,6 +119,25 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Who am I + the assignable team, loaded once. A manager/admin gets the full
+  // picker (assign to anyone); everyone else just gets the "assign to me" shortcut.
+  useEffect(() => {
+    void (async () => {
+      const [meRes, teamRes] = await Promise.all([
+        fetch('/api/workspace/me', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/workspace/users', { cache: 'no-store' }).catch(() => null),
+      ]);
+      if (meRes?.ok) {
+        const m = (await meRes.json().catch(() => null)) as TeamUser | null;
+        if (m && m.username) setMe(m);
+      }
+      if (teamRes?.ok) {
+        const t = (await teamRes.json().catch(() => [])) as TeamUser[];
+        if (Array.isArray(t)) setTeam(t);
+      }
+    })();
+  }, []);
 
   const patchAccount = useCallback(async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -128,19 +153,13 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     }
   }, [accountId, load]);
 
-  const assignToMe = useCallback(async () => {
-    setBusy(true);
-    try {
-      await fetch('/api/crm/accounts/assign-owner', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accountId }),
-      });
-      await load();
-    } finally {
-      setBusy(false);
-    }
-  }, [accountId, load]);
+  // Direct ownerId PATCH — the old assign-owner BFF required a session cookie
+  // (`sub`) that dev has none of, so it 401'd. Setting the username straight
+  // through the account PATCH works for both "assign to me" and reassignment.
+  const assignOwner = useCallback(
+    (ownerId: string | null) => patchAccount({ ownerId }),
+    [patchAccount],
+  );
 
   // Contacts are managed inline from the Account 360 — set-primary, deactivate,
   // etc. — then the whole account summary reloads so counts and the header
@@ -176,6 +195,13 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     { name: 'email', label: 'Email', kind: 'text' as const, placeholder: 'name@company.com' },
     { name: 'phone', label: 'Phone', kind: 'text' as const, placeholder: '+971 …' },
   ];
+
+  // Admins and managers may reassign ownership to anyone; the picker is theirs.
+  const canManage = !!me && (me.isAdmin === true || /manager|executive|admin|lead/i.test(me.roleLabel ?? ''));
+  const ownerLabel = (username: string): string => {
+    const u = team.find((t) => t.username === username);
+    return u?.roleLabel ? `${username} · ${u.roleLabel}` : username;
+  };
 
   // ── Relationship health (derived, with the WHY) ─────────────────────────
   const openOpps = opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost');
@@ -234,11 +260,27 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             {a.industry && <span>{a.industry}</span>}
             <span>Client since {monthYear(a.createdAt)}</span>
             {a.source && <span>Source: {a.source}</span>}
-            <span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               Owner:{' '}
-              {a.ownerId ?? <span style={{ color: 'var(--muted)' }}>Unassigned</span>}
-              {!a.ownerId && (
-                <button disabled={busy} onClick={() => void assignToMe()} style={st.inlineAction}>Assign to me</button>
+              {a.ownerId ? ownerLabel(a.ownerId) : <span style={{ color: 'var(--muted)' }}>Unassigned</span>}
+              {me && a.ownerId !== me.username && (
+                <button disabled={busy} onClick={() => void assignOwner(me.username)} style={st.inlineAction}>Assign to me</button>
+              )}
+              {canManage && (
+                <select
+                  value={a.ownerId ?? ''}
+                  disabled={busy}
+                  onChange={(e) => void assignOwner(e.target.value || null)}
+                  style={st.ownerSelect}
+                  title="Assign owner — admin / manager"
+                >
+                  <option value="">Unassigned</option>
+                  {team.map((u) => (
+                    <option key={u.username} value={u.username}>
+                      {u.roleLabel ? `${u.username} · ${u.roleLabel}` : u.username}
+                    </option>
+                  ))}
+                </select>
               )}
             </span>
           </div>
@@ -691,6 +733,7 @@ const st = {
   subline: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
   healthLine: { marginTop: 8, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } as CSSProperties,
   inlineAction: { marginLeft: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  ownerSelect: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--fg)', borderRadius: 6, padding: '2px 6px', fontSize: 11.5, cursor: 'pointer', maxWidth: 200 } as CSSProperties,
   actionBtn: { display: 'inline-block', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
   menu: { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 6, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', gap: 2 } as CSSProperties,
   menuItem: { display: 'block', padding: '7px 10px', borderRadius: 7, color: 'var(--fg)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600 } as CSSProperties,

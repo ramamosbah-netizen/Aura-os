@@ -178,7 +178,7 @@ export default function LeadAttentionPanel({ data }: { data: LeadCommand | null 
               <span style={{ ...st.dot, background: r.attention.severity ? SEV_COLOR[r.attention.severity] : 'var(--border)' }} />
               <div style={st.main}>
                 <div style={st.title}>
-                  {r.name}
+                  <a href={`/crm/leads/${r.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{r.name}</a>
                   {r.companyName ? <span style={st.company}> · {r.companyName}</span> : null}
                 </div>
                 <div style={st.meta}>

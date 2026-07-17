@@ -7,7 +7,8 @@ import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
 import Timeline from './timeline';
 import {
-  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel, SituationBand,
+  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
+  RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordOutcome,
   useTab, type Tone, type KpiItem, type Insight, type TabDef, type MetaItem,
   type HealthState, type NextBestAction,
 } from './crm/record-shell';
@@ -265,13 +266,13 @@ export default function Lead360Client({ lead, qualification, accounts }: {
       header={header}
       kpis={kpis}
       situation={
-        <SituationBand
-          situation={situationText}
-          health={health}
-          missing={missing}
-          action={nba}
-          outcome={converted ? undefined : { onSelect: logOutcome, busy, note: outcomeNote }}
-        />
+        <RecordBand tone={health?.tone}>
+          <RecordSituation situation={situationText} />
+          {nba && <RecordNextAction action={nba} />}
+          {health && <RecordHealth health={health} />}
+          <RecordMissing items={missing} />
+          {!converted && <RecordOutcome outcome={{ onSelect: logOutcome, busy, note: outcomeNote }} />}
+        </RecordBand>
       }
       tabs={tabs}
       activeTab={tab}

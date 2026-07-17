@@ -4,7 +4,8 @@ import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Timeline from './timeline';
 import {
-  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel, SituationBand,
+  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
+  RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordOutcome,
   useTab, type Tone, type KpiItem, type Insight, type TabDef, type MetaItem,
   type HealthState, type NextBestAction,
 } from './crm/record-shell';
@@ -270,13 +271,13 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
       }
       kpis={kpis}
       situation={
-        <SituationBand
-          situation={situationText}
-          health={bandHealth}
-          missing={missing}
-          action={nba}
-          outcome={isOpen ? { onSelect: logOutcome, busy, note: outcomeNote } : undefined}
-        />
+        <RecordBand tone={bandHealth?.tone}>
+          <RecordSituation situation={situationText} />
+          {nba && <RecordNextAction action={nba} />}
+          {bandHealth && <RecordHealth health={bandHealth} />}
+          <RecordMissing items={missing} />
+          {isOpen && <RecordOutcome outcome={{ onSelect: logOutcome, busy, note: outcomeNote }} />}
+        </RecordBand>
       }
       tabs={tabs}
       activeTab={tab}

@@ -3,6 +3,8 @@ import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Contract, type ContractStatus, ContractService } from '@aura/contracts';
+import { AccountService } from '@aura/crm';
+import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
 class CreateContractDto {
   @IsString() title!: string;
@@ -28,11 +30,12 @@ class UpdateContractDto {
 export class ContractsController {
   constructor(
     private readonly contracts: ContractService,
+    private readonly accounts: AccountService,
     private readonly tenant: TenantContext,
   ) {}
 
   @Post()
-  create(@Body() dto: CreateContractDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Contract> {
+  async create(@Body() dto: CreateContractDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Contract> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
     return this.contracts.create({
@@ -43,7 +46,7 @@ export class ContractsController {
       tenderId: dto.tenderId ?? null,
       tenderTitle: dto.tenderTitle ?? null,
       accountId: dto.accountId ?? null,
-      accountName: dto.accountName ?? null,
+      accountName: await resolveAccountSnapshot(this.accounts, dto.accountId, dto.accountName),
       status: dto.status,
       value: dto.value,
       ownerId: ctx.actorId,
@@ -60,7 +63,7 @@ export class ContractsController {
         reference: dto.reference,
         value: dto.value,
         accountId: dto.accountId,
-        accountName: dto.accountName,
+        ...(await accountSnapshotPatch(this.accounts, dto.accountId, dto.accountName)),
       });
     } catch (e) {
       const msg = (e as Error).message;

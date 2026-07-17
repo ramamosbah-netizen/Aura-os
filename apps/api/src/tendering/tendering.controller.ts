@@ -4,6 +4,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
+import { AccountService } from '@aura/crm';
+import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 import * as xlsx from 'xlsx';
 
 class CreateTenderDto {
@@ -60,11 +62,12 @@ export class TenderingController {
   constructor(
     private readonly tenders: TenderService,
     private readonly clarifications: ClarificationService,
+    private readonly accounts: AccountService,
     private readonly tenant: TenantContext,
   ) {}
 
   @Post()
-  create(@Body() dto: CreateTenderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Tender> {
+  async create(@Body() dto: CreateTenderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Tender> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     assertSource(dto.source);
     const ctx = this.tenant.get();
@@ -74,7 +77,7 @@ export class TenderingController {
       title: dto.title,
       reference: dto.reference,
       accountId: dto.accountId ?? null,
-      accountName: dto.accountName ?? null,
+      accountName: await resolveAccountSnapshot(this.accounts, dto.accountId, dto.accountName),
       status: dto.status,
       source: dto.source,
       value: dto.value,
@@ -96,7 +99,7 @@ export class TenderingController {
         source: dto.source,
         value: dto.value,
         accountId: dto.accountId,
-        accountName: dto.accountName,
+        ...(await accountSnapshotPatch(this.accounts, dto.accountId, dto.accountName)),
         submissionDeadline: dto.submissionDeadline,
       });
     } catch (e) {

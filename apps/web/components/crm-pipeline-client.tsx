@@ -4,6 +4,7 @@ import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { opportunityAttention } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
+import LeadConvertDrawer from './lead-convert-drawer';
 
 // CRM · Sales Pipeline — the full sales cycle, with Lead and Opportunity kept
 // as SEPARATE concepts that share one board:
@@ -221,18 +222,22 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
 
   const qualifyLead = (l: Lead): void => { void call(`/api/crm/leads/${l.id}`, 'PATCH', { status: 'qualified' }); };
 
+  // Quick convert (used by drag-to-Discovery): the proper transactional convert with
+  // auto-resolution — links the Account/Contact on an EXACT match, else creates them.
+  // The reviewable link-vs-create choice lives in <LeadConvertDrawer/> on the card.
   const convertLead = (l: Lead): void => {
-    setMsg(null);
+    setMsg(null); setErr(null);
     void (async () => {
-      const ok = await call('/api/crm/opportunities', 'POST', {
-        title: l.companyName ? `${l.companyName} — ${l.name}` : l.name,
-        leadId: l.id,
-        stage: 'qualification',
+      const res = await fetch(`/api/crm/leads/${l.id}/convert`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
       });
-      if (ok) {
-        await call(`/api/crm/leads/${l.id}`, 'PATCH', { status: 'qualified' });
-        setMsg(`Lead "${l.name}" converted to an opportunity — set its value, account and close date.`);
-      }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(d.message ?? d.error ?? 'Convert failed'); return; }
+      const acc = d.account?.action === 'created' ? 'new account created' : 'linked to its account';
+      setMsg(`Lead "${l.name}" converted — ${acc}, primary contact set, opportunity opened.`);
+      router.refresh();
     })();
   };
 
@@ -363,14 +368,25 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
         <div style={{ flex: 1 }} />
         <CreateDrawer
           entity="Lead"
-          subtitle="A new sales lead — an unqualified contact. Qualify it, then convert it into an opportunity."
+          subtitle="Account-first: name the account, add the person you deal with, capture the interest — then Qualify & Convert links it all and opens an Opportunity."
           endpoint="/api/crm/leads"
           fields={[
-            { name: 'name', label: 'Contact name', kind: 'text', required: true, placeholder: 'e.g. Fatima Al Zaabi', span: 2 },
-            { name: 'companyName', label: 'Company', kind: 'text', placeholder: 'e.g. Nakheel' },
-            { name: 'source', label: 'Source', kind: 'select', defaultValue: 'website', options: SOURCES.map((src) => ({ value: src, label: src.replace('_', ' ') })) },
+            // 1 · Account — the party. Pick an existing one (fills the name so Qualify & Convert
+            // auto-links it) or type a brand-new prospect. The hard link forms at conversion.
+            {
+              name: '_existingAccount', label: 'Existing account (optional)', kind: 'select', span: 2,
+              placeholder: 'Search accounts…', hint: 'Or leave blank and type a new company below.',
+              options: initialAccounts.map((a) => ({ value: a.id, label: a.name, fills: { companyName: a.name } })),
+            },
+            { name: 'companyName', label: 'Company / account', kind: 'text', span: 2, placeholder: 'e.g. Nakheel' },
+            // 2 · Primary Contact — the person inside that account.
+            { name: 'name', label: 'Primary contact', kind: 'text', required: true, span: 2, placeholder: 'e.g. Fatima Al Zaabi' },
             { name: 'email', label: 'Email', kind: 'text', placeholder: 'name@company.com' },
             { name: 'phone', label: 'Phone', kind: 'text', placeholder: '+971 …' },
+            // 3 · Lead info — source, interest, expected value.
+            { name: 'source', label: 'Source', kind: 'select', defaultValue: 'website', options: SOURCES.map((src) => ({ value: src, label: src.replace('_', ' ') })) },
+            { name: 'estimatedValue', label: 'Expected value (AED)', kind: 'number', placeholder: '0' },
+            { name: 'requirement', label: 'Interest / requirement', kind: 'textarea', span: 2, placeholder: 'What are they interested in? e.g. CCTV + access control for 3 towers' },
           ]}
         />
         <CreateDrawer
@@ -842,7 +858,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               {col.kind === 'lead' && col.leads!.map((l) => (
                 <div key={l.id} style={{ ...s.card, ...s.cardGrab, ...(drag?.id === l.id ? s.cardDragging : {}) }}
                   {...dragHandlers('lead', l.id, l.status)} title="Drag to qualify / convert">
-                  <div style={s.cardTitle}>{l.name}</div>
+                  <div style={s.cardTitle}><a href={`/crm/leads/${l.id}`} style={{ color: 'inherit', textDecoration: 'none' }} onMouseDown={(e) => e.stopPropagation()}>{l.name}</a></div>
                   {l.companyName && <div style={s.cardSub}>{l.companyName}</div>}
                   <div style={s.cardMetaRow}>
                     {l.source && <span style={s.srcTag}>{l.source.replace('_', ' ')}</span>}
@@ -851,7 +867,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                   <div style={s.cardActions}>
                     {l.status !== 'qualified'
                       ? <button style={s.cardBtn} disabled={busy} onClick={() => qualifyLead(l)}>Qualify ✓</button>
-                      : <button style={{ ...s.cardBtn, color: 'var(--accent)' }} disabled={busy} onClick={() => convertLead(l)}>→ Opportunity</button>}
+                      : <LeadConvertDrawer lead={l} accounts={initialAccounts} onDone={() => { setMsg(`Lead "${l.name}" converted to an opportunity.`); router.refresh(); }} />}
                   </div>
                 </div>
               ))}

@@ -159,6 +159,11 @@ export function InsightsPanel({ title = 'Insights & next actions', insights }: {
 // so no record ever goes dead. This primitive only RENDERS facts the domain already owns.
 export interface HealthState { label: string; tone: Tone; reasons?: string[] }
 export interface NextBestAction { label: string; hint?: string; onClick?: () => void; href?: string }
+// Stage gate — what must be TRUE to advance to the next state. A Universal Object Shell primitive:
+// every entity with a lifecycle (opportunity, quotation, contract, project…) exposes one. The verdict
+// is always resolved SERVER-SIDE and passed in; this only renders it, so a preview can never disagree
+// with enforcement. `gaps` is empty when the gate is clear.
+export interface StageGateView { nextStage?: string; label: string; allowed: boolean; gaps: string[] }
 export interface OutcomeChoice { id: string; label: string; tone?: Tone }
 export interface OutcomeLoop {
   onSelect: (choiceId: string) => void | Promise<void>;
@@ -174,12 +179,30 @@ const DEFAULT_OUTCOMES: OutcomeChoice[] = [
   { id: 'reschedule', label: 'Reschedule', tone: 'accent' },
 ];
 
+// Stage-gate primitive — renders the server's verdict for the next lifecycle transition. Reused by
+// every 360 that has stages; the caller passes `summary.stageGate` straight through.
+export function RecordStageGate({ gate }: { gate: StageGateView }) {
+  return (
+    <div style={rs.sSplit}>
+      <span style={rs.sLabel}>Gate to {gate.label}</span>
+      {gate.allowed ? (
+        <div style={rs.sGateOk}>✓ Clear to advance</div>
+      ) : (
+        <div style={rs.sChips}>
+          {gate.gaps.map((g, i) => <span key={i} style={rs.sGateChip}>{g}</span>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SituationBand({
-  situation, health, missing = [], action, outcome,
+  situation, health, missing = [], gate, action, outcome,
 }: {
   situation: ReactNode;
   health?: HealthState;
   missing?: string[];
+  gate?: StageGateView;
   action?: NextBestAction;
   outcome?: OutcomeLoop;
 }) {
@@ -216,6 +239,8 @@ export function SituationBand({
           </div>
         </div>
       )}
+
+      {gate && <RecordStageGate gate={gate} />}
 
       {outcome && (
         <div style={rs.sSplit}>
@@ -323,6 +348,8 @@ const rs: Record<string, CSSProperties> = {
   sSplit: { marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' },
   sChips: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 },
   sMissChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', color: 'var(--bad)', background: 'color-mix(in srgb, var(--bad) 8%, transparent)' },
+  sGateOk: { fontSize: 12.5, color: 'var(--good)', fontWeight: 600, marginTop: 6 },
+  sGateChip: { fontSize: 12, border: '1px solid var(--warn, #d97706)', borderRadius: 8, padding: '3px 10px', color: 'var(--warn, #d97706)', background: 'color-mix(in srgb, var(--warn, #d97706) 8%, transparent)' },
   sLogBtn: { border: '1px dashed var(--border)', background: 'transparent', color: 'var(--muted)', borderRadius: 8, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
   sOutcomeChip: { border: '1px solid var(--border)', background: 'transparent', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   sOutcomeCancel: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', alignSelf: 'center' },

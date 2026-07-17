@@ -15,8 +15,10 @@ import {
 import {
   opportunityAttention,
   resolveNextAction,
+  checkStageTransition,
   type Opportunity,
   type OpportunityAttention,
+  type OpportunityStage,
   type ResolvedNextAction,
 } from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
@@ -59,7 +61,20 @@ interface Opportunity360Payload {
   nextAction: ResolvedNextAction;
   /** The Next-Action Invariant verdict for this deal, computed on the same resolved facts. */
   attention: OpportunityAttention;
+  /**
+   * G5 — the stage gate for the NEXT forward stage, resolved server-side from the same rule the
+   * PATCH enforces (`checkStageTransition`) with the same evidence. The client renders this and
+   * NEVER re-derives it, so the preview can never disagree with the enforcement. `null` once the
+   * deal is closed or sitting at the last gated stage.
+   */
+  stageGate: { nextStage: OpportunityStage; label: string; allowed: boolean; gaps: string[] } | null;
 }
+
+/** Only forward commercial commitments are gated (won/lost carry their reason at close time). */
+const NEXT_FORWARD_STAGE: Partial<Record<OpportunityStage, OpportunityStage>> = {
+  qualification: 'proposal',
+  proposal: 'negotiation',
+};
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -132,6 +147,25 @@ export class Opportunity360Controller {
       ? { nextActionSubject: next.subject, nextActionDueIso: next.dueIso, nextActionOwnerId: next.assigneeId }
       : {};
 
+    // G5 stage gate — the SAME rule + evidence the PATCH enforces, resolved here so the client only
+    // renders the verdict. Only previewed while the deal is open and has a gated forward stage.
+    const nextStage = status === 'open' ? NEXT_FORWARD_STAGE[opp.stage] : undefined;
+    const stageGate = nextStage
+      ? (() => {
+          const check = checkStageTransition(opp, nextStage, {
+            hasStakeholder: stakeholders.length > 0,
+            hasQuotation: quotations.length > 0,
+            quotationSubmitted: quotations.some((q) => q.status !== 'draft' && q.status !== 'internal_review'),
+          });
+          return {
+            nextStage,
+            label: nextStage.charAt(0).toUpperCase() + nextStage.slice(1),
+            allowed: check.allowed,
+            gaps: check.gaps.map((g) => g.message),
+          };
+        })()
+      : null;
+
     return {
       opportunity: opp,
       account,
@@ -147,6 +181,7 @@ export class Opportunity360Controller {
       outcome: { status, lossReason: opp.lossReason, contractedValue },
       nextAction: resolveNextAction(opp, facts),
       attention: opportunityAttention(opp, facts),
+      stageGate,
     };
   }
 }

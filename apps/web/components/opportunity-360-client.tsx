@@ -7,7 +7,7 @@ import Timeline from './timeline';
 import {
   RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, SituationBand, useTab,
   type Tone, type KpiItem, type MetaItem, type TabDef, type Insight,
-  type HealthState, type NextBestAction,
+  type HealthState, type NextBestAction, type StageGateView,
 } from './crm/record-shell';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
@@ -37,6 +37,8 @@ interface Payload {
   /** G2 — resolved server-side from the activity stream; render this, never re-derive the rule. */
   nextAction: { subject: string | null; dueDate: string | null; ownerId: string | null; fromActivity: boolean };
   attention: { active: boolean; gaps: string[]; needsAttention: boolean };
+  /** G5 — the next-stage gate, resolved server-side. Rendered as-is; the client never re-derives it. */
+  stageGate: StageGateView | null;
 }
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
@@ -86,7 +88,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, activities, qualification, route, progression, outcome, nextAction, attention } = data;
+  const { opportunity: o, account, stakeholders, activities, qualification, route, progression, outcome, nextAction, attention, stageGate } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)', tone: 'accent' as Tone },
     won: { label: 'Won', color: 'var(--good)', tone: 'good' as Tone },
@@ -230,6 +232,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
           situation={situationText}
           health={health}
           missing={missing}
+          gate={stageGate ?? undefined}
           action={nba}
           outcome={outcome.status === 'open' ? { onSelect: logOutcome, busy, note: outcomeNote } : undefined}
         />

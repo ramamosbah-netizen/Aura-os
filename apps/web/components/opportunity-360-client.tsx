@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 import Timeline from './timeline';
+import PreAwardPanel from './pre-award-panel';
+import BuyingJourneyPanel from './buying-journey-panel';
+import WinPlanPanel from './win-plan-panel';
+import DealDepthPanel from './deal-depth-panel';
 import {
   RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, SituationBand, useTab,
   type Tone, type KpiItem, type MetaItem, type TabDef, type Insight,
@@ -25,10 +29,13 @@ interface Stakeholder { id: string; name: string; jobTitle: string | null; stake
 interface Step { key: string; label: string; reached: boolean; count: number; value: number | null; href: string | null }
 interface ActivityRec { id: string; type: string; subject: string; status: string; dueDate: string | null; createdAt: string }
 
+interface QuotationLite { id: string; quoteNumber: string; status: string; total: number }
+
 interface Payload {
   opportunity: Opportunity;
   account: { id: string; name: string; status: string } | null;
   stakeholders: Stakeholder[];
+  quotations: QuotationLite[];
   activities: ActivityRec[];
   qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number };
   route: 'tender' | 'direct';
@@ -88,7 +95,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, activities, qualification, route, progression, outcome, nextAction, attention, stageGate } = data;
+  const { opportunity: o, account, stakeholders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)', tone: 'accent' as Tone },
     won: { label: 'Won', color: 'var(--good)', tone: 'good' as Tone },
@@ -212,7 +219,12 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'qualification', label: 'Qualification' },
+    { id: 'scope', label: 'Scope' },
     { id: 'stakeholders', label: 'Stakeholders', count: stakeholders.length },
+    { id: 'quotation', label: 'Commercial', count: quotations.length },
+    { id: 'journey', label: 'Journey' },
+    { id: 'winplan', label: 'Win Plan' },
+    { id: 'depth', label: 'Deal Depth' },
     { id: 'activity', label: 'Activity' },
   ];
 
@@ -305,6 +317,11 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </RecordCard>
       )}
 
+      {tab === 'scope' && <PreAwardPanel opportunityId={o.id} />}
+      {tab === 'journey' && <BuyingJourneyPanel opportunityId={o.id} />}
+      {tab === 'winplan' && <WinPlanPanel opportunityId={o.id} />}
+      {tab === 'depth' && <DealDepthPanel opportunityId={o.id} />}
+
       {tab === 'stakeholders' && (
         <RecordCard title={`Stakeholders ${account ? `at ${account.name}` : ''}`}>
           {stakeholders.length === 0 ? (
@@ -318,6 +335,34 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
                 {s.relationshipStrength && <span style={{ fontSize: 11, fontWeight: 700, color: STRENGTH_COLOR[s.relationshipStrength] ?? 'var(--muted)' }}>{STRENGTH_LABEL[s.relationshipStrength] ?? s.relationshipStrength}</span>}
               </div>
             ))
+          )}
+        </RecordCard>
+      )}
+
+      {tab === 'quotation' && (
+        <RecordCard title="Quotations for this deal">
+          {quotations.length === 0 ? (
+            <p style={st.muted}>
+              No quotation yet — {outcome.status === 'won' && !o.requiresTender
+                ? <button style={st.linkBtn} onClick={() => { void fetch(`/api/crm/opportunities/${o.id}/convert-to-quotation`, { method: 'POST' }).then(() => load()); }}>generate one from this deal →</button>
+                : <a href="/crm/quotations" style={st.link}>create a quotation →</a>}
+            </p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={st.qTable}>
+                <thead><tr>{['Number', 'Status', 'Total', ''].map((h, i) => <th key={h} style={{ ...st.qTh, textAlign: i >= 2 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {quotations.map((q) => (
+                    <tr key={q.id}>
+                      <td style={st.qTd}>{q.quoteNumber}</td>
+                      <td style={st.qTd}><span style={st.statusPill}>{q.status.replace(/_/g, ' ')}</span></td>
+                      <td style={{ ...st.qTd, textAlign: 'right' }}>AED {aed(q.total)}</td>
+                      <td style={{ ...st.qTd, textAlign: 'right' }}><a href={`/crm/quotations/${q.id}`} style={st.link}>Open →</a></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </RecordCard>
       )}
@@ -369,6 +414,11 @@ const st = {
   rolePill: { fontSize: 10.5, border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', color: 'var(--fg)' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12.5, margin: '4px 0' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
+  linkBtn: { background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0 } as CSSProperties,
+  qTable: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
+  qTh: { padding: '7px 8px', borderBottom: '1px solid var(--border)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' } as CSSProperties,
+  qTd: { padding: '8px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' } as CSSProperties,
+  statusPill: { fontSize: 11, textTransform: 'capitalize', border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', color: 'var(--muted)' } as CSSProperties,
   tlRow: { display: 'flex', alignItems: 'baseline', gap: 10, padding: '5px 2px', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
   tlDate: { color: 'var(--muted)', fontSize: 12, width: 86, flexShrink: 0 } as CSSProperties,
 };

@@ -42,8 +42,7 @@ export const NAV: NavGroup[] = [
   {
     title: 'Deal chain',
     items: [
-      { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals' },
-      { label: 'Pricing Sheets', href: '/tendering/pricing', glyph: '⊞', desc: 'Internal cost & resource breakdowns' },
+      { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals — incl. the internal pricing summary' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
       { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Delivery & execution' },
       { label: 'Projects Dashboard', href: '/projects/dashboard', glyph: '📊', desc: 'Portfolio value & counts by status' },

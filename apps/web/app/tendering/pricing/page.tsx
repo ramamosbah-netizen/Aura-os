@@ -30,10 +30,10 @@ export default async function PricingSheetsPage() {
     <div style={st.container}>
       <div style={st.head}>
         <div>
-          <h1 style={st.h1}>Pricing Sheets</h1>
+          <h1 style={st.h1}>Pricing Summary</h1>
           <p style={st.sub}>
             Internal cost &amp; resource breakdowns across all tenders — open a sheet to price lines, export any
-            sheet as the original spreadsheet.
+            sheet as the original spreadsheet. Reached from <a href="/tendering/tenders" style={st.link}>Tenders</a>.
           </p>
         </div>
         <a href="/api/tendering/pricing/sheets/csv" style={st.btn}>⤓ Export summary CSV</a>

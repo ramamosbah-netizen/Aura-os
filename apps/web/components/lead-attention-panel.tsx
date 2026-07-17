@@ -322,7 +322,7 @@ const st = {
   head: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,
   h2: { fontSize: 16, margin: 0, letterSpacing: -0.3 } as CSSProperties,
   tabs: { display: 'flex', gap: 6, flexWrap: 'wrap' } as CSSProperties,
-  tab: { fontSize: 12.5, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' } as CSSProperties,
+  tab: { fontSize: 12.5, padding: '5px 10px', borderRadius: 6, borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' } as CSSProperties,
   tabOn: { background: 'var(--panel-2)', color: 'var(--fg)', borderColor: 'var(--fg)' } as CSSProperties,
   count: { opacity: 0.7, marginLeft: 2 } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 } as CSSProperties,

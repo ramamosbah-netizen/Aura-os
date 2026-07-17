@@ -7,6 +7,11 @@ import {
   STRENGTH_LABEL, STRENGTH_COLOR, STRENGTH_OPTIONS,
 } from './stakeholder-meta';
 import CreateDrawer from './ui/create-drawer';
+import {
+  RecordHeader, KpiRow, RecordTabs, ActionButton, SituationBand,
+  type Tone, type KpiItem, type MetaItem, type TabDef,
+  type HealthState, type NextBestAction,
+} from './crm/record-shell';
 import Timeline from './timeline';
 import RelationshipGraphPanel from './relationship-graph-panel';
 import InstalledBasePanel from './installed-base-panel';
@@ -106,6 +111,8 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   // need not equal the username and is absent in the dev pass-through.
   const [me, setMe] = useState<TeamUser | null>(null);
   const [team, setTeam] = useState<TeamUser[]>([]);
+  // Outcome Loop — capture what happened after acting so the relationship never goes quiet.
+  const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/accounts/${accountId}/summary`, { cache: 'no-store' });
@@ -219,6 +226,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     attention: { dot: '🟠', label: 'Attention Required', color: 'var(--warn, #d97706)' },
     at_risk: { dot: '🔴', label: 'At Risk', color: 'var(--bad)' },
   }[health];
+  const healthTone: Tone = health === 'at_risk' ? 'bad' : health === 'attention' ? 'warn' : 'good';
 
   const upcoming = activities
     .filter((x) => x.status !== 'done' && x.status !== 'cancelled')
@@ -227,6 +235,53 @@ export default function Account360Client({ accountId }: { accountId: string }) {
 
   const tenderedQuotes = quotations.filter((q) => q.sourceTenderId).length;
   const directQuotes = quotations.length - tenderedQuotes;
+
+  // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
+  // Account is the relationship hub — the band reads its health, exposure and coverage, never
+  // re-deriving a rule the summary already resolved.
+  const situationText = `${STAGE_LABEL[a.status] ?? a.status} · ${summary.activeOpportunities} open opps · AED ${aed(summary.pipelineValue)} pipeline${summary.wonValue > 0 ? ` · AED ${aed(summary.wonValue)} contracted` : ''}`;
+  const bandHealth: HealthState = { label: HEALTH.label, tone: healthTone, reasons: healthReasons };
+
+  // Missing Information — relationship gaps that cap growth.
+  const hasPrimary = contacts.some((c) => c.isPrimary);
+  const missing: string[] = [];
+  if (!a.ownerId) missing.push('Account owner');
+  if (contacts.length === 0) missing.push('Key contacts');
+  else if (!hasPrimary) missing.push('Primary contact');
+  if (openOpps.length === 0) missing.push('Open opportunity');
+  if (upcoming.length === 0) missing.push('Next action');
+  if (stageMismatch) missing.push('Stage (has contracts, still prospect)');
+
+  // The ONE next best action.
+  let nba: NextBestAction | undefined;
+  if (receivables.overdue > 0) nba = { label: 'Chase overdue AR', hint: `AED ${aed(receivables.overdue)} overdue`, href: '/finance/ar' };
+  else if (!a.ownerId) nba = { label: 'Assign an owner', hint: me ? 'assign to you' : 'no owner yet', onClick: () => { if (me) void assignOwner(me.username); } };
+  else if (contacts.length === 0) nba = { label: 'Add key contacts', onClick: () => setTab('contacts') };
+  else if (!hasPrimary) nba = { label: 'Set the primary contact', onClick: () => setTab('contacts') };
+  else if (openOpps.length === 0) nba = { label: 'Create an opportunity', href: '/crm/leads' };
+  else if (upcoming.length === 0) nba = { label: 'Schedule the next step', href: '/crm/activities' };
+
+  // Outcome Loop — writes a real activity linked to this account (§17 activity stream).
+  const logOutcome = async (choiceId: string): Promise<void> => {
+    const plan: Record<string, { type: string; subject: string; status?: string }> = {
+      completed: { type: 'note', subject: `Outcome — touchpoint with ${a.name}`, status: 'completed' },
+      failed: { type: 'note', subject: `Outcome — ${a.name}: no response`, status: 'completed' },
+      follow_up: { type: 'follow_up', subject: `Follow up: ${a.name}` },
+      reschedule: { type: 'task', subject: `Reschedule: ${a.name}` },
+    };
+    const act = plan[choiceId];
+    if (!act) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/crm/activities', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: act.type, subject: act.subject, relatedType: 'account', relatedId: a.id, relatedName: a.name, status: act.status }),
+      });
+      if (!res.ok) { setErr('Could not log the outcome'); return; }
+      setOutcomeNote(`Logged: ${act.subject}`);
+      await load();
+    } finally { setBusy(false); }
+  };
 
   const TABS: Array<{ id: Tab; label: string; count?: number }> = [
     { id: 'overview', label: 'Overview' },
@@ -250,93 +305,85 @@ export default function Account360Client({ accountId }: { accountId: string }) {
 
   return (
     <div>
-      {/* ── Header: identity + relationship health ── */}
-      <div style={st.header}>
-        <div style={{ minWidth: 0 }}>
-          <h1 style={st.h1}>{a.name}</h1>
-          <div style={st.subline}>
-            <span style={st.stagePill}>{STAGE_LABEL[a.status] ?? a.status}</span>
-            {a.partyType && <span style={st.stagePill}>{PARTY_LABEL[a.partyType] ?? a.partyType}</span>}
-            {a.industry && <span>{a.industry}</span>}
-            <span>Client since {monthYear(a.createdAt)}</span>
-            {a.source && <span>Source: {a.source}</span>}
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              Owner:{' '}
-              {a.ownerId ? ownerLabel(a.ownerId) : <span style={{ color: 'var(--muted)' }}>Unassigned</span>}
-              {me && a.ownerId !== me.username && (
-                <button disabled={busy} onClick={() => void assignOwner(me.username)} style={st.inlineAction}>Assign to me</button>
-              )}
-              {canManage && (
-                <select
-                  value={a.ownerId ?? ''}
-                  disabled={busy}
-                  onChange={(e) => void assignOwner(e.target.value || null)}
-                  style={st.ownerSelect}
-                  title="Assign owner — admin / manager"
-                >
-                  <option value="">Unassigned</option>
-                  {team.map((u) => (
-                    <option key={u.username} value={u.username}>
-                      {u.roleLabel ? `${u.username} · ${u.roleLabel}` : u.username}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </span>
-          </div>
-          <div style={{ ...st.healthLine, color: HEALTH.color }}>
-            Relationship Health: {HEALTH.dot} {HEALTH.label}
-            {healthReasons.length > 0 && <span style={{ color: 'var(--muted)', fontWeight: 500 }}> — {healthReasons.join(' · ')}</span>}
-            {stageMismatch && (
-              <button disabled={busy} onClick={() => void patchAccount({ status: 'active_customer' })} style={st.inlineAction}>
-                Promote to Active Customer
-              </button>
-            )}
-          </div>
+      {/* ── Header: identity + relationship health (shared record-shell) ── */}
+      <RecordHeader
+        title={a.name}
+        status={STAGE_LABEL[a.status] ?? a.status}
+        statusTone="accent"
+        score={{ value: HEALTH.dot, label: 'Relationship', badge: HEALTH.label, badgeTone: healthTone }}
+        meta={[
+          ...(a.partyType ? [{ value: <span style={st.stagePill}>{PARTY_LABEL[a.partyType] ?? a.partyType}</span> }] as MetaItem[] : []),
+          ...(a.industry ? [{ value: a.industry }] as MetaItem[] : []),
+          { label: 'Client since', value: monthYear(a.createdAt) },
+          ...(a.source ? [{ label: 'Source', value: a.source }] as MetaItem[] : []),
+          {
+            label: 'Owner',
+            value: (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {a.ownerId ? ownerLabel(a.ownerId) : <span style={{ color: 'var(--muted)' }}>Unassigned</span>}
+                {me && a.ownerId !== me.username && (
+                  <button disabled={busy} onClick={() => void assignOwner(me.username)} style={st.inlineAction}>Assign to me</button>
+                )}
+                {canManage && (
+                  <select value={a.ownerId ?? ''} disabled={busy} onChange={(e) => void assignOwner(e.target.value || null)} style={st.ownerSelect} title="Assign owner — admin / manager">
+                    <option value="">Unassigned</option>
+                    {team.map((u) => (<option key={u.username} value={u.username}>{u.roleLabel ? `${u.username} · ${u.roleLabel}` : u.username}</option>))}
+                  </select>
+                )}
+              </span>
+            ),
+          },
+        ]}
+        actions={
+          <>
+            <ActionButton href="/crm/leads">+ Opportunity</ActionButton>
+            <ActionButton href="/crm/quotations">+ Quotation</ActionButton>
+            <ActionButton href="/tendering/tenders">+ Tender</ActionButton>
+            <details style={{ position: 'relative' }}>
+              <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>Export ▾</summary>
+              <div style={st.menu}>
+                <a href={`/api/crm/accounts/${a.id}/dossier/xlsx`} style={st.menuItem}>⤓ Customer dossier (Excel)</a>
+                <a href={`/crm/accounts/${a.id}/print`} style={st.menuItem}>🖨 Customer dossier (PDF)</a>
+              </div>
+            </details>
+            <details style={{ position: 'relative' }}>
+              <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>More ▾</summary>
+              <div style={st.menu}>
+                <button type="button" onClick={() => setTab('contacts')} style={{ ...st.menuItem, background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%' }}>+ Contact</button>
+                <a href="/crm/activities" style={st.menuItem}>+ Activity</a>
+                <a href="/finance/ar" style={st.menuItem}>Accounts receivable →</a>
+              </div>
+            </details>
+            {stageMismatch && <ActionButton onClick={() => void patchAccount({ status: 'active_customer' })} disabled={busy}>Promote to Active Customer</ActionButton>}
+          </>
+        }
+      />
+      {healthReasons.length > 0 && (
+        <div style={{ margin: '-4px 0 14px', fontSize: 12.5, color: 'var(--muted)' }}>
+          <b style={{ color: HEALTH.color }}>Attention:</b> {healthReasons.join(' · ')}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a href="/crm/leads" style={st.actionBtn}>+ Opportunity</a>
-          <a href="/crm/quotations" style={st.actionBtn}>+ Quotation</a>
-          <a href="/tendering/tenders" style={st.actionBtn}>+ Tender</a>
-          <details style={{ position: 'relative' }}>
-            <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>Export ▾</summary>
-            <div style={st.menu}>
-              <a href={`/api/crm/accounts/${a.id}/dossier/xlsx`} style={st.menuItem}>⤓ Customer dossier (Excel)</a>
-              <a href={`/crm/accounts/${a.id}/print`} style={st.menuItem}>🖨 Customer dossier (PDF)</a>
-            </div>
-          </details>
-          <details style={{ position: 'relative' }}>
-            <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>More ▾</summary>
-            <div style={st.menu}>
-              <button type="button" onClick={() => setTab('contacts')} style={{ ...st.menuItem, background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%' }}>+ Contact</button>
-              <a href="/crm/activities" style={st.menuItem}>+ Activity</a>
-              <a href="/finance/ar" style={st.menuItem}>Accounts receivable →</a>
-            </div>
-          </details>
-        </div>
-      </div>
+      )}
 
-      {/* ── Account snapshot: Commercial | Delivery & Finance ── */}
-      <div style={st.snapshotRow}>
-        <div style={st.snapshotGroup}>
-          <div style={st.groupTitle}>Commercial</div>
-          <div style={st.groupStats}>
-            <Stat label="Open pipeline" value={`AED ${aed(summary.pipelineValue)}`} accent />
-            <Stat label="Active opportunities" value={String(summary.activeOpportunities)} />
-            <Stat label="Contracted value" value={`AED ${aed(summary.wonValue)}`} strong accent />
-            <Stat label="Active contracts" value={`${activeContracts.length} / ${contracts.length}`} />
-          </div>
-        </div>
-        <div style={st.snapshotGroup}>
-          <div style={st.groupTitle}>Delivery &amp; Finance</div>
-          <div style={st.groupStats}>
-            <Stat label="Active projects" value={`${activeProjects.length} / ${projects.length}`} />
-            <Stat label="Open tenders" value={`${summary.openTenders} / ${summary.tenderCount}`} />
-            <Stat label="Quotations" value={String(summary.quotationCount)} />
-            <Stat label="Outstanding AR" value={`AED ${aed(summary.outstandingReceivables)}`} strong tone={receivables.overdue > 0 ? 'bad' : undefined} />
-          </div>
-        </div>
-      </div>
+      {/* ── Account snapshot as the unified KPI strip ── */}
+      <KpiRow items={[
+        { label: 'Open pipeline', value: `AED ${aed(summary.pipelineValue)}`, tone: 'accent' },
+        { label: 'Active opps', value: String(summary.activeOpportunities) },
+        { label: 'Contracted', value: `AED ${aed(summary.wonValue)}`, tone: 'accent' },
+        { label: 'Active contracts', value: `${activeContracts.length} / ${contracts.length}` },
+        { label: 'Active projects', value: `${activeProjects.length} / ${projects.length}` },
+        { label: 'Open tenders', value: `${summary.openTenders} / ${summary.tenderCount}` },
+        { label: 'Quotations', value: String(summary.quotationCount) },
+        { label: 'Outstanding AR', value: `AED ${aed(summary.outstandingReceivables)}`, tone: receivables.overdue > 0 ? 'bad' : 'neutral' },
+      ] as KpiItem[]} />
+
+      {/* ── Universal Object Shell — Situation / Health / Missing / Next Best Action ── */}
+      <SituationBand
+        situation={situationText}
+        health={bandHealth}
+        missing={missing}
+        action={nba}
+        outcome={{ onSelect: logOutcome, busy, note: outcomeNote }}
+      />
 
       {/* ── Commercial Portfolio: the account is the hub — both deal routes ── */}
       <div style={st.chain}>
@@ -365,15 +412,9 @@ export default function Account360Client({ accountId }: { accountId: string }) {
         </div>
       </div>
 
-      {/* ── Tabs ── */}
-      <div style={st.tabs}>
-        {TABS.map((t) => (
-          <button key={t.id} style={{ ...st.tab, ...(tab === t.id ? st.tabOn : {}) }} onClick={() => setTab(t.id)}>
-            {t.label}
-            {t.count !== undefined && t.count > 0 && <span style={st.tabCount}>{t.count}</span>}
-          </button>
-        ))}
-      </div>
+      {/* ── Tabs (shared record-shell) ── */}
+      <RecordTabs tabs={TABS as unknown as TabDef[]} active={tab} onChange={(id) => setTab(id as Tab)} />
+      <div style={{ marginTop: 4 }} />
 
       <section style={st.card}>
         {tab === 'overview' && (
@@ -692,7 +733,7 @@ function Pill({ text }: { text: string }) {
   const bad = ['lost', 'rejected', 'cancelled', 'expired'].includes(text);
   return (
     <span style={{
-      fontSize: 11.5, textTransform: 'capitalize', border: '1px solid', borderRadius: 999, padding: '2px 9px',
+      fontSize: 11.5, textTransform: 'capitalize', borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '2px 9px',
       color: good ? 'var(--good)' : bad ? 'var(--bad)' : 'var(--muted)', borderColor: 'currentColor',
     }}>
       {text.replace(/_/g, ' ')}

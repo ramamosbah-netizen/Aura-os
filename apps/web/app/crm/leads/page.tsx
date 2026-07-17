@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import CrmPipelineClient from '../../../components/crm-pipeline-client';
-import LeadAttentionPanel, { type LeadCommand } from '../../../components/lead-attention-panel';
-import OpportunityRadarPanel, { type RadarData } from '../../../components/opportunity-radar-panel';
+import SalesPipelineWorkspace from '../../../components/sales-pipeline-workspace';
+import type { LeadCommand } from '../../../components/lead-attention-panel';
+import type { RadarData } from '../../../components/signals-radar';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,21 +46,18 @@ export default async function CrmLeadsPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>CRM · Sales Pipeline</h1>
+      <h1 style={st.h1}>Sales Pipeline</h1>
       <p style={st.sub}>
-        The full sales cycle: Lead → Qualified → Opportunity → Proposal → Negotiation → Won/Lost.
-        After a win the deal chain is optional per deal — tender/estimation for bid work, or a
-        direct quotation for direct sales, AMC renewals and variations.
+        Signal → Lead → Opportunity → Won. Triage the Radar, work the Board, read the Analytics —
+        one workspace for the whole acquisition cycle.
       </p>
 
-      <OpportunityRadarPanel data={radar ?? null} />
-
-      <LeadAttentionPanel data={leadCommand ?? null} />
-
-      <CrmPipelineClient
-        initialLeads={leads ?? []}
-        initialOpportunities={opportunities ?? []}
-        initialAccounts={accounts ?? []}
+      <SalesPipelineWorkspace
+        leads={leads ?? []}
+        opportunities={opportunities ?? []}
+        accounts={accounts ?? []}
+        leadCommand={leadCommand ?? null}
+        radar={radar ?? null}
       />
     </div>
   );
@@ -69,13 +66,5 @@ export default async function CrmLeadsPage() {
 const st = {
   page: { maxWidth: 1200, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
-  sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 740, lineHeight: 1.5 } as CSSProperties,
-  code: {
-    fontFamily: 'ui-monospace, monospace',
-    fontSize: 12.5,
-    background: 'var(--panel-2)',
-    border: '1px solid var(--border)',
-    borderRadius: 5,
-    padding: '1px 5px',
-  } as CSSProperties,
+  sub: { color: 'var(--muted)', margin: '0 0 18px', maxWidth: 740, lineHeight: 1.5 } as CSSProperties,
 };

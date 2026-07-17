@@ -256,7 +256,7 @@ const st: Record<string, CSSProperties> = {
   sectionTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', fontWeight: 700, marginBottom: 8 },
   choice: { display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 11px', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6, cursor: 'pointer', fontSize: 13 },
   choiceOn: { borderColor: 'var(--accent)', background: 'var(--panel-2)' },
-  badge: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, border: '1px solid', borderRadius: 999, padding: '1px 7px', textTransform: 'uppercase', letterSpacing: 0.4 },
+  badge: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '1px 7px', textTransform: 'uppercase', letterSpacing: 0.4 },
   reasons: { color: 'var(--muted)', fontSize: 12 },
   noMatch: { color: 'var(--muted)', fontSize: 12.5, margin: '0 0 6px' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },

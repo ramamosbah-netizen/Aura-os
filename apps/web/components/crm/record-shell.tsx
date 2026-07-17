@@ -152,12 +152,105 @@ export function InsightsPanel({ title = 'Insights & next actions', insights }: {
   );
 }
 
+// ── Situation Band — the Universal Object experience (Phase 1) ───────────────────────
+// Every record answers the three questions ABOVE the fold: what is happening (Situation),
+// why it matters now (Business Health), what is blocking progress (Missing Information),
+// and the ONE thing to do (Next Best Action). The Outcome Loop then captures what happened
+// so no record ever goes dead. This primitive only RENDERS facts the domain already owns.
+export interface HealthState { label: string; tone: Tone; reasons?: string[] }
+export interface NextBestAction { label: string; hint?: string; onClick?: () => void; href?: string }
+export interface OutcomeChoice { id: string; label: string; tone?: Tone }
+export interface OutcomeLoop {
+  onSelect: (choiceId: string) => void | Promise<void>;
+  choices?: OutcomeChoice[];
+  busy?: boolean;
+  note?: string | null; // last captured outcome, echoed back inline
+}
+
+const DEFAULT_OUTCOMES: OutcomeChoice[] = [
+  { id: 'completed', label: 'Completed', tone: 'good' },
+  { id: 'failed', label: 'Did not land', tone: 'bad' },
+  { id: 'follow_up', label: 'Need follow-up', tone: 'warn' },
+  { id: 'reschedule', label: 'Reschedule', tone: 'accent' },
+];
+
+export function SituationBand({
+  situation, health, missing = [], action, outcome,
+}: {
+  situation: ReactNode;
+  health?: HealthState;
+  missing?: string[];
+  action?: NextBestAction;
+  outcome?: OutcomeLoop;
+}) {
+  const [logging, setLogging] = useState(false);
+  return (
+    <section style={{ ...rs.sBand, borderLeftColor: toneColor(health?.tone ?? 'accent') }}>
+      <div style={rs.sMain}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={rs.sLabel}>Situation</div>
+          <div style={rs.sText}>{situation}</div>
+          {health && (
+            <div style={rs.sHealthRow}>
+              <span style={{ ...rs.sHealthPill, color: toneColor(health.tone), borderColor: toneColor(health.tone) }}>{health.label}</span>
+              {health.reasons && health.reasons.length > 0 && <span style={rs.sReasons}>{health.reasons.join(' · ')}</span>}
+            </div>
+          )}
+        </div>
+        {action && (
+          <div style={rs.sActionBox}>
+            <div style={rs.sLabel}>Next best action</div>
+            {action.href
+              ? <a href={action.href} style={{ ...rs.primaryBtn, textDecoration: 'none', display: 'inline-block' }}>{action.label}</a>
+              : <button type="button" onClick={action.onClick} style={rs.primaryBtn}>{action.label}</button>}
+            {action.hint && <div style={rs.sActionHint}>{action.hint}</div>}
+          </div>
+        )}
+      </div>
+
+      {missing.length > 0 && (
+        <div style={rs.sSplit}>
+          <span style={rs.sLabel}>Missing to progress</span>
+          <div style={rs.sChips}>
+            {missing.map((m) => <span key={m} style={rs.sMissChip}>✕ {m}</span>)}
+          </div>
+        </div>
+      )}
+
+      {outcome && (
+        <div style={rs.sSplit}>
+          {outcome.note ? (
+            <span style={rs.sOutcomeNote}>✓ {outcome.note}</span>
+          ) : logging ? (
+            <>
+              <span style={rs.sLabel}>What happened?</span>
+              <div style={rs.sChips}>
+                {(outcome.choices ?? DEFAULT_OUTCOMES).map((c) => (
+                  <button key={c.id} type="button" disabled={outcome.busy}
+                    onClick={() => { void outcome.onSelect(c.id); setLogging(false); }}
+                    style={{ ...rs.sOutcomeChip, color: toneColor(c.tone), borderColor: toneColor(c.tone) }}>
+                    {c.label}
+                  </button>
+                ))}
+                <button type="button" style={rs.sOutcomeCancel} onClick={() => setLogging(false)}>cancel</button>
+              </div>
+            </>
+          ) : (
+            <button type="button" style={rs.sLogBtn} onClick={() => setLogging(true)}>＋ Log what happened</button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── Shell frame ───────────────────────────────────────────────────────────────────
 export function RecordShell({
-  header, kpis, tabs, activeTab, onTab, aside, children, footer,
+  header, kpis, situation, tabs, activeTab, onTab, aside, children, footer,
 }: {
   header: ReactNode;
   kpis?: KpiItem[];
+  situation?: ReactNode;
   tabs?: TabDef[];
   activeTab?: string;
   onTab?: (id: string) => void;
@@ -169,6 +262,7 @@ export function RecordShell({
     <div>
       {header}
       {kpis && kpis.length > 0 && <KpiRow items={kpis} />}
+      {situation}
       {tabs && tabs.length > 0 && activeTab && onTab && <RecordTabs tabs={tabs} active={activeTab} onChange={onTab} />}
       <div style={rs.body}>
         <div style={{ minWidth: 0 }}>{children}</div>
@@ -189,11 +283,11 @@ const rs: Record<string, CSSProperties> = {
   header: { display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 16 },
   h1: { fontSize: 26, margin: '0 0 8px', letterSpacing: -0.5 },
   subline: { display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', fontSize: 13, color: 'var(--muted)' },
-  statusPill: { border: '1px solid', borderRadius: 999, padding: '2px 11px', fontSize: 12, fontWeight: 600 },
+  statusPill: { borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '2px 11px', fontSize: 12, fontWeight: 600 },
   actionRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 },
   scoreBox: { textAlign: 'center', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 16px', flexShrink: 0 },
   scoreLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
-  recBadge: { marginTop: 5, fontSize: 10.5, fontWeight: 700, border: '1px solid', borderRadius: 999, padding: '1px 8px', letterSpacing: 0.4 },
+  recBadge: { marginTop: 5, fontSize: 10.5, fontWeight: 700, borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '1px 8px', letterSpacing: 0.4 },
   primaryBtn: { border: '1px solid var(--accent)', background: 'var(--accent)', color: '#0b1020', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
   ghostBtn: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--fg)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },
   kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 16 },
@@ -201,7 +295,7 @@ const rs: Record<string, CSSProperties> = {
   kpiLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },
   kpiValue: { fontSize: 18, fontWeight: 700, marginTop: 4 },
   tabs: { display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', marginBottom: 16 },
-  tab: { border: 'none', background: 'transparent', color: 'var(--muted)', padding: '8px 14px', fontSize: 13, cursor: 'pointer', borderBottom: '2px solid transparent', marginBottom: -1, display: 'inline-flex', alignItems: 'center', gap: 6 },
+  tab: { border: 'none', background: 'transparent', color: 'var(--muted)', padding: '8px 14px', fontSize: 13, cursor: 'pointer', borderBottomWidth: 2, borderBottomStyle: 'solid', borderBottomColor: 'transparent', marginBottom: -1, display: 'inline-flex', alignItems: 'center', gap: 6 },
   tabOn: { color: 'var(--accent)', borderBottomColor: 'var(--accent)', fontWeight: 600 },
   tabCount: { fontSize: 11, background: 'var(--panel-2)', borderRadius: 999, padding: '0 7px', color: 'var(--muted)' },
   body: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 16, alignItems: 'start' },
@@ -214,6 +308,23 @@ const rs: Record<string, CSSProperties> = {
   aside: { border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--panel)' },
   asideHead: { display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, marginBottom: 12 },
   aiDot: { width: 8, height: 8, borderRadius: 999, background: 'var(--accent)', boxShadow: '0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent)' },
-  insight: { borderLeft: '3px solid var(--accent)', padding: '6px 0 6px 10px', marginBottom: 10 },
+  insight: { borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: 'var(--accent)', padding: '6px 0 6px 10px', marginBottom: 10 },
   insightAction: { display: 'inline-block', marginTop: 4, background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'none' },
+  // Situation Band (Universal Object experience)
+  sBand: { border: '1px solid var(--border)', borderLeftWidth: 3, borderLeftStyle: 'solid', borderRadius: 14, padding: '14px 16px', background: 'var(--panel)', marginBottom: 16 },
+  sMain: { display: 'flex', gap: 16, alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' },
+  sLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  sText: { fontSize: 14.5, fontWeight: 600, lineHeight: 1.4 },
+  sHealthRow: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 },
+  sHealthPill: { borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '2px 11px', fontSize: 12, fontWeight: 700 },
+  sReasons: { fontSize: 12, color: 'var(--muted)' },
+  sActionBox: { textAlign: 'right', flexShrink: 0, minWidth: 150 },
+  sActionHint: { fontSize: 11.5, color: 'var(--muted)', marginTop: 5, maxWidth: 220 },
+  sSplit: { marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' },
+  sChips: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 },
+  sMissChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', color: 'var(--bad)', background: 'color-mix(in srgb, var(--bad) 8%, transparent)' },
+  sLogBtn: { border: '1px dashed var(--border)', background: 'transparent', color: 'var(--muted)', borderRadius: 8, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
+  sOutcomeChip: { border: '1px solid var(--border)', background: 'transparent', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  sOutcomeCancel: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', alignSelf: 'center' },
+  sOutcomeNote: { fontSize: 12.5, color: 'var(--good)', fontWeight: 600 },
 };

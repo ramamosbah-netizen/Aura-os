@@ -4,8 +4,9 @@ import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Timeline from './timeline';
 import {
-  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
+  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel, SituationBand,
   useTab, type Tone, type KpiItem, type Insight, type TabDef, type MetaItem,
+  type HealthState, type NextBestAction,
 } from './crm/record-shell';
 
 // Quotation 360 — the commercial document command center on the shared CRM
@@ -43,6 +44,8 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Outcome Loop — capture what happened after acting so no quote stalls unseen.
+  const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
 
   // ── Pricing composition (quotation sheet ↔ pricing engine) ──────────────────
   const pricing = useMemo(() => {
@@ -179,6 +182,68 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
     insights.push({ tone: 'warn', title: 'Not dead yet — revise', detail: `Supersede Rev ${q.revision} and draft Rev ${q.revision + 1} with updated commercials.`, action: { label: 'Revise ↺', onClick: () => void revise() } });
   }
 
+  // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
+  const WAITING: Record<string, string> = {
+    draft: 'needs approval', internal_review: 'in review', approved: 'ready to send',
+    sent: 'awaiting customer decision', under_negotiation: 'in negotiation',
+    accepted: q.convertedContractId ? 'awarded to contract' : 'ready to convert',
+    rejected: 'declined by customer', expired: 'validity lapsed', cancelled: 'cancelled',
+  };
+  const situationText = `${STATUS_LABEL[q.status] ?? q.status} · Rev ${q.revision} · ${aed0(q.total)}${WAITING[q.status] ? ` · ${WAITING[q.status]}` : ''}`;
+
+  let bandHealth: HealthState;
+  if (q.status === 'accepted') bandHealth = { label: q.convertedContractId ? 'Awarded' : 'Accepted', tone: 'good' };
+  else if (q.status === 'rejected' || q.status === 'cancelled') bandHealth = { label: STATUS_LABEL[q.status], tone: 'bad' };
+  else if (pastValidity) bandHealth = { label: 'Validity lapsed', tone: 'bad', reasons: [`valid until ${q.validUntil}`] };
+  else if (pricing && pricing.marginPct < 10 && isOpen) bandHealth = { label: 'Thin margin', tone: 'bad', reasons: [`${pct(pricing.marginPct)} — below the 10% floor`] };
+  else if (expiresSoon) bandHealth = { label: 'Expiring soon', tone: 'warn', reasons: [`valid until ${q.validUntil}`] };
+  else if (q.status === 'expired') bandHealth = { label: 'Expired', tone: 'warn' };
+  else if (q.status === 'draft' || q.status === 'internal_review') bandHealth = { label: 'Awaiting approval', tone: 'warn' };
+  else if (!pricing && isOpen) bandHealth = { label: 'No margin visibility', tone: 'warn', reasons: ['no pricing sheet linked'] };
+  else bandHealth = { label: 'On track', tone: 'good' };
+
+  // Missing Information — what's blocking this quote from progressing.
+  const missing: string[] = [];
+  if (isOpen) {
+    if (q.status === 'draft' || q.status === 'internal_review') missing.push('Approval');
+    if (!pricing) missing.push('Pricing sheet');
+    if (!q.validUntil) missing.push('Validity date');
+    if (!q.contactName) missing.push('Customer contact');
+    if (!q.terms) missing.push('Commercial terms');
+  }
+
+  // The ONE next best action — mapped to the lifecycle.
+  let nba: NextBestAction | undefined;
+  if (q.status === 'accepted' && !q.convertedContractId) nba = { label: '→ Convert to contract', hint: 'award the quote', onClick: () => void toContract() };
+  else if (q.status === 'draft' || q.status === 'internal_review') nba = { label: 'Approve', hint: 'locks the commercial baseline', onClick: () => void act('approve') };
+  else if (q.status === 'approved') nba = { label: 'Send to customer', onClick: () => void act('send') };
+  else if (pastValidity || q.status === 'rejected' || q.status === 'expired') nba = { label: 'Revise ↺', hint: `supersede Rev ${q.revision}`, onClick: () => void revise() };
+  else if (q.status === 'sent' || q.status === 'under_negotiation') nba = { label: 'Chase a decision', hint: 'awaiting customer', onClick: () => setTab('activity') };
+  else if (!pricing && isOpen) nba = { label: 'Build the pricing sheet', href: `/crm/quotations/${q.id}/pricing` };
+
+  // Outcome Loop — writes a real activity linked to this quotation (§17 activity stream).
+  const logOutcome = async (choiceId: string): Promise<void> => {
+    const ref = q.quoteNumber;
+    const plan: Record<string, { type: string; subject: string; status?: string }> = {
+      completed: { type: 'note', subject: `Outcome — ${ref}: customer responded`, status: 'completed' },
+      failed: { type: 'note', subject: `Outcome — ${ref}: no response`, status: 'completed' },
+      follow_up: { type: 'follow_up', subject: `Follow up: ${ref} (${q.customerName})` },
+      reschedule: { type: 'task', subject: `Reschedule: ${ref}` },
+    };
+    const a2 = plan[choiceId];
+    if (!a2) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/crm/activities', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: a2.type, subject: a2.subject, relatedType: 'quotation', relatedId: q.id, relatedName: q.quoteNumber, status: a2.status }),
+      });
+      if (!res.ok) { setErr('Could not log the outcome'); return; }
+      setOutcomeNote(`Logged: ${a2.subject}`);
+      router.refresh();
+    } finally { setBusy(false); }
+  };
+
   // ── Tabs ─────────────────────────────────────────────────────────────────────
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
@@ -204,6 +269,15 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
         />
       }
       kpis={kpis}
+      situation={
+        <SituationBand
+          situation={situationText}
+          health={bandHealth}
+          missing={missing}
+          action={nba}
+          outcome={isOpen ? { onSelect: logOutcome, busy, note: outcomeNote } : undefined}
+        />
+      }
       tabs={tabs}
       activeTab={tab}
       onTab={setTab}

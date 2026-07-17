@@ -7,8 +7,9 @@ import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
 import Timeline from './timeline';
 import {
-  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
+  RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel, SituationBand,
   useTab, type Tone, type KpiItem, type Insight, type TabDef, type MetaItem,
+  type HealthState, type NextBestAction,
 } from './crm/record-shell';
 
 // Lead 360 — the acquisition command center for a single lead, expressed on the shared
@@ -61,6 +62,8 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   const [assessing, setAssessing] = useState(false);
   const [dims, setDims] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState(lead.qualificationNotes ?? '');
+  // Outcome Loop — capture what happened after acting so no lead goes dead.
+  const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -207,10 +210,69 @@ export default function Lead360Client({ lead, qualification, accounts }: {
     if (lead.assignedTo && !lead.firstRespondedAt) insights.push({ tone: 'warn', title: 'Respond — SLA running', detail: 'Assigned but no first response logged.' });
   }
 
+  // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
+  const situationText = `${STATUS_LABEL[lead.status] ?? lead.status} · ${daysSince(lead.createdAt)}d old${lead.estimatedValue != null ? ` · AED ${aed(lead.estimatedValue)}` : ''}`;
+
+  let health: HealthState;
+  if (converted) health = { label: 'Converted', tone: 'good' };
+  else if (assessed && a!.recommendation === 'QUALIFY') health = { label: 'Ready to convert', tone: 'good' };
+  else if (assessed && a!.recommendation === 'DISQUALIFY') health = { label: 'Weak fit', tone: 'bad', reasons: a!.gaps.map((g) => g.label) };
+  else if (assessed) health = { label: 'Needs review', tone: 'warn', reasons: a!.gaps.map((g) => g.label) };
+  else health = { label: 'Unrated', tone: 'warn', reasons: ['not assessed yet'] };
+
+  // Missing Information — what's blocking qualification/conversion.
+  const missing: string[] = [];
+  if (!converted) {
+    if (!assessed) missing.push('Qualification');
+    if (!lead.email && !lead.phone) missing.push('Contact channel');
+    if (!lead.assignedTo) missing.push('Owner');
+    if (lead.assignedTo && !lead.firstRespondedAt) missing.push('First response');
+    if (assessed) for (const g of a!.gaps.slice(0, 3)) missing.push(g.label);
+  }
+
+  // The ONE next best action.
+  let nba: NextBestAction | undefined;
+  if (converted) nba = { label: 'Open the opportunity →', href: `/crm/opportunities/${lead.convertedOpportunityId}` };
+  else if (!assessed) nba = { label: 'Assess this lead', hint: 'Score the eight dimensions', onClick: () => { setTab('qualification'); setAssessing(true); } };
+  else if (a!.recommendation === 'QUALIFY') nba = { label: 'Qualify & convert', hint: `Score ${a!.score} — engine says QUALIFY`, onClick: () => setTab('convert') };
+  else nba = { label: 'Update assessment', hint: a!.gaps.length ? `Find out: ${a!.gaps.map((g) => g.label).join(', ')}` : undefined, onClick: () => { setTab('qualification'); setAssessing(true); } };
+
+  // Outcome Loop — writes a real activity linked to this lead (§17 activity stream).
+  const logOutcome = async (choiceId: string): Promise<void> => {
+    const who = lead.name;
+    const plan: Record<string, { type: string; subject: string; status?: string }> = {
+      completed: { type: 'note', subject: `Outcome — reached ${who}`, status: 'completed' },
+      failed: { type: 'note', subject: `Outcome — ${who}: no answer`, status: 'completed' },
+      follow_up: { type: 'follow_up', subject: `Follow up: ${who}` },
+      reschedule: { type: 'task', subject: `Reschedule: ${who}` },
+    };
+    const act = plan[choiceId];
+    if (!act) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/crm/activities', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: act.type, subject: act.subject, relatedType: 'lead', relatedId: lead.id, relatedName: lead.name, status: act.status }),
+      });
+      if (!res.ok) { setErr('Could not log the outcome'); return; }
+      setOutcomeNote(`Logged: ${act.subject}`);
+      router.refresh();
+    } catch { setErr('CRM API unreachable'); } finally { setBusy(false); }
+  };
+
   return (
     <RecordShell
       header={header}
       kpis={kpis}
+      situation={
+        <SituationBand
+          situation={situationText}
+          health={health}
+          missing={missing}
+          action={nba}
+          outcome={converted ? undefined : { onSelect: logOutcome, busy, note: outcomeNote }}
+        />
+      }
       tabs={tabs}
       activeTab={tab}
       onTab={setTab}

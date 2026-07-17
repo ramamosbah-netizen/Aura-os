@@ -8,8 +8,9 @@ import {
 } from './stakeholder-meta';
 import CreateDrawer from './ui/create-drawer';
 import {
-  RecordHeader, KpiRow, RecordTabs, ActionButton,
+  RecordHeader, KpiRow, RecordTabs, ActionButton, SituationBand,
   type Tone, type KpiItem, type MetaItem, type TabDef,
+  type HealthState, type NextBestAction,
 } from './crm/record-shell';
 import Timeline from './timeline';
 import RelationshipGraphPanel from './relationship-graph-panel';
@@ -110,6 +111,8 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   // need not equal the username and is absent in the dev pass-through.
   const [me, setMe] = useState<TeamUser | null>(null);
   const [team, setTeam] = useState<TeamUser[]>([]);
+  // Outcome Loop — capture what happened after acting so the relationship never goes quiet.
+  const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/accounts/${accountId}/summary`, { cache: 'no-store' });
@@ -233,6 +236,53 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   const tenderedQuotes = quotations.filter((q) => q.sourceTenderId).length;
   const directQuotes = quotations.length - tenderedQuotes;
 
+  // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
+  // Account is the relationship hub — the band reads its health, exposure and coverage, never
+  // re-deriving a rule the summary already resolved.
+  const situationText = `${STAGE_LABEL[a.status] ?? a.status} · ${summary.activeOpportunities} open opps · AED ${aed(summary.pipelineValue)} pipeline${summary.wonValue > 0 ? ` · AED ${aed(summary.wonValue)} contracted` : ''}`;
+  const bandHealth: HealthState = { label: HEALTH.label, tone: healthTone, reasons: healthReasons };
+
+  // Missing Information — relationship gaps that cap growth.
+  const hasPrimary = contacts.some((c) => c.isPrimary);
+  const missing: string[] = [];
+  if (!a.ownerId) missing.push('Account owner');
+  if (contacts.length === 0) missing.push('Key contacts');
+  else if (!hasPrimary) missing.push('Primary contact');
+  if (openOpps.length === 0) missing.push('Open opportunity');
+  if (upcoming.length === 0) missing.push('Next action');
+  if (stageMismatch) missing.push('Stage (has contracts, still prospect)');
+
+  // The ONE next best action.
+  let nba: NextBestAction | undefined;
+  if (receivables.overdue > 0) nba = { label: 'Chase overdue AR', hint: `AED ${aed(receivables.overdue)} overdue`, href: '/finance/ar' };
+  else if (!a.ownerId) nba = { label: 'Assign an owner', hint: me ? 'assign to you' : 'no owner yet', onClick: () => { if (me) void assignOwner(me.username); } };
+  else if (contacts.length === 0) nba = { label: 'Add key contacts', onClick: () => setTab('contacts') };
+  else if (!hasPrimary) nba = { label: 'Set the primary contact', onClick: () => setTab('contacts') };
+  else if (openOpps.length === 0) nba = { label: 'Create an opportunity', href: '/crm/leads' };
+  else if (upcoming.length === 0) nba = { label: 'Schedule the next step', href: '/crm/activities' };
+
+  // Outcome Loop — writes a real activity linked to this account (§17 activity stream).
+  const logOutcome = async (choiceId: string): Promise<void> => {
+    const plan: Record<string, { type: string; subject: string; status?: string }> = {
+      completed: { type: 'note', subject: `Outcome — touchpoint with ${a.name}`, status: 'completed' },
+      failed: { type: 'note', subject: `Outcome — ${a.name}: no response`, status: 'completed' },
+      follow_up: { type: 'follow_up', subject: `Follow up: ${a.name}` },
+      reschedule: { type: 'task', subject: `Reschedule: ${a.name}` },
+    };
+    const act = plan[choiceId];
+    if (!act) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/crm/activities', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: act.type, subject: act.subject, relatedType: 'account', relatedId: a.id, relatedName: a.name, status: act.status }),
+      });
+      if (!res.ok) { setErr('Could not log the outcome'); return; }
+      setOutcomeNote(`Logged: ${act.subject}`);
+      await load();
+    } finally { setBusy(false); }
+  };
+
   const TABS: Array<{ id: Tab; label: string; count?: number }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'contacts', label: 'Contacts', count: contacts.length },
@@ -325,6 +375,15 @@ export default function Account360Client({ accountId }: { accountId: string }) {
         { label: 'Quotations', value: String(summary.quotationCount) },
         { label: 'Outstanding AR', value: `AED ${aed(summary.outstandingReceivables)}`, tone: receivables.overdue > 0 ? 'bad' : 'neutral' },
       ] as KpiItem[]} />
+
+      {/* ── Universal Object Shell — Situation / Health / Missing / Next Best Action ── */}
+      <SituationBand
+        situation={situationText}
+        health={bandHealth}
+        missing={missing}
+        action={nba}
+        outcome={{ onSelect: logOutcome, busy, note: outcomeNote }}
+      />
 
       {/* ── Commercial Portfolio: the account is the hub — both deal routes ── */}
       <div style={st.chain}>

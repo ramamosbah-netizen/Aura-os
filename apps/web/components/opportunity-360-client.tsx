@@ -5,8 +5,9 @@ import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 import Timeline from './timeline';
 import {
-  RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, useTab,
+  RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, SituationBand, useTab,
   type Tone, type KpiItem, type MetaItem, type TabDef, type Insight,
+  type HealthState, type NextBestAction,
 } from './crm/record-shell';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
@@ -56,6 +57,8 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const [tab, setTab] = useTab('overview');
   // Closing a deal needs its reason in the SAME patch (§40.3/40.4 stage gate) — capture it inline.
   const [closing, setClosing] = useState<{ stage: 'won' | 'lost'; reason: string } | null>(null);
+  // Outcome Loop — after acting on the Next Best Action, capture what happened so no deal goes dead.
+  const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/opportunities/${opportunityId}/summary`, { cache: 'no-store' });
@@ -90,6 +93,71 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     lost: { label: 'Lost', color: 'var(--bad)', tone: 'bad' as Tone },
   }[outcome.status];
   const competitors = (o.competitors ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+  // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
+  // Composed from facts the server already resolved (attention, qualification, nextAction) — the
+  // band never re-derives a rule, it only renders what the domain owns.
+  const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+  const situationText = `${cap(o.stage)} · ${o.winProbability}% win · AED ${aed(o.value)}${o.closeDate ? ` · close ${d(o.closeDate)}` : ''}`;
+
+  const gapLabel = (g: string): string => (({
+    'no-next-action': 'no next action', 'no-owner': 'no owner', 'no-due-date': 'no due date',
+    stale: 'gone quiet', STALE: 'gone quiet', QUALIFICATION_STALLED: 'qualification stalled',
+    NO_NEXT_ACTIVITY: 'nothing scheduled',
+  } as Record<string, string>)[g] ?? g.replace(/[-_]/g, ' ').toLowerCase());
+
+  let health: HealthState;
+  if (outcome.status === 'won') health = { label: 'Won', tone: 'good' };
+  else if (outcome.status === 'lost') health = { label: 'Lost', tone: 'neutral' };
+  else if (attention?.needsAttention) health = { label: 'At risk', tone: 'bad', reasons: (attention.gaps ?? []).map(gapLabel) };
+  else if (qualification.score < 2) health = { label: 'Early', tone: 'warn', reasons: ['weak qualification'] };
+  else health = { label: 'On track', tone: 'good' };
+
+  // Missing Information — the specific facts blocking progress (the ERP differentiator).
+  const missing: string[] = [];
+  if (outcome.status === 'open') {
+    if (!o.budgetConfirmed) missing.push('Budget');
+    if (!o.authorityConfirmed) missing.push('Decision maker');
+    if (!o.needConfirmed) missing.push('Need');
+    if (!o.timelineConfirmed) missing.push('Timeline');
+    if (stakeholders.length === 0) missing.push('Stakeholders mapped');
+    if (!nextAction.subject) missing.push('Next action');
+    if (!o.closeDate) missing.push('Close date');
+  }
+
+  // The ONE next best action — pick the single most valuable move given the current state.
+  let nba: NextBestAction | undefined;
+  if (outcome.status === 'open') {
+    if (nextAction.subject) nba = { label: 'Work the next step', hint: `${nextAction.subject}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}`, onClick: () => setTab('activity') };
+    else if (qualification.score < 2) nba = { label: 'Qualify (BANT)', hint: `Only ${qualification.score}/4 confirmed`, onClick: () => setTab('qualification') };
+    else if (stakeholders.length === 0) nba = { label: 'Map the decision maker', hint: 'No stakeholders mapped yet', onClick: () => setTab('stakeholders') };
+    else nba = { label: 'Log the next step', hint: 'Keep the deal moving', onClick: () => setTab('activity') };
+  } else if (outcome.status === 'won' && !o.requiresTender) {
+    nba = { label: '→ Generate quotation', hint: 'Won — turn it into a quote', onClick: () => { void fetch(`/api/crm/opportunities/${o.id}/convert-to-quotation`, { method: 'POST' }).then(() => load()); } };
+  }
+
+  // Outcome Loop — writes a real activity linked to this opportunity (reuses the §17 activity stream).
+  const logOutcome = async (choiceId: string): Promise<void> => {
+    const step = nextAction.subject ?? 'next step';
+    const plan: Record<string, { type: string; subject: string; status?: string }> = {
+      completed: { type: 'note', subject: `Outcome — ${step}: completed`, status: 'completed' },
+      failed: { type: 'note', subject: `Outcome — ${step}: did not land`, status: 'completed' },
+      follow_up: { type: 'follow_up', subject: `Follow up: ${o.title}` },
+      reschedule: { type: 'task', subject: `Reschedule: ${step}` },
+    };
+    const a = plan[choiceId];
+    if (!a) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/crm/activities', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: a.type, subject: a.subject, relatedType: 'opportunity', relatedId: o.id, relatedName: o.title, status: a.status }),
+      });
+      if (!res.ok) { setErr('Could not log the outcome'); return; }
+      setOutcomeNote(`Logged: ${a.subject}`);
+      await load();
+    } finally { setBusy(false); }
+  };
 
   const meta: MetaItem[] = [
     ...(account ? [{ label: 'for', value: <a href={`/crm/accounts/${account.id}`} style={st.link}>{account.name}</a> }] as MetaItem[]
@@ -157,6 +225,15 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     <RecordShell
       header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: qualification.score < 2 ? 'warn' : 'good' }} actions={actions} />}
       kpis={kpis}
+      situation={
+        <SituationBand
+          situation={situationText}
+          health={health}
+          missing={missing}
+          action={nba}
+          outcome={outcome.status === 'open' ? { onSelect: logOutcome, busy, note: outcomeNote } : undefined}
+        />
+      }
       tabs={tabs}
       activeTab={tab}
       onTab={setTab}

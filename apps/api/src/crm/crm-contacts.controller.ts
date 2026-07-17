@@ -2,7 +2,8 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Contact, type ContactStatus, type RelationshipStrength, type StakeholderRole, ContactService } from '@aura/crm';
+import { type Contact, type ContactStatus, type RelationshipStrength, type StakeholderRole, AccountService, ContactService } from '@aura/crm';
+import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
 class CreateContactDto {
   @IsString() name!: string;
@@ -43,18 +44,19 @@ class UpdateContactDto {
 export class CrmContactsController {
   constructor(
     private readonly contacts: ContactService,
+    private readonly accounts: AccountService,
     private readonly tenant: TenantContext,
   ) {}
 
   @Post()
-  create(@Body() dto: CreateContactDto): Promise<Contact> {
+  async create(@Body() dto: CreateContactDto): Promise<Contact> {
     if (!dto?.name?.trim()) throw new BadRequestException('name is required');
     const ctx = this.tenant.get();
     return this.contacts.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
       accountId: dto.accountId ?? null,
-      accountName: dto.accountName ?? null,
+      accountName: await resolveAccountSnapshot(this.accounts, dto.accountId, dto.accountName),
       name: dto.name,
       jobTitle: dto.jobTitle ?? null,
       email: dto.email ?? null,
@@ -73,7 +75,10 @@ export class CrmContactsController {
   @Patch(':id')
   async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateContactDto): Promise<Contact> {
     try {
-      return await this.contacts.update(id, dto);
+      return await this.contacts.update(id, {
+        ...dto,
+        ...(await accountSnapshotPatch(this.accounts, dto.accountId, dto.accountName)),
+      });
     } catch (err) {
       throw new BadRequestException(err instanceof Error ? err.message : 'update failed');
     }

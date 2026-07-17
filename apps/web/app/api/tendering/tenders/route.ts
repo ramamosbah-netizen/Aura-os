@@ -9,6 +9,9 @@ export async function POST(request: Request): Promise<Response> {
     value?: unknown;
     accountId?: unknown;
     accountName?: unknown;
+    source?: unknown;
+    submissionDeadline?: unknown;
+    sourceOpportunityId?: unknown;
   };
   const title = typeof body.title === 'string' ? body.title : '';
   if (!title.trim()) {
@@ -25,6 +28,9 @@ export async function POST(request: Request): Promise<Response> {
         value: typeof body.value === 'number' ? body.value : 0,
         accountId: typeof body.accountId === 'string' ? body.accountId : null,
         accountName: typeof body.accountName === 'string' ? body.accountName : null,
+        source: typeof body.source === 'string' ? body.source : undefined,
+        submissionDeadline: typeof body.submissionDeadline === 'string' ? body.submissionDeadline : undefined,
+        sourceOpportunityId: typeof body.sourceOpportunityId === 'string' ? body.sourceOpportunityId : undefined,
       }),
       cache: 'no-store',
     });

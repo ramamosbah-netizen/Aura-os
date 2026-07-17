@@ -204,6 +204,19 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       {o.stage === 'won' && !o.requiresTender && (
         <button disabled={busy} onClick={() => { void fetch(`/api/crm/opportunities/${o.id}/convert-to-quotation`, { method: 'POST' }).then(() => load()); }} style={st.actionBtn}>→ Quotation</button>
       )}
+      {o.requiresTender && outcome.status === 'open' && !progression.some((s) => s.key === 'tender' && s.reached) && (
+        <button disabled={busy} style={st.actionBtn}
+          onClick={() => {
+            void fetch('/api/tendering/tenders', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                title: o.title, value: o.value, accountId: o.accountId, accountName: account?.name ?? o.accountName,
+                source: 'opportunity', sourceOpportunityId: o.id,
+                submissionDeadline: o.closeDate ?? undefined,
+              }),
+            }).then((r) => { if (!r.ok) setErr('Tender creation failed'); return load(); });
+          }}>→ Tender</button>
+      )}
       {err && <span style={{ color: 'var(--bad)', fontSize: 12.5, fontWeight: 600 }}>{err}</span>}
     </>
   );

@@ -85,6 +85,7 @@ export class CrmSignalsController {
         id: s.id, title: s.title, source: s.source, type: s.type, status: s.status,
         accountId: s.accountId, accountName: s.accountName, confidence: s.confidence,
         detectedAt: s.detectedAt, ownerId: s.ownerId, evidence: s.evidence,
+        description: s.description, contextType: s.contextType, contextId: s.contextId,
       }));
 
     return {

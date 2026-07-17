@@ -41,7 +41,7 @@ const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as con
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list' | 'activities';
+export type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list' | 'activities';
 
 /** C5 / G15 (§29) — Source → Wins → Contract Value → Actual Margin. Every money field names the
  * subset it was measured over; nulls mean "not measured yet", never zero. */
@@ -111,11 +111,15 @@ interface ForecastHistory {
   };
 }
 
-export default function CrmPipelineClient({ initialLeads, initialOpportunities, initialAccounts }: {
+export default function CrmPipelineClient({ initialLeads, initialOpportunities, initialAccounts, view: controlledView, onViewChange }: {
   initialLeads: Lead[]; initialOpportunities: Opportunity[]; initialAccounts: Account[];
+  /** When provided the workspace owns the tab bar — internal switcher hides, navigation delegates up. */
+  view?: View; onViewChange?: (v: View) => void;
 }) {
   const router = useRouter();
-  const [view, setView] = useState<View>('command');
+  const [internalView, setInternalView] = useState<View>('command');
+  const view = controlledView ?? internalView;
+  const setView = (v: View): void => { if (onViewChange) onViewChange(v); else setInternalView(v); };
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -358,9 +362,9 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
         <Kpi label="Win Rate" value={winRate === null ? '—' : `${winRate}%`} accent />
       </div>
 
-      {/* view switch + creates */}
+      {/* view switch + creates (switcher hides when the workspace owns the tabs) */}
       <div style={s.tabBar}>
-        {(['command', 'board', 'analytics', 'sources', 'executive', 'list', 'activities'] as View[]).map((v) => (
+        {!controlledView && (['command', 'board', 'analytics', 'sources', 'executive', 'list', 'activities'] as View[]).map((v) => (
           <button key={v} type="button" style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
             {v === 'command' ? 'Overview' : v[0].toUpperCase() + v.slice(1)}
           </button>
@@ -1108,12 +1112,12 @@ const s = {
   errorBar: { background: 'rgba(220,53,69,0.1)', border: '1px solid rgba(220,53,69,0.2)', color: '#dc3545', padding: '10px 14px', borderRadius: 10, fontSize: 13 } as CSSProperties,
   okBar: { border: '1px solid var(--good)', color: 'var(--good)', padding: '10px 14px', borderRadius: 10, fontSize: 13 } as CSSProperties,
   board: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(190px, 1fr))', gap: 10, overflowX: 'auto' } as CSSProperties,
-  col: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 8, minWidth: 190, display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'start' } as CSSProperties,
+  col: { background: 'var(--panel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 12, padding: 8, minWidth: 190, display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'start' } as CSSProperties,
   colHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', padding: '4px 4px 0' } as CSSProperties,
   colCount: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 7px', fontSize: 11 } as CSSProperties,
   colValue: { fontSize: 11, color: 'var(--accent)', fontWeight: 700, padding: '0 4px' } as CSSProperties,
   colEmpty: { color: 'var(--muted)', textAlign: 'center', padding: '14px 0', fontSize: 12 } as CSSProperties,
-  card: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 11px', display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
+  card: { background: 'var(--panel-2)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 10, padding: '10px 11px', display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
   cardGrab: { cursor: 'grab' } as CSSProperties,
   cardDragging: { opacity: 0.45, cursor: 'grabbing' } as CSSProperties,
   colDroppable: { borderStyle: 'dashed', borderColor: 'var(--accent)' } as CSSProperties,

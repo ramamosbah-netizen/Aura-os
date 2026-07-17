@@ -96,7 +96,7 @@ export class PostgresSignalStore implements SignalStore {
          contact_id = $10, context_type = $11, context_id = $12, evidence = $13, confidence = $14,
          detected_at = $15, owner_id = $16, status = $17, promoted_lead_id = $18,
          dismissal_reason = $19, dedupe_key = $20, updated_at = now()
-       WHERE id = $1`,
+       WHERE id = $1 AND tenant_id = $2 AND company_id IS NOT DISTINCT FROM $3`,
       params(s).slice(0, 20),
     );
   }

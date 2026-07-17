@@ -31,6 +31,26 @@ interface Clarification {
 
 const SOURCE_LABELS: Record<string, string> = { invitation: 'Invitation to bid', public: 'Public advertisement', private: 'Private / single-source', opportunity: 'From opportunity' };
 
+// T3 — the Go/No-Go bid decision the submission gate requires. Score is computed
+// server-side (weighted 0–100 → go ≥70 / conditional ≥50 / no-go); we only render.
+interface BidCriterion { name: string; weight: number; score: number }
+interface BidScoreRec {
+  id: string; totalScore: number; recommendation: 'go' | 'conditional' | 'no_go';
+  criteria: BidCriterion[]; notes: string | null; createdAt: string;
+}
+const DEFAULT_BID_CRITERIA: BidCriterion[] = [
+  { name: 'Strategic fit', weight: 3, score: 5 },
+  { name: 'Winability (relationship & competition)', weight: 3, score: 5 },
+  { name: 'Technical capability', weight: 2, score: 5 },
+  { name: 'Capacity to deliver', weight: 1, score: 5 },
+  { name: 'Commercial risk (payment, terms)', weight: 1, score: 5 },
+];
+const REC_META: Record<BidScoreRec['recommendation'], { label: string; color: string }> = {
+  go: { label: 'GO', color: '#10b981' },
+  conditional: { label: 'CONDITIONAL', color: '#d97706' },
+  no_go: { label: 'NO-GO', color: '#ef4444' },
+};
+
 interface BOQ {
   id: string;
   tenderId: string;
@@ -89,10 +109,49 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
 
+  // Bid decision (Go/No-Go) state
+  const [bidScore, setBidScore] = useState<BidScoreRec | null>(null);
+  const [scoringOpen, setScoringOpen] = useState(false);
+  const [bidCriteria, setBidCriteria] = useState<BidCriterion[]>(DEFAULT_BID_CRITERIA);
+  const [bidNotes, setBidNotes] = useState('');
+  const [bidBusy, setBidBusy] = useState(false);
+
   // Load BOQ on mount
   useEffect(() => {
     fetchBOQ();
+    void fetchBidScore();
   }, [tender.id]);
+
+  async function fetchBidScore() {
+    try {
+      const res = await fetch(`/api/tendering/bid-scores?tenderId=${tender.id}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const list = (await res.json()) as BidScoreRec[];
+      if (Array.isArray(list) && list.length > 0) {
+        setBidScore([...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]);
+      }
+    } catch { /* panel simply stays in "not decided" state */ }
+  }
+
+  async function recordBidDecision() {
+    setBidBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch('/api/tendering/bid-scores', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tenderId: tender.id, tenderTitle: tender.title, criteria: bidCriteria, notes: bidNotes || undefined }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || d.error || 'Failed to record the bid decision');
+      setBidScore(d as BidScoreRec);
+      setScoringOpen(false);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBidBusy(false);
+    }
+  }
 
   async function fetchBOQ() {
     setLoading(true);
@@ -124,7 +183,8 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to update status');
+        // The gate's verdict lives in `message` (taxonomy body); `error` is just the class label.
+        throw new Error(d.message || d.error || 'Failed to update status');
       }
       router.refresh();
       // Reload tender value in local view
@@ -391,6 +451,50 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
 
       {err && <div style={s.errorBar}>{err}</div>}
       {importNote && <div style={{ ...s.errorBar, borderColor: 'var(--good, #10b981)', color: 'var(--good, #10b981)' }}>{importNote}</div>}
+
+      {/* BID DECISION (Go/No-Go) — the submission gate requires this on record */}
+      <section style={s.boqSection}>
+        <div style={s.sectionHeader}>
+          <h2 style={s.sectionTitle}>Bid Decision (Go / No-Go)</h2>
+          {bidScore && !scoringOpen && (
+            <button type="button" style={s.btnSecondary} onClick={() => setScoringOpen(true)}>Re-score</button>
+          )}
+        </div>
+        {bidScore && !scoringOpen ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: REC_META[bidScore.recommendation].color, border: `1px solid ${REC_META[bidScore.recommendation].color}`, borderRadius: 999, padding: '3px 14px' }}>
+              {REC_META[bidScore.recommendation].label}
+            </span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+              Score <strong style={{ color: 'var(--fg)' }}>{bidScore.totalScore}/100</strong>
+              {' · '}{bidScore.criteria.map((c) => `${c.name} ${c.score}/10`).join(' · ')}
+            </span>
+            {bidScore.notes && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>“{bidScore.notes}”</span>}
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 10px' }}>
+              {scoringOpen ? 'Re-score the bid — a new decision supersedes the old one.' : 'Not decided yet — the submission gate requires a Go/Conditional decision on record before this bid can be submitted.'}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 560 }}>
+              {bidCriteria.map((c, i) => (
+                <label key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+                  <span style={{ flex: 1 }}>{c.name} <span style={{ color: 'var(--muted)' }}>(w{c.weight})</span></span>
+                  <input type="range" min={0} max={10} value={c.score} style={{ width: 160 }}
+                    onChange={(e) => setBidCriteria(bidCriteria.map((x, j) => j === i ? { ...x, score: Number(e.target.value) } : x))} />
+                  <span style={{ width: 34, textAlign: 'right', fontWeight: 700 }}>{c.score}/10</span>
+                </label>
+              ))}
+              <input value={bidNotes} onChange={(e) => setBidNotes(e.target.value)} placeholder="Notes — why this call? (optional)"
+                style={{ background: 'var(--panel-2, transparent)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', color: 'var(--fg)', fontSize: 12.5, marginTop: 4 }} />
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button type="button" disabled={bidBusy} style={s.btnAccent} onClick={() => void recordBidDecision()}>Record decision</button>
+                {scoringOpen && <button type="button" style={s.btnSecondary} onClick={() => setScoringOpen(false)}>Cancel</button>}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* BOQ SECTION */}
       <section style={s.boqSection}>

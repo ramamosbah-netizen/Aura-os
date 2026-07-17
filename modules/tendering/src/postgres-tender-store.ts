@@ -38,7 +38,14 @@ function rowToTender(r: Row): Tender {
     status: r.status as Tender['status'],
     source: r.source as Tender['source'],
     value: Number(r.value),
-    submissionDeadline: r.submission_deadline ? String(r.submission_deadline).slice(0, 10) : null,
+    // pg returns `date` columns as a JS Date at LOCAL midnight — String() would yield
+    // "Tue Sep 15" (which then corrupts every later UPDATE), and toISOString() can shift
+    // a calendar day across timezones. Local getters give the stored calendar date.
+    submissionDeadline: r.submission_deadline
+      ? (r.submission_deadline instanceof Date
+        ? `${r.submission_deadline.getFullYear()}-${String(r.submission_deadline.getMonth() + 1).padStart(2, '0')}-${String(r.submission_deadline.getDate()).padStart(2, '0')}`
+        : String(r.submission_deadline).slice(0, 10))
+      : null,
     sourceOpportunityId: r.source_opportunity_id,
     ownerId: r.owner_id,
     createdBy: r.created_by,

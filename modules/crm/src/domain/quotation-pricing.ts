@@ -176,6 +176,18 @@ function manpower(b: ManpowerBlock): ManpowerLine {
   return { ...b, manHours, total: round2(manHours * b.rate) };
 }
 
+/**
+ * The sell unit price that yields `targetMarginPercent` margin on an all-in unit cost.
+ * Margin is taken on the SELL price (the sheet's headline margin): sell = cost / (1 − m).
+ * This is the AUTHORING direction — cost build-up + desired margin ⇒ the price to quote,
+ * the inverse of the sell-fixed sheet where margin falls out. Clamped to [0, 99.9)%.
+ */
+export function deriveSellUnitPrice(unitCostAllIn: number, targetMarginPercent: number): number {
+  const cost = num(unitCostAllIn);
+  const m = Math.min(Math.max(num(targetMarginPercent), 0), 99.9) / 100;
+  return round2(m <= 0 ? cost : cost / (1 - m));
+}
+
 /** Compile the full sheet from the quote lines + their build-ups. */
 export function computeQuotationPricing(lines: QuotationLine[], input?: unknown): QuotationPricingSheet {
   const buildups = normalizePricingInput(lines.length, input);

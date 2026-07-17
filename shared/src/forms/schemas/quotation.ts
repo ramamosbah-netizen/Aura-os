@@ -11,6 +11,8 @@ export const quotationFormSchema: FormSchema = {
   entity: 'Quotation',
   endpoint: '/api/crm/quotations',
   subtitle: 'A customer quote with VAT line items. Send it, then accepting converts it to a contract.',
+  // After create, hand off to the pricing sheet — the quote is authored (priced) there.
+  createdRedirect: '/crm/quotations/:id/pricing',
   version: 1,
   fields: [
     { name: 'quoteNumber', label: 'Quote #', kind: 'text', required: true, placeholder: 'QT-001' },

@@ -48,6 +48,12 @@ interface Buildup {
 }
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
+// AUTHORING direction — the price to quote for a desired margin on an all-in unit cost.
+// Mirrors the domain deriveSellUnitPrice so the live grid matches the server after Apply.
+const deriveSell = (unitCostAllIn: number, targetMarginPercent: number): number => {
+  const m = Math.min(Math.max(Number(targetMarginPercent) || 0, 0), 99.9) / 100;
+  return r2(m <= 0 ? unitCostAllIn : unitCostAllIn / (1 - m));
+};
 const money = (n: number): string => n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n: number | null): string => (n === null ? '—' : `${n}%`);
 const marginColor = (n: number | null): string => (n === null ? 'var(--muted)' : n < 0 ? 'var(--bad)' : n < 15 ? 'var(--bad)' : n < 30 ? 'var(--accent)' : 'var(--good)');
@@ -66,8 +72,11 @@ const mp = (b: ManpowerBlock): ManpowerLine => {
   return { ...b, manHours, total: r2(manHours * b.rate) };
 };
 
-/** Client-side mirror of the domain compile — keeps the grid live before saving. */
-function compute(base: PricingSheet, builds: Buildup[]): PricingSheet {
+/** Client-side mirror of the domain compile — keeps the grid live before saving.
+ *  When unlocked, the sheet AUTHORS the price: each line's sell is derived from its
+ *  all-in unit cost + its target margin (the `margins` driver). Locked sheets keep
+ *  their approved sell fixed. */
+function compute(base: PricingSheet, builds: Buildup[], margins: number[]): PricingSheet {
   const rows: PricingLine[] = base.lines.map((l, i) => {
     const b = builds[i];
     const supplyTotal = r2(l.quantity * b.supplyUnitPrice);
@@ -78,14 +87,17 @@ function compute(base: PricingSheet, builds: Buildup[]): PricingSheet {
     const directCost = r2(materialTotal + labourTotal + b.transport + b.equipmentRent + b.subcontract + b.otherDirect);
     const indirectCost = r2(directCost * (b.indirectPercent / 100));
     const costTotal = r2(directCost + indirectCost);
-    const sellTotal = l.sellTotal;
+    const unitCostTotal = l.quantity > 0 ? r2(costTotal / l.quantity) : 0;
+    // Author mode (unlocked): cost + target margin ⇒ sell. Locked: approved sell is fixed.
+    const unitPrice = base.locked ? l.unitPrice : deriveSell(unitCostTotal, margins[i] ?? 0);
+    const sellTotal = base.locked ? l.sellTotal : r2(unitPrice * l.quantity);
     const profit = r2(sellTotal - costTotal);
     return {
       ...l, supplyUnitPrice: b.supplyUnitPrice, supplyTotal, wastagePercent: b.wastagePercent, wastageTotal,
       accessories: b.accessories, materialTotal, technician, engineer, projectManager, labourTotal,
       transport: b.transport, equipmentRent: b.equipmentRent, subcontract: b.subcontract, otherDirect: b.otherDirect,
       directCost, indirectPercent: b.indirectPercent, indirectCost, costTotal,
-      unitCostTotal: l.quantity > 0 ? r2(costTotal / l.quantity) : 0,
+      unitCostTotal, unitPrice, sellTotal,
       profit,
       marginPercent: sellTotal > 0 ? r2((profit / sellTotal) * 100) : null,
       markupPercent: costTotal > 0 ? r2((profit / costTotal) * 100) : null,
@@ -113,13 +125,17 @@ export default function QuotationPricingClient({ id, customerName, status, initi
   id: string; customerName: string; status: string; initialSheet: PricingSheet;
 }) {
   const [builds, setBuilds] = useState<Buildup[]>(initialSheet.lines.map(toBuildup));
-  const [saved, setSaved] = useState<string>(JSON.stringify(initialSheet.lines.map(toBuildup)));
+  // Per-line target margin — the AUTHORING driver. Seeded from the line's current margin
+  // so the grid opens showing today's price, then editing cost/margin re-derives the sell.
+  const seedMargin = (l: PricingLine): number => (l.costTotal > 0 && l.marginPercent !== null ? l.marginPercent : 25);
+  const [margins, setMargins] = useState<number[]>(initialSheet.lines.map(seedMargin));
+  const [saved, setSaved] = useState<string>(JSON.stringify({ builds: initialSheet.lines.map(toBuildup), margins: initialSheet.lines.map(seedMargin) }));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const sheet = useMemo(() => compute(initialSheet, builds), [initialSheet, builds]);
+  const sheet = useMemo(() => compute(initialSheet, builds, margins), [initialSheet, builds, margins]);
   const locked = initialSheet.locked;
-  const dirty = !locked && JSON.stringify(builds) !== saved;
+  const dirty = !locked && JSON.stringify({ builds, margins }) !== saved;
 
   const set = (i: number, patch: Partial<Buildup>): void =>
     setBuilds((prev) => prev.map((b, j) => (j === i ? { ...b, ...patch } : b)));
@@ -127,6 +143,7 @@ export default function QuotationPricingClient({ id, customerName, status, initi
     setBuilds((prev) => prev.map((b, j) => (j === i ? { ...b, [role]: { ...b[role], ...patch } } : b)));
   const n = (v: string): number => { const x = Number(v); return Number.isFinite(x) && x >= 0 ? x : 0; };
 
+  // Save the cost build-up only (margins are not persisted separately — they drive the sell).
   const save = async (): Promise<void> => {
     setBusy(true); setMsg('');
     try {
@@ -134,7 +151,25 @@ export default function QuotationPricingClient({ id, customerName, status, initi
         method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lines: builds }),
       });
       if (!res.ok) { setMsg('Save failed'); return; }
-      setSaved(JSON.stringify(builds)); setMsg('Saved ✓');
+      setSaved(JSON.stringify({ builds, margins })); setMsg('Saved ✓');
+    } catch { setMsg('API unreachable'); } finally { setBusy(false); }
+  };
+
+  // Author the quote FROM the sheet: persist the build-up and write the derived sell
+  // prices onto the quotation lines. Reload so the quote's new totals surface everywhere.
+  const apply = async (): Promise<void> => {
+    setBusy(true); setMsg('');
+    try {
+      const res = await fetch(`/api/crm/quotations/${id}/pricing/apply`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ lines: builds, targetMargins: margins }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setMsg(d.message || d.error || 'Apply failed'); return;
+      }
+      setSaved(JSON.stringify({ builds, margins })); setMsg('Applied to quotation ✓');
+      window.location.reload();
     } catch { setMsg('API unreachable'); } finally { setBusy(false); }
   };
 
@@ -178,10 +213,20 @@ export default function QuotationPricingClient({ id, customerName, status, initi
           columns={Object.keys(exportRows[0] ?? {}).map((key) => ({ key }))} />
         <a href={`/crm/quotations/${id}/pricing/print`} target="_blank" rel="noreferrer" style={st.printBtn}>🖨 Print</a>
         {!locked && (
-          <button type="button" onClick={() => void save()} disabled={busy || !dirty}
-            style={{ ...st.save, ...(dirty && !busy ? {} : st.saveDisabled) }}>Save build-up</button>
+          <>
+            <button type="button" onClick={() => void save()} disabled={busy || !dirty}
+              style={{ ...st.save, ...(dirty && !busy ? {} : st.saveDisabled) }}>Save build-up</button>
+            <button type="button" onClick={() => void apply()} disabled={busy}
+              style={st.apply} title="Write the derived sell prices onto the quotation lines">Apply to quotation →</button>
+          </>
         )}
       </div>
+      {!locked && (
+        <p style={st.authorHint}>
+          Authoring mode — set each line’s cost build-up and <b>target margin</b>; the sell price is derived.
+          <b> Apply to quotation</b> writes those prices onto the quote.
+        </p>
+      )}
 
       <div style={st.scroll}>
         <table style={st.table}>
@@ -215,7 +260,7 @@ export default function QuotationPricingClient({ id, customerName, status, initi
               <th style={st.th}>Direct cost</th><th style={st.th}>Unit cost (all-in)</th>
               <th style={st.th}>Ind. %</th><th style={st.th}>Indirect</th>
               <th style={st.th}>Cost total</th><th style={st.th}>Profit</th>
-              <th style={st.th}>Unit sell</th><th style={st.th}>Sell total</th><th style={st.th}>Margin</th><th style={st.th}>Markup</th>
+              <th style={st.th}>Unit sell</th><th style={st.th}>Sell total</th><th style={st.th}>{locked ? 'Margin' : 'Target margin'}</th><th style={st.th}>Markup</th>
               <th style={st.th} />
             </tr>
           </thead>
@@ -261,9 +306,15 @@ export default function QuotationPricingClient({ id, customerName, status, initi
                   <td style={{ ...st.tdC, fontWeight: 800 }}>{money(l.costTotal)}</td>
                   <td style={{ ...st.tdC, color: marginColor(l.marginPercent), fontWeight: 700 }}>{money(l.profit)}</td>
 
-                  <td style={st.tdR}>{money(l.unitPrice)}</td>
+                  <td style={{ ...st.tdR, ...(locked ? {} : { color: 'var(--accent)', fontWeight: 700 }) }}>{money(l.unitPrice)}</td>
                   <td style={{ ...st.tdR, fontWeight: 700 }}>{money(l.sellTotal)}</td>
-                  <td style={{ ...st.tdR, color: marginColor(l.marginPercent), fontWeight: 800 }}>{pct(l.marginPercent)}</td>
+                  <td style={{ ...st.tdR, color: marginColor(l.marginPercent), fontWeight: 800 }}>
+                    {locked
+                      ? pct(l.marginPercent)
+                      : <input type="number" min={0} max={99} step="0.5" value={margins[i] ?? 0}
+                          onChange={(e) => setMargins((prev) => prev.map((m, j) => (j === i ? n(e.target.value) : m)))}
+                          style={{ ...st.input, width: 56, color: marginColor(l.marginPercent), fontWeight: 800 }} />}
+                  </td>
                   <td style={{ ...st.tdR, color: 'var(--muted)' }}>{pct(l.markupPercent)}</td>
                   <td style={st.td} />
                 </tr>
@@ -328,8 +379,10 @@ const st: Record<string, CSSProperties> = {
   lockLink: { color: 'var(--accent)', fontWeight: 700 },
   ro: { fontSize: 12, color: 'var(--fg)' },
   printBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', background: 'var(--panel)', textDecoration: 'none' },
-  save: { border: '1px solid var(--accent)', borderRadius: 9, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, color: 'var(--accent)', background: 'transparent', cursor: 'pointer' },
+  save: { borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--accent)', borderRadius: 9, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, color: 'var(--accent)', background: 'transparent', cursor: 'pointer' },
   saveDisabled: { opacity: 0.45, cursor: 'default', borderColor: 'var(--border)', color: 'var(--muted)' },
+  apply: { border: '1px solid var(--accent)', borderRadius: 9, padding: '7px 14px', fontSize: 12.5, fontWeight: 800, color: '#0b1020', background: 'var(--accent)', cursor: 'pointer' },
+  authorHint: { fontSize: 12, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.5 },
   scroll: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' },
   table: { borderCollapse: 'collapse', fontSize: 12, whiteSpace: 'nowrap' },
   grp: { padding: '6px 8px', borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--accent)', background: 'var(--panel-2, var(--panel))', textAlign: 'center' },

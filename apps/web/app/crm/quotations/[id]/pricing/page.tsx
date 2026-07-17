@@ -25,8 +25,9 @@ export default async function QuotationPricingPage({ params }: { params: Promise
         Pricing sheet <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>{q.quoteNumber} · Rev {q.revision}</span>
       </h1>
       <p style={{ color: 'var(--muted)', margin: '0 0 20px', fontSize: 13, maxWidth: 680, lineHeight: 1.5 }}>
-        Internal cost &amp; margin breakdown for this revision. Enter the unit cost per line — the quoted sell price is fixed;
-        margin is derived. Costs are saved against this revision only and carry forward when you revise.
+        The internal cost build-up that authors this quotation. Enter each line’s cost and its target margin;
+        the sell price is derived, and <b>Apply to quotation</b> writes those prices onto the quote. Once the
+        quotation is approved the sheet locks (read-only) — re-price by raising a revision.
       </p>
       <QuotationPricingClient id={id} customerName={q.customerName} status={q.status} initialSheet={sheet} />
     </div>

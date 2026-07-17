@@ -147,6 +147,16 @@ export class CrmQuotationsController {
     return this.quotations.setPricing(id, dto);
   }
 
+  /**
+   * Author the quote FROM its sheet: save the cost build-up, derive each line's
+   * sell price from its cost + target margin, and write those prices onto the
+   * quotation. Refused with 409 once approved (the sheet is locked).
+   */
+  @Post(':id/pricing/apply')
+  applyPricing(@Param('id') id: string, @Body() dto: { lines?: unknown; targetMargins?: unknown }) {
+    return this.quotations.applyPricing(id, dto ?? {});
+  }
+
   @Get(':id')
   async get(@Param('id') id: string): Promise<Quotation> {
     const found = await this.quotations.get(id);

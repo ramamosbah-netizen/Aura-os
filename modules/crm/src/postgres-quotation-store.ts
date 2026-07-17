@@ -78,7 +78,11 @@ export class PostgresQuotationStore implements QuotationStore {
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, terms = EXCLUDED.terms, owner_id = EXCLUDED.owner_id,
          converted_contract_id = EXCLUDED.converted_contract_id, valid_until = EXCLUDED.valid_until,
-         pricing = EXCLUDED.pricing`,
+         pricing = EXCLUDED.pricing,
+         -- Line/total fields must persist too: authoring the quote from its pricing sheet
+         -- (applyPricing) rewrites lines + totals on an existing row. Omitting these silently
+         -- dropped the new prices.
+         lines = EXCLUDED.lines, subtotal = EXCLUDED.subtotal, vat_total = EXCLUDED.vat_total, total = EXCLUDED.total`,
       [
         q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.sourceTenderId, q.sourceOpportunityId, q.ownerId, q.terms, q.revision, q.parentQuotationId, q.convertedContractId, q.issueDate, q.validUntil,
         JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.pricing ? JSON.stringify(q.pricing) : null, q.status, q.createdBy, q.createdAt,

@@ -144,7 +144,7 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
           <option value="">All statuses</option>
           {['draft', 'qualifying', 'estimating', 'priced', 'submitted', 'won', 'lost', 'declined'].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <a href="/tendering/pricing" style={st.linkBtn}>⊞ Pricing sheets</a>
+        <a href="/tendering/pricing" style={st.linkBtn}>⊞ Pricing summary</a>
         {err && <span style={st.err}>{err}</span>}
       </div>
 

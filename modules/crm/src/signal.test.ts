@@ -54,6 +54,19 @@ describe('SignalService', () => {
     expect((await leads.list({ tenantId: 't1' })).length).toBe(1);
   });
 
+  it('promote carries the signal evidence to the lead and maps RELATIONSHIP → referral (zero re-entry)', async () => {
+    const { svc } = harness();
+    const s = await svc.create({
+      tenantId: 't1', title: 'Sustainable City CCTV expansion', source: 'RELATIONSHIP', type: 'EXPANSION',
+      accountName: 'Sustainable City', evidence: 'Client asked to expand CCTV to phase 2.',
+    });
+
+    const res = await svc.promote(s.id, 'u1');
+
+    expect(res.lead.requirement).toBe('Client asked to expand CCTV to phase 2.'); // evidence → requirement
+    expect(res.lead.source).toBe('referral'); // RELATIONSHIP no longer degrades to 'other'
+  });
+
   it('cannot promote twice — replays idempotently and creates no second lead', async () => {
     const { svc, leads } = harness();
     const s = await svc.create({ tenantId: 't1', title: 'New tender detected', source: 'TENDER_DISCOVERY', type: 'TENDER_DETECTED' });

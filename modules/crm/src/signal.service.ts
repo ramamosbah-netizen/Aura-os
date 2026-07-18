@@ -19,7 +19,8 @@ export interface PromoteSignalResult {
 /** Map a signal source onto the (narrower) lead source enum — attribution is also carried
  * verbatim via lead.signalId, so this is only the coarse bucket the lead funnel understands. */
 function leadSourceFromSignal(s: Signal): LeadSource {
-  if (s.source === 'REFERRAL') return 'referral';
+  // Warm existing-relationship signals are referrals, not 'other' — they lost that fact before.
+  if (s.source === 'REFERRAL' || s.source === 'RELATIONSHIP' || s.source === 'ACCOUNT_GROWTH') return 'referral';
   if (s.source === 'MARKET' || s.source === 'INTELLIGENCE' || s.source === 'TENDER_DISCOVERY') return 'campaign';
   if (s.source === 'INBOUND') return 'website';
   return 'other';
@@ -102,6 +103,8 @@ export class SignalService {
       source: leadSourceFromSignal(signal),
       assignedTo: signal.ownerId,
       signalId: signal.id, // lineage back to the originating signal
+      // Carry what the signal already KNEW so the rep doesn't re-type it at qualification (zero re-entry).
+      requirement: signal.evidence ?? signal.description ?? undefined,
     });
     const promoted = promoteSignal(signal, lead.id);
 

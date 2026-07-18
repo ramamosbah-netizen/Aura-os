@@ -19,8 +19,7 @@ export interface PromoteSignalResult {
 /** Map a signal source onto the (narrower) lead source enum — attribution is also carried
  * verbatim via lead.signalId, so this is only the coarse bucket the lead funnel understands. */
 function leadSourceFromSignal(s: Signal): LeadSource {
-  // Warm existing-relationship signals are referrals, not 'other' (they degraded to 'other' before,
-  // losing the fact that the lead came from a relationship we already had).
+  // Warm existing-relationship signals are referrals, not 'other' — they lost that fact before.
   if (s.source === 'REFERRAL' || s.source === 'RELATIONSHIP' || s.source === 'ACCOUNT_GROWTH') return 'referral';
   if (s.source === 'MARKET' || s.source === 'INTELLIGENCE' || s.source === 'TENDER_DISCOVERY') return 'campaign';
   if (s.source === 'INBOUND') return 'website';
@@ -73,60 +72,13 @@ export class SignalService {
     return signal;
   }
 
-  async advance(id: Id, to: 'REVIEWING' | 'RESEARCHING' | 'WATCHING', actorId?: Id | null): Promise<Signal> {
+  async advance(id: Id, to: 'REVIEWING' | 'RESEARCHING', actorId?: Id | null): Promise<Signal> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`Signal ${id} not found`);
     this.assert(actorId, existing.tenantId, existing.companyId);
     const next = advanceSignal(existing, to);
     await this.store.update(next);
     return next;
-  }
-
-  /** Watch mode: Park the signal if the timing isn't right, to be automatically reactivated later. */
-  async watch(id: Id, actorId?: Id | null): Promise<Signal> {
-    return this.advance(id, 'WATCHING', actorId);
-  }
-
-  /** Merge multiple signals into one, preserving evidence and tracing lineage. */
-  async mergeSignals(targetId: Id, sourceIds: Id[], reason: string, actorId?: Id | null): Promise<Signal> {
-    const target = await this.store.get(targetId);
-    if (!target) throw new Error(`Target signal ${targetId} not found`);
-    this.assert(actorId, target.tenantId, target.companyId);
-
-    const mergedEvidences: string[] = [];
-    const relatedIds = new Set(target.relatedSignalIds);
-
-    for (const sid of sourceIds) {
-      if (sid === targetId) continue;
-      const source = await this.store.get(sid);
-      if (!source) continue;
-      
-      // Accumulate evidence and trace relationships
-      if (source.evidence) mergedEvidences.push(`[From ${source.title}]: ${source.evidence}`);
-      relatedIds.add(source.id);
-      source.relatedSignalIds.forEach(id => relatedIds.add(id));
-
-      // Mark the source signal as duplicate/merged
-      const dismissedSource = dismissSignal(source, `Merged into ${targetId}: ${reason}`, true);
-      dismissedSource.mergeReason = reason;
-      dismissedSource.mergedBy = actorId ?? null;
-      dismissedSource.mergedAt = new Date().toISOString();
-      dismissedSource.timeline.push({ event: `Merged into ${targetId}`, at: new Date().toISOString() });
-      await this.store.update(dismissedSource);
-    }
-
-    const nextTarget = {
-      ...target,
-      relatedSignalIds: Array.from(relatedIds),
-      evidence: target.evidence 
-        ? `${target.evidence}\n\nMerged Evidence:\n${mergedEvidences.join('\n')}`
-        : mergedEvidences.join('\n'),
-      timeline: [...target.timeline, { event: `Merged with ${sourceIds.length} signals`, at: new Date().toISOString() }],
-      updatedAt: new Date().toISOString()
-    };
-
-    await this.store.update(nextTarget);
-    return nextTarget;
   }
 
   /** Promote a signal to a Lead — one transaction, preserving source attribution (lead.signalId +
@@ -152,7 +104,6 @@ export class SignalService {
       assignedTo: signal.ownerId,
       signalId: signal.id, // lineage back to the originating signal
       // Carry what the signal already KNEW so the rep doesn't re-type it at qualification (zero re-entry).
-      // (The account itself is matched by companyName at Convert — the Lead has no accountId field.)
       requirement: signal.evidence ?? signal.description ?? undefined,
     });
     const promoted = promoteSignal(signal, lead.id);

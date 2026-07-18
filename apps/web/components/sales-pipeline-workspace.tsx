@@ -4,14 +4,16 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import CrmPipelineClient, { type View } from './crm-pipeline-client';
 import LeadAttentionPanel, { type LeadCommand } from './lead-attention-panel';
 import SignalsRadar, { type RadarData } from './signals-radar';
+import OpportunityActivitiesCard from './opportunity-activities-card';
 
-// Sales Pipeline workspace — ONE page, clear top-level tabs instead of stacked panels:
+// Sales Pipeline workspace — ONE page for working DEALS, clear top-level tabs:
 //
-//   Radar → Overview → Board → List → Analytics → Activities
+//   Radar → Overview → Board → List → Analytics
 //
 // Radar is the acquisition inbox (signals), Overview is the manager cockpit (+ leads
-// needing attention), Board/List work the deals, Analytics deep-dives (performance /
-// sources / executive), Activities shows the touchpoints. Each tab is one job.
+// needing attention + an Opportunity-Activities pointer), Board/List work the deals,
+// Analytics deep-dives. Each tab is one job. Activity EXECUTION lives in the Activities
+// Work Center; the Overview only points to it (scoped) so the pipeline stays about deals.
 
 interface Lead {
   id: string; name: string; companyName: string | null; email: string | null;
@@ -24,7 +26,7 @@ interface Opportunity {
 }
 interface Account { id: string; name: string }
 
-type PageTab = 'radar' | 'overview' | 'board' | 'list' | 'analytics' | 'activities';
+type PageTab = 'radar' | 'overview' | 'board' | 'list' | 'analytics';
 type AnalyticsSub = 'analytics' | 'sources' | 'executive';
 
 const TAB_DEFS: Array<{ id: PageTab; label: string; icon: string; hint: string }> = [
@@ -33,7 +35,6 @@ const TAB_DEFS: Array<{ id: PageTab; label: string; icon: string; hint: string }
   { id: 'board', label: 'Board', icon: '⊞', hint: 'Work deals across stages (drag & drop)' },
   { id: 'list', label: 'List', icon: '☰', hint: 'Every lead and deal, filterable' },
   { id: 'analytics', label: 'Analytics', icon: '📈', hint: 'Performance · sources · executive' },
-  { id: 'activities', label: 'Activities', icon: '✓', hint: 'Touchpoints across the pipeline' },
 ];
 
 export default function SalesPipelineWorkspace({ leads, opportunities, accounts, leadCommand, radar }: {
@@ -50,8 +51,7 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
     tab === 'overview' ? 'command'
       : tab === 'board' ? 'board'
         : tab === 'list' ? 'list'
-          : tab === 'activities' ? 'activities'
-            : tab === 'analytics' ? sub : null;
+          : tab === 'analytics' ? sub : null;
 
   // Cross-tab navigation from inside the pipeline client ("work on the Board…" links).
   const onViewChange = (v: View): void => {
@@ -81,7 +81,12 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
 
       {tab === 'radar' && <SignalsRadar data={radar} />}
 
-      {tab === 'overview' && <LeadAttentionPanel data={leadCommand} />}
+      {tab === 'overview' && (
+        <>
+          <OpportunityActivitiesCard />
+          <LeadAttentionPanel data={leadCommand} />
+        </>
+      )}
 
       {pipelineView && (
         <>

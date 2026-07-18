@@ -23,7 +23,13 @@ interface Account { id: string; name: string; }
 interface Contact { id: string; name: string; accountName: string | null; }
 interface Opportunity { id: string; title: string; }
 
-export default async function CrmActivitiesPage() {
+const RELATED_LABEL: Record<string, string> = {
+  opportunity: 'Opportunity', account: 'Account', contact: 'Contact', lead: 'Lead', quotation: 'Quotation',
+};
+
+export default async function CrmActivitiesPage({ searchParams }: { searchParams: Promise<{ relatedType?: string }> }) {
+  const { relatedType } = await searchParams;
+  const scope = relatedType && RELATED_LABEL[relatedType] ? relatedType : '';
   const [activities, accounts, contacts, opportunities] = await Promise.all([
     getJson<Activity[]>('/api/crm/activities'),
     getJson<Account[]>('/api/crm/accounts'),
@@ -33,16 +39,18 @@ export default async function CrmActivitiesPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>CRM · Activities</h1>
+      <h1 style={st.h1}>{scope ? `${RELATED_LABEL[scope]} Activities` : 'CRM · Activities'}</h1>
       <p style={st.sub}>
-        Every interaction and to-do on the deal chain — calls, emails, meetings, notes and tasks —
-        agenda-grouped by urgency and linked to the account, contact or deal they're about.
+        {scope
+          ? `A saved view of the Activities work center — every open ${RELATED_LABEL[scope].toLowerCase()} touchpoint, worked here. Clear the view to see all activities.`
+          : "Every interaction and to-do on the deal chain — calls, emails, meetings, notes and tasks — agenda-grouped by urgency and linked to the account, contact or deal they're about."}
       </p>
       <ActivitiesClient
         initialActivities={activities ?? []}
         accounts={accounts ?? []}
         contacts={contacts ?? []}
         opportunities={opportunities ?? []}
+        initialRelatedType={scope}
       />
     </div>
   );

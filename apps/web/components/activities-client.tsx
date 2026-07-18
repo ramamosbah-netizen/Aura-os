@@ -47,17 +47,24 @@ const RELATED_HREF: Record<string, (id: string) => string> = {
 
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities }: {
+const RELATED_TYPE_LABEL: Record<string, string> = {
+  opportunity: '◎ Opportunities', account: '◆ Accounts', contact: '☎ Contacts', lead: '⌥ Leads', quotation: '✎ Quotations',
+};
+
+export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '' }: {
   initialActivities: Activity[];
   accounts: Account[];
   contacts: Contact[];
   opportunities: Opportunity[];
+  /** Saved-view scope from the URL (e.g. 'opportunity') — pre-applies the related-type filter. */
+  initialRelatedType?: string;
 }) {
   const router = useRouter();
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [relatedFilter, setRelatedFilter] = useState(initialRelatedType);
   const [query, setQuery] = useState('');
   const [completing, setCompleting] = useState<{ id: string; outcome: string; fuOn: boolean; fuType: string; fuSubject: string; fuDate: string } | null>(null);
 
@@ -65,22 +72,25 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
   const kpi = useMemo(() => {
-    const open = initialActivities.filter((a) => isLive(a.status));
+    // Headline counts respect the saved-view SCOPE (related type) but not the transient type/text refinements.
+    const base = relatedFilter ? initialActivities.filter((a) => a.relatedType === relatedFilter) : initialActivities;
+    const open = base.filter((a) => isLive(a.status));
     const overdue = open.filter((a) => a.dueDate && a.dueDate < today);
     const dueToday = open.filter((a) => a.dueDate === today);
     const dueWeek = open.filter((a) => a.dueDate && a.dueDate > today && a.dueDate <= weekEnd);
     const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-    const done30 = initialActivities.filter((a) => a.status === 'completed' && (a.completedAt ?? a.createdAt) >= monthAgo);
+    const done30 = base.filter((a) => a.status === 'completed' && (a.completedAt ?? a.createdAt) >= monthAgo);
     return { open: open.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, done30: done30.length };
-  }, [initialActivities, today, weekEnd]);
+  }, [initialActivities, relatedFilter, today, weekEnd]);
 
   const filtered = useMemo(() => {
     let out = initialActivities;
+    if (relatedFilter) out = out.filter((a) => a.relatedType === relatedFilter);
     if (typeFilter) out = out.filter((a) => a.type === typeFilter);
     const q = query.trim().toLowerCase();
     if (q) out = out.filter((a) => [a.subject, a.notes, a.relatedName, a.assigneeId].some((v) => v && v.toLowerCase().includes(q)));
     return out;
-  }, [initialActivities, typeFilter, query]);
+  }, [initialActivities, relatedFilter, typeFilter, query]);
 
   /** Work-center buckets — every open activity by urgency, plus a Completed tab. */
   const groups = useMemo(() => {
@@ -173,6 +183,10 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
           ]}
         />
         <input style={st.search} placeholder="Search subject, notes, related…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <select style={st.search} value={relatedFilter} onChange={(e) => setRelatedFilter(e.target.value)} title="Scope to what the activity is about">
+          <option value="">All records</option>
+          {Object.entries(RELATED_TYPE_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+        </select>
         <select style={st.search} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
           {['call', 'email', 'meeting', 'note', 'task'].map((t) => <option key={t} value={t}>{t}</option>)}

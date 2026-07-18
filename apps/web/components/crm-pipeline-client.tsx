@@ -26,11 +26,6 @@ interface Opportunity {
   nextActionDueDate?: string | null; createdAt: string;
 }
 interface Account { id: string; name: string; }
-interface Activity {
-  id: string; type: string; subject: string; status: string;
-  relatedType: string | null; dueDate: string | null; createdAt: string;
-}
-
 const OPP_STAGES = ['qualification', 'proposal', 'negotiation', 'won', 'lost'] as const;
 const ACTIVE_STAGES = ['qualification', 'proposal', 'negotiation'];
 const GAP_LABEL: Record<string, string> = {
@@ -41,7 +36,7 @@ const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as con
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-export type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list' | 'activities';
+export type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list';
 
 /** C5 / G15 (§29) — Source → Wins → Contract Value → Actual Margin. Every money field names the
  * subset it was measured over; nulls mean "not measured yet", never zero. */
@@ -124,7 +119,6 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [forecast, setForecast] = useState<{ id: string; prob: number; reason: string } | null>(null);
-  const [activities, setActivities] = useState<Activity[] | null>(null);
   const [command, setCommand] = useState<PipelineCommand | null>(null);
   const [fcast, setFcast] = useState<ForecastHistory | null>(null);
   const [funnel, setFunnel] = useState<SourceFunnel | null>(null);
@@ -179,17 +173,6 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   // keyboard-accessible fallback for the same moves).
   const [drag, setDrag] = useState<{ kind: 'lead' | 'opp'; id: string; from: string } | null>(null);
   const [hoverCol, setHoverCol] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (view !== 'activities' || activities) return;
-    void (async () => {
-      const res = await fetch('/api/crm/activities', { cache: 'no-store' });
-      if (res.ok) {
-        const d = await res.json();
-        setActivities(Array.isArray(d) ? d : (d.items ?? []));
-      } else setActivities([]);
-    })();
-  }, [view, activities]);
 
   async function call(path: string, method: string, body?: unknown): Promise<boolean> {
     setBusy(true); setErr(null);
@@ -364,7 +347,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
 
       {/* view switch + creates (switcher hides when the workspace owns the tabs) */}
       <div style={s.tabBar}>
-        {!controlledView && (['command', 'board', 'analytics', 'sources', 'executive', 'list', 'activities'] as View[]).map((v) => (
+        {!controlledView && (['command', 'board', 'analytics', 'sources', 'executive', 'list'] as View[]).map((v) => (
           <button key={v} type="button" style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
             {v === 'command' ? 'Overview' : v[0].toUpperCase() + v.slice(1)}
           </button>
@@ -1014,29 +997,6 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
         </>
       )}
 
-      {/* ── FORECAST ── */}
-      {/* ── ACTIVITIES ── */}
-      {view === 'activities' && (
-        <div style={s.panel}>
-          <div style={s.panelTitle}>Activities</div>
-          {activities === null ? <p style={s.muted}>Loading…</p> : activities.length === 0 ? <p style={s.muted}>No activities logged yet.</p> : (
-            <table style={s.table}><thead><tr>
-              {['Type', 'Subject', 'Related to', 'Status', 'Due', 'Logged'].map((h) => <th key={h} style={s.th}>{h}</th>)}
-            </tr></thead><tbody>
-              {activities.map((a) => (
-                <tr key={a.id}>
-                  <td style={s.td}><span style={s.srcTag}>{a.type}</span></td>
-                  <td style={s.td}><strong>{a.subject}</strong></td>
-                  <td style={s.tdM}>{a.relatedType ?? '—'}</td>
-                  <td style={s.td}><span style={{ ...s.srcTag, textTransform: 'capitalize' }}>{a.status}</span></td>
-                  <td style={s.tdM}>{a.dueDate ? fmt(a.dueDate) : '—'}</td>
-                  <td style={s.tdM}>{fmt(a.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody></table>
-          )}
-        </div>
-      )}
     </div>
   );
 }

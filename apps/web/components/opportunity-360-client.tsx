@@ -108,7 +108,8 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   // Composed from facts the server already resolved (attention, qualification, nextAction) — the
   // band never re-derives a rule, it only renders what the domain owns.
   const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-  const situationText = `${cap(o.stage)} · ${o.winProbability}% win · AED ${aed(o.value)}${o.closeDate ? ` · close ${d(o.closeDate)}` : ''}`;
+  const winPct = outcome.status === 'won' ? 100 : outcome.status === 'lost' ? 0 : o.winProbability;
+  const situationText = `${cap(o.stage)} · ${winPct}% win · AED ${aed(o.value)}${o.closeDate ? ` · close ${d(o.closeDate)}` : ''}`;
 
   const gapLabel = (g: string): string => (({
     'no-next-action': 'no next action', 'no-owner': 'no owner', 'no-due-date': 'no due date',
@@ -210,8 +211,8 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   const kpis: KpiItem[] = [
     { label: 'Value', value: `AED ${aed(o.value)}`, tone: 'accent' },
-    { label: 'Win probability', value: `${o.winProbability}%` },
-    { label: 'Qualification', value: `${qualification.score}/4`, tone: qualification.score < 2 ? 'warn' : 'neutral' },
+    { label: 'Win probability', value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, tone: outcome.status === 'won' ? 'good' : 'neutral' },
+    { label: 'Qualification', value: `${qualification.score}/4`, tone: outcome.status === 'open' && qualification.score < 2 ? 'warn' : 'neutral' },
     { label: 'Expected close', value: o.closeDate ? d(o.closeDate) : '—' },
     { label: 'Owner', value: o.ownerId ?? 'Unassigned' },
     { label: 'Contracted', value: `AED ${aed(outcome.contractedValue)}`, tone: outcome.contractedValue > 0 ? 'good' : 'neutral' },
@@ -232,13 +233,14 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const insights: Insight[] = [];
   if (attention?.gaps?.length) insights.push({ tone: 'warn', title: 'Needs attention', detail: attention.gaps.join(', ') });
   if (nextAction.subject) insights.push({ tone: 'accent', title: 'Next action', detail: `${nextAction.subject}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}` });
-  if (qualification.score < 2) insights.push({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${qualification.score}/4 — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('qualification') } });
+  if (outcome.status === 'open' && qualification.score < 2) insights.push({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${qualification.score}/4 — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('qualification') } });
+  if (outcome.status === 'won' && outcome.contractedValue === 0) insights.push({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } });
   if (outcome.status === 'open') insights.push({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' });
   if (competitors.length) insights.push({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${competitors.join(', ')}` });
 
   return (
     <RecordShell
-      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: qualification.score < 2 ? 'warn' : 'good' }} actions={actions} />}
+      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: outcome.status === 'open' && qualification.score < 2 ? 'warn' : 'good' }} actions={actions} />}
       kpis={kpis}
       situation={
         <RecordBand tone={health.tone}>

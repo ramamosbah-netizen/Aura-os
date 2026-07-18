@@ -113,7 +113,11 @@ export class Opportunity360Controller {
     const tenders = allTenders.filter((t) => t.sourceOpportunityId === id);
     const tenderIds = new Set(tenders.map((t) => t.id));
     const quotations = allQuotes.filter((q) => q.sourceOpportunityId === id || (q.sourceTenderId && tenderIds.has(q.sourceTenderId)));
-    const contracts = allContracts.filter((c) => c.tenderId && tenderIds.has(c.tenderId));
+    // A contract reaches this opportunity by EITHER path: the tender route (contract.tenderId ∈ this
+    // opp's tenders) OR the direct route (a quotation of this opp converted to it, quotation.convertedContractId).
+    // Without the direct path a completed DIRECT sale showed "Contract —" on its own opportunity.
+    const directContractIds = new Set(quotations.map((q) => q.convertedContractId).filter((cid): cid is string => !!cid));
+    const contracts = allContracts.filter((c) => (c.tenderId && tenderIds.has(c.tenderId)) || directContractIds.has(c.id));
     const contractIds = new Set(contracts.map((c) => c.id));
     const projects = allProjects.filter((p) => p.contractId && contractIds.has(p.contractId));
 

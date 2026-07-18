@@ -25,10 +25,13 @@ interface Certificate {
   createdAt: string;
 }
 
+interface ArInvoice { id: string; invoiceNumber: string; total: number; status: string }
+
 export default async function CertificatesPage() {
-  const [contracts, certificates] = await Promise.all([
+  const [contracts, certificates, invoices] = await Promise.all([
     getJson<Contract[]>('/api/contracts/contracts'),
     getJson<Certificate[]>('/api/contracts/certificates'),
+    getJson<ArInvoice[]>('/api/finance/customer-invoices'),
   ]);
 
   return (
@@ -40,7 +43,7 @@ export default async function CertificatesPage() {
         is the trigger to bill the client (AR).
       </p>
       <section style={{ marginTop: 10 }}>
-        <CertificatesClient contracts={contracts ?? []} initialCertificates={certificates ?? []} />
+        <CertificatesClient contracts={contracts ?? []} initialCertificates={certificates ?? []} arInvoices={invoices ?? []} />
       </section>
     </div>
   );

@@ -39,7 +39,14 @@ function money(n: number): string {
   return new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', maximumFractionDigits: 0 }).format(n);
 }
 
-export default function CertificatesClient({ contracts, initialCertificates }: { contracts: Contract[]; initialCertificates: Certificate[] }) {
+interface ArInvoice { id: string; invoiceNumber: string; total: number; status: string }
+
+export default function CertificatesClient({ contracts, initialCertificates, arInvoices = [] }: { contracts: Contract[]; initialCertificates: Certificate[]; arInvoices?: ArInvoice[] }) {
+  // A certified IPC auto-drafts an AR invoice `AR-{reference}-{contractId[:8]}` (cross-module reactor).
+  // Surface it here so the certify→bill handoff isn't invisible (you had to know to go to Finance).
+  const arByNumber = new Map(arInvoices.map((inv) => [inv.invoiceNumber, inv]));
+  const arFor = (c: Certificate): ArInvoice | undefined =>
+    arByNumber.get(`AR-${c.reference ?? `IPC-${c.sequence}`}-${c.contractId.slice(0, 8)}`);
   const [certificates, setCertificates] = useState<Certificate[]>(initialCertificates);
   const [contractId, setContractId] = useState('');
   const [workDone, setWorkDone] = useState('');
@@ -158,7 +165,10 @@ export default function CertificatesClient({ contracts, initialCertificates }: {
                 <td style={s.tdR}>{money(c.grossToDate)}</td>
                 <td style={s.tdOmit}>−{money(c.retentionToDate)}</td>
                 <td style={s.tdAdd}>{money(c.netThisCertificate)}</td>
-                <td style={s.td}><span style={s.tag(c.status)}>{c.status}</span></td>
+                <td style={s.td}>
+                  <span style={s.tag(c.status)}>{c.status}</span>
+                  {arFor(c) && <a href="/finance/customer-invoices" style={{ display: 'block', marginTop: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }} title="AR invoice auto-drafted from this certified IPC">🧾 {arFor(c)!.invoiceNumber} →</a>}
+                </td>
                 <td style={s.tdR}>
                   {c.status === 'draft' && <button type="button" style={s.smallBtn} onClick={() => setStatus(c.id, 'submitted')}>Submit</button>}
                   {c.status === 'submitted' && (

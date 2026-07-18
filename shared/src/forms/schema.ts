@@ -175,6 +175,12 @@ export interface FormSchema {
   /** when omitted, the renderer falls back to a flat 2-col grid of all fields */
   layout?: LayoutNode[];
   rules?: FormRule[];
+  /**
+   * Where to send the user after a successful CREATE. A path template with `:id`
+   * substituted from the created record's id (e.g. '/crm/quotations/:id/pricing').
+   * Ignored on edit. Lets a create hand straight off to the next step of the flow.
+   */
+  createdRedirect?: string;
 }
 
 /** Every field name referenced anywhere in a layout tree, in order. */

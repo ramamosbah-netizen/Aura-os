@@ -11,8 +11,10 @@ import {
   isPricingLocked,
   makeQuotation,
   reviseQuotation,
+  buildQuotationLine,
+  computeQuotationTotals,
 } from './domain/quotation';
-import { type QuotationPricingView, computeQuotationPricing, normalizePricingInput } from './domain/quotation-pricing';
+import { type QuotationPricingView, computeQuotationPricing, normalizePricingInput, deriveSellUnitPrice } from './domain/quotation-pricing';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
@@ -172,6 +174,46 @@ export class QuotationService {
     this.logger.log(`Pricing sheet saved for ${q.quoteNumber} Rev ${q.revision}`);
     return {
       ...computeQuotationPricing(q.lines, { lines }),
+      locked: false,
+      status: q.status,
+      quoteNumber: q.quoteNumber,
+      revision: q.revision,
+    };
+  }
+
+  /**
+   * AUTHORING direction — price the quote FROM its sheet. Persists the per-line cost
+   * build-up, then derives each line's sell price from its all-in unit cost + the
+   * per-line target margin and writes those prices back onto the quotation lines
+   * (recomputing line/quote totals). This is how a quote is generated from its
+   * pricing sheet rather than by typing sell prices directly.
+   *
+   * Governance: refused once approved (same lock as setPricing) — the sheet behind
+   * an approved price is immutable; re-price by raising a revision.
+   */
+  async applyPricing(id: Id, input: { lines?: unknown; targetMargins?: unknown }): Promise<QuotationPricingView> {
+    const q = await this.store.get(id);
+    if (!q) throw new Error(`quotation ${id} not found`);
+    if (isPricingLocked(q)) {
+      throw new Error(
+        `pricing sheet is locked: only a draft or in-review quotation can be re-priced — ` +
+          `${q.quoteNumber} Rev ${q.revision} is ${q.status}. Raise a revision to re-price.`,
+      );
+    }
+    const buildups = normalizePricingInput(q.lines.length, input);
+    // Cost side is independent of price — compute all-in unit cost per line from the build-up.
+    const costed = computeQuotationPricing(q.lines, { lines: buildups });
+    const margins = Array.isArray(input?.targetMargins) ? (input.targetMargins as unknown[]) : [];
+    const lines = q.lines.map((l, i) => {
+      const targetMargin = Number(margins[i]) || 0;
+      const unitPrice = deriveSellUnitPrice(costed.lines[i]?.unitCostTotal ?? 0, targetMargin);
+      return buildQuotationLine({ description: l.description, quantity: l.quantity, unitPrice, vatRate: l.vatRate });
+    });
+    const { subtotal, vatTotal, total } = computeQuotationTotals(lines);
+    await this.store.save({ ...q, lines, subtotal, vatTotal, total, pricing: { lines: buildups } });
+    this.logger.log(`Pricing applied to ${q.quoteNumber} Rev ${q.revision}: total ${total}`);
+    return {
+      ...computeQuotationPricing(lines, { lines: buildups }),
       locked: false,
       status: q.status,
       quoteNumber: q.quoteNumber,

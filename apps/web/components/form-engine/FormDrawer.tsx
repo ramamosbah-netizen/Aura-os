@@ -139,6 +139,12 @@ function FormDrawerImpl({
         setOpen(false);
         setToast(`${schema.entity} ${isEdit ? 'updated' : 'created'}`);
         onSaved?.(payload);
+        // A create can hand straight off to the next step (e.g. a new quotation → its
+        // pricing sheet). Substitute the created record's id into the template.
+        if (!isEdit && schema.createdRedirect) {
+          const created = (await res.json().catch(() => null)) as { id?: string } | null;
+          if (created?.id) { router.push(schema.createdRedirect.replace(':id', created.id)); return; }
+        }
         router.refresh();
       }
     } catch {

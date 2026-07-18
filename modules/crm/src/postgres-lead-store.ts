@@ -23,6 +23,7 @@ interface LeadRow {
   converted_opportunity_id: string | null;
   converted_at: Date | null;
   signal_id: string | null;
+  account_id: string | null;
   qualification_dimensions: LeadQualificationDimensions | string | null;
   qualification_notes: string | null;
   qualification_assessed_at: Date | null;
@@ -48,7 +49,7 @@ const COLS =
   'qualification_dimensions, qualification_notes, qualification_assessed_at, qualification_assessed_by, ' +
   'requirement, systems, sector, project_name, project_location, consultant, main_contractor, ' +
   'estimated_value, project_stage, expected_timeline, ' +
-  'created_at, updated_at';
+  'created_at, updated_at, account_id';
 
 function rowToLead(r: LeadRow): Lead {
   return {
@@ -70,6 +71,7 @@ function rowToLead(r: LeadRow): Lead {
     convertedOpportunityId: r.converted_opportunity_id,
     convertedAt: r.converted_at ? r.converted_at.toISOString() : null,
     signalId: r.signal_id,
+    accountId: r.account_id ?? null,
     // jsonb comes back parsed from pg, but a text-typed column or a driver quirk yields a string —
     // the quotation store hit exactly this, so parse defensively rather than trust the shape.
     qualificationDimensions:
@@ -129,7 +131,7 @@ export class PostgresLeadStore implements LeadStore {
               requirement = $20, systems = $21, sector = $22, project_name = $23,
               project_location = $24, consultant = $25, main_contractor = $26,
               estimated_value = $27, project_stage = $28, expected_timeline = $29,
-              updated_at = now()
+              account_id = $31, updated_at = now()
         WHERE id = $1`,
       [l.id, l.name, l.companyName, l.email, l.phone, l.status, l.source,
        l.assignedTo, l.assignedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
@@ -138,7 +140,7 @@ export class PostgresLeadStore implements LeadStore {
        l.qualificationNotes, l.qualificationAssessedAt, l.qualificationAssessedBy,
        l.requirement, l.systems ? JSON.stringify(l.systems) : null, l.sector, l.projectName,
        l.projectLocation, l.consultant, l.mainContractor, l.estimatedValue, l.projectStage,
-       l.expectedTimeline, l.acceptedAt],
+       l.expectedTimeline, l.acceptedAt, l.accountId],
     );
   }
 
@@ -148,7 +150,7 @@ export class PostgresLeadStore implements LeadStore {
     return executor.query(
       `INSERT INTO public.aura_crm_leads (${COLS})
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
-               $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)`,
+               $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)`,
       [l.id, l.tenantId, l.companyId, l.name, l.companyName, l.email, l.phone, l.status, l.source,
        l.assignedTo, l.assignedAt, l.acceptedAt, l.firstRespondedAt, l.slaFirstResponseHours, l.nextActivityDue,
        l.convertedOpportunityId, l.convertedAt, l.signalId,
@@ -157,7 +159,7 @@ export class PostgresLeadStore implements LeadStore {
        l.requirement, l.systems ? JSON.stringify(l.systems) : null, l.sector, l.projectName,
        l.projectLocation, l.consultant, l.mainContractor, l.estimatedValue, l.projectStage,
        l.expectedTimeline,
-       l.createdAt, l.updatedAt],
+       l.createdAt, l.updatedAt, l.accountId],
     );
   }
 

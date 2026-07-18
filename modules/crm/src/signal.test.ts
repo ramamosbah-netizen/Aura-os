@@ -3,8 +3,6 @@ import { NullTxRunner, type AccessService, type EventStore } from '@aura/core';
 import { SignalService } from './signal.service';
 import { InMemorySignalStore } from './in-memory-signal-store';
 import { InMemoryLeadStore } from './in-memory-lead-store';
-import { InMemoryAccountStore } from './in-memory-account-store';
-import { makeAccount } from './domain/account';
 
 /**
  * S3 Signal + Opportunity Radar E2E — proves promotion preserves source attribution (invariant #10),
@@ -19,9 +17,8 @@ function harness() {
   const access = { assert: vi.fn() } as unknown as AccessService;
   const signals = new InMemorySignalStore();
   const leads = new InMemoryLeadStore();
-  const accounts = new InMemoryAccountStore();
-  const svc = new SignalService(signals, leads, events, new NullTxRunner(), access, accounts);
-  return { svc, signals, leads, accounts };
+  const svc = new SignalService(signals, leads, events, new NullTxRunner(), access);
+  return { svc, signals, leads };
 }
 
 describe('SignalService', () => {
@@ -57,10 +54,8 @@ describe('SignalService', () => {
     expect((await leads.list({ tenantId: 't1' })).length).toBe(1);
   });
 
-  it('promote carries the signal evidence and resolves the account by name (zero re-entry)', async () => {
-    const { svc, accounts } = harness();
-    const acct = makeAccount({ tenantId: 't1', name: 'Sustainable City', status: 'customer' });
-    await accounts.create(acct);
+  it('promote carries the signal evidence to the lead and maps RELATIONSHIP → referral (zero re-entry)', async () => {
+    const { svc } = harness();
     const s = await svc.create({
       tenantId: 't1', title: 'Sustainable City CCTV expansion', source: 'RELATIONSHIP', type: 'EXPANSION',
       accountName: 'Sustainable City', evidence: 'Client asked to expand CCTV to phase 2.',
@@ -69,7 +64,6 @@ describe('SignalService', () => {
     const res = await svc.promote(s.id, 'u1');
 
     expect(res.lead.requirement).toBe('Client asked to expand CCTV to phase 2.'); // evidence → requirement
-    expect(res.lead.accountId).toBe(acct.id); // name-only signal resolved to the existing account
     expect(res.lead.source).toBe('referral'); // RELATIONSHIP no longer degrades to 'other'
   });
 

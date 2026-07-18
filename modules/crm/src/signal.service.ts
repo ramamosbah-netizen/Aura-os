@@ -2,13 +2,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type AccessTarget, type Id, type OrgLevel, makeEvent,
   type Signal, type NewSignal, type SignalStatus, type Lead, type LeadSource,
-  makeSignal, advanceSignal, promoteSignal, dismissSignal, makeLead, resolveIdentity,
+  makeSignal, advanceSignal, promoteSignal, dismissSignal, makeLead,
   CRM_SIGNAL_EVENT, CRM_EVENT,
 } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_SIGNAL_STORE, type SignalFilter, type SignalStore } from './signal-store';
 import { CRM_LEAD_STORE, type LeadStore } from './lead-store';
-import { CRM_ACCOUNT_STORE, type AccountStore } from './account-store';
 
 export interface PromoteSignalResult {
   /** True when the signal was already promoted — the existing lead is returned, nothing new created. */
@@ -38,7 +37,6 @@ export class SignalService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
-    @Inject(CRM_ACCOUNT_STORE) private readonly accounts: AccountStore,
   ) {}
 
   private assert(actorId: Id | null | undefined, tenantId: Id, companyId: Id | null): void {
@@ -75,13 +73,60 @@ export class SignalService {
     return signal;
   }
 
-  async advance(id: Id, to: 'REVIEWING' | 'RESEARCHING', actorId?: Id | null): Promise<Signal> {
+  async advance(id: Id, to: 'REVIEWING' | 'RESEARCHING' | 'WATCHING', actorId?: Id | null): Promise<Signal> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`Signal ${id} not found`);
     this.assert(actorId, existing.tenantId, existing.companyId);
     const next = advanceSignal(existing, to);
     await this.store.update(next);
     return next;
+  }
+
+  /** Watch mode: Park the signal if the timing isn't right, to be automatically reactivated later. */
+  async watch(id: Id, actorId?: Id | null): Promise<Signal> {
+    return this.advance(id, 'WATCHING', actorId);
+  }
+
+  /** Merge multiple signals into one, preserving evidence and tracing lineage. */
+  async mergeSignals(targetId: Id, sourceIds: Id[], reason: string, actorId?: Id | null): Promise<Signal> {
+    const target = await this.store.get(targetId);
+    if (!target) throw new Error(`Target signal ${targetId} not found`);
+    this.assert(actorId, target.tenantId, target.companyId);
+
+    const mergedEvidences: string[] = [];
+    const relatedIds = new Set(target.relatedSignalIds);
+
+    for (const sid of sourceIds) {
+      if (sid === targetId) continue;
+      const source = await this.store.get(sid);
+      if (!source) continue;
+      
+      // Accumulate evidence and trace relationships
+      if (source.evidence) mergedEvidences.push(`[From ${source.title}]: ${source.evidence}`);
+      relatedIds.add(source.id);
+      source.relatedSignalIds.forEach(id => relatedIds.add(id));
+
+      // Mark the source signal as duplicate/merged
+      const dismissedSource = dismissSignal(source, `Merged into ${targetId}: ${reason}`, true);
+      dismissedSource.mergeReason = reason;
+      dismissedSource.mergedBy = actorId ?? null;
+      dismissedSource.mergedAt = new Date().toISOString();
+      dismissedSource.timeline.push({ event: `Merged into ${targetId}`, at: new Date().toISOString() });
+      await this.store.update(dismissedSource);
+    }
+
+    const nextTarget = {
+      ...target,
+      relatedSignalIds: Array.from(relatedIds),
+      evidence: target.evidence 
+        ? `${target.evidence}\n\nMerged Evidence:\n${mergedEvidences.join('\n')}`
+        : mergedEvidences.join('\n'),
+      timeline: [...target.timeline, { event: `Merged with ${sourceIds.length} signals`, at: new Date().toISOString() }],
+      updatedAt: new Date().toISOString()
+    };
+
+    await this.store.update(nextTarget);
+    return nextTarget;
   }
 
   /** Promote a signal to a Lead — one transaction, preserving source attribution (lead.signalId +
@@ -98,32 +143,18 @@ export class SignalService {
       return { idempotentReplay: true, signal, lead: existingLead };
     }
 
-    // Identity resolution AT PROMOTE (not later at Convert): if the signal only knows the account by
-    // NAME, resolve it to an existing account here so the lead is already linked.
-    let accountId = signal.accountId ?? null;
-    if (!accountId && signal.accountName) {
-      const accountsList = await this.accounts.list({ tenantId: signal.tenantId, limit: 5000 });
-      const res = resolveIdentity(
-        { name: signal.accountName },
-        accountsList.map((a) => ({ id: a.id, name: a.name })),
-      );
-      if (res.best === 'EXACT') accountId = res.matches[0].id;
-    }
-
-    const lead = {
-      ...makeLead({
-        tenantId: signal.tenantId,
-        companyId: signal.companyId,
-        name: signal.accountName ?? signal.title,
-        companyName: signal.accountName,
-        source: leadSourceFromSignal(signal),
-        assignedTo: signal.ownerId,
-        signalId: signal.id, // lineage back to the originating signal
-        // Carry what the signal already KNEW so the rep doesn't re-type it (zero re-entry).
-        requirement: signal.evidence ?? signal.description ?? undefined,
-      }),
-      accountId,
-    };
+    const lead = makeLead({
+      tenantId: signal.tenantId,
+      companyId: signal.companyId,
+      name: signal.accountName ?? signal.title,
+      companyName: signal.accountName,
+      source: leadSourceFromSignal(signal),
+      assignedTo: signal.ownerId,
+      signalId: signal.id, // lineage back to the originating signal
+      // Carry what the signal already KNEW so the rep doesn't re-type it at qualification (zero re-entry).
+      // (The account itself is matched by companyName at Convert — the Lead has no accountId field.)
+      requirement: signal.evidence ?? signal.description ?? undefined,
+    });
     const promoted = promoteSignal(signal, lead.id);
 
     const evs = [

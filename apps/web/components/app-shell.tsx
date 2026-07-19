@@ -107,30 +107,42 @@ export default function AppShell({
 
   return (
     <div style={s.root}>
-      <aside style={s.sidebar}>
-        <div style={s.brand}>
-          <div style={s.brandLogo}>◆</div>
-          <div>
+      {/* WCAG 2.4.1 Bypass Blocks — first tab stop on every page. Lets a keyboard
+          user jump the ~60-link sidebar instead of tabbing through it every time. */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      <aside className="app-sidebar" style={s.sidebar} aria-label="Primary">
+        <div className="sidebar-brand" style={s.brand}>
+          <div style={s.brandLogo} aria-hidden>
+            ◆
+          </div>
+          <div className="sidebar-brand-text">
             <div style={s.brandName}>AURA OS</div>
             <div style={s.brandSub}>ENTERPRISE ERP</div>
           </div>
         </div>
-        <nav style={s.nav}>
+        <nav style={s.nav} aria-label="Main navigation">
           {groups.map((group) => (
             <div key={group.title} style={s.group}>
-              <div style={s.groupTitle}>{group.title}</div>
+              <div className="sidebar-group-title" style={s.groupTitle}>
+                {group.title}
+              </div>
               {group.items.map((item) => {
                 const active = pathname === item.href;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
+                    className="sidebar-link"
+                    title={item.label}
+                    aria-current={active ? 'page' : undefined}
                     style={active ? { ...s.link, ...s.linkActive } : s.link}
                   >
                     <span style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>
                       {item.glyph}
                     </span>
-                    {item.label}
+                    <span className="sidebar-label">{item.label}</span>
                   </Link>
                 );
               })}
@@ -196,7 +208,9 @@ export default function AppShell({
           <ThemeToggle />
         </header>
         <TabBar />
-        <main style={s.main}>{children}</main>
+        <main id="main-content" style={s.main} tabIndex={-1}>
+          {children}
+        </main>
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -204,21 +218,17 @@ export default function AppShell({
   );
 }
 
-const SIDEBAR_W = 232;
+/* Sidebar width now lives in the .app-sidebar CSS class (globals.css) so media
+   queries can collapse it to a rail; see the note on s.sidebar below. */
 
 const s = {
   root: { display: 'flex', minHeight: '100vh' } as CSSProperties,
+  // NOTE: width / position / height / display / flex-direction / padding / borders
+  // deliberately live in the .app-sidebar CSS class, NOT here. Inline styles win over
+  // stylesheets, so anything set here can never be overridden by a media query — that
+  // is exactly why the shell was desktop-only. Keep this object free of layout.
   sidebar: {
-    width: SIDEBAR_W,
     flexShrink: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    borderRight: '1px solid var(--border)',
-    background: 'var(--sidebar-bg)',
-    padding: '20px 14px',
-    position: 'sticky',
-    top: 0,
-    height: '100vh',
   } as CSSProperties,
   brand: { display: 'flex', alignItems: 'center', gap: 11, padding: '2px 8px 22px' } as CSSProperties,
   brandLogo: {

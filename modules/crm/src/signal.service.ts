@@ -2,12 +2,13 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type AccessTarget, type Id, type OrgLevel, makeEvent,
   type Signal, type NewSignal, type SignalStatus, type Lead, type LeadSource,
-  makeSignal, advanceSignal, promoteSignal, dismissSignal, makeLead,
+  makeSignal, advanceSignal, promoteSignal, dismissSignal, makeLead, resolveIdentity,
   CRM_SIGNAL_EVENT, CRM_EVENT,
 } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_SIGNAL_STORE, type SignalFilter, type SignalStore } from './signal-store';
 import { CRM_LEAD_STORE, type LeadStore } from './lead-store';
+import { CRM_ACCOUNT_STORE, type AccountStore } from './account-store';
 
 export interface PromoteSignalResult {
   /** True when the signal was already promoted — the existing lead is returned, nothing new created. */
@@ -36,6 +37,7 @@ export class SignalService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    @Inject(CRM_ACCOUNT_STORE) private readonly accounts: AccountStore,
   ) {}
 
   private assert(actorId: Id | null | undefined, tenantId: Id, companyId: Id | null): void {
@@ -95,6 +97,16 @@ export class SignalService {
       return { idempotentReplay: true, signal, lead: existingLead };
     }
 
+    // Identity resolution AT PROMOTE: if the signal only knows the account by NAME, resolve it to an
+    // existing account here (EXACT match only) so the lead is already linked — previously the account
+    // link happened only later at Convert, forcing a re-match.
+    let accountId = signal.accountId ?? null;
+    if (!accountId && signal.accountName) {
+      const accountsList = await this.accounts.list({ tenantId: signal.tenantId, limit: 5000 });
+      const res = resolveIdentity({ name: signal.accountName }, accountsList.map((a) => ({ id: a.id, name: a.name })));
+      if (res.best === 'EXACT' && res.matches.length === 1) accountId = res.matches[0].id;
+    }
+
     const lead = makeLead({
       tenantId: signal.tenantId,
       companyId: signal.companyId,
@@ -103,6 +115,7 @@ export class SignalService {
       source: leadSourceFromSignal(signal),
       assignedTo: signal.ownerId,
       signalId: signal.id, // lineage back to the originating signal
+      accountId,
       // Carry what the signal already KNEW so the rep doesn't re-type it at qualification (zero re-entry).
       requirement: signal.evidence ?? signal.description ?? undefined,
     });

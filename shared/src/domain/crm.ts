@@ -50,6 +50,8 @@ export interface Lead {
   /** Lineage: the Signal this lead was promoted from (null for directly-captured leads).
    * Preserves source attribution back up the acquisition chain: Signal → Lead → Opportunity. */
   signalId: Id | null;
+  /** The account this lead was resolved to (at promote / qualification), or null until linked. */
+  accountId: Id | null;
   /**
    * G3 — the qualification assessment (the eight 0–100 dimensions). Null/absent keys mean UNRATED,
    * never zero. The score and recommendation are NOT stored: they are pure functions of this map
@@ -167,6 +169,7 @@ export interface NewLead {
   convertedOpportunityId?: Id | null;
   convertedAt?: string | null;
   signalId?: Id | null;
+  accountId?: Id | null;
   qualificationDimensions?: LeadQualificationDimensions | null;
   qualificationNotes?: string | null;
   qualificationAssessedAt?: string | null;
@@ -204,6 +207,7 @@ export function makeLead(input: NewLead): Lead {
     convertedOpportunityId: input.convertedOpportunityId ?? null,
     convertedAt: input.convertedAt ?? null,
     signalId: input.signalId ?? null,
+    accountId: input.accountId ?? null,
     // Unassessed by default — which assessLeadQualification honestly reports as score 0 /
     // LOW confidence / REVIEW, rather than pretending a fresh lead has been judged.
     qualificationDimensions: input.qualificationDimensions ?? null,

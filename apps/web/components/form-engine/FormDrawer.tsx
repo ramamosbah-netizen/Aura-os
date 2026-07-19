@@ -5,7 +5,7 @@
 // and plugin toolbar actions. Pure metadata in: pass a FormSchema and it does
 // the rest. The legacy CreateDrawer delegates here.
 
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { applyFormOverrides, buildFormPayload, hasOverrides, type FormOverrides, type FormSchema } from '@aura/shared';
 import FormRenderer, { useFormEngine } from './FormRenderer';
@@ -100,13 +100,54 @@ function FormDrawerImpl({
     if (!busy) setOpen(false);
   }, [busy]);
 
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+
+  // Escape to close + focus trap (WCAG 2.1.2 No Keyboard Trap / 2.4.3 Focus Order).
+  // The drawer is aria-modal, so focus must not be able to Tab out into the page
+  // behind it — previously Tab escaped straight into the background content.
   useEffect(() => {
     if (!open) return;
+
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+
+    const FOCUSABLE =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusable = () =>
+      Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).filter(
+        (el) => el.offsetParent !== null || el === document.activeElement,
+      );
+
+    // move focus into the drawer on open
+    focusable()[0]?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
+      if (e.key === 'Escape') {
+        close();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = focusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      // wrap at both ends, and pull focus back in if it has already escaped
+      if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !panelRef.current?.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      // return focus to whatever opened the drawer
+      restoreFocusRef.current?.focus?.();
+    };
   }, [open, close]);
 
   useEffect(() => {
@@ -187,7 +228,7 @@ function FormDrawerImpl({
       {open ? (
         <>
           <div className="drawer-overlay" onClick={close} />
-          <div className="drawer" role="dialog" aria-modal="true" aria-label={`${isEdit ? 'Edit' : 'New'} ${schema.entity}`}>
+          <div ref={panelRef} className="drawer" role="dialog" aria-modal="true" aria-label={`${isEdit ? 'Edit' : 'New'} ${schema.entity}`}>
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="drawer-head">
                 <div>

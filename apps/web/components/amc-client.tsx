@@ -366,7 +366,10 @@ export default function AmcClient() {
 
 // ─── Premium Glassmorphic Styles ──────────────────────────────────────────
 const s = {
-  root: { padding: '32px', minHeight: '100vh', background: 'radial-gradient(ellipse at top right, rgba(29, 38, 59, 0.4), transparent)' } as CSSProperties,
+  // padding is supplied by the #main-content page-container rule; the old navy
+  // radial tint (rgba(29,38,59,…)) was a leftover from the pre-grey theme and
+  // reintroduced a blue cast on this one page.
+  root: { minHeight: '100vh' } as CSSProperties,
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 } as CSSProperties,
   title: { fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text)' } as CSSProperties,
   subtitle: { fontSize: 13, color: 'var(--muted)', margin: '4px 0 0' } as CSSProperties,

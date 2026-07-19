@@ -25,6 +25,19 @@ export default function CrmAdvisor() {
     return () => { alive = false; };
   }, []);
 
+  // The panel is a fixed overlay, so it sat on top of page content — on wide tables
+  // it hid the right-most columns. Flag its presence on <html> so the page container
+  // can reserve a matching right gutter (see #main-content in globals.css).
+  // Must run before the early returns below to keep hook order stable.
+  const panelVisible =
+    open && loaded && !!data && data.alerts.length > 0 && !pathname?.startsWith('/crm/activities');
+  useEffect(() => {
+    const el = document.documentElement;
+    if (panelVisible) el.setAttribute('data-advisor', 'open');
+    else el.removeAttribute('data-advisor');
+    return () => el.removeAttribute('data-advisor');
+  }, [panelVisible]);
+
   // Activities has its own inline Relationship-Intelligence panel — don't double up there.
   if (pathname?.startsWith('/crm/activities')) return null;
   if (!loaded || !data || data.alerts.length === 0) return null;
@@ -43,7 +56,7 @@ export default function CrmAdvisor() {
   }
 
   return (
-    <aside style={st.panel} aria-label="Relationship advisor">
+    <aside className="crm-advisor-panel" style={st.panel} aria-label="Relationship advisor">
       <div style={st.head}>
         <div style={{ minWidth: 0 }}>
           <div style={st.title}>⚡ Advisor</div>
@@ -82,7 +95,10 @@ const st = {
   panel: {
     // Anchored top-right with a bounded height so it never covers the AURA Copilot
     // launcher in the bottom-right corner.
-    position: 'fixed', top: 64, right: 12, width: 320, maxHeight: 'calc(100vh - 150px)', zIndex: 40,
+    // NOTE: width/top/right/maxHeight live in the .crm-advisor-panel CSS class so a
+    // media query can shrink this on small screens — at 375px a fixed 320px panel
+    // covered the entire page. Do not move layout back inline.
+    position: 'fixed', zIndex: 40,
     display: 'flex', flexDirection: 'column',
     background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14,
     boxShadow: '0 12px 40px rgba(0,0,0,0.28)', overflow: 'hidden',

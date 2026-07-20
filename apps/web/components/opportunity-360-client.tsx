@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 import Timeline from './timeline';
@@ -69,6 +69,8 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const [closing, setClosing] = useState<{ stage: 'won' | 'lost'; reason: string } | null>(null);
   // Outcome Loop — after acting on the Next Best Action, capture what happened so no deal goes dead.
   const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
+  // setBusy is async; a fast double-click can land before the re-render. The ref rejects it.
+  const busyRef = useRef(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/opportunities/${opportunityId}/summary`, { cache: 'no-store' });
@@ -77,6 +79,31 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   }, [opportunityId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Generating a quotation was written inline in three places, none of which set `busy` —
+  // so even the button that reads `disabled={busy}` never actually disabled for this action.
+  // The call takes seconds (POST, then a full summary reload), and a second click during that
+  // window POSTs again and drafts a SECOND quotation off the same deal.
+  const generateQuotation = useCallback(async (): Promise<void> => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/crm/opportunities/${opportunityId}/convert-to-quotation`, { method: 'POST' });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        setErr(d.message ?? d.error ?? 'Could not generate a quotation from this deal.');
+        return;
+      }
+      await load();
+    } catch {
+      setErr('Could not reach the server — no quotation was generated.');
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [opportunityId, load]);
 
   const patch = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true); setErr(null);
@@ -144,7 +171,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     else if (stakeholders.length === 0) nba = { label: 'Map the decision maker', hint: 'No stakeholders mapped yet', onClick: () => setTab('stakeholders') };
     else nba = { label: 'Log the next step', hint: 'Keep the deal moving', onClick: () => setTab('activity') };
   } else if (outcome.status === 'won' && !o.requiresTender) {
-    nba = { label: '→ Generate quotation', hint: 'Won — turn it into a quote', onClick: () => { void fetch(`/api/crm/opportunities/${o.id}/convert-to-quotation`, { method: 'POST' }).then(() => load()); } };
+    nba = { label: '→ Generate quotation', hint: 'Won — turn it into a quote', onClick: () => { void generateQuotation(); } };
   }
 
   // Outcome Loop — writes a real activity linked to this opportunity (reuses the §17 activity stream).
@@ -203,7 +230,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </>
       )}
       {o.stage === 'won' && !o.requiresTender && (
-        <button disabled={busy} onClick={() => { void fetch(`/api/crm/opportunities/${o.id}/convert-to-quotation`, { method: 'POST' }).then(() => load()); }} style={st.actionBtn}>→ Quotation</button>
+        <button disabled={busy} onClick={() => { void generateQuotation(); }} style={st.actionBtn}>{busy ? 'Generating…' : '→ Quotation'}</button>
       )}
       {err && <span style={{ color: 'var(--bad)', fontSize: 12.5, fontWeight: 600 }}>{err}</span>}
     </>
@@ -347,7 +374,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
           {quotations.length === 0 ? (
             <p style={st.muted}>
               No quotation yet — {outcome.status === 'won' && !o.requiresTender
-                ? <button style={st.linkBtn} onClick={() => { void fetch(`/api/crm/opportunities/${o.id}/convert-to-quotation`, { method: 'POST' }).then(() => load()); }}>generate one from this deal →</button>
+                ? <button style={st.linkBtn} disabled={busy} onClick={() => { void generateQuotation(); }}>{busy ? 'Generating…' : 'generate one from this deal →'}</button>
                 : <a href="/crm/quotations" style={st.link}>create a quotation →</a>}
             </p>
           ) : (

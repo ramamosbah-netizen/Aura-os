@@ -6,6 +6,7 @@ import MyDayTasks, { type Task } from '../../../components/my-day-tasks';
 import MyDayQuickAdd from '../../../components/my-day-quick-add';
 import MyDayNotifications, { type Notification } from '../../../components/my-day-notifications';
 import MyDayLayout from '../../../components/my-day-layout';
+import MyDayInbox from '../../../components/my-day-inbox';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,11 +44,6 @@ interface TenderLite {
   id: string; title: string; status: string; value: number; submissionDeadline: string | null;
 }
 interface ContractLite { id: string; title: string; status: string; value: number }
-/** Universal-inbox row — every pending decision across the platform (see InboxService). */
-interface InboxItem {
-  id: string; module: string; kind: string; title: string; detail: string;
-  action: string; href: string; value: number | null; createdAt: string | null;
-}
 /** Pipeline command aggregate — the at-risk deals already carry a diagnosis. */
 interface AtRiskDeal {
   id: string; title: string; value: number; stage: string; ownerId: string | null;
@@ -175,14 +171,13 @@ export default async function MyDayPage() {
     };
   })();
 
-  const [{ username, day }, quotes, tenders, contracts, radar, inbox, notifications, pipeline] =
+  const [{ username, day }, quotes, tenders, contracts, radar, notifications, pipeline] =
     await Promise.all([
       dayRequest,
       getJson<QuotationLite[]>('/api/crm/quotations'),
       getJson<TenderLite[]>('/api/tendering/tenders'),
       getJson<ContractLite[]>('/api/contracts/contracts'),
       getJson<RadarLite>('/api/crm/signals/radar'),
-      getJson<InboxItem[]>('/api/inbox'),
       getJson<Notification[]>('/api/notifications'),
       getJson<PipelineLite>('/api/crm/opportunities/pipeline'),
     ]);
@@ -197,12 +192,11 @@ export default async function MyDayPage() {
   }
 
   const c = day.counts;
-  // A day with 37 approvals waiting is not a quiet day, so pending decisions count
-  // toward it too — otherwise "clear desk" would render above a full inbox.
-  const quiet =
-    c.overdue + c.today + c.thisWeek + c.leadsNeedingAttention + c.opportunitiesNeedingAttention === 0 &&
-    (inbox ?? []).length === 0;
-  const pending = inbox ?? [];
+  // Whether the DAY is quiet. Whether the INBOX is quiet is no longer known here —
+  // <MyDayInbox> loads it after first paint and owns the combined "clear desk" claim,
+  // because that claim is only true when both are empty.
+  const dayIsQuiet =
+    c.overdue + c.today + c.thisWeek + c.leadsNeedingAttention + c.opportunitiesNeedingAttention === 0;
   // Unread only: My Day answers "what changed", not "everything that ever happened" —
   // /workspace remains the full archive. Capped so news cannot bury the work below it.
   const unread = (notifications ?? []).filter((n) => !n.read).slice(0, 6);
@@ -253,11 +247,6 @@ export default async function MyDayPage() {
 
   // Grouped so the shape of the backlog reads at a glance ("19 of these are Finance"),
   // then the biggest few by money — the ones actually worth interrupting the day for.
-  const pendingByModule = Object.entries(
-    pending.reduce<Record<string, number>>((acc, i) => ({ ...acc, [i.module]: (acc[i.module] ?? 0) + 1 }), {}),
-  ).sort((a, b) => b[1] - a[1]);
-  const topPending = [...pending].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 5);
-  const pendingExposure = pending.reduce((sum, i) => sum + (i.value ?? 0), 0);
 
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
@@ -300,14 +289,6 @@ export default async function MyDayPage() {
         <div style={{ minWidth: 0 }}>
           <MyDayLayout
             sections={[
-              ...(quiet
-                ? [{ key: 'quiet', label: 'Clear-desk notice', node: (
-
-            <section style={st.card}>
-              <Empty text="Nothing is late, due, or drifting on your desk today. An empty day here means an empty desk — not an empty pipeline." />
-            </section>
-                  ) }]
-                : []),
               { key: 'work', label: 'Your work', node: (
                 <section style={st.card}>
                   <h2 style={st.h2}>
@@ -366,46 +347,9 @@ export default async function MyDayPage() {
             )}
           </section>
                 ) },
-              ...(pending.length > 0
-                ? [{ key: 'pending', label: 'Waiting on you', node: (
-
-            <section style={st.card}>
-              <h2 style={st.h2}>
-                Waiting on you{' '}
-                <span style={st.h2note}>
-                  {pending.length} decision{pending.length > 1 ? 's' : ''} across the platform ·{' '}
-                  {money(pendingExposure)} held up
-                </span>
-              </h2>
-              <div style={st.modChips}>
-                {pendingByModule.map(([mod, n]) => (
-                  <span key={mod} style={st.modChip}>
-                    {mod} <b style={{ color: 'var(--accent)' }}>{n}</b>
-                  </span>
-                ))}
-              </div>
-              <ul style={st.list}>
-                {topPending.map((i) => (
-                  <li key={`${i.module}-${i.id}`} className="day-pend-row" style={st.pendRow}>
-                    <span style={st.type}>{i.action}</span>
-                    <span style={st.subject}>
-                      <Link href={i.href} style={st.link}>
-                        {i.title}
-                      </Link>
-                      <span style={st.dim}> · {i.kind}</span>
-                    </span>
-                    <span style={st.due}>{i.value ? money(i.value) : '—'}</span>
-                  </li>
-                ))}
-              </ul>
-              <p style={st.deskL}>
-                <Link href="/workspace" style={st.link}>
-                  All {pending.length} in the inbox →
-                </Link>
-              </p>
-            </section>
-                  ) }]
-                : []),
+              { key: 'pending', label: 'Waiting on you', node: (
+                <MyDayInbox dayIsQuiet={dayIsQuiet} />
+                ) },
               ...(needsAttention.length > 0
                 ? [{ key: 'risk', label: 'Deals needing attention', node: (
 

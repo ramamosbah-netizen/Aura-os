@@ -34,6 +34,7 @@ export * from './domain/lead-qualification';
 export * from './domain/elv-context';
 export * from './domain/stage-gate';
 export * from './domain/opportunity-risk';
+export * from './domain/document-requirement';
 export * from './domain/opportunity-health';
 export * from './domain/forecast-snapshot';
 export * from './domain/account-growth';

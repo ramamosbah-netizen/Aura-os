@@ -71,7 +71,7 @@ export default function MyDayTasks({ tasks, empty }: { tasks: Task[]; empty: str
         const late = t.when === 'OVERDUE' && !done;
 
         return (
-          <li key={t.id} style={{ ...st.row, ...(done ? st.rowDone : {}) }}>
+          <li key={t.id} className="day-task-row" style={{ ...st.row, ...(done ? st.rowDone : {}) }}>
             <span style={st.type}>{t.type.replace(/_/g, ' ')}</span>
 
             <span style={st.subject}>
@@ -133,13 +133,9 @@ function Chip({ text, tone }: { text: string; tone: 'bad' | 'warn' | 'good' }) {
 
 const st = {
   list: { listStyle: 'none', margin: 0, padding: 0 } as CSSProperties,
-  // 5th column added for the actions; the first four match the page's read-only rows
-  // so the lists still line up with "My leads" / "My deals" below them.
+  // Column tracks live in .day-task-row (globals.css) so a media query can collapse
+  // them; a 5th column was added here for the actions. Only non-layout paint stays.
   row: {
-    display: 'grid',
-    gridTemplateColumns: '110px 1fr 1fr 92px 118px',
-    gap: 10,
-    alignItems: 'center',
     padding: '8px 0',
     borderTop: '1px solid var(--border)',
     fontSize: 13,

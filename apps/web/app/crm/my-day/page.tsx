@@ -41,6 +41,11 @@ interface TenderLite {
   id: string; title: string; status: string; value: number; submissionDeadline: string | null;
 }
 interface ContractLite { id: string; title: string; status: string; value: number }
+/** Universal-inbox row — every pending decision across the platform (see InboxService). */
+interface InboxItem {
+  id: string; module: string; kind: string; title: string; detail: string;
+  action: string; href: string; value: number | null; createdAt: string | null;
+}
 interface RadarLite {
   counts: { open: number };
   signals: Array<{ id: string; title: string; confidence: number; accountName: string | null }>;
@@ -67,7 +72,7 @@ const money = (n: number): string => `AED ${n.toLocaleString('en-AE', { maximumF
 
 /** The AI rail — pure composition over facts the deal chain already owns, ranked worst-first.
  * It opens the conversation ("AI noticed: …"); the user decides. */
-function composeAiNoticed(day: MyDay, quotes: QuotationLite[], tenders: TenderLite[], contracts: ContractLite[], radar: RadarLite | null): Insight[] {
+function composeAiNoticed(day: MyDay, quotes: QuotationLite[], tenders: TenderLite[], contracts: ContractLite[], radar: RadarLite | null, inbox: InboxItem[]): Insight[] {
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   const bad: Insight[] = [];
@@ -80,6 +85,21 @@ function composeAiNoticed(day: MyDay, quotes: QuotationLite[], tenders: TenderLi
   const slaLead = day.leads.find((l) => l.severity === 'HIGH');
   if (slaLead) {
     bad.push({ tone: 'bad', title: `Lead ${slaLead.name} is breaching`, detail: slaLead.gaps.map((g) => GAP_LABEL[g] ?? g).join(', '), action: { label: 'Open lead', href: slaLead.href } });
+  }
+
+  // Decisions block other people's work, so they outrank your own drifting deals.
+  // Ranked by money at stake — an unapproved AED 340k invoice is not the same
+  // problem as an unapproved AED 2k one.
+  if (inbox.length > 0) {
+    const byValue = [...inbox].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+    const top = byValue[0];
+    const exposure = inbox.reduce((sum, i) => sum + (i.value ?? 0), 0);
+    bad.push({
+      tone: 'bad',
+      title: `${inbox.length} decision${inbox.length > 1 ? 's are' : ' is'} waiting on you`,
+      detail: `${money(exposure)} held up · biggest: ${top.action.toLowerCase()} ${top.kind.toLowerCase()} "${top.title}"${top.value ? ` (${money(top.value)})` : ''}.`,
+      action: { label: 'Open inbox', href: '/workspace' },
+    });
   }
 
   const lapsed = quotes.filter((q) => QUOTE_OPEN.includes(q.status) && q.validUntil && q.validUntil < today);
@@ -136,12 +156,13 @@ export default async function MyDayPage() {
   // The API answers for the caller; when the session carries no actor (dev), resolve
   // the workspace user and ask for their day explicitly.
   const me = await getJson<{ username: string }>('/api/workspace/me');
-  const [day, quotes, tenders, contracts, radar] = await Promise.all([
+  const [day, quotes, tenders, contracts, radar, inbox] = await Promise.all([
     getJson<MyDay>(`/api/crm/my-day${me?.username ? `?userId=${encodeURIComponent(me.username)}` : ''}`),
     getJson<QuotationLite[]>('/api/crm/quotations'),
     getJson<TenderLite[]>('/api/tendering/tenders'),
     getJson<ContractLite[]>('/api/contracts/contracts'),
     getJson<RadarLite>('/api/crm/signals/radar'),
+    getJson<InboxItem[]>('/api/inbox'),
   ]);
 
   if (!day?.counts) {
@@ -154,9 +175,21 @@ export default async function MyDayPage() {
   }
 
   const c = day.counts;
+  // A day with 37 approvals waiting is not a quiet day, so pending decisions count
+  // toward it too — otherwise "clear desk" would render above a full inbox.
   const quiet =
-    c.overdue + c.today + c.thisWeek + c.leadsNeedingAttention + c.opportunitiesNeedingAttention === 0;
-  const noticed = composeAiNoticed(day, quotes ?? [], tenders ?? [], contracts ?? [], radar ?? null);
+    c.overdue + c.today + c.thisWeek + c.leadsNeedingAttention + c.opportunitiesNeedingAttention === 0 &&
+    (inbox ?? []).length === 0;
+  const pending = inbox ?? [];
+  const noticed = composeAiNoticed(day, quotes ?? [], tenders ?? [], contracts ?? [], radar ?? null, pending);
+
+  // Grouped so the shape of the backlog reads at a glance ("19 of these are Finance"),
+  // then the biggest few by money — the ones actually worth interrupting the day for.
+  const pendingByModule = Object.entries(
+    pending.reduce<Record<string, number>>((acc, i) => ({ ...acc, [i.module]: (acc[i.module] ?? 0) + 1 }), {}),
+  ).sort((a, b) => b[1] - a[1]);
+  const topPending = [...pending].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 5);
+  const pendingExposure = pending.reduce((sum, i) => sum + (i.value ?? 0), 0);
 
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
@@ -195,7 +228,7 @@ export default async function MyDayPage() {
         ))}
       </div>
 
-      <div style={st.body}>
+      <div className="day-body" style={st.body}>
         <div style={{ minWidth: 0 }}>
           <section style={st.card}>
             <h2 style={st.h2}>
@@ -203,6 +236,44 @@ export default async function MyDayPage() {
             </h2>
             <MyDayQuickAdd assigneeId={me?.username ?? null} />
           </section>
+
+          {pending.length > 0 && (
+            <section style={st.card}>
+              <h2 style={st.h2}>
+                Waiting on you{' '}
+                <span style={st.h2note}>
+                  {pending.length} decision{pending.length > 1 ? 's' : ''} across the platform ·{' '}
+                  {money(pendingExposure)} held up
+                </span>
+              </h2>
+              <div style={st.modChips}>
+                {pendingByModule.map(([mod, n]) => (
+                  <span key={mod} style={st.modChip}>
+                    {mod} <b style={{ color: 'var(--accent)' }}>{n}</b>
+                  </span>
+                ))}
+              </div>
+              <ul style={st.list}>
+                {topPending.map((i) => (
+                  <li key={`${i.module}-${i.id}`} className="day-pend-row" style={st.pendRow}>
+                    <span style={st.type}>{i.action}</span>
+                    <span style={st.subject}>
+                      <Link href={i.href} style={st.link}>
+                        {i.title}
+                      </Link>
+                      <span style={st.dim}> · {i.kind}</span>
+                    </span>
+                    <span style={st.due}>{i.value ? money(i.value) : '—'}</span>
+                  </li>
+                ))}
+              </ul>
+              <p style={st.deskL}>
+                <Link href="/workspace" style={st.link}>
+                  All {pending.length} in the inbox →
+                </Link>
+              </p>
+            </section>
+          )}
 
           {quiet && (
             <section style={st.card}>
@@ -241,7 +312,7 @@ export default async function MyDayPage() {
             ) : (
               <ul style={st.list}>
                 {day.leads.map((l) => (
-                  <li key={l.id} style={st.row}>
+                  <li key={l.id} className="day-row" style={st.row}>
                     <span style={st.type}>{l.status}</span>
                     <span style={st.subject}>
                       <Link href={l.href} style={st.link}>{l.name}</Link>
@@ -268,7 +339,7 @@ export default async function MyDayPage() {
             ) : (
               <ul style={st.list}>
                 {day.opportunities.map((o) => (
-                  <li key={o.id} style={st.row}>
+                  <li key={o.id} className="day-row" style={st.row}>
                     <span style={st.type}>{o.stage}</span>
                     <span style={st.subject}>
                       <Link href={o.href} style={st.link}>{o.title}</Link>
@@ -285,7 +356,7 @@ export default async function MyDayPage() {
           </section>
         </div>
 
-        <div style={st.asideCol}>
+        <div className="day-aside" style={st.asideCol}>
           <InsightsPanel title="AI noticed" insights={noticed} />
         </div>
       </div>
@@ -310,18 +381,27 @@ const st = {
   kpi: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' } as CSSProperties,
   kpiN: { fontSize: 26, fontWeight: 600, lineHeight: 1.1 } as CSSProperties,
   kpiL: { color: 'var(--muted)', fontSize: 12, marginTop: 4 } as CSSProperties,
+  modChips: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 } as CSSProperties,
+  modChip: {
+    border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px',
+    fontSize: 11, color: 'var(--muted)',
+  } as CSSProperties,
+  // Three columns (verb / what / worth) declared in .day-pend-row (globals.css).
+  pendRow: { padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: 13 } as CSSProperties,
   desk: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 } as CSSProperties,
   deskCard: { display: 'flex', alignItems: 'baseline', gap: 10, background: 'var(--panel)', borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--border)', borderRadius: 10, padding: '10px 14px', textDecoration: 'none', color: 'var(--fg)' } as CSSProperties,
   deskCardHot: { borderStyle: 'solid', borderColor: 'var(--accent)' } as CSSProperties,
   deskN: { fontSize: 20, fontWeight: 800 } as CSSProperties,
   deskL: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  body: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16, alignItems: 'start' } as CSSProperties,
-  asideCol: { position: 'sticky', top: 16 } as CSSProperties,
+  // Tracks live in .day-body (globals.css) so the rail can drop below the day.
+  body: {} as CSSProperties,
+  asideCol: { top: 16 } as CSSProperties,
   card: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 } as CSSProperties,
   h2: { fontSize: 15, margin: '0 0 10px', display: 'flex', alignItems: 'baseline', gap: 8 } as CSSProperties,
   h2note: { color: 'var(--muted)', fontSize: 12, fontWeight: 400 } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0 } as CSSProperties,
-  row: { display: 'grid', gridTemplateColumns: '110px 1fr 1fr 92px', gap: 10, alignItems: 'center', padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: 13 } as CSSProperties,
+  // Tracks live in .day-row (globals.css) so they can collapse on narrow viewports.
+  row: { padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: 13 } as CSSProperties,
   type: { color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 } as CSSProperties,
   subject: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 } as CSSProperties,
   related: { color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,

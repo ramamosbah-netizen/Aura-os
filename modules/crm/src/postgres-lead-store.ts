@@ -178,6 +178,10 @@ export class PostgresLeadStore implements LeadStore {
       params.push(filter.tenantId);
       where.push(`tenant_id = $${params.length}`);
     }
+    if (filter.assignedTo) {
+      params.push(filter.assignedTo);
+      where.push(`assigned_to = $${params.length}`);
+    }
     if (filter.status) {
       params.push(filter.status);
       where.push(`status = $${params.length}`);

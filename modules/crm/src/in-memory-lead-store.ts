@@ -31,6 +31,7 @@ export class InMemoryLeadStore implements LeadStore {
     let out = [...this.leads.values()];
     if (filter.tenantId) out = out.filter((l) => l.tenantId === filter.tenantId);
     if (filter.status) out = out.filter((l) => l.status === filter.status);
+    if (filter.assignedTo) out = out.filter((l) => l.assignedTo === filter.assignedTo);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

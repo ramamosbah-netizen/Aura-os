@@ -6,6 +6,8 @@ export const CRM_LEAD_STORE = Symbol('CRM_LEAD_STORE');
 export interface LeadFilter {
   tenantId?: string;
   status?: LeadStatus;
+  /** Whose leads. See ActivityFilter.assigneeId. */
+  assignedTo?: string;
   limit?: number;
 }
 

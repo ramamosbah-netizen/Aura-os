@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import { getJson } from '@/lib/api';
+import { currentUser, getJson } from '@/lib/api';
 import { InsightsPanel, type Insight } from '../../../components/crm/record-shell';
 import MyDayTasks, { type Task } from '../../../components/my-day-tasks';
 import MyDayQuickAdd from '../../../components/my-day-quick-add';
@@ -163,19 +163,39 @@ function Empty({ text }: { text: string }) {
 }
 
 export default async function MyDayPage() {
-  // The API answers for the caller; when the session carries no actor (dev), resolve
-  // the workspace user and ask for their day explicitly.
-  const me = await getJson<{ username: string }>('/api/workspace/me');
-  const [day, quotes, tenders, contracts, radar, inbox, notifications, pipeline] = await Promise.all([
-    getJson<MyDay>(`/api/crm/my-day${me?.username ? `?userId=${encodeURIComponent(me.username)}` : ''}`),
-    getJson<QuotationLite[]>('/api/crm/quotations'),
-    getJson<TenderLite[]>('/api/tendering/tenders'),
-    getJson<ContractLite[]>('/api/contracts/contracts'),
-    getJson<RadarLite>('/api/crm/signals/radar'),
-    getJson<InboxItem[]>('/api/inbox'),
-    getJson<Notification[]>('/api/notifications'),
-    getJson<PipelineLite>('/api/crm/opportunities/pipeline'),
-  ]);
+  // Identity first, because /api/crm/my-day needs a user and refuses without one.
+  //
+  // The session cookie already carries the username, and decoding it costs nothing —
+  // no round trip. /api/workspace/me was measured at ~800ms, and because the my-day
+  // fetch could not start until it returned, that 800ms sat IN FRONT of the whole
+  // parallel block rather than inside it.
+  //
+  // Signed out (dev without login) there is no cookie and the API must still be asked
+  // who we are. That path is unchanged — but it now blocks only the my-day fetch
+  // instead of all eight.
+  const sessionUser = await currentUser();
+  const dayRequest = (async () => {
+    const username =
+      sessionUser?.sub ?? (await getJson<{ username: string }>('/api/workspace/me'))?.username ?? null;
+    return {
+      username,
+      day: await getJson<MyDay>(
+        `/api/crm/my-day${username ? `?userId=${encodeURIComponent(username)}` : ''}`,
+      ),
+    };
+  })();
+
+  const [{ username, day }, quotes, tenders, contracts, radar, inbox, notifications, pipeline] =
+    await Promise.all([
+      dayRequest,
+      getJson<QuotationLite[]>('/api/crm/quotations'),
+      getJson<TenderLite[]>('/api/tendering/tenders'),
+      getJson<ContractLite[]>('/api/contracts/contracts'),
+      getJson<RadarLite>('/api/crm/signals/radar'),
+      getJson<InboxItem[]>('/api/inbox'),
+      getJson<Notification[]>('/api/notifications'),
+      getJson<PipelineLite>('/api/crm/opportunities/pipeline'),
+    ]);
 
   if (!day?.counts) {
     return (
@@ -202,7 +222,7 @@ export default async function MyDayPage() {
   // unowned at-risk deal is everyone's problem, but your own is yours today.
   const atRisk = [...((pipeline?.atRisk ?? []) as AtRiskDeal[])]
     .sort((a, b) => {
-      const mine = (d: AtRiskDeal) => (me?.username && d.ownerId === me.username ? 0 : 1);
+      const mine = (d: AtRiskDeal) => (username && d.ownerId === username ? 0 : 1);
       return mine(a) - mine(b) || b.value - a.value;
     })
     .slice(0, 5);
@@ -263,7 +283,7 @@ export default async function MyDayPage() {
             <h2 style={st.h2}>
               Capture <span style={st.h2note}>a task, a follow-up, or a note — without leaving</span>
             </h2>
-            <MyDayQuickAdd assigneeId={me?.username ?? null} />
+            <MyDayQuickAdd assigneeId={username} />
           </section>
                 ) },
               ...(pending.length > 0

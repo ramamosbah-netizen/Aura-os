@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import QuotationsClient from './quotations-client';
+import CommercialDecisionQueue from './commercial-decision-queue';
 
 // CRM · Commercial workspace — one place for the commercial DECISION. Tabs are LINKED
 // VIEWS onto records owned by their domains: Quotations (CRM), Pricing (Tendering),
@@ -25,12 +26,12 @@ export interface CommSheet {
   pricedItems: number; boqItems: number; directCost: number; sellingValue: number; tenderValue: number; marginPercent: number;
 }
 
-type Tab = 'overview' | 'quotations' | 'pricing' | 'contracts' | 'approvals' | 'margins';
+type Tab = 'overview' | 'quotations' | 'pricing' | 'approvals' | 'margins' | 'queue';
 const TAB_DEFS: Array<{ id: Tab; label: string; icon: string; hint: string }> = [
   { id: 'overview', label: 'Overview', icon: '◎', hint: 'The commercial picture + what needs a decision now' },
+  { id: 'queue', label: 'Decision Queue', icon: '📋', hint: 'Quotes awaiting a commercial decision — review and clear them here' },
   { id: 'quotations', label: 'Quotations', icon: '✎', hint: 'Customer quotes (owned by CRM)' },
   { id: 'pricing', label: 'Pricing', icon: '⊞', hint: 'Internal cost & margin sheets (owned by Tendering)' },
-  { id: 'contracts', label: 'Contracts', icon: '▦', hint: 'Awarded engagements (owned by the deal chain)' },
   { id: 'approvals', label: 'Approvals', icon: '✔', hint: 'Quotes awaiting internal approval' },
   { id: 'margins', label: 'Margins', icon: '％', hint: 'Quoted vs contracted value & conversion' },
 ];
@@ -67,7 +68,7 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, api
     <div>
       <div style={st.tabBar} role="tablist">
         {TAB_DEFS.map((t) => {
-          const badge = t.id === 'approvals' ? kpi.awaitingCount : 0;
+          const badge = t.id === 'approvals' || t.id === 'queue' ? kpi.awaitingCount : 0;
           const active = tab === t.id;
           return (
             <button key={t.id} type="button" role="tab" aria-selected={active} title={t.hint}
@@ -93,11 +94,13 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, api
           </div>
           <div style={st.decideRow}>
             {kpi.awaitingCount > 0
-              ? <button type="button" style={st.decideBtn} onClick={() => setTab('approvals')}>{kpi.awaitingCount} quote{kpi.awaitingCount === 1 ? '' : 's'} awaiting your approval →</button>
+              ? <button type="button" style={st.decideBtn} onClick={() => setTab('queue')}>{kpi.awaitingCount} quote{kpi.awaitingCount === 1 ? '' : 's'} awaiting your approval →</button>
               : <span style={st.muted}>Nothing awaiting approval. The commercial desk is clear.</span>}
           </div>
         </>
       )}
+
+      {tab === 'queue' && <CommercialDecisionQueue quotations={quotations} contracts={contracts} />}
 
       {tab === 'quotations' && <QuotationsClient initialQuotations={quotations} />}
 
@@ -110,17 +113,6 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, api
             cells: [s.tenderTitle, s.client ?? '—', cap(s.status), `${s.pricedItems}/${s.boqItems}`, aed(s.sellingValue), `${s.marginPercent}%`],
           }))}
           empty="No pricing sheets yet." />
-      )}
-
-      {tab === 'contracts' && (
-        <LinkedTable
-          note={<>Awarded engagements, owned by the deal chain. <a href="/contracts/contracts" style={st.link}>Open Contracts →</a></>}
-          head={['Contract', 'Account', 'Value', 'Status', 'From', 'Created']}
-          rows={contracts.map((c) => ({
-            key: c.id, href: `/contracts/contracts/${c.id}`,
-            cells: [c.title, c.accountName ?? '—', aed(c.value), cap(c.status), c.commercialBaselineId ? '🔒 baseline' : c.tenderTitle ? 'tender' : '—', fmt(c.createdAt)],
-          }))}
-          empty="No contracts yet." />
       )}
 
       {tab === 'approvals' && (

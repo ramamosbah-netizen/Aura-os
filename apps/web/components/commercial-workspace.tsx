@@ -3,6 +3,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import QuotationsClient from './quotations-client';
 import CommercialDecisionQueue from './commercial-decision-queue';
+import { CommercialFinancials, CommercialRisks, commercialRisks } from './commercial-financials';
 
 // CRM · Commercial workspace — one place for the commercial DECISION. Tabs are LINKED
 // VIEWS onto records owned by their domains: Quotations (CRM), Pricing (Tendering),
@@ -26,12 +27,14 @@ export interface CommSheet {
   pricedItems: number; boqItems: number; directCost: number; sellingValue: number; tenderValue: number; marginPercent: number;
 }
 
-type Tab = 'overview' | 'quotations' | 'pricing' | 'approvals' | 'margins' | 'queue';
+type Tab = 'overview' | 'quotations' | 'pricing' | 'approvals' | 'margins' | 'queue' | 'financials' | 'risks';
 const TAB_DEFS: Array<{ id: Tab; label: string; icon: string; hint: string }> = [
   { id: 'overview', label: 'Overview', icon: '◎', hint: 'The commercial picture + what needs a decision now' },
   { id: 'queue', label: 'Decision Queue', icon: '📋', hint: 'Quotes awaiting a commercial decision — review and clear them here' },
   { id: 'quotations', label: 'Quotations', icon: '✎', hint: 'Customer quotes (owned by CRM)' },
   { id: 'pricing', label: 'Pricing', icon: '⊞', hint: 'Internal cost & margin sheets (owned by Tendering)' },
+  { id: 'financials', label: 'Financials', icon: '📊', hint: 'What the desk is carrying — and how much of it has a known margin' },
+  { id: 'risks', label: 'Risks', icon: '⚠', hint: 'What is blocking or eroding the open quotes, aggregated' },
   { id: 'approvals', label: 'Approvals', icon: '✔', hint: 'Quotes awaiting internal approval' },
   { id: 'margins', label: 'Margins', icon: '％', hint: 'Quoted vs contracted value & conversion' },
 ];
@@ -62,13 +65,15 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, api
     };
   }, [quotations, contracts]);
 
+  const riskCount = useMemo(() => commercialRisks(quotations).length, [quotations]);
+
   const approvals = useMemo(() => quotations.filter((q) => q.status === 'internal_review'), [quotations]);
 
   return (
     <div>
       <div style={st.tabBar} role="tablist">
         {TAB_DEFS.map((t) => {
-          const badge = t.id === 'approvals' || t.id === 'queue' ? kpi.awaitingCount : 0;
+          const badge = t.id === 'approvals' || t.id === 'queue' ? kpi.awaitingCount : t.id === 'risks' ? riskCount : 0;
           const active = tab === t.id;
           return (
             <button key={t.id} type="button" role="tab" aria-selected={active} title={t.hint}
@@ -101,6 +106,10 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, api
       )}
 
       {tab === 'queue' && <CommercialDecisionQueue quotations={quotations} contracts={contracts} />}
+
+      {tab === 'financials' && <CommercialFinancials quotations={quotations} contracts={contracts} />}
+
+      {tab === 'risks' && <CommercialRisks quotations={quotations} />}
 
       {tab === 'quotations' && <QuotationsClient initialQuotations={quotations} />}
 

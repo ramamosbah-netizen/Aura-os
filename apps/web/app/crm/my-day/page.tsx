@@ -2,20 +2,18 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import { InsightsPanel, type Insight } from '../../../components/crm/record-shell';
+import MyDayTasks, { type Task } from '../../../components/my-day-tasks';
 
 export const dynamic = 'force-dynamic';
 
 // My Day — the page a salesperson opens FIRST. It answers one decision: "where do I
 // focus today?" AI opens the conversation (the "AI noticed" rail composes facts from
 // the whole deal chain — CRM, quotations, tenders, contracts, signals) and every row
-// links back to the record that owns the fact. The day is where you SEE the work.
-
-type When = 'OVERDUE' | 'TODAY' | 'THIS_WEEK' | 'LATER' | 'UNDATED';
-
-interface Task {
-  id: string; type: string; subject: string; when: When; dueDate: string | null;
-  started: boolean; relatedType: string | null; relatedName: string | null; href: string | null;
-}
+// links back to the record that owns the fact.
+//
+// The day is also where the work gets DONE: the task lists are a client island
+// (<MyDayTasks>) that can start and complete an activity in place, so acting on your
+// day no longer costs you the view of it.
 interface DayLead {
   id: string; name: string; companyName: string | null; status: string; gaps: string[];
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | null; nextAction: string | null;
@@ -129,25 +127,6 @@ function Chip({ text, tone }: { text: string; tone: 'bad' | 'warn' | 'plain' }) 
   return <span style={{ ...st.chip, color, borderColor: color }}>{text}</span>;
 }
 
-function TaskRow({ t }: { t: Task }) {
-  const late = t.when === 'OVERDUE';
-  return (
-    <li style={st.row}>
-      <span style={st.type}>{t.type.replace(/_/g, ' ')}</span>
-      <span style={st.subject}>
-        {t.subject}
-        {t.started && <Chip text="started" tone="warn" />}
-      </span>
-      <span style={st.related}>
-        {t.href && t.relatedName ? <Link href={t.href} style={st.link}>{t.relatedName}</Link> : t.relatedName}
-      </span>
-      <span style={{ ...st.due, color: late ? 'var(--bad)' : 'var(--muted)' }}>
-        {t.dueDate ?? 'no date'}
-      </span>
-    </li>
-  );
-}
-
 function Empty({ text }: { text: string }) {
   return <p style={st.empty}>{text}</p>;
 }
@@ -225,33 +204,24 @@ export default async function MyDayPage() {
 
           <section style={st.card}>
             <h2 style={st.h2}>Today&apos;s appointments</h2>
-            {day.meetings.length === 0 ? (
-              <Empty text="No meetings, site visits, demos or presentations scheduled for today." />
-            ) : (
-              <ul style={st.list}>{day.meetings.map((t) => <TaskRow key={t.id} t={t} />)}</ul>
-            )}
+            <MyDayTasks
+              tasks={day.meetings}
+              empty="No meetings, site visits, demos or presentations scheduled for today."
+            />
           </section>
 
           <section style={st.card}>
             <h2 style={st.h2}>
               Now <span style={st.h2note}>late or due today</span>
             </h2>
-            {day.now.length === 0 ? (
-              <Empty text="Nothing late and nothing due today." />
-            ) : (
-              <ul style={st.list}>{day.now.map((t) => <TaskRow key={t.id} t={t} />)}</ul>
-            )}
+            <MyDayTasks tasks={day.now} empty="Nothing late and nothing due today." />
           </section>
 
           <section style={st.card}>
             <h2 style={st.h2}>
               Next <span style={st.h2note}>this week, and your unscheduled work</span>
             </h2>
-            {day.next.length === 0 ? (
-              <Empty text="Nothing scheduled for the rest of the week." />
-            ) : (
-              <ul style={st.list}>{day.next.map((t) => <TaskRow key={t.id} t={t} />)}</ul>
-            )}
+            <MyDayTasks tasks={day.next} empty="Nothing scheduled for the rest of the week." />
           </section>
 
           <section style={st.card}>

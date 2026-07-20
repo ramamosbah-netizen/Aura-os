@@ -5,6 +5,7 @@ import { InsightsPanel, type Insight } from '../../../components/crm/record-shel
 import MyDayTasks, { type Task } from '../../../components/my-day-tasks';
 import MyDayQuickAdd from '../../../components/my-day-quick-add';
 import MyDayNotifications, { type Notification } from '../../../components/my-day-notifications';
+import MyDayLayout from '../../../components/my-day-layout';
 
 export const dynamic = 'force-dynamic';
 
@@ -255,14 +256,19 @@ export default async function MyDayPage() {
 
       <div className="day-body" style={st.body}>
         <div style={{ minWidth: 0 }}>
-          <section style={st.card}>
+          <MyDayLayout
+            sections={[
+              { key: 'capture', label: 'Capture', node: (
+<section style={st.card}>
             <h2 style={st.h2}>
               Capture <span style={st.h2note}>a task, a follow-up, or a note — without leaving</span>
             </h2>
             <MyDayQuickAdd assigneeId={me?.username ?? null} />
           </section>
+                ) },
+              ...(pending.length > 0
+                ? [{ key: 'pending', label: 'Waiting on you', node: (
 
-          {pending.length > 0 && (
             <section style={st.card}>
               <h2 style={st.h2}>
                 Waiting on you{' '}
@@ -298,15 +304,19 @@ export default async function MyDayPage() {
                 </Link>
               </p>
             </section>
-          )}
+                  ) }]
+                : []),
+              ...(unread.length > 0
+                ? [{ key: 'news', label: 'Since you were here', node: (
 
-          {unread.length > 0 && (
             <section style={st.card}>
               <MyDayNotifications notifications={unread} />
             </section>
-          )}
+                  ) }]
+                : []),
+              ...(atRisk.length > 0
+                ? [{ key: 'risk', label: 'Deals at risk', node: (
 
-          {atRisk.length > 0 && (
             <section style={st.card}>
               <h2 style={st.h2}>
                 Deals at risk{' '}
@@ -339,37 +349,43 @@ export default async function MyDayPage() {
                 ))}
               </ul>
             </section>
-          )}
+                  ) }]
+                : []),
+              ...(quiet
+                ? [{ key: 'quiet', label: 'Clear-desk notice', node: (
 
-          {quiet && (
             <section style={st.card}>
               <Empty text="Nothing is late, due, or drifting on your desk today. An empty day here means an empty desk — not an empty pipeline." />
             </section>
-          )}
-
-          <section style={st.card}>
+                  ) }]
+                : []),
+              { key: 'appointments', label: 'Appointments', node: (
+<section style={st.card}>
             <h2 style={st.h2}>Today&apos;s appointments</h2>
             <MyDayTasks
               tasks={day.meetings}
               empty="No meetings, site visits, demos or presentations scheduled for today."
             />
           </section>
-
-          <section style={st.card}>
+                ) },
+              { key: 'now', label: 'Now', node: (
+<section style={st.card}>
             <h2 style={st.h2}>
               Now <span style={st.h2note}>late or due today</span>
             </h2>
             <MyDayTasks tasks={day.now} empty="Nothing late and nothing due today." />
           </section>
-
-          <section style={st.card}>
+                ) },
+              { key: 'next', label: 'Next', node: (
+<section style={st.card}>
             <h2 style={st.h2}>
               Next <span style={st.h2note}>this week, and your unscheduled work</span>
             </h2>
             <MyDayTasks tasks={day.next} empty="Nothing scheduled for the rest of the week." />
           </section>
-
-          <section style={st.card}>
+                ) },
+              { key: 'leads', label: 'My leads', node: (
+<section style={st.card}>
             <h2 style={st.h2}>
               My leads <span style={st.h2note}>with an open gap, worst first</span>
             </h2>
@@ -395,8 +411,9 @@ export default async function MyDayPage() {
               </ul>
             )}
           </section>
-
-          <section style={st.card}>
+                ) },
+              { key: 'deals', label: 'My deals', node: (
+<section style={st.card}>
             <h2 style={st.h2}>
               My deals <span style={st.h2note}>missing a next step, biggest first</span>
             </h2>
@@ -420,6 +437,9 @@ export default async function MyDayPage() {
               </ul>
             )}
           </section>
+                ) },
+            ]}
+          />
         </div>
 
         <div className="day-aside" style={st.asideCol}>

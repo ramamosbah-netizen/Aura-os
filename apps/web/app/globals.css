@@ -326,6 +326,12 @@ a {
   gap: 10px;
   align-items: center;
 }
+.day-note-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 72px 104px;
+  gap: 10px;
+  align-items: start;
+}
 
 /* The 320px insight rail is what squeezes the lists in the first place; below the
    same breakpoint it stops being a column and simply follows the day. */
@@ -348,7 +354,8 @@ a {
   }
   .day-task-row,
   .day-row,
-  .day-pend-row {
+  .day-pend-row,
+  .day-note-row {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 3px;
     padding-bottom: 12px;
@@ -357,7 +364,8 @@ a {
      a single column. !important is required: it beats the inline textAlign. */
   .day-task-row > *,
   .day-row > *,
-  .day-pend-row > * {
+  .day-pend-row > *,
+  .day-note-row > * {
     text-align: left !important;
     justify-content: flex-start !important;
   }

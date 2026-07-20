@@ -32,6 +32,11 @@ export const ACTIVITY_OPEN_STATUSES: readonly ActivityStatus[] = ['open', 'in_pr
 export const isLiveActivity = (status: string): boolean =>
   (ACTIVITY_OPEN_STATUSES as readonly string[]).includes(status);
 
+/** `cancelled` = work that was called off, never work that happened — `cancelActivity` only ever
+ * transitions from open/in_progress. Every read that treats an activity as evidence the record was
+ * touched must exclude it, or creating-then-cancelling an activity silently clears a quiet/stale gap. */
+export const isCancelledActivity = (status: string): boolean => status === 'cancelled';
+
 /**
  * What an activity can be about (G1 — Universal Activity).
  *

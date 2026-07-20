@@ -7,7 +7,7 @@
 // shared domain predicates (leadAttention, opportunityAttention) can reuse it without a
 // module dependency; re-exported here so existing '@aura/crm' consumers are unchanged.
 export { daysSince, hoursSince, isQuiet } from '@aura/shared';
-import { isLiveActivity } from './domain/activity';
+import { isCancelledActivity, isLiveActivity } from './domain/activity';
 
 /** One shared threshold set (days). Change here, change everywhere. */
 export const ATTENTION_THRESHOLDS = {
@@ -22,15 +22,28 @@ export const ATTENTION_THRESHOLDS = {
 /** Minimal shape the last-touch scan needs (Activity satisfies it). */
 export interface ActivityTouch {
   relatedId: string | null;
+  status: string;
   completedAt: string | null;
   createdAt: string;
 }
 
-/** Most-recent touch (ISO) per related record id, from the activity stream. */
+/**
+ * Most-recent touch (ISO) per related record id, from the activity stream.
+ *
+ * THE STATUS RULE (shared with nextOpenActivityByRecord below, so the two can never disagree about
+ * whether status matters): `cancelled` activities are excluded everywhere in this file. A cancelled
+ * activity is work that was called off, not work that happened — counting one as a touch let anybody
+ * clear a lead's STALE gap by creating and cancelling a call, with no contact ever made (observed
+ * live 2026-07-20). Open/in-progress activities DO count, at createdAt: scheduling the next call is
+ * a real act of working the record, and the record is not quiet while dated work sits on it.
+ *
+ * Where the two functions legitimately differ: this one also counts `completed` (a touch that
+ * happened is still a touch), while the next-action projection wants only live work.
+ */
 export function lastActivityByRecord(activities: ActivityTouch[]): Map<string, string> {
   const m = new Map<string, string>();
   for (const a of activities) {
-    if (!a.relatedId) continue;
+    if (!a.relatedId || isCancelledActivity(a.status)) continue;
     const at = a.completedAt ?? a.createdAt;
     const prev = m.get(a.relatedId);
     if (!prev || at > prev) m.set(a.relatedId, at);
@@ -63,7 +76,8 @@ export interface NextOpenActivity {
  * "Next" = earliest due date; an open activity with no due date only wins if nothing is dated
  * (undated work is real work, but dated work is more urgent). Completed/cancelled are ignored —
  * completing an activity therefore hands the next action to whatever is scheduled after it, which
- * is the whole point of the projection.
+ * is the whole point of the projection. Cancelled is excluded here for the same reason it is
+ * excluded from lastActivityByRecord above: see THE STATUS RULE on that function.
  */
 export function nextOpenActivityByRecord(activities: OpenActivityCandidate[]): Map<string, NextOpenActivity> {
   const m = new Map<string, NextOpenActivity>();

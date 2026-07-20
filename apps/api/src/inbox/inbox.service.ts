@@ -6,6 +6,7 @@ import { InvoiceService } from '@aura/finance';
 import { SubcontractsService } from '@aura/subcontracts';
 import { HrService } from '@aura/hr';
 import { QualityService } from '@aura/quality';
+import { QuotationService } from '@aura/crm';
 
 export interface InboxItem {
   id: string;
@@ -41,10 +42,11 @@ export class InboxService {
     private readonly variations: VariationService,
     private readonly hr: HrService,
     private readonly quality: QualityService,
+    private readonly quotations: QuotationService,
   ) {}
 
   async list(tenantId: string): Promise<InboxItem[]> {
-    const [prs, pos, invoices, subcontracts, claims, tenders, variations, leaves, timesheets, expenseClaims, advances, mars, employees] =
+    const [prs, pos, invoices, subcontracts, claims, tenders, variations, leaves, timesheets, expenseClaims, advances, mars, employees, quotations] =
       await Promise.all([
         this.prs.list({ tenantId, limit: 100 }),
         this.pos.list({ tenantId, limit: 100 }),
@@ -59,12 +61,26 @@ export class InboxService {
         this.hr.listStaffAdvances(tenantId),
         this.quality.listMaterialApprovals(tenantId),
         this.hr.listEmployees(tenantId),
+        this.quotations.list({ tenantId, limit: 100 }),
       ]);
 
     const employeeName = new Map(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`]));
     const who = (id: string): string => employeeName.get(id) ?? 'Employee';
 
     const items: InboxItem[] = [];
+
+    // A quotation in internal_review is blocked on an internal approval — the same shape as a
+    // purchase request awaiting sign-off. It was absent from this list entirely, so "approve this
+    // quote" never reached the platform's decision queue and only existed inside Quotation 360.
+    // Deliberately narrow: `draft` is still being written, and `sent` / `under_negotiation` wait
+    // on the customer, not on us.
+    for (const q of quotations)
+      if (q.status === 'internal_review')
+        items.push({
+          id: q.id, module: 'Commercial', kind: 'Quotation', title: `${q.quoteNumber} — ${q.customerName}`,
+          detail: q.revision > 0 ? `Rev ${q.revision}` : '',
+          action: 'Approve', href: `/crm/quotations/${q.id}`, value: q.total, createdAt: q.issueDate,
+        });
 
     for (const pr of prs)
       if (pr.status === 'draft')

@@ -97,6 +97,12 @@ The page's own stated question is *"where do I focus today?"* — the answer to 
 | # | Change | Rationale |
 |---|---|---|
 | R1 | **Merge `My deals` into `Deals at risk`** | One card, "Deals needing attention", yours sorted first then unowned. Kills a permanently-empty card (§1.1) |
+| R2 | **Drop the decisions insight from the AI rail** | The card states it better and more completely (§1.2) |
+| R3 | **Merge `Now` + `Next`** into one "Your work" card with two headings | `Next` was empty; two cards for one list of dated activities |
+| R4 | **Reorder:** work first — Now/Next, Appointments, then Waiting on you, Deals at risk, Since you were here, Capture last | Answers the page's own question at position 1 (§4) |
+| R5 | **Keep Capture, move it to the end** | Capture is a verb you reach for deliberately; it is not the answer to "where do I focus" |
+
+Net: **9 cards → 7** (measured after implementing; the original estimate of 6 was wrong — `My leads` was double-counted as merged when it is not), with nothing removed from the day.
 
 > **Correction to R1 (found while implementing).** This row originally said the merge "removes the duplicate engine". That was wrong — the two engines are **complementary, not duplicated**, and their reason sets do not intersect:
 >
@@ -108,12 +114,7 @@ The page's own stated question is *"where do I focus today?"* — the answer to 
 > Dropping either would have lost real signal. The implemented fix therefore **merges by opportunity id and unions both reason sets**, rather than removing an engine. Verified live by temporarily assigning an at-risk deal to the test user: it rendered as **one** row, first, carrying **all five** reasons — three from the pipeline engine, two from my-day — and the deal was reverted to unowned afterwards.
 >
 > The defect was never duplication. It was **two cards for one question, one of them structurally silent** because it filtered by owner while 11 of 12 sliding deals had no owner.
-| R2 | **Drop the decisions insight from the AI rail** | The card states it better and more completely (§1.2) |
-| R3 | **Merge `Now` + `Next`** into one "Your work" card with two headings | `Next` was empty; two cards for one list of dated activities |
-| R4 | **Reorder:** work first — Now/Next, Appointments, then Waiting on you, Deals at risk, Since you were here, Capture last | Answers the page's own question at position 1 (§4) |
-| R5 | **Keep Capture, move it to the end** | Capture is a verb you reach for deliberately; it is not the answer to "where do I focus" |
 
-Net: **9 cards → 6**, with nothing removed from the day.
 
 ---
 

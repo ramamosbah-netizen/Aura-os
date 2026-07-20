@@ -47,6 +47,14 @@ interface InboxItem {
   id: string; module: string; kind: string; title: string; detail: string;
   action: string; href: string; value: number | null; createdAt: string | null;
 }
+/** Pipeline command aggregate — the at-risk deals already carry a diagnosis. */
+interface AtRiskDeal {
+  id: string; title: string; value: number; stage: string; ownerId: string | null;
+  accountName: string | null; reasons: string[]; recommendation: string | null;
+  daysSinceActivity: number | null;
+}
+interface PipelineLite { atRisk: AtRiskDeal[] }
+
 interface RadarLite {
   counts: { open: number };
   signals: Array<{ id: string; title: string; confidence: number; accountName: string | null }>;
@@ -157,7 +165,7 @@ export default async function MyDayPage() {
   // The API answers for the caller; when the session carries no actor (dev), resolve
   // the workspace user and ask for their day explicitly.
   const me = await getJson<{ username: string }>('/api/workspace/me');
-  const [day, quotes, tenders, contracts, radar, inbox, notifications] = await Promise.all([
+  const [day, quotes, tenders, contracts, radar, inbox, notifications, pipeline] = await Promise.all([
     getJson<MyDay>(`/api/crm/my-day${me?.username ? `?userId=${encodeURIComponent(me.username)}` : ''}`),
     getJson<QuotationLite[]>('/api/crm/quotations'),
     getJson<TenderLite[]>('/api/tendering/tenders'),
@@ -165,6 +173,7 @@ export default async function MyDayPage() {
     getJson<RadarLite>('/api/crm/signals/radar'),
     getJson<InboxItem[]>('/api/inbox'),
     getJson<Notification[]>('/api/notifications'),
+    getJson<PipelineLite>('/api/crm/opportunities/pipeline'),
   ]);
 
   if (!day?.counts) {
@@ -186,6 +195,17 @@ export default async function MyDayPage() {
   // Unread only: My Day answers "what changed", not "everything that ever happened" —
   // /workspace remains the full archive. Capped so news cannot bury the work below it.
   const unread = (notifications ?? []).filter((n) => !n.read).slice(0, 6);
+
+  // At-risk deals already arrive diagnosed (reasons + a recommendation) from the
+  // pipeline command aggregate — one call, no per-deal fan-out. Yours first: an
+  // unowned at-risk deal is everyone's problem, but your own is yours today.
+  const atRisk = [...((pipeline?.atRisk ?? []) as AtRiskDeal[])]
+    .sort((a, b) => {
+      const mine = (d: AtRiskDeal) => (me?.username && d.ownerId === me.username ? 0 : 1);
+      return mine(a) - mine(b) || b.value - a.value;
+    })
+    .slice(0, 5);
+  const unowned = (pipeline?.atRisk ?? []).filter((d) => !d.ownerId).length;
   const noticed = composeAiNoticed(day, quotes ?? [], tenders ?? [], contracts ?? [], radar ?? null, pending);
 
   // Grouped so the shape of the backlog reads at a glance ("19 of these are Finance"),
@@ -283,6 +303,41 @@ export default async function MyDayPage() {
           {unread.length > 0 && (
             <section style={st.card}>
               <MyDayNotifications notifications={unread} />
+            </section>
+          )}
+
+          {atRisk.length > 0 && (
+            <section style={st.card}>
+              <h2 style={st.h2}>
+                Deals at risk{' '}
+                <span style={st.h2note}>
+                  {(pipeline?.atRisk ?? []).length} across the pipeline
+                  {unowned > 0 ? ` · ${unowned} with no owner` : ''} — worst money first
+                </span>
+              </h2>
+              <ul style={st.list}>
+                {atRisk.map((d) => (
+                  <li key={d.id} style={st.riskRow}>
+                    <span style={st.subject}>
+                      <Link href={`/crm/opportunities/${d.id}`} style={st.link}>
+                        {d.title}
+                      </Link>
+                      <span style={st.dim}>
+                        {' '}
+                        · {money(d.value)} · {d.stage}
+                        {d.accountName ? ` · ${d.accountName}` : ''}
+                        {!d.ownerId && ' · unowned'}
+                      </span>
+                    </span>
+                    <span style={st.gaps}>
+                      {d.reasons.map((r) => (
+                        <Chip key={r} text={r} tone="warn" />
+                      ))}
+                    </span>
+                    {d.recommendation && <span style={st.reco}>→ {d.recommendation}</span>}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 
@@ -392,6 +447,9 @@ const st = {
   kpi: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' } as CSSProperties,
   kpiN: { fontSize: 26, fontWeight: 600, lineHeight: 1.1 } as CSSProperties,
   kpiL: { color: 'var(--muted)', fontSize: 12, marginTop: 4 } as CSSProperties,
+  // One column: title line, reason chips, then the recommendation as its own line.
+  riskRow: { padding: '10px 0', borderTop: '1px solid var(--border)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 5 } as CSSProperties,
+  reco: { color: 'var(--good)', fontSize: 12.5 } as CSSProperties,
   modChips: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 } as CSSProperties,
   modChip: {
     border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px',

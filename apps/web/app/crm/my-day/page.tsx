@@ -300,12 +300,70 @@ export default async function MyDayPage() {
         <div style={{ minWidth: 0 }}>
           <MyDayLayout
             sections={[
-              { key: 'capture', label: 'Capture', node: (
+              ...(quiet
+                ? [{ key: 'quiet', label: 'Clear-desk notice', node: (
+
+            <section style={st.card}>
+              <Empty text="Nothing is late, due, or drifting on your desk today. An empty day here means an empty desk — not an empty pipeline." />
+            </section>
+                  ) }]
+                : []),
+              { key: 'work', label: 'Your work', node: (
+                <section style={st.card}>
+                  <h2 style={st.h2}>
+                    Your work <span style={st.h2note}>what today actually asks of you</span>
+                  </h2>
+                  {day.now.length === 0 && day.next.length === 0 ? (
+                    <Empty text="Nothing late, nothing due today, and nothing scheduled for the rest of the week." />
+                  ) : (
+                    <>
+                      <h3 style={st.h3}>
+                        Now <span style={st.h2note}>late or due today</span>
+                      </h3>
+                      <MyDayTasks tasks={day.now} empty="Nothing late and nothing due today." />
+                      <h3 style={{ ...st.h3, marginTop: 18 }}>
+                        Next <span style={st.h2note}>this week, and your unscheduled work</span>
+                      </h3>
+                      <MyDayTasks tasks={day.next} empty="Nothing scheduled for the rest of the week." />
+                    </>
+                  )}
+                </section>
+                ) },
+              { key: 'appointments', label: 'Appointments', node: (
+<section style={st.card}>
+            <h2 style={st.h2}>Today&apos;s appointments</h2>
+            <MyDayTasks
+              tasks={day.meetings}
+              empty="No meetings, site visits, demos or presentations scheduled for today."
+            />
+          </section>
+                ) },
+              { key: 'leads', label: 'My leads', node: (
 <section style={st.card}>
             <h2 style={st.h2}>
-              Capture <span style={st.h2note}>a task, a follow-up, or a note — without leaving</span>
+              My leads <span style={st.h2note}>with an open gap, worst first</span>
             </h2>
-            <MyDayQuickAdd assigneeId={username} />
+            {day.leads.length === 0 ? (
+              <Empty text="Every lead assigned to you is answered, scheduled and moving." />
+            ) : (
+              <ul style={st.list}>
+                {day.leads.map((l) => (
+                  <li key={l.id} className="day-row" style={st.row}>
+                    <span style={st.type}>{l.status}</span>
+                    <span style={st.subject}>
+                      <Link href={l.href} style={st.link}>{l.name}</Link>
+                      {l.companyName && <span style={st.dim}> · {l.companyName}</span>}
+                    </span>
+                    <span style={st.gaps}>
+                      {l.gaps.map((g) => (
+                        <Chip key={g} text={GAP_LABEL[g] ?? g} tone={l.severity === 'HIGH' ? 'bad' : 'warn'} />
+                      ))}
+                    </span>
+                    <span style={st.due}>{l.nextActionDue ?? '—'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
                 ) },
               ...(pending.length > 0
@@ -348,14 +406,6 @@ export default async function MyDayPage() {
             </section>
                   ) }]
                 : []),
-              ...(unread.length > 0
-                ? [{ key: 'news', label: 'Since you were here', node: (
-
-            <section style={st.card}>
-              <MyDayNotifications notifications={unread} />
-            </section>
-                  ) }]
-                : []),
               ...(needsAttention.length > 0
                 ? [{ key: 'risk', label: 'Deals needing attention', node: (
 
@@ -393,65 +443,20 @@ export default async function MyDayPage() {
             </section>
                   ) }]
                 : []),
-              ...(quiet
-                ? [{ key: 'quiet', label: 'Clear-desk notice', node: (
+              ...(unread.length > 0
+                ? [{ key: 'news', label: 'Since you were here', node: (
 
             <section style={st.card}>
-              <Empty text="Nothing is late, due, or drifting on your desk today. An empty day here means an empty desk — not an empty pipeline." />
+              <MyDayNotifications notifications={unread} />
             </section>
                   ) }]
                 : []),
-              { key: 'appointments', label: 'Appointments', node: (
-<section style={st.card}>
-            <h2 style={st.h2}>Today&apos;s appointments</h2>
-            <MyDayTasks
-              tasks={day.meetings}
-              empty="No meetings, site visits, demos or presentations scheduled for today."
-            />
-          </section>
-                ) },
-              { key: 'now', label: 'Now', node: (
+              { key: 'capture', label: 'Capture', node: (
 <section style={st.card}>
             <h2 style={st.h2}>
-              Now <span style={st.h2note}>late or due today</span>
+              Capture <span style={st.h2note}>a task, a follow-up, or a note — without leaving</span>
             </h2>
-            <MyDayTasks tasks={day.now} empty="Nothing late and nothing due today." />
-          </section>
-                ) },
-              { key: 'next', label: 'Next', node: (
-<section style={st.card}>
-            <h2 style={st.h2}>
-              Next <span style={st.h2note}>this week, and your unscheduled work</span>
-            </h2>
-            <MyDayTasks tasks={day.next} empty="Nothing scheduled for the rest of the week." />
-          </section>
-                ) },
-              { key: 'leads', label: 'My leads', node: (
-<section style={st.card}>
-            <h2 style={st.h2}>
-              My leads <span style={st.h2note}>with an open gap, worst first</span>
-            </h2>
-            {day.leads.length === 0 ? (
-              <Empty text="Every lead assigned to you is answered, scheduled and moving." />
-            ) : (
-              <ul style={st.list}>
-                {day.leads.map((l) => (
-                  <li key={l.id} className="day-row" style={st.row}>
-                    <span style={st.type}>{l.status}</span>
-                    <span style={st.subject}>
-                      <Link href={l.href} style={st.link}>{l.name}</Link>
-                      {l.companyName && <span style={st.dim}> · {l.companyName}</span>}
-                    </span>
-                    <span style={st.gaps}>
-                      {l.gaps.map((g) => (
-                        <Chip key={g} text={GAP_LABEL[g] ?? g} tone={l.severity === 'HIGH' ? 'bad' : 'warn'} />
-                      ))}
-                    </span>
-                    <span style={st.due}>{l.nextActionDue ?? '—'}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <MyDayQuickAdd assigneeId={username} />
           </section>
                 ) },
             ]}
@@ -503,6 +508,7 @@ const st = {
   asideCol: { top: 16 } as CSSProperties,
   card: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 } as CSSProperties,
   h2: { fontSize: 15, margin: '0 0 10px', display: 'flex', alignItems: 'baseline', gap: 8 } as CSSProperties,
+  h3: { fontSize: 13, margin: '0 0 8px', display: 'flex', alignItems: 'baseline', gap: 8, color: 'var(--text)' } as CSSProperties,
   h2note: { color: 'var(--muted)', fontSize: 12, fontWeight: 400 } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0 } as CSSProperties,
   // Tracks live in .day-row (globals.css) so they can collapse on narrow viewports.

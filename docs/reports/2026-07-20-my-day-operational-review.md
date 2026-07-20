@@ -164,8 +164,8 @@ The parallel block is bounded by its slowest member, so **`my-day` alone sets th
 ## 8. Suggested order of work
 
 1. ~~**P1** — un-block the `me` waterfall.~~ **Done.** Correct, but the win is production-only — see the correction in §6. Do not expect it to show up in dev timings.
-2. **R1 + R2** — merge the deals cards, drop the duplicated insight. Closes the SSOT violation.
-3. **R4 + R3 + R5** — reorder and merge Now/Next. Pure layout.
+2. ~~**R1 + R2** — merge the deals cards, drop the duplicated insight.~~ **Done** — see the R1 correction above: the engines were complementary, so both reason sets were merged rather than one engine dropped.
+3. ~~**R4 + R3 + R5** — reorder and merge Now/Next.~~ **Done.** Order now runs: your work → what is blocked on you → what changed → capture. Cards 9 → 7.
 4. **P2** — push `my-day` filtering into the query instead of loading 15,000 rows. Largest win, but it is an API change and belongs in its own slice.
 5. **P3** — consider caching `/inbox` or loading it after first paint.
 

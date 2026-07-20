@@ -8,6 +8,8 @@ export interface OpportunityFilter {
   stage?: OpportunityStage;
   leadId?: string;
   accountId?: string;
+  /** Whose deals. See ActivityFilter.assigneeId. */
+  ownerId?: string;
   limit?: number;
 }
 

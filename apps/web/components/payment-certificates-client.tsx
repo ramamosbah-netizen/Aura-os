@@ -48,6 +48,8 @@ export default function CertificatesClient({ contracts, initialCertificates, arI
   const arFor = (c: Certificate): ArInvoice | undefined =>
     arByNumber.get(`AR-${c.reference ?? `IPC-${c.sequence}`}-${c.contractId.slice(0, 8)}`);
   const [certificates, setCertificates] = useState<Certificate[]>(initialCertificates);
+  /** Which certificate is mid-transition, and to what — drives the button's pending label. */
+  const [pending, setPending] = useState<{ id: string; status: string } | null>(null);
   const [contractId, setContractId] = useState('');
   const [workDone, setWorkDone] = useState('');
   const [materials, setMaterials] = useState('');
@@ -101,14 +103,50 @@ export default function CertificatesClient({ contracts, initialCertificates, arI
     await loadSummary(contractId);
   }
 
+  // A status change costs ~4.4s end to end: the PATCH, then refresh() re-reads the whole
+  // certificate list and the contract summary, and each of those is a flat ~0.85s round trip.
+  // Without a pending state the row simply sits there looking untouched for four seconds, with
+  // the button still live — and these are `Certify` and `Mark paid`, where the natural response
+  // to "nothing happened" is to click again.
   async function setStatus(id: string, status: string): Promise<void> {
-    await fetch(`/api/contracts/certificates/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    await refresh();
-    if (summary?.contract) await loadSummary(summary.contract.id);
+    if (pending) return;
+    setPending({ id, status });
+    setErr('');
+    try {
+      const res = await fetch(`/api/contracts/certificates/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        setErr(d.message ?? d.error ?? `Could not mark this certificate ${status}.`);
+        return;
+      }
+      await refresh();
+      if (summary?.contract) await loadSummary(summary.contract.id);
+    } catch {
+      setErr('Could not reach the server — the certificate was not changed.');
+    } finally {
+      setPending(null);
+    }
+  }
+
+  function ActionBtn({ cert, to, label, busyLabel, style }: {
+    cert: Certificate; to: string; label: string; busyLabel: string; style: CSSProperties;
+  }) {
+    const mine = pending?.id === cert.id && pending.status === to;
+    return (
+      <button
+        type="button"
+        style={pending ? { ...style, opacity: 0.6, cursor: 'default' } : style}
+        disabled={!!pending}
+        aria-busy={mine}
+        onClick={() => setStatus(cert.id, to)}
+      >
+        {mine ? busyLabel : label}
+      </button>
+    );
   }
 
   return (
@@ -170,14 +208,14 @@ export default function CertificatesClient({ contracts, initialCertificates, arI
                   {arFor(c) && <a href="/finance/customer-invoices" style={{ display: 'block', marginTop: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }} title="AR invoice auto-drafted from this certified IPC">🧾 {arFor(c)!.invoiceNumber} →</a>}
                 </td>
                 <td style={s.tdR}>
-                  {c.status === 'draft' && <button type="button" style={s.smallBtn} onClick={() => setStatus(c.id, 'submitted')}>Submit</button>}
+                  {c.status === 'draft' && <ActionBtn cert={c} to="submitted" label="Submit" busyLabel="Submitting…" style={s.smallBtn} />}
                   {c.status === 'submitted' && (
                     <>
-                      <button type="button" style={s.approveBtn} onClick={() => setStatus(c.id, 'certified')}>Certify</button>
-                      <button type="button" style={s.smallBtn} onClick={() => setStatus(c.id, 'rejected')}>Reject</button>
+                      <ActionBtn cert={c} to="certified" label="Certify" busyLabel="Certifying…" style={s.approveBtn} />
+                      <ActionBtn cert={c} to="rejected" label="Reject" busyLabel="Rejecting…" style={s.smallBtn} />
                     </>
                   )}
-                  {c.status === 'certified' && <button type="button" style={s.approveBtn} onClick={() => setStatus(c.id, 'paid')}>Mark paid</button>}
+                  {c.status === 'certified' && <ActionBtn cert={c} to="paid" label="Mark paid" busyLabel="Marking paid…" style={s.approveBtn} />}
                 </td>
               </tr>
             ))

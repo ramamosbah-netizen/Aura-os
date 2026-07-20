@@ -4,6 +4,7 @@ import { getJson } from '@/lib/api';
 import { InsightsPanel, type Insight } from '../../../components/crm/record-shell';
 import MyDayTasks, { type Task } from '../../../components/my-day-tasks';
 import MyDayQuickAdd from '../../../components/my-day-quick-add';
+import MyDayNotifications, { type Notification } from '../../../components/my-day-notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,13 +157,14 @@ export default async function MyDayPage() {
   // The API answers for the caller; when the session carries no actor (dev), resolve
   // the workspace user and ask for their day explicitly.
   const me = await getJson<{ username: string }>('/api/workspace/me');
-  const [day, quotes, tenders, contracts, radar, inbox] = await Promise.all([
+  const [day, quotes, tenders, contracts, radar, inbox, notifications] = await Promise.all([
     getJson<MyDay>(`/api/crm/my-day${me?.username ? `?userId=${encodeURIComponent(me.username)}` : ''}`),
     getJson<QuotationLite[]>('/api/crm/quotations'),
     getJson<TenderLite[]>('/api/tendering/tenders'),
     getJson<ContractLite[]>('/api/contracts/contracts'),
     getJson<RadarLite>('/api/crm/signals/radar'),
     getJson<InboxItem[]>('/api/inbox'),
+    getJson<Notification[]>('/api/notifications'),
   ]);
 
   if (!day?.counts) {
@@ -181,6 +183,9 @@ export default async function MyDayPage() {
     c.overdue + c.today + c.thisWeek + c.leadsNeedingAttention + c.opportunitiesNeedingAttention === 0 &&
     (inbox ?? []).length === 0;
   const pending = inbox ?? [];
+  // Unread only: My Day answers "what changed", not "everything that ever happened" —
+  // /workspace remains the full archive. Capped so news cannot bury the work below it.
+  const unread = (notifications ?? []).filter((n) => !n.read).slice(0, 6);
   const noticed = composeAiNoticed(day, quotes ?? [], tenders ?? [], contracts ?? [], radar ?? null, pending);
 
   // Grouped so the shape of the backlog reads at a glance ("19 of these are Finance"),
@@ -272,6 +277,12 @@ export default async function MyDayPage() {
                   All {pending.length} in the inbox →
                 </Link>
               </p>
+            </section>
+          )}
+
+          {unread.length > 0 && (
+            <section style={st.card}>
+              <MyDayNotifications notifications={unread} />
             </section>
           )}
 

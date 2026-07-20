@@ -302,6 +302,67 @@ a {
   }
 }
 
+/* ── My Day rows: responsive record grids ──────────────────────────── */
+
+/* Same lesson as .app-sidebar above: these column tracks cannot live in the
+   inline style objects, because no media query can override an inline style.
+   Below ~1000px the fixed tracks are wider than the column they sit in and the
+   cells overlap each other's text — verified at 800px before this was added. */
+.day-task-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 1fr 92px 118px;
+  gap: 10px;
+  align-items: center;
+}
+.day-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 1fr 92px;
+  gap: 10px;
+  align-items: center;
+}
+.day-pend-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 120px;
+  gap: 10px;
+  align-items: center;
+}
+
+/* The 320px insight rail is what squeezes the lists in the first place; below the
+   same breakpoint it stops being a column and simply follows the day. */
+.day-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+.day-aside {
+  position: sticky;
+}
+
+@media (max-width: 1000px) {
+  .day-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .day-aside {
+    position: static;
+  }
+  .day-task-row,
+  .day-row,
+  .day-pend-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 3px;
+    padding-bottom: 12px;
+  }
+  /* The right-aligned money/date cell reads as a stray fragment once the row is
+     a single column. !important is required: it beats the inline textAlign. */
+  .day-task-row > *,
+  .day-row > *,
+  .day-pend-row > * {
+    text-align: left !important;
+    justify-content: flex-start !important;
+  }
+}
+
 /* ── Skeleton loading (perceived performance) ───────────────────────── */
 
 .skeleton {

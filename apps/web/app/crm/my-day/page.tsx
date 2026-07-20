@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import { InsightsPanel, type Insight } from '../../../components/crm/record-shell';
 import MyDayTasks, { type Task } from '../../../components/my-day-tasks';
+import MyDayQuickAdd from '../../../components/my-day-quick-add';
 
 export const dynamic = 'force-dynamic';
 
@@ -196,6 +197,13 @@ export default async function MyDayPage() {
 
       <div style={st.body}>
         <div style={{ minWidth: 0 }}>
+          <section style={st.card}>
+            <h2 style={st.h2}>
+              Capture <span style={st.h2note}>a task, a follow-up, or a note — without leaving</span>
+            </h2>
+            <MyDayQuickAdd assigneeId={me?.username ?? null} />
+          </section>
+
           {quiet && (
             <section style={st.card}>
               <Empty text="Nothing is late, due, or drifting on your desk today. An empty day here means an empty desk — not an empty pipeline." />

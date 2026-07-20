@@ -82,7 +82,7 @@ const money = (n: number): string => `AED ${n.toLocaleString('en-AE', { maximumF
 
 /** The AI rail — pure composition over facts the deal chain already owns, ranked worst-first.
  * It opens the conversation ("AI noticed: …"); the user decides. */
-function composeAiNoticed(day: MyDay, quotes: QuotationLite[], tenders: TenderLite[], contracts: ContractLite[], radar: RadarLite | null, inbox: InboxItem[]): Insight[] {
+function composeAiNoticed(day: MyDay, quotes: QuotationLite[], tenders: TenderLite[], contracts: ContractLite[], radar: RadarLite | null): Insight[] {
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   const bad: Insight[] = [];
@@ -97,20 +97,10 @@ function composeAiNoticed(day: MyDay, quotes: QuotationLite[], tenders: TenderLi
     bad.push({ tone: 'bad', title: `Lead ${slaLead.name} is breaching`, detail: slaLead.gaps.map((g) => GAP_LABEL[g] ?? g).join(', '), action: { label: 'Open lead', href: slaLead.href } });
   }
 
-  // Decisions block other people's work, so they outrank your own drifting deals.
-  // Ranked by money at stake — an unapproved AED 340k invoice is not the same
-  // problem as an unapproved AED 2k one.
-  if (inbox.length > 0) {
-    const byValue = [...inbox].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-    const top = byValue[0];
-    const exposure = inbox.reduce((sum, i) => sum + (i.value ?? 0), 0);
-    bad.push({
-      tone: 'bad',
-      title: `${inbox.length} decision${inbox.length > 1 ? 's are' : ' is'} waiting on you`,
-      detail: `${money(exposure)} held up · biggest: ${top.action.toLowerCase()} ${top.kind.toLowerCase()} "${top.title}"${top.value ? ` (${money(top.value)})` : ''}.`,
-      action: { label: 'Open inbox', href: '/workspace' },
-    });
-  }
+  // NOTE: the decisions insight that used to live here was removed (review §1.2).
+  // It restated the "Waiting on you" card verbatim — same count, same money, same
+  // source — directly above the card itself. The card says it better, with the
+  // per-module breakdown and the rows. The rail is for facts no card carries.
 
   const lapsed = quotes.filter((q) => QUOTE_OPEN.includes(q.status) && q.validUntil && q.validUntil < today);
   const expiring = quotes.filter((q) => QUOTE_OPEN.includes(q.status) && q.validUntil && q.validUntil >= today && q.validUntil <= soon);
@@ -220,14 +210,46 @@ export default async function MyDayPage() {
   // At-risk deals already arrive diagnosed (reasons + a recommendation) from the
   // pipeline command aggregate — one call, no per-deal fan-out. Yours first: an
   // unowned at-risk deal is everyone's problem, but your own is yours today.
-  const atRisk = [...((pipeline?.atRisk ?? []) as AtRiskDeal[])]
+  // ONE card for "deals that need me", merged from the two detectors that each
+  // saw half the picture (operational review §1.1, §3):
+  //
+  //   pipeline.atRisk  — close date passed, gone quiet, weak qualification,
+  //                      no decision-maker, buying-journey misalignment. Tenant-wide.
+  //   day.opportunities — no next action, no owner, no due date. Owner-filtered.
+  //
+  // They are complementary, NOT duplicates: their reason sets do not intersect. So
+  // this merges by opportunity id and keeps both sets of reasons, rather than
+  // dropping one engine. Rendering them as two cards meant an owner-filtered card
+  // sat empty while 12 deals slid past it.
+  const attentionById = new Map<
+    string,
+    { id: string; title: string; value: number; stage: string; ownerId: string | null;
+      accountName: string | null; reasons: string[]; recommendation: string | null }
+  >();
+  for (const d of (pipeline?.atRisk ?? []) as AtRiskDeal[]) {
+    attentionById.set(d.id, { ...d, reasons: [...d.reasons] });
+  }
+  for (const o of day.opportunities) {
+    const gaps = o.gaps.map((g) => GAP_LABEL[g] ?? g);
+    const seen = attentionById.get(o.id);
+    if (seen) {
+      // Same deal, second detector — add only what the first one missed.
+      for (const g of gaps) if (!seen.reasons.includes(g)) seen.reasons.push(g);
+    } else {
+      attentionById.set(o.id, {
+        id: o.id, title: o.title, value: o.value, stage: o.stage, ownerId: username,
+        accountName: null, reasons: gaps, recommendation: null,
+      });
+    }
+  }
+  const needsAttention = [...attentionById.values()]
     .sort((a, b) => {
-      const mine = (d: AtRiskDeal) => (username && d.ownerId === username ? 0 : 1);
+      const mine = (d: { ownerId: string | null }) => (username && d.ownerId === username ? 0 : 1);
       return mine(a) - mine(b) || b.value - a.value;
     })
-    .slice(0, 5);
-  const unowned = (pipeline?.atRisk ?? []).filter((d) => !d.ownerId).length;
-  const noticed = composeAiNoticed(day, quotes ?? [], tenders ?? [], contracts ?? [], radar ?? null, pending);
+    .slice(0, 6);
+  const unowned = [...attentionById.values()].filter((d) => !d.ownerId).length;
+  const noticed = composeAiNoticed(day, quotes ?? [], tenders ?? [], contracts ?? [], radar ?? null);
 
   // Grouped so the shape of the backlog reads at a glance ("19 of these are Finance"),
   // then the biggest few by money — the ones actually worth interrupting the day for.
@@ -334,19 +356,19 @@ export default async function MyDayPage() {
             </section>
                   ) }]
                 : []),
-              ...(atRisk.length > 0
-                ? [{ key: 'risk', label: 'Deals at risk', node: (
+              ...(needsAttention.length > 0
+                ? [{ key: 'risk', label: 'Deals needing attention', node: (
 
             <section style={st.card}>
               <h2 style={st.h2}>
-                Deals at risk{' '}
+                Deals needing attention{' '}
                 <span style={st.h2note}>
-                  {(pipeline?.atRisk ?? []).length} across the pipeline
-                  {unowned > 0 ? ` · ${unowned} with no owner` : ''} — worst money first
+                  {attentionById.size} deal{attentionById.size === 1 ? '' : 's'}
+                  {unowned > 0 ? ` · ${unowned} with no owner` : ''} — yours first, then worst money
                 </span>
               </h2>
               <ul style={st.list}>
-                {atRisk.map((d) => (
+                {needsAttention.map((d) => (
                   <li key={d.id} style={st.riskRow}>
                     <span style={st.subject}>
                       <Link href={`/crm/opportunities/${d.id}`} style={st.link}>
@@ -426,32 +448,6 @@ export default async function MyDayPage() {
                       ))}
                     </span>
                     <span style={st.due}>{l.nextActionDue ?? '—'}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-                ) },
-              { key: 'deals', label: 'My deals', node: (
-<section style={st.card}>
-            <h2 style={st.h2}>
-              My deals <span style={st.h2note}>missing a next step, biggest first</span>
-            </h2>
-            {day.opportunities.length === 0 ? (
-              <Empty text="Every open deal you own has an owner, a next action and a date." />
-            ) : (
-              <ul style={st.list}>
-                {day.opportunities.map((o) => (
-                  <li key={o.id} className="day-row" style={st.row}>
-                    <span style={st.type}>{o.stage}</span>
-                    <span style={st.subject}>
-                      <Link href={o.href} style={st.link}>{o.title}</Link>
-                      <span style={st.dim}> · {money(o.value)}</span>
-                    </span>
-                    <span style={st.gaps}>
-                      {o.gaps.map((g) => <Chip key={g} text={GAP_LABEL[g] ?? g} tone="warn" />)}
-                    </span>
-                    <span style={st.due}>{o.closeDate ?? '—'}</span>
                   </li>
                 ))}
               </ul>

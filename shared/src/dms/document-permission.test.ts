@@ -53,12 +53,37 @@ describe('document access — tenant isolation is absolute', () => {
   });
 });
 
-describe('document access — the owner cannot lock themselves out', () => {
-  it('gives the creator everything with no shares present', () => {
+describe('document access — the owner cannot lock themselves out, but is not an administrator', () => {
+  it('gives the creator the owner policy with no shares present', () => {
     const d = resolveDocumentAccess(DOC, [], actor({ userId: 'u-owner' }));
     expect(d.allowed).toBe(true);
     expect(d.reason).toBe('owner');
-    expect(d.effective).toEqual(['VIEW', 'DOWNLOAD', 'COMMENT', 'EDIT', 'SHARE', 'APPROVE']);
+    expect(d.effective).toEqual(['VIEW', 'DOWNLOAD', 'COMMENT', 'EDIT', 'SHARE']);
+  });
+
+  // Authorship is not authority. The person who drafts a contract is exactly the person who
+  // should not sign it off, and a creator who has left the company must not keep approving.
+  it('does NOT give the creator APPROVE', () => {
+    const d = resolveDocumentAccess(DOC, [], actor({ userId: 'u-owner' }));
+    expect(d.effective).not.toContain('APPROVE');
+    expect(canDocument(DOC, [], actor({ userId: 'u-owner' }), 'APPROVE')).toBe(false);
+  });
+
+  // Ownership is a floor, not a short-circuit: an earlier version returned early on ownership
+  // and would have silently discarded this grant.
+  it('DOES give the creator APPROVE when it is explicitly shared with them', () => {
+    const granted = share({ subjectId: 'u-owner', permission: 'APPROVE' });
+    const d = resolveDocumentAccess(DOC, [granted], actor({ userId: 'u-owner' }));
+    expect(d.effective).toContain('APPROVE');
+    expect(d.effective).toContain('EDIT');
+    expect(d.reason).toMatch(/owner \+ shared/);
+  });
+
+  it('honours a tenant policy that withholds more than the default', () => {
+    const readOnlyOwner = { creator: ['VIEW'] as const };
+    const d = resolveDocumentAccess(DOC, [], actor({ userId: 'u-owner' }), new Date(), readOnlyOwner);
+    expect(d.effective).toEqual(['VIEW']);
+    expect(d.effective).not.toContain('EDIT');
   });
 
   it('does not treat a null creator as matching a null-ish actor', () => {

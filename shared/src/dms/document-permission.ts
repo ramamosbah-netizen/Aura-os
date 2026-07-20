@@ -85,6 +85,26 @@ export function makeDocumentPermission(input: NewDocumentPermission, now = new D
   };
 }
 
+/**
+ * What the creator keeps by virtue of having created the document.
+ *
+ * APPROVE is deliberately ABSENT. Approval is a functional responsibility, not a property of
+ * authorship — the person who drafts a contract is precisely the person who should not sign it
+ * off, and a creator who has since left the company must not retain approval rights on
+ * everything they ever uploaded. It is a policy value rather than a constant so a tenant that
+ * disagrees can change it without editing the resolver.
+ *
+ * This is a FLOOR, not a ceiling: an explicit share can still grant the creator APPROVE, and the
+ * resolver unions the two rather than short-circuiting on ownership.
+ */
+export interface DocumentOwnerPolicy {
+  creator: readonly DocumentPermissionLevel[];
+}
+
+export const DEFAULT_OWNER_POLICY: DocumentOwnerPolicy = {
+  creator: ['VIEW', 'DOWNLOAD', 'COMMENT', 'EDIT', 'SHARE'],
+};
+
 /** Who is asking, and everything they belong to. Teams/roles/company come from the session. */
 export interface DocumentActor {
   userId: Id;
@@ -120,39 +140,51 @@ function subjectMatches(p: DocumentPermission, actor: DocumentActor): boolean {
 /**
  * Resolve what an actor may do with a document.
  *
- * Two absolute rules, checked before any permission is read:
- *   1. Cross-tenant is denied unconditionally. A share can never reach across tenants, however
- *      it was written — this is the isolation the storage-key layout also enforces.
- *   2. The creator keeps full access. Otherwise a user can share away their own document and
- *      lock themselves out of it.
+ *   1. Cross-tenant is denied unconditionally, before anything else is read. A share can never
+ *      reach across tenants however it was written — the same isolation the storage-key layout
+ *      enforces, restated where the decision is actually made.
+ *   2. The creator keeps DocumentOwnerPolicy.creator (not everything — see the policy), so they
+ *      cannot share their own document away and lock themselves out of it.
  */
 export function resolveDocumentAccess(
   doc: Pick<Document, 'id' | 'tenantId' | 'createdBy'>,
   permissions: DocumentPermission[],
   actor: DocumentActor,
   now = new Date(),
+  policy: DocumentOwnerPolicy = DEFAULT_OWNER_POLICY,
 ): DocumentAccessDecision {
   if (doc.tenantId !== actor.tenantId) {
     return { allowed: false, reason: 'cross-tenant access is never permitted', effective: [] };
   }
-  if (doc.createdBy && doc.createdBy === actor.userId) {
-    return { allowed: true, reason: 'owner', effective: [...DOCUMENT_PERMISSION_LEVELS] };
+
+  const effective = new Set<DocumentPermissionLevel>();
+  const reasons: string[] = [];
+
+  // Ownership is a FLOOR, not a short-circuit: the creator keeps the policy's levels AND anything
+  // additionally shared with them. Returning early here would have silently discarded an explicit
+  // grant — including the APPROVE the policy deliberately withholds.
+  const isOwner = !!doc.createdBy && doc.createdBy === actor.userId;
+  if (isOwner) {
+    for (const level of policy.creator) for (const implied of IMPLIES[level]) effective.add(implied);
+    reasons.push('owner');
   }
 
   const nowIso = now.toISOString();
   const mine = permissions.filter(
     (p) => p.documentId === doc.id && p.tenantId === doc.tenantId && isLive(p, nowIso) && subjectMatches(p, actor),
   );
-  if (mine.length === 0) {
+  for (const p of mine) for (const level of IMPLIES[p.permission]) effective.add(level);
+  if (mine.length > 0) {
+    reasons.push(`shared via ${[...new Set(mine.map((p) => p.subjectType.toLowerCase()))].join(', ')}`);
+  }
+
+  if (effective.size === 0) {
     return { allowed: false, reason: 'not shared with this user', effective: [] };
   }
 
-  const effective = new Set<DocumentPermissionLevel>();
-  for (const p of mine) for (const level of IMPLIES[p.permission]) effective.add(level);
-
   return {
     allowed: true,
-    reason: `shared via ${[...new Set(mine.map((p) => p.subjectType.toLowerCase()))].join(', ')}`,
+    reason: reasons.join(' + '),
     effective: DOCUMENT_PERMISSION_LEVELS.filter((l) => effective.has(l)),
   };
 }
@@ -164,8 +196,9 @@ export function canDocument(
   actor: DocumentActor,
   requested: DocumentPermissionLevel,
   now = new Date(),
+  policy: DocumentOwnerPolicy = DEFAULT_OWNER_POLICY,
 ): boolean {
-  return resolveDocumentAccess(doc, permissions, actor, now).effective.includes(requested);
+  return resolveDocumentAccess(doc, permissions, actor, now, policy).effective.includes(requested);
 }
 
 /** Thrown when a document action is refused. Mapped to 403 at the API edge. */

@@ -19,30 +19,78 @@ import { DOCUMENT_STORE, type DocumentStore } from './document-store';
  * its own rule, and an audit log has a single place to read its reasons from.
  */
 
-/** Why access was granted — structured, not prose, so events and audit views can filter on it. */
-export type AccessReasonKind =
-  | 'owner'
-  | 'shared-user'
-  | 'shared-team'
-  | 'shared-role'
-  | 'shared-company'
-  | 'inherited-context';
+/**
+ * Where one permission came from.
+ *
+ * Attached PER PERMISSION rather than to the decision as a whole. A flat reasons[] answers
+ * "why was this allowed"; it cannot answer "why does this person have DOWNLOAD" once owner,
+ * direct share, team, company and entity-inherited context can each contribute. That question
+ * is the one an auditor actually asks, and it becomes unanswerable exactly when the model gets
+ * rich enough to need it.
+ */
+export type AccessSourceType = 'owner' | 'user' | 'team' | 'role' | 'company' | 'context';
 
-export interface AccessReason {
-  kind: AccessReasonKind;
-  /** What this particular reason contributed, after implications. */
-  grants: DocumentPermissionLevel[];
-  /** The team/role/company/user the grant came through, when there is one. */
+export interface AccessSource {
+  type: AccessSourceType;
+  /** The user/team/role/company the grant came through. */
   subjectId?: string;
-  /** The permission row, so a revocation can be traced back to the access it enabled. */
+  /** The share row, so a revocation can be traced back to the access it enabled. */
   permissionId?: string;
+  /** For context sources: the entity the access was inherited from, e.g. 'crm.contract'. */
+  entity?: string;
+}
+
+export interface EffectivePermission {
+  permission: DocumentPermissionLevel;
+  /** Every source that grants it — plural, because access is usually over-determined. */
+  sources: AccessSource[];
 }
 
 export interface AccessDecision {
   allowed: boolean;
-  /** Everything the actor may do, after implications and union. */
+  /** Flat list for membership tests. */
   permissions: DocumentPermissionLevel[];
-  reasons: AccessReason[];
+  /** The same set, each with where it came from. */
+  effective: EffectivePermission[];
+  /** Which policy generation decided this — see POLICY_VERSION. */
+  policyVersion: number;
+}
+
+/**
+ * Bump when the MEANING of a decision changes — the implication lattice, the owner policy
+ * defaults, or how sources are derived. Audit records carry the version they were decided
+ * under, so a five-year-old access record is never silently reinterpreted against today's rules.
+ */
+export const POLICY_VERSION = 1;
+
+/**
+ * A decision frozen at the moment it was acted on, for the audit trail.
+ *
+ * The audit must contain the decision AS TAKEN, not a pointer that gets recomputed later. Team
+ * membership changes, shares are revoked, owner policy is retuned — replaying any of those over
+ * an old event would rewrite history.
+ */
+export interface AccessDecisionSnapshot {
+  allowed: boolean;
+  /** The single permission being exercised, not the whole set. */
+  permission: DocumentPermissionLevel;
+  sources: AccessSource[];
+  policyVersion: number;
+  decidedAt: string;
+}
+
+export function snapshotOf(
+  decision: AccessDecision,
+  permission: DocumentPermissionLevel,
+  now = new Date(),
+): AccessDecisionSnapshot {
+  return {
+    allowed: decision.permissions.includes(permission),
+    permission,
+    sources: decision.effective.find((e) => e.permission === permission)?.sources ?? [],
+    policyVersion: decision.policyVersion,
+    decidedAt: now.toISOString(),
+  };
 }
 
 /**
@@ -65,11 +113,11 @@ export const DEFAULT_DELEGATION_POLICY: DocumentDelegationPolicy = {
   neverDelegable: [],
 };
 
-const SUBJECT_REASON: Record<DocumentSubjectType, AccessReasonKind> = {
-  USER: 'shared-user',
-  TEAM: 'shared-team',
-  ROLE: 'shared-role',
-  COMPANY: 'shared-company',
+const SUBJECT_SOURCE: Record<DocumentSubjectType, AccessSourceType> = {
+  USER: 'user',
+  TEAM: 'team',
+  ROLE: 'role',
+  COMPANY: 'company',
 };
 
 const IMPLIES: Record<DocumentPermissionLevel, readonly DocumentPermissionLevel[]> = {
@@ -89,6 +137,8 @@ const ORDER: readonly DocumentPermissionLevel[] = ['VIEW', 'DOWNLOAD', 'COMMENT'
  * Tendering and Contracts can each contribute without this file importing any of them.
  */
 export interface AccessContextProvider {
+  /** Which entity this provider speaks for, recorded on the source, e.g. 'crm.contract'. */
+  readonly entity: string;
   /** Levels this provider grants the actor on a document, or [] for none. */
   grantsFor(document: Document, actor: DocumentActor): Promise<DocumentPermissionLevel[]>;
 }
@@ -134,25 +184,29 @@ export class DocumentAccessResolver {
    * copy of the policy at every call site.
    */
   async authorize(document: Document, actor: DocumentActor, preloaded?: DocumentPermission[]): Promise<AccessDecision> {
-    if (document.tenantId !== actor.tenantId) {
-      return { allowed: false, permissions: [], reasons: [] };
-    }
+    const empty: AccessDecision = { allowed: false, permissions: [], effective: [], policyVersion: POLICY_VERSION };
+    if (document.tenantId !== actor.tenantId) return empty;
 
-    const effective = new Set<DocumentPermissionLevel>();
-    const reasons: AccessReason[] = [];
-    const add = (levels: readonly DocumentPermissionLevel[]): DocumentPermissionLevel[] => {
-      const added: DocumentPermissionLevel[] = [];
+    // permission -> every source granting it. A source granting EDIT also sources the DOWNLOAD,
+    // COMMENT and VIEW it implies, so "why do I have VIEW" names the grant it really came from
+    // rather than reporting nothing.
+    const bySource = new Map<DocumentPermissionLevel, AccessSource[]>();
+    // Deduped by identity: one source granting EDIT implies DOWNLOAD, COMMENT and VIEW, so
+    // without this every implied level would list the same grant once per implying level —
+    // "owner, owner, owner, owner, owner" on VIEW, which tells an auditor nothing and bloats
+    // every audit payload that carries it.
+    const key = (x: AccessSource): string => `${x.type}|${x.subjectId ?? ''}|${x.permissionId ?? ''}|${x.entity ?? ''}`;
+    const grant = (levels: readonly DocumentPermissionLevel[], source: AccessSource): void => {
       for (const level of levels) {
         for (const implied of IMPLIES[level]) {
-          if (!effective.has(implied)) added.push(implied);
-          effective.add(implied);
+          const existing = bySource.get(implied) ?? [];
+          if (!existing.some((x) => key(x) === key(source))) bySource.set(implied, [...existing, source]);
         }
       }
-      return ORDER.filter((l) => added.includes(l));
     };
 
     if (document.createdBy && document.createdBy === actor.userId) {
-      reasons.push({ kind: 'owner', grants: add(this.ownerPolicy.creator) });
+      grant(this.ownerPolicy.creator, { type: 'owner' });
     }
 
     const rows = preloaded ?? (await this.permissions.listForDocument(document.id));
@@ -161,21 +215,21 @@ export class DocumentAccessResolver {
       if (p.documentId !== document.id || p.tenantId !== document.tenantId) continue;
       if (p.expiresAt !== null && p.expiresAt <= nowIso) continue;
       if (!DocumentAccessResolver.matches(p, actor)) continue;
-      reasons.push({
-        kind: SUBJECT_REASON[p.subjectType],
-        grants: add([p.permission]),
-        subjectId: p.subjectId,
-        permissionId: p.id,
-      });
+      grant([p.permission], { type: SUBJECT_SOURCE[p.subjectType], subjectId: p.subjectId, permissionId: p.id });
     }
 
     for (const provider of this.contextProviders) {
       const levels = await provider.grantsFor(document, actor);
-      if (levels.length > 0) reasons.push({ kind: 'inherited-context', grants: add(levels) });
+      if (levels.length > 0) grant(levels, { type: 'context', entity: provider.entity });
     }
 
-    const permissions = ORDER.filter((l) => effective.has(l));
-    return { allowed: permissions.length > 0, permissions, reasons };
+    const permissions = ORDER.filter((l) => bySource.has(l));
+    return {
+      allowed: permissions.length > 0,
+      permissions,
+      effective: permissions.map((permission) => ({ permission, sources: bySource.get(permission) ?? [] })),
+      policyVersion: POLICY_VERSION,
+    };
   }
 
   private static matches(p: DocumentPermission, actor: DocumentActor): boolean {

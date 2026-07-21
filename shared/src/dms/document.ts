@@ -118,6 +118,13 @@ export const DMS_EVENT = {
   // Sharing is a state change like any other, so it goes on the spine. Intelligence later
   // needs to answer "why did this contract reach Legal" and "who was given sight of the
   // quotation" — questions only an event log can answer after the fact.
-  shared: 'dms.document.shared',
-  unshared: 'dms.document.unshared',
+  // Sharing and access are state changes like any other, so they go on the spine.
+  //
+  // NAMING IS DELIBERATE: `downloadCompleted`, not `downloadStarted`. An audit event must
+  // describe what HAPPENED, not what was attempted — if storage fails after the check passes,
+  // nobody downloaded anything and the trail must not claim they did.
+  shared: 'dms.document.share.granted',
+  unshared: 'dms.document.share.revoked',
+  accessDenied: 'dms.document.access.denied',
+  downloadCompleted: 'dms.document.download.completed',
 } as const;

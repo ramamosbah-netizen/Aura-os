@@ -23,7 +23,12 @@ import { EVENT_STORE, type EventStore } from '../events/event-store';
 import { DOCUMENT_STORE, type DocumentFilter, type DocumentStore, type DocumentWithVersions } from './document-store';
 import { DOCUMENT_STORAGE, type DocumentStorage } from './document-storage';
 import { DOCUMENT_PERMISSION_STORE, type DocumentPermissionStore } from './document-permission-store';
-import { DocumentAccessResolver, type AccessDecision } from './document-access-resolver';
+import {
+  DocumentAccessResolver,
+  POLICY_VERSION,
+  snapshotOf,
+  type AccessDecision,
+} from './document-access-resolver';
 
 export interface DocumentFileInput {
   fileName: string;
@@ -53,7 +58,7 @@ export class DmsService {
   access(documentId: Id, actor: DocumentActor): Promise<AccessDecision> {
     return this.access_
       .authorizeById(documentId, actor)
-      .then((r) => r?.decision ?? { allowed: false, permissions: [], reasons: [] });
+      .then((r) => r?.decision ?? { allowed: false, permissions: [], effective: [], policyVersion: POLICY_VERSION });
   }
 
   /**
@@ -65,10 +70,38 @@ export class DmsService {
     actor: DocumentActor,
     required: DocumentPermissionLevel,
   ): Promise<DocumentWithVersions> {
-    await this.access_.assert(documentId, actor, required);
+    try {
+      await this.access_.assert(documentId, actor, required);
+    } catch (err) {
+      // A refusal is an audit fact. "Who tried to reach this and was turned away" is a question
+      // only a recorded denial can answer, and it is the one that matters after an incident.
+      await this.recordDenied(documentId, actor, required);
+      throw err;
+    }
     const found = await this.store.get(documentId);
     if (!found) throw new DocumentAccessDeniedError('document not found');
     return found;
+  }
+
+  private async recordDenied(
+    documentId: Id,
+    actor: DocumentActor,
+    required: DocumentPermissionLevel,
+  ): Promise<void> {
+    const resolved = await this.access_.authorizeById(documentId, actor);
+    // No document, no aggregate to attach an event to — the 403 is still returned.
+    if (!resolved) return;
+    await this.events.append([
+      makeEvent({
+        type: DMS_EVENT.accessDenied,
+        tenantId: resolved.document.tenantId,
+        companyId: resolved.document.companyId,
+        actorId: actor.userId,
+        aggregateType: 'dms.document',
+        aggregateId: documentId,
+        payload: { decision: snapshotOf(resolved.decision, required) },
+      }),
+    ]);
   }
 
   async createDocument(input: NewDocument, file: DocumentFileInput): Promise<DocumentWithVersions> {
@@ -213,7 +246,29 @@ export class DmsService {
     const wanted = version ?? found.document.currentVersion;
     const v = found.versions.find((x) => x.version === wanted);
     if (!v) throw new Error(`document ${documentId} has no version ${wanted}`);
-    return { bytes: await this.storage.read(v.storageKey), version: v };
+
+    // Read FIRST. The event is emitted only once bytes are actually in hand: if storage fails,
+    // nobody downloaded anything and the trail must not say otherwise.
+    const bytes = await this.storage.read(v.storageKey);
+
+    const decision = await this.access_.authorizeById(documentId, actor);
+    await this.events.append([
+      makeEvent({
+        type: DMS_EVENT.downloadCompleted,
+        tenantId: found.document.tenantId,
+        companyId: found.document.companyId,
+        actorId: actor.userId,
+        aggregateType: 'dms.document',
+        aggregateId: documentId,
+        payload: {
+          version: v.version,
+          fileName: v.fileName,
+          sizeBytes: v.sizeBytes,
+          decision: decision ? snapshotOf(decision.decision, 'DOWNLOAD') : null,
+        },
+      }),
+    ]);
+    return { bytes, version: v };
   }
 
   /**
@@ -226,7 +281,7 @@ export class DmsService {
    * deliberately withholds. That was live and exploitable.
    */
   async share(input: NewDocumentPermission, actor: DocumentActor): Promise<DocumentPermission> {
-    await this.access_.assertCanDelegate(input.documentId, actor, input.permission);
+    const authorising = await this.access_.assertCanDelegate(input.documentId, actor, input.permission);
     const found = await this.assertCan(input.documentId, actor, 'SHARE');
     const permission = makeDocumentPermission({
       ...input,
@@ -248,6 +303,9 @@ export class DmsService {
           subjectId: permission.subjectId,
           permission: permission.permission,
           expiresAt: permission.expiresAt,
+          // The authority the granter was acting under, frozen. Team membership and shares
+          // change; an old grant must stay explicable by what was true when it was made.
+          decision: snapshotOf(authorising, 'SHARE'),
         },
       }),
     ]);
@@ -259,6 +317,7 @@ export class DmsService {
 
   /** Revoke a share. Requires SHARE — whoever may grant access may take it away. */
   async revokeShare(documentId: Id, permissionId: Id, actor: DocumentActor): Promise<boolean> {
+    const authorising = await this.access_.assert(documentId, actor, 'SHARE');
     const found = await this.assertCan(documentId, actor, 'SHARE');
     const existing = await this.permissions.get(permissionId);
     // A permission id belonging to another document must not be revocable through this one.
@@ -278,6 +337,7 @@ export class DmsService {
           subjectType: existing.subjectType,
           subjectId: existing.subjectId,
           permission: existing.permission,
+          decision: snapshotOf(authorising, 'SHARE'),
         },
       }),
     ]);

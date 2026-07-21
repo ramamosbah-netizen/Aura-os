@@ -3,6 +3,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import QuotationsClient from './quotations-client';
 import CommercialDecisionQueue from './commercial-decision-queue';
+import NegotiationTab from './negotiation-tab';
 import type { EvidenceDoc, StoredRequirement } from './decision-readiness';
 import { CommercialFinancials, CommercialRisks, commercialRisks } from './commercial-financials';
 
@@ -28,7 +29,7 @@ export interface CommSheet {
   pricedItems: number; boqItems: number; directCost: number; sellingValue: number; tenderValue: number; marginPercent: number;
 }
 
-type Tab = 'overview' | 'quotations' | 'pricing' | 'approvals' | 'margins' | 'queue' | 'financials' | 'risks';
+type Tab = 'overview' | 'quotations' | 'pricing' | 'approvals' | 'margins' | 'queue' | 'financials' | 'risks' | 'negotiation';
 const TAB_DEFS: Array<{ id: Tab; label: string; icon: string; hint: string }> = [
   { id: 'overview', label: 'Overview', icon: '◎', hint: 'The commercial picture + what needs a decision now' },
   { id: 'queue', label: 'Decision Queue', icon: '📋', hint: 'Quotes awaiting a commercial decision — review and clear them here' },
@@ -36,6 +37,7 @@ const TAB_DEFS: Array<{ id: Tab; label: string; icon: string; hint: string }> = 
   { id: 'pricing', label: 'Pricing', icon: '⊞', hint: 'Internal cost & margin sheets (owned by Tendering)' },
   { id: 'financials', label: 'Financials', icon: '📊', hint: 'What the desk is carrying — and how much of it has a known margin' },
   { id: 'risks', label: 'Risks', icon: '⚠', hint: 'What is blocking or eroding the open quotes, aggregated' },
+  { id: 'negotiation', label: 'Negotiation', icon: '⇄', hint: 'What the customer asked for, what we answered, and what it actually cost' },
   { id: 'approvals', label: 'Approvals', icon: '✔', hint: 'Quotes awaiting internal approval' },
   { id: 'margins', label: 'Margins', icon: '％', hint: 'Quoted vs contracted value & conversion' },
 ];
@@ -107,6 +109,7 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, evi
         </>
       )}
 
+      {tab === 'negotiation' && <NegotiationTab quotations={quotations} />}
       {tab === 'queue' && <CommercialDecisionQueue quotations={quotations} contracts={contracts} evidence={evidence} requirements={requirements} />}
 
       {tab === 'financials' && <CommercialFinancials quotations={quotations} contracts={contracts} />}

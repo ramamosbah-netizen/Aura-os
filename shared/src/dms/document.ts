@@ -115,4 +115,9 @@ export const DMS_EVENT = {
   created: 'dms.document.created',
   versionAdded: 'dms.document.version_added',
   archived: 'dms.document.archived',
+  // Sharing is a state change like any other, so it goes on the spine. Intelligence later
+  // needs to answer "why did this contract reach Legal" and "who was given sight of the
+  // quotation" — questions only an event log can answer after the fact.
+  shared: 'dms.document.shared',
+  unshared: 'dms.document.unshared',
 } as const;

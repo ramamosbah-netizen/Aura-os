@@ -24,6 +24,9 @@ import { DmsService } from './dms/dms.service';
 import { DOCUMENT_STORE } from './dms/document-store';
 import { DOCUMENT_PERMISSION_STORE } from './dms/document-permission-store';
 import { DocumentAccessResolver } from './dms/document-access-resolver';
+import { DOCUMENT_REQUIREMENT_STORE } from './dms/document-requirement-store';
+import { InMemoryDocumentRequirementStore } from './dms/in-memory-document-requirement-store';
+import { PostgresDocumentRequirementStore } from './dms/postgres-document-requirement-store';
 import { InMemoryDocumentPermissionStore } from './dms/in-memory-document-permission-store';
 import { PostgresDocumentPermissionStore } from './dms/postgres-document-permission-store';
 import { InMemoryDocumentStore } from './dms/in-memory-document-store';
@@ -178,6 +181,12 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresDocumentPermissionStore(pool) : new InMemoryDocumentPermissionStore(),
     },
+    {
+      provide: DOCUMENT_REQUIREMENT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDocumentRequirementStore(pool) : new InMemoryDocumentRequirementStore(),
+    },
     DocumentAccessResolver,
     DmsService,
     {
@@ -206,6 +215,11 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
   ],
   exports: [
     EventBus,
+    // The requirement store is injected directly by the requirements controller, so the token
+    // itself has to leave the module — DmsService is not a facade over it the way it is over
+    // documents.
+    DOCUMENT_REQUIREMENT_STORE,
+    DocumentAccessResolver,
     TenantContext,
     OrgService,
     AccessService,

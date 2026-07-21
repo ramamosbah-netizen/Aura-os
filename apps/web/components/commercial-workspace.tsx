@@ -3,7 +3,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import QuotationsClient from './quotations-client';
 import CommercialDecisionQueue from './commercial-decision-queue';
-import type { EvidenceDoc } from './decision-readiness';
+import type { EvidenceDoc, StoredRequirement } from './decision-readiness';
 import { CommercialFinancials, CommercialRisks, commercialRisks } from './commercial-financials';
 
 // CRM · Commercial workspace — one place for the commercial DECISION. Tabs are LINKED
@@ -45,9 +45,9 @@ const aed = (n: number): string => 'AED ' + (n || 0).toLocaleString(undefined, {
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 const cap = (s: string): string => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
-export default function CommercialWorkspace({ quotations, contracts, sheets, evidence = [], apiDown }: {
+export default function CommercialWorkspace({ quotations, contracts, sheets, evidence = [], requirements = [], apiDown }: {
   quotations: CommQuotation[]; contracts: CommContract[]; sheets: CommSheet[];
-  evidence?: EvidenceDoc[]; apiDown: boolean;
+  evidence?: EvidenceDoc[]; requirements?: StoredRequirement[]; apiDown: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('overview');
 
@@ -107,7 +107,7 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, evi
         </>
       )}
 
-      {tab === 'queue' && <CommercialDecisionQueue quotations={quotations} contracts={contracts} evidence={evidence} />}
+      {tab === 'queue' && <CommercialDecisionQueue quotations={quotations} contracts={contracts} evidence={evidence} requirements={requirements} />}
 
       {tab === 'financials' && <CommercialFinancials quotations={quotations} contracts={contracts} />}
 

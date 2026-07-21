@@ -46,9 +46,20 @@ create unique index if not exists uq_aura_dms_perm_live
   on public.aura_dms_document_permissions (document_id, subject_type, subject_id, permission)
   where revoked_at is null;
 
--- Lock down: RLS on, no policies → only the service-role back-end (which bypasses
--- RLS) reads/writes, exactly as 0002 does for documents themselves.
+-- Tenant isolation, the enforced way (0163/0164).
+--
+-- NOT the 0002 pattern of "enable RLS, no policy". That was written when the runtime connected
+-- as a BYPASSRLS service role; under the `aura_app` role R1 moved us to, RLS-enabled-with-no-
+-- policy is DENY-ALL — the exact trap migration 0164 exists to clean up, and the one
+-- rls-fitness.mjs fails the build on. This table carries tenant_id, so it is genuinely
+-- tenant-scoped and gets the canonical policy rather than an exclusion.
 alter table public.aura_dms_document_permissions enable row level security;
+alter table public.aura_dms_document_permissions force row level security;
+
+drop policy if exists tenant_isolation on public.aura_dms_document_permissions;
+create policy tenant_isolation on public.aura_dms_document_permissions
+  using (tenant_id::text = public.current_tenant_id() and public.current_tenant_id() is not null)
+  with check (tenant_id::text = public.current_tenant_id() and public.current_tenant_id() is not null);
 
 -- @DOWN
 drop table if exists public.aura_dms_document_permissions;

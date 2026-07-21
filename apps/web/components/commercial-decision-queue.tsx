@@ -3,6 +3,7 @@
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CommQuotation, CommContract } from './commercial-workspace';
+import DecisionReadiness, { readinessFor, type EvidenceDoc } from './decision-readiness';
 
 // The Decision Queue — list on the left, preview on the right, decide without leaving.
 //
@@ -33,9 +34,10 @@ function flagsFor(q: CommQuotation): string[] {
   return f;
 }
 
-export default function CommercialDecisionQueue({ quotations, contracts }: {
-  quotations: CommQuotation[]; contracts: CommContract[];
+export default function CommercialDecisionQueue({ quotations, contracts, evidence = [] }: {
+  quotations: CommQuotation[]; contracts: CommContract[]; evidence?: EvidenceDoc[];
 }) {
+  const docsFor = (id: string): EvidenceDoc[] => evidence.filter((d) => d.aggregateId === id);
   const router = useRouter();
   // Worst money first — the queue is about triage, and the biggest exposure is the first call.
   const queue = [...quotations]
@@ -102,9 +104,21 @@ export default function CommercialDecisionQueue({ quotations, contracts }: {
                 </span>
                 <span style={st.rowSub}>{q.customerName}</span>
                 <span style={st.rowFlags}>
-                  {settled
-                    ? <span style={{ ...st.flag, color: 'var(--good)', borderColor: 'var(--good)' }}>{settled}</span>
-                    : flagsFor(q).slice(0, 2).map((f) => <span key={f} style={st.flag}>{f}</span>)}
+                  {settled ? (
+                    <span style={{ ...st.flag, color: 'var(--good)', borderColor: 'var(--good)' }}>{settled}</span>
+                  ) : (
+                    <>
+                      {(() => {
+                        const r = readinessFor(docsFor(q.id));
+                        return r.verdict === 'READY' ? null : (
+                          <span style={{ ...st.flag, color: 'var(--bad)', borderColor: 'var(--bad)' }}>
+                            evidence {r.score}%
+                          </span>
+                        );
+                      })()}
+                      {flagsFor(q).slice(0, 2).map((f) => <span key={f} style={st.flag}>{f}</span>)}
+                    </>
+                  )}
                 </span>
               </button>
             </li>
@@ -134,6 +148,8 @@ export default function CommercialDecisionQueue({ quotations, contracts }: {
                 {flagsFor(selected).map((f) => <span key={f} style={st.flag}>{f}</span>)}
               </p>
             )}
+
+            <DecisionReadiness docs={docsFor(selected.id)} quotationId={selected.id} />
 
             {/* Linked records — the chain, not a Contracts tab. */}
             <p style={st.chain}>

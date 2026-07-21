@@ -115,8 +115,14 @@ export class DocumentsController {
 
   /** Only what the caller may see — filtering happens in the service, not here. */
   @Get()
-  list(@Query('kind') kind?: string, @Query('aggregateId') aggregateId?: string): Promise<Document[]> {
-    return this.dms.listFor({ kind, aggregateId, limit: 100 }, this.actor());
+  list(
+    @Query('kind') kind?: string,
+    @Query('aggregateType') aggregateType?: string,
+    @Query('aggregateId') aggregateId?: string,
+  ): Promise<Document[]> {
+    // aggregateType alone answers "every document on any quotation", which is what a portfolio
+    // readiness view needs — one call instead of one per record.
+    return this.dms.listFor({ kind, aggregateType, aggregateId, limit: 200 }, this.actor());
   }
 
   /** Documents other people have shared with the caller. */

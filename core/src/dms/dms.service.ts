@@ -22,11 +22,8 @@ import {
 import { EVENT_STORE, type EventStore } from '../events/event-store';
 import { DOCUMENT_STORE, type DocumentFilter, type DocumentStore, type DocumentWithVersions } from './document-store';
 import { DOCUMENT_STORAGE, type DocumentStorage } from './document-storage';
-import {
-  DOCUMENT_PERMISSION_STORE,
-  type DocumentPermissionStore,
-  type SubjectRef,
-} from './document-permission-store';
+import { DOCUMENT_PERMISSION_STORE, type DocumentPermissionStore } from './document-permission-store';
+import { DocumentAccessResolver, type AccessDecision } from './document-access-resolver';
 
 export interface DocumentFileInput {
   fileName: string;
@@ -49,43 +46,28 @@ export class DmsService {
     @Inject(DOCUMENT_STORAGE) private readonly storage: DocumentStorage,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(DOCUMENT_PERMISSION_STORE) private readonly permissions: DocumentPermissionStore,
+    private readonly access_: DocumentAccessResolver,
   ) {}
 
-  /** Every subject an actor is, for shared-with-me and bulk resolution. */
-  private static subjectsOf(actor: DocumentActor): SubjectRef[] {
-    const subjects: SubjectRef[] = [{ subjectType: 'USER', subjectId: actor.userId }];
-    for (const t of actor.teamIds ?? []) subjects.push({ subjectType: 'TEAM', subjectId: t });
-    for (const r of actor.roleIds ?? []) subjects.push({ subjectType: 'ROLE', subjectId: r });
-    if (actor.companyId) subjects.push({ subjectType: 'COMPANY', subjectId: actor.companyId });
-    return subjects;
-  }
-
-  /** What may this actor do with this document? */
-  async access(documentId: Id, actor: DocumentActor): Promise<DocumentAccessDecision> {
-    const found = await this.store.get(documentId);
-    if (!found) return { allowed: false, reason: 'document not found', effective: [] };
-    const perms = await this.permissions.listForDocument(documentId);
-    return resolveDocumentAccess(found.document, perms, actor);
+  /** What may this actor do with this document, and why? Delegated — this service holds no policy. */
+  access(documentId: Id, actor: DocumentActor): Promise<AccessDecision> {
+    return this.access_
+      .authorizeById(documentId, actor)
+      .then((r) => r?.decision ?? { allowed: false, permissions: [], reasons: [] });
   }
 
   /**
-   * The single gate. Every command below goes through it, so a new command cannot be added
-   * without deciding what it requires.
+   * Assert a level and return the document. The DECISION comes from the resolver — this service
+   * never re-implements the rule, it only says which level each command needs.
    */
   private async assertCan(
     documentId: Id,
     actor: DocumentActor,
     required: DocumentPermissionLevel,
   ): Promise<DocumentWithVersions> {
+    await this.access_.assert(documentId, actor, required);
     const found = await this.store.get(documentId);
-    // Same answer for missing and not-yours: distinguishing them tells an unauthorised caller
-    // that the document exists, which is itself a disclosure.
     if (!found) throw new DocumentAccessDeniedError('document not found');
-    const perms = await this.permissions.listForDocument(documentId);
-    const decision = resolveDocumentAccess(found.document, perms, actor);
-    if (!decision.effective.includes(required)) {
-      throw new DocumentAccessDeniedError(`${required.toLowerCase()} refused — ${decision.reason}`);
-    }
     return found;
   }
 
@@ -183,15 +165,20 @@ export class DmsService {
    */
   async listFor(filter: DocumentFilter, actor: DocumentActor): Promise<Document[]> {
     const docs = await this.store.list({ ...filter, tenantId: actor.tenantId });
-    const mine = await this.permissions.listForSubjects(actor.tenantId, DmsService.subjectsOf(actor));
+    const mine = await this.permissions.listForSubjects(actor.tenantId, DocumentAccessResolver.subjectsOf(actor));
     const byDoc = new Map<string, DocumentPermission[]>();
     for (const p of mine) byDoc.set(p.documentId, [...(byDoc.get(p.documentId) ?? []), p]);
-    return docs.filter((d) => resolveDocumentAccess(d, byDoc.get(d.id) ?? [], actor).allowed);
+    const visible: Document[] = [];
+    for (const d of docs) {
+      const decision = await this.access_.authorize(d, actor, byDoc.get(d.id) ?? []);
+      if (decision.allowed) visible.push(d);
+    }
+    return visible;
   }
 
   /** Documents shared with this actor — excludes their own, which they reach by ownership. */
   async sharedWithMe(actor: DocumentActor): Promise<Array<{ document: Document; permissions: DocumentPermission[] }>> {
-    const mine = await this.permissions.listForSubjects(actor.tenantId, DmsService.subjectsOf(actor));
+    const mine = await this.permissions.listForSubjects(actor.tenantId, DocumentAccessResolver.subjectsOf(actor));
     const byDoc = new Map<string, DocumentPermission[]>();
     for (const p of mine) byDoc.set(p.documentId, [...(byDoc.get(p.documentId) ?? []), p]);
     const out: Array<{ document: Document; permissions: DocumentPermission[] }> = [];
@@ -229,8 +216,17 @@ export class DmsService {
     return { bytes: await this.storage.read(v.storageKey), version: v };
   }
 
-  /** Share a document. Requires SHARE on it — being able to read is not being able to pass on. */
+  /**
+   * Share a document.
+   *
+   * Requires SHARE **and** that the actor may delegate the level being granted:
+   * `granted ⊆ delegable(actor)`. Holding SHARE lets you pass on what you HAVE; it does not let
+   * you mint authority you were never given. Before this check, anyone with VIEW + SHARE could
+   * grant APPROVE — which also let a creator hand themselves the APPROVE the owner policy
+   * deliberately withholds. That was live and exploitable.
+   */
   async share(input: NewDocumentPermission, actor: DocumentActor): Promise<DocumentPermission> {
+    await this.access_.assertCanDelegate(input.documentId, actor, input.permission);
     const found = await this.assertCan(input.documentId, actor, 'SHARE');
     const permission = makeDocumentPermission({
       ...input,

@@ -1,14 +1,19 @@
 import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Query, StreamableFile } from '@nestjs/common';
 import type {
   Document,
-  DocumentAccessDecision,
   DocumentActor,
   DocumentPermission,
   DocumentPermissionLevel,
   DocumentSubjectType,
   DocumentVersion,
 } from '@aura/shared';
-import { DmsService, type DocumentWithVersions, ParseUuidOr404Pipe, TenantContext } from '@aura/core';
+import {
+  DmsService,
+  type AccessDecision,
+  type DocumentWithVersions,
+  ParseUuidOr404Pipe,
+  TenantContext,
+} from '@aura/core';
 
 interface CreateDocumentDto {
   kind: string;
@@ -127,7 +132,7 @@ export class DocumentsController {
 
   /** What the caller may do with this document — lets a UI render actions without guessing. */
   @Get(':id/access')
-  access(@Param('id', ParseUuidOr404Pipe) id: string): Promise<DocumentAccessDecision> {
+  access(@Param('id', ParseUuidOr404Pipe) id: string): Promise<AccessDecision> {
     return this.dms.access(id, this.actor());
   }
 

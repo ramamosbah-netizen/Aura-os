@@ -23,6 +23,7 @@ import { AiService } from './ai/ai.service';
 import { DmsService } from './dms/dms.service';
 import { DOCUMENT_STORE } from './dms/document-store';
 import { DOCUMENT_PERMISSION_STORE } from './dms/document-permission-store';
+import { DocumentAccessResolver } from './dms/document-access-resolver';
 import { InMemoryDocumentPermissionStore } from './dms/in-memory-document-permission-store';
 import { PostgresDocumentPermissionStore } from './dms/postgres-document-permission-store';
 import { InMemoryDocumentStore } from './dms/in-memory-document-store';
@@ -177,6 +178,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresDocumentPermissionStore(pool) : new InMemoryDocumentPermissionStore(),
     },
+    DocumentAccessResolver,
     DmsService,
     {
       provide: WORKFLOW_STORE,

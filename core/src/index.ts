@@ -28,6 +28,7 @@ export * from './dms/document-storage';
 export * from './dms/in-memory-document-store';
 export * from './dms/postgres-document-store';
 export * from './dms/document-permission-store';
+export * from './dms/document-access-resolver';
 export * from './dms/in-memory-document-permission-store';
 export * from './dms/postgres-document-permission-store';
 export * from './dms/local-document-storage';

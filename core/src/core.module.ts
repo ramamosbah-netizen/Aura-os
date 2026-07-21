@@ -25,6 +25,9 @@ import { DOCUMENT_STORE } from './dms/document-store';
 import { DOCUMENT_PERMISSION_STORE } from './dms/document-permission-store';
 import { DocumentAccessResolver } from './dms/document-access-resolver';
 import { DOCUMENT_REQUIREMENT_STORE } from './dms/document-requirement-store';
+import { NEGOTIATION_STORE } from './crm/negotiation-store';
+import { InMemoryNegotiationStore } from './crm/in-memory-negotiation-store';
+import { PostgresNegotiationStore } from './crm/postgres-negotiation-store';
 import { InMemoryDocumentRequirementStore } from './dms/in-memory-document-requirement-store';
 import { PostgresDocumentRequirementStore } from './dms/postgres-document-requirement-store';
 import { InMemoryDocumentPermissionStore } from './dms/in-memory-document-permission-store';
@@ -187,6 +190,12 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresDocumentRequirementStore(pool) : new InMemoryDocumentRequirementStore(),
     },
+    {
+      provide: NEGOTIATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresNegotiationStore(pool) : new InMemoryNegotiationStore(),
+    },
     DocumentAccessResolver,
     DmsService,
     {
@@ -219,6 +228,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     // itself has to leave the module — DmsService is not a facade over it the way it is over
     // documents.
     DOCUMENT_REQUIREMENT_STORE,
+    NEGOTIATION_STORE,
     DocumentAccessResolver,
     TenantContext,
     OrgService,

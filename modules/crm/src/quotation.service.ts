@@ -132,12 +132,48 @@ export class QuotationService {
     return this.store.get(id);
   }
 
-  /** All revisions of a quotation (same quote number), oldest revision first. */
+  /**
+   * All revisions of a quotation, oldest revision first.
+   *
+   * The quote number alone is NOT the chain. Numbers derived from a source record collide —
+   * quoting the same opportunity twice produces two independent quotes sharing one number, both
+   * at revision 0 — and returning those as a revision history invents a price change between
+   * two unrelated quotes. `parentQuotationId` is the authoritative link, so the chain is the
+   * connected component under it.
+   *
+   * The number-matched set is still used as a fallback, but only when its revision numbers are
+   * distinct: that shape is a real chain whose links were never written, whereas a repeated
+   * revision number proves the rows are separate quotes.
+   */
   async listRevisions(tenantId: string, id: Id): Promise<Quotation[]> {
     const q = await this.store.get(id);
     if (!q) return [];
-    const all = await this.store.list({ tenantId, quoteNumber: q.quoteNumber, limit: 100 });
-    return all.sort((a, b) => a.revision - b.revision);
+    const candidates = await this.store.list({ tenantId, quoteNumber: q.quoteNumber, limit: 100 });
+    const byId = new Map(candidates.map((c) => [c.id, c]));
+
+    // Up to the root, then down through the children — the component containing `q`.
+    let root = q;
+    const guard = new Set<Id>([q.id]);
+    while (root.parentQuotationId) {
+      const parent = byId.get(root.parentQuotationId);
+      if (!parent || guard.has(parent.id)) break; // missing link, or a cycle in bad data
+      guard.add(parent.id);
+      root = parent;
+    }
+    const chain = [root];
+    for (;;) {
+      const child = candidates.find((c) => c.parentQuotationId === chain[chain.length - 1].id && !guard.has(c.id));
+      if (!child) break;
+      guard.add(child.id);
+      chain.push(child);
+    }
+
+    if (chain.length > 1) return chain.sort((a, b) => a.revision - b.revision);
+
+    // Unlinked. Trust the number only when it cannot be hiding two separate quotes.
+    const revisions = candidates.map((c) => c.revision);
+    const distinct = new Set(revisions).size === revisions.length;
+    return distinct ? [...candidates].sort((a, b) => a.revision - b.revision) : [q];
   }
 
   /** The internal rate build-up for this revision, plus whether it's frozen. */

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import CommercialWorkspace, { type CommQuotation, type CommContract, type CommSheet } from '../../../components/commercial-workspace';
+import type { EvidenceDoc } from '../../../components/decision-readiness';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,10 +12,13 @@ export const dynamic = 'force-dynamic';
 // records that live elsewhere — no data or ownership moves here.
 
 export default async function CommercialPage() {
-  const [quotations, contracts, sheets] = await Promise.all([
+  const [quotations, contracts, sheets, evidence] = await Promise.all([
     getJson<CommQuotation[]>('/api/crm/quotations'),
     getJson<CommContract[]>('/api/contracts/contracts'),
     getJson<CommSheet[]>('/api/tendering/tenders/pricing/sheets'),
+    // One call for every quotation's evidence — the readiness panel groups by aggregateId
+    // client-side rather than asking per record.
+    getJson<EvidenceDoc[]>('/api/documents?aggregateType=crm.quotation'),
   ]);
 
   return (
@@ -29,6 +33,7 @@ export default async function CommercialPage() {
         quotations={quotations ?? []}
         contracts={contracts ?? []}
         sheets={sheets ?? []}
+        evidence={evidence ?? []}
         apiDown={quotations === null}
       />
     </div>

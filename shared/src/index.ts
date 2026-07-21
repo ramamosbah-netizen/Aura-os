@@ -18,6 +18,7 @@ export * from './admin/modules';
 export * from './admin/module-settings';
 export * from './ai/ai-provider';
 export * from './dms/document';
+export * from './dms/document-permission';
 export * from './workflow/workflow';
 export * from './workflow/saga';
 export * from './integration/webhook';

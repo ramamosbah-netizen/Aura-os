@@ -2,6 +2,7 @@ import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../../components/record-chrome';
 import QuotationPricingClient, { type PricingSheet } from '../../../../../components/quotation-pricing-client';
 import SheetItemsAuthor from '../../../../../components/sheet-items-author';
+import PricingAdvicePanel from '../../../../../components/pricing-advice-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,7 @@ export default async function QuotationPricingPage({ params }: { params: Promise
         quotation is approved the sheet locks (read-only) — re-price by raising a revision.
       </p>
       <SheetItemsAuthor id={id} locked={sheet.locked} />
+      <PricingAdvicePanel id={id} />
       <QuotationPricingClient id={id} customerName={q.customerName} status={q.status} initialSheet={sheet} />
     </div>
   );

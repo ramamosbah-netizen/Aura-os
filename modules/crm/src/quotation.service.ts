@@ -357,6 +357,50 @@ export class QuotationService {
     return updated;
   }
 
+  /**
+   * What we have quoted this item for before — the historic half of the pricing library. Aggregates
+   * the line items of past quotes into distinct descriptions with how many times and at what price,
+   * so an estimator sees "you quoted this 6 times, most recently at 780" instead of guessing afresh.
+   *
+   * Uses the SELL unit price actually put on the line, not a cost. It is history, so it is honest
+   * about spread: min/max as well as the most recent.
+   */
+  async priceHistory(
+    tenantId: string,
+    q?: string,
+    excludeQuotationId?: string,
+  ): Promise<Array<{ description: string; count: number; lastPrice: number; minPrice: number; maxPrice: number; lastAt: string }>> {
+    const quotes = await this.store.list({ tenantId, limit: 500 });
+    const needle = q?.trim().toLowerCase();
+    const map = new Map<string, { name: string; prices: number[]; last: { price: number; at: string } }>();
+    for (const quote of quotes) {
+      // For pricing advice, the quote being priced must not compare against itself.
+      if (excludeQuotationId && quote.id === excludeQuotationId) continue;
+      for (const l of quote.lines) {
+        const desc = l.description?.trim();
+        if (!desc || l.unitPrice <= 0) continue;
+        if (needle && !desc.toLowerCase().includes(needle)) continue;
+        const key = desc.toLowerCase();
+        const e = map.get(key) ?? { name: desc, prices: [], last: { price: 0, at: '' } };
+        e.prices.push(l.unitPrice);
+        // Latest by the quote's createdAt — the price the market last bore.
+        if (quote.createdAt > e.last.at) e.last = { price: l.unitPrice, at: quote.createdAt };
+        map.set(key, e);
+      }
+    }
+    return [...map.values()]
+      .map((e) => ({
+        description: e.name,
+        count: e.prices.length,
+        lastPrice: e.last.price,
+        minPrice: Math.min(...e.prices),
+        maxPrice: Math.max(...e.prices),
+        lastAt: e.last.at,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+  }
+
   /** Quotations generated from a tender's pricing sheet. */
   listBySourceTender(tenantId: string, tenderId: string): Promise<Quotation[]> {
     return this.store.list({ tenantId, sourceTenderId: tenderId });

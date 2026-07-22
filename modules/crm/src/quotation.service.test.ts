@@ -62,7 +62,7 @@ describe('QuotationService.listRevisions — the chain is links, not the number'
     const r0 = await quote(svc, 'QT-9');
     await svc.changeStatus(r0.id, 'approve', 'u-manager');
     await svc.changeStatus(r0.id, 'send');
-    const r1 = await svc.revise(r0.id, 'u1');
+    const r1 = await svc.revise(r0.id);
 
     const chain = await svc.listRevisions('t1', r0.id);
     expect(chain.map((q) => q.revision)).toEqual([0, 1]);

@@ -36,6 +36,7 @@ export const NAV: NavGroup[] = [
       { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People at each account' },
       { label: 'Sales Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'CRM — leads & opportunities' },
       { label: 'Commercial', href: '/crm/commercial', glyph: '✎', desc: 'The commercial decision — pricing, quotations, contracts, approvals & margins (linked views)' },
+      { label: 'Market Intelligence', href: '/crm/market-intelligence', glyph: '⊛', desc: 'The reference catalogue behind pricing — items, brands, benchmark cost/sell & install time' },
       { label: 'Activities', href: '/crm/activities', glyph: '☑', desc: 'Calls, meetings & tasks' },
     ],
   },

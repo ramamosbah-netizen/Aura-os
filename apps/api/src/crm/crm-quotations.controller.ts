@@ -4,8 +4,9 @@ import { AiService, FormCustomValuesService, FormOverridesService, NumberingServ
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
-  MarketItemService, analysePricing, type LineRefs, type SheetLineForAdvice,
+  analysePricing, type LineRefs, type SheetLineForAdvice,
 } from '@aura/crm';
+import { MarketItemService } from '@aura/market-intelligence';
 import { type Contract, ContractService } from '@aura/contracts';
 
 class CreateQuotationDto {

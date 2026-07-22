@@ -29,6 +29,7 @@
     "@aura/hr": "workspace:*",
     "@aura/hse": "workspace:*",
     "@aura/intelligence": "workspace:*",
+    "@aura/market-intelligence": "workspace:*",
     "@aura/inventory": "workspace:*",
     "@aura/procurement": "workspace:*",
     "@aura/projects": "workspace:*",

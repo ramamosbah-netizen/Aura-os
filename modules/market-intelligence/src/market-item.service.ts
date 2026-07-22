@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Id } from '@aura/shared';
 import { type MarketItem, type NewMarketItem, makeMarketItem } from './domain/market-item';
-import { CRM_MARKET_ITEM_STORE, type MarketItemFilter, type MarketItemStore } from './market-item-store';
+import { MARKET_ITEM_STORE, type MarketItemFilter, type MarketItemStore } from './market-item-store';
 
 /** A small, real ELV starter catalogue — so the library works the moment the module is switched on
  *  rather than showing an empty box. Benchmarks are indicative UAE market figures, dated, editable. */
@@ -26,7 +26,7 @@ const STARTER_CATALOGUE: ReadonlyArray<Omit<NewMarketItem, 'tenantId'>> = [
 export class MarketItemService {
   private readonly logger = new Logger(MarketItemService.name);
 
-  constructor(@Inject(CRM_MARKET_ITEM_STORE) private readonly store: MarketItemStore) {}
+  constructor(@Inject(MARKET_ITEM_STORE) private readonly store: MarketItemStore) {}
 
   create(input: NewMarketItem): Promise<MarketItem> {
     const item = makeMarketItem(input);

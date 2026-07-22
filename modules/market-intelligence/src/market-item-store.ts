@@ -2,7 +2,7 @@ import type { Id } from '@aura/shared';
 import type { MarketItem, MarketItemCategory } from './domain/market-item';
 
 /** DI token for the market-intelligence catalogue store. */
-export const CRM_MARKET_ITEM_STORE = Symbol('CRM_MARKET_ITEM_STORE');
+export const MARKET_ITEM_STORE = Symbol('MARKET_ITEM_STORE');
 
 export interface MarketItemFilter {
   tenantId: Id;

@@ -5,7 +5,7 @@ import {
   MarketItemService,
   type MarketItem,
   type MarketItemCategory,
-} from '@aura/crm';
+} from '@aura/market-intelligence';
 import { ParseUuidOr404Pipe, TenantContext } from '@aura/core';
 
 class CreateMarketItemDto {

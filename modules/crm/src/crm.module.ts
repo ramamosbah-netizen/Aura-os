@@ -17,10 +17,6 @@ import { PostgresOpportunityStore } from './postgres-opportunity-store';
 import { OpportunityService } from './opportunity.service';
 
 import { CRM_QUOTATION_STORE } from './quotation-store';
-import { CRM_MARKET_ITEM_STORE } from './market-item-store';
-import { InMemoryMarketItemStore } from './in-memory-market-item-store';
-import { PostgresMarketItemStore } from './postgres-market-item-store';
-import { MarketItemService } from './market-item.service';
 import { InMemoryQuotationStore } from './in-memory-quotation-store';
 import { PostgresQuotationStore } from './postgres-quotation-store';
 import { QuotationService } from './quotation.service';
@@ -84,13 +80,6 @@ import { LeadConversionService } from './lead-conversion.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresAccountStore(pool) : new InMemoryAccountStore(),
     },
-    {
-      provide: CRM_MARKET_ITEM_STORE,
-      inject: [PG_POOL],
-      useFactory: (pool: Pool | null) =>
-        pool ? new PostgresMarketItemStore(pool) : new InMemoryMarketItemStore(),
-    },
-    MarketItemService,
     {
       provide: CRM_LEAD_STORE,
       inject: [PG_POOL],
@@ -177,6 +166,6 @@ import { LeadConversionService } from './lead-conversion.service';
     PreAwardService,
     LeadConversionService,
   ],
-  exports: [MarketItemService, AccountService, AccountRelationshipService, InstalledBaseService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
+  exports: [AccountService, AccountRelationshipService, InstalledBaseService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
 })
 export class CrmModule {}

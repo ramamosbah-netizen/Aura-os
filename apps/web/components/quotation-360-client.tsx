@@ -18,6 +18,7 @@ interface Line { description: string; quantity: number; unitPrice: number; vatRa
 export interface Quotation {
   id: string; quoteNumber: string; customerName: string; accountId: string | null; contactName: string | null;
   ownerId: string | null; terms: string | null; revision: number; status: string;
+  exclusions?: string[]; paymentConditions?: string | null; deliveryTerms?: string | null;
   sourceTenderId: string | null; sourceOpportunityId: string | null; convertedContractId: string | null;
   issueDate: string; validUntil: string | null; lines: Line[]; subtotal: number; vatTotal: number; total: number;
   pricing: { unitCosts: number[] } | null;
@@ -210,7 +211,10 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
     if (!pricing) missing.push('Pricing sheet');
     if (!q.validUntil) missing.push('Validity date');
     if (!q.contactName) missing.push('Customer contact');
-    if (!q.terms) missing.push('Commercial terms');
+    // A quote with no payment terms, no delivery terms, no exclusions AND no notes has no
+    // commercial position stated — the free-text blob is no longer the only place they can live.
+    const hasTerms = !!q.terms || !!q.paymentConditions || !!q.deliveryTerms || (q.exclusions?.length ?? 0) > 0;
+    if (!hasTerms) missing.push('Commercial terms');
   }
 
   // The ONE next best action — mapped to the lifecycle.
@@ -327,7 +331,7 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
               <InfoRow label="Valid until" value={q.validUntil ?? '—'} />
             </RecordCard>
             <RecordCard title="Commercial terms">
-              {q.terms ? <p style={st.terms}>{q.terms}</p> : <p style={st.empty}>No terms captured on this revision.</p>}
+              <CommercialTerms q={q} editable={q.status === 'draft' || q.status === 'internal_review'} onSaved={() => router.refresh()} />
             </RecordCard>
           </CardGrid>
         </div>
@@ -398,6 +402,99 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
   );
 }
 
+/**
+ * Commercial terms — structured, and editable while the quote is still being worked up.
+ *
+ * Exclusions are a list because "does this cover the permits?" should be answered by a row, not
+ * by re-reading a paragraph. Editing is offered only on draft / internal-review: after that the
+ * customer and the locked baseline hold these terms, so the API refuses (409) and the UI does not
+ * pretend otherwise — it shows them read-only with a note that a revision is the way to change them.
+ */
+function CommercialTerms({ q, editable, onSaved }: { q: Quotation; editable: boolean; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [exclusions, setExclusions] = useState((q.exclusions ?? []).join('\n'));
+  const [payment, setPayment] = useState(q.paymentConditions ?? '');
+  const [delivery, setDelivery] = useState(q.deliveryTerms ?? '');
+  const [notes, setNotes] = useState(q.terms ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const list = q.exclusions ?? [];
+  const anything = !!q.terms || !!q.paymentConditions || !!q.deliveryTerms || list.length > 0;
+
+  async function save(): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/crm/quotations/${q.id}/terms`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          exclusions: exclusions.split('\n').map((s) => s.trim()).filter(Boolean),
+          paymentConditions: payment.trim() || null,
+          deliveryTerms: delivery.trim() || null,
+          terms: notes.trim() || null,
+        }),
+      });
+      if (res.status === 409) { setErr('This quote is past draft — raise a revision to change its terms.'); return; }
+      if (!res.ok) { setErr('Could not save the terms.'); return; }
+      setEditing(false);
+      onSaved();
+    } catch {
+      setErr('Could not reach the server — nothing was saved.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div style={st.termsEdit}>
+        <label style={st.termsLabel}>Exclusions — one per line
+          <textarea value={exclusions} onChange={(e) => setExclusions(e.target.value)} rows={4} style={st.termsArea}
+            placeholder={'VAT\nPermits & approvals\nCivil works'} />
+        </label>
+        <label style={st.termsLabel}>Payment conditions
+          <input value={payment} onChange={(e) => setPayment(e.target.value)} style={st.termsInput} placeholder="50% advance, 50% on delivery" />
+        </label>
+        <label style={st.termsLabel}>Delivery terms
+          <input value={delivery} onChange={(e) => setDelivery(e.target.value)} style={st.termsInput} placeholder="6–8 weeks from PO" />
+        </label>
+        <label style={st.termsLabel}>Notes
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={st.termsArea} placeholder="Anything the fields above don't capture" />
+        </label>
+        {err && <p style={st.termsErr}>{err}</p>}
+        <div style={st.termsBtns}>
+          <ActionButton kind="primary" onClick={() => void save()}>{busy ? 'Saving…' : 'Save terms'}</ActionButton>
+          <ActionButton kind="ghost" onClick={() => setEditing(false)}>Cancel</ActionButton>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {!anything && <p style={st.empty}>No commercial terms captured on this revision.</p>}
+      {list.length > 0 && (
+        <div style={st.termsBlock}>
+          <span style={st.termsHead}>Excludes</span>
+          <ul style={st.exclList}>{list.map((x, i) => <li key={i} style={st.exclItem}>{x}</li>)}</ul>
+        </div>
+      )}
+      {q.paymentConditions && <InfoRow label="Payment" value={q.paymentConditions} />}
+      {q.deliveryTerms && <InfoRow label="Delivery" value={q.deliveryTerms} />}
+      {q.terms && <p style={st.terms}>{q.terms}</p>}
+      {editable && (
+        <div style={{ marginTop: 10 }}>
+          <ActionButton kind="ghost" onClick={() => setEditing(true)}>{anything ? 'Edit terms' : 'Add terms'}</ActionButton>
+        </div>
+      )}
+      {!editable && anything && <p style={st.termsNote}>Locked past draft — revise the quote to change these.</p>}
+    </div>
+  );
+}
+
 const st: Record<string, CSSProperties> = {
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 },
   flash: { borderWidth: 1, borderStyle: 'solid', borderRadius: 10, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 14 },
@@ -406,8 +503,19 @@ const st: Record<string, CSSProperties> = {
   td: { padding: '8px', borderBottom: '1px solid var(--border)' },
   tdR: { padding: '8px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap' },
   tfLabel: { padding: '8px', textAlign: 'right', color: 'var(--muted)' },
-  terms: { fontSize: 13, color: 'var(--fg)', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.55 },
+  terms: { fontSize: 13, color: 'var(--fg)', margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 },
   empty: { fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' },
+  termsBlock: { marginBottom: 8 },
+  termsHead: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' },
+  exclList: { margin: '4px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 },
+  exclItem: { fontSize: 13, color: 'var(--fg)', lineHeight: 1.5 },
+  termsNote: { fontSize: 11.5, color: 'var(--muted)', margin: '8px 0 0', lineHeight: 1.5 },
+  termsEdit: { display: 'flex', flexDirection: 'column', gap: 10 },
+  termsLabel: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11.5, color: 'var(--muted)' },
+  termsArea: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--fg)', padding: '7px 9px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical' },
+  termsInput: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--fg)', padding: '7px 9px', fontSize: 12.5 },
+  termsErr: { color: 'var(--bad)', fontSize: 12, margin: 0 },
+  termsBtns: { display: 'flex', gap: 8 },
   revChain: { display: 'flex', gap: 8, flexWrap: 'wrap' },
   revChip: { display: 'flex', flexDirection: 'column', gap: 2, border: '1px solid var(--border)', borderRadius: 9, padding: '7px 11px', textDecoration: 'none', minWidth: 92 },
   revChipActive: { borderColor: 'var(--accent)', background: 'var(--panel-2, var(--panel))' },

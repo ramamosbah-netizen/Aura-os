@@ -1,12 +1,13 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { FormCustomValuesService, FormOverridesService, TenantContext } from '@aura/core';
+import { FormCustomValuesService, FormOverridesService, NumberingService, TenantContext } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
 import { QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService } from '@aura/crm';
 import { type Contract, ContractService } from '@aura/contracts';
 
 class CreateQuotationDto {
-  @IsString() quoteNumber!: string;
+  /** Optional: left blank, the server allocates the next auto-incrementing reference. */
+  @IsOptional() @IsString() quoteNumber?: string;
   @IsString() customerName!: string;
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() contactName?: string;
@@ -20,6 +21,19 @@ class CreateQuotationDto {
   @IsString() issueDate!: string;
   @IsOptional() @IsString() validUntil?: string;
   @IsArray() lines!: NewQuotationLine[];
+  @IsOptional() @IsString() terms?: string;
+  @IsOptional() @IsArray() exclusions?: string[];
+  @IsOptional() @IsString() paymentConditions?: string;
+  @IsOptional() @IsString() deliveryTerms?: string;
+}
+
+/** Editing the commercial terms of a quote that is still being worked up. Every field optional —
+ *  a PATCH that only touches exclusions must not blank out the payment conditions. */
+class UpdateTermsDto {
+  @IsOptional() @IsString() terms?: string | null;
+  @IsOptional() @IsArray() exclusions?: string[];
+  @IsOptional() @IsString() paymentConditions?: string | null;
+  @IsOptional() @IsString() deliveryTerms?: string | null;
 }
 
 /** CRM customer-quotation API — stamps tenant/actor, delegates to QuotationService. */
@@ -31,6 +45,7 @@ export class CrmQuotationsController {
     private readonly tenant: TenantContext,
     private readonly formOverrides: FormOverridesService,
     private readonly customValues: FormCustomValuesService,
+    private readonly numbering: NumberingService,
   ) {}
 
   /** One-click convert an accepted quotation into a draft contract (carries value + account). */
@@ -76,23 +91,29 @@ export class CrmQuotationsController {
   async create(@Body() dto: CreateQuotationDto, @Req() req: { body?: Record<string, unknown> }): Promise<Quotation> {
     // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
     // Raw body: designer-added cf_* fields (P2) are stripped from the decorated DTO.
-    const merged = applyFormOverrides(quotationFormSchema, await this.formOverrides.get(this.tenant.get().tenantId, quotationFormSchema.id));
-    const raw = (req.body ?? dto) as Record<string, unknown>;
+    const ctx = this.tenant.get();
+    const merged = applyFormOverrides(quotationFormSchema, await this.formOverrides.get(ctx.tenantId, quotationFormSchema.id));
+    // Auto-reference: when the author didn't set a number, allocate the next gapless, concurrency-
+    // safe one (same 'crm'/'quotation'/'QUO' sequence the tender-generated path uses, so both
+    // draw from one series). A typed number still wins — the reference auto-increments but stays
+    // editable. Injected into `raw` BEFORE validation so the schema's required 'quoteNumber' is
+    // satisfied by the generated value rather than rejecting a deliberately-blank field.
+    const quoteNumber = dto.quoteNumber?.trim()
+      || (await this.numbering.generateNextNumber(ctx.tenantId, ctx.companyId ?? null, 'crm', 'quotation', 'QUO'));
+    const raw = { ...(req.body ?? dto), quoteNumber } as Record<string, unknown>;
     // The schema's 'lines' field validates via opts.lines rows (evaluateForm
     // contract) — without this every create carrying line items is rejected
     // with "Add at least one line item".
     assertFormValid(merged, raw, {
       lines: { lines: (Array.isArray(raw.lines) ? raw.lines : []) as Array<Record<string, string | number | boolean | null>> },
     });
-    if (!dto?.quoteNumber?.trim()) throw new BadRequestException('quoteNumber is required');
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
-    const ctx = this.tenant.get();
     const quotation = await this.quotations.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
-      quoteNumber: dto.quoteNumber,
+      quoteNumber,
       customerName: dto.customerName,
       accountId: dto.accountId ?? null,
       contactName: dto.contactName ?? null,
@@ -100,6 +121,10 @@ export class CrmQuotationsController {
       issueDate: dto.issueDate,
       validUntil: dto.validUntil ?? null,
       lines: dto.lines,
+      terms: dto.terms ?? null,
+      exclusions: dto.exclusions,
+      paymentConditions: dto.paymentConditions ?? null,
+      deliveryTerms: dto.deliveryTerms ?? null,
       createdBy: ctx.actorId,
     });
     await this.customValues.save(ctx.tenantId, merged.id, quotation.id, pickCustomFieldValues(merged, req.body));
@@ -168,6 +193,16 @@ export class CrmQuotationsController {
   @Get(':id/baseline')
   async baseline(@Param('id') id: string) {
     return (await this.quotations.getBaseline(this.tenant.get().tenantId, id)) ?? null;
+  }
+
+  /**
+   * Edit the commercial terms (notes, exclusions, payment & delivery conditions) of a quote still
+   * being worked up. The service refuses (409) once the quote is approved or sent — after that the
+   * terms are what the customer and the baseline hold, and a change means a revision.
+   */
+  @Patch(':id/terms')
+  async updateTerms(@Param('id') id: string, @Body() dto: UpdateTermsDto): Promise<Quotation> {
+    return this.quotations.updateCommercialTerms(id, dto);
   }
 
   @Patch(':id/status')

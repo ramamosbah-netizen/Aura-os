@@ -97,8 +97,18 @@ export interface Quotation {
   /** Opportunity this quotation was converted from (direct-sale path), reference not join. */
   sourceOpportunityId: Id | null;
   ownerId: Id | null;
-  /** Commercial terms shown to the client (payment, delivery, exclusions …). */
+  /** Free-form commercial notes. Kept for anything the structured fields below don't capture. */
   terms: string | null;
+  /**
+   * What the price does NOT include — one line per exclusion. A list, not prose, because an
+   * exclusion buried in a paragraph is the one a customer later says they never saw, and a
+   * dispute over "does this cover the permits?" is answered by a row, not by re-reading a blob.
+   */
+  exclusions: string[];
+  /** How and when we get paid, e.g. "50% advance, 50% on delivery". */
+  paymentConditions: string | null;
+  /** When and how we deliver, e.g. "6–8 weeks from PO". */
+  deliveryTerms: string | null;
   /** Revision number — Rev 0 is the original; revising supersedes it (status 'revised'). */
   revision: number;
   parentQuotationId: Id | null;
@@ -128,6 +138,9 @@ export interface NewQuotation {
   sourceOpportunityId?: Id | null;
   ownerId?: Id | null;
   terms?: string | null;
+  exclusions?: string[];
+  paymentConditions?: string | null;
+  deliveryTerms?: string | null;
   revision?: number;
   parentQuotationId?: Id | null;
   issueDate: string;
@@ -163,6 +176,22 @@ export function computeQuotationTotals(lines: QuotationLine[]): QuotationTotals 
   return { subtotal, vatTotal, total: round2(subtotal + vatTotal) };
 }
 
+/** Trim each exclusion, drop blanks, and dedupe case-insensitively while keeping first spelling. */
+export function normaliseExclusions(raw: string[] | undefined): string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of raw) {
+    const trimmed = item?.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
 export function makeQuotation(input: NewQuotation): Quotation {
   if (!input.quoteNumber?.trim()) throw new Error('quoteNumber is required');
   if (!input.customerName?.trim()) throw new Error('customerName is required');
@@ -182,6 +211,11 @@ export function makeQuotation(input: NewQuotation): Quotation {
     sourceOpportunityId: input.sourceOpportunityId ?? null,
     ownerId: input.ownerId ?? null,
     terms: input.terms?.trim() || null,
+    // Trim, drop blanks, dedupe — a checklist of exclusions with "" or a repeat in it reads as
+    // sloppy and invites the exact ambiguity the list exists to remove.
+    exclusions: normaliseExclusions(input.exclusions),
+    paymentConditions: input.paymentConditions?.trim() || null,
+    deliveryTerms: input.deliveryTerms?.trim() || null,
     revision: Number.isInteger(input.revision) && input.revision! >= 0 ? input.revision! : 0,
     parentQuotationId: input.parentQuotationId ?? null,
     convertedContractId: null,
@@ -280,6 +314,11 @@ export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Qu
     sourceOpportunityId: q.sourceOpportunityId,
     ownerId: q.ownerId,
     terms: q.terms,
+    // The commercial position carries into the revision — a new price does not silently reset
+    // what was excluded or how payment was agreed.
+    exclusions: q.exclusions,
+    paymentConditions: q.paymentConditions,
+    deliveryTerms: q.deliveryTerms,
     revision: q.revision + 1,
     parentQuotationId: q.id,
     issueDate: new Date().toISOString().slice(0, 10),
@@ -298,4 +337,5 @@ export const QUOTATION_EVENT = {
   accepted: 'crm.quotation.accepted',
   statusChanged: 'crm.quotation.status_changed',
   revised: 'crm.quotation.revised',
+  updated: 'crm.quotation.updated',
 } as const;

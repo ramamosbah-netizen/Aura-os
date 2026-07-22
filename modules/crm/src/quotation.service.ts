@@ -10,6 +10,7 @@ import {
   applyQuotationAction,
   isPricingLocked,
   makeQuotation,
+  normaliseExclusions,
   reviseQuotation,
   buildQuotationLine,
   computeQuotationTotals,
@@ -51,6 +52,43 @@ export class QuotationService {
     ]);
     this.logger.log(`Quotation ${q.quoteNumber} created for ${q.customerName}: total ${q.total}`);
     return q;
+  }
+
+  /**
+   * Edit the commercial terms (free-form notes, exclusions, payment and delivery conditions) on
+   * a quotation still being worked up. Only draft / internal-review — the same commitment
+   * boundary as the pricing sheet: once approved or sent, the customer and the locked baseline
+   * hold these terms, so changing them means raising a revision, not a quiet in-place edit.
+   *
+   * The guard is phrased "only … can" on purpose: the error taxonomy maps that to 409, whereas
+   * "cannot …" would map to 400 — a locked quote is a state conflict, not bad input.
+   */
+  async updateCommercialTerms(
+    id: Id,
+    input: { terms?: string | null; exclusions?: string[]; paymentConditions?: string | null; deliveryTerms?: string | null },
+  ): Promise<Quotation> {
+    const q = await this.store.get(id);
+    if (!q) throw new Error(`quotation ${id} not found`);
+    if (isPricingLocked(q)) {
+      throw new Error(`only a draft or in-review quotation can have its commercial terms edited — raise a revision to change them after that`);
+    }
+    const updated: Quotation = {
+      ...q,
+      terms: input.terms !== undefined ? (input.terms?.trim() || null) : q.terms,
+      exclusions: input.exclusions !== undefined ? normaliseExclusions(input.exclusions) : q.exclusions,
+      paymentConditions: input.paymentConditions !== undefined ? (input.paymentConditions?.trim() || null) : q.paymentConditions,
+      deliveryTerms: input.deliveryTerms !== undefined ? (input.deliveryTerms?.trim() || null) : q.deliveryTerms,
+    };
+    await this.store.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: QUOTATION_EVENT.updated,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: q.createdBy,
+        aggregateType: 'crm.quotation', aggregateId: id,
+        payload: { quoteNumber: q.quoteNumber, field: 'commercial_terms' },
+      }),
+    ]);
+    return updated;
   }
 
   async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null): Promise<Quotation> {

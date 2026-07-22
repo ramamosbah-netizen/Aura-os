@@ -3,7 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
-import { EntityForm } from './form-engine';
+import QuotationCreate from './quotation-create';
 
 // CRM · Quotations — a real deal-chain member, not a proto-invoice. Lifecycle:
 //   Draft → Internal Review → Approved → Sent → Under Negotiation →
@@ -126,7 +126,7 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
       </div>
 
       <div style={st.toolbar}>
-        <EntityForm id="crm.quotation" />
+        <QuotationCreate />
         <ExportButton filename="quotations" rows={quotes as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'quoteNumber' }, { key: 'revision' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'validUntil' }, { key: 'subtotal' }, { key: 'vatTotal' }, { key: 'total' }, { key: 'status' }, { key: 'ownerId' }]} />
         {error && <span style={st.err}>{error}</span>}

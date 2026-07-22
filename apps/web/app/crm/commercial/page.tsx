@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import CommercialWorkspace, { type CommQuotation, type CommContract, type CommSheet } from '../../../components/commercial-workspace';
-import type { EvidenceDoc } from '../../../components/decision-readiness';
+import type { EvidenceDoc, StoredRequirement } from '../../../components/decision-readiness';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,13 +12,16 @@ export const dynamic = 'force-dynamic';
 // records that live elsewhere — no data or ownership moves here.
 
 export default async function CommercialPage() {
-  const [quotations, contracts, sheets, evidence] = await Promise.all([
+  const [quotations, contracts, sheets, evidence, reqs] = await Promise.all([
     getJson<CommQuotation[]>('/api/crm/quotations'),
     getJson<CommContract[]>('/api/contracts/contracts'),
     getJson<CommSheet[]>('/api/tendering/tenders/pricing/sheets'),
     // One call for every quotation's evidence — the readiness panel groups by aggregateId
     // client-side rather than asking per record.
     getJson<EvidenceDoc[]>('/api/documents?aggregateType=crm.quotation'),
+    // Persisted checklists for every quotation, in one call. Where a quote has one it is the
+    // truth; where it has none the panel falls back to matching documents against the template.
+    getJson<{ requirements: StoredRequirement[] }>('/api/document-requirements?entityType=crm.quotation'),
   ]);
 
   return (
@@ -34,6 +37,7 @@ export default async function CommercialPage() {
         contracts={contracts ?? []}
         sheets={sheets ?? []}
         evidence={evidence ?? []}
+        requirements={reqs?.requirements ?? []}
         apiDown={quotations === null}
       />
     </div>

@@ -3,7 +3,7 @@
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CommQuotation, CommContract } from './commercial-workspace';
-import DecisionReadiness, { readinessFor, type EvidenceDoc } from './decision-readiness';
+import DecisionReadiness, { readinessFor, type EvidenceDoc, type StoredRequirement } from './decision-readiness';
 
 // The Decision Queue — list on the left, preview on the right, decide without leaving.
 //
@@ -34,10 +34,12 @@ function flagsFor(q: CommQuotation): string[] {
   return f;
 }
 
-export default function CommercialDecisionQueue({ quotations, contracts, evidence = [] }: {
-  quotations: CommQuotation[]; contracts: CommContract[]; evidence?: EvidenceDoc[];
+export default function CommercialDecisionQueue({ quotations, contracts, evidence = [], requirements = [] }: {
+  quotations: CommQuotation[]; contracts: CommContract[];
+  evidence?: EvidenceDoc[]; requirements?: StoredRequirement[];
 }) {
   const docsFor = (id: string): EvidenceDoc[] => evidence.filter((d) => d.aggregateId === id);
+  const reqsFor = (id: string): StoredRequirement[] => requirements.filter((r) => r.entityId === id);
   const router = useRouter();
   // Worst money first — the queue is about triage, and the biggest exposure is the first call.
   const queue = [...quotations]
@@ -50,6 +52,30 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
   const [done, setDone] = useState<Record<string, string>>({});
 
   const selected = queue.find((q) => q.id === selectedId) ?? null;
+
+  /** Create the evidence checklist on a record so its requirements become decidable — waivable,
+   *  markable not-applicable — instead of merely derived from what happens to be attached. */
+  async function seedChecklist(quotationId: string): Promise<void> {
+    if (pending) return;
+    setPending(quotationId);
+    setErr(null);
+    try {
+      const res = await fetch('/api/document-requirements', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entityType: 'crm.quotation', entityId: quotationId }),
+      });
+      if (!res.ok) {
+        setErr('Could not create the checklist.');
+        return;
+      }
+      router.refresh();
+    } catch {
+      setErr('Could not reach the server — no checklist was created.');
+    } finally {
+      setPending(null);
+    }
+  }
 
   async function decide(q: CommQuotation, action: 'approve' | 'cancel'): Promise<void> {
     if (pending) return;
@@ -109,7 +135,7 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
                   ) : (
                     <>
                       {(() => {
-                        const r = readinessFor(docsFor(q.id));
+                        const r = readinessFor(docsFor(q.id), reqsFor(q.id));
                         return r.verdict === 'READY' ? null : (
                           <span style={{ ...st.flag, color: 'var(--bad)', borderColor: 'var(--bad)' }}>
                             evidence {r.score}%
@@ -149,7 +175,12 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
               </p>
             )}
 
-            <DecisionReadiness docs={docsFor(selected.id)} quotationId={selected.id} />
+            <DecisionReadiness
+              docs={docsFor(selected.id)}
+              requirements={reqsFor(selected.id)}
+              quotationId={selected.id}
+              onSeed={() => void seedChecklist(selected.id)}
+            />
 
             {/* Linked records — the chain, not a Contracts tab. */}
             <p style={st.chain}>

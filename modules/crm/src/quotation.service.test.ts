@@ -50,3 +50,55 @@ describe('QuotationService — commercial governance (R3)', () => {
     expect(await svc.getBaseline('t2', q.id)).toBeNull();
   });
 });
+
+describe('QuotationService.listRevisions — the chain is links, not the number', () => {
+  const quote = (svc: QuotationService, quoteNumber: string) => svc.create({
+    tenantId: 't1', quoteNumber, customerName: 'Emaar', accountId: 'a1', issueDate: '2026-07-14',
+    lines: [{ description: 'CCTV', quantity: 2, unitPrice: 1000 }], createdBy: 'u1',
+  });
+
+  it('follows parentQuotationId, oldest revision first', async () => {
+    const { svc } = harness();
+    const r0 = await quote(svc, 'QT-9');
+    await svc.changeStatus(r0.id, 'approve', 'u-manager');
+    await svc.changeStatus(r0.id, 'send');
+    const r1 = await svc.revise(r0.id);
+
+    const chain = await svc.listRevisions('t1', r0.id);
+    expect(chain.map((q) => q.revision)).toEqual([0, 1]);
+    expect(chain[1].id).toBe(r1.id);
+    // Reachable from either end — a chain read from the newest revision is the same chain.
+    expect((await svc.listRevisions('t1', r1.id)).map((q) => q.id)).toEqual(chain.map((q) => q.id));
+  });
+
+  // The live defect this rule exists for: quoting one opportunity twice yields two independent
+  // quotes sharing a derived number, both at revision 0. Returning them as a revision history
+  // invents a price change between two unrelated quotes.
+  it('does NOT treat two separate quotes sharing a number as revisions of each other', async () => {
+    const { svc } = harness();
+    const a = await quote(svc, 'QT-OPP-947e5807');
+    const b = await quote(svc, 'QT-OPP-947e5807');
+
+    expect(await svc.listRevisions('t1', a.id)).toHaveLength(1);
+    expect((await svc.listRevisions('t1', a.id))[0].id).toBe(a.id);
+    expect((await svc.listRevisions('t1', b.id))[0].id).toBe(b.id);
+  });
+
+  it('still returns a number-matched chain whose links were never written', async () => {
+    const { svc } = harness();
+    const store = new InMemoryQuotationStore();
+    const svc2 = new QuotationService(store, new InMemoryCommercialBaselineStore(),
+      { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore);
+    const r0 = await quote(svc2, 'QT-LEGACY');
+    // A revision 1 with no parent link — legacy data, but distinct revision numbers prove it is
+    // one chain rather than two quotes.
+    await store.save({ ...r0, id: 'legacy-r1', revision: 1, parentQuotationId: null });
+
+    expect((await svc2.listRevisions('t1', r0.id)).map((q) => q.revision)).toEqual([0, 1]);
+  });
+
+  it('returns nothing for a quotation that does not exist', async () => {
+    const { svc } = harness();
+    expect(await svc.listRevisions('t1', 'nope')).toEqual([]);
+  });
+});

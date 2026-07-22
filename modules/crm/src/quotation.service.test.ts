@@ -102,3 +102,26 @@ describe('QuotationService.listRevisions — the chain is links, not the number'
     expect(await svc.listRevisions('t1', 'nope')).toEqual([]);
   });
 });
+
+describe('QuotationService.updateCommercialTerms — editable only while worked up', () => {
+  const withTerms = (svc: QuotationService) => svc.create({
+    tenantId: 't1', quoteNumber: 'QT-T', customerName: 'Emaar', accountId: 'a1', issueDate: '2026-07-14',
+    lines: [{ description: 'CCTV', quantity: 2, unitPrice: 1000 }], createdBy: 'u1',
+  });
+
+  it('edits exclusions and payment on a draft, leaving untouched fields alone', async () => {
+    const { svc } = harness();
+    const q = await withTerms(svc);
+    const updated = await svc.updateCommercialTerms(q.id, { exclusions: ['VAT', 'vat', 'Permits'], paymentConditions: '50/50' });
+    expect(updated.exclusions).toEqual(['VAT', 'Permits']); // normalised
+    expect(updated.paymentConditions).toBe('50/50');
+    expect(updated.deliveryTerms).toBeNull(); // not passed → unchanged
+  });
+
+  it('refuses once approved — a 409-shaped "only … can" message, not "cannot"', async () => {
+    const { svc } = harness();
+    const q = await withTerms(svc);
+    await svc.changeStatus(q.id, 'approve', 'u-manager');
+    await expect(svc.updateCommercialTerms(q.id, { exclusions: ['too late'] })).rejects.toThrow(/only .* can .* edited/);
+  });
+});

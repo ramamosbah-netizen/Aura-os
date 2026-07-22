@@ -105,3 +105,34 @@ describe('extended lifecycle (review/negotiation/revisions)', () => {
     expect(() => reviseQuotation(makeQuotation(base))).toThrow('cannot revise from status draft');
   });
 });
+
+describe('structured commercial terms', () => {
+  it('normalises exclusions — trims, drops blanks, dedupes case-insensitively keeping first spelling', () => {
+    const q = makeQuotation({ ...base, exclusions: [' VAT ', 'vat', '', 'Permits', 'permits', 'Civil works'] });
+    expect(q.exclusions).toEqual(['VAT', 'Permits', 'Civil works']);
+  });
+
+  it('defaults to an empty exclusion list and null payment/delivery, never undefined', () => {
+    const q = makeQuotation(base);
+    expect(q.exclusions).toEqual([]);
+    expect(q.paymentConditions).toBeNull();
+    expect(q.deliveryTerms).toBeNull();
+  });
+
+  it('trims payment and delivery, blanks become null', () => {
+    const q = makeQuotation({ ...base, paymentConditions: '  50% advance ', deliveryTerms: '   ' });
+    expect(q.paymentConditions).toBe('50% advance');
+    expect(q.deliveryTerms).toBeNull();
+  });
+
+  it('carries the commercial position into a revision — a new price does not reset what was excluded', () => {
+    const sent = sendQuotation(applyQuotationAction(
+      makeQuotation({ ...base, exclusions: ['VAT', 'Permits'], paymentConditions: '50/50', deliveryTerms: '6 weeks' }),
+      'approve',
+    ));
+    const { next } = reviseQuotation(sent);
+    expect(next.exclusions).toEqual(['VAT', 'Permits']);
+    expect(next.paymentConditions).toBe('50/50');
+    expect(next.deliveryTerms).toBe('6 weeks');
+  });
+});

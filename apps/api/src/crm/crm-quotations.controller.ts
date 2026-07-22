@@ -20,6 +20,19 @@ class CreateQuotationDto {
   @IsString() issueDate!: string;
   @IsOptional() @IsString() validUntil?: string;
   @IsArray() lines!: NewQuotationLine[];
+  @IsOptional() @IsString() terms?: string;
+  @IsOptional() @IsArray() exclusions?: string[];
+  @IsOptional() @IsString() paymentConditions?: string;
+  @IsOptional() @IsString() deliveryTerms?: string;
+}
+
+/** Editing the commercial terms of a quote that is still being worked up. Every field optional —
+ *  a PATCH that only touches exclusions must not blank out the payment conditions. */
+class UpdateTermsDto {
+  @IsOptional() @IsString() terms?: string | null;
+  @IsOptional() @IsArray() exclusions?: string[];
+  @IsOptional() @IsString() paymentConditions?: string | null;
+  @IsOptional() @IsString() deliveryTerms?: string | null;
 }
 
 /** CRM customer-quotation API — stamps tenant/actor, delegates to QuotationService. */
@@ -100,6 +113,10 @@ export class CrmQuotationsController {
       issueDate: dto.issueDate,
       validUntil: dto.validUntil ?? null,
       lines: dto.lines,
+      terms: dto.terms ?? null,
+      exclusions: dto.exclusions,
+      paymentConditions: dto.paymentConditions ?? null,
+      deliveryTerms: dto.deliveryTerms ?? null,
       createdBy: ctx.actorId,
     });
     await this.customValues.save(ctx.tenantId, merged.id, quotation.id, pickCustomFieldValues(merged, req.body));
@@ -168,6 +185,16 @@ export class CrmQuotationsController {
   @Get(':id/baseline')
   async baseline(@Param('id') id: string) {
     return (await this.quotations.getBaseline(this.tenant.get().tenantId, id)) ?? null;
+  }
+
+  /**
+   * Edit the commercial terms (notes, exclusions, payment & delivery conditions) of a quote still
+   * being worked up. The service refuses (409) once the quote is approved or sent — after that the
+   * terms are what the customer and the baseline hold, and a change means a revision.
+   */
+  @Patch(':id/terms')
+  async updateTerms(@Param('id') id: string, @Body() dto: UpdateTermsDto): Promise<Quotation> {
+    return this.quotations.updateCommercialTerms(id, dto);
   }
 
   @Patch(':id/status')

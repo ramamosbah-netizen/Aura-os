@@ -64,7 +64,10 @@ export class CrmQuotationsController {
       {
         tenantId: ctx.tenantId,
         companyId: q.companyId,
-        title: `Contract from ${q.quoteNumber} — ${q.customerName}`,
+        // The subject IS the job — carry it as the contract title so the words the customer saw on
+        // the quote name the contract, and (through it) the project. Only fall back to the generic
+        // "Contract from …" label when a quote was raised without a subject.
+        title: q.subject?.trim() || `Contract from ${q.quoteNumber} — ${q.customerName}`,
         accountId: q.accountId,
         accountName: q.customerName,
         value: baseline ? baseline.total : q.total,

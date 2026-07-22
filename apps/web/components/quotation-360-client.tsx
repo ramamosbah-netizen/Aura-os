@@ -18,6 +18,7 @@ interface Line { description: string; quantity: number; unitPrice: number; vatRa
 export interface Quotation {
   id: string; quoteNumber: string; customerName: string; accountId: string | null; contactName: string | null;
   ownerId: string | null; terms: string | null; revision: number; status: string;
+  subject?: string | null;
   exclusions?: string[]; paymentConditions?: string | null; deliveryTerms?: string | null;
   sourceTenderId: string | null; sourceOpportunityId: string | null; convertedContractId: string | null;
   issueDate: string; validUntil: string | null; lines: Line[]; subtotal: number; vatTotal: number; total: number;
@@ -324,6 +325,7 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
           </RecordCard>
           <CardGrid>
             <RecordCard title="Document">
+              <InfoRow label="Subject" value={q.subject ?? '—'} />
               <InfoRow label="Customer" value={q.accountId ? <a href={`/crm/accounts/${q.accountId}`} style={st.link}>{q.customerName}</a> : q.customerName} />
               <InfoRow label="Contact" value={q.contactName ?? '—'} />
               <InfoRow label="Owner" value={q.ownerId ?? '—'} />

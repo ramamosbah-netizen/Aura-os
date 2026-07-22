@@ -10,6 +10,8 @@ class CreateQuotationDto {
   @IsOptional() @IsString() quoteNumber?: string;
   @IsString() customerName!: string;
   @IsOptional() @IsString() accountId?: string;
+  /** What the quote is for — travels downstream as the contract and project title. */
+  @IsOptional() @IsString() subject?: string;
   @IsOptional() @IsString() contactName?: string;
   /**
    * Provenance: the opportunity this quote answers. The column and the store filter always
@@ -116,6 +118,7 @@ export class CrmQuotationsController {
       quoteNumber,
       customerName: dto.customerName,
       accountId: dto.accountId ?? null,
+      subject: dto.subject ?? null,
       contactName: dto.contactName ?? null,
       sourceOpportunityId: dto.sourceOpportunityId ?? null,
       issueDate: dto.issueDate,

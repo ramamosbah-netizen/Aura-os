@@ -20,6 +20,7 @@ export const quotationFormSchema: FormSchema = {
     { name: 'quoteNumber', label: 'Quote # (auto if blank)', kind: 'text', required: false, placeholder: 'Auto-generated — or type your own' },
     { name: 'issueDate', label: 'Issue date', kind: 'date', required: true, defaultValue: '=TODAY()' },
     { name: 'customerName', label: 'Customer', kind: 'text', required: true, placeholder: 'e.g. Emaar Properties', span: 2 },
+    { name: 'subject', label: 'Subject', kind: 'text', required: false, placeholder: 'What the quote is for — e.g. Tower B ELV fit-out', span: 2 },
     { name: 'lines', label: 'Line items', kind: 'lines', required: true },
     {
       name: 'subtotal',

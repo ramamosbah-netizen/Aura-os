@@ -125,3 +125,48 @@ describe('QuotationService.updateCommercialTerms — editable only while worked 
     await expect(svc.updateCommercialTerms(q.id, { exclusions: ['too late'] })).rejects.toThrow(/only .* can .* edited/);
   });
 });
+
+describe('QuotationService.generateFromSheet — the sheet is the source of items', () => {
+  const shell = (svc: QuotationService) => svc.create({
+    tenantId: 't1', quoteNumber: 'QT-GEN', customerName: 'Emaar', accountId: 'a1', issueDate: '2026-07-14',
+    lines: [{ description: 'placeholder', quantity: 1, unitPrice: 0 }], createdBy: 'u1',
+  });
+
+  it('generates lines from sheet items with sell prices derived from cost + margin', async () => {
+    const { svc } = harness();
+    const q = await shell(svc);
+    const out = await svc.generateFromSheet(q.id, [
+      { description: 'CCTV camera', quantity: 4, supplyUnitPrice: 800, targetMarginPercent: 20 },
+      { description: 'Access control', quantity: 1, supplyUnitPrice: 1200, targetMarginPercent: 25 },
+    ]);
+    // Cost is supply only here → unit cost 800; sell at 20% margin = 800/(1-0.2) = 1000.
+    expect(out.lines).toHaveLength(2);
+    expect(out.lines[0]).toMatchObject({ description: 'CCTV camera', quantity: 4, unitPrice: 1000 });
+    // 1200 / (1-0.25) = 1600.
+    expect(out.lines[1]).toMatchObject({ description: 'Access control', quantity: 1, unitPrice: 1600 });
+    // Totals recomputed: 4*1000 + 1*1600 = 5600 net.
+    expect(out.subtotal).toBe(5600);
+  });
+
+  it('stores item identity on the sheet so it reopens as items, not bare columns', async () => {
+    const { svc } = harness();
+    const q = await shell(svc);
+    await svc.generateFromSheet(q.id, [{ description: 'CCTV', quantity: 2, supplyUnitPrice: 500, targetMarginPercent: 10 }]);
+    const view = await svc.getPricing(q.id);
+    expect(view.lines[0]).toMatchObject({ description: 'CCTV', quantity: 2 });
+  });
+
+  it('refuses an empty sheet', async () => {
+    const { svc } = harness();
+    const q = await shell(svc);
+    await expect(svc.generateFromSheet(q.id, [])).rejects.toThrow(/at least one item/);
+  });
+
+  it('refuses once approved (409-shaped lock)', async () => {
+    const { svc } = harness();
+    const q = await shell(svc);
+    await svc.changeStatus(q.id, 'approve', 'u-mgr');
+    await expect(svc.generateFromSheet(q.id, [{ description: 'x', quantity: 1, supplyUnitPrice: 1 }]))
+      .rejects.toThrow(/only a draft or in-review/);
+  });
+});

@@ -185,6 +185,16 @@ export class CrmQuotationsController {
     return this.quotations.applyPricing(id, dto ?? {});
   }
 
+  /**
+   * Generate the quote's LINES from pricing-sheet items — the sheet-first authoring path. Each
+   * item carries its own description, quantity, cost build-up and target margin; the line is
+   * written with a sell price derived from cost and margin. Refused (409) once approved.
+   */
+  @Post(':id/pricing/generate-lines')
+  generateFromSheet(@Param('id') id: string, @Body() dto: { items?: unknown }): Promise<Quotation> {
+    return this.quotations.generateFromSheet(id, dto?.items ?? []);
+  }
+
   @Get(':id')
   async get(@Param('id') id: string): Promise<Quotation> {
     const found = await this.quotations.get(id);

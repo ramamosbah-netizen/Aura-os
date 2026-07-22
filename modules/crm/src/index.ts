@@ -1,5 +1,11 @@
 // @aura/crm — the CRM business module (the first T1 module; template for the rest).
 export * from './domain/account';
+export * from './domain/market-item';
+export * from './market-item-store';
+export * from './in-memory-market-item-store';
+export * from './postgres-market-item-store';
+export * from './market-item.service';
+
 export * from './account-store';
 export * from './in-memory-account-store';
 export * from './postgres-account-store';

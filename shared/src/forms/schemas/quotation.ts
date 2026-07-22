@@ -15,7 +15,9 @@ export const quotationFormSchema: FormSchema = {
   createdRedirect: '/crm/quotations/:id/pricing',
   version: 1,
   fields: [
-    { name: 'quoteNumber', label: 'Quote #', kind: 'text', required: true, placeholder: 'QT-001' },
+    // Optional: left blank, the server allocates the next auto-incrementing reference (QUO-…).
+    // A typed value still wins, so the reference auto-increments but stays editable.
+    { name: 'quoteNumber', label: 'Quote # (auto if blank)', kind: 'text', required: false, placeholder: 'Auto-generated — or type your own' },
     { name: 'issueDate', label: 'Issue date', kind: 'date', required: true, defaultValue: '=TODAY()' },
     { name: 'customerName', label: 'Customer', kind: 'text', required: true, placeholder: 'e.g. Emaar Properties', span: 2 },
     { name: 'lines', label: 'Line items', kind: 'lines', required: true },

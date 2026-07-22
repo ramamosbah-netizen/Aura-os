@@ -142,6 +142,12 @@ export class CrmQuotationsController {
     return this.quotations.list({ tenantId: this.tenant.get().tenantId, status, accountId, limit: 100 });
   }
 
+  /** What this item has been quoted for before — the historic half of the pricing library. */
+  @Get('price-history')
+  priceHistory(@Query('q') q?: string) {
+    return this.quotations.priceHistory(this.tenant.get().tenantId, q);
+  }
+
   @Get('paged')
   paged(
     @Query('status') status?: Quotation['status'],

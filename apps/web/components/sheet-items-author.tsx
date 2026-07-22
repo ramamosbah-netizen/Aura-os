@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import MarketItemPicker, { type PickedItem } from './market-item-picker';
 
 // Define items → generate the quote lines. The sheet-first authoring surface: each row is an item
 // with a unit cost and a target margin; the sell price is derived (cost / (1 − margin)) and shown
@@ -12,7 +13,7 @@ import { type CSSProperties, useState } from 'react';
 // Cost here is the item's all-in unit cost, entered as supply price; the detailed grid is where a
 // cost gets decomposed. Kept deliberately small so a fast quote is fast.
 
-interface Item { description: string; quantity: number; unitCost: number; margin: number }
+interface Item { description: string; quantity: number; unitCost: number; margin: number; note?: string }
 
 const blank = (): Item => ({ description: '', quantity: 1, unitCost: 0, margin: 25 });
 const money = (n: number): string => n.toLocaleString('en-AE', { maximumFractionDigits: 2 });
@@ -29,6 +30,15 @@ export default function SheetItemsAuthor({ id, locked }: { id: string; locked: b
 
   const set = (i: number, patch: Partial<Item>): void =>
     setItems((prev) => prev.map((it, j) => (j === i ? { ...it, ...patch } : it)));
+  // A library pick fills what it knows: the catalogue brings a cost + margin, a past-quote brings
+  // just the name (history is a sell price, not a cost). Either way the note records provenance.
+  const pick = (i: number, p: PickedItem): void =>
+    set(i, {
+      description: p.description,
+      ...(p.unitCost !== undefined ? { unitCost: p.unitCost } : {}),
+      ...(p.marginPercent !== undefined ? { margin: p.marginPercent } : {}),
+      note: p.note,
+    });
   const add = (): void => setItems((prev) => [...prev, blank()]);
   const remove = (i: number): void => setItems((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev));
   const num = (v: string): number => { const x = Number(v); return Number.isFinite(x) && x >= 0 ? x : 0; };
@@ -91,13 +101,21 @@ export default function SheetItemsAuthor({ id, locked }: { id: string; locked: b
           <span>Item</span><span>Qty</span><span>Unit cost</span><span>Margin %</span><span>Sell / unit</span><span></span>
         </div>
         {items.map((it, i) => (
-          <div key={i} style={st.row}>
-            <input value={it.description} onChange={(e) => set(i, { description: e.target.value })} placeholder="e.g. CCTV camera, 4MP dome" style={st.desc} aria-label={`item ${i + 1} description`} />
-            <input type="number" min={1} value={it.quantity} onChange={(e) => set(i, { quantity: num(e.target.value) || 1 })} style={st.num} aria-label={`item ${i + 1} quantity`} />
-            <input type="number" min={0} step="0.01" value={it.unitCost} onChange={(e) => set(i, { unitCost: num(e.target.value) })} style={st.num} aria-label={`item ${i + 1} unit cost`} />
-            <input type="number" min={0} max={99} value={it.margin} onChange={(e) => set(i, { margin: num(e.target.value) })} style={st.num} aria-label={`item ${i + 1} margin`} />
-            <span style={st.sellCell}>{money(sell(it.unitCost, it.margin))}</span>
-            <button type="button" onClick={() => remove(i)} style={st.rm} aria-label={`remove item ${i + 1}`} disabled={items.length === 1}>✕</button>
+          <div key={i}>
+            <div style={st.row}>
+              <MarketItemPicker
+                value={it.description}
+                placeholder="Search the library or type an item…"
+                onType={(v) => set(i, { description: v, note: undefined })}
+                onPick={(p) => pick(i, p)}
+              />
+              <input type="number" min={1} value={it.quantity} onChange={(e) => set(i, { quantity: num(e.target.value) || 1 })} style={st.num} aria-label={`item ${i + 1} quantity`} />
+              <input type="number" min={0} step="0.01" value={it.unitCost} onChange={(e) => set(i, { unitCost: num(e.target.value) })} style={st.num} aria-label={`item ${i + 1} unit cost`} />
+              <input type="number" min={0} max={99} value={it.margin} onChange={(e) => set(i, { margin: num(e.target.value) })} style={st.num} aria-label={`item ${i + 1} margin`} />
+              <span style={st.sellCell}>{money(sell(it.unitCost, it.margin))}</span>
+              <button type="button" onClick={() => remove(i)} style={st.rm} aria-label={`remove item ${i + 1}`} disabled={items.length === 1}>✕</button>
+            </div>
+            {it.note && <div style={st.noteRow}>↳ {it.note}</div>}
           </div>
         ))}
       </div>
@@ -122,6 +140,7 @@ const st = {
   row: { display: 'grid', gridTemplateColumns: '1fr 70px 100px 84px 100px 30px', gap: 8, alignItems: 'center' } as CSSProperties,
   headerRow: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--muted)' } as CSSProperties,
   desc: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text, var(--fg))', padding: '7px 9px', fontSize: 13 } as CSSProperties,
+  noteRow: { fontSize: 11, color: 'var(--muted)', padding: '2px 0 4px 2px', lineHeight: 1.4 } as CSSProperties,
   num: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text, var(--fg))', padding: '7px 8px', fontSize: 13, width: '100%', boxSizing: 'border-box' } as CSSProperties,
   sellCell: { fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--good)', fontWeight: 600 } as CSSProperties,
   rm: { background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 } as CSSProperties,

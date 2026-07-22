@@ -10,6 +10,8 @@ class CreateQuotationDto {
   @IsOptional() @IsString() quoteNumber?: string;
   @IsString() customerName!: string;
   @IsOptional() @IsString() accountId?: string;
+  /** What the quote is for — travels downstream as the contract and project title. */
+  @IsOptional() @IsString() subject?: string;
   @IsOptional() @IsString() contactName?: string;
   /**
    * Provenance: the opportunity this quote answers. The column and the store filter always
@@ -62,7 +64,10 @@ export class CrmQuotationsController {
       {
         tenantId: ctx.tenantId,
         companyId: q.companyId,
-        title: `Contract from ${q.quoteNumber} — ${q.customerName}`,
+        // The subject IS the job — carry it as the contract title so the words the customer saw on
+        // the quote name the contract, and (through it) the project. Only fall back to the generic
+        // "Contract from …" label when a quote was raised without a subject.
+        title: q.subject?.trim() || `Contract from ${q.quoteNumber} — ${q.customerName}`,
         accountId: q.accountId,
         accountName: q.customerName,
         value: baseline ? baseline.total : q.total,
@@ -116,6 +121,7 @@ export class CrmQuotationsController {
       quoteNumber,
       customerName: dto.customerName,
       accountId: dto.accountId ?? null,
+      subject: dto.subject ?? null,
       contactName: dto.contactName ?? null,
       sourceOpportunityId: dto.sourceOpportunityId ?? null,
       issueDate: dto.issueDate,
@@ -180,6 +186,16 @@ export class CrmQuotationsController {
   @Post(':id/pricing/apply')
   applyPricing(@Param('id') id: string, @Body() dto: { lines?: unknown; targetMargins?: unknown }) {
     return this.quotations.applyPricing(id, dto ?? {});
+  }
+
+  /**
+   * Generate the quote's LINES from pricing-sheet items — the sheet-first authoring path. Each
+   * item carries its own description, quantity, cost build-up and target margin; the line is
+   * written with a sell price derived from cost and margin. Refused (409) once approved.
+   */
+  @Post(':id/pricing/generate-lines')
+  generateFromSheet(@Param('id') id: string, @Body() dto: { items?: unknown }): Promise<Quotation> {
+    return this.quotations.generateFromSheet(id, dto?.items ?? []);
   }
 
   @Get(':id')

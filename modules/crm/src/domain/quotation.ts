@@ -91,6 +91,13 @@ export interface Quotation {
   quoteNumber: string;
   customerName: string;
   accountId: Id | null;
+  /**
+   * What this quote is FOR, in the author's words — "Tower B ELV fit-out", "MOE CCTV upgrade".
+   * Not a line item and not the customer: the one phrase that names the job. It travels
+   * downstream as the title of the contract and then the project, so the same words a customer
+   * saw on the quote are the words the delivery team works under. Null on legacy quotes.
+   */
+  subject: string | null;
   contactName: string | null;
   /** Tender this quotation was generated from (tender pricing sheet), reference not join. */
   sourceTenderId: Id | null;
@@ -133,6 +140,7 @@ export interface NewQuotation {
   quoteNumber: string;
   customerName: string;
   accountId?: Id | null;
+  subject?: string | null;
   contactName?: string | null;
   sourceTenderId?: Id | null;
   sourceOpportunityId?: Id | null;
@@ -206,6 +214,7 @@ export function makeQuotation(input: NewQuotation): Quotation {
     quoteNumber: input.quoteNumber.trim(),
     customerName: input.customerName.trim(),
     accountId: input.accountId ?? null,
+    subject: input.subject?.trim() || null,
     contactName: input.contactName ?? null,
     sourceTenderId: input.sourceTenderId ?? null,
     sourceOpportunityId: input.sourceOpportunityId ?? null,
@@ -309,6 +318,7 @@ export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Qu
     quoteNumber: q.quoteNumber,
     customerName: q.customerName,
     accountId: q.accountId,
+    subject: q.subject,
     contactName: q.contactName,
     sourceTenderId: q.sourceTenderId,
     sourceOpportunityId: q.sourceOpportunityId,

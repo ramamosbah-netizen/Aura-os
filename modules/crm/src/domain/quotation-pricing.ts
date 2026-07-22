@@ -20,6 +20,16 @@ export interface ManpowerBlock {
 
 /** The editable cost factors for one quotation line. */
 export interface QuotationPricingLineInput {
+  /**
+   * Item identity, when the SHEET is the source of items rather than pricing lines you already
+   * typed. Optional for backward compatibility: an older sheet line without these still prices
+   * the quote line at its index. When present, the sheet owns the item — its description and
+   * quantity are what a generated quote line carries, and `targetMarginPercent` is what turns
+   * its cost into a sell price. This is what "the items are imported from the sheet" means.
+   */
+  description?: string;
+  quantity?: number;
+  targetMarginPercent?: number;
   /** Material supply price per unit. */
   supplyUnitPrice: number;
   /** Wastage as a % of material supply. */
@@ -141,6 +151,11 @@ export function emptyPricingLine(): QuotationPricingLineInput {
 function normalizeLine(v: unknown): QuotationPricingLineInput {
   const l = (v ?? {}) as Partial<QuotationPricingLineInput>;
   return {
+    // Item identity is carried through only when the sheet line actually defines an item, so a
+    // legacy build-up (costs only) stays exactly as it was and does not grow phantom fields.
+    ...(typeof l.description === 'string' ? { description: l.description } : {}),
+    ...(l.quantity !== undefined ? { quantity: num(l.quantity) } : {}),
+    ...(l.targetMarginPercent !== undefined ? { targetMarginPercent: num(l.targetMarginPercent) } : {}),
     supplyUnitPrice: num(l.supplyUnitPrice),
     wastagePercent: num(l.wastagePercent),
     accessories: num(l.accessories),

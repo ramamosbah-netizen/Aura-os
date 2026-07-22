@@ -136,3 +136,15 @@ describe('structured commercial terms', () => {
     expect(next.deliveryTerms).toBe('6 weeks');
   });
 });
+
+describe('quotation subject', () => {
+  it('trims the subject and carries it into a revision', () => {
+    const q = makeQuotation({ ...base, subject: '  Tower B ELV fit-out ' });
+    expect(q.subject).toBe('Tower B ELV fit-out');
+    const sent = sendQuotation(applyQuotationAction(q, 'approve'));
+    expect(reviseQuotation(sent).next.subject).toBe('Tower B ELV fit-out');
+  });
+  it('defaults subject to null, never undefined', () => {
+    expect(makeQuotation(base).subject).toBeNull();
+  });
+});

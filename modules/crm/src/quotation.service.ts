@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type EstimationLineInput, estimateLine, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   QUOTATION_EVENT,
@@ -399,6 +399,53 @@ export class QuotationService {
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
+  }
+
+  /**
+   * Save the Pricing Workspace: each line's full Estimation Engine build-up is stored AND the quote
+   * lines are regenerated from it — description + quantity + the engine's derived unit sell price.
+   * The build-up is the source; the lines are the output. Refused (409) once approved, same lock.
+   */
+  async saveEstimation(id: Id, items: EstimationLineInput[]): Promise<Quotation> {
+    const q = await this.store.get(id);
+    if (!q) throw new Error(`quotation ${id} not found`);
+    if (isPricingLocked(q)) {
+      throw new Error(
+        `pricing sheet is locked: only a draft or in-review quotation can be re-priced — ` +
+          `${q.quoteNumber} Rev ${q.revision} is ${q.status}. Raise a revision to re-price.`,
+      );
+    }
+    const rows = Array.isArray(items) ? items : [];
+    if (rows.length === 0) throw new Error('the pricing workspace needs at least one item');
+
+    const lines = rows.map((it, i) => {
+      const r = estimateLine(it);
+      return buildQuotationLine({
+        description: (it.description ?? '').trim() || `Item ${i + 1}`,
+        quantity: r.quantity,
+        unitPrice: r.unitSellPrice,
+        vatRate: 5,
+      });
+    });
+    const { subtotal, vatTotal, total } = computeQuotationTotals(lines);
+    const updated: Quotation = { ...q, lines, subtotal, vatTotal, total, estimation: rows };
+    await this.store.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: QUOTATION_EVENT.updated,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: q.createdBy,
+        aggregateType: 'crm.quotation', aggregateId: id,
+        payload: { quoteNumber: q.quoteNumber, field: 'estimation', lineCount: lines.length, total },
+      }),
+    ]);
+    this.logger.log(`Estimation saved for ${q.quoteNumber}: ${lines.length} line(s), total ${total}`);
+    return updated;
+  }
+
+  /** The stored Estimation Engine build-up for a quote, or [] if it was priced the old way. */
+  async getEstimation(id: Id): Promise<EstimationLineInput[]> {
+    const q = await this.store.get(id);
+    return q?.estimation ?? [];
   }
 
   /** Quotations generated from a tender's pricing sheet. */

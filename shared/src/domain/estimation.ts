@@ -122,6 +122,16 @@ export function estimateLine(input: EstimationInput): EstimationResult {
   };
 }
 
+/**
+ * An estimation input that names its item — one row of a pricing workspace. Carries the build-up
+ * plus the description that becomes the quote line, and an optional link back to the Market
+ * Intelligence item it was seeded from (so a benchmark can be traced and refreshed).
+ */
+export interface EstimationLineInput extends EstimationInput {
+  description: string;
+  marketItemId?: string | null;
+}
+
 /** An empty estimation input — every factor zero, one unit, ready to build up. */
 export function emptyEstimationInput(): EstimationInput {
   return {

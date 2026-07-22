@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, type EstimationLineInput, newId } from '@aura/shared';
 // quotation-pricing has only a type-only dep back on this file, so this value
 // import is one-way at runtime — no cycle.
 import { type QuotationPricingInput, emptyPricingLine } from './quotation-pricing';
@@ -129,6 +129,13 @@ export interface Quotation {
   total: number;
   /** Internal cost sheet (this revision only); null until priced. */
   pricing: QuotationPricingInput | null;
+  /**
+   * The Estimation Engine build-up per line, authored in the Pricing Workspace — materials, labour,
+   * loadings and margin. This is the SOURCE the lines were generated from, kept so reopening the
+   * workspace shows the full cost build-up rather than only the resulting sell prices. Null on
+   * quotes priced the old way.
+   */
+  estimation: EstimationLineInput[] | null;
   status: QuotationStatus;
   createdAt: string;
   createdBy: Id | null;
@@ -155,6 +162,7 @@ export interface NewQuotation {
   validUntil?: string | null;
   lines: NewQuotationLine[];
   pricing?: QuotationPricingInput | null;
+  estimation?: EstimationLineInput[] | null;
   createdBy?: Id | null;
 }
 
@@ -237,6 +245,7 @@ export function makeQuotation(input: NewQuotation): Quotation {
     // A quotation is born with its pricing sheet: one empty build-up per line,
     // ready to cost. It is never null, so "open the sheet" always works.
     pricing: input.pricing ?? { lines: lines.map(() => emptyPricingLine()) },
+    estimation: input.estimation ?? null,
     status: 'draft',
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
@@ -336,6 +345,8 @@ export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Qu
     lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })),
     // Carry the internal build-up into the new revision — costs rarely reset between revisions.
     pricing: q.pricing ? { lines: q.pricing.lines.map((l) => ({ ...l })) } : null,
+    // The estimation build-up carries into a revision — re-pricing starts from the last cost model.
+    estimation: q.estimation ? q.estimation.map((e) => ({ ...e })) : null,
     createdBy: q.createdBy,
   });
   return { superseded: { ...q, status: 'revised' }, next };

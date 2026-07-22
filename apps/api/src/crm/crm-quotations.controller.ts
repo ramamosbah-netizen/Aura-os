@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { AiService, FormCustomValuesService, FormOverridesService, NumberingService, TenantContext } from '@aura/core';
-import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
+import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema, type EstimationLineInput } from '@aura/shared';
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
   analysePricing, type LineRefs, type SheetLineForAdvice,
@@ -208,6 +208,18 @@ export class CrmQuotationsController {
   @Post(':id/pricing/generate-lines')
   generateFromSheet(@Param('id') id: string, @Body() dto: { items?: unknown }): Promise<Quotation> {
     return this.quotations.generateFromSheet(id, dto?.items ?? []);
+  }
+
+  /** The Pricing Workspace: the stored Estimation Engine build-up per line. */
+  @Get(':id/estimation')
+  getEstimation(@Param('id') id: string) {
+    return this.quotations.getEstimation(id);
+  }
+
+  /** Save the Pricing Workspace — persist each line's build-up and regenerate the quote lines from it. */
+  @Post(':id/estimation')
+  saveEstimation(@Param('id') id: string, @Body() dto: { items?: EstimationLineInput[] }): Promise<Quotation> {
+    return this.quotations.saveEstimation(id, Array.isArray(dto?.items) ? dto.items : []);
   }
 
   /**

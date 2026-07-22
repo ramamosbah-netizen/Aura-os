@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import type { Id, Page, PageParams } from '@aura/shared';
+import type { Id, Page, PageParams, EstimationLineInput } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { Quotation, QuotationLine } from './domain/quotation';
 import type { QuotationPricingInput } from './domain/quotation-pricing';
@@ -31,6 +31,7 @@ interface Row {
   vat_total: string | number;
   total: string | number;
   pricing: QuotationPricingInput | string | null;
+  estimation: unknown[] | string | null;
   status: string;
   created_by: string | null;
   created_at: Date | string;
@@ -38,7 +39,7 @@ interface Row {
 
 const COLS =
   'id, tenant_id, company_id, quote_number, customer_name, account_id, subject, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, exclusions, payment_conditions, delivery_terms, revision, parent_quotation_id, converted_contract_id, ' +
-  'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, pricing, status, created_by, created_at';
+  'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, pricing, estimation, status, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 function rowTo(r: Row): Quotation {
@@ -69,6 +70,8 @@ function rowTo(r: Row): Quotation {
     vatTotal: Number(r.vat_total),
     total: Number(r.total),
     pricing: typeof r.pricing === 'string' ? (JSON.parse(r.pricing) as QuotationPricingInput) : (r.pricing ?? null),
+    estimation: r.estimation == null ? null
+      : (typeof r.estimation === 'string' ? (JSON.parse(r.estimation) as EstimationLineInput[]) : (r.estimation as EstimationLineInput[])),
     status: r.status as Quotation['status'],
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
@@ -81,10 +84,10 @@ export class PostgresQuotationStore implements QuotationStore {
   async save(q: Quotation): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_crm_quotations
-        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, exclusions, payment_conditions, delivery_terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, pricing, status, created_by, created_at, subject)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, exclusions, payment_conditions, delivery_terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, pricing, status, created_by, created_at, subject, estimation)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
        ON CONFLICT (id) DO UPDATE SET
-         status = EXCLUDED.status, terms = EXCLUDED.terms, owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject,
+         status = EXCLUDED.status, terms = EXCLUDED.terms, owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, estimation = EXCLUDED.estimation,
          exclusions = EXCLUDED.exclusions, payment_conditions = EXCLUDED.payment_conditions, delivery_terms = EXCLUDED.delivery_terms,
          converted_contract_id = EXCLUDED.converted_contract_id, valid_until = EXCLUDED.valid_until,
          pricing = EXCLUDED.pricing,
@@ -95,6 +98,7 @@ export class PostgresQuotationStore implements QuotationStore {
       [
         q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.sourceTenderId, q.sourceOpportunityId, q.ownerId, q.terms, JSON.stringify(q.exclusions ?? []), q.paymentConditions, q.deliveryTerms, q.revision, q.parentQuotationId, q.convertedContractId, q.issueDate, q.validUntil,
         JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.pricing ? JSON.stringify(q.pricing) : null, q.status, q.createdBy, q.createdAt, q.subject,
+        q.estimation ? JSON.stringify(q.estimation) : null,
       ],
     );
   }

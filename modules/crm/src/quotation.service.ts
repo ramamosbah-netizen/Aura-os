@@ -368,11 +368,14 @@ export class QuotationService {
   async priceHistory(
     tenantId: string,
     q?: string,
+    excludeQuotationId?: string,
   ): Promise<Array<{ description: string; count: number; lastPrice: number; minPrice: number; maxPrice: number; lastAt: string }>> {
     const quotes = await this.store.list({ tenantId, limit: 500 });
     const needle = q?.trim().toLowerCase();
     const map = new Map<string, { name: string; prices: number[]; last: { price: number; at: string } }>();
     for (const quote of quotes) {
+      // For pricing advice, the quote being priced must not compare against itself.
+      if (excludeQuotationId && quote.id === excludeQuotationId) continue;
       for (const l of quote.lines) {
         const desc = l.description?.trim();
         if (!desc || l.unitPrice <= 0) continue;

@@ -1,8 +1,11 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { FormCustomValuesService, FormOverridesService, NumberingService, TenantContext } from '@aura/core';
+import { AiService, FormCustomValuesService, FormOverridesService, NumberingService, TenantContext } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
-import { QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService } from '@aura/crm';
+import {
+  QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
+  MarketItemService, analysePricing, type LineRefs, type SheetLineForAdvice,
+} from '@aura/crm';
 import { type Contract, ContractService } from '@aura/contracts';
 
 class CreateQuotationDto {
@@ -48,6 +51,8 @@ export class CrmQuotationsController {
     private readonly formOverrides: FormOverridesService,
     private readonly customValues: FormCustomValuesService,
     private readonly numbering: NumberingService,
+    private readonly marketItems: MarketItemService,
+    private readonly ai: AiService,
   ) {}
 
   /** One-click convert an accepted quotation into a draft contract (carries value + account). */
@@ -202,6 +207,67 @@ export class CrmQuotationsController {
   @Post(':id/pricing/generate-lines')
   generateFromSheet(@Param('id') id: string, @Body() dto: { items?: unknown }): Promise<Quotation> {
     return this.quotations.generateFromSheet(id, dto?.items ?? []);
+  }
+
+  /**
+   * AI pricing review. The FINDINGS are computed deterministically — each line's margin, and how
+   * its price sits against the Market Intelligence benchmark and past quotes — so they can be
+   * verified. The AI only narrates them into advice; it never invents a number. When no AI provider
+   * is configured the findings still stand, and `narrative` is null.
+   */
+  @Get(':id/pricing/advice')
+  async pricingAdvice(@Param('id') id: string): Promise<{ advice: ReturnType<typeof analysePricing>; narrative: string | null; provider: string }> {
+    const tenantId = this.tenant.get().tenantId;
+    const view = await this.quotations.getPricing(id); // throws → 404 via the taxonomy filter
+    const lines: SheetLineForAdvice[] = view.lines.map((l) => ({
+      description: l.description, quantity: l.quantity, unitCost: l.unitCostTotal, unitPrice: l.unitPrice,
+    }));
+
+    // Best-effort match each line to a catalogue benchmark and to its own price history (excluding
+    // THIS quote, so a line is never compared against itself). Findings degrade gracefully when a
+    // line matches nothing — the margin analysis still holds.
+    const refs: LineRefs[] = await Promise.all(lines.map(async (l) => {
+      const [cat] = await this.marketItems.list({ tenantId, q: l.description, limit: 1 });
+      const [hist] = await this.quotations.priceHistory(tenantId, l.description, id);
+      return {
+        benchmark: cat ? { benchmarkCost: cat.benchmarkCost, benchmarkSell: cat.benchmarkSell, source: cat.source } : null,
+        historic: hist ? { lastPrice: hist.lastPrice, minPrice: hist.minPrice, maxPrice: hist.maxPrice, count: hist.count } : null,
+      };
+    }));
+
+    const advice = analysePricing(lines, refs);
+    const { narrative, provider } = await this.narratePricing(advice, view.quoteNumber);
+    return { advice, narrative, provider };
+  }
+
+  /** Turn the deterministic findings into a couple of sentences of advice. Never throws — a missing
+   *  or failing provider just means no narrative, not a broken endpoint. */
+  private async narratePricing(
+    advice: ReturnType<typeof analysePricing>,
+    quoteNumber: string,
+  ): Promise<{ narrative: string | null; provider: string }> {
+    try {
+      const facts = [
+        `Quote ${quoteNumber}. Blended margin ${advice.blendedMargin}%.`,
+        `${advice.lossLines} line(s) below cost, ${advice.thinLines} thin, ${advice.aboveMarketLines} above market, ${advice.belowMarketLines} below market.`,
+        ...advice.findings.flatMap((f) => f.notes.map((n) => `- ${f.description}: ${n}`)),
+      ].join('\n');
+      const res = await this.ai.complete({
+        system:
+          'You are a commercial pricing manager for an ELV/MEP contractor. Given deterministic findings ' +
+          'about a quotation pricing sheet, give at most 3 short, concrete sentences of advice — what to fix ' +
+          'and where the risk is. Use only the findings provided; do not invent numbers.',
+        messages: [{ role: 'user', content: facts }],
+        maxTokens: 220,
+      });
+      // The local/dev provider echoes the prompt rather than reasoning over it. Showing that back
+      // as "AI advice" would be a lie, so a written narrative appears only from a real provider —
+      // the deterministic findings are the substance and stand on their own without it.
+      const narrative = res.provider === 'local' ? null : (res.text?.trim() || null);
+      return { narrative, provider: res.provider };
+    } catch {
+      return { narrative: null, provider: 'unavailable' };
+    }
   }
 
   @Get(':id')

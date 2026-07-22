@@ -22,6 +22,14 @@ const STARTER_CATALOGUE: ReadonlyArray<Omit<NewMarketItem, 'tenantId'>> = [
   { name: 'IP Video Door Station', brand: 'Hikvision', category: 'INTERCOM', unit: 'each', benchmarkCost: 620, benchmarkSell: 1050, installHours: 2.5, source: 'distributor offer', asOf: '2026-06-01' },
 ];
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** Indicative supply lead time (days) by category — a starting point, editable per item. */
+const LEAD_TIME_BY_CATEGORY: Record<string, number> = {
+  CCTV: 10, ACCESS_CONTROL: 14, FIRE_ALARM: 21, PA_VA: 14, NETWORK: 7,
+  INTERCOM: 14, BMS: 28, STRUCTURED_CABLING: 5, AUDIO_VISUAL: 14, OTHER: 14,
+};
+
 @Injectable()
 export class MarketItemService {
   private readonly logger = new Logger(MarketItemService.name);
@@ -52,7 +60,22 @@ export class MarketItemService {
   async seed(tenantId: Id, createdBy: Id | null = null): Promise<number> {
     if ((await this.store.count(tenantId)) > 0) return 0;
     for (const spec of STARTER_CATALOGUE) {
-      await this.store.save(makeMarketItem({ ...spec, tenantId, createdBy }));
+      const cost = spec.benchmarkCost ?? 0;
+      const sell = spec.benchmarkSell ?? 0;
+      // Enrich the starter rows with sensible, honestly-approximate deep fields so the deeper
+      // schema is not an empty promise: a ±12% price spread, a lead time and crew by category,
+      // manufacturer from the brand, and a middling-high confidence for a dated benchmark.
+      await this.store.save(makeMarketItem({
+        ...spec, tenantId, createdBy,
+        manufacturer: spec.brand ?? null,
+        minPrice: round2(sell * 0.88),
+        maxPrice: round2(sell * 1.12),
+        avgPrice: sell,
+        leadTimeDays: LEAD_TIME_BY_CATEGORY[spec.category ?? 'OTHER'] ?? 14,
+        warrantyMonths: 12,
+        crewSize: (spec.installHours ?? 0) >= 4 ? 2 : 1,
+        confidence: 75,
+      }));
     }
     this.logger.log(`Seeded ${STARTER_CATALOGUE.length} market items for ${tenantId}`);
     return STARTER_CATALOGUE.length;

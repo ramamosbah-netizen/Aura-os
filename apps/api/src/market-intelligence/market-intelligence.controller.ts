@@ -19,6 +19,17 @@ class CreateMarketItemDto {
   @IsOptional() @IsString() source?: string;
   @IsOptional() @IsString() asOf?: string;
   @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() sku?: string;
+  @IsOptional() @IsString() manufacturer?: string;
+  @IsOptional() @IsString() model?: string;
+  @IsOptional() @IsString() countryOfOrigin?: string;
+  @IsOptional() @IsNumber() @Min(0) minPrice?: number;
+  @IsOptional() @IsNumber() @Min(0) maxPrice?: number;
+  @IsOptional() @IsNumber() @Min(0) avgPrice?: number;
+  @IsOptional() @IsNumber() @Min(0) leadTimeDays?: number;
+  @IsOptional() @IsNumber() @Min(0) warrantyMonths?: number;
+  @IsOptional() @IsNumber() @Min(1) crewSize?: number;
+  @IsOptional() @IsNumber() @Min(0) confidence?: number;
 }
 
 /**

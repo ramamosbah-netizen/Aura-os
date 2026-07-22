@@ -9,6 +9,7 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 interface MarketItem {
   id: string; name: string; brand: string | null; category: string; unit: string;
   benchmarkCost: number; benchmarkSell: number; installHours: number; source: string | null; asOf: string;
+  leadTimeDays?: number | null; warrantyMonths?: number | null; confidence?: number;
 }
 
 const CATEGORIES = ['CCTV', 'ACCESS_CONTROL', 'FIRE_ALARM', 'PA_VA', 'NETWORK', 'INTERCOM', 'BMS', 'STRUCTURED_CABLING', 'AUDIO_VISUAL', 'OTHER'];
@@ -81,7 +82,7 @@ export default function MarketIntelligenceClient() {
           <table style={st.table}>
             <thead>
               <tr>
-                {['Item', 'Brand', 'Category', 'Unit', 'Cost', 'Sell', 'Margin', 'Install', 'Source', 'As of', ''].map((h) => <th key={h} style={st.th}>{h}</th>)}
+                {['Item', 'Brand', 'Category', 'Unit', 'Cost', 'Sell', 'Margin', 'Install', 'Lead', 'Conf.', 'Source', 'As of', ''].map((h) => <th key={h} style={st.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -95,6 +96,8 @@ export default function MarketIntelligenceClient() {
                   <td style={st.tdR}>{money(i.benchmarkSell)}</td>
                   <td style={st.tdR}>{marginOf(i.benchmarkCost, i.benchmarkSell)}%</td>
                   <td style={st.tdR}>{i.installHours}h</td>
+                  <td style={st.tdR}>{i.leadTimeDays != null ? `${i.leadTimeDays}d` : '—'}</td>
+                  <td style={st.tdR}>{i.confidence != null ? `${i.confidence}%` : '—'}</td>
                   <td style={st.tdMuted}>{i.source ?? '—'}</td>
                   <td style={st.tdMuted}>{i.asOf}</td>
                   <td style={st.td}><button type="button" onClick={() => void remove(i.id)} style={st.del} aria-label={`delete ${i.name}`}>✕</button></td>

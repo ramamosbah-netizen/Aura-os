@@ -191,7 +191,7 @@ export default function PricingWorkspace({ id, initial, locked }: { id: string; 
 function IntelPane({ description, result, onInsert }: {
   description: string; result: ReturnType<typeof estimateLine>; onInsert: (p: PickedItem) => void;
 }) {
-  const [catalog, setCatalog] = useState<Array<{ id: string; name: string; brand: string | null; benchmarkCost: number; benchmarkSell: number; installHours: number; source: string | null }>>([]);
+  const [catalog, setCatalog] = useState<Array<{ id: string; name: string; brand: string | null; benchmarkCost: number; benchmarkSell: number; installHours: number; source: string | null; minPrice: number | null; maxPrice: number | null; leadTimeDays: number | null; warrantyMonths: number | null; confidence: number }>>([]);
   const [history, setHistory] = useState<Array<{ description: string; count: number; lastPrice: number; minPrice: number; maxPrice: number }>>([]);
 
   useEffect(() => {
@@ -231,12 +231,19 @@ function IntelPane({ description, result, onInsert }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {bench && (
         <div style={st.intelCard}>
-          <div style={st.intelHead}>Market benchmark</div>
+          <div style={st.intelHead}>
+            Market benchmark
+            <span style={{ ...st.conf, color: bench.confidence >= 75 ? 'var(--good)' : bench.confidence >= 50 ? 'var(--warn)' : 'var(--bad)' }}>
+              {bench.confidence}% confidence
+            </span>
+          </div>
           <div style={st.benchName}>{bench.name}{bench.brand ? ` · ${bench.brand}` : ''}</div>
           <div style={st.benchGrid}>
             <span>Cost</span><b>{money(bench.benchmarkCost)}</b>
-            <span>Sell</span><b>{money(bench.benchmarkSell)}</b>
+            <span>Sell</span><b>{money(bench.benchmarkSell)}{bench.minPrice != null && bench.maxPrice != null ? ` (${money(bench.minPrice)}–${money(bench.maxPrice)})` : ''}</b>
             <span>Install</span><b>{bench.installHours}h</b>
+            {bench.leadTimeDays != null && <><span>Lead time</span><b>{bench.leadTimeDays} days</b></>}
+            {bench.warrantyMonths != null && <><span>Warranty</span><b>{bench.warrantyMonths} mo</b></>}
           </div>
           <button type="button" style={st.insert} onClick={() => onInsert({ description: bench.name, unitCost: bench.benchmarkCost, marginPercent: bench.benchmarkSell > 0 ? Math.round(((bench.benchmarkSell - bench.benchmarkCost) / bench.benchmarkSell) * 10) / 10 : 0 })}>
             Insert into build-up
@@ -322,7 +329,8 @@ const st = {
   resLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.3 } as CSSProperties,
   resVal: { fontSize: 14, fontVariantNumeric: 'tabular-nums' } as CSSProperties,
   intelCard: { border: '1px solid var(--border)', borderRadius: 9, padding: 10 } as CSSProperties,
-  intelHead: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', marginBottom: 6 } as CSSProperties,
+  intelHead: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 } as CSSProperties,
+  conf: { fontSize: 10, fontWeight: 700, letterSpacing: 0 } as CSSProperties,
   benchName: { fontSize: 12.5, fontWeight: 600, marginBottom: 6 } as CSSProperties,
   benchGrid: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', fontSize: 12, alignItems: 'baseline' } as CSSProperties,
   insert: { marginTop: 8, width: '100%', background: 'var(--panel-2, var(--panel))', border: '1px solid var(--accent)', borderRadius: 7, color: 'var(--accent)', padding: '6px', fontSize: 12, fontWeight: 600, cursor: 'pointer' } as CSSProperties,

@@ -55,6 +55,39 @@ export interface MarketItem {
   /** The date the benchmark reflects (YYYY-MM-DD). A price is only as current as its as-of date. */
   asOf: string;
   notes: string | null;
+
+  // ── identity — what EXACTLY this is, so two "cameras" are not confused
+  /** Stock-keeping / part number. */
+  sku: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  countryOfOrigin: string | null;
+
+  // ── the price SPREAD, not just one number — what an estimator negotiates within
+  minPrice: number | null;
+  maxPrice: number | null;
+  avgPrice: number | null;
+
+  // ── delivery & productivity — the facts a materials-only price forgets
+  /** Supply lead time in days. */
+  leadTimeDays: number | null;
+  warrantyMonths: number | null;
+  /** Typical crew size to install — seeds the estimation labour, with installHours. */
+  crewSize: number | null;
+
+  // ── knowledge graph
+  /** Other market items that can substitute for this one. */
+  alternativeIds: string[];
+  datasheetUrl: string | null;
+  imageUrl: string | null;
+
+  /**
+   * How much to trust this row, 0–100. A price from a signed supplier offer last week is high
+   * confidence; one typed from memory a year ago is low. The Copilot weights its advice by it,
+   * so a shaky benchmark does not get quoted as gospel.
+   */
+  confidence: number;
+
   createdAt: string;
   createdBy: Id | null;
 }
@@ -71,6 +104,20 @@ export interface NewMarketItem {
   source?: string | null;
   asOf?: string;
   notes?: string | null;
+  sku?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  countryOfOrigin?: string | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  avgPrice?: number | null;
+  leadTimeDays?: number | null;
+  warrantyMonths?: number | null;
+  crewSize?: number | null;
+  alternativeIds?: string[];
+  datasheetUrl?: string | null;
+  imageUrl?: string | null;
+  confidence?: number;
   createdBy?: Id | null;
 }
 
@@ -97,6 +144,21 @@ export function makeMarketItem(input: NewMarketItem, now = new Date()): MarketIt
     // Default the as-of to today: a benchmark entered now reflects now unless told otherwise.
     asOf: /^\d{4}-\d{2}-\d{2}$/.test(input.asOf ?? '') ? input.asOf! : iso.slice(0, 10),
     notes: input.notes?.trim() || null,
+    sku: input.sku?.trim() || null,
+    manufacturer: input.manufacturer?.trim() || null,
+    model: input.model?.trim() || null,
+    countryOfOrigin: input.countryOfOrigin?.trim() || null,
+    minPrice: input.minPrice == null ? null : nonNeg(input.minPrice, 'minPrice'),
+    maxPrice: input.maxPrice == null ? null : nonNeg(input.maxPrice, 'maxPrice'),
+    avgPrice: input.avgPrice == null ? null : nonNeg(input.avgPrice, 'avgPrice'),
+    leadTimeDays: input.leadTimeDays == null ? null : nonNeg(input.leadTimeDays, 'leadTimeDays'),
+    warrantyMonths: input.warrantyMonths == null ? null : nonNeg(input.warrantyMonths, 'warrantyMonths'),
+    crewSize: input.crewSize == null ? null : Math.max(1, Math.floor(Number(input.crewSize) || 1)),
+    alternativeIds: Array.isArray(input.alternativeIds) ? input.alternativeIds.filter(Boolean) : [],
+    datasheetUrl: input.datasheetUrl?.trim() || null,
+    imageUrl: input.imageUrl?.trim() || null,
+    // Confidence defaults to a middling 60 — present but unproven — clamped to 0–100.
+    confidence: Math.min(100, Math.max(0, Math.round(Number(input.confidence ?? 60)))),
     createdAt: iso,
     createdBy: input.createdBy ?? null,
   };

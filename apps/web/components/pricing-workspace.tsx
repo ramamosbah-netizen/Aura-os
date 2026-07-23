@@ -19,11 +19,24 @@ type Line = EstimationLineInput;
 const seed = (description = ''): Line => ({ ...emptyEstimationInput(), description });
 const money = (n: number): string => (Number.isFinite(n) ? n : 0).toLocaleString('en-AE', { maximumFractionDigits: 2 });
 
-export default function PricingWorkspace({ id, initial, locked }: { id: string; initial: Line[]; locked: boolean }) {
-  const [lines, setLines] = useState<Line[]>(initial.length > 0 ? initial : [seed()]);
+/** The sheet as the workspace sees it — the aggregate that owns the pricing. */
+export interface SheetHead {
+  id: string; name: string; status: 'draft' | 'frozen'; version: number;
+  lines: Line[];
+}
+
+export default function PricingWorkspace({ quotationId, sheetName, initialSheet }: {
+  quotationId: string;
+  /** Default name for a sheet created on first save — usually the quote number + subject. */
+  sheetName: string;
+  initialSheet: SheetHead | null;
+}) {
+  const [sheet, setSheet] = useState<SheetHead | null>(initialSheet);
+  const [lines, setLines] = useState<Line[]>(initialSheet && initialSheet.lines.length > 0 ? initialSheet.lines : [seed()]);
   const [sel, setSel] = useState(0);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
+  const frozen = sheet?.status === 'frozen';
 
   const results = useMemo(() => lines.map(estimateLine), [lines]);
   const selected = lines[sel] ?? lines[0];
@@ -42,41 +55,69 @@ export default function PricingWorkspace({ id, initial, locked }: { id: string; 
     setSel((s) => Math.max(0, s >= i ? s - 1 : s));
   };
 
-  async function save(): Promise<void> {
-    if (busy || locked) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch(`/api/crm/quotations/${id}/estimation`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ items: lines.filter((l) => l.description.trim()) }),
-      });
-      if (res.status === 409) { setMsg({ tone: 'bad', text: 'This quote is past draft — raise a revision to re-price.' }); return; }
-      if (!res.ok) { setMsg({ tone: 'bad', text: 'Could not save the pricing.' }); return; }
-      setMsg({ tone: 'ok', text: 'Saved — quote lines generated from the build-up.' });
-    } catch {
-      setMsg({ tone: 'bad', text: 'Could not reach the server — nothing was saved.' });
-    } finally {
-      setBusy(false);
-    }
+  // The sheet lifecycle: save the DRAFT (creating the sheet on first save) → FREEZE the baseline
+  // (build-up becomes immutable) → GENERATE the quotation from the frozen sheet. Re-pricing after
+  // freeze is a NEW VERSION. Governance verdicts (409s) come from the server; the UI only relays.
+  async function run(fn: () => Promise<void>): Promise<void> {
+    if (busy) return;
+    setBusy(true); setMsg(null);
+    try { await fn(); } catch { setMsg({ tone: 'bad', text: 'Could not reach the server.' }); } finally { setBusy(false); }
   }
 
-  if (locked) {
-    return (
-      <div style={st.lockedWrap}>
-        <b>Pricing is locked</b>
-        <p style={st.muted}>This quote is approved — its lines were generated from the estimation. Raise a revision to re-price.</p>
-      </div>
-    );
-  }
+  const saveDraft = (): Promise<void> => run(async () => {
+    const items = lines.filter((l) => l.description.trim());
+    if (!sheet) {
+      const res = await fetch('/api/crm/pricing-sheets', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: sheetName, quotationId, lines: items }),
+      });
+      if (!res.ok) { setMsg({ tone: 'bad', text: 'Could not create the pricing sheet.' }); return; }
+      const created = (await res.json()) as SheetHead;
+      setSheet(created);
+      setMsg({ tone: 'ok', text: `Draft saved — sheet v${created.version}.` });
+      return;
+    }
+    const res = await fetch(`/api/crm/pricing-sheets/${sheet.id}/lines`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lines: items }),
+    });
+    if (res.status === 409) { setMsg({ tone: 'bad', text: 'This sheet is frozen — raise a new version to re-price.' }); return; }
+    if (!res.ok) { setMsg({ tone: 'bad', text: 'Could not save the draft.' }); return; }
+    setMsg({ tone: 'ok', text: 'Draft saved.' });
+  });
+
+  const freeze = (): Promise<void> => run(async () => {
+    if (!sheet) { setMsg({ tone: 'bad', text: 'Save the draft first.' }); return; }
+    const res = await fetch(`/api/crm/pricing-sheets/${sheet.id}/freeze`, { method: 'POST' });
+    if (!res.ok) { setMsg({ tone: 'bad', text: 'Could not freeze — is the sheet already frozen or empty?' }); return; }
+    setSheet((await res.json()) as SheetHead);
+    setMsg({ tone: 'ok', text: 'Baseline frozen — the build-up is now immutable. Generate the quotation when ready.' });
+  });
+
+  const generate = (): Promise<void> => run(async () => {
+    if (!sheet) return;
+    const res = await fetch(`/api/crm/pricing-sheets/${sheet.id}/generate-quotation`, { method: 'POST' });
+    if (res.status === 409) { setMsg({ tone: 'bad', text: 'Freeze the baseline first — a quote is generated from a committed price.' }); return; }
+    if (!res.ok) { setMsg({ tone: 'bad', text: 'Could not generate the quotation.' }); return; }
+    setMsg({ tone: 'ok', text: 'Quotation lines generated from the frozen sheet.' });
+  });
+
+  const newVersion = (): Promise<void> => run(async () => {
+    if (!sheet) return;
+    const res = await fetch(`/api/crm/pricing-sheets/${sheet.id}/revise`, { method: 'POST' });
+    if (!res.ok) { setMsg({ tone: 'bad', text: 'Could not raise a new version.' }); return; }
+    const next = (await res.json()) as SheetHead;
+    setSheet(next);
+    setLines(next.lines.length > 0 ? next.lines : [seed()]);
+    setMsg({ tone: 'ok', text: `Draft v${next.version} raised — carrying the frozen build-up forward.` });
+  });
 
   return (
     <div>
       <div className="pricing-workspace">
         {/* ── LEFT: items ─────────────────────────────── */}
         <div style={st.pane}>
-          <div style={st.paneHead}><b>Items</b><button type="button" onClick={addItem} style={st.addBtn}>+ Add</button></div>
+          <div style={st.paneHead}><b>Items</b><button type="button" onClick={addItem} disabled={frozen} style={st.addBtn}>+ Add</button></div>
           <ul style={st.itemList}>
             {lines.map((l, i) => {
               const r = results[i];
@@ -105,9 +146,13 @@ export default function PricingWorkspace({ id, initial, locked }: { id: string; 
         <div style={st.pane}>
           {selected && (
             <>
-              <div style={st.paneHead}><b>Cost build-up</b>
-                {lines.length > 1 && <button type="button" onClick={() => removeItem(sel)} style={st.rm}>Remove item</button>}
+              <div style={st.paneHead}>
+                <b>Cost build-up{frozen ? ' — frozen (read-only)' : ''}</b>
+                {lines.length > 1 && !frozen && <button type="button" onClick={() => removeItem(sel)} style={st.rm}>Remove item</button>}
               </div>
+              {/* fieldset[disabled] freezes every input inside in one stroke — the frozen build-up
+                  stays fully visible (that is the point of a committed baseline) but untouchable. */}
+              <fieldset disabled={frozen} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
               <label style={st.field}>Item
                 <MarketItemPicker
                   value={selected.description}
@@ -147,6 +192,7 @@ export default function PricingWorkspace({ id, initial, locked }: { id: string; 
               <Group title="Margin & price">
                 <Num label="Target margin %" v={selected.targetMarginPercent} on={(n) => patch(sel, { targetMarginPercent: n })} />
               </Group>
+              </fieldset>
 
               <div style={st.result}>
                 <Res label="Direct" v={selResult.directCost} />
@@ -168,9 +214,28 @@ export default function PricingWorkspace({ id, initial, locked }: { id: string; 
       </div>
 
       <div style={st.foot}>
-        <button type="button" onClick={() => void save()} disabled={busy} style={st.save}>
-          {busy ? 'Saving…' : 'Save & generate quote lines →'}
-        </button>
+        {sheet && <span style={st.sheetBadge}>{sheet.name} · v{sheet.version} · {frozen ? '🧊 frozen' : 'draft'}</span>}
+        {!frozen && (
+          <>
+            <button type="button" onClick={() => void saveDraft()} disabled={busy} style={st.ghostBtn}>
+              {busy ? 'Working…' : sheet ? 'Save draft' : 'Save draft (creates the sheet)'}
+            </button>
+            <button type="button" onClick={() => void freeze()} disabled={busy || !sheet} style={st.save}
+              title="The commercial commitment — the build-up becomes immutable">
+              Freeze baseline 🧊
+            </button>
+          </>
+        )}
+        {frozen && (
+          <>
+            <button type="button" onClick={() => void generate()} disabled={busy} style={st.save}>
+              Generate quotation →
+            </button>
+            <button type="button" onClick={() => void newVersion()} disabled={busy} style={st.ghostBtn}>
+              New version (re-price)
+            </button>
+          </>
+        )}
         {msg && <span style={msg.tone === 'ok' ? st.ok : st.err}>{msg.text}</span>}
       </div>
     </div>
@@ -344,6 +409,8 @@ const st = {
   save: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#0b1020', padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   rm: { background: 'transparent', border: 'none', color: 'var(--bad)', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   lockedWrap: { border: '1px solid var(--border)', borderRadius: 12, padding: 16, background: 'var(--panel)' } as CSSProperties,
+  sheetBadge: { fontSize: 12, color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 11px' } as CSSProperties,
+  ghostBtn: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--fg))', padding: '9px 16px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.6, margin: 0 } as CSSProperties,
   ok: { color: 'var(--good)', fontSize: 12.5 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 12.5 } as CSSProperties,

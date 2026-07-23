@@ -1,22 +1,23 @@
 import { getJson } from '@/lib/api';
-import type { EstimationLineInput } from '@aura/shared';
 import RecordChrome from '../../../../../components/record-chrome';
 import QuotationPricingClient, { type PricingSheet } from '../../../../../components/quotation-pricing-client';
 import PricingAdvicePanel from '../../../../../components/pricing-advice-panel';
-import PricingWorkspace from '../../../../../components/pricing-workspace';
+import PricingWorkspace, { type SheetHead } from '../../../../../components/pricing-workspace';
 
 export const dynamic = 'force-dynamic';
 
-interface QuotationHead { id: string; quoteNumber: string; revision: number; status: string; customerName: string }
+interface QuotationHead { id: string; quoteNumber: string; revision: number; status: string; customerName: string; subject?: string | null }
 
 export default async function QuotationPricingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [q, sheet, estimation] = await Promise.all([
+  const [q, sheet, sheets] = await Promise.all([
     getJson<QuotationHead>(`/api/crm/quotations/${id}`),
     getJson<PricingSheet>(`/api/crm/quotations/${id}/pricing`),
-    getJson<EstimationLineInput[]>(`/api/crm/quotations/${id}/estimation`),
+    // The PricingSheet aggregate behind this quote — newest first, so [0] is the working version.
+    getJson<SheetHead[]>(`/api/crm/pricing-sheets?quotationId=${id}`),
   ]);
   if (!q || !sheet) return <div style={{ padding: 40 }}>Quotation not found or API offline.</div>;
+  const workingSheet = Array.isArray(sheets) && sheets.length > 0 ? sheets[0] : null;
 
   return (
     <div style={{ maxWidth: 1240, margin: '0 auto', padding: '24px 28px 64px' }}>
@@ -36,7 +37,11 @@ export default async function QuotationPricingPage({ params }: { params: Promise
         right pane shows the market benchmark, price history and advice for the item you’re working on.
       </p>
 
-      <PricingWorkspace id={id} initial={estimation ?? []} locked={sheet.locked} />
+      <PricingWorkspace
+        quotationId={id}
+        sheetName={`${q.quoteNumber}${q.subject ? ` — ${q.subject}` : ''}`}
+        initialSheet={workingSheet}
+      />
       <div style={{ marginTop: 20 }}><PricingAdvicePanel id={id} /></div>
 
       <details style={{ marginTop: 20 }}>

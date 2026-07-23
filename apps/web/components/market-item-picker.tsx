@@ -58,12 +58,11 @@ export default function MarketItemPicker({ value, placeholder, onType, onPick, s
     timer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const [c, h] = await Promise.all([
-          fetch(`/api/crm/market-items?q=${encodeURIComponent(q)}&limit=6`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
-          fetch(`/api/crm/quotations/price-history?q=${encodeURIComponent(q)}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
-        ]);
-        setCatalog(Array.isArray(c) ? c.slice(0, 6) : []);
-        setHistoric(Array.isArray(h) ? h.slice(0, 4) : []);
+        // ONE read — Product Knowledge is the single source (products + history together).
+        const k = await fetch(`/api/crm/product-knowledge?q=${encodeURIComponent(q)}`, { cache: 'no-store' })
+          .then((r) => r.json()).catch(() => ({ products: [], history: [] }));
+        setCatalog(Array.isArray(k.products) ? k.products.slice(0, 6) : []);
+        setHistoric(Array.isArray(k.history) ? k.history.slice(0, 4) : []);
       } finally {
         setLoading(false);
       }

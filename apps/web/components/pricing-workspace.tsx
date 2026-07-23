@@ -258,17 +258,20 @@ function IntelPane({ description, result, onInsert }: {
 }) {
   const [catalog, setCatalog] = useState<Array<{ id: string; name: string; brand: string | null; benchmarkCost: number; benchmarkSell: number; installHours: number; source: string | null; minPrice: number | null; maxPrice: number | null; leadTimeDays: number | null; warrantyMonths: number | null; confidence: number; crewSize: number | null; commissioningHours: number | null }>>([]);
   const [history, setHistory] = useState<Array<{ description: string; count: number; lastPrice: number; minPrice: number; maxPrice: number }>>([]);
+  const [suppliers, setSuppliers] = useState<Array<{ supplier: string; amount: number; rfq: string }>>([]);
+  const [inventory, setInventory] = useState<Array<{ name: string; quantityOnHand: number; avgCost: number }>>([]);
 
   useEffect(() => {
     const q = description.trim();
     if (q.length < 2) { setCatalog([]); setHistory([]); return; }
     const t = setTimeout(async () => {
-      const [c, h] = await Promise.all([
-        fetch(`/api/crm/market-items?q=${encodeURIComponent(q)}&limit=3`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
-        fetch(`/api/crm/quotations/price-history?q=${encodeURIComponent(q)}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => []),
-      ]);
-      setCatalog(Array.isArray(c) ? c.slice(0, 3) : []);
-      setHistory(Array.isArray(h) ? h.slice(0, 3) : []);
+      // ONE read — Product Knowledge (MI as the single source): product, history, suppliers, stock.
+      const k = await fetch(`/api/crm/product-knowledge?q=${encodeURIComponent(q)}`, { cache: 'no-store' })
+        .then((r) => r.json()).catch(() => ({ products: [], history: [], suppliers: [], inventory: [] }));
+      setCatalog(Array.isArray(k.products) ? k.products.slice(0, 3) : []);
+      setHistory(Array.isArray(k.history) ? k.history.slice(0, 3) : []);
+      setSuppliers(Array.isArray(k.suppliers) ? k.suppliers.slice(0, 3) : []);
+      setInventory(Array.isArray(k.inventory) ? k.inventory.slice(0, 3) : []);
     }, 250);
     return () => clearTimeout(t);
   }, [description]);
@@ -323,6 +326,30 @@ function IntelPane({ description, result, onInsert }: {
             Insert into build-up
           </button>
           {bench.source && <div style={st.src}>{bench.source}</div>}
+        </div>
+      )}
+      {suppliers.length > 0 && (
+        <div style={st.intelCard}>
+          <div style={st.intelHead}>Supplier offers</div>
+          {suppliers.map((s, i) => (
+            <div key={i} style={st.histRow}>
+              <span style={st.histName}>{s.supplier}</span>
+              <span style={st.histMeta}>{money(s.amount)} · {s.rfq}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(inventory.length > 0 || bench) && (
+        <div style={st.intelCard}>
+          <div style={st.intelHead}>Inventory</div>
+          {inventory.length > 0
+            ? inventory.map((s) => (
+              <div key={s.name} style={st.histRow}>
+                <span style={st.histName}>{s.name}</span>
+                <span style={st.histMeta}>{s.quantityOnHand} on hand · WAC {money(s.avgCost)}</span>
+              </div>
+            ))
+            : <p style={st.muted}>Not in stock — needs procurement{bench?.leadTimeDays != null ? ` (~${bench.leadTimeDays} days lead)` : ''}.</p>}
         </div>
       )}
       {history.length > 0 && (

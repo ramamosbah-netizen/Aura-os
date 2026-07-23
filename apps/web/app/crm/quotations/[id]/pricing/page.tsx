@@ -1,6 +1,5 @@
 import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../../components/record-chrome';
-import QuotationPricingClient, { type PricingSheet } from '../../../../../components/quotation-pricing-client';
 import PricingAdvicePanel from '../../../../../components/pricing-advice-panel';
 import PricingWorkspace, { type SheetHead } from '../../../../../components/pricing-workspace';
 
@@ -10,13 +9,12 @@ interface QuotationHead { id: string; quoteNumber: string; revision: number; sta
 
 export default async function QuotationPricingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [q, sheet, sheets] = await Promise.all([
+  const [q, sheets] = await Promise.all([
     getJson<QuotationHead>(`/api/crm/quotations/${id}`),
-    getJson<PricingSheet>(`/api/crm/quotations/${id}/pricing`),
     // The PricingSheet aggregate behind this quote — newest first, so [0] is the working version.
     getJson<SheetHead[]>(`/api/crm/pricing-sheets?quotationId=${id}`),
   ]);
-  if (!q || !sheet) return <div style={{ padding: 40 }}>Quotation not found or API offline.</div>;
+  if (!q) return <div style={{ padding: 40 }}>Quotation not found or API offline.</div>;
   const workingSheet = Array.isArray(sheets) && sheets.length > 0 ? sheets[0] : null;
 
   return (
@@ -43,13 +41,6 @@ export default async function QuotationPricingPage({ params }: { params: Promise
         initialSheet={workingSheet}
       />
       <div style={{ marginTop: 20 }}><PricingAdvicePanel id={id} /></div>
-
-      <details style={{ marginTop: 20 }}>
-        <summary style={{ cursor: 'pointer', color: 'var(--muted)', fontSize: 12.5 }}>Advanced — detailed cost sheet (legacy)</summary>
-        <div style={{ marginTop: 12 }}>
-          <QuotationPricingClient id={id} customerName={q.customerName} status={q.status} initialSheet={sheet} />
-        </div>
-      </details>
     </div>
   );
 }

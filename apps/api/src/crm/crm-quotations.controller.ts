@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { AiService, FormCustomValuesService, FormOverridesService, NumberingService, TenantContext } from '@aura/core';
-import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema, type EstimationLineInput } from '@aura/shared';
+import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
   analysePricing, type LineRefs, type SheetLineForAdvice,
@@ -173,53 +173,16 @@ export class CrmQuotationsController {
     return this.quotations.listRevisions(this.tenant.get().tenantId, id);
   }
 
-  /** Internal rate build-up (cost factors → direct/indirect → margin) + lock state. */
+  /**
+   * Internal rate build-up view (cost factors → direct/indirect → margin) + lock state. READ ONLY:
+   * all pricing WRITES go through the PricingSheet aggregate (crm/pricing-sheets — draft → freeze →
+   * generate). The legacy write endpoints (set/apply/generate-lines/estimation) were removed once
+   * the sheet became the single source; the quotation is an output, not a place prices are typed.
+   */
   @Get(':id/pricing')
   getPricing(@Param('id') id: string) {
     // Domain errors flow to the taxonomy filter: "not found" → 404.
     return this.quotations.getPricing(id);
-  }
-
-  /**
-   * Save the per-line cost build-up for this revision.
-   * Refused with 409 once the quotation is approved — the sheet is locked
-   * (the taxonomy filter classifies the "only … can be re-priced" guard).
-   */
-  @Put(':id/pricing')
-  setPricing(@Param('id') id: string, @Body() dto: unknown) {
-    return this.quotations.setPricing(id, dto);
-  }
-
-  /**
-   * Author the quote FROM its sheet: save the cost build-up, derive each line's
-   * sell price from its cost + target margin, and write those prices onto the
-   * quotation. Refused with 409 once approved (the sheet is locked).
-   */
-  @Post(':id/pricing/apply')
-  applyPricing(@Param('id') id: string, @Body() dto: { lines?: unknown; targetMargins?: unknown }) {
-    return this.quotations.applyPricing(id, dto ?? {});
-  }
-
-  /**
-   * Generate the quote's LINES from pricing-sheet items — the sheet-first authoring path. Each
-   * item carries its own description, quantity, cost build-up and target margin; the line is
-   * written with a sell price derived from cost and margin. Refused (409) once approved.
-   */
-  @Post(':id/pricing/generate-lines')
-  generateFromSheet(@Param('id') id: string, @Body() dto: { items?: unknown }): Promise<Quotation> {
-    return this.quotations.generateFromSheet(id, dto?.items ?? []);
-  }
-
-  /** The Pricing Workspace: the stored Estimation Engine build-up per line. */
-  @Get(':id/estimation')
-  getEstimation(@Param('id') id: string) {
-    return this.quotations.getEstimation(id);
-  }
-
-  /** Save the Pricing Workspace — persist each line's build-up and regenerate the quote lines from it. */
-  @Post(':id/estimation')
-  saveEstimation(@Param('id') id: string, @Body() dto: { items?: EstimationLineInput[] }): Promise<Quotation> {
-    return this.quotations.saveEstimation(id, Array.isArray(dto?.items) ? dto.items : []);
   }
 
   /**

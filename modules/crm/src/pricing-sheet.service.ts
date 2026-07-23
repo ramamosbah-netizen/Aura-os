@@ -2,8 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, type EstimationLineInput, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
-  type NewPricingSheet, type PricingSheet,
-  makePricingSheet, withSheetLines, freezeSheet, reviseSheet,
+  type NewPricingSheet, type PricingSheet, type SheetComparison,
+  makePricingSheet, withSheetLines, freezeSheet, reviseSheet, compareSheets,
 } from './domain/pricing-sheet';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetFilter, type PricingSheetStore } from './pricing-sheet-store';
 import { QuotationService } from './quotation.service';
@@ -88,6 +88,20 @@ export class PricingSheetService {
     const next = reviseSheet(sheet, actorId);
     await this.store.save(next);
     return next;
+  }
+
+  /**
+   * Version comparison — change analysis between this sheet and a reference (its frozen parent by
+   * default): the money moved (cost / sell / margin points) and WHERE, line by line.
+   */
+  async compare(id: Id, withId?: Id): Promise<SheetComparison> {
+    const to = await this.store.get(id);
+    if (!to) throw new Error(`pricing sheet ${id} not found`);
+    const refId = withId ?? to.parentSheetId;
+    if (!refId) throw new Error(`pricing sheet ${to.name} v${to.version} has no earlier version to compare against`);
+    const from = await this.store.get(refId);
+    if (!from || from.tenantId !== to.tenantId) throw new Error(`comparison sheet ${refId} not found`);
+    return compareSheets(from, to);
   }
 
   /**

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { emptyEstimationInput, type EstimationLineInput } from '@aura/shared';
-import { makePricingSheet, withSheetLines, freezeSheet, reviseSheet, computeSheetTotals } from './pricing-sheet';
+import { makePricingSheet, withSheetLines, freezeSheet, reviseSheet, computeSheetTotals, compareSheets } from './pricing-sheet';
 
 const line = (over: Partial<EstimationLineInput> = {}): EstimationLineInput => ({
   ...emptyEstimationInput(),
@@ -73,5 +73,45 @@ describe('reviseSheet', () => {
 describe('computeSheetTotals', () => {
   it('is empty-safe', () => {
     expect(computeSheetTotals([])).toEqual({ totalCost: 0, totalSell: 0, marginPercent: 0 });
+  });
+});
+
+describe('compareSheets — what changed between two prices, line by line', () => {
+  const mk = (lines: Parameters<typeof makePricingSheet>[0]['lines'], version = 1) =>
+    makePricingSheet({ tenantId: 't1', name: 'Job', version, lines });
+
+  it('classifies added, removed, changed and unchanged lines by normalised description', () => {
+    const v1 = mk([
+      line(),                                                     // CCTV Camera — will change price
+      line({ description: 'NVR 16ch', materialUnitCost: 2400, quantity: 1 }), // will be removed
+      line({ description: 'Cat6 Cable', materialUnitCost: 2, quantity: 500, labour: { hoursPerUnit: 0.05, crewSize: 1, hourlyRate: 30 } }), // unchanged
+    ]);
+    const v2 = mk([
+      line({ targetMarginPercent: 15 }),                          // cheaper camera (margin cut)
+      line({ description: '  cat6   cable ', materialUnitCost: 2, quantity: 500, labour: { hoursPerUnit: 0.05, crewSize: 1, hourlyRate: 30 } }), // same, messy spacing
+      line({ description: 'Access Reader', materialUnitCost: 260, quantity: 2 }), // added
+    ], 2);
+
+    const c = compareSheets(v1, v2);
+    expect(c.added.map((l) => l.description)).toEqual(['Access Reader']);
+    expect(c.removed.map((l) => l.description)).toEqual(['NVR 16ch']);
+    expect(c.changed.map((l) => l.description)).toEqual(['CCTV Camera']);
+    expect(c.unchanged).toBe(1);
+  });
+
+  it('reports the money: cost diff, sell diff, and margin movement in points', () => {
+    const v1 = mk([line({ targetMarginPercent: 25 })]);           // sell 2880 @ 25%
+    const v2 = mk([line({ targetMarginPercent: 15 })], 2);        // sell ~2541.18 @ 15%
+    const c = compareSheets(v1, v2);
+    expect(c.costDiff).toBe(0);                                   // same build-up
+    expect(c.sellDiff).toBeLessThan(0);                           // cheaper offer
+    expect(c.marginDiffPoints).toBe(-10);                         // 25% → 15%
+    expect(c.changed[0].sellDiff).toBe(c.sellDiff);               // one line carries it all
+  });
+
+  it('a quantity change is a change even at identical unit prices', () => {
+    const v1 = mk([line({ quantity: 4 })]);
+    const v2 = mk([line({ quantity: 6 })], 2);
+    expect(compareSheets(v1, v2).changed).toHaveLength(1);
   });
 });

@@ -22,6 +22,7 @@ const money = (n: number): string => (Number.isFinite(n) ? n : 0).toLocaleString
 /** The sheet as the workspace sees it — the aggregate that owns the pricing. */
 export interface SheetHead {
   id: string; name: string; status: 'draft' | 'frozen'; version: number;
+  parentSheetId?: string | null;
   lines: Line[];
 }
 
@@ -51,6 +52,18 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
     fetch(`/api/crm/pricing-sheets/${sheet.id}/deal-context`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null)).then(setDeal).catch(() => setDeal(null));
   }, [sheet?.id]);
+  const [compare, setCompare] = useState<{
+    from: { version: number }; costDiff: number; sellDiff: number; marginDiffPoints: number;
+    added: Array<{ description: string; sellTotal: number }>;
+    removed: Array<{ description: string; sellTotal: number }>;
+    changed: Array<{ description: string; sellDiff: number; marginDiffPoints: number }>;
+    unchanged: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!sheet?.id || !sheet.parentSheetId) { setCompare(null); return; }
+    fetch(`/api/crm/pricing-sheets/${sheet.id}/compare`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).then(setCompare).catch(() => setCompare(null));
+  }, [sheet?.id, sheet?.parentSheetId]);
   const selected = lines[sel] ?? lines[0];
   const selResult = results[sel] ?? results[0];
   const grandTotal = results.reduce((s, r) => s + r.sellPrice, 0);
@@ -262,6 +275,26 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
                   Committed baselines so far: {deal.frozenSheets.count}, avg margin {deal.frozenSheets.avgMarginPercent}% — this sheet: {sheetAdvice.blendedMarginPercent}%.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Version comparison — change analysis vs the frozen parent. */}
+          {compare && (
+            <div style={{ ...st.intelCard, marginTop: 12 }}>
+              <div style={st.intelHead}>vs v{compare.from.version}</div>
+              <div style={st.benchGrid}>
+                <span>Sell</span><b style={{ color: compare.sellDiff < 0 ? 'var(--warn)' : compare.sellDiff > 0 ? 'var(--good)' : 'inherit' }}>{compare.sellDiff >= 0 ? '+' : ''}{money(compare.sellDiff)}</b>
+                <span>Cost</span><b>{compare.costDiff >= 0 ? '+' : ''}{money(compare.costDiff)}</b>
+                <span>Margin</span><b>{compare.marginDiffPoints >= 0 ? '+' : ''}{compare.marginDiffPoints} pts</b>
+              </div>
+              {(compare.added.length > 0 || compare.removed.length > 0 || compare.changed.length > 0) && (
+                <ul style={{ ...st.flags, marginTop: 6 }}>
+                  {compare.added.map((l) => <li key={'a' + l.description} style={{ ...st.flag, color: 'var(--good)' }}>+ {l.description} ({money(l.sellTotal)})</li>)}
+                  {compare.removed.map((l) => <li key={'r' + l.description} style={{ ...st.flag, color: 'var(--bad)' }}>− {l.description} ({money(l.sellTotal)})</li>)}
+                  {compare.changed.map((l) => <li key={'c' + l.description} style={{ ...st.flag, color: 'var(--warn)' }}>Δ {l.description}: {l.sellDiff >= 0 ? '+' : ''}{money(l.sellDiff)} · {l.marginDiffPoints >= 0 ? '+' : ''}{l.marginDiffPoints} pts</li>)}
+                </ul>
+              )}
+              <p style={{ ...st.muted, marginTop: 6 }}>{compare.unchanged} line(s) unchanged.</p>
             </div>
           )}
         </div>

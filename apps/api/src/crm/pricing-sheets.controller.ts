@@ -50,6 +50,12 @@ export class PricingSheetsController {
     return sheet;
   }
 
+  /** Change analysis vs an earlier version (the frozen parent by default): money moved, and where. */
+  @Get(':id/compare')
+  compare(@Param('id', ParseUuidOr404Pipe) id: string, @Query('with') withId?: string) {
+    return this.sheets.compare(id, withId);
+  }
+
   /** Opportunity-level Copilot facts — real counts (quotes to this account, frozen-sheet margins). */
   @Get(':id/deal-context')
   dealContext(@Param('id', ParseUuidOr404Pipe) id: string) {

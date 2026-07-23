@@ -3,6 +3,7 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { estimateLine, emptyEstimationInput, analyseSheet, type EstimationLineInput } from '@aura/shared';
 import MarketItemPicker, { type PickedItem } from './market-item-picker';
+import IntelligenceCenter from './intelligence-center';
 
 // The Pricing Workspace — three panes, so the screen does one thing at a time instead of two.
 //
@@ -38,6 +39,9 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
   const frozen = sheet?.status === 'frozen';
+  // The workspace's two views over the SAME live lines: the 3-pane authoring surface, and the
+  // Intelligence Center — the whole offer's market dossier in one tab.
+  const [view, setView] = useState<'workspace' | 'intelligence'>('workspace');
 
   const results = useMemo(() => lines.map(estimateLine), [lines]);
   // Sheet-level Copilot — same shared function the server owns, run live on every edit.
@@ -139,7 +143,14 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
 
   return (
     <div>
-      <div className="pricing-workspace">
+      <div style={st.viewTabs}>
+        <button type="button" onClick={() => setView('workspace')} style={{ ...st.viewTab, ...(view === 'workspace' ? st.viewTabOn : {}) }}>Workspace</button>
+        <button type="button" onClick={() => setView('intelligence')} style={{ ...st.viewTab, ...(view === 'intelligence' ? st.viewTabOn : {}) }}>Intelligence</button>
+      </div>
+
+      {view === 'intelligence' && <IntelligenceCenter lines={lines} />}
+
+      <div className="pricing-workspace" style={view === 'intelligence' ? { display: 'none' } : undefined}>
         {/* ── LEFT: items ─────────────────────────────── */}
         <div style={st.pane}>
           <div style={st.paneHead}><b>Items</b><button type="button" onClick={addItem} disabled={frozen} style={st.addBtn}>+ Add</button></div>
@@ -532,6 +543,9 @@ const st = {
   save: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#0b1020', padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   rm: { background: 'transparent', border: 'none', color: 'var(--bad)', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   lockedWrap: { border: '1px solid var(--border)', borderRadius: 12, padding: 16, background: 'var(--panel)' } as CSSProperties,
+  viewTabs: { display: 'flex', gap: 4, marginBottom: 14, borderBottom: '1px solid var(--border)' } as CSSProperties,
+  viewTab: { background: 'transparent', border: 'none', borderBottom: '2px solid transparent', color: 'var(--muted)', padding: '7px 14px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
+  viewTabOn: { color: 'var(--text, var(--fg))', borderBottomColor: 'var(--accent)', fontWeight: 600 } as CSSProperties,
   sheetBadge: { fontSize: 12, color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 11px' } as CSSProperties,
   ghostBtn: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--fg))', padding: '9px 16px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.6, margin: 0 } as CSSProperties,

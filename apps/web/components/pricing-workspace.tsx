@@ -1,7 +1,7 @@
 'use client';
 
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { estimateLine, emptyEstimationInput, type EstimationLineInput } from '@aura/shared';
+import { estimateLine, emptyEstimationInput, analyseSheet, type EstimationLineInput } from '@aura/shared';
 import MarketItemPicker, { type PickedItem } from './market-item-picker';
 
 // The Pricing Workspace — three panes, so the screen does one thing at a time instead of two.
@@ -39,6 +39,18 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
   const frozen = sheet?.status === 'frozen';
 
   const results = useMemo(() => lines.map(estimateLine), [lines]);
+  // Sheet-level Copilot — same shared function the server owns, run live on every edit.
+  const sheetAdvice = useMemo(() => analyseSheet(lines), [lines]);
+  const [deal, setDeal] = useState<{
+    account: { id: string; name: string } | null;
+    quotesToAccount: { total: number; accepted: number; rejected: number; decidedWinRatePercent: number | null };
+    frozenSheets: { count: number; avgMarginPercent: number | null };
+  } | null>(null);
+  useEffect(() => {
+    if (!sheet?.id) { setDeal(null); return; }
+    fetch(`/api/crm/pricing-sheets/${sheet.id}/deal-context`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).then(setDeal).catch(() => setDeal(null));
+  }, [sheet?.id]);
   const selected = lines[sel] ?? lines[0];
   const selResult = results[sel] ?? results[0];
   const grandTotal = results.reduce((s, r) => s + r.sellPrice, 0);
@@ -210,6 +222,48 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
         <div style={st.pane} className="pw-intel">
           <div style={st.paneHead}><b>Intelligence</b></div>
           {selected && <IntelPane description={selected.description} result={selResult} onInsert={(p) => applyPick(sel, p)} />}
+
+          {/* Sheet-level Copilot — the whole offer, live. */}
+          <div style={{ ...st.intelCard, marginTop: 12 }}>
+            <div style={st.intelHead}>Sheet review</div>
+            <div style={st.benchGrid}>
+              <span>Blended margin</span><b>{sheetAdvice.blendedMarginPercent}%</b>
+              <span>Labour share</span><b>{sheetAdvice.labourSharePercent}% of direct</b>
+            </div>
+            {sheetAdvice.flags.length > 0 && (
+              <ul style={{ ...st.flags, marginTop: 6 }}>
+                {sheetAdvice.flags.map((f, i) => (
+                  <li key={i} style={{ ...st.flag, color: f.tone === 'bad' ? 'var(--bad)' : f.tone === 'warn' ? 'var(--warn)' : 'var(--good)' }}>
+                    {f.tone === 'ok' ? '✓' : '⚠'} {f.text}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Opportunity-level Copilot — real counts, never an invented probability. */}
+          {deal && (
+            <div style={{ ...st.intelCard, marginTop: 12 }}>
+              <div style={st.intelHead}>Deal context{deal.account ? ` · ${deal.account.name}` : ''}</div>
+              {deal.account ? (
+                deal.quotesToAccount.total > 0 ? (
+                  <div style={st.benchGrid}>
+                    <span>Past quotes</span><b>{deal.quotesToAccount.total}</b>
+                    <span>Accepted</span><b>{deal.quotesToAccount.accepted}</b>
+                    <span>Rejected</span><b>{deal.quotesToAccount.rejected}</b>
+                    {deal.quotesToAccount.decidedWinRatePercent != null && (
+                      <><span>Decided win rate</span><b>{deal.quotesToAccount.decidedWinRatePercent}%</b></>
+                    )}
+                  </div>
+                ) : <p style={st.muted}>First quote to this account — no history yet.</p>
+              ) : <p style={st.muted}>No account linked — link the quote to a customer for deal history.</p>}
+              {deal.frozenSheets.count > 0 && deal.frozenSheets.avgMarginPercent != null && (
+                <p style={{ ...st.muted, marginTop: 6 }}>
+                  Committed baselines so far: {deal.frozenSheets.count}, avg margin {deal.frozenSheets.avgMarginPercent}% — this sheet: {sheetAdvice.blendedMarginPercent}%.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

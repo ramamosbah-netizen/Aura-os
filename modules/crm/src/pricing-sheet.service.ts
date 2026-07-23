@@ -91,6 +91,56 @@ export class PricingSheetService {
   }
 
   /**
+   * Opportunity-level context for the Copilot — DESCRIPTIVE FACTS with real counts, never an
+   * invented probability. "3 of 5 decided quotes to this account were accepted" is knowledge a
+   * commercial manager can check; "win probability 62%" from 29 records would be a costume.
+   * Every number here is a count or an average over rows that exist.
+   */
+  async dealContext(id: Id): Promise<{
+    account: { id: Id; name: string } | null;
+    quotesToAccount: { total: number; accepted: number; rejected: number; decidedWinRatePercent: number | null };
+    frozenSheets: { count: number; avgMarginPercent: number | null };
+    thisSheetMarginPercent: number;
+  }> {
+    const sheet = await this.store.get(id);
+    if (!sheet) throw new Error(`pricing sheet ${id} not found`);
+
+    let account: { id: Id; name: string } | null = null;
+    let quotesToAccount = { total: 0, accepted: 0, rejected: 0, decidedWinRatePercent: null as number | null };
+    if (sheet.quotationId) {
+      const quote = await this.quotations.get(sheet.quotationId);
+      if (quote?.accountId) {
+        account = { id: quote.accountId, name: quote.customerName };
+        const history = await this.quotations.list({ tenantId: sheet.tenantId, accountId: quote.accountId, limit: 200 });
+        const others = history.filter((q) => q.id !== sheet.quotationId);
+        const accepted = others.filter((q) => q.status === 'accepted').length;
+        const rejected = others.filter((q) => q.status === 'rejected').length;
+        const decided = accepted + rejected;
+        quotesToAccount = {
+          total: others.length,
+          accepted,
+          rejected,
+          decidedWinRatePercent: decided > 0 ? Math.round((accepted / decided) * 100) : null,
+        };
+      }
+    }
+
+    // How this sheet's margin sits against every baseline the tenant has committed to.
+    const all = await this.store.list({ tenantId: sheet.tenantId, limit: 200 });
+    const frozen = all.filter((s) => s.status === 'frozen' && s.id !== sheet.id);
+    const avgMarginPercent = frozen.length > 0
+      ? Math.round((frozen.reduce((sum, s) => sum + s.totals.marginPercent, 0) / frozen.length) * 10) / 10
+      : null;
+
+    return {
+      account,
+      quotesToAccount,
+      frozenSheets: { count: frozen.length, avgMarginPercent },
+      thisSheetMarginPercent: sheet.totals.marginPercent,
+    };
+  }
+
+  /**
    * Generate the quotation FROM the sheet — the quotation as an output. Only a frozen sheet can
    * generate: a quote is the face of a committed price, not a preview of a moving draft.
    */

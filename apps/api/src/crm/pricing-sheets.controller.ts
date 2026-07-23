@@ -50,6 +50,12 @@ export class PricingSheetsController {
     return sheet;
   }
 
+  /** Opportunity-level Copilot facts — real counts (quotes to this account, frozen-sheet margins). */
+  @Get(':id/deal-context')
+  dealContext(@Param('id', ParseUuidOr404Pipe) id: string) {
+    return this.sheets.dealContext(id);
+  }
+
   /** Save the draft's lines. The domain refuses on a frozen sheet (409 via the taxonomy). */
   @Put(':id/lines')
   saveLines(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { lines?: EstimationLineInput[] }): Promise<PricingSheet> {

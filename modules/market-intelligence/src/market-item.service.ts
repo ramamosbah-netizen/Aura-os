@@ -74,6 +74,8 @@ export class MarketItemService {
         leadTimeDays: LEAD_TIME_BY_CATEGORY[spec.category ?? 'OTHER'] ?? 14,
         warrantyMonths: 12,
         crewSize: (spec.installHours ?? 0) >= 4 ? 2 : 1,
+        // Commissioning: roughly half the install for active devices; passive items need none.
+        commissioningHours: spec.category === 'STRUCTURED_CABLING' ? 0 : Math.round(((spec.installHours ?? 0) / 2) * 100) / 100,
         confidence: 75,
       }));
     }

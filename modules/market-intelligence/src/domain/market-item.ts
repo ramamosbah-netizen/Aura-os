@@ -74,6 +74,12 @@ export interface MarketItem {
   warrantyMonths: number | null;
   /** Typical crew size to install — seeds the estimation labour, with installHours. */
   crewSize: number | null;
+  /**
+   * Commissioning time per unit, in hours — distinct from installHours because hanging a device
+   * and making it WORK are different jobs, and the second is the one estimates forget. The
+   * workspace seeds labour with install + commissioning together.
+   */
+  commissioningHours: number | null;
 
   // ── knowledge graph
   /** Other market items that can substitute for this one. */
@@ -114,6 +120,7 @@ export interface NewMarketItem {
   leadTimeDays?: number | null;
   warrantyMonths?: number | null;
   crewSize?: number | null;
+  commissioningHours?: number | null;
   alternativeIds?: string[];
   datasheetUrl?: string | null;
   imageUrl?: string | null;
@@ -154,6 +161,7 @@ export function makeMarketItem(input: NewMarketItem, now = new Date()): MarketIt
     leadTimeDays: input.leadTimeDays == null ? null : nonNeg(input.leadTimeDays, 'leadTimeDays'),
     warrantyMonths: input.warrantyMonths == null ? null : nonNeg(input.warrantyMonths, 'warrantyMonths'),
     crewSize: input.crewSize == null ? null : Math.max(1, Math.floor(Number(input.crewSize) || 1)),
+    commissioningHours: input.commissioningHours == null ? null : nonNeg(input.commissioningHours, 'commissioningHours'),
     alternativeIds: Array.isArray(input.alternativeIds) ? input.alternativeIds.filter(Boolean) : [],
     datasheetUrl: input.datasheetUrl?.trim() || null,
     imageUrl: input.imageUrl?.trim() || null,

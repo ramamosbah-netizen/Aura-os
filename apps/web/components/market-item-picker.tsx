@@ -18,6 +18,9 @@ export interface PickedItem {
   description: string;
   unitCost?: number;
   marginPercent?: number;
+  /** Productivity from the Crew Library — install + commissioning hours per unit, and the crew. */
+  hoursPerUnit?: number;
+  crewSize?: number;
   /** A short provenance line to show under the row after a pick. */
   note?: string;
 }
@@ -25,6 +28,7 @@ export interface PickedItem {
 interface CatalogHit {
   id: string; name: string; brand: string | null; category: string;
   benchmarkCost: number; benchmarkSell: number; installHours: number; source: string | null; asOf: string;
+  crewSize: number | null; commissioningHours: number | null;
 }
 interface HistoricHit { description: string; count: number; lastPrice: number; minPrice: number; maxPrice: number }
 
@@ -77,11 +81,16 @@ export default function MarketItemPicker({ value, placeholder, onType, onPick, s
   const hasHits = catalog.length > 0 || historic.length > 0;
 
   function pickCatalog(c: CatalogHit): void {
+    // The Crew Library at work: labour is seeded with install + commissioning (making it WORK is
+    // the half estimates forget) and the typical crew, alongside the benchmark cost + margin.
+    const hours = c.installHours + (c.commissioningHours ?? 0);
     onPick({
       description: c.name,
       unitCost: c.benchmarkCost,
       marginPercent: marginOf(c.benchmarkCost, c.benchmarkSell),
-      note: `Catalogue${c.brand ? ` · ${c.brand}` : ''} · sells ~${money(c.benchmarkSell)}${c.source ? ` · ${c.source} ${c.asOf}` : ''} · ${c.installHours}h install`,
+      ...(hours > 0 ? { hoursPerUnit: hours } : {}),
+      ...(c.crewSize ? { crewSize: c.crewSize } : {}),
+      note: `Catalogue${c.brand ? ` · ${c.brand}` : ''} · sells ~${money(c.benchmarkSell)} · ${c.installHours}h install${c.commissioningHours ? ` + ${c.commissioningHours}h comm.` : ''}${c.crewSize ? ` · crew ${c.crewSize}` : ''}`,
     });
     setOpen(false);
   }

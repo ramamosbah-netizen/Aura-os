@@ -29,6 +29,7 @@ class CreateMarketItemDto {
   @IsOptional() @IsNumber() @Min(0) leadTimeDays?: number;
   @IsOptional() @IsNumber() @Min(0) warrantyMonths?: number;
   @IsOptional() @IsNumber() @Min(1) crewSize?: number;
+  @IsOptional() @IsNumber() @Min(0) commissioningHours?: number;
   @IsOptional() @IsNumber() @Min(0) confidence?: number;
 }
 

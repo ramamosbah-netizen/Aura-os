@@ -26,6 +26,7 @@ interface Row {
   lead_time_days: number | null;
   warranty_months: number | null;
   crew_size: number | null;
+  commissioning_hours: string | number | null;
   alternative_ids: string[] | string | null;
   datasheet_url: string | null;
   image_url: string | null;
@@ -62,6 +63,7 @@ function rowTo(r: Row): MarketItem {
     leadTimeDays: numN(r.lead_time_days),
     warrantyMonths: numN(r.warranty_months),
     crewSize: numN(r.crew_size),
+    commissioningHours: numN(r.commissioning_hours),
     alternativeIds: r.alternative_ids == null ? []
       : (typeof r.alternative_ids === 'string' ? (JSON.parse(r.alternative_ids) as string[]) : r.alternative_ids),
     datasheetUrl: r.datasheet_url,
@@ -74,7 +76,7 @@ function rowTo(r: Row): MarketItem {
 
 const COLS =
   'id, tenant_id, name, brand, category, unit, benchmark_cost, benchmark_sell, install_hours, source, as_of::text AS as_of, notes, ' +
-  'sku, manufacturer, model, country_of_origin, min_price, max_price, avg_price, lead_time_days, warranty_months, crew_size, alternative_ids, datasheet_url, image_url, confidence, ' +
+  'sku, manufacturer, model, country_of_origin, min_price, max_price, avg_price, lead_time_days, warranty_months, crew_size, commissioning_hours, alternative_ids, datasheet_url, image_url, confidence, ' +
   'created_at, created_by';
 
 export class PostgresMarketItemStore implements MarketItemStore {
@@ -84,21 +86,21 @@ export class PostgresMarketItemStore implements MarketItemStore {
     await this.pool.query(
       `INSERT INTO public.aura_crm_market_items
         (id, tenant_id, name, brand, category, unit, benchmark_cost, benchmark_sell, install_hours, source, as_of, notes,
-         sku, manufacturer, model, country_of_origin, min_price, max_price, avg_price, lead_time_days, warranty_months, crew_size, alternative_ids, datasheet_url, image_url, confidence,
+         sku, manufacturer, model, country_of_origin, min_price, max_price, avg_price, lead_time_days, warranty_months, crew_size, commissioning_hours, alternative_ids, datasheet_url, image_url, confidence,
          created_at, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, brand = EXCLUDED.brand, category = EXCLUDED.category, unit = EXCLUDED.unit,
          benchmark_cost = EXCLUDED.benchmark_cost, benchmark_sell = EXCLUDED.benchmark_sell,
          install_hours = EXCLUDED.install_hours, source = EXCLUDED.source, as_of = EXCLUDED.as_of, notes = EXCLUDED.notes,
          sku = EXCLUDED.sku, manufacturer = EXCLUDED.manufacturer, model = EXCLUDED.model, country_of_origin = EXCLUDED.country_of_origin,
          min_price = EXCLUDED.min_price, max_price = EXCLUDED.max_price, avg_price = EXCLUDED.avg_price,
-         lead_time_days = EXCLUDED.lead_time_days, warranty_months = EXCLUDED.warranty_months, crew_size = EXCLUDED.crew_size,
+         lead_time_days = EXCLUDED.lead_time_days, warranty_months = EXCLUDED.warranty_months, crew_size = EXCLUDED.crew_size, commissioning_hours = EXCLUDED.commissioning_hours,
          alternative_ids = EXCLUDED.alternative_ids, datasheet_url = EXCLUDED.datasheet_url, image_url = EXCLUDED.image_url, confidence = EXCLUDED.confidence`,
       [m.id, m.tenantId, m.name, m.brand, m.category, m.unit, m.benchmarkCost, m.benchmarkSell,
        m.installHours, m.source, m.asOf, m.notes,
        m.sku, m.manufacturer, m.model, m.countryOfOrigin, m.minPrice, m.maxPrice, m.avgPrice,
-       m.leadTimeDays, m.warrantyMonths, m.crewSize, JSON.stringify(m.alternativeIds ?? []), m.datasheetUrl, m.imageUrl, m.confidence,
+       m.leadTimeDays, m.warrantyMonths, m.crewSize, m.commissioningHours, JSON.stringify(m.alternativeIds ?? []), m.datasheetUrl, m.imageUrl, m.confidence,
        m.createdAt, m.createdBy],
     );
   }

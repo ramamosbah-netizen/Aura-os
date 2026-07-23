@@ -170,7 +170,7 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
                 <Num label="Wastage %" v={selected.wastagePercent} on={(n) => patch(sel, { wastagePercent: n })} />
               </Group>
 
-              <Group title={`Labour — ${selResult.labourHours}h · ${selResult.installDurationDays} day(s)`}>
+              <Group title={`Labour — ${selResult.labourHours}h · ${selResult.installDurationDays} day(s)${selected.labour.hoursPerUnit > 0 ? ` · ~${Math.floor((selected.labour.crewSize * 8) / selected.labour.hoursPerUnit)} units/day` : ''}`}>
                 <Num label="Hours / unit" v={selected.labour.hoursPerUnit} on={(n) => patchLabour(sel, { hoursPerUnit: n })} />
                 <Num label="Crew size" v={selected.labour.crewSize} on={(n) => patchLabour(sel, { crewSize: n })} />
                 <Num label="Rate / hour" v={selected.labour.hourlyRate} on={(n) => patchLabour(sel, { hourlyRate: n })} />
@@ -256,7 +256,7 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet 
 function IntelPane({ description, result, onInsert }: {
   description: string; result: ReturnType<typeof estimateLine>; onInsert: (p: PickedItem) => void;
 }) {
-  const [catalog, setCatalog] = useState<Array<{ id: string; name: string; brand: string | null; benchmarkCost: number; benchmarkSell: number; installHours: number; source: string | null; minPrice: number | null; maxPrice: number | null; leadTimeDays: number | null; warrantyMonths: number | null; confidence: number }>>([]);
+  const [catalog, setCatalog] = useState<Array<{ id: string; name: string; brand: string | null; benchmarkCost: number; benchmarkSell: number; installHours: number; source: string | null; minPrice: number | null; maxPrice: number | null; leadTimeDays: number | null; warrantyMonths: number | null; confidence: number; crewSize: number | null; commissioningHours: number | null }>>([]);
   const [history, setHistory] = useState<Array<{ description: string; count: number; lastPrice: number; minPrice: number; maxPrice: number }>>([]);
 
   useEffect(() => {
@@ -309,8 +309,17 @@ function IntelPane({ description, result, onInsert }: {
             <span>Install</span><b>{bench.installHours}h</b>
             {bench.leadTimeDays != null && <><span>Lead time</span><b>{bench.leadTimeDays} days</b></>}
             {bench.warrantyMonths != null && <><span>Warranty</span><b>{bench.warrantyMonths} mo</b></>}
+            {bench.crewSize != null && <><span>Crew</span><b>{bench.crewSize} tech{bench.crewSize > 1 ? 's' : ''}</b></>}
+            {bench.commissioningHours != null && bench.commissioningHours > 0 && <><span>Commissioning</span><b>{bench.commissioningHours}h</b></>}
+            {(() => { const h = bench.installHours + (bench.commissioningHours ?? 0); const crew = bench.crewSize ?? 1;
+              return h > 0 ? <><span>Daily capacity</span><b>{Math.floor((crew * 8) / h)} / day</b></> : null; })()}
           </div>
-          <button type="button" style={st.insert} onClick={() => onInsert({ description: bench.name, unitCost: bench.benchmarkCost, marginPercent: bench.benchmarkSell > 0 ? Math.round(((bench.benchmarkSell - bench.benchmarkCost) / bench.benchmarkSell) * 10) / 10 : 0 })}>
+          <button type="button" style={st.insert} onClick={() => onInsert({
+            description: bench.name, unitCost: bench.benchmarkCost,
+            marginPercent: bench.benchmarkSell > 0 ? Math.round(((bench.benchmarkSell - bench.benchmarkCost) / bench.benchmarkSell) * 10) / 10 : 0,
+            ...(bench.installHours + (bench.commissioningHours ?? 0) > 0 ? { hoursPerUnit: bench.installHours + (bench.commissioningHours ?? 0) } : {}),
+            ...(bench.crewSize ? { crewSize: bench.crewSize } : {}),
+          })}>
             Insert into build-up
           </button>
           {bench.source && <div style={st.src}>{bench.source}</div>}

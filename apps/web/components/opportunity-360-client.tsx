@@ -21,7 +21,7 @@ import {
 
 interface Opportunity {
   id: string; title: string; value: number; stage: string; winProbability: number;
-  closeDate: string | null; requiresTender: boolean; ownerId: string | null; nextAction: string | null;
+  closeDate: string | null; requiresTender: boolean; executionType?: string; ownerId: string | null; nextAction: string | null;
   accountId: string | null; accountName: string | null;
   budgetConfirmed: boolean; authorityConfirmed: boolean; needConfirmed: boolean; timelineConfirmed: boolean;
   competitors: string | null; source: string | null; lossReason: string | null; createdAt: string;
@@ -53,6 +53,14 @@ const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFract
 const d = (iso: string): string => new Date(iso).toLocaleDateString();
 
 const STAGE_OPTIONS = ['qualification', 'proposal', 'negotiation', 'won', 'lost'];
+// The execution fork — how this opportunity is delivered once discovery is done.
+const EXECUTION_OPTIONS = [
+  { value: 'direct_sale', label: 'Direct sale' },
+  { value: 'tender', label: 'Tender' },
+  { value: 'framework_agreement', label: 'Framework agreement' },
+  { value: 'amc_renewal', label: 'AMC renewal' },
+  { value: 'variation_order', label: 'Variation order' },
+];
 const BANT: Array<{ key: 'budget' | 'authority' | 'need' | 'timeline'; field: string; label: string }> = [
   { key: 'budget', field: 'budgetConfirmed', label: 'Budget' },
   { key: 'authority', field: 'authorityConfirmed', label: 'Authority' },
@@ -214,6 +222,12 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
           else { setClosing(null); void patch({ stage: next }); }
         }} style={st.select}>
         {STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <span style={st.metaLabel}>Execution</span>
+      <select disabled={busy} value={o.executionType ?? (o.requiresTender ? 'tender' : 'direct_sale')}
+        onChange={(e) => void patch({ executionType: e.target.value })} style={st.select}
+        title="How this opportunity is executed — the fork between the sales and tender lifecycles">
+        {EXECUTION_OPTIONS.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
       </select>
       {closing && (
         <>

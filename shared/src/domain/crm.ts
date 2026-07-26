@@ -87,6 +87,13 @@ export interface Lead {
 
 export type OpportunityStage = 'qualification' | 'proposal' | 'negotiation' | 'won' | 'lost';
 
+/** How an opportunity is executed — the fork between the sales and tender lifecycles. */
+export type ExecutionType = 'direct_sale' | 'tender' | 'framework_agreement' | 'amc_renewal' | 'variation_order';
+
+export const EXECUTION_TYPES: readonly ExecutionType[] = [
+  'direct_sale', 'tender', 'framework_agreement', 'amc_renewal', 'variation_order',
+];
+
 export interface Opportunity {
   id: Id;
   tenantId: Id;
@@ -106,9 +113,17 @@ export interface Opportunity {
   forecastCategory: import('./forecast-category').ForecastCategory | null;
   closeDate: string | null;
   /**
-   * Whether winning this deal needs a Tender/Estimation. The deal chain is
-   * OPTIONAL per deal: direct sales, AMC renewals, variations and service
-   * contracts convert straight to a quotation — no tender is auto-created.
+   * HOW this opportunity is executed — the fork at the heart of the revenue lifecycle. Sales
+   * discovers the opportunity; the execution path decides where it goes next:
+   *   direct_sale        → Quotation → Contract
+   *   tender             → Tender Management → Award → Contract
+   *   framework_agreement / amc_renewal / variation_order → their own light paths
+   * The seller never "opens a tender" directly — they set this, then Start Tender.
+   */
+  executionType: ExecutionType;
+  /**
+   * @deprecated Kept in sync with `executionType === 'tender'` for the reactor and any older
+   * reader. New code reads `executionType`. Removed once nothing depends on it.
    */
   requiresTender: boolean;
   ownerId: Id | null;
@@ -375,6 +390,7 @@ export interface NewOpportunity {
   winProbability?: number;
   forecastCategory?: import('./forecast-category').ForecastCategory | null;
   closeDate?: string | null;
+  executionType?: ExecutionType;
   requiresTender?: boolean;
   ownerId?: Id | null;
   nextAction?: string | null;
@@ -405,7 +421,11 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     winProbability: Number.isFinite(input.winProbability) ? Number(input.winProbability) : 20.0,
     forecastCategory: input.forecastCategory ?? null,
     closeDate: input.closeDate ?? null,
-    requiresTender: input.requiresTender ?? true,
+    // executionType is the new truth; requiresTender is derived from it and kept in sync. When only
+    // the legacy boolean is supplied (older callers), map it: false → direct_sale, otherwise the
+    // historical default of tender is preserved so existing conversions are unchanged.
+    executionType: input.executionType ?? (input.requiresTender === false ? 'direct_sale' : 'tender'),
+    requiresTender: (input.executionType ?? (input.requiresTender === false ? 'direct_sale' : 'tender')) === 'tender',
     ownerId: input.ownerId ?? null,
     nextAction: input.nextAction?.trim() || null,
     nextActionDueDate: input.nextActionDueDate ?? null,

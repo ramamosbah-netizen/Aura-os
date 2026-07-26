@@ -70,7 +70,7 @@ export class OpportunityService {
 
   async update(
     id: Id,
-    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'forecastCategory' | 'closeDate' | 'accountId' | 'accountName' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason' | 'winReason' | 'buyingStage'>>,
+    updates: Partial<Pick<Opportunity, 'title' | 'value' | 'stage' | 'winProbability' | 'forecastCategory' | 'closeDate' | 'accountId' | 'accountName' | 'executionType' | 'requiresTender' | 'ownerId' | 'nextAction' | 'nextActionDueDate' | 'budgetConfirmed' | 'authorityConfirmed' | 'needConfirmed' | 'timelineConfirmed' | 'competitors' | 'source' | 'lossReason' | 'winReason' | 'buyingStage'>>,
     actorId?: Id | null,
     /**
      * G5 — evidence for the stage gate (quotations/stakeholders live outside this aggregate, so
@@ -97,6 +97,11 @@ export class OpportunityService {
       ...defined,
       updatedAt: new Date().toISOString(),
     };
+    // Keep the pair in sync from whichever side was set: executionType is the truth, requiresTender
+    // its derived shadow. Setting executionType updates the boolean; a legacy boolean-only PATCH
+    // maps back to an executionType so the two never disagree.
+    if (updates.executionType !== undefined) updated.requiresTender = updates.executionType === 'tender';
+    else if (updates.requiresTender !== undefined) updated.executionType = updates.requiresTender ? 'tender' : 'direct_sale';
 
     const isStageChange = updates.stage && updates.stage !== existing.stage;
 

@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { FORECAST_CATEGORIES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
+import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
 import { type Quotation, AccountService, ContactService, OpportunityService, QuotationService } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
@@ -23,6 +23,7 @@ class CreateOpportunityDto {
   @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() requiresTender?: boolean | string;
+  @IsOptional() @IsIn(EXECUTION_TYPES as readonly string[]) executionType?: ExecutionType;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
   @IsOptional() @IsString() nextActionDueDate?: string;
@@ -46,6 +47,7 @@ class UpdateOpportunityDto {
   @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() requiresTender?: boolean | string;
+  @IsOptional() @IsIn(EXECUTION_TYPES as readonly string[]) executionType?: ExecutionType;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
   @IsOptional() @IsString() nextActionDueDate?: string;
@@ -118,6 +120,7 @@ export class CrmOpportunitiesController {
       forecastCategory: dto.forecastCategory,
       closeDate: dto.closeDate,
       requiresTender: coerceBool(dto.requiresTender),
+      executionType: dto.executionType,
       ownerId: dto.ownerId,
       nextAction: dto.nextAction,
       nextActionDueDate: dto.nextActionDueDate,
@@ -164,6 +167,7 @@ export class CrmOpportunitiesController {
       ...dto,
       ...(await accountSnapshotPatch(this.accounts, dto.accountId, dto.accountName)),
       ...(dto.requiresTender !== undefined ? { requiresTender: coerceBool(dto.requiresTender) } : {}),
+      ...(dto.executionType !== undefined ? { executionType: dto.executionType } : {}),
       ...(dto.budgetConfirmed !== undefined ? { budgetConfirmed: coerceBool(dto.budgetConfirmed) } : {}),
       ...(dto.authorityConfirmed !== undefined ? { authorityConfirmed: coerceBool(dto.authorityConfirmed) } : {}),
       ...(dto.needConfirmed !== undefined ? { needConfirmed: coerceBool(dto.needConfirmed) } : {}),

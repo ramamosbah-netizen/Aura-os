@@ -95,4 +95,25 @@ describe('OutboxRelay tenant restoration', () => {
     expect(updates).toHaveLength(2);
     expect(tenant.boundTenantId()).toBeNull();
   });
+
+  it('a dropped connection at connect() is swallowed — no crash, and draining resets so the next tick retries', async () => {
+    const tenant = new TenantContext();
+    const bus = new EventBus();
+    // A managed DB idles connections out, so connect() (or the tenant-GUC bind inside it) can reject.
+    // In this background poller an uncaught rejection took the whole API down; the drain must absorb it.
+    let calls = 0;
+    const pool = {
+      connect: vi.fn(async () => {
+        calls++;
+        throw new Error('Connection terminated unexpectedly');
+      }),
+    } as unknown as Pool;
+    const relay = new OutboxRelay(pool, bus, tenant);
+
+    // The rejection is caught inside drain(), never propagated (an unhandled rejection would crash the process).
+    await expect(relay.drain()).resolves.toBeUndefined();
+    // `draining` was reset, so a later tick actually re-attempts the connect — the relay is not wedged.
+    await expect(relay.drain()).resolves.toBeUndefined();
+    expect(calls).toBe(2);
+  });
 });

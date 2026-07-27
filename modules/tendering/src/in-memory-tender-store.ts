@@ -35,6 +35,7 @@ export class InMemoryTenderStore implements TenderStore {
     if (filter.status) out = out.filter((t) => t.status === filter.status);
     if (filter.source) out = out.filter((t) => t.source === filter.source);
     if (filter.accountId) out = out.filter((t) => t.accountId === filter.accountId);
+    if (filter.sourceOpportunityId) out = out.filter((t) => t.sourceOpportunityId === filter.sourceOpportunityId);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

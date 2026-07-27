@@ -99,18 +99,19 @@ export class Opportunity360Controller {
     if (!opp || opp.tenantId !== tenantId) throw new NotFoundException(`opportunity ${id} not found`);
 
     const accountId = opp.accountId;
-    const [account, stakeholders, allTenders, allQuotes, allContracts, allProjects, activities] = await Promise.all([
+    const [account, stakeholders, tenders, allQuotes, allContracts, allProjects, activities] = await Promise.all([
       accountId ? this.accounts.get(accountId) : Promise.resolve(null),
       accountId ? this.contacts.list({ tenantId, accountId }) : Promise.resolve([]),
-      accountId ? this.tenders.list({ tenantId, accountId }) : Promise.resolve([]),
+      // Tenders follow the PROVENANCE link, not the account — a tender started from (or reverse-linked
+      // to) an account-less opportunity would be invisible under account-scoped filtering.
+      this.tenders.list({ tenantId, sourceOpportunityId: id }),
       accountId ? this.quotations.list({ tenantId, accountId }) : Promise.resolve([]),
       accountId ? this.contracts.list({ tenantId, accountId }) : Promise.resolve([]),
       accountId ? this.projects.list({ tenantId, accountId }) : Promise.resolve([]),
       this.activities.list({ tenantId, relatedId: id }),
     ]);
 
-    // Follow the provenance chain this opportunity spawned.
-    const tenders = allTenders.filter((t) => t.sourceOpportunityId === id);
+    // Follow the rest of the provenance chain this opportunity spawned.
     const tenderIds = new Set(tenders.map((t) => t.id));
     const quotations = allQuotes.filter((q) => q.sourceOpportunityId === id || (q.sourceTenderId && tenderIds.has(q.sourceTenderId)));
     // A contract reaches this opportunity by EITHER path: the tender route (contract.tenderId ∈ this

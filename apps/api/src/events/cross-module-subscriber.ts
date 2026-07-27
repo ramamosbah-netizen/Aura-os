@@ -4,7 +4,7 @@ import { ContractService } from '@aura/contracts';
 import { ProjectService, WbsService, CbsService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService } from '@aura/tendering';
-import { AccountService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
+import { AccountService, OpportunityService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } from '@aura/shared';
@@ -48,6 +48,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly tenders: TenderService,
     private readonly estimateSourcing: EstimateSourcingService,
     private readonly accounts: AccountService,
+    private readonly opportunities: OpportunityService,
     private readonly signals: SignalService,
     private readonly quotations: QuotationService,
     private readonly customerInvoices: CustomerInvoiceService,
@@ -76,6 +77,16 @@ export class CrossModuleSubscriber implements OnModuleInit {
           this.logger.log(`opportunity.won (${e.aggregateId}) — requiresTender=false, no tender created (direct-sale path)`);
           return;
         }
+        // A bid may already have been started from this opportunity (J2 "Start Tender") — a deal has
+        // ONE tender. Guard on the persisted link so a later win never spawns a second (restart-safe,
+        // unlike the command cache the idempotency key relies on). [J3 will retire won→create-tender
+        // entirely: bidding precedes winning, so the tender should exist well before this fires.]
+        const already = (await this.tenders.list({ tenantId: e.tenantId, accountId: (p.accountId as string) ?? undefined }))
+          .find((t) => t.sourceOpportunityId === e.aggregateId);
+        if (already) {
+          this.logger.log(`opportunity.won (${e.aggregateId}) — tender ${already.id} already started, not creating a second`);
+          return;
+        }
         const tender = await this.tenders.create(
           {
             tenantId: e.tenantId,
@@ -101,6 +112,41 @@ export class CrossModuleSubscriber implements OnModuleInit {
         );
       } catch (err) {
         this.logger.error(`Failed to auto-create tender from opportunity.won: ${err}`);
+      }
+    });
+
+    // ── Reverse junction: Tender registered directly → auto-create a linked Opportunity ──
+    // The Opportunity is the single source of truth for the sales pipeline/forecast. A tender logged
+    // straight into Tendering (an invitation, a portal listing, a walk-in RFQ) must still surface
+    // there — so we create ONE Opportunity (executionType 'tender') and back-link the tender to it,
+    // which is what lets the Opportunity 360 compose the tender under the deal.
+    //
+    // Tenders BORN from an opportunity ("Start Tender" / the deal-chain reactor) already carry
+    // sourceOpportunityId and are skipped. The guard reads the tender's LIVE link (not the event
+    // payload, which predates the back-link stamp), so an at-least-once redelivery never spawns a
+    // second opportunity. opportunity.create emits `opportunity.created`, never `stage_changed`, so
+    // this cannot loop back into the won→tender reactor above.
+    this.bus.subscribe('tendering.tender.created', async (e: DomainEvent) => {
+      try {
+        const tender = await this.tenders.get(e.aggregateId);
+        if (!tender || tender.sourceOpportunityId) return; // born from an opportunity, or already linked
+        const opp = await this.opportunities.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          title: tender.title,
+          accountId: tender.accountId,
+          accountName: tender.accountName,
+          value: tender.value,
+          executionType: 'tender',
+          source: 'tender',
+          actorId: null,
+        });
+        await this.tenders.linkOpportunity(tender.id, opp.id);
+        this.logger.log(
+          `⚡ tender.created (direct) → auto-created Opportunity "${opp.title}" (${opp.id}) + back-linked tender ${tender.id}`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-create opportunity from tender.created: ${err}`);
       }
     });
 

@@ -96,6 +96,64 @@ describe('business-chain e2e (HTTP)', () => {
     expect(wbs.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('junction (J2): "Start Tender" creates ONE linked draft tender, idempotently', async () => {
+    const account = (await http.post('/api/v1/crm/accounts').send({ name: 'Emaar Malls' }).expect(201)).body;
+    const opp = (
+      await http
+        .post('/api/v1/crm/opportunities')
+        .send({ title: 'Dubai Mall ELV Upgrade', value: 1_200_000, accountId: account.id, accountName: account.name, executionType: 'tender' })
+        .expect(201)
+    ).body;
+    expect(opp.executionType).toBe('tender');
+
+    // Bidding PRECEDES winning: the bid starts while the deal is still open, in `draft` (not the
+    // deal-chain reactor's already-won `submitted`).
+    const started = (await http.post(`/api/v1/crm/opportunities/${opp.id}/start-tender`).expect(201)).body;
+    expect(started.status).toBe('draft');
+    expect(started.sourceOpportunityId).toBe(opp.id);
+
+    // A deal has ONE bid — a second Start Tender hands back the same tender, never a duplicate.
+    const again = (await http.post(`/api/v1/crm/opportunities/${opp.id}/start-tender`).expect(201)).body;
+    expect(again.id).toBe(started.id);
+
+    // The 360 composes the tender under the opportunity via the provenance link.
+    const summary = (await http.get(`/api/v1/crm/opportunities/${opp.id}/summary`).expect(200)).body;
+    expect(summary.tenders.map((t: any) => t.id)).toEqual([started.id]);
+    expect(summary.route).toBe('tender');
+
+    // A direct-sale opportunity has no tender to start.
+    const direct = (
+      await http.post('/api/v1/crm/opportunities').send({ title: 'Small ELV job', value: 5_000, executionType: 'direct_sale' }).expect(201)
+    ).body;
+    await http.post(`/api/v1/crm/opportunities/${direct.id}/start-tender`).expect(400);
+  });
+
+  it('junction (J2): a tender registered directly auto-creates a linked Opportunity (reverse)', async () => {
+    const tender = (
+      await http.post('/api/v1/tendering/tenders').send({ title: 'Airport ELV RFQ (direct)', value: 3_000_000 }).expect(201)
+    ).body;
+    expect(tender.sourceOpportunityId).toBeNull();
+
+    // The Opportunity is the single source of truth for the pipeline, so a directly-registered
+    // tender still surfaces there — the reverse reactor creates it (executionType 'tender').
+    const opps = await eventually(async () =>
+      ((await http.get('/api/v1/crm/opportunities').expect(200)).body as any[]).filter(
+        (o) => o.title === 'Airport ELV RFQ (direct)',
+      ),
+    );
+    expect(opps).toHaveLength(1);
+    expect(opps[0].executionType).toBe('tender');
+    expect(opps[0].source).toBe('tender');
+
+    // ...and back-links the tender to it, so the Opportunity 360 composes it (the link is what the
+    // 360 follows — even for this account-less tender).
+    const linked = await eventually(async () => {
+      const t = (await http.get(`/api/v1/tendering/tenders/${tender.id}`).expect(200)).body;
+      return t.sourceOpportunityId ? [t] : [];
+    });
+    expect(linked[0].sourceOpportunityId).toBe(opps[0].id);
+  });
+
   it('P2P chain: PO issued → GRN receipt → PO auto-transitions to received', async () => {
     // Small-value PO auto-approves (below the approval-matrix threshold) → issue it.
     const po = (

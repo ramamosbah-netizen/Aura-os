@@ -148,6 +148,22 @@ export class TenderService implements OnModuleInit {
     return updated;
   }
 
+  /**
+   * Back-link a directly-registered tender to the CRM Opportunity created for it — the reverse of
+   * "Start Tender". Stamps `sourceOpportunityId` and classifies the source as `opportunity` so the
+   * Opportunity 360 composes this tender under it (the 360 filters tenders by that link). This is a
+   * back-reference stamp, not a lifecycle change, so it emits NO event — it must not trip the
+   * `tendering.tender.updated` BOQ-recalc reactor.
+   */
+  async linkOpportunity(tenderId: Id, opportunityId: Id): Promise<Tender> {
+    const existing = await this.store.get(tenderId);
+    if (!existing) throw new Error(`tender ${tenderId} not found`);
+    const updated: Tender = { ...existing, sourceOpportunityId: opportunityId, source: existing.source ?? 'opportunity' };
+    await this.store.update(updated);
+    this.logger.log(`Tender ${updated.title} (${updated.id}) back-linked to opportunity ${opportunityId}`);
+    return updated;
+  }
+
   /** Gather the facts the lifecycle gate needs from the sibling records — the bid decision and
    * whether anything is priced. Kept here so the gate stays pure and the caller stays simple. */
   async tenderEvidence(tenantId: Id, tenderId: Id): Promise<TenderGateEvidence> {

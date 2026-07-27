@@ -13,35 +13,35 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+// Experience Architecture (L5) — the sidebar is a spine of front-doors + workspaces, not a page
+// directory. Every item below keeps its exact href (routes, APIs, permissions unchanged); this file
+// only RE-PARENTS them into the workspace a person would look for them in. The old flat 54-item
+// "Operate" group is split into Operations / Finance; CRM→Sales, Deal chain→Delivery. See
+// docs/reports/2026-07-27-aura-os-experience-architecture.md.
 export const NAV: NavGroup[] = [
   {
-    title: 'Workspace',
+    title: 'Home',
     items: [
-      { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live workspace' },
-      {
-        label: 'My Workspace',
-        href: '/workspace',
-        glyph: '◉',
-        desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page',
-      },
+      { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live personal command center' },
+      { label: 'My Workspace', href: '/workspace', glyph: '◉', desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page' },
+      { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
+      { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },
     ],
   },
   {
-    title: 'CRM',
+    title: 'Sales',
     items: [
-      // First, because it is where the day starts. Not a sixth entity page — the locked CRM IA is
-      // about where records LIVE; this is a view onto records that live elsewhere.
       { label: 'My Day', href: '/crm/my-day', glyph: '◐', desc: 'My meetings, work, leads & deals today' },
-      { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'CRM — customers & prospects' },
+      { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'Customers & prospects' },
       { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People at each account' },
-      { label: 'Sales Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'CRM — leads & opportunities' },
-      { label: 'Commercial', href: '/crm/commercial', glyph: '✎', desc: 'The commercial decision — pricing, quotations, contracts, approvals & margins (linked views)' },
+      { label: 'Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'Leads & opportunities' },
+      { label: 'Quotations', href: '/crm/commercial', glyph: '✎', desc: 'The commercial decision — pricing, quotations, contracts, approvals & margins' },
       { label: 'Market Intelligence', href: '/crm/market-intelligence', glyph: '⊛', desc: 'The reference catalogue behind pricing — items, brands, benchmark cost/sell & install time' },
       { label: 'Activities', href: '/crm/activities', glyph: '☑', desc: 'Calls, meetings & tasks' },
     ],
   },
   {
-    title: 'Deal chain',
+    title: 'Delivery',
     items: [
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals — incl. the internal pricing summary' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
@@ -53,7 +53,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: 'Operate',
+    title: 'Operations',
     items: [
       { label: 'Procurement Dashboard', href: '/procurement/dashboard', glyph: '📊', desc: 'PO spend & counts by status' },
       { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
@@ -88,14 +88,19 @@ export const NAV: NavGroup[] = [
       { label: 'Depreciation', href: '/assets/depreciation', glyph: '📉', desc: 'Asset depreciation schedule & net book value' },
       { label: 'AMC & Services', href: '/amc', glyph: '⚙', desc: 'Service contracts, support tickets, & SLA timers' },
       { label: 'Preventive Maintenance', href: '/amc/ppm', glyph: '♺', desc: 'PPM schedules & recurring visit generation' },
+      { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
+      { label: 'Subcontract Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
+      { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { label: 'Finance Dashboard', href: '/finance/dashboard', glyph: '📊', desc: 'Finance — KPIs & charts (aging, P&L, cost centres)' },
       { label: 'Invoices', href: '/finance/invoices', glyph: '◰', desc: 'Finance — supplier invoices' },
       { label: 'Customer Invoices', href: '/finance/customer-invoices', glyph: '◳', desc: 'Finance — client tax invoices & receipts (AR)' },
       { label: 'AR Aging', href: '/finance/ar-aging', glyph: '▦', desc: 'Finance — receivables aged by overdue bucket' },
       { label: 'AP Aging', href: '/finance/ap-aging', glyph: '▤', desc: 'Finance — payables aged by invoice-date bucket' },
-      { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
-      { label: 'Subcontract Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
-      { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
-      { label: 'Finance Dashboard', href: '/finance/dashboard', glyph: '📊', desc: 'Finance — KPIs & charts (aging, P&L, cost centres)' },
       { label: 'Ledger & COA', href: '/finance/ledger', glyph: '◳', desc: 'Finance — double-entry general ledger' },
       { label: 'Financial Statements', href: '/finance/statements', glyph: '▣', desc: 'Finance — P&L, balance sheet, cash flow & trial balance from the GL' },
       { label: 'Group Consolidation', href: '/finance/consolidation', glyph: '▦', desc: 'Finance — per-company + consolidated group financials' },
@@ -112,23 +117,28 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: 'Intelligence',
+    title: 'Knowledge',
+    items: [
+      { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },
+      { label: 'Document Control', href: '/documents/control', glyph: '⧇', desc: 'Transmittals & correspondence' },
+      { label: 'Submittals', href: '/doccontrol/submittals', glyph: '⊟', desc: 'Document submittal register (Code A/B/C/D review)' },
+      { label: 'Templates', href: '/admin/templates', glyph: '⧇', desc: 'DMS — visual print templates' },
+    ],
+  },
+  {
+    title: 'Analytics',
     items: [
       { label: 'Insights', href: '/intelligence', glyph: '✶', desc: 'AI briefing & pipeline' },
       { label: 'Intelligence Console', href: '/admin/intelligence', glyph: '⚡', desc: 'IEC pricing & autonomy engine' },
     ],
   },
   {
-    title: 'Platform',
+    title: 'Administration',
     items: [
-      { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },
-      { label: 'Document Control', href: '/documents/control', glyph: '⧇', desc: 'Transmittals & correspondence' },
-      { label: 'Submittals', href: '/doccontrol/submittals', glyph: '⊟', desc: 'Document submittal register (Code A/B/C/D review)' },
-      { label: 'Templates', href: '/admin/templates', glyph: '⧇', desc: 'DMS — visual print templates' },
       { label: 'Admin Center', href: '/admin', glyph: '🛠', desc: 'Governance, configuration, integrations & observability' },
       { label: 'Roles & Access', href: '/admin/access', glyph: '🔑', desc: 'Roles & permission grants — what the API guard enforces' },
-      { label: 'Webhooks', href: '/admin/webhooks', glyph: '🪝', desc: 'Outbound webhook subscriptions & delivery log' },
       { label: 'Approval Matrix', href: '/admin/approval-matrix', glyph: '✔', desc: 'Ordered approval rules per entity type' },
+      { label: 'Webhooks', href: '/admin/webhooks', glyph: '🪝', desc: 'Outbound webhook subscriptions & delivery log' },
       { label: 'Feature Flags', href: '/admin/feature-flags', glyph: '🚩', desc: 'Toggle staged capabilities + per-tenant overrides' },
       { label: 'Connectors', href: '/admin/connectors', glyph: '🔌', desc: 'External-system integration connectors' },
       { label: 'Numbering', href: '/admin/numbering', glyph: '#️⃣', desc: 'Document numbering sequences & counters' },
@@ -146,12 +156,19 @@ export const ALL_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
  * the current user's allowed functions; unmapped groups (e.g. Workspace) always
  * show. Kept next to NAV so the two never drift.
  */
+// New workspace names map onto the SAME existing suites the old groups used, so every user sees
+// exactly the pages they saw before — the re-group changes labels & grouping, never permissions.
+// (Sales+Delivery were CRM+Deal chain → dealChain; Operations+Finance were Operate → operate;
+// Knowledge+Administration were Platform → platform; Analytics was Intelligence.) Home is the
+// front-door band — unmapped, so it always shows.
 export const GROUP_SUITE: Record<string, string> = {
-  CRM: 'suite.dealChain',
-  'Deal chain': 'suite.dealChain',
-  Operate: 'suite.operate',
-  Intelligence: 'suite.intelligence',
-  Platform: 'suite.platform',
+  Sales: 'suite.dealChain',
+  Delivery: 'suite.dealChain',
+  Operations: 'suite.operate',
+  Finance: 'suite.operate',
+  Knowledge: 'suite.platform',
+  Analytics: 'suite.intelligence',
+  Administration: 'suite.platform',
 };
 
 /** Filter nav groups by an allowed `suite.*` set; null = show everything. */

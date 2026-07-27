@@ -65,55 +65,37 @@ export class CrossModuleSubscriber implements OnModuleInit {
     return this.financeAccounts.create({ tenantId, code, name, type });
   }
 
+  /**
+   * J3 — a tender's award/loss IS the outcome of the Opportunity it was started from, so it closes
+   * that deal Won/Lost. Supplies the reason (and, for a win, a value) the CRM stage gate requires so
+   * the programmatic close passes the same gate a human would. No-ops when the tender has no source
+   * opportunity or the deal is already closed — making an at-least-once redelivery idempotent.
+   */
+  private async closeSourceOpportunity(tenderId: string, outcome: 'won' | 'lost'): Promise<void> {
+    const tender = await this.tenders.get(tenderId);
+    if (!tender?.sourceOpportunityId) return; // a tender with no CRM deal behind it
+    const opp = await this.opportunities.get(tender.sourceOpportunityId);
+    if (!opp || opp.stage === 'won' || opp.stage === 'lost') return; // gone, or already closed
+    const ref = tender.reference ?? tender.id;
+    const reason = outcome === 'won' ? `Won on tender ${ref}` : `Lost on tender ${ref}`;
+    await this.opportunities.update(
+      tender.sourceOpportunityId,
+      outcome === 'won'
+        // The won gate needs the win explained AND a non-zero value — carry the tender's if the deal has none.
+        ? { stage: 'won', winReason: reason, ...(opp.value > 0 ? {} : { value: tender.value }) }
+        : { stage: 'lost', lossReason: reason },
+      null,
+    );
+    this.logger.log(`⚡ tender.${outcome} → Opportunity "${opp.title}" (${opp.id}) closed ${outcome} (tender ${ref})`);
+  }
+
   onModuleInit(): void {
-    // ── Deal chain: Opportunity won → auto-create Tender (draft) ───────
-    this.bus.subscribe('crm.opportunity.stage_changed', async (e: DomainEvent) => {
-      try {
-        const p = e.payload as Record<string, unknown>;
-        if (p.stage !== 'won') return; // Only react on won stage
-        // The deal chain is OPTIONAL per deal: direct sales / AMC renewals /
-        // variations skip tendering and convert straight to a quotation.
-        if (p.requiresTender === false) {
-          this.logger.log(`opportunity.won (${e.aggregateId}) — requiresTender=false, no tender created (direct-sale path)`);
-          return;
-        }
-        // A bid may already have been started from this opportunity (J2 "Start Tender") — a deal has
-        // ONE tender. Guard on the persisted link so a later win never spawns a second (restart-safe,
-        // unlike the command cache the idempotency key relies on). [J3 will retire won→create-tender
-        // entirely: bidding precedes winning, so the tender should exist well before this fires.]
-        const already = (await this.tenders.list({ tenantId: e.tenantId, accountId: (p.accountId as string) ?? undefined }))
-          .find((t) => t.sourceOpportunityId === e.aggregateId);
-        if (already) {
-          this.logger.log(`opportunity.won (${e.aggregateId}) — tender ${already.id} already started, not creating a second`);
-          return;
-        }
-        const tender = await this.tenders.create(
-          {
-            tenantId: e.tenantId,
-            companyId: e.companyId,
-            title: `Tender: ${p.title ?? 'Opportunity'}`,
-            accountId: (p.accountId as string) ?? null,
-            accountName: (p.accountName as string) ?? null,
-            value: (p.value as number) ?? 0,
-            // T1 — a tender born from an ALREADY-WON opportunity is not a fresh competitive bid: the
-            // deal was won at the CRM level, so the bid it represents has effectively been submitted
-            // and won. Creating it `submitted` (not `draft`) lets the award flow past the lifecycle
-            // gate — which exists to govern real, manual tenders, not this programmatic formality.
-            status: 'submitted',
-            sourceOpportunityId: e.aggregateId,
-          },
-          // Idempotency: the outbox is at-least-once, so a re-delivered (or re-won)
-          // opportunity event must not spawn a second tender. Keyed by the source
-          // opportunity id, a retry returns the same tender from the command cache.
-          `tender-from-opportunity:${e.aggregateId}`,
-        );
-        this.logger.log(
-          `⚡ opportunity.won → auto-created Tender "${tender.title}" (${tender.id})`,
-        );
-      } catch (err) {
-        this.logger.error(`Failed to auto-create tender from opportunity.won: ${err}`);
-      }
-    });
+    // ── Causality (J3): winning an Opportunity does NOT create its tender ──────────────
+    // Bidding PRECEDES winning. The tender is started from the still-open opportunity ("Start
+    // Tender" — crm/opportunities/:id/start-tender, J2), and it is the tender's AWARD that then
+    // closes the deal Won (the tender.awarded → close-opportunity reactor below). The old
+    // opportunity.won → create-tender reactor had that arrow backwards — a deal cannot be won at the
+    // CRM level before the bid it represents has even been submitted — so it was retired here.
 
     // ── Reverse junction: Tender registered directly → auto-create a linked Opportunity ──
     // The Opportunity is the single source of truth for the sales pipeline/forecast. A tender logged
@@ -240,6 +222,28 @@ export class CrossModuleSubscriber implements OnModuleInit {
         );
       } catch (err) {
         this.logger.error(`Failed to auto-create contract from tender.awarded: ${err}`);
+      }
+    });
+
+    // ── Deal chain CLOSE (J3): Tender won → close the source Opportunity as Won ──
+    // The tender is the EXECUTION of one opportunity, so winning the bid wins the deal. Sibling to
+    // the contract reactor above: the award drives both the contract (delivery side) and the CRM
+    // close (pipeline side). No-ops when the tender has no source opportunity or the deal is
+    // already closed, so an at-least-once redelivery is safe.
+    this.bus.subscribe('tendering.tender.awarded', async (e: DomainEvent) => {
+      try {
+        await this.closeSourceOpportunity(e.aggregateId, 'won');
+      } catch (err) {
+        this.logger.error(`Failed to close opportunity Won from tender.awarded: ${err}`);
+      }
+    });
+
+    // ── Deal chain CLOSE (J3): Tender lost → close the source Opportunity as Lost ──
+    this.bus.subscribe('tendering.tender.lost', async (e: DomainEvent) => {
+      try {
+        await this.closeSourceOpportunity(e.aggregateId, 'lost');
+      } catch (err) {
+        this.logger.error(`Failed to close opportunity Lost from tender.lost: ${err}`);
       }
     });
 

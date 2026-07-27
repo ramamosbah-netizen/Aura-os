@@ -48,32 +48,29 @@ describe('business-chain e2e (HTTP)', () => {
     await app?.close();
   });
 
-  it('deal chain: opportunity won → tender → award → contract → sign → project (+WBS seed)', async () => {
-    // 1. Client account + opportunity, then win it.
+  it('deal chain: tender (started from an opportunity) → award → {contract + opportunity Won} → sign → project (+WBS seed)', async () => {
+    // 1. Client account + opportunity on the tender execution path — still OPEN (bidding precedes winning).
     const account = (
       await http.post('/api/v1/crm/accounts').send({ name: 'Acme Developments LLC' }).expect(201)
     ).body;
     const opp = (
       await http
         .post('/api/v1/crm/opportunities')
-        .send({ title: 'Marina Tower ELV', value: 750_000, accountId: account.id, accountName: account.name })
+        .send({ title: 'Marina Tower ELV', value: 750_000, accountId: account.id, accountName: account.name, executionType: 'tender' })
         .expect(201)
     ).body;
-    // G5: a win must carry its final value + winning reason (§40.3) — the value came from create.
-    await http.patch(`/api/v1/crm/opportunities/${opp.id}`).send({ stage: 'won', winReason: 'Best technical fit' }).expect(200);
 
-    // 2. Reactor auto-drafts the tender, carrying title/value/account down.
-    const tenders = await eventually(async () =>
-      ((await http.get('/api/v1/tendering/tenders').expect(200)).body as any[]).filter(
-        (t) => t.title === 'Tender: Marina Tower ELV',
-      ),
-    );
-    expect(tenders).toHaveLength(1);
-    const tender = tenders[0];
-    expect(tender.value).toBe(750_000);
-    expect(tender.accountName).toBe('Acme Developments LLC');
+    // 2. The bid goes out, linked to the opportunity. (The lifecycle draft→submitted is the tender
+    //    e2e's subject; here it starts submitted so the chain under test is award → downstream.)
+    const tender = (
+      await http
+        .post('/api/v1/tendering/tenders')
+        .send({ title: 'Marina Tower ELV — bid', value: 750_000, accountId: account.id, accountName: account.name, status: 'submitted', sourceOpportunityId: opp.id })
+        .expect(201)
+    ).body;
+    expect(tender.sourceOpportunityId).toBe(opp.id);
 
-    // 3. Award the tender → auto contract.
+    // 3. Award the tender → the contract is drafted AND (J3) the source opportunity closes Won.
     await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'won' }).expect(200);
     const contracts = await eventually(async () =>
       (await http.get(`/api/v1/contracts/contracts?tenderId=${tender.id}`).expect(200)).body as any[],
@@ -81,6 +78,13 @@ describe('business-chain e2e (HTTP)', () => {
     expect(contracts).toHaveLength(1);
     const contract = contracts[0];
     expect(contract.value).toBe(750_000);
+
+    // The award is the opportunity's outcome — it is now Won, with a reason naming the tender.
+    const wonOpp = await eventually(async () => {
+      const o = (await http.get(`/api/v1/crm/opportunities/${opp.id}`).expect(200)).body;
+      return o.stage === 'won' ? [o] : [];
+    });
+    expect(wonOpp[0].winReason).toMatch(/tender/i);
 
     // 4. Sign the contract → auto project, seeded with a root WBS node.
     await http.patch(`/api/v1/contracts/contracts/${contract.id}/status`).send({ status: 'active' }).expect(200);
@@ -152,6 +156,26 @@ describe('business-chain e2e (HTTP)', () => {
       return t.sourceOpportunityId ? [t] : [];
     });
     expect(linked[0].sourceOpportunityId).toBe(opps[0].id);
+  });
+
+  it('junction (J3): losing the tender closes the source Opportunity as Lost', async () => {
+    const opp = (
+      await http.post('/api/v1/crm/opportunities').send({ title: 'Airport ELV re-bid', value: 400_000, executionType: 'tender' }).expect(201)
+    ).body;
+    const tender = (
+      await http
+        .post('/api/v1/tendering/tenders')
+        .send({ title: 'Airport ELV re-bid — bid', value: 400_000, status: 'submitted', sourceOpportunityId: opp.id })
+        .expect(201)
+    ).body;
+
+    await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'lost' }).expect(200);
+
+    const lostOpp = await eventually(async () => {
+      const o = (await http.get(`/api/v1/crm/opportunities/${opp.id}`).expect(200)).body;
+      return o.stage === 'lost' ? [o] : [];
+    });
+    expect(lostOpp[0].lossReason).toMatch(/tender/i);
   });
 
   it('P2P chain: PO issued → GRN receipt → PO auto-transitions to received', async () => {

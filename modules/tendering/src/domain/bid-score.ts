@@ -1,18 +1,12 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, computeBidScore, recommendationFor, type BidRecommendation, type BidCriterion } from '@aura/shared';
 
-// Tendering domain — framework-free. A BidScore is a go/no-go qualification of a tender:
-// weighted scoring across criteria (client, margin, competition, capacity, risk …) producing
-// an overall 0–100 score and a recommendation, so bid/no-bid decisions are consistent.
-
-export type BidRecommendation = 'go' | 'conditional' | 'no_go';
-
-export interface BidCriterion {
-  name: string;
-  /** Relative importance (>0). Weights are normalised across criteria. */
-  weight: number;
-  /** Raw score for this criterion, 0–10. */
-  score: number;
-}
+// Tendering domain — framework-free. A BidScore is the persisted record of a go/no-go qualification:
+// the weighted criteria + the overall score/recommendation. The SCORING itself (computeBidScore /
+// recommendationFor / BidCriterion / BidRecommendation) lives in `@aura/shared` so the tender module
+// and the qualification UI compute it the same way; re-exported here so existing importers of this
+// module are unaffected.
+export { computeBidScore, recommendationFor } from '@aura/shared';
+export type { BidRecommendation, BidCriterion } from '@aura/shared';
 
 export interface BidScore {
   id: Id;
@@ -39,22 +33,6 @@ export interface NewBidScore {
   notes?: string | null;
   decidedBy?: Id | null;
   createdBy?: Id | null;
-}
-
-const r2 = (n: number): number => Math.round(n * 100) / 100;
-
-/** Weighted 0–100 score from criteria (each score 0–10, weights normalised). */
-export function computeBidScore(criteria: BidCriterion[]): number {
-  const totalWeight = criteria.reduce((s, c) => s + (Number(c.weight) || 0), 0);
-  if (totalWeight <= 0) return 0;
-  const weighted = criteria.reduce((s, c) => s + (Number(c.weight) || 0) * (Number(c.score) || 0), 0);
-  return r2((weighted / totalWeight) * 10); // score 0–10 → 0–100
-}
-
-export function recommendationFor(total: number): BidRecommendation {
-  if (total >= 70) return 'go';
-  if (total >= 50) return 'conditional';
-  return 'no_go';
 }
 
 export function makeBidScore(input: NewBidScore): BidScore {

@@ -46,8 +46,8 @@ export default function AppShell({
   const groups = visibleNav(isAdmin || navSuites == null ? null : new Set(navSuites))
     .map((g) => ({ ...g, items: g.items.filter((i) => !disabledModules.has(i.href.split('/')[1] ?? '')) }))
     .filter((g) => g.items.length > 0);
-  // ── The 8-line spine: workspaces collapse to a single line; the one holding the current page
-  // auto-expands. 'Home' is the always-open front-door band. ──
+  // ── Workspace model (Linear/VS Code): the sidebar SELECTS a workspace; the workspace owns its
+  // pages as a horizontal tab row. The sidebar itself hides with ☰ / Ctrl+B for more table space. ──
   const activeGroup = useMemo(() => {
     if (pathname === '/') return 'Home';
     let best: { title: string; len: number } | null = null;
@@ -60,16 +60,12 @@ export default function AppShell({
     }
     return best?.title ?? null;
   }, [groups, pathname]);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(activeGroup ? [activeGroup] : []));
-  useEffect(() => {
-    if (activeGroup) setExpanded((prev) => (prev.has(activeGroup) ? prev : new Set(prev).add(activeGroup)));
-  }, [activeGroup]);
-  const toggleGroup = (title: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(title)) next.delete(title); else next.add(title);
-      return next;
-    });
+  // The tab row for the workspace you're in (null on Home / front-door pages).
+  const workspaceTabs = useMemo(() => {
+    if (!activeGroup || activeGroup === 'Home') return null;
+    return groups.find((g) => g.title === activeGroup) ?? null;
+  }, [groups, activeGroup]);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
@@ -100,6 +96,10 @@ export default function AppShell({
       if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setPaletteOpen((o) => !o);
+      }
+      if (e.key.toLowerCase() === 'b' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSidebarHidden((h) => !h);
       }
     }
     window.addEventListener('keydown', onKey);
@@ -137,6 +137,7 @@ export default function AppShell({
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
+      {!sidebarHidden && (
       <aside className="app-sidebar" style={s.sidebar} aria-label="Primary">
         <div className="sidebar-brand" style={s.brand}>
           <div style={s.brandLogo} aria-hidden>
@@ -148,56 +149,53 @@ export default function AppShell({
           </div>
         </div>
         <nav style={s.nav} aria-label="Main navigation">
-          {groups.map((group) => {
-            const renderItems = () =>
-              group.items.map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="sidebar-link"
-                    title={item.label}
-                    aria-current={active ? 'page' : undefined}
-                    style={active ? { ...s.link, ...s.linkActive } : s.link}
-                  >
-                    <span style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>
-                      {item.glyph}
-                    </span>
-                    <span className="sidebar-label">{item.label}</span>
-                  </Link>
-                );
-              });
-
-            // Home = the always-open front-door band (no collapse).
-            if (group.title === 'Home') {
+          {(() => {
+            const home = groups.find((g) => g.title === 'Home');
+            const admin = groups.find((g) => g.title === 'Administration');
+            const workspaces = groups.filter((g) => g.title !== 'Home' && g.title !== 'Administration');
+            // A workspace is ONE line — it selects the workspace (lands on its first page). Its pages
+            // are the horizontal tab row, not sidebar children.
+            const wsLink = (group: (typeof groups)[number]) => {
+              const active = activeGroup === group.title;
               return (
-                <div key={group.title} style={s.group}>
-                  {renderItems()}
-                </div>
-              );
-            }
-
-            // Every other group is a collapsible workspace: one line, click to open.
-            const open = expanded.has(group.title);
-            const onActive = group.title === activeGroup;
-            return (
-              <div key={group.title} style={s.group}>
-                <button
-                  type="button"
+                <Link
+                  key={group.title}
+                  href={group.items[0]?.href ?? '/'}
                   className="sidebar-link"
-                  onClick={() => toggleGroup(group.title)}
-                  aria-expanded={open}
-                  style={{ ...s.ws, ...(onActive ? s.wsActive : {}) }}
+                  title={group.title}
+                  aria-current={active ? 'page' : undefined}
+                  style={active ? { ...s.link, ...s.linkActive } : s.link}
                 >
-                  <span style={{ ...s.linkGlyph, ...(onActive ? { color: 'var(--accent)' } : {}) }}>{group.glyph}</span>
-                  <span className="sidebar-label" style={{ flex: 1, textAlign: 'left', fontWeight: 700 }}>{group.title}</span>
-                  <span style={{ ...s.wsChevron, transform: open ? 'rotate(90deg)' : 'none' }}>▸</span>
-                </button>
-                {open && <div style={s.wsItems}>{renderItems()}</div>}
-              </div>
+                  <span style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>{group.glyph}</span>
+                  <span className="sidebar-label" style={{ fontWeight: 600 }}>{group.title}</span>
+                </Link>
+              );
+            };
+            return (
+              <>
+                {home?.items.map((item) => {
+                  const active = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="sidebar-link"
+                      title={item.label}
+                      aria-current={active ? 'page' : undefined}
+                      style={active ? { ...s.link, ...s.linkActive } : s.link}
+                    >
+                      <span style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>{item.glyph}</span>
+                      <span className="sidebar-label">{item.label}</span>
+                    </Link>
+                  );
+                })}
+                {workspaces.length > 0 && <div style={s.navDivider} />}
+                {workspaces.map(wsLink)}
+                {admin && <div style={s.navDivider} />}
+                {admin && wsLink(admin)}
+              </>
             );
-          })}
+          })()}
         </nav>
         {user ? (
           <div style={s.userBox}>
@@ -211,9 +209,19 @@ export default function AppShell({
           </div>
         ) : null}
       </aside>
+      )}
 
       <div style={s.col}>
         <header style={s.topbar}>
+          <button
+            type="button"
+            style={s.hamburger}
+            onClick={() => setSidebarHidden((h) => !h)}
+            aria-label={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
+            title="Toggle sidebar (Ctrl+B)"
+          >
+            ☰
+          </button>
           <button type="button" style={s.search} onClick={() => setPaletteOpen(true)}>
             <span style={{ color: 'var(--muted)' }}>Search or jump to…</span>
             <span style={s.kbdHint}>⌘K</span>
@@ -257,6 +265,22 @@ export default function AppShell({
 
           <ThemeToggle />
         </header>
+        {workspaceTabs && (
+          <nav style={s.wsTabbar} aria-label={`${workspaceTabs.title} navigation`}>
+            <span style={s.wsTabbarName}>{workspaceTabs.glyph} {workspaceTabs.title}</span>
+            <div style={s.wsTabScroll}>
+              {workspaceTabs.items.map((it) => {
+                const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
+                return (
+                  <Link key={it.href} href={it.href} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
+                    <span style={{ opacity: 0.8, fontSize: 12 }}>{it.glyph}</span>
+                    {it.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        )}
         <TabBar />
         <main id="main-content" style={s.main} tabIndex={-1}>
           {children}
@@ -298,14 +322,22 @@ const s = {
   brandName: { fontWeight: 800, fontSize: 15, letterSpacing: 0.3, color: 'var(--text)' } as CSSProperties,
   brandSub: { fontSize: 9, letterSpacing: 1.5, color: 'var(--muted)', marginTop: 1, fontWeight: 700 } as CSSProperties,
   group: { marginBottom: 4 } as CSSProperties,
-  ws: {
-    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-    background: 'transparent', border: 'none', cursor: 'pointer',
-    padding: '9px 10px', borderRadius: 9, color: 'var(--text)', fontSize: 14, fontFamily: 'inherit',
+  navDivider: { height: 1, background: 'var(--border)', margin: '10px 6px' } as CSSProperties,
+  hamburger: {
+    background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 18,
+    cursor: 'pointer', padding: '4px 12px 4px 0', lineHeight: 1, flexShrink: 0,
   } as CSSProperties,
-  wsActive: { background: 'var(--panel-2)' } as CSSProperties,
-  wsChevron: { fontSize: 11, color: 'var(--muted)', transition: 'transform 0.15s ease', flexShrink: 0 } as CSSProperties,
-  wsItems: { margin: '1px 0 6px', paddingLeft: 8, borderLeft: '1px solid var(--border)' } as CSSProperties,
+  wsTabbar: {
+    display: 'flex', alignItems: 'center', gap: 14, padding: '0 24px', height: 46,
+    borderBottom: '1px solid var(--border)', background: 'var(--panel)',
+  } as CSSProperties,
+  wsTabbarName: { fontSize: 13, fontWeight: 800, color: 'var(--text)', flexShrink: 0, letterSpacing: 0.2 } as CSSProperties,
+  wsTabScroll: { display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flex: 1 } as CSSProperties,
+  wsTab: {
+    display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+    padding: '7px 12px', borderRadius: 8, fontSize: 13, color: 'var(--muted)',
+  } as CSSProperties,
+  wsTabActive: { color: 'var(--text)', background: 'var(--panel-2)', fontWeight: 700 } as CSSProperties,
   groupTitle: {
     fontSize: 11,
     textTransform: 'uppercase',

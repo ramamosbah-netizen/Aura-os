@@ -26,6 +26,7 @@ export const NAV: NavGroup[] = [
     glyph: '⌂',
     items: [
       { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live personal command center' },
+      { label: 'My Day', href: '/crm/my-day', glyph: '◐', desc: 'Today: meetings, tasks, priorities, approvals & AI suggestions' },
       { label: 'My Workspace', href: '/workspace', glyph: '◉', desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page' },
       { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
       { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },
@@ -35,7 +36,6 @@ export const NAV: NavGroup[] = [
     title: 'Sales',
     glyph: '◎',
     items: [
-      { label: 'My Day', href: '/crm/my-day', glyph: '◐', desc: 'My meetings, work, leads & deals today' },
       { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'Customers & prospects' },
       { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People at each account' },
       { label: 'Pipeline', href: '/crm/leads', glyph: '⌥', desc: 'Leads & opportunities' },
@@ -48,10 +48,10 @@ export const NAV: NavGroup[] = [
     title: 'Delivery',
     glyph: '▥',
     items: [
+      { label: 'Overview', href: '/projects/dashboard', glyph: '◎', desc: 'Delivery cockpit — portfolio value, completion %, delays & cash flow' },
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals — incl. the internal pricing summary' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
       { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Delivery & execution' },
-      { label: 'Projects Dashboard', href: '/projects/dashboard', glyph: '📊', desc: 'Portfolio value & counts by status' },
       { label: 'Variations', href: '/projects/variations', glyph: '◷', desc: 'Change orders & revised contract value' },
       { label: 'Schedule (Gantt)', href: '/projects/schedule', glyph: '▤', desc: 'Projects — Gantt: planned vs baseline vs actual %' },
       { label: 'Payment Certificates', href: '/contracts/certificates', glyph: '◰', desc: 'Interim payment certificates (IPC) — progress billing & retention' },
@@ -103,7 +103,7 @@ export const NAV: NavGroup[] = [
     title: 'Finance',
     glyph: '◳',
     items: [
-      { label: 'Finance Dashboard', href: '/finance/dashboard', glyph: '📊', desc: 'Finance — KPIs & charts (aging, P&L, cost centres)' },
+      { label: 'Overview', href: '/finance/dashboard', glyph: '◎', desc: 'Finance cockpit — revenue, profit, cash position, receivables & payables' },
       { label: 'Invoices', href: '/finance/invoices', glyph: '◰', desc: 'Finance — supplier invoices' },
       { label: 'Customer Invoices', href: '/finance/customer-invoices', glyph: '◳', desc: 'Finance — client tax invoices & receipts (AR)' },
       { label: 'AR Aging', href: '/finance/ar-aging', glyph: '▦', desc: 'Finance — receivables aged by overdue bucket' },

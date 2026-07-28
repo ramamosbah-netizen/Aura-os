@@ -11,6 +11,8 @@ export interface NavItem {
 export interface NavGroup {
   title: string;
   items: NavItem[];
+  /** Workspace icon shown on the collapsed spine header (front-door 'Home' has none). */
+  glyph?: string;
 }
 
 // Experience Architecture (L5) — the sidebar is a spine of front-doors + workspaces, not a page
@@ -21,6 +23,7 @@ export interface NavGroup {
 export const NAV: NavGroup[] = [
   {
     title: 'Home',
+    glyph: '⌂',
     items: [
       { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live personal command center' },
       { label: 'My Workspace', href: '/workspace', glyph: '◉', desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page' },
@@ -30,6 +33,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Sales',
+    glyph: '◎',
     items: [
       { label: 'My Day', href: '/crm/my-day', glyph: '◐', desc: 'My meetings, work, leads & deals today' },
       { label: 'Accounts', href: '/crm/accounts', glyph: '◎', desc: 'Customers & prospects' },
@@ -42,6 +46,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Delivery',
+    glyph: '▥',
     items: [
       { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals — incl. the internal pricing summary' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements' },
@@ -54,6 +59,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Operations',
+    glyph: '⚙',
     items: [
       { label: 'Procurement Dashboard', href: '/procurement/dashboard', glyph: '📊', desc: 'PO spend & counts by status' },
       { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
@@ -95,6 +101,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Finance',
+    glyph: '◳',
     items: [
       { label: 'Finance Dashboard', href: '/finance/dashboard', glyph: '📊', desc: 'Finance — KPIs & charts (aging, P&L, cost centres)' },
       { label: 'Invoices', href: '/finance/invoices', glyph: '◰', desc: 'Finance — supplier invoices' },
@@ -118,6 +125,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Knowledge',
+    glyph: '▤',
     items: [
       { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },
       { label: 'Document Control', href: '/documents/control', glyph: '⧇', desc: 'Transmittals & correspondence' },
@@ -127,6 +135,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Analytics',
+    glyph: '✶',
     items: [
       { label: 'Insights', href: '/intelligence', glyph: '✶', desc: 'AI briefing & pipeline' },
       { label: 'Intelligence Console', href: '/admin/intelligence', glyph: '⚡', desc: 'IEC pricing & autonomy engine' },
@@ -134,6 +143,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Administration',
+    glyph: '🛠',
     items: [
       { label: 'Admin Center', href: '/admin', glyph: '🛠', desc: 'Governance, configuration, integrations & observability' },
       { label: 'Roles & Access', href: '/admin/access', glyph: '🔑', desc: 'Roles & permission grants — what the API guard enforces' },

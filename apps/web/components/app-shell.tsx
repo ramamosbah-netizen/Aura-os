@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { visibleNav } from './nav';
@@ -46,6 +46,31 @@ export default function AppShell({
   const groups = visibleNav(isAdmin || navSuites == null ? null : new Set(navSuites))
     .map((g) => ({ ...g, items: g.items.filter((i) => !disabledModules.has(i.href.split('/')[1] ?? '')) }))
     .filter((g) => g.items.length > 0);
+  // ── The 8-line spine: workspaces collapse to a single line; the one holding the current page
+  // auto-expands. 'Home' is the always-open front-door band. ──
+  const activeGroup = useMemo(() => {
+    if (pathname === '/') return 'Home';
+    let best: { title: string; len: number } | null = null;
+    for (const g of groups) {
+      for (const it of g.items) {
+        if (it.href !== '/' && (pathname === it.href || pathname.startsWith(`${it.href}/`)) && (!best || it.href.length > best.len)) {
+          best = { title: g.title, len: it.href.length };
+        }
+      }
+    }
+    return best?.title ?? null;
+  }, [groups, pathname]);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(activeGroup ? [activeGroup] : []));
+  useEffect(() => {
+    if (activeGroup) setExpanded((prev) => (prev.has(activeGroup) ? prev : new Set(prev).add(activeGroup)));
+  }, [activeGroup]);
+  const toggleGroup = (title: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title); else next.add(title);
+      return next;
+    });
+
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [activeCompany, setActiveCompany] = useState('AURA Group HQ');
@@ -123,12 +148,9 @@ export default function AppShell({
           </div>
         </div>
         <nav style={s.nav} aria-label="Main navigation">
-          {groups.map((group) => (
-            <div key={group.title} style={s.group}>
-              <div className="sidebar-group-title" style={s.groupTitle}>
-                {group.title}
-              </div>
-              {group.items.map((item) => {
+          {groups.map((group) => {
+            const renderItems = () =>
+              group.items.map((item) => {
                 const active = pathname === item.href;
                 return (
                   <Link
@@ -145,9 +167,37 @@ export default function AppShell({
                     <span className="sidebar-label">{item.label}</span>
                   </Link>
                 );
-              })}
-            </div>
-          ))}
+              });
+
+            // Home = the always-open front-door band (no collapse).
+            if (group.title === 'Home') {
+              return (
+                <div key={group.title} style={s.group}>
+                  {renderItems()}
+                </div>
+              );
+            }
+
+            // Every other group is a collapsible workspace: one line, click to open.
+            const open = expanded.has(group.title);
+            const onActive = group.title === activeGroup;
+            return (
+              <div key={group.title} style={s.group}>
+                <button
+                  type="button"
+                  className="sidebar-link"
+                  onClick={() => toggleGroup(group.title)}
+                  aria-expanded={open}
+                  style={{ ...s.ws, ...(onActive ? s.wsActive : {}) }}
+                >
+                  <span style={{ ...s.linkGlyph, ...(onActive ? { color: 'var(--accent)' } : {}) }}>{group.glyph}</span>
+                  <span className="sidebar-label" style={{ flex: 1, textAlign: 'left', fontWeight: 700 }}>{group.title}</span>
+                  <span style={{ ...s.wsChevron, transform: open ? 'rotate(90deg)' : 'none' }}>▸</span>
+                </button>
+                {open && <div style={s.wsItems}>{renderItems()}</div>}
+              </div>
+            );
+          })}
         </nav>
         {user ? (
           <div style={s.userBox}>
@@ -247,7 +297,15 @@ const s = {
   } as CSSProperties,
   brandName: { fontWeight: 800, fontSize: 15, letterSpacing: 0.3, color: 'var(--text)' } as CSSProperties,
   brandSub: { fontSize: 9, letterSpacing: 1.5, color: 'var(--muted)', marginTop: 1, fontWeight: 700 } as CSSProperties,
-  group: { marginBottom: 18 } as CSSProperties,
+  group: { marginBottom: 4 } as CSSProperties,
+  ws: {
+    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    padding: '9px 10px', borderRadius: 9, color: 'var(--text)', fontSize: 14, fontFamily: 'inherit',
+  } as CSSProperties,
+  wsActive: { background: 'var(--panel-2)' } as CSSProperties,
+  wsChevron: { fontSize: 11, color: 'var(--muted)', transition: 'transform 0.15s ease', flexShrink: 0 } as CSSProperties,
+  wsItems: { margin: '1px 0 6px', paddingLeft: 8, borderLeft: '1px solid var(--border)' } as CSSProperties,
   groupTitle: {
     fontSize: 11,
     textTransform: 'uppercase',

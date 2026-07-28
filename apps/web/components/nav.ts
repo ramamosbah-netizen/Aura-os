@@ -8,10 +8,22 @@ export interface NavItem {
   desc: string;
 }
 
+/** A Domain/Area inside a LARGE workspace (e.g. Operations → Procurement). Adds the middle
+ * level of the SAP/Salesforce model: sidebar → workspace → area → tabs. Small workspaces skip it. */
+export interface NavArea {
+  title: string;
+  glyph?: string;
+  items: NavItem[];
+}
+
 export interface NavGroup {
   title: string;
+  /** Flat workspaces list their pages here (rendered as the workspace tab row). */
   items: NavItem[];
-  /** Workspace icon shown on the collapsed spine header (front-door 'Home' has none). */
+  /** Large workspaces list AREAS instead — each area becomes a level-1 tab whose pages form a
+   * second sub-tab row. When present, `items` is ignored for rendering. */
+  areas?: NavArea[];
+  /** Workspace icon shown in the sidebar (front-door 'Home' has none). */
   glyph?: string;
 }
 
@@ -60,43 +72,95 @@ export const NAV: NavGroup[] = [
   {
     title: 'Operations',
     glyph: '⚙',
-    items: [
-      { label: 'Procurement Dashboard', href: '/procurement/dashboard', glyph: '📊', desc: 'PO spend & counts by status' },
-      { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
-      { label: 'Purchase requests', href: '/procurement/purchase-requests', glyph: '▤', desc: 'Procurement request & approval' },
-      { label: 'RFQs', href: '/procurement/rfqs', glyph: '◷', desc: 'Vendor quotations & bid comparison' },
-      { label: 'Purchase orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' },
-      { label: 'Goods receipts', href: '/inventory/grns', glyph: '▢', desc: 'Inventory — received vs POs' },
-      { label: 'Inventory Dashboard', href: '/inventory/dashboard', glyph: '📊', desc: 'Stock value & counts by warehouse' },
-      { label: 'Stock', href: '/inventory/stock', glyph: '▦', desc: 'Inventory — on-hand & movements' },
-      { label: 'Transfers', href: '/inventory/transfers', glyph: '⇄', desc: 'Inventory — warehouse-to-warehouse' },
-      { label: 'Valuation', href: '/inventory/valuation', glyph: '▣', desc: 'Inventory — stock value at moving-average cost (WAC)' },
-      { label: 'Engineering', href: '/engineering', glyph: '⚙', desc: 'Shop drawings, RFIs, & submittals' },
-      { label: 'Site Control', href: '/site/control', glyph: '▤', desc: 'Site diaries, delay logs, & material consumption' },
-      { label: 'Site Instructions', href: '/site/instructions', glyph: '✋', desc: 'Formal site instructions (SI) with cost/time flags' },
-      { label: 'HSE Control', href: '/hse/control', glyph: '🛡', desc: 'Safety incident logs, permits to work, & CAPA' },
-      { label: 'Toolbox Talks', href: '/hse/toolbox-talks', glyph: '📋', desc: 'Daily safety briefings & attendance log' },
-      { label: 'Quality Control', href: '/quality/control', glyph: '✓', desc: 'Non-conformance reports, inspections, & snags' },
-      { label: 'Inspection & Test Plans', href: '/quality/itps', glyph: '☑', desc: 'ITPs — hold/witness points & sign-off' },
-      { label: 'Material Approvals', href: '/quality/material-approvals', glyph: '🧱', desc: 'MAR — material submittals & consultant approval' },
-      { label: 'HR Dashboard', href: '/hr/dashboard', glyph: '📊', desc: 'Headcount by department & distribution' },
-      { label: 'HR & Payroll', href: '/hr/control', glyph: '👤', desc: 'Employee profiles, leave logs, & payroll processing' },
-      { label: 'Gratuity (EOSB)', href: '/hr/eosb', glyph: '◷', desc: 'End-of-service benefit calculator' },
-      { label: 'Timesheets', href: '/hr/timesheets', glyph: '⏱', desc: 'Daily hours logging & approval' },
-      { label: 'Attendance', href: '/hr/attendance', glyph: '🗓', desc: 'Daily presence — check-in/out, status & worked hours' },
-      { label: 'Expense Claims', href: '/hr/expense-claims', glyph: '🧾', desc: 'Employee reimbursements — submit, approve, pay' },
-      { label: 'Staff Advances', href: '/hr/staff-advances', glyph: '💵', desc: 'Salary advances / loans with installment repayment' },
-      { label: 'Document Expiry', href: '/hr/document-expiry', glyph: '🪪', desc: 'Visa & work-permit expiry compliance watch-list' },
-      { label: 'Fleet & Logistics', href: '/fleet/control', glyph: '🚚', desc: 'Vehicles, equipment fleet, fuel logs, & maintenance' },
-      { label: 'Traffic Fines', href: '/fleet/fines', glyph: '🚦', desc: 'UAE fines — black points, driver liability, settlement' },
-      { label: 'Salik (Tolls)', href: '/fleet/salik', glyph: '🛣', desc: 'Dubai road tolls — record, allocate to cost owner, dispute' },
-      { label: 'Assets & Equipment', href: '/assets/control', glyph: '🔧', desc: 'Asset register, calibration, inspections, & warranties' },
-      { label: 'Depreciation', href: '/assets/depreciation', glyph: '📉', desc: 'Asset depreciation schedule & net book value' },
-      { label: 'AMC & Services', href: '/amc', glyph: '⚙', desc: 'Service contracts, support tickets, & SLA timers' },
-      { label: 'Preventive Maintenance', href: '/amc/ppm', glyph: '♺', desc: 'PPM schedules & recurring visit generation' },
-      { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
-      { label: 'Subcontract Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
-      { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
+    items: [],
+    // Too big for a flat tab row — organised into DOMAINS (level-1 tabs), each with its own pages.
+    areas: [
+      {
+        title: 'Procurement', glyph: '◈',
+        items: [
+          { label: 'Overview', href: '/procurement/dashboard', glyph: '◎', desc: 'Procurement cockpit — PO spend & counts by status' },
+          { label: 'Purchase Requests', href: '/procurement/purchase-requests', glyph: '▤', desc: 'Procurement request & approval' },
+          { label: 'RFQs', href: '/procurement/rfqs', glyph: '◷', desc: 'Vendor quotations & bid comparison' },
+          { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
+          { label: 'Purchase Orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' },
+        ],
+      },
+      {
+        title: 'Inventory', glyph: '▦',
+        items: [
+          { label: 'Overview', href: '/inventory/dashboard', glyph: '◎', desc: 'Stock value & counts by warehouse' },
+          { label: 'Stock', href: '/inventory/stock', glyph: '▦', desc: 'On-hand & movements' },
+          { label: 'Goods Receipts', href: '/inventory/grns', glyph: '▢', desc: 'Received vs POs' },
+          { label: 'Transfers', href: '/inventory/transfers', glyph: '⇄', desc: 'Warehouse-to-warehouse' },
+          { label: 'Valuation', href: '/inventory/valuation', glyph: '▣', desc: 'Stock value at moving-average cost (WAC)' },
+        ],
+      },
+      {
+        title: 'Engineering', glyph: '⚙',
+        items: [
+          { label: 'Engineering', href: '/engineering', glyph: '⚙', desc: 'Shop drawings, RFIs, & submittals' },
+        ],
+      },
+      {
+        title: 'Site', glyph: '▤',
+        items: [
+          { label: 'Site Control', href: '/site/control', glyph: '▤', desc: 'Site diaries, delay logs, & material consumption' },
+          { label: 'Site Instructions', href: '/site/instructions', glyph: '✋', desc: 'Formal site instructions (SI) with cost/time flags' },
+        ],
+      },
+      {
+        title: 'Quality', glyph: '✓',
+        items: [
+          { label: 'Quality Control', href: '/quality/control', glyph: '✓', desc: 'Non-conformance reports, inspections, & snags' },
+          { label: 'Inspection & Test Plans', href: '/quality/itps', glyph: '☑', desc: 'ITPs — hold/witness points & sign-off' },
+          { label: 'Material Approvals', href: '/quality/material-approvals', glyph: '🧱', desc: 'MAR — material submittals & consultant approval' },
+        ],
+      },
+      {
+        title: 'HSE', glyph: '🛡',
+        items: [
+          { label: 'HSE Control', href: '/hse/control', glyph: '🛡', desc: 'Safety incident logs, permits to work, & CAPA' },
+          { label: 'Toolbox Talks', href: '/hse/toolbox-talks', glyph: '📋', desc: 'Daily safety briefings & attendance log' },
+        ],
+      },
+      {
+        title: 'People', glyph: '👤',
+        items: [
+          { label: 'Overview', href: '/hr/dashboard', glyph: '◎', desc: 'Headcount by department & distribution' },
+          { label: 'HR & Payroll', href: '/hr/control', glyph: '👤', desc: 'Employee profiles, leave logs, & payroll processing' },
+          { label: 'Timesheets', href: '/hr/timesheets', glyph: '⏱', desc: 'Daily hours logging & approval' },
+          { label: 'Attendance', href: '/hr/attendance', glyph: '🗓', desc: 'Daily presence — check-in/out, status & worked hours' },
+          { label: 'Expense Claims', href: '/hr/expense-claims', glyph: '🧾', desc: 'Employee reimbursements — submit, approve, pay' },
+          { label: 'Staff Advances', href: '/hr/staff-advances', glyph: '💵', desc: 'Salary advances / loans with installment repayment' },
+          { label: 'Gratuity (EOSB)', href: '/hr/eosb', glyph: '◷', desc: 'End-of-service benefit calculator' },
+          { label: 'Document Expiry', href: '/hr/document-expiry', glyph: '🪪', desc: 'Visa & work-permit expiry compliance watch-list' },
+        ],
+      },
+      {
+        title: 'Fleet & Assets', glyph: '🚚',
+        items: [
+          { label: 'Fleet & Logistics', href: '/fleet/control', glyph: '🚚', desc: 'Vehicles, equipment fleet, fuel logs, & maintenance' },
+          { label: 'Traffic Fines', href: '/fleet/fines', glyph: '🚦', desc: 'UAE fines — black points, driver liability, settlement' },
+          { label: 'Salik (Tolls)', href: '/fleet/salik', glyph: '🛣', desc: 'Dubai road tolls — record, allocate to cost owner, dispute' },
+          { label: 'Assets & Equipment', href: '/assets/control', glyph: '🔧', desc: 'Asset register, calibration, inspections, & warranties' },
+          { label: 'Depreciation', href: '/assets/depreciation', glyph: '📉', desc: 'Asset depreciation schedule & net book value' },
+        ],
+      },
+      {
+        title: 'Service (AMC)', glyph: '♺',
+        items: [
+          { label: 'AMC & Services', href: '/amc', glyph: '⚙', desc: 'Service contracts, support tickets, & SLA timers' },
+          { label: 'Preventive Maintenance', href: '/amc/ppm', glyph: '♺', desc: 'PPM schedules & recurring visit generation' },
+        ],
+      },
+      {
+        title: 'Subcontracts', glyph: '▧',
+        items: [
+          { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
+          { label: 'Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
+          { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
+        ],
+      },
     ],
   },
   {
@@ -159,7 +223,12 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-export const ALL_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
+/** Every page in a group — flat `items` or the pages nested inside its `areas`. */
+export function groupAllItems(g: NavGroup): NavItem[] {
+  return g.areas ? g.areas.flatMap((a) => a.items) : g.items;
+}
+
+export const ALL_ITEMS: NavItem[] = NAV.flatMap(groupAllItems);
 
 /**
  * Nav group → workspace `suite.*` function id. Groups mapped here are gated by
@@ -194,7 +263,7 @@ export function visibleNav(allowedSuites: Set<string> | null): NavGroup[] {
 export function findNavMatch(pathname: string): { group: string; label: string; href: string } | null {
   let match: { group: string; label: string; href: string } | null = null;
   for (const group of NAV) {
-    for (const item of group.items) {
+    for (const item of groupAllItems(group)) {
       if (item.href === '/') continue;
       if (
         (pathname === item.href || pathname.startsWith(`${item.href}/`)) &&

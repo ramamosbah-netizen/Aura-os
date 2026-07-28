@@ -3,7 +3,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { visibleNav } from './nav';
+import { visibleNav, groupAllItems } from './nav';
 import Breadcrumbs from './breadcrumbs';
 import CommandPalette from './command-palette';
 import TabBar from './tab-bar';
@@ -43,16 +43,21 @@ export default function AppShell({
       .catch(() => undefined);
   }, []);
   // Admins always see every suite; otherwise gate by the role's allowed suites.
+  const keepItem = (i: { href: string }) => !disabledModules.has(i.href.split('/')[1] ?? '');
   const groups = visibleNav(isAdmin || navSuites == null ? null : new Set(navSuites))
-    .map((g) => ({ ...g, items: g.items.filter((i) => !disabledModules.has(i.href.split('/')[1] ?? '')) }))
-    .filter((g) => g.items.length > 0);
+    .map((g) =>
+      g.areas
+        ? { ...g, areas: g.areas.map((a) => ({ ...a, items: a.items.filter(keepItem) })).filter((a) => a.items.length > 0) }
+        : { ...g, items: g.items.filter(keepItem) },
+    )
+    .filter((g) => (g.areas ? g.areas.length > 0 : g.items.length > 0));
   // ── Workspace model (Linear/VS Code): the sidebar SELECTS a workspace; the workspace owns its
   // pages as a horizontal tab row. The sidebar itself hides with ☰ / Ctrl+B for more table space. ──
   const activeGroup = useMemo(() => {
     if (pathname === '/') return 'Home';
     let best: { title: string; len: number } | null = null;
     for (const g of groups) {
-      for (const it of g.items) {
+      for (const it of groupAllItems(g)) {
         if (it.href !== '/' && (pathname === it.href || pathname.startsWith(`${it.href}/`)) && (!best || it.href.length > best.len)) {
           best = { title: g.title, len: it.href.length };
         }
@@ -65,6 +70,23 @@ export default function AppShell({
     if (!activeGroup || activeGroup === 'Home') return null;
     return groups.find((g) => g.title === activeGroup) ?? null;
   }, [groups, activeGroup]);
+  // Level 2 (large workspaces only): which DOMAIN you're in, and its pages.
+  const activeArea = useMemo(() => {
+    if (!workspaceTabs?.areas) return null;
+    let best: { title: string; len: number } | null = null;
+    for (const a of workspaceTabs.areas) {
+      for (const it of a.items) {
+        if ((pathname === it.href || pathname.startsWith(`${it.href}/`)) && (!best || it.href.length > best.len)) {
+          best = { title: a.title, len: it.href.length };
+        }
+      }
+    }
+    return best?.title ?? workspaceTabs.areas[0]?.title ?? null;
+  }, [workspaceTabs, pathname]);
+  const activeAreaItems = useMemo(
+    () => workspaceTabs?.areas?.find((a) => a.title === activeArea)?.items ?? null,
+    [workspaceTabs, activeArea],
+  );
   const [sidebarHidden, setSidebarHidden] = useState(false);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -160,7 +182,7 @@ export default function AppShell({
               return (
                 <Link
                   key={group.title}
-                  href={group.items[0]?.href ?? '/'}
+                  href={groupAllItems(group)[0]?.href ?? '/'}
                   className="sidebar-link"
                   title={group.title}
                   aria-current={active ? 'page' : undefined}
@@ -269,11 +291,36 @@ export default function AppShell({
           <nav style={s.wsTabbar} aria-label={`${workspaceTabs.title} navigation`}>
             <span style={s.wsTabbarName}>{workspaceTabs.glyph} {workspaceTabs.title}</span>
             <div style={s.wsTabScroll}>
-              {workspaceTabs.items.map((it) => {
+              {workspaceTabs.areas
+                ? workspaceTabs.areas.map((area) => {
+                    const active = area.title === activeArea;
+                    return (
+                      <Link key={area.title} href={area.items[0]?.href ?? '/'} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
+                        <span style={{ opacity: 0.8, fontSize: 12 }}>{area.glyph}</span>
+                        {area.title}
+                      </Link>
+                    );
+                  })
+                : workspaceTabs.items.map((it) => {
+                    const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
+                    return (
+                      <Link key={it.href} href={it.href} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
+                        <span style={{ opacity: 0.8, fontSize: 12 }}>{it.glyph}</span>
+                        {it.label}
+                      </Link>
+                    );
+                  })}
+            </div>
+          </nav>
+        )}
+        {activeAreaItems && (
+          <nav style={s.wsSubTabbar} aria-label={`${activeArea} navigation`}>
+            <div style={s.wsTabScroll}>
+              {activeAreaItems.map((it) => {
                 const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
                 return (
-                  <Link key={it.href} href={it.href} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
-                    <span style={{ opacity: 0.8, fontSize: 12 }}>{it.glyph}</span>
+                  <Link key={it.href} href={it.href} style={active ? { ...s.wsSubTab, ...s.wsSubTabActive } : s.wsSubTab}>
+                    <span style={{ opacity: 0.75, fontSize: 11.5 }}>{it.glyph}</span>
                     {it.label}
                   </Link>
                 );
@@ -338,6 +385,15 @@ const s = {
     padding: '7px 12px', borderRadius: 8, fontSize: 13, color: 'var(--muted)',
   } as CSSProperties,
   wsTabActive: { color: 'var(--text)', background: 'var(--panel-2)', fontWeight: 700 } as CSSProperties,
+  wsSubTabbar: {
+    display: 'flex', alignItems: 'center', gap: 10, padding: '0 24px', height: 40,
+    borderBottom: '1px solid var(--border)', background: 'var(--panel-2)',
+  } as CSSProperties,
+  wsSubTab: {
+    display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+    padding: '5px 11px', borderRadius: 7, fontSize: 12.5, color: 'var(--muted)',
+  } as CSSProperties,
+  wsSubTabActive: { color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   groupTitle: {
     fontSize: 11,
     textTransform: 'uppercase',

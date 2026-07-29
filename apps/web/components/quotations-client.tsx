@@ -51,7 +51,7 @@ const OPEN_STATUSES = ['draft', 'internal_review', 'approved', 'sent', 'under_ne
 const LOST_STATUSES = ['rejected', 'expired', 'cancelled'];
 const aed = (n: number): string => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-export default function QuotationsClient({ initialQuotations }: { initialQuotations: Quotation[] }) {
+export default function QuotationsClient({ initialQuotations, embedded }: { initialQuotations: Quotation[]; embedded?: boolean }) {
   const router = useRouter();
   const quotes = initialQuotations;
   const [error, setError] = useState('');
@@ -115,18 +115,20 @@ export default function QuotationsClient({ initialQuotations }: { initialQuotati
 
   return (
     <>
-      {/* KPI strip */}
-      <div style={st.cards}>
-        <Kpi label="Draft value" value={`AED ${aed(kpi.draftValue)}`} />
-        <Kpi label="Open / sent value" value={`AED ${aed(kpi.openValue)}`} accent />
-        <Kpi label="Accepted value" value={`AED ${aed(kpi.acceptedValue)}`} good />
-        <Kpi label="Rejected / lost value" value={`AED ${aed(kpi.lostValue)}`} bad />
-        <Kpi label="Expiring ≤ 7 days" value={String(kpi.expiringSoon)} bad={kpi.expiringSoon > 0} />
-        <Kpi label="Acceptance rate" value={kpi.acceptanceRate === null ? '—' : `${kpi.acceptanceRate}%`} accent />
-      </div>
+      {/* KPI strip — hidden when embedded in the Quotations OS (its Overview owns the KPIs) */}
+      {!embedded && (
+        <div style={st.cards}>
+          <Kpi label="Draft value" value={`AED ${aed(kpi.draftValue)}`} />
+          <Kpi label="Open / sent value" value={`AED ${aed(kpi.openValue)}`} accent />
+          <Kpi label="Accepted value" value={`AED ${aed(kpi.acceptedValue)}`} good />
+          <Kpi label="Rejected / lost value" value={`AED ${aed(kpi.lostValue)}`} bad />
+          <Kpi label="Expiring ≤ 7 days" value={String(kpi.expiringSoon)} bad={kpi.expiringSoon > 0} />
+          <Kpi label="Acceptance rate" value={kpi.acceptanceRate === null ? '—' : `${kpi.acceptanceRate}%`} accent />
+        </div>
+      )}
 
       <div style={st.toolbar}>
-        <QuotationCreate />
+        {!embedded && <QuotationCreate />}
         <ExportButton filename="quotations" rows={quotes as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'quoteNumber' }, { key: 'revision' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'validUntil' }, { key: 'subtotal' }, { key: 'vatTotal' }, { key: 'total' }, { key: 'status' }, { key: 'ownerId' }]} />
         {error && <span style={st.err}>{error}</span>}

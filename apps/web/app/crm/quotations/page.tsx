@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import QuotationsClient from '../../../components/quotations-client';
+import QuotationsWorkspace from '../../../components/quotations-workspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,22 +30,21 @@ export default async function QuotationsPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>CRM · Quotations</h1>
+      <h1 style={st.h1}>Quotations</h1>
       <p style={st.sub}>
-        The client-facing quote in the deal chain: Draft → Internal Review → Approved → Sent →
-        Under Negotiation → Accepted / Rejected / Expired / Cancelled, with revisions
-        (Rev 0 → 1 → 2 …). Accepted quotes convert to a contract in one click; every quote
-        keeps its source (opportunity or tender pricing sheet) and its account.
+        The quotation lifecycle as a workspace — Overview, a status Board (Draft → Review → Approved
+        → Sent → Negotiation → Accepted), the full List, and Analytics. Accepted quotes convert to a
+        contract in one click; every quote keeps its source (opportunity or tender) and its account.
       </p>
       <section style={{ marginTop: 10 }}>
-        {quotations === null ? <p style={st.muted}>API offline.</p> : <QuotationsClient initialQuotations={quotations} />}
+        {quotations === null ? <p style={st.muted}>API offline.</p> : <QuotationsWorkspace initialQuotations={quotations} />}
       </section>
     </div>
   );
 }
 
 const st = {
-  page: { maxWidth: 1040, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  page: { maxWidth: 1280, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,

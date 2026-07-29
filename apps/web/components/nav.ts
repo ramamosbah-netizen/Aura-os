@@ -77,6 +77,12 @@ export const NAV: NavGroup[] = [
     // Too big for a flat tab row — organised into DOMAINS (level-1 tabs), each with its own pages.
     areas: [
       {
+        title: 'Overview', glyph: '◎',
+        items: [
+          { label: 'Overview', href: '/operations/overview', glyph: '◎', desc: 'Operations cockpit — committed spend, requests to approve & stock to reorder' },
+        ],
+      },
+      {
         title: 'Procurement', glyph: '◈',
         items: [
           { label: 'Overview', href: '/procurement/dashboard', glyph: '◎', desc: 'Procurement cockpit — PO spend & counts by status' },

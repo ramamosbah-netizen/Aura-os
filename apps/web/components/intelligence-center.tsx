@@ -40,7 +40,7 @@ export default function IntelligenceCenter({ lines }: { lines: EstimationLineInp
     ).then((r) => { if (!cancelled) setRows(r); });
     return () => { cancelled = true; };
     // Re-query when the set of descriptions changes, not on every keystroke elsewhere.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // (react-hooks/exhaustive-deps isn't configured in this repo's flat ESLint, so no directive.)
   }, [priced.map((l) => l.description).join('|')]);
 
   if (priced.length === 0) {

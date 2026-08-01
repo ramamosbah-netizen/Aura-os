@@ -47,8 +47,9 @@
 ### Tendering — ~70%
 - Lifecycle, BOQ (Excel import productionized), submissions, risk layer, register depth. Bid review + vendor comparison (T6) was the last piece. **Strong domain, 4 pages** — needs an estimator's workspace UI.
 
-### Procurement — ~65%
-- PR→RFQ→PO, suppliers, PO↔supplier FK. Good spine. **Missing:** supplier portal, goods-receipt matching UI depth, 3-way match surfacing, spend analytics.
+### Procurement — ~70% *(was ~65% — 2026-08-01 update)*
+- PR→RFQ→PO (with side-by-side vendor quote comparison + award), suppliers, PO↔supplier FK. Good spine.
+- **2026-08-01 update — 3-way match surfaced.** The match *rule* already lived in Finance (invoice approval blocks over-receipt); new `GET procurement/three-way-match` + `/procurement/three-way-match` page expose the **read view** procurement/finance lacked: per-PO ordered vs received (GRN) vs invoiced (AP), with an over-invoiced/billing-exposure flag and KPIs. Verified against the live DB (25 POs; 9 over-invoiced caught). **Still missing:** supplier portal, spend analytics.
 
 ### HR — ~65%
 - Employees, timesheets, attendance, expenses, advances, WPS (UAE SIF). Good UAE-specific depth. **Missing:** payroll run UI, leave management, org chart, performance/appraisal.

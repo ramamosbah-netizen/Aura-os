@@ -33,9 +33,9 @@
 - **Has:** pipeline command center, account portfolio with health, forecast snapshots + slippage, quotations OS, my-day, deal briefs, at-risk deals with recommendations. This persona has a finished product.
 - **Friction:** quotation pricing still has two engines; email/comms not fully in-app.
 
-### Project Manager — 5/10
-- **Has:** project backend depth (WBS/CBS/variations/schedules/cashflow), 5 pages.
-- **Missing:** a PM cockpit — Gantt, earned-value, resource loading, RFI/submittal tracking, budget-vs-actual at a glance. The data exists; the workspace doesn't.
+### Project Manager — 6.5/10 *(was 5 — 2026-08-01)*
+- **Has:** project backend depth (WBS/CBS/variations/schedules/cashflow); Engineering RFI/submittal/TQ cockpit (built this session); and now a **Delivery Portfolio Cockpit** (`/projects/dashboard`) with earned-value health (portfolio + per-project SPI/CPI, at-risk callout, budget-vs-actual variance).
+- **Still missing:** an interactive Gantt and resource loading. The EVM "at a glance" gap is now closed; the schedule-visualisation gap remains.
 
 ### Engineer — 3/10
 - **Has:** 1 engineering page over 36 backend files.

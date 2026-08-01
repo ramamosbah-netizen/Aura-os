@@ -40,8 +40,9 @@
 - **Weaknesses:** consolidation/inter-company depth; fixed-asset↔GL integration; cashflow forecasting is project-side.
 - **Missing:** full financial statements (P&L exists via projections; balance sheet/cashflow statement maturity unclear); audit-ready reporting pack.
 
-### Projects — ~65% (strong backend, thin UI: 5 pages)
-- WBS/CBS, variations, schedules, cashflow forecasts, closeouts. Execution lifecycle + closeout→contract.completed reactor. **UI under-serves the backend** — PM cockpit, Gantt, resource loading, earned-value are the gaps.
+### Projects — ~70% *(was ~65% — 2026-08-01 update)*
+- WBS/CBS, variations, schedules, cashflow forecasts, closeouts. Execution lifecycle + closeout→contract.completed reactor.
+- **2026-08-01 update — a real Delivery/PM Portfolio Cockpit shipped.** New `GET projects/projects/portfolio` composes **Earned-Value** (SPI/CPI, planned/earned/actual, cost & schedule variance) across all projects in one call; `/projects/dashboard` was upgraded from a status-count widget to a cockpit: portfolio KPIs (value, completion, portfolio SPI/CPI), an **at-risk callout** (active projects with SPI or CPI < 1), and a per-project health table. Verified against the live API (15 projects with EVM). Remaining PM gaps: an interactive Gantt (the `/projects/schedule` page exists but is basic) and resource loading.
 
 ### Tendering — ~70%
 - Lifecycle, BOQ (Excel import productionized), submissions, risk layer, register depth. Bid review + vendor comparison (T6) was the last piece. **Strong domain, 4 pages** — needs an estimator's workspace UI.

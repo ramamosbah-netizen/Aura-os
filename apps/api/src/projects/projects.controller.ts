@@ -143,6 +143,23 @@ export class ProjectsController {
     return this.projects.list({ status, accountId, contractId, limit: 100 });
   }
 
+  /**
+   * GET /api/projects/portfolio — the PM/Delivery cockpit rollup: every project with its
+   * live Earned-Value metrics (SPI/CPI/variances) composed in one call, so the front end
+   * doesn't fan out an EVM request per project. At-risk = SPI or CPI below 1.
+   */
+  @Get('projects/portfolio')
+  async portfolio(@Query('status') status?: string): Promise<Array<Project & { evm: EvmMetrics; atRisk: boolean }>> {
+    const projects = await this.projects.list({ status, limit: 500 });
+    return Promise.all(
+      projects.map(async (p) => {
+        const evm = await this.wbs.getEvmMetrics(p.id);
+        const atRisk = p.status === 'active' && (evm.spi < 1 || evm.cpi < 1);
+        return { ...p, evm, atRisk };
+      }),
+    );
+  }
+
   @Get('projects/paged')
   pagedProjects(
     @Query('status') status?: string,

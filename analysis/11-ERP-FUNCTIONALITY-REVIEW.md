@@ -80,8 +80,9 @@
 ### Fleet — ~55%
 - Vehicles, traffic fines, Salik (UAE). Good local fit. **Missing:** maintenance scheduling UI, fuel/telematics, driver assignment.
 
-### AMC — ~50%
-- AMC contracts, PPM schedules, work-order costing. **Missing:** the field-service loop (dispatch→technician mobile→checklist→customer signoff→invoice) — the money-maker for ELV maintenance businesses.
+### AMC — ~60% *(was ~50% — 2026-08-01 update)*
+- AMC contracts, PPM schedules, work-order costing.
+- **2026-08-01 update — the field-service loop now has an operational UI.** New `/amc/dispatch` board (columns Open → Assigned → In progress → Completed) over the existing backend: raise a work order, **assign a technician**, **complete on site with a billable cost** (drives the AMC → AR invoice reactor), and a **technician filter** for a per-engineer view. Verified E2E (create → assign → complete → dispatch-board). **Still missing:** a true technician **mobile/PWA** with offline + on-site checklist/photos and customer e-signature.
 
 ### Subcontracts — ~60%
 - Subcontracts, variations, back-charges, retention release. Reasonable. **Missing:** subcontractor portal, progress claims workflow UI.

@@ -159,6 +159,7 @@ export const NAV: NavGroup[] = [
         title: 'Service (AMC)', glyph: '♺',
         items: [
           { label: 'AMC & Services', href: '/amc', glyph: '⚙', desc: 'Service contracts, support tickets, & SLA timers' },
+          { label: 'Field Service (Dispatch)', href: '/amc/dispatch', glyph: '🧰', desc: 'Work-order dispatch board — assign technicians, complete on site, bill the visit' },
           { label: 'Preventive Maintenance', href: '/amc/ppm', glyph: '♺', desc: 'PPM schedules & recurring visit generation' },
         ],
       },

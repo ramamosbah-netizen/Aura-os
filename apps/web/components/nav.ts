@@ -102,6 +102,7 @@ export const NAV: NavGroup[] = [
           { label: 'Goods Receipts', href: '/inventory/grns', glyph: '▢', desc: 'Received vs POs' },
           { label: 'Transfers', href: '/inventory/transfers', glyph: '⇄', desc: 'Warehouse-to-warehouse' },
           { label: 'Valuation', href: '/inventory/valuation', glyph: '▣', desc: 'Stock value at moving-average cost (WAC)' },
+          { label: 'Serial Tracking', href: '/inventory/serials', glyph: '#', desc: 'Per-unit device ledger — serial → issued → installed → warranty (ELV asset lifecycle)' },
         ],
       },
       {

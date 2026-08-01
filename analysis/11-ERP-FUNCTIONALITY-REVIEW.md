@@ -55,8 +55,9 @@
 ### Contracts — ~65%
 - Contract 360, bonds/guarantees, payment certificates, obligations, clauses. Solid. **Missing:** contract authoring/templating UI depth, variation↔contract value automation.
 
-### Inventory — ~60%
-- GRN, stock, transfers, valuation, reorder levels. **Missing:** warehouse/bin management, barcode/mobile picking, cycle counting, serial/batch tracking (critical for ELV asset serials).
+### Inventory — ~68% *(was ~60% — 2026-08-01 update)*
+- GRN, stock, transfers, valuation, reorder levels.
+- **2026-08-01 update — serial/batch tracking added** (the thinnest domain's biggest ELV gap). New `SerialUnit` aggregate + `/inventory/serials` UI: register a serialised unit (unique per tenant+item), then track it in_stock → issued (to project) → installed (with warranty clock) → returned/faulty, with a status filter. Migration 0199 (RLS + unique-serial index). Verified E2E incl. the install-only-from-issued (409) and duplicate-serial (400) guards. **Still missing:** warehouse/bin locations, barcode/mobile picking, cycle counting.
 
 ### Engineering — ~60% *(was ~40% — 2026-08-01 update)*
 - **2026-08-01 update — all seven backend domains now surfaced.** The Engineering page is now a full 7-tab cockpit (Overview + Shop Drawings, RFIs, Technical Submittals, Technical Queries, Design Changes, Documents, BIM Models). The two previously backend-only domains were wired end-to-end and verified against the running API: **Technical Queries** (raise → respond, open→responded) and **BIM Models** (register → version, v1→v2/Rev bump), each with client proxy routes and `EmptyState` on empty lists. Remaining gaps that keep it below ~80%: material take-off from BOQ, drawing↔submittal↔RFI cross-linking, an actual model *viewer* (the registry is the backbone; the 3D viewer is not built), and per-record detail pages.

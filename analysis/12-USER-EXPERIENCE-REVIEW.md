@@ -1,6 +1,8 @@
 # User Experience Review
 
-**Score: 6.3 / 10** — best-in-class where invested (CRM/Finance cockpits, modern IA), near-absent for delivery/field personas. Reviewed through 9 role lenses below.
+**Score: 6.7 / 10** *(was 6.3 — see 2026-08-01 update)* — best-in-class where invested (CRM/Finance cockpits, modern IA), near-absent for delivery/field personas. Reviewed through 9 role lenses below.
+
+> **2026-08-01 update — loading/error states shipped.** App-wide route boundaries were added and verified against the running app (typecheck clean; CRM Accounts + Finance AR-Aging render with boundaries in place): a cockpit-shaped `PageLoading` skeleton (`components/ui/page-loading.tsx`, reusing the existing `ui/skeleton.tsx` shimmer), a recoverable `ErrorState` client boundary (`components/ui/error-state.tsx`), a self-contained `global-error.tsx`, plus root `loading.tsx`/`error.tsx` and **per-segment `loading.tsx` + `error.tsx` across 28 route segments** (CRM, Finance, Projects, …). An `EmptyState` primitive (`components/ui/empty-state.tsx`) was also added but **not yet adopted into pages** — so the "empty" third of this dimension is still pending. This raised *Empty/loading/error states* 3→7 and overall UX 6.3→6.7. It is **not** a 10: mobile/field (2), delivery-persona depth, customer portal, and optimistic mutations remain the dominant drags and require the multi-week builds in [`16-PRIORITIZED-ROADMAP.md`](16-PRIORITIZED-ROADMAP.md).
 
 ## Global UX assessment
 
@@ -19,7 +21,7 @@
 | Filters | 6/10 | Saved-view pattern (per doctrine, queues = saved views not sidebar items). |
 | Dashboards | 6/10 | Per-module cockpits (pipeline, portfolio, operations overview); no unified BI yet. |
 | **Mobile** | **2/10** | Desktop-first; no field/PWA app. Critical miss for site/technician personas. |
-| Empty/loading/error states | **3/10** | 0 `loading.tsx`, 0 `error.tsx`; only 1 `not-found`. Empty states are per-component, inconsistent. |
+| Empty/loading/error states | **7/10** *(was 3)* | ✅ App-wide `loading.tsx` (skeletons) + `error.tsx` (recoverable) across root + 28 segments + `global-error`. ⚠️ `EmptyState` primitive built but not yet adopted into pages — empty-list handling still per-component. |
 
 ## Role-based walkthroughs
 

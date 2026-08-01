@@ -37,8 +37,10 @@ export function classifyDomainMessage(m: string): DomainClassification {
 
   // 400 — validation and limit guards ("exceeds remaining ceiling", "validation failed",
   // "needs at least one line", "out of range", "dependency cycle", "duplicate …", "unknown …").
+  // Also the pricing-sheet precondition guards: nothing to freeze/compare, no earlier version,
+  // and "not linked to a quotation yet — create the quote shell first".
   if (
-    /required|requires\b|\bmust\b|invalid|cannot|expected|validation failed|exceeds\b|out of range|needs a\b|needs at least|duplicate\b|dependency cycle|gate blocked|no lines?\b|missing\b|negative\b|unknown\b/i.test(m)
+    /required|requires\b|\bmust\b|invalid|cannot|expected|validation failed|exceeds\b|out of range|needs a\b|needs at least|duplicate\b|dependency cycle|gate blocked|no lines?\b|missing\b|negative\b|unknown\b|nothing to \w+|not linked|no earlier version/i.test(m)
   ) {
     return { status: 400, code: 'VALIDATION' };
   }

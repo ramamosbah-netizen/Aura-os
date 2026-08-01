@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import EmptyState from './ui/empty-state';
 
 interface Project {
   id: string;
@@ -310,7 +311,11 @@ export default function QualityControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Active NCR Registry</h3>
             {ncrs.length === 0 ? (
-              <p style={st.muted}>No NCR logs recorded yet.</p>
+              <EmptyState
+                compact
+                title="No NCR logs recorded yet"
+                description="Raise a non-conformance report to track defects and drive them to close-out."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -397,7 +402,11 @@ export default function QualityControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Inspection Log</h3>
             {inspections.length === 0 ? (
-              <p style={st.muted}>No inspection requests logged.</p>
+              <EmptyState
+                compact
+                title="No inspection requests logged"
+                description="Log an inspection request (IR) to schedule consultant/QA inspections and capture their outcome."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -491,7 +500,11 @@ export default function QualityControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Snag Registry</h3>
             {snags.length === 0 ? (
-              <p style={st.muted}>No active snags logged.</p>
+              <EmptyState
+                compact
+                title="No active snags logged"
+                description="Capture snags/defects and track their close-out before handover."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -578,7 +591,11 @@ export default function QualityControlClient({
           <section style={{ ...st.panel, marginBottom: 24 }}>
             <h3 style={st.panelTitle}>Audit Schedules Ledger</h3>
             {audits.length === 0 ? (
-              <p style={st.muted}>No scheduled audits recorded yet.</p>
+              <EmptyState
+                compact
+                title="No scheduled audits recorded yet"
+                description="Schedule quality audits and track their findings and corrective actions."
+              />
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={st.table}>

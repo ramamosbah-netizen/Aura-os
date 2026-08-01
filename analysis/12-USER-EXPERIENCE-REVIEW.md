@@ -21,7 +21,7 @@
 | Filters | 6/10 | Saved-view pattern (per doctrine, queues = saved views not sidebar items). |
 | Dashboards | 6/10 | Per-module cockpits (pipeline, portfolio, operations overview); no unified BI yet. |
 | **Mobile** | **2/10** | Desktop-first; no field/PWA app. Critical miss for site/technician personas. |
-| Empty/loading/error states | **7/10** *(was 3)* | ✅ App-wide `loading.tsx` (skeletons) + `error.tsx` (recoverable) across root + 28 segments + `global-error`. ⚠️ `EmptyState` primitive built but not yet adopted into pages — empty-list handling still per-component. |
+| Empty/loading/error states | **7.5/10** *(was 3)* | ✅ App-wide `loading.tsx` (skeletons) + `error.tsx` (recoverable) across root + 28 segments + `global-error`. ✅ `EmptyState` now adopted across Engineering (6 lists) + Site, Quality & HSE (15 lists). ⚠️ Other modules (Finance, CRM, Procurement, HR, …) still use per-component bare empty text — rollout is partial. |
 
 ## Role-based walkthroughs
 

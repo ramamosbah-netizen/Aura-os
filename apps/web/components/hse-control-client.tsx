@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import EmptyState from './ui/empty-state';
 
 interface Project {
   id: string;
@@ -203,7 +204,11 @@ export default function HseControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Active Safety Register</h3>
             {incidents.length === 0 ? (
-              <p style={st.muted}>No safety incidents logged yet.</p>
+              <EmptyState
+                compact
+                title="No safety incidents logged yet"
+                description="Log an incident to start the HSE register — investigation, CAPA and reporting build from here."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -284,7 +289,11 @@ export default function HseControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Permits Log</h3>
             {permits.length === 0 ? (
-              <p style={st.muted}>No permit to work logs registered.</p>
+              <EmptyState
+                compact
+                title="No permits to work registered"
+                description="Raise a permit to work to control high-risk activities before they start on site."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -358,7 +367,11 @@ export default function HseControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>CAPA Register</h3>
             {capas.length === 0 ? (
-              <p style={st.muted}>No CAPA actions registered.</p>
+              <EmptyState
+                compact
+                title="No CAPA actions registered"
+                description="Corrective & preventive actions raised from incidents and audits are tracked here."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -459,7 +472,11 @@ export default function HseControlClient({
             </div>
 
             {trainingRecords.length === 0 ? (
-              <p style={st.muted}>No safety training records registered yet.</p>
+              <EmptyState
+                compact
+                title="No safety training records yet"
+                description="Record inductions and safety certifications to track competency and expiry."
+              />
             ) : (
               <table style={st.table}>
                 <thead>

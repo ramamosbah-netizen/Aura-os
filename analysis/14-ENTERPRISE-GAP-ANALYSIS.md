@@ -45,7 +45,7 @@
 | **AMC / preventive maintenance** | 🟡 | PPM schedules + WO costing exist; no field execution loop |
 | **Asset lifecycle / installed base** | 🟡 | Installed-base store in CRM + assets module; no unified device lifecycle from install→warranty→AMC→replacement |
 | **Field service** | 🔴 | No dispatch, no technician mobile, no checklist/signoff |
-| **Commissioning (T&C)** | 🔴 | No commissioning module — the ELV deliverable |
+| **Commissioning (T&C)** | 🟡 *(2026-08-01: built)* | New commissioning module + UI — per-system T&C register with test-point tally and witnessed sign-off; verified E2E. Still needs per-device checklists & the handover trigger |
 | **Handover / O&M / warranty** | 🔴 | No structured handover package |
 | **Snagging / defects** | 🔴 | No snag list workflow |
 | **RMS / material submittals** | 🟡 | Doc control + material approvals backends exist; UI stub |

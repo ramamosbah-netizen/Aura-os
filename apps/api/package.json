@@ -19,6 +19,7 @@
   "dependencies": {
     "@aura/amc": "workspace:*",
     "@aura/assets": "workspace:*",
+    "@aura/commissioning": "workspace:*",
     "@aura/contracts": "workspace:*",
     "@aura/core": "workspace:*",
     "@aura/crm": "workspace:*",

@@ -67,6 +67,7 @@ export const NAV: NavGroup[] = [
       { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Delivery & execution' },
       { label: 'Variations', href: '/projects/variations', glyph: '◷', desc: 'Change orders & revised contract value' },
       { label: 'Schedule (Gantt)', href: '/projects/schedule', glyph: '▤', desc: 'Projects — Gantt: planned vs baseline vs actual %' },
+      { label: 'Commissioning', href: '/commissioning', glyph: '✓', desc: 'Test & Commissioning register — prove each ELV system works, witnessed sign-off unlocks handover' },
       { label: 'Payment Certificates', href: '/contracts/certificates', glyph: '◰', desc: 'Interim payment certificates (IPC) — progress billing & retention' },
     ],
   },

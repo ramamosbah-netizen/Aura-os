@@ -17,7 +17,7 @@ Legend: ✅ built & connected · 🟡 partial / thin UI · 🔴 missing or dead-
 | 8 | **Inventory** | ✅ | GRN→stock→transfers→valuation (migs 0010/0054/0055/0073); `chains.e2e-spec.ts` covers the flow |
 | 9 | **Project** | ✅→🟡 | Project created + WBS/CBS/schedule/cashflow; **PM cockpit UI missing** (5 pages) |
 | 10 | **Execution** | 🟡 | Site instructions, delay logs, variations exist; **daily site reports, labor/plant returns, progress tracking UI missing** |
-| 11 | **Commissioning** | 🔴 | No dedicated commissioning module/workflow found. Quality ITPs (mig 0068) partially cover inspection but not T&C / systems commissioning (critical for ELV) |
+| 11 | **Commissioning** | 🟡 *(2026-08-01: built)* | New `commissioning` module + `/commissioning` UI: register each ELV system, record its test-point pass rate, commission it with a witnessed sign-off (state machine `pending→in_progress→tested→commissioned`, guard blocks sign-off until all points pass). Verified E2E against the live DB. Remaining: link a commissioned set to trigger the handover package (stage 12) |
 | 12 | **Handover** | 🔴 | No handover workflow (O&M manuals, as-builts, warranty start, snag close-out, client acceptance). Project closeout (mig 0087) exists but is financial/administrative, not a client-handover package |
 | 13 | **Maintenance (AMC)** | 🟡 | AMC contracts + PPM schedules + WO costing (migs 0038/0078/0083); **field execution loop missing** |
 | 14 | **Service** | 🔴 | No field-service ticket→dispatch→technician→checklist→signoff loop. AMC WOs exist as records, not an operational field workflow |

@@ -46,7 +46,7 @@
 | **Asset lifecycle / installed base** | 🟡 | Installed-base store in CRM + assets module; no unified device lifecycle from install→warranty→AMC→replacement |
 | **Field service** | 🔴 | No dispatch, no technician mobile, no checklist/signoff |
 | **Commissioning (T&C)** | 🟡 *(2026-08-01: built)* | New commissioning module + UI — per-system T&C register with test-point tally and witnessed sign-off; verified E2E. Still needs per-device checklists & the handover trigger |
-| **Handover / O&M / warranty** | 🔴 | No structured handover package |
+| **Handover / O&M / warranty** | 🟡 *(2026-08-01: built)* | New Handover module + UI — per-project acceptance package (close-out checklist, client sign-off, warranty-clock start) linked to live commissioning status; verified E2E. Still needs the DMS document bundle + auto-AMC-on-acceptance |
 | **Snagging / defects** | 🔴 | No snag list workflow |
 | **RMS / material submittals** | 🟡 | Doc control + material approvals backends exist; UI stub |
 

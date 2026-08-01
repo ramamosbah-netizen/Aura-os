@@ -3,6 +3,7 @@ import type { Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { CommissioningStore } from './store.interface';
 import type { CommissioningRecord, CommissioningStatus, ElvSystem } from './domain/commissioning-record';
+import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
 // Postgres adapter for Commissioning. The domain is a plain interface (no class rehydration),
 // so mapping is a straight row → object. `date` columns are read via ::text to avoid the
@@ -133,4 +134,112 @@ export class PostgresCommissioningStore implements CommissioningStore {
     );
     return makePage(res.rows.map(toRecord), total, page);
   }
+
+  // ── Handover packages ──────────────────────────────────────────────────────
+
+  async saveHandover(p: HandoverPackage): Promise<void> {
+    await this.pool.query(
+      `insert into public.aura_handover_packages
+         (id, tenant_id, company_id, project_id, project_name, code, title, status, checklist,
+          submitted_at, accepted_at, client_representative, warranty_start_date, warranty_months,
+          remarks, created_by, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       on conflict (id) do update set
+         project_name = excluded.project_name,
+         title = excluded.title,
+         status = excluded.status,
+         checklist = excluded.checklist,
+         submitted_at = excluded.submitted_at,
+         accepted_at = excluded.accepted_at,
+         client_representative = excluded.client_representative,
+         warranty_start_date = excluded.warranty_start_date,
+         warranty_months = excluded.warranty_months,
+         remarks = excluded.remarks,
+         updated_at = excluded.updated_at`,
+      [
+        p.id, p.tenantId, p.companyId, p.projectId, p.projectName, p.code, p.title, p.status,
+        JSON.stringify(p.checklist), p.submittedAt, p.acceptedAt, p.clientRepresentative,
+        p.warrantyStartDate, p.warrantyMonths, p.remarks, p.createdBy, p.createdAt, p.updatedAt,
+      ],
+    );
+  }
+
+  async findHandover(id: string, tenantId: string): Promise<HandoverPackage | null> {
+    const res = await this.pool.query<HandoverRow>(
+      `select ${HANDOVER_COLS} from public.aura_handover_packages where id = $1 and tenant_id = $2`,
+      [id, tenantId],
+    );
+    return res.rows[0] ? toHandover(res.rows[0]) : null;
+  }
+
+  async listHandovers(tenantId: string, projectId?: string): Promise<HandoverPackage[]> {
+    const res = projectId
+      ? await this.pool.query<HandoverRow>(
+          `select ${HANDOVER_COLS} from public.aura_handover_packages
+           where tenant_id = $1 and project_id = $2 order by created_at desc limit 500`,
+          [tenantId, projectId],
+        )
+      : await this.pool.query<HandoverRow>(
+          `select ${HANDOVER_COLS} from public.aura_handover_packages
+           where tenant_id = $1 order by created_at desc limit 500`,
+          [tenantId],
+        );
+    return res.rows.map(toHandover);
+  }
+}
+
+interface HandoverRow {
+  id: string;
+  tenant_id: string;
+  company_id: string | null;
+  project_id: string;
+  project_name: string | null;
+  code: string;
+  title: string;
+  status: string;
+  checklist: HandoverChecklist | string;
+  submitted_at: string | null;
+  accepted_at: string | null;
+  client_representative: string | null;
+  warranty_start_date: string | null;
+  warranty_months: number | null;
+  remarks: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const HANDOVER_COLS = `id, tenant_id, company_id, project_id, project_name, code, title, status,
+  checklist, submitted_at, accepted_at, client_representative, warranty_start_date::text,
+  warranty_months, remarks, created_by, created_at, updated_at`;
+
+function toHandover(r: HandoverRow): HandoverPackage {
+  const checklist = (typeof r.checklist === 'string' ? JSON.parse(r.checklist) : r.checklist) as HandoverChecklist;
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    companyId: r.company_id,
+    projectId: r.project_id,
+    projectName: r.project_name,
+    code: r.code,
+    title: r.title,
+    status: r.status as HandoverStatus,
+    checklist: {
+      omManuals: !!checklist?.omManuals,
+      asBuilts: !!checklist?.asBuilts,
+      testCertificates: !!checklist?.testCertificates,
+      warrantyDocs: !!checklist?.warrantyDocs,
+      training: !!checklist?.training,
+      spares: !!checklist?.spares,
+    },
+    submittedAt: r.submitted_at,
+    acceptedAt: r.accepted_at,
+    clientRepresentative: r.client_representative,
+    warrantyStartDate: r.warranty_start_date,
+    warrantyMonths: r.warranty_months == null ? null : Number(r.warranty_months),
+    remarks: r.remarks,
+    createdBy: r.created_by,
+    createdAt: typeof r.created_at === 'string' ? r.created_at : new Date(r.created_at).toISOString(),
+    updatedAt: typeof r.updated_at === 'string' ? r.updated_at : new Date(r.updated_at).toISOString(),
+  };
 }

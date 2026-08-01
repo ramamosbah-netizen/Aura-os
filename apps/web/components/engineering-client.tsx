@@ -97,12 +97,34 @@ interface TechnicalQuery {
   createdAt: string;
 }
 
+interface BimModel {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  name: string;
+  discipline: string;
+  format: 'ifc' | 'rvt' | 'nwd' | 'nwc' | 'dwg' | 'glb' | 'other';
+  storageKey: string | null;
+  fileUrl: string | null;
+  version: number;
+  revision: string;
+  status: 'wip' | 'shared' | 'published' | 'archived';
+  fileSizeBytes: number | null;
+  federationGroup: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+const MODEL_FORMATS = ['ifc', 'rvt', 'nwd', 'nwc', 'dwg', 'glb', 'other'] as const;
+const MODEL_STATUSES = ['wip', 'shared', 'published', 'archived'] as const;
+
 const DISCIPLINES = [
   'architectural', 'structural', 'civil', 'mechanical', 'electrical', 'plumbing', 'hvac',
   'fire_fighting', 'fire_alarm', 'elv', 'ict', 'security', 'cctv', 'access_control', 'bms', 'other',
 ];
 
-type Tab = 'overview' | 'drawings' | 'rfis' | 'submittals' | 'design-changes' | 'documents' | 'technical-queries';
+type Tab = 'overview' | 'drawings' | 'rfis' | 'submittals' | 'design-changes' | 'documents' | 'technical-queries' | 'bim-models';
 
 // Renders a docType's type-specific fields via the platform form engine (ADR-0011 point-6): a new
 // document type is a new schema in lib/form-schemas/engineering-documents.ts, not new code here.
@@ -126,6 +148,7 @@ interface Props {
   initialDesignChanges: DesignChange[];
   initialDocuments: EngineeringDocument[];
   initialTechnicalQueries: TechnicalQuery[];
+  initialBimModels: BimModel[];
   docTypes: DocTypeMeta[];
   projects: Project[];
 }
@@ -137,6 +160,7 @@ export default function EngineeringClient({
   initialDesignChanges,
   initialDocuments,
   initialTechnicalQueries,
+  initialBimModels,
   docTypes,
   projects,
 }: Props) {
@@ -147,6 +171,7 @@ export default function EngineeringClient({
   const [designChanges, setDesignChanges] = useState<DesignChange[]>(initialDesignChanges);
   const [documents, setDocuments] = useState<EngineeringDocument[]>(initialDocuments);
   const [technicalQueries, setTechnicalQueries] = useState<TechnicalQuery[]>(initialTechnicalQueries);
+  const [bimModels, setBimModels] = useState<BimModel[]>(initialBimModels);
 
   // Form states
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
@@ -188,6 +213,17 @@ export default function EngineeringClient({
   const [tqCostImpact, setTqCostImpact] = useState(false);
   const [tqTimeImpact, setTqTimeImpact] = useState(false);
   const [tqResponses, setTqResponses] = useState<Record<string, string>>({});
+
+  // BIM model form
+  const [bmCode, setBmCode] = useState('');
+  const [bmName, setBmName] = useState('');
+  const [bmDiscipline, setBmDiscipline] = useState('elv');
+  const [bmFormat, setBmFormat] = useState<(typeof MODEL_FORMATS)[number]>('ifc');
+  const [bmRevision, setBmRevision] = useState('A');
+  const [bmStatus, setBmStatus] = useState<(typeof MODEL_STATUSES)[number]>('wip');
+  const [bmFederation, setBmFederation] = useState('');
+  const [bmFileUrl, setBmFileUrl] = useState('');
+  const [bmVersionRev, setBmVersionRev] = useState<Record<string, string>>({});
 
   // Shared discipline filter for the discipline-tagged lists (design changes + documents).
   const [disciplineFilter, setDisciplineFilter] = useState('all');
@@ -348,6 +384,61 @@ export default function EngineeringClient({
     }
   };
 
+  const handleRegisterBim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bmCode.trim() || !bmName.trim()) return;
+
+    setError(null);
+    try {
+      const res = await fetch('/api/engineering/bim-models', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          projectName: selectedProjName,
+          code: bmCode,
+          name: bmName,
+          discipline: bmDiscipline,
+          format: bmFormat,
+          revision: bmRevision,
+          status: bmStatus,
+          federationGroup: bmFederation || undefined,
+          fileUrl: bmFileUrl || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const newModel = await res.json();
+      setBimModels([newModel, ...bimModels]);
+      setBmCode('');
+      setBmName('');
+      setBmFederation('');
+      setBmFileUrl('');
+      setBmRevision('A');
+    } catch (err: any) {
+      setError(err.message || 'Failed to register BIM model');
+    }
+  };
+
+  const handleVersionBim = async (id: string) => {
+    const revision = bmVersionRev[id];
+    if (!revision?.trim()) return;
+
+    setError(null);
+    try {
+      const res = await fetch(`/api/engineering/bim-models/${id}/version`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ revision }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      setBimModels(bimModels.map((m) => (m.id === id ? updated : m)));
+      setBmVersionRev({ ...bmVersionRev, [id]: '' });
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload new model version');
+    }
+  };
+
   const handleCreateSubmittal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subCode.trim() || !subTitle.trim()) return;
@@ -463,6 +554,7 @@ export default function EngineeringClient({
   const dcAwaiting = designChanges.filter((d) => d.status === 'draft' || d.status === 'submitted').length;
   const docsPending = documents.filter((d) => d.status === 'draft' || d.status === 'submitted').length;
   const tqsOpen = technicalQueries.filter((t) => t.status === 'open').length;
+  const bimWip = bimModels.filter((m) => m.status === 'wip').length;
 
   const stats: { label: string; total: number; pending: number; tab: Tab }[] = [
     { label: 'Shop Drawings', total: drawings.length, pending: drawingsPending, tab: 'drawings' },
@@ -471,6 +563,7 @@ export default function EngineeringClient({
     { label: 'Technical Queries', total: technicalQueries.length, pending: tqsOpen, tab: 'technical-queries' },
     { label: 'Design Changes', total: designChanges.length, pending: dcAwaiting, tab: 'design-changes' },
     { label: 'Documents', total: documents.length, pending: docsPending, tab: 'documents' },
+    { label: 'BIM Models', total: bimModels.length, pending: bimWip, tab: 'bim-models' },
   ];
 
   const attention: { label: string; count: number; tab: Tab }[] = ([
@@ -480,6 +573,7 @@ export default function EngineeringClient({
     { label: 'Technical queries awaiting response', count: tqsOpen, tab: 'technical-queries' as Tab },
     { label: 'Design changes awaiting decision', count: dcAwaiting, tab: 'design-changes' as Tab },
     { label: 'Documents pending approval', count: docsPending, tab: 'documents' as Tab },
+    { label: 'BIM models still WIP', count: bimWip, tab: 'bim-models' as Tab },
   ]).filter((a) => a.count > 0);
 
   const byDiscipline = (() => {
@@ -536,6 +630,12 @@ export default function EngineeringClient({
           style={activeTab === 'documents' ? st.activeTabBtn : st.tabBtn}
         >
           Documents
+        </button>
+        <button
+          onClick={() => setActiveTab('bim-models')}
+          style={activeTab === 'bim-models' ? st.activeTabBtn : st.tabBtn}
+        >
+          BIM Models
         </button>
       </div>
 
@@ -1291,6 +1391,195 @@ export default function EngineeringClient({
           </section>
         </div>
       )}
+
+      {activeTab === 'bim-models' && (
+        <div>
+          {/* Register Form */}
+          <form onSubmit={handleRegisterBim} style={st.formCard}>
+            <h3 style={st.formTitle}>Register BIM Model</h3>
+            <p style={st.formHint}>
+              The versioned model registry behind the coordination viewer: each entry points at the
+              stored file (IFC/Revit/Navisworks/DWG/glTF) for a discipline. Models sharing a
+              federation group are loaded together for clash coordination.
+            </p>
+            <div style={st.formGrid}>
+              <div style={st.field}>
+                <label style={st.label}>Project</label>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  style={st.select}
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Model Code</label>
+                <input
+                  type="text"
+                  placeholder="e.g. BIM-ELV-001"
+                  value={bmCode}
+                  onChange={(e) => setBmCode(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Model Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. ELV containment & devices"
+                  value={bmName}
+                  onChange={(e) => setBmName(e.target.value)}
+                  style={st.input}
+                  required
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Discipline</label>
+                <select
+                  value={bmDiscipline}
+                  onChange={(e) => setBmDiscipline(e.target.value)}
+                  style={st.select}
+                >
+                  {DISCIPLINES.map((d) => (
+                    <option key={d} value={d}>
+                      {d.replace('_', ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Format</label>
+                <select
+                  value={bmFormat}
+                  onChange={(e) => setBmFormat(e.target.value as (typeof MODEL_FORMATS)[number])}
+                  style={st.select}
+                >
+                  {MODEL_FORMATS.map((f) => (
+                    <option key={f} value={f}>
+                      {f.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Revision</label>
+                <input
+                  type="text"
+                  placeholder="e.g. A"
+                  value={bmRevision}
+                  onChange={(e) => setBmRevision(e.target.value)}
+                  style={st.input}
+                />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Status</label>
+                <select
+                  value={bmStatus}
+                  onChange={(e) => setBmStatus(e.target.value as (typeof MODEL_STATUSES)[number])}
+                  style={st.select}
+                >
+                  {MODEL_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Federation Group</label>
+                <input
+                  type="text"
+                  placeholder="e.g. TOWER-A-COORD"
+                  value={bmFederation}
+                  onChange={(e) => setBmFederation(e.target.value)}
+                  style={st.input}
+                />
+              </div>
+            </div>
+            <div style={st.field} className="mt-2">
+              <label style={st.label}>File URL (optional)</label>
+              <input
+                type="text"
+                placeholder="https://… or object-store key resolved by the viewer"
+                value={bmFileUrl}
+                onChange={(e) => setBmFileUrl(e.target.value)}
+                style={st.input}
+              />
+            </div>
+            <button type="submit" style={st.btn} className="mt-3">Register Model</button>
+          </form>
+
+          {/* List panel */}
+          <section style={st.panel}>
+            <h3 style={st.panelTitle}>Model Registry</h3>
+            {bimModels.length === 0 ? (
+              <EmptyState
+                compact
+                title="No BIM models registered yet"
+                description="Register a model above to build the versioned coordination registry. Each entry tracks its discipline, format, revision and federation group so the viewer can load models together."
+              />
+            ) : (
+              <div style={st.rfiList}>
+                {bimModels.map((m) => (
+                  <div key={m.id} style={st.rfiCard}>
+                    <div style={st.rfiHeader}>
+                      <span style={st.rfiCode}>{m.code} · v{m.version}</span>
+                      <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={st.tagMuted}>{m.format}</span>
+                        <span
+                          style={
+                            m.status === 'published'
+                              ? st.tagApproved
+                              : m.status === 'archived'
+                                ? st.tagMuted
+                                : m.status === 'wip'
+                                  ? st.tagPending
+                                  : st.tagInfo
+                          }
+                        >
+                          {m.status}
+                        </span>
+                      </span>
+                    </div>
+                    <h4 style={st.rfiTitle}>{m.name}</h4>
+                    <p style={st.rfiProject}>
+                      Project: {m.projectName || '—'} · {m.discipline.replace('_', ' ')} · Rev {m.revision}
+                      {m.federationGroup ? ` · group ${m.federationGroup}` : ''}
+                    </p>
+                    {m.fileUrl ? (
+                      <p style={st.rfiProject}>
+                        <a href={m.fileUrl} target="_blank" rel="noreferrer" style={st.modelLink}>
+                          Open model file ↗
+                        </a>
+                      </p>
+                    ) : null}
+                    <div style={st.rfiActionRow}>
+                      <input
+                        type="text"
+                        placeholder="New revision (e.g. B) to upload a version…"
+                        value={bmVersionRev[m.id] || ''}
+                        onChange={(e) =>
+                          setBmVersionRev({ ...bmVersionRev, [m.id]: e.target.value })
+                        }
+                        style={st.inlineInput}
+                      />
+                      <button onClick={() => handleVersionBim(m.id)} style={st.btnSmall}>
+                        Upload Version
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -1461,6 +1750,7 @@ const st = {
     fontWeight: 600,
     textTransform: 'capitalize',
   } as CSSProperties,
+  modelLink: { color: 'var(--accent)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600 } as CSSProperties,
   checkRow: { display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 12 } as CSSProperties,
   checkLabel: {
     display: 'flex',

@@ -58,8 +58,9 @@
 ### Inventory — ~60%
 - GRN, stock, transfers, valuation, reorder levels. **Missing:** warehouse/bin management, barcode/mobile picking, cycle counting, serial/batch tracking (critical for ELV asset serials).
 
-### Engineering — ~40% (36 backend files, **1 page**)
-- Substantial domain model, almost no UI. For an *ELV* ERP this is a flagship vertical (design registers, drawing/submittal linkage, material take-off from BOQ). **Highest UI-vs-backend gap in the product.**
+### Engineering — ~60% *(was ~40% — 2026-08-01 update)*
+- **2026-08-01 update — all seven backend domains now surfaced.** The Engineering page is now a full 7-tab cockpit (Overview + Shop Drawings, RFIs, Technical Submittals, Technical Queries, Design Changes, Documents, BIM Models). The two previously backend-only domains were wired end-to-end and verified against the running API: **Technical Queries** (raise → respond, open→responded) and **BIM Models** (register → version, v1→v2/Rev bump), each with client proxy routes and `EmptyState` on empty lists. Remaining gaps that keep it below ~80%: material take-off from BOQ, drawing↔submittal↔RFI cross-linking, an actual model *viewer* (the registry is the backbone; the 3D viewer is not built), and per-record detail pages.
+- Original finding: substantial domain model, almost no UI — was the highest UI-vs-backend gap in the product; that specific gap is now largely closed.
 
 ### Doc Control — ~40% (25 files, **1 page**)
 - Submittals, transmittals, requirements. Backend exists; UI is a stub. Doc control is table-stakes for construction — needs a real transmittal/submittal register UI with revision control.

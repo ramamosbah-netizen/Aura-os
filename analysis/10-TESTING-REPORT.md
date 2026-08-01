@@ -33,6 +33,8 @@
 | **Load/perf tests (web)** | Medium | backend perf harness exists (memory: P1); no web load/Lighthouse tests. |
 | **a11y tests** | Medium | none; hand-rolled components have no a11y baseline. |
 
+> **2026-08-01 update — delivery-module domain coverage raised.** Added domain unit tests to the low-coverage delivery modules — contracts (bond validation/actions/expiry + obligation status/overdue), subcontracts (payment-certification retention math incl. retention-release), fleet (maintenance/fuel) — alongside the new commissioning (19), handover, and inventory-serial (6) tests shipped this session. The pure state-machine/calculation logic in these modules is now covered; postgres-adapter, frontend, and intelligence-layer tests remain the open gaps.
+
 ## 4. Test quality observations
 
 - Tests run on **in-memory adapters**, which is fast and isolating but means the **postgres adapters themselves are largely validated only through the CI boot/e2e path**, not per-adapter unit tests. Some `postgres-*.test.ts` exist (e.g. `modules/amc/src/postgres-amc-store.test.ts`) but not universally. SQL-shape bugs can slip past module tests.

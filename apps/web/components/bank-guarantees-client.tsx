@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface BankGuarantee {
   id: string;
@@ -103,7 +104,7 @@ export default function BankGuaranteesClient({ initialGuarantees }: { initialGua
 
       <h2 style={st.h2}>Guarantees</h2>
       {guarantees.length === 0 ? (
-        <p style={st.muted}>No bank guarantees recorded.</p>
+        <EmptyState compact title="No bank guarantees recorded" description="Register performance bonds and advance-payment guarantees to track validity and expiry." />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Reference</th><th style={st.th}>Type</th><th style={st.th}>Beneficiary</th><th style={st.th}>Amount</th><th style={st.th}>Expiry</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>

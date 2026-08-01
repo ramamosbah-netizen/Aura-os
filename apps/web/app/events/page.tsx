@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import EmptyState from '@/components/ui/empty-state';
 import type { DomainEvent } from '@aura/shared';
 import { getJson } from '@/lib/api';
 import { humanizeEventType } from '@/lib/event-labels';
@@ -23,7 +24,7 @@ export default async function EventsPage() {
         {events === null ? (
           <p style={st.muted}>API offline.</p>
         ) : events.length === 0 ? (
-          <p style={st.muted}>No events yet.</p>
+          <EmptyState compact title="No events yet" description="Domain events on the spine appear here as activity happens." />
         ) : (
           <ul style={st.list}>
             {events.map((e) => {

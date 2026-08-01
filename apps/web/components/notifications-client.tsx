@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 
 interface Notification { id: string; title: string; body: string; category: string; read: boolean; createdAt: string }
@@ -19,7 +20,7 @@ export default function NotificationsClient({ initial }: { initial: Notification
     } finally { setBusy(false); }
   }
 
-  if (initial.length === 0) return <p style={s.muted}>No notifications.</p>;
+  if (initial.length === 0) return <EmptyState compact title="You're all caught up" description="New notifications will appear here as they arrive." />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

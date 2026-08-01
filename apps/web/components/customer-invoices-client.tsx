@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
 import SaveViewButton from './save-view-button';
@@ -92,7 +93,7 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
       </div>
 
       {invoices.length === 0 ? (
-        <p style={st.muted}>No customer invoices yet — create the first one.</p>
+        <EmptyState compact title="No customer invoices yet" description="Raise a client tax invoice to start billing and track receivables." />
       ) : (
         <section className="panel">
           <table className="data-table">

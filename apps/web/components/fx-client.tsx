@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 
 interface Rate { fromCurrency: string; toCurrency: string; rate: number; effectiveDate: string }
@@ -71,7 +72,7 @@ export default function FxClient({ initialRates }: { initialRates: Rate[] }) {
 
       <div style={s.panel}>
         {initialRates.length === 0 ? (
-          <p style={s.muted}>No stored rates (using default pegs). Set one above.</p>
+          <EmptyState compact title="No stored exchange rates" description="Using default currency pegs. Set a rate above to override them." />
         ) : (
           <table style={s.table}>
             <thead><tr>{['Pair', 'Rate', 'Effective'].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr></thead>

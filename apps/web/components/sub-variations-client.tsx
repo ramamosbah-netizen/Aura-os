@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface Subcontract { id: string; title: string; subcontractorName: string; value: number }
 interface Variation {
@@ -89,7 +90,7 @@ export default function SubVariationsClient({ initialVariations, subcontracts }:
 
       <h2 style={st.h2}>Variations</h2>
       {variations.length === 0 ? (
-        <p style={st.muted}>No variations yet.</p>
+        <EmptyState compact title="No subcontract variations yet" description="Raise additions or omissions to adjust the subcontract value." />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Reference</th><th style={st.th}>Subcontract</th><th style={st.th}>Type</th><th style={st.th}>Amount</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>

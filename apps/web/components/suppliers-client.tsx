@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
 import CreateDrawer from './ui/create-drawer';
@@ -81,7 +82,7 @@ export default function SuppliersClient({ initialSuppliers }: { initialSuppliers
       </div>
 
       {suppliers.length === 0 ? (
-        <p style={st.muted}>No suppliers registered — onboard the first one.</p>
+        <EmptyState compact title="No suppliers registered" description="Onboard your first approved vendor to start raising RFQs and POs." />
       ) : (
         <section className="panel">
           <table className="data-table">

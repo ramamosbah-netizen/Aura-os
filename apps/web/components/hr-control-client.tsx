@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import EmptyState from './ui/empty-state';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
@@ -172,7 +173,7 @@ export default function HrControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Active Staff Directory</h3>
             {employees.length === 0 ? (
-              <p style={st.muted}>No employee profiles registered yet.</p>
+              <EmptyState compact title="No employees registered yet" description="Add an employee profile to manage leave, payroll and documents." />
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={st.table}>
@@ -284,7 +285,7 @@ export default function HrControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Leave & Absence Requests</h3>
             {leaves.length === 0 ? (
-              <p style={st.muted}>No leave logs recorded.</p>
+              <EmptyState compact title="No leave logs recorded" description="Record employee leave to track balances and site coverage." />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -359,7 +360,7 @@ export default function HrControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Payroll Ledger & Runs</h3>
             {payrollRuns.length === 0 ? (
-              <p style={st.muted}>No payroll runs calculated yet.</p>
+              <EmptyState compact title="No payroll runs yet" description="Calculate a payroll run to generate the WPS SIF file and payslips." />
             ) : (
               <table style={st.table}>
                 <thead>

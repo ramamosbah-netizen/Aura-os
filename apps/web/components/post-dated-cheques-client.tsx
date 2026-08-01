@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface PostDatedCheque {
   id: string;
@@ -124,7 +125,7 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
 
       <h2 style={st.h2}>Cheques</h2>
       {cheques.length === 0 ? (
-        <p style={st.muted}>No post-dated cheques recorded.</p>
+        <EmptyState compact title="No post-dated cheques recorded" description="Record incoming and outgoing PDCs to track their maturity dates." />
       ) : (
         <table style={st.table}>
           <thead><tr>

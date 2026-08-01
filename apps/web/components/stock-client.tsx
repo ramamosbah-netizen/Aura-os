@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, Fragment, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
 
 interface StockItem {
@@ -218,7 +219,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                       {!detail ? (
                         <p style={s.muted}>Loading movements…</p>
                       ) : detail.movements.length === 0 ? (
-                        <p style={s.muted}>No movements yet.</p>
+                        <EmptyState compact title="No stock movements yet" description="Goods receipts, issues and transfers will appear here as they happen." />
                       ) : (
                         <table style={s.subTable}>
                           <thead>

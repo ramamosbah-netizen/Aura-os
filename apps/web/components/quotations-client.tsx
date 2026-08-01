@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
 import QuotationCreate from './quotation-create';
@@ -136,7 +137,7 @@ export default function QuotationsClient({ initialQuotations, embedded }: { init
       </div>
 
       {quotes.length === 0 ? (
-        <p style={st.muted}>No quotations yet — create the first one.</p>
+        <EmptyState compact title="No quotations yet" description="Create a quotation to price a deal and route it for approval." />
       ) : (
         <section className="panel">
           <div style={{ overflowX: 'auto' }}>

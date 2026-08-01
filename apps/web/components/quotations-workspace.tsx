@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, type ReactNode, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import QuotationsClient from './quotations-client';
 import QuotationCreate from './quotation-create';
 
@@ -116,7 +117,7 @@ function Overview({ m }: { m: OverviewShape }) {
         <section className="panel" style={st.panel}>
           <h3 style={st.h3}>Recent quotations</h3>
           {m.recent.length === 0
-            ? <p style={st.muted}>No quotations yet.</p>
+            ? <EmptyState compact title="No quotations yet" description="Quotations you create appear here across their full lifecycle." />
             : m.recent.map((q) => <QuoteRow key={q.id} q={q} right={<span className="badge">{q.status.replace(/_/g, ' ')}</span>} />)}
         </section>
       </div>

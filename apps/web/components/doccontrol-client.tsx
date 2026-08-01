@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import EmptyState from './ui/empty-state';
 import type { CSSProperties } from 'react';
 
 interface Project {
@@ -253,7 +254,7 @@ export default function DocControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Sent & Received Transmittals</h3>
             {transmittals.length === 0 ? (
-              <p style={st.muted}>No transmittals logged yet.</p>
+              <EmptyState compact title="No transmittals logged yet" description="Issue a transmittal to formally send documents and track their receipt." />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -376,7 +377,7 @@ export default function DocControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Logged Correspondence</h3>
             {correspondence.length === 0 ? (
-              <p style={st.muted}>No correspondence logged yet.</p>
+              <EmptyState compact title="No correspondence logged yet" description="Log incoming and outgoing project correspondence for the record." />
             ) : (
               <table style={st.table}>
                 <thead>

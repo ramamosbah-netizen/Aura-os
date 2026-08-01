@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface PettyCashFund {
   id: string;
@@ -103,7 +104,7 @@ export default function PettyCashClient({ initialFunds }: { initialFunds: PettyC
 
       <h2 style={st.h2}>Funds</h2>
       {funds.length === 0 ? (
-        <p style={st.muted}>No petty cash funds yet.</p>
+        <EmptyState compact title="No petty cash funds yet" description="Open a petty cash fund to record its float and movements." />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Fund</th><th style={st.th}>Balance</th><th style={st.th}>Status</th><th style={st.th}></th></tr></thead>

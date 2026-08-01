@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 
 interface Account { id: string; code: string; name: string; type: string }
@@ -122,7 +123,7 @@ export default function BudgetsClient({ initialBudgets, accounts }: { initialBud
 
       <div style={s.panel}>
         {initialBudgets.length === 0 ? (
-          <p style={s.muted}>No budgets yet.</p>
+          <EmptyState compact title="No budgets yet" description="Create a budget to track budget-vs-actual folded live from the general ledger." />
         ) : (
           <table style={s.table}>
             <thead><tr>{['Name', 'Period', 'Lines', ''].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr></thead>

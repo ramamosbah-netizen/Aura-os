@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 import { PoEdit } from './po-create';
 
@@ -78,7 +79,7 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
 
       <section style={s.panel}>
         {initialPos.length === 0 ? (
-          <p style={s.muted}>No purchase orders yet — raise one above.</p>
+          <EmptyState compact title="No purchase orders yet" description="Raise a purchase order to commit spend against an approved supplier." />
         ) : (
           <table style={s.table}>
             <thead>

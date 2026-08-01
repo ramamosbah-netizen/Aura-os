@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
 
 interface Vehicle {
@@ -120,7 +121,7 @@ export default function FinesClient({ initialFines, vehicles }: { initialFines: 
       <h2 style={st.h2}>Fines</h2>
       <div style={{ margin: '8px 0' }}><div style={{ margin: '8px 0' }}><ExportButton filename="traffic-fines" rows={fines as unknown as Array<Record<string, unknown>>} /></div></div>
       {fines.length === 0 ? (
-        <p style={st.muted}>No fines recorded.</p>
+        <EmptyState compact title="No traffic fines recorded" description="UAE fines with black points and driver liability are tracked here." />
       ) : (
         <table style={st.table}>
           <thead>

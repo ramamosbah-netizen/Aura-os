@@ -62,8 +62,8 @@
 - **2026-08-01 update — all seven backend domains now surfaced.** The Engineering page is now a full 7-tab cockpit (Overview + Shop Drawings, RFIs, Technical Submittals, Technical Queries, Design Changes, Documents, BIM Models). The two previously backend-only domains were wired end-to-end and verified against the running API: **Technical Queries** (raise → respond, open→responded) and **BIM Models** (register → version, v1→v2/Rev bump), each with client proxy routes and `EmptyState` on empty lists. Remaining gaps that keep it below ~80%: material take-off from BOQ, drawing↔submittal↔RFI cross-linking, an actual model *viewer* (the registry is the backbone; the 3D viewer is not built), and per-record detail pages.
 - Original finding: substantial domain model, almost no UI — was the highest UI-vs-backend gap in the product; that specific gap is now largely closed.
 
-### Doc Control — ~40% (25 files, **1 page**)
-- Submittals, transmittals, requirements. Backend exists; UI is a stub. Doc control is table-stakes for construction — needs a real transmittal/submittal register UI with revision control.
+### Doc Control — ~60% *(was ~40% — 2026-08-01 update)*
+- **2026-08-01 update — the controlled Drawing/Document Register is now surfaced.** The register backend (`register` + `revise` + `history`) was previously built but exposed nowhere; `/documents/control` now has a **Drawing Register tab** (create · revision control · status lifecycle · distribution/transmittal history) alongside the existing transmittals + correspondence logs, and submittals remain at `/doccontrol/submittals`. Verified E2E (create Rev A → revise Rev B/for-construction → history). Remaining: bulk import, distribution-matrix editing, and document-file attachment via DMS.
 
 ### Quality — ~50%
 - ITPs, material approvals, calibrations. **Missing:** inspection request (IR) workflow UI, NCR management, snag lists — core construction QA.

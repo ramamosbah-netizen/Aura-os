@@ -201,7 +201,7 @@ export const NAV: NavGroup[] = [
     glyph: '▤',
     items: [
       { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },
-      { label: 'Document Control', href: '/documents/control', glyph: '⧇', desc: 'Transmittals & correspondence' },
+      { label: 'Document Control', href: '/documents/control', glyph: '⧇', desc: 'Controlled drawing register (revisions + distribution history), transmittals & correspondence' },
       { label: 'Submittals', href: '/doccontrol/submittals', glyph: '⊟', desc: 'Document submittal register (Code A/B/C/D review)' },
       { label: 'Templates', href: '/admin/templates', glyph: '⧇', desc: 'DMS — visual print templates' },
     ],

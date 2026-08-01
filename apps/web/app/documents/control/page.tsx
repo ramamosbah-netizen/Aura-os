@@ -42,10 +42,26 @@ interface Correspondence {
   createdAt: string;
 }
 
+interface RegisterEntry {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  documentNumber: string;
+  title: string;
+  discipline: string;
+  docType: string;
+  currentRevision: string;
+  status: string;
+  custodian: string | null;
+  revisionDate: string | null;
+  createdAt: string;
+}
+
 export default async function DocControlPage() {
-  const [transmittals, correspondence, projects] = await Promise.all([
+  const [transmittals, correspondence, register, projects] = await Promise.all([
     getJson<Transmittal[]>('/api/doccontrol/transmittals'),
     getJson<Correspondence[]>('/api/doccontrol/correspondence'),
+    getJson<RegisterEntry[]>('/api/doccontrol/register'),
     getJson<Project[]>('/api/projects/projects'),
   ]);
 
@@ -53,12 +69,15 @@ export default async function DocControlPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Document Control</h1>
       <p style={st.sub}>
-        Technical controls for engineering and construction dispatch logs. Track official transmittals to external parties and register project correspondence.
+        The controlled document register with revision control and distribution history, plus the
+        transmittal and correspondence logs — the single source of truth for the latest revision of
+        every drawing and document, and who holds it.
       </p>
 
       <DocControlClient
         initialTransmittals={transmittals ?? []}
         initialCorrespondence={correspondence ?? []}
+        initialRegister={register ?? []}
         projects={projects ?? []}
       />
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import type { CSSProperties } from 'react';
 
@@ -42,20 +42,63 @@ interface Correspondence {
   createdAt: string;
 }
 
+interface RegisterEntry {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  documentNumber: string;
+  title: string;
+  discipline: string;
+  docType: string;
+  currentRevision: string;
+  status: string;
+  custodian: string | null;
+  revisionDate: string | null;
+  createdAt: string;
+}
+
+interface HistoryRow {
+  revision: string;
+  purpose?: string;
+  transmittalCode?: string;
+  transmittalTitle?: string;
+  recipient?: string | null;
+  transmittalStatus?: string;
+}
+
+const REG_DISCIPLINES = ['architectural', 'structural', 'mep', 'elv', 'civil', 'other'];
+const REG_DOCTYPES = ['drawing', 'specification', 'document', 'bod', 'calculation'];
+const REG_STATUSES = ['draft', 'for_review', 'for_construction', 'superseded', 'as_built'];
+const regLabel = (s: string) => s.replace(/_/g, ' ');
+
 interface Props {
   initialTransmittals: Transmittal[];
   initialCorrespondence: Correspondence[];
+  initialRegister: RegisterEntry[];
   projects: Project[];
 }
 
 export default function DocControlClient({
   initialTransmittals,
   initialCorrespondence,
+  initialRegister,
   projects,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'transmittals' | 'correspondence'>('transmittals');
+  const [activeTab, setActiveTab] = useState<'register' | 'transmittals' | 'correspondence'>('register');
   const [transmittals, setTransmittals] = useState<Transmittal[]>(initialTransmittals);
   const [correspondence, setCorrespondence] = useState<Correspondence[]>(initialCorrespondence);
+  const [register, setRegister] = useState<RegisterEntry[]>(initialRegister);
+
+  // Register form + per-row action state
+  const [regDocNumber, setRegDocNumber] = useState('');
+  const [regTitle, setRegTitle] = useState('');
+  const [regDiscipline, setRegDiscipline] = useState('elv');
+  const [regDocType, setRegDocType] = useState('drawing');
+  const [regCustodian, setRegCustodian] = useState('');
+  const [reviseRev, setReviseRev] = useState<Record<string, string>>({});
+  const [reviseStatus, setReviseStatus] = useState<Record<string, string>>({});
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const [historyRows, setHistoryRows] = useState<HistoryRow[]>([]);
 
   // Form states
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
@@ -73,6 +116,67 @@ export default function DocControlClient({
   const [error, setError] = useState<string | null>(null);
 
   const selectedProjName = projects.find((p) => p.id === selectedProjectId)?.title || null;
+
+  const handleCreateRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regDocNumber.trim() || !regTitle.trim()) return;
+    setError(null);
+    try {
+      const res = await fetch('/api/doccontrol/register', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          projectName: selectedProjName,
+          documentNumber: regDocNumber,
+          title: regTitle,
+          discipline: regDiscipline,
+          docType: regDocType,
+          custodian: regCustodian || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || data?.error || 'Failed to add register entry');
+      setRegister([data, ...register]);
+      setRegDocNumber(''); setRegTitle(''); setRegCustodian('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to add register entry');
+    }
+  };
+
+  const handleReviseRegister = async (id: string) => {
+    const revision = reviseRev[id];
+    const status = reviseStatus[id];
+    if (!revision?.trim() || !status) { setError('A new revision and status are required to revise.'); return; }
+    setError(null);
+    try {
+      const res = await fetch(`/api/doccontrol/register/${id}/revise`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ revision, status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || data?.error || 'Failed to revise');
+      setRegister(register.map((r) => (r.id === id ? data : r)));
+      setReviseRev({ ...reviseRev, [id]: '' });
+    } catch (err: any) {
+      setError(err.message || 'Failed to revise');
+    }
+  };
+
+  const handleViewHistory = async (id: string) => {
+    if (historyFor === id) { setHistoryFor(null); return; }
+    setError(null);
+    try {
+      const res = await fetch(`/api/doccontrol/register/${id}/history`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || data?.error || 'Failed to load history');
+      setHistoryRows(Array.isArray(data?.history) ? data.history : []);
+      setHistoryFor(id);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load history');
+    }
+  };
 
   const handleCreateTransmittal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,6 +274,12 @@ export default function DocControlClient({
       {/* Tabs */}
       <div style={st.tabs}>
         <button
+          onClick={() => setActiveTab('register')}
+          style={activeTab === 'register' ? st.activeTabBtn : st.tabBtn}
+        >
+          Drawing Register
+        </button>
+        <button
           onClick={() => setActiveTab('transmittals')}
           style={activeTab === 'transmittals' ? st.activeTabBtn : st.tabBtn}
         >
@@ -184,6 +294,108 @@ export default function DocControlClient({
       </div>
 
       {/* Tab Contents */}
+      {activeTab === 'register' && (
+        <div>
+          <form onSubmit={handleCreateRegister} style={st.formCard}>
+            <h3 style={st.formTitle}>Add to Drawing / Document Register</h3>
+            <div style={st.formGrid}>
+              <div style={st.field}>
+                <label style={st.label}>Project</label>
+                <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} style={st.select}>
+                  {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Document Number</label>
+                <input value={regDocNumber} onChange={(e) => setRegDocNumber(e.target.value)} placeholder="e.g. ELV-DWG-001" style={st.input} required />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Title</label>
+                <input value={regTitle} onChange={(e) => setRegTitle(e.target.value)} placeholder="e.g. CCTV layout — Level 3" style={st.input} required />
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Discipline</label>
+                <select value={regDiscipline} onChange={(e) => setRegDiscipline(e.target.value)} style={st.select}>
+                  {REG_DISCIPLINES.map((d) => <option key={d} value={d}>{regLabel(d)}</option>)}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Type</label>
+                <select value={regDocType} onChange={(e) => setRegDocType(e.target.value)} style={st.select}>
+                  {REG_DOCTYPES.map((d) => <option key={d} value={d}>{regLabel(d)}</option>)}
+                </select>
+              </div>
+              <div style={st.field}>
+                <label style={st.label}>Custodian</label>
+                <input value={regCustodian} onChange={(e) => setRegCustodian(e.target.value)} placeholder="e.g. Design Manager" style={st.input} />
+              </div>
+            </div>
+            <button type="submit" style={st.btn}>Add entry</button>
+          </form>
+
+          <section style={st.panel}>
+            <h3 style={st.panelTitle}>Controlled Register — latest revision of every document</h3>
+            {register.length === 0 ? (
+              <EmptyState compact title="No documents in the register yet" description="Add a drawing or document above to control its revision and distribution. Revising bumps the controlled revision; History shows which transmittals conveyed each rev." />
+            ) : (
+              <table style={st.table}>
+                <thead>
+                  <tr>{['Number', 'Title', 'Disc.', 'Type', 'Rev', 'Status', 'Custodian', 'Revise', ''].map((h) => <th key={h} style={st.th}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {register.map((r) => (
+                    <Fragment key={r.id}>
+                      <tr>
+                        <td style={st.tdCode}>{r.documentNumber}</td>
+                        <td style={st.td}>{r.title}</td>
+                        <td style={st.tdMuted}>{regLabel(r.discipline)}</td>
+                        <td style={st.tdMuted}>{regLabel(r.docType)}</td>
+                        <td style={st.td}><strong>{r.currentRevision}</strong></td>
+                        <td style={st.td}><span style={r.status === 'for_construction' || r.status === 'as_built' ? st.tagApproved : st.tagPending}>{regLabel(r.status)}</span></td>
+                        <td style={st.tdMuted}>{r.custodian || '—'}</td>
+                        <td style={st.td}>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <input placeholder="Rev" value={reviseRev[r.id] ?? ''} onChange={(e) => setReviseRev({ ...reviseRev, [r.id]: e.target.value })} style={st.miniInput} />
+                            <select value={reviseStatus[r.id] ?? ''} onChange={(e) => setReviseStatus({ ...reviseStatus, [r.id]: e.target.value })} style={st.miniSelect}>
+                              <option value="">status…</option>
+                              {REG_STATUSES.map((s) => <option key={s} value={s}>{regLabel(s)}</option>)}
+                            </select>
+                            <button onClick={() => handleReviseRegister(r.id)} style={st.btnApprove}>Revise</button>
+                          </div>
+                        </td>
+                        <td style={st.td}>
+                          <button onClick={() => handleViewHistory(r.id)} style={st.btnGhost}>{historyFor === r.id ? 'Hide' : 'History'}</button>
+                        </td>
+                      </tr>
+                      {historyFor === r.id && (
+                        <tr>
+                          <td colSpan={9} style={st.historyCell}>
+                            {historyRows.length === 0 ? (
+                              <span style={st.tdMuted}>No transmittal has conveyed this document yet.</span>
+                            ) : (
+                              <ul style={st.historyList}>
+                                {historyRows.map((h, i) => (
+                                  <li key={i} style={st.historyRow}>
+                                    <strong>Rev {h.revision}</strong>
+                                    {h.purpose ? ` · ${h.purpose}` : ''} — via {h.transmittalCode || '—'}
+                                    {h.recipient ? ` → ${h.recipient}` : ''}
+                                    {h.transmittalStatus ? ` (${h.transmittalStatus})` : ''}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+      )}
+
       {activeTab === 'transmittals' && (
         <div>
           {/* Create Form */}
@@ -499,6 +711,44 @@ const st = {
     fontSize: 12,
     cursor: 'pointer',
   } as CSSProperties,
+  btnGhost: {
+    padding: '4px 10px',
+    borderRadius: 6,
+    background: 'var(--panel)',
+    color: 'var(--muted)',
+    border: '1px solid var(--border)',
+    fontWeight: 600,
+    fontSize: 12,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  miniInput: {
+    width: 52,
+    background: 'var(--panel)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '4px 6px',
+    fontSize: 12,
+    color: 'var(--text)',
+    fontFamily: 'inherit',
+  } as CSSProperties,
+  miniSelect: {
+    background: 'var(--panel)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '4px 6px',
+    fontSize: 12,
+    color: 'var(--text)',
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+  } as CSSProperties,
+  historyCell: {
+    padding: '8px 12px 12px',
+    borderBottom: '1px solid var(--border)',
+    background: 'var(--panel-2)',
+  } as CSSProperties,
+  historyList: { margin: 0, padding: '0 0 0 4px', listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
+  historyRow: { fontSize: 12.5, color: 'var(--text)' } as CSSProperties,
   panel: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',

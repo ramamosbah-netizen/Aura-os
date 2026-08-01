@@ -40,6 +40,8 @@ interface PermitToWork {
   status: 'draft' | 'requested' | 'approved' | 'expired' | 'closed';
   approvedBy: string | null;
   approvedAt: string | null;
+  closedBy: string | null;
+  closedAt: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -124,6 +126,17 @@ export default function HseControlClient({
       router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to approve permit to work');
+    }
+  };
+
+  const handleClosePermit = async (id: string) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/hse/ptws/${id}/close`, { method: 'PUT' });
+      if (!res.ok) throw new Error(await res.text());
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || 'Failed to close permit to work');
     }
   };
 
@@ -312,12 +325,12 @@ export default function HseControlClient({
                       <td style={st.tdMuted}>{new Date(p.validTo).toLocaleString()}</td>
                       <td style={st.td}>{p.description}</td>
                       <td style={st.td}>
-                        <span style={p.status === 'approved' ? st.tagApproved : st.tagPending}>
+                        <span style={p.status === 'approved' ? st.tagApproved : p.status === 'closed' ? st.tagMuted : st.tagPending}>
                           {p.status}
                         </span>
                       </td>
                       <td style={st.td}>
-                        {p.status !== 'approved' && (
+                        {p.status === 'requested' && (
                           <button
                             onClick={() => handleApprovePermit(p.id)}
                             style={st.btnApprove}
@@ -325,6 +338,16 @@ export default function HseControlClient({
                             Approve & Issue
                           </button>
                         )}
+                        {p.status === 'approved' && (
+                          <button
+                            onClick={() => handleClosePermit(p.id)}
+                            style={st.btnGhost}
+                            title="Work finished & area made safe"
+                          >
+                            Close permit
+                          </button>
+                        )}
+                        {p.status === 'closed' && <span style={st.tdMuted}>closed</span>}
                       </td>
                     </tr>
                   ))}
@@ -614,6 +637,27 @@ const st = {
     fontWeight: 600,
     fontSize: 12,
     cursor: 'pointer',
+  } as CSSProperties,
+  btnGhost: {
+    padding: '4px 10px',
+    borderRadius: 6,
+    background: 'var(--panel)',
+    color: 'var(--muted)',
+    border: '1px solid var(--border)',
+    fontWeight: 600,
+    fontSize: 12,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  tagMuted: {
+    fontSize: 11,
+    background: 'var(--panel-2)',
+    color: 'var(--muted)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '2px 8px',
+    fontWeight: 600,
+    textTransform: 'capitalize',
   } as CSSProperties,
   panel: {
     background: 'var(--panel)',

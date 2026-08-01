@@ -160,12 +160,14 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_hse_ptws (
-        id, tenant_id, company_id, project_id, project_name, permit_type, valid_from, valid_to, description, status, approved_by, approved_at, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        id, tenant_id, company_id, project_id, project_name, permit_type, valid_from, valid_to, description, status, approved_by, approved_at, closed_by, closed_at, created_by, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       on conflict (id) do update set
         status = excluded.status,
         approved_by = excluded.approved_by,
         approved_at = excluded.approved_at,
+        closed_by = excluded.closed_by,
+        closed_at = excluded.closed_at,
         updated_at = excluded.updated_at`,
       [
         permit.id,
@@ -180,6 +182,8 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
         permit.status,
         permit.approvedBy,
         permit.approvedAt,
+        permit.closedBy,
+        permit.closedAt,
         permit.createdBy,
         permit.createdAt,
         permit.updatedAt,
@@ -237,6 +241,8 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
       status: row.status,
       approvedBy: row.approved_by,
       approvedAt: row.approved_at ? row.approved_at.toISOString() : null,
+      closedBy: row.closed_by ?? null,
+      closedAt: row.closed_at ? row.closed_at.toISOString() : null,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),

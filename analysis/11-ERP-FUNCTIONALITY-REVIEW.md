@@ -73,8 +73,9 @@
 ### Quality — ~50%
 - ITPs, material approvals, calibrations. **Missing:** inspection request (IR) workflow UI, NCR management, snag lists — core construction QA.
 
-### HSE — ~45%
-- Toolbox talks, incidents. **Missing:** permit-to-work, observation cards, audit/inspection UI, incident investigation workflow.
+### HSE — ~52% *(was ~45% — 2026-08-01 update)*
+- Toolbox talks, incidents, permits-to-work (request→approve), CAPA, risk assessments, safety training.
+- **2026-08-01 update — permit-to-work close-out added.** The PTW lifecycle was request→approve with no way to close; added `PUT ptws/:id/close` (approved→closed, records closedBy/closedAt, guarded so only an approved permit can close and a closed one can't re-close) + migration 0201 + a "Close permit" action in the HSE control UI. Verified E2E (request → 409-before-approve → approve → close → 409-already-closed). **Still missing:** observation cards, audit/inspection UI, incident-investigation workflow.
 
 ### Site — ~45%
 - Site instructions, delay logs. **Missing:** daily site reports, labor/plant returns, progress photos, site diary — the field foreman's daily tools.

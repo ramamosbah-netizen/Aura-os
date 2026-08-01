@@ -13,6 +13,9 @@ export interface PermitToWork {
   status: 'draft' | 'requested' | 'approved' | 'expired' | 'closed';
   approvedBy: string | null;
   approvedAt: string | null;
+  /** Who closed the permit when the work finished + the area was made safe, and when. */
+  closedBy: string | null;
+  closedAt: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -46,6 +49,8 @@ export function makePermitToWork(input: NewPermitToWork): PermitToWork {
     status: input.status ?? 'requested',
     approvedBy: null,
     approvedAt: null,
+    closedBy: null,
+    closedAt: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,
     updatedAt: now,

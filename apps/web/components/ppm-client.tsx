@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface Contract { id: string; contractNumber: string; clientName: string }
 interface PpmSchedule {
@@ -83,7 +84,7 @@ export default function PpmClient({ initialSchedules, contracts }: { initialSche
 
       <h2 style={st.h2}>Schedules</h2>
       {schedules.length === 0 ? (
-        <p style={st.muted}>No PPM schedules yet.</p>
+        <EmptyState compact title="No PPM schedules yet" description="Create a preventive-maintenance schedule to auto-generate recurring visits." />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Contract</th><th style={st.th}>Task</th><th style={st.th}>Frequency</th><th style={st.th}>Next due</th><th style={st.th}>Visits</th><th style={st.th}>Active</th></tr></thead>

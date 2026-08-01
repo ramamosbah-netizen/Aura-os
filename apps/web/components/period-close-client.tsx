@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 
 interface PeriodClose {
@@ -93,7 +94,7 @@ export default function PeriodCloseClient({ initialCloses }: { initialCloses: Pe
 
       <div style={s.panel}>
         {initialCloses.length === 0 ? (
-          <p style={s.muted}>No periods closed yet.</p>
+          <EmptyState compact title="No periods closed yet" description="Lock a fiscal month to prevent further journal posting into it." />
         ) : (
           <table style={s.table}>
             <thead>

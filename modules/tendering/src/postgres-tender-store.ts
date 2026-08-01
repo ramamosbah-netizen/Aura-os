@@ -77,8 +77,11 @@ export class PostgresTenderStore implements TenderStore {
 
   private upd(executor: Pool | PoolClient, t: Tender): Promise<unknown> {
     return executor.query(
-      `UPDATE public.aura_tendering_tenders SET title=$2, reference=$3, account_id=$4, account_name=$5, status=$6, source=$7, value=$8, owner_id=$9, submission_deadline=$10 WHERE id=$1`,
-      [t.id, t.title, t.reference, t.accountId, t.accountName, t.status, t.source, t.value, t.ownerId, t.submissionDeadline],
+      // source_opportunity_id is written too — the reverse junction (a directly-registered tender
+      // back-linked to its auto-created Opportunity) needs the stamp to persist, and re-writing the
+      // existing value on every other update is a harmless no-op.
+      `UPDATE public.aura_tendering_tenders SET title=$2, reference=$3, account_id=$4, account_name=$5, status=$6, source=$7, value=$8, owner_id=$9, submission_deadline=$10, source_opportunity_id=$11 WHERE id=$1`,
+      [t.id, t.title, t.reference, t.accountId, t.accountName, t.status, t.source, t.value, t.ownerId, t.submissionDeadline, t.sourceOpportunityId],
     );
   }
 
@@ -103,6 +106,7 @@ export class PostgresTenderStore implements TenderStore {
     add('status', filter.status);
     add('source', filter.source);
     add('account_id', filter.accountId);
+    add('source_opportunity_id', filter.sourceOpportunityId);
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<Row>(
@@ -122,6 +126,7 @@ export class PostgresTenderStore implements TenderStore {
     add('status', filter.status);
     add('source', filter.source);
     add('account_id', filter.accountId);
+    add('source_opportunity_id', filter.sourceOpportunityId);
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const countRes = await this.pool.query<{ count: string }>(
       `SELECT COUNT(*)::int AS count FROM public.aura_tendering_tenders ${whereSql}`, params);

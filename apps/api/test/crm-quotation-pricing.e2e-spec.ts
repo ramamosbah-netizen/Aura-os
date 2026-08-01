@@ -1,6 +1,9 @@
-// AURA OS — quotation rate build-up + revision chain e2e (HTTP). Every cost
-// factor rolls to direct → indirect → total cost; the quoted sell is fixed so
-// profit/margin fall out. Each revision is its own record with its own sheet.
+// AURA OS — PricingSheet aggregate e2e (HTTP). Pricing is its OWN aggregate now
+// (crm/pricing-sheets), not a JSON pocket inside a quotation: a DRAFT is built up
+// through the estimation engine, FREEZE commits it immutable, GENERATE writes the
+// quotation from the frozen truth, and re-pricing after freeze is a new VERSION.
+// Supersedes the embedded `PUT /crm/quotations/:id/pricing` path removed in
+// "refactor(crm): remove the duplicated pricing paths — one source of truth" (03e0b5d).
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
@@ -12,21 +15,35 @@ import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 
 interface Sheet {
-  lines: Array<{
-    description: string; quantity: number;
-    supplyTotal: number; wastageTotal: number; materialTotal: number;
-    technician: { manHours: number; total: number };
-    engineer: { total: number }; projectManager: { total: number };
-    labourTotal: number; directCost: number; indirectCost: number;
-    costTotal: number; unitCostTotal: number; sellTotal: number; profit: number;
-    marginPercent: number | null; markupPercent: number | null;
-  }>;
-  totalMaterial: number; totalLabour: number; totalDirect: number; totalIndirect: number;
-  totalCost: number; totalSell: number; profit: number; marginPercent: number | null;
-  locked: boolean; status: string; quoteNumber: string; revision: number;
+  id: string; name: string; version: number; status: 'draft' | 'frozen';
+  opportunityId: string | null; quotationId: string | null; parentSheetId: string | null;
+  lines: unknown[];
+  totals: { totalCost: number; totalSell: number; marginPercent: number };
 }
 
-describe('quotation rate build-up e2e (HTTP)', () => {
+// One fully built-up line — every factor shows up in the roll-up:
+//   material 10×300 ×1.02 wastage = 3060 · labour 32h×15 = 480 · equipment 150 ·
+//   consumables 200 · subcontract 250  ⇒ direct 4140 · +10% overhead 414 ⇒ cost 4554
+//   sell = 4554 / (1 − 0.10) = 5060 · margin 10%.
+const LINE_A = {
+  description: 'CCTV supply & install', quantity: 10,
+  materialUnitCost: 300, wastagePercent: 2,
+  labour: { hoursPerUnit: 3.2, crewSize: 2, hourlyRate: 15 },
+  equipmentUnitCost: 15, consumablesUnitCost: 20, subcontractUnitCost: 25,
+  overheadPercent: 10, riskPercent: 0, warrantyPercent: 0, contingencyPercent: 0,
+  targetMarginPercent: 10,
+};
+// A leaner re-price: material 3500 + labour 200 = direct 3700, no loadings, 20% margin ⇒ sell 4625.
+const LINE_B = {
+  description: 'CCTV supply & install', quantity: 10,
+  materialUnitCost: 350, wastagePercent: 0,
+  labour: { hoursPerUnit: 1, crewSize: 1, hourlyRate: 20 },
+  equipmentUnitCost: 0, consumablesUnitCost: 0, subcontractUnitCost: 0,
+  overheadPercent: 0, riskPercent: 0, warrantyPercent: 0, contingencyPercent: 0,
+  targetMarginPercent: 20,
+};
+
+describe('PricingSheet aggregate e2e (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
 
@@ -34,12 +51,11 @@ describe('quotation rate build-up e2e (HTTP)', () => {
     app = await NestFactory.create(AppModule, { logger: false });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
-    // Mirror main.ts: the taxonomy filter is what maps domain guards to 404/409
-    // instead of letting them escape as 500.
+    // Mirror main.ts: the taxonomy filter maps domain guards to 404/409/400, not 500.
     app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
     app.use((_req: unknown, _res: unknown, next: () => void) =>
-      tenant.run({ tenantId: 'qp-tenant', companyId: null, actorId: null, correlationId: 'e2e-qp' }, () => next()),
+      tenant.run({ tenantId: 'ps-tenant', companyId: null, actorId: null, correlationId: 'e2e-ps' }, () => next()),
     );
     await app.init();
     http = request(app.getHttpServer());
@@ -49,182 +65,87 @@ describe('quotation rate build-up e2e (HTTP)', () => {
     await app?.close();
   });
 
-  /** One line: 10 × 589 sell = 5890. */
-  const newQuote = async (quoteNumber: string) =>
-    (
+  const newSheet = async (name: string, extra: Record<string, unknown> = {}): Promise<Sheet> =>
+    (await http.post('/api/v1/crm/pricing-sheets').send({ name, lines: [LINE_A], ...extra }).expect(201)).body as Sheet;
+
+  it('create builds the draft up through the estimation engine — every factor in the roll-up', async () => {
+    const s = await newSheet('Tower B — option A');
+    expect(s.status).toBe('draft');
+    expect(s.version).toBe(1);
+    expect(s.totals.totalCost).toBe(4554);
+    expect(s.totals.totalSell).toBe(5060);
+    expect(s.totals.marginPercent).toBe(10);
+
+    // Persisted — a re-read matches.
+    const re = (await http.get(`/api/v1/crm/pricing-sheets/${s.id}`).expect(200)).body as Sheet;
+    expect(re.totals.totalCost).toBe(4554);
+  });
+
+  it('saveLines re-prices the draft', async () => {
+    const s = await newSheet('Tower B — resave');
+    const updated = (
+      await http.put(`/api/v1/crm/pricing-sheets/${s.id}/lines`).send({ lines: [LINE_B] }).expect(200)
+    ).body as Sheet;
+    expect(updated.totals.totalCost).toBe(3700);
+    expect(updated.totals.totalSell).toBe(4625);
+    expect(updated.totals.marginPercent).toBe(20);
+  });
+
+  it('freeze locks the build-up — re-pricing is refused with 409, the read stays open', async () => {
+    const s = await newSheet('Tower B — freeze');
+    const frozen = (await http.post(`/api/v1/crm/pricing-sheets/${s.id}/freeze`).expect(201)).body as Sheet;
+    expect(frozen.status).toBe('frozen');
+
+    // A write against a frozen sheet is a state-transition conflict, not a crash.
+    const refused = await http.put(`/api/v1/crm/pricing-sheets/${s.id}/lines`).send({ lines: [LINE_B] }).expect(409);
+    expect(String(refused.body.message ?? refused.body.error)).toMatch(/draft|frozen|version/i);
+
+    // ...and the committed figures are untouched.
+    const read = (await http.get(`/api/v1/crm/pricing-sheets/${s.id}`).expect(200)).body as Sheet;
+    expect(read.totals.totalCost).toBe(4554);
+  });
+
+  it('revise raises a fresh draft version, carried forward; the frozen sheet never moves', async () => {
+    const s = await newSheet('Tower B — revise');
+    await http.post(`/api/v1/crm/pricing-sheets/${s.id}/freeze`).expect(201);
+
+    const v2 = (await http.post(`/api/v1/crm/pricing-sheets/${s.id}/revise`).expect(201)).body as Sheet;
+    expect(v2.version).toBe(2);
+    expect(v2.status).toBe('draft');
+    expect(v2.parentSheetId).toBe(s.id);
+    expect(v2.totals.totalCost).toBe(4554); // carried forward from the frozen parent
+
+    // Re-price v2 — the frozen v1 must not move.
+    await http.put(`/api/v1/crm/pricing-sheets/${v2.id}/lines`).send({ lines: [LINE_B] }).expect(200);
+    const v2r = (await http.get(`/api/v1/crm/pricing-sheets/${v2.id}`).expect(200)).body as Sheet;
+    const v1r = (await http.get(`/api/v1/crm/pricing-sheets/${s.id}`).expect(200)).body as Sheet;
+    expect(v2r.totals.totalCost).toBe(3700);
+    expect(v1r.totals.totalCost).toBe(4554);
+
+    // Change analysis vs the frozen parent: the money moved, and by how much.
+    const cmp = (await http.get(`/api/v1/crm/pricing-sheets/${v2.id}/compare`).expect(200)).body as { costDiff: number };
+    expect(cmp.costDiff).toBe(-854); // 3700 − 4554
+  });
+
+  it('generate writes the quotation from the FROZEN sheet — a draft is refused', async () => {
+    const q = (
       await http.post('/api/v1/crm/quotations').send({
-        quoteNumber, customerName: 'Marina Holdings', issueDate: '2026-07-01',
-        lines: [{ description: 'CCTV supply & install', quantity: 10, unitPrice: 589, vatRate: 5 }],
+        quoteNumber: 'QT-PS-1', customerName: 'Marina Holdings', issueDate: '2026-07-01',
+        lines: [{ description: 'placeholder', quantity: 1, unitPrice: 1, vatRate: 5 }],
       }).expect(201)
     ).body;
+    const s = await newSheet('Tower B — generate', { quotationId: q.id });
 
-  /** R3 governance: draft → approved → sent (send is only legal from approved). */
-  const sendQuote = async (id: string): Promise<void> => {
-    await http.patch(`/api/v1/crm/quotations/${id}/status`).send({ action: 'approve' }).expect(200);
-    await http.patch(`/api/v1/crm/quotations/${id}/status`).send({ action: 'send' }).expect(200);
-  };
+    // A quote is the face of a COMMITTED price — an unfrozen draft cannot generate one.
+    await http.post(`/api/v1/crm/pricing-sheets/${s.id}/generate-quotation`).expect(409);
 
-  it('creating a quotation creates its pricing sheet — present, empty, unlocked', async () => {
-    const q = await newQuote('QT-B-1');
-    // The sheet exists on the record itself from creation (never null).
-    expect(q.pricing).toBeTruthy();
-    expect(q.pricing.lines).toHaveLength(1);
+    await http.post(`/api/v1/crm/pricing-sheets/${s.id}/freeze`).expect(201);
+    const gen = (await http.post(`/api/v1/crm/pricing-sheets/${s.id}/generate-quotation`).expect(201)).body as { quotationId: string };
+    expect(gen.quotationId).toBe(q.id);
 
-    const sheet = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
-    expect(sheet.lines).toHaveLength(1);
-    expect(sheet.totalCost).toBe(0);
-    expect(sheet.totalSell).toBe(5890);
-    expect(sheet.marginPercent).toBe(100);
-    expect(sheet.locked).toBe(false);
-    expect(sheet.status).toBe('draft');
-  });
-
-  it('every factor rolls up: material → labour → other directs → direct → indirect → cost → margin', async () => {
-    const q = await newQuote('QT-B-2');
-    const sheet = (
-      await http.put(`/api/v1/crm/quotations/${q.id}/pricing`).send({
-        lines: [{
-          supplyUnitPrice: 300,     // 10 × 300            = 3000 supply
-          wastagePercent: 2,        // 2% of 3000          =   60 wastage
-          accessories: 200,         // lump                =  200
-          technician: { count: 2, hours: 16, rate: 15 },   //  32 mh × 15 = 480
-          engineer: { count: 1, hours: 8, rate: 20 },      //   8 h  × 20 = 160
-          projectManager: { count: 1, hours: 4, rate: 40 },//   4 h  × 40 = 160
-          transport: 300,
-          equipmentRent: 150,
-          subcontract: 250,
-          otherDirect: 100,
-          indirectPercent: 10,
-        }],
-      }).expect(200)
-    ).body as Sheet;
-
-    const l = sheet.lines[0];
-    // Material: 3000 + 60 + 200 = 3260
-    expect(l.supplyTotal).toBe(3000);
-    expect(l.wastageTotal).toBe(60);
-    expect(l.materialTotal).toBe(3260);
-    // Labour: 480 + 160 + 160 = 800
-    expect(l.technician.manHours).toBe(32);
-    expect(l.technician.total).toBe(480);
-    expect(l.engineer.total).toBe(160);
-    expect(l.projectManager.total).toBe(160);
-    expect(l.labourTotal).toBe(800);
-    // Direct: 3260 + 800 + 300 + 150 + 250 + 100 = 4860
-    expect(l.directCost).toBe(4860);
-    // Indirect 10% = 486 → cost 5346; unit cost 534.6
-    expect(l.indirectCost).toBe(486);
-    expect(l.costTotal).toBe(5346);
-    expect(l.unitCostTotal).toBe(534.6);
-    // Sell 5890 → profit 544 → margin 9.24%, markup 10.18%
-    expect(l.sellTotal).toBe(5890);
-    expect(l.profit).toBe(544);
-    expect(l.marginPercent).toBeCloseTo(9.24, 1);
-    expect(l.markupPercent).toBeCloseTo(10.18, 1);
-    // Sheet roll-up mirrors the line.
-    expect(sheet.totalDirect).toBe(4860);
-    expect(sheet.totalIndirect).toBe(486);
-    expect(sheet.totalCost).toBe(5346);
-    expect(sheet.profit).toBe(544);
-
-    // Persisted — re-read matches.
-    const reread = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
-    expect(reread.totalCost).toBe(5346);
-    expect(reread.lines[0].labourTotal).toBe(800);
-  });
-
-  it('accepts the legacy lean shape and lifts unitCosts into supply', async () => {
-    const q = await newQuote('QT-B-3');
-    const sheet = (
-      await http.put(`/api/v1/crm/quotations/${q.id}/pricing`).send({ unitCosts: [450] }).expect(200)
-    ).body as Sheet;
-    expect(sheet.lines[0].supplyTotal).toBe(4500); // 10 × 450 lifted into supplyUnitPrice
-    expect(sheet.totalCost).toBe(4500);
-  });
-
-  it('each revision keeps its own build-up — carried forward, then independent', async () => {
-    const q = await newQuote('QT-B-4');
-    await http.put(`/api/v1/crm/quotations/${q.id}/pricing`)
-      .send({ lines: [{ supplyUnitPrice: 300, technician: { count: 1, hours: 10, rate: 20 } }] }).expect(200);
-    await sendQuote(q.id);
-
-    const rev1 = (await http.post(`/api/v1/crm/quotations/${q.id}/revise`).expect(201)).body;
-    expect(rev1.revision).toBe(1);
-
-    // Carried: 3000 supply + 200 labour = 3200
-    const carried = (await http.get(`/api/v1/crm/quotations/${rev1.id}/pricing`).expect(200)).body as Sheet;
-    expect(carried.totalCost).toBe(3200);
-
-    // Re-price Rev 1 — Rev 0 must not move.
-    await http.put(`/api/v1/crm/quotations/${rev1.id}/pricing`)
-      .send({ lines: [{ supplyUnitPrice: 350, technician: { count: 1, hours: 10, rate: 20 } }] }).expect(200);
-    const rev1Sheet = (await http.get(`/api/v1/crm/quotations/${rev1.id}/pricing`).expect(200)).body as Sheet;
-    const rev0Sheet = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
-    expect(rev1Sheet.totalCost).toBe(3700); // 3500 + 200
-    expect(rev0Sheet.totalCost).toBe(3200); // untouched
-  });
-
-  it('approval LOCKS the sheet — re-pricing is refused with 409, read stays open', async () => {
-    const q = await newQuote('QT-L-1');
-    await http.put(`/api/v1/crm/quotations/${q.id}/pricing`)
-      .send({ lines: [{ supplyUnitPrice: 300 }] }).expect(200);
-
-    // Still editable through internal review.
-    await http.patch(`/api/v1/crm/quotations/${q.id}/status`).send({ action: 'submit_review' }).expect(200);
-    await http.put(`/api/v1/crm/quotations/${q.id}/pricing`)
-      .send({ lines: [{ supplyUnitPrice: 310 }] }).expect(200);
-
-    // Approval is the commitment point — the build-up freezes.
-    await http.patch(`/api/v1/crm/quotations/${q.id}/status`).send({ action: 'approve' }).expect(200);
-
-    const locked = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
-    expect(locked.locked).toBe(true);
-    expect(locked.status).toBe('approved');
-    expect(locked.totalCost).toBe(3100); // the approved build-up is still readable
-
-    // Writes are refused as a state-transition conflict, not a crash.
-    const refused = await http.put(`/api/v1/crm/quotations/${q.id}/pricing`)
-      .send({ lines: [{ supplyUnitPrice: 999 }] }).expect(409);
-    expect(String(refused.body.message ?? refused.body.error)).toMatch(/locked/i);
-
-    // And the stored figures are untouched.
-    const after = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
-    expect(after.totalCost).toBe(3100);
-  });
-
-  it('stays locked once sent, and a new revision unlocks a fresh sheet', async () => {
-    const q = await newQuote('QT-L-2');
-    await http.put(`/api/v1/crm/quotations/${q.id}/pricing`).send({ lines: [{ supplyUnitPrice: 300 }] }).expect(200);
-    await sendQuote(q.id);
-
-    // Sent → still locked.
-    const sent = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
-    expect(sent.locked).toBe(true);
-    await http.put(`/api/v1/crm/quotations/${q.id}/pricing`).send({ lines: [{ supplyUnitPrice: 999 }] }).expect(409);
-
-    // Revising is the sanctioned way to re-price: Rev 1 is a draft, carried + editable.
-    const rev1 = (await http.post(`/api/v1/crm/quotations/${q.id}/revise`).expect(201)).body;
-    const fresh = (await http.get(`/api/v1/crm/quotations/${rev1.id}/pricing`).expect(200)).body as Sheet;
-    expect(fresh.locked).toBe(false);
-    expect(fresh.status).toBe('draft');
-    expect(fresh.totalCost).toBe(3000); // carried forward
-    await http.put(`/api/v1/crm/quotations/${rev1.id}/pricing`).send({ lines: [{ supplyUnitPrice: 350 }] }).expect(200);
-
-    // Rev 0 remains frozen at its approved figures.
-    const rev0 = (await http.get(`/api/v1/crm/quotations/${q.id}/pricing`).expect(200)).body as Sheet;
-    expect(rev0.locked).toBe(true);
-    expect(rev0.totalCost).toBe(3000);
-  });
-
-  it('the revision chain lists every revision of the quote number, oldest first', async () => {
-    const q = await newQuote('QT-B-5');
-    await sendQuote(q.id);
-    await http.post(`/api/v1/crm/quotations/${q.id}/revise`).expect(201);
-
-    const chain = (await http.get(`/api/v1/crm/quotations/${q.id}/revisions`).expect(200)).body as Array<{ revision: number; status: string }>;
-    expect(chain).toHaveLength(2);
-    expect(chain[0].revision).toBe(0);
-    expect(chain[0].status).toBe('revised');
-    expect(chain[1].revision).toBe(1);
+    // The quotation's lines are regenerated from the sheet's build-up (one engine, one writer):
+    // its subtotal is now the sheet's sell (10 × 506 unit-sell = 5060), not the placeholder.
+    const quote = (await http.get(`/api/v1/crm/quotations/${q.id}`).expect(200)).body as { subtotal: number };
+    expect(quote.subtotal).toBe(5060);
   });
 });

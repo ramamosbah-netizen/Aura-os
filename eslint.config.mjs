@@ -14,6 +14,10 @@ export default tseslint.config(
       '**/*.d.ts',
       '**/playwright-report/**',
       '**/test-results/**',
+      // Local-only: git worktrees created under .claude/ are full repo copies and must not
+      // be linted (they'd double-count and lint stale code CI never sees).
+      '.claude/**',
+      '**/.turbo/**',
     ],
   },
   js.configs.recommended,

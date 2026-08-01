@@ -78,13 +78,51 @@ interface DocTypeMeta {
   formSchemaId: string;
 }
 
+interface TechnicalQuery {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  title: string;
+  query: string;
+  response: string | null;
+  status: 'open' | 'responded' | 'closed';
+  priority: 'low' | 'medium' | 'high';
+  discipline: string;
+  drawingReference: string | null;
+  costImpact: boolean;
+  timeImpact: boolean;
+  createdAt: string;
+}
+
+interface BimModel {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  name: string;
+  discipline: string;
+  format: 'ifc' | 'rvt' | 'nwd' | 'nwc' | 'dwg' | 'glb' | 'other';
+  storageKey: string | null;
+  fileUrl: string | null;
+  version: number;
+  revision: string;
+  status: 'wip' | 'shared' | 'published' | 'archived';
+  fileSizeBytes: number | null;
+  federationGroup: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
 export default async function EngineeringPage() {
-  const [drawings, rfis, submittals, designChanges, documents, docTypes, projects] = await Promise.all([
+  const [drawings, rfis, submittals, designChanges, documents, technicalQueries, bimModels, docTypes, projects] = await Promise.all([
     getJson<Drawing[]>('/api/engineering/drawings'),
     getJson<Rfi[]>('/api/engineering/rfis'),
     getJson<Submittal[]>('/api/engineering/submittals'),
     getJson<DesignChange[]>('/api/engineering/design-changes'),
     getJson<EngineeringDocument[]>('/api/engineering/documents'),
+    getJson<TechnicalQuery[]>('/api/engineering/technical-queries'),
+    getJson<BimModel[]>('/api/engineering/bim-models'),
     getJson<DocTypeMeta[]>('/api/engineering/document-types'),
     getJson<Project[]>('/api/projects/projects'),
   ]);
@@ -104,6 +142,8 @@ export default async function EngineeringPage() {
         initialSubmittals={submittals ?? []}
         initialDesignChanges={designChanges ?? []}
         initialDocuments={documents ?? []}
+        initialTechnicalQueries={technicalQueries ?? []}
+        initialBimModels={bimModels ?? []}
         docTypes={docTypes ?? []}
         projects={projects ?? []}
       />

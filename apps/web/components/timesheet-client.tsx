@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface TimesheetEntry {
   id: string;
@@ -85,7 +86,7 @@ export default function TimesheetClient({ initialEntries }: { initialEntries: Ti
 
       <h2 style={st.h2}>Entries</h2>
       {entries.length === 0 ? (
-        <p style={st.muted}>No timesheet entries yet.</p>
+        <EmptyState compact title="No timesheet entries yet" description="Log daily hours to route them for approval and cost allocation." />
       ) : (
         <table style={st.table}>
           <thead>

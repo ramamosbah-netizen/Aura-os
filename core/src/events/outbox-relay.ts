@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { EventBus } from './event-bus';
 import { EVENT_COLUMNS, type EventRow, rowToEvent } from './postgres-event-store';
 import { TenantContext } from '../tenancy/tenant-context';
@@ -54,8 +54,13 @@ export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
   async drain(): Promise<void> {
     if (!this.pool || this.draining) return;
     this.draining = true;
-    const client = await this.pool.connect();
+    // `pool.connect()` is INSIDE the try: a managed DB (Supabase) idles connections out, so the
+    // connect — or the tenant-GUC bind inside it — can reject. Left uncaught in this background
+    // poller (no request to absorb it) that rejection took the whole API down, and `draining` never
+    // reset so the relay stayed wedged. Now it logs and retries next tick.
+    let client: PoolClient | null = null;
     try {
+      client = await this.pool.connect();
       await client.query('BEGIN');
       const { rows } = await client.query<EventRow & { attempts: number }>(
         `SELECT ${EVENT_COLUMNS}, attempts FROM public.aura_events
@@ -105,10 +110,11 @@ export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
       await client.query('COMMIT');
       if (rows.length) this.logger.log(`Relayed ${rows.length} event(s).`);
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      this.logger.error(`Drain failed: ${String(err)}`);
+      // Roll back only if we got as far as a live client — a failed connect has none.
+      if (client) await client.query('ROLLBACK').catch(() => undefined);
+      this.logger.error(`Drain failed (will retry next tick): ${String(err)}`);
     } finally {
-      client.release();
+      if (client) client.release();
       this.draining = false;
     }
   }

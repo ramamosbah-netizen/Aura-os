@@ -11,6 +11,9 @@ export interface TenderFilter {
   /** Register classification (T4): invitation / public / private / opportunity. */
   source?: string;
   accountId?: string;
+  /** The opportunity this tender was started from — the provenance link the Opportunity 360 follows
+   * (works even when the deal has no account, which account-scoped filtering would miss). */
+  sourceOpportunityId?: string;
   limit?: number;
 }
 

@@ -61,11 +61,13 @@ function buildHarness() {
   );
 
   // Deal-chain services (each registers its create command on the shared bus).
+  const bidScoreStore = new InMemoryBidScoreStore();
+  const estimateStore = new InMemoryEstimateStore();
   const tenders = new TenderService(
     new InMemoryTenderStore(),
     new InMemoryBOQStore(),
-    new InMemoryBidScoreStore(),
-    new InMemoryEstimateStore(),
+    bidScoreStore,
+    estimateStore,
     new InMemorySubmissionStore(),
     events,
     tx,
@@ -176,6 +178,7 @@ function buildHarness() {
     tenders,
     { restampFromAward: async () => 0 } as any, // EstimateSourcingService (R5)
     noop, // AccountService (CRM)
+    opportunities, // OpportunityService (CRM) — required for the tender.awarded → close-opportunity reactor
     mockSignals, // SignalService (CRM)
     // QuotationService (CRM) — the award reactor asks it whether a tender's quotation is already
     // committed, so a frozen estimate is never silently restamped. No quotes here → nothing frozen.
@@ -188,7 +191,18 @@ function buildHarness() {
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, createdSignals };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, createdSignals };
+}
+
+/**
+ * Walk a started tender to `submitted` so its AWARD can fire the deal-chain reactors. The submit
+ * gate reads evidence, not visited states (T2): a go bid-decision + a priced estimate + a value.
+ * We seed those facts directly, then flip to submitted (which records the submission).
+ */
+async function makeTenderSubmittable(h: ReturnType<typeof buildHarness>, tenderId: string): Promise<void> {
+  await h.bidScoreStore.save({ id: `bs-${tenderId}`, tenantId, tenderId, recommendation: 'go', createdAt: new Date().toISOString() } as any);
+  await h.estimateStore.save({ id: `est-${tenderId}`, tenantId, tenderId, sellingRate: 100, quantity: 1 } as any);
+  await h.tenders.changeStatus(tenderId, 'submitted');
 }
 
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
@@ -207,19 +221,23 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
       accountId: 'acct-1',
       accountName: 'Acme Developments LLC',
     });
-    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
-    // unaffected by it, but a win must still explain itself.
-    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
+    // Start Tender from the still-open opportunity (J2): the tender is created against the
+    // opportunity and linked back (sourceOpportunityId), carrying the client snapshot down.
+    // (Causality: bidding precedes winning — the tender's AWARD is what wins the deal, below.)
+    const tender = await h.tenders.create({
+      tenantId,
+      title: 'Tender: Marina Tower ELV',
+      value: 1_000_000,
+      accountId: 'acct-1',
+      accountName: 'Acme Developments LLC',
+    });
+    await h.tenders.linkOpportunity(tender.id, opp.id);
+    expect(tender.accountName).toBe('Acme Developments LLC'); // opportunity→tender account carry-down
 
-    const tenders = await h.tenders.list();
-    expect(tenders).toHaveLength(1);
-    expect(tenders[0].title).toBe('Tender: Marina Tower ELV'); // proves the title-propagation fix
-    expect(tenders[0].value).toBe(1_000_000);
-    expect(tenders[0].accountName).toBe('Acme Developments LLC'); // proves opportunity→tender account carry-down
-    const tender = tenders[0];
-
-    // 2. Tender awarded → Contract (draft).
+    // 2. Tender submitted, then awarded → Contract (draft) AND the source opportunity closes Won.
+    await makeTenderSubmittable(h, tender.id);
     await h.tenders.changeStatus(tender.id, 'won');
+    expect((await h.opportunities.get(opp.id))?.stage).toBe('won'); // tender.awarded → close-opportunity
     const contracts = await h.contracts.list({ tenderId: tender.id });
     expect(contracts).toHaveLength(1);
     expect(contracts[0].tenderId).toBe(tender.id);
@@ -238,12 +256,11 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
 
   it('is idempotent: re-delivered award/sign events do not duplicate downstream records', async () => {
     const opp = await h.opportunities.create({ tenantId, title: 'Idem Job', value: 500 });
-    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
-    // unaffected by it, but a win must still explain itself.
-    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
-    const tender = (await h.tenders.list())[0];
+    // Start Tender from the opportunity, then award it twice (simulates at-least-once re-delivery).
+    const tender = await h.tenders.create({ tenantId, title: 'Tender: Idem Job', value: 500 });
+    await h.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(h, tender.id);
 
-    // Award the tender twice (simulates an at-least-once outbox re-delivery).
     await h.tenders.changeStatus(tender.id, 'won');
     await h.tenders.changeStatus(tender.id, 'won');
     expect(await h.contracts.list({ tenderId: tender.id })).toHaveLength(1);
@@ -254,20 +271,17 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     await h.contracts.changeStatus(contract.id, 'active');
     expect(await h.projects.list({ contractId: contract.id })).toHaveLength(1);
 
-    // And re-winning the same opportunity must not spawn a second tender.
-    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
-    // unaffected by it, but a win must still explain itself.
-    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
+    // Re-awarding must not spawn a second contract, and only the one started tender exists.
     expect(await h.tenders.list()).toHaveLength(1);
   });
 
   it('raises deduped growth Signals when a project and its contract complete (S9 account growth loop)', async () => {
     // Build the full chain to a live project.
     const opp = await h.opportunities.create({ tenantId, title: 'Downtown ELV', value: 800_000, accountId: 'acct-9', accountName: 'Nakheel PJSC' });
-    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
-    // unaffected by it, but a win must still explain itself.
-    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
-    const tender = (await h.tenders.list())[0];
+    // Start Tender from the opportunity, then award it to win the deal.
+    const tender = await h.tenders.create({ tenantId, title: 'Tender: Downtown ELV', value: 800_000, accountId: 'acct-9', accountName: 'Nakheel PJSC' });
+    await h.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(h, tender.id);
     await h.tenders.changeStatus(tender.id, 'won');
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
     await h.contracts.changeStatus(contract.id, 'active');
@@ -364,10 +378,9 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     // G5: value 0 was fine when nothing checked it; the win gate now refuses it (a win of 0 is not
     // a win). The BOQ/CBS assertions below are about the tender's items, not this figure.
     const opp = await h.opportunities.create({ tenantId, title: 'BOQ Job', value: 250_000 });
-    // G5: the win gate requires the winning context (§40.3) — the reactor chain under test is
-    // unaffected by it, but a win must still explain itself.
-    await h.opportunities.update(opp.id, { stage: 'won', winReason: 'Best technical fit' });
-    const tender = (await h.tenders.list())[0];
+    // Start Tender from the opportunity.
+    const tender = await h.tenders.create({ tenantId, title: 'Tender: BOQ Job', value: 250_000 });
+    await h.tenders.linkOpportunity(tender.id, opp.id);
 
     // Give the tender a BOQ; this also recalculates its value.
     const { boq } = await h.tenders.getOrCreateBOQ(tenantId, null, tender.id);
@@ -379,6 +392,7 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
       rate: 50,
     });
 
+    await makeTenderSubmittable(h, tender.id);
     await h.tenders.changeStatus(tender.id, 'won');
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
     await h.contracts.changeStatus(contract.id, 'active');

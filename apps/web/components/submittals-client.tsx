@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface Submittal {
   id: string;
@@ -94,7 +95,7 @@ export default function SubmittalsClient({ initialSubmittals }: { initialSubmitt
 
       <h2 style={st.h2}>Register</h2>
       {items.length === 0 ? (
-        <p style={st.muted}>No submittals recorded.</p>
+        <EmptyState compact title="No submittals recorded" description="Register a submittal and track it through review and approval." />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Reference</th><th style={st.th}>Title</th><th style={st.th}>Disc.</th><th style={st.th}>Rev</th><th style={st.th}>Status</th><th style={st.th}>Code</th><th style={st.th}>Actions</th></tr></thead>

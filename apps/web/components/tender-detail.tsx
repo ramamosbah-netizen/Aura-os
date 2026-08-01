@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { computeBidScore, recommendationFor, DEFAULT_BID_CRITERIA, type BidCriterion, type BidRecommendation } from '@aura/shared';
 
 interface Tender {
   id: string;
@@ -391,6 +392,9 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
 
       {err && <div style={s.errorBar}>{err}</div>}
       {importNote && <div style={{ ...s.errorBar, borderColor: 'var(--good, #10b981)', color: 'var(--good, #10b981)' }}>{importNote}</div>}
+
+      {/* GO / NO-GO QUALIFICATION (T-A) — the bid/no-bid gate, before any estimating */}
+      <QualificationPanel tenderId={tender.id} />
 
       {/* BOQ SECTION */}
       <section style={s.boqSection}>
@@ -1148,6 +1152,153 @@ const s = {
     animation: 'spin 0.8s linear infinite',
   } as CSSProperties,
 };
+
+interface BidScore {
+  id: string;
+  tenderId: string;
+  criteria: BidCriterion[];
+  totalScore: number;
+  recommendation: BidRecommendation;
+  notes: string | null;
+  createdAt: string;
+}
+
+const REC: Record<BidRecommendation, { label: string; color: string; bg: string }> = {
+  go: { label: 'GO', color: '#34d399', bg: 'rgba(16, 185, 129, 0.12)' },
+  conditional: { label: 'CONDITIONAL', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.12)' },
+  no_go: { label: 'NO-GO', color: '#f87171', bg: 'rgba(239, 68, 68, 0.12)' },
+};
+
+/**
+ * T-A — the Bid/No-Bid qualification (Go/No-Go). A weighted checklist scores the tender 0–100 and
+ * yields GO / CONDITIONAL / NO-GO; the latest decision is what the tender lifecycle gate reads
+ * before it lets estimating begin. The live preview uses the SAME `computeBidScore` /
+ * `recommendationFor` the API commits with (imported from @aura/shared) — never a second formula.
+ */
+function QualificationPanel({ tenderId }: { tenderId: string }) {
+  const [records, setRecords] = useState<BidScore[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [criteria, setCriteria] = useState<BidCriterion[]>(() => DEFAULT_BID_CRITERIA.map((c) => ({ ...c, score: 5 })));
+  const [notes, setNotes] = useState('');
+
+  const load = async (): Promise<void> => {
+    const res = await fetch(`/api/tendering/bid-scores?tenderId=${tenderId}`, { cache: 'no-store' });
+    if (res.ok) setRecords(await res.json());
+  };
+  useEffect(() => { void load(); }, [tenderId]);
+
+  // Live, from the shared engine — the estimator sees the verdict move as they score.
+  const liveTotal = computeBidScore(criteria);
+  const liveRec = recommendationFor(liveTotal);
+
+  const setScore = (i: number, score: number): void =>
+    setCriteria((cs) => cs.map((c, j) => (j === i ? { ...c, score } : c)));
+  const setWeight = (i: number, weight: number): void =>
+    setCriteria((cs) => cs.map((c, j) => (j === i ? { ...c, weight } : c)));
+
+  const save = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/tendering/bid-scores`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tenderId, criteria, notes: notes || undefined }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(d.message ?? d.error ?? 'Failed to record the decision'); return; }
+      setAdding(false);
+      setCriteria(DEFAULT_BID_CRITERIA.map((c) => ({ ...c, score: 5 })));
+      setNotes('');
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  const latest = records[0] ?? null;
+  const input: CSSProperties = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none' };
+
+  return (
+    <section style={s.boqSection}>
+      <div style={s.sectionHeader}>
+        <h2 style={s.sectionTitle}>
+          Bid / No-Bid Qualification
+          {records.length > 0 && <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · {records.length} assessment{records.length > 1 ? 's' : ''}</span>}
+        </h2>
+        <button style={s.btnSecondary} onClick={() => setAdding((v) => !v)}>{adding ? 'Close' : latest ? '+ Re-assess' : '+ Assess Go/No-Go'}</button>
+      </div>
+
+      {err && <div style={s.errorBar}>{err}</div>}
+
+      {/* The current decision — the verdict the lifecycle gate reads. */}
+      {latest ? (
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: '4px 0 8px' }}>
+          <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 0.5, color: REC[latest.recommendation].color, background: REC[latest.recommendation].bg, border: `1px solid ${REC[latest.recommendation].color}`, borderRadius: 8, padding: '6px 14px' }}>
+            {REC[latest.recommendation].label}
+          </span>
+          <span style={{ fontSize: 22, fontWeight: 800 }}>{latest.totalScore}<span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>/100</span></span>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>decided {new Date(latest.createdAt).toLocaleDateString()}</span>
+          {latest.notes && <span style={{ fontSize: 13, color: 'var(--fg)', fontStyle: 'italic' }}>“{latest.notes}”</span>}
+        </div>
+      ) : (
+        !adding && <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>Not yet qualified — score the tender against the checklist to make the bid/no-bid call before estimating.</p>
+      )}
+
+      {/* The weighted checklist. */}
+      {adding && (
+        <div style={{ display: 'grid', gap: 10, padding: '12px 0 0', borderTop: latest ? '1px solid var(--border)' : 'none', marginTop: latest ? 12 : 0 }}>
+          {criteria.map((c, i) => (
+            <div key={c.name} style={{ display: 'grid', gridTemplateColumns: '1fr 64px 210px 40px', gap: 12, alignItems: 'center' }}>
+              <span style={{ fontSize: 13 }}>{c.name}</span>
+              <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 11, color: 'var(--muted)' }} title="Weight — relative importance">
+                w
+                <input type="number" min={0} max={9} step={1} value={c.weight} onChange={(e) => setWeight(i, Number(e.target.value) || 0)} style={{ ...input, width: 44, padding: '4px 6px' }} />
+              </label>
+              <input type="range" min={0} max={10} step={1} value={c.score} onChange={(e) => setScore(i, Number(e.target.value))} style={{ accentColor: 'var(--accent)' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right' }}>{c.score}<span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 11 }}>/10</span></span>
+            </div>
+          ))}
+
+          <textarea style={{ ...input, minHeight: 48 }} placeholder="Rationale — why this go/no-go call (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+          {/* Live verdict from the shared engine. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <span style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' }}>Live score</span>
+            <span style={{ fontSize: 20, fontWeight: 800 }}>{liveTotal}<span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>/100</span></span>
+            <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 0.5, color: REC[liveRec].color, background: REC[liveRec].bg, border: `1px solid ${REC[liveRec].color}`, borderRadius: 7, padding: '4px 10px' }}>
+              → {REC[liveRec].label}
+            </span>
+            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: '#0b0e14', marginLeft: 'auto' }} disabled={busy} onClick={() => void save()}>
+              {busy ? 'Recording…' : 'Record decision'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Prior assessments — the audit trail of how the call moved. */}
+      {records.length > 1 && (
+        <div style={{ marginTop: 12 }}>
+          <button style={{ ...s.btnSecondary, fontSize: 11.5 }} onClick={() => setShowHistory((v) => !v)}>
+            {showHistory ? 'Hide' : 'Show'} {records.length - 1} earlier assessment{records.length - 1 > 1 ? 's' : ''}
+          </button>
+          {showHistory && (
+            <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+              {records.slice(1).map((r) => (
+                <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5, color: 'var(--muted)' }}>
+                  <span style={{ fontWeight: 700, color: REC[r.recommendation].color, minWidth: 96 }}>{REC[r.recommendation].label}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--fg)' }}>{r.totalScore}/100</span>
+                  <span>{new Date(r.createdAt).toLocaleDateString()}</span>
+                  {r.notes && <span style={{ fontStyle: 'italic' }}>“{r.notes}”</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 /** T4 — Clarifications & addenda: record the Q&A/change traffic, answer/acknowledge it, and
  * see an addendum's deadline extension reflected on the tender (the server mirrors it). */

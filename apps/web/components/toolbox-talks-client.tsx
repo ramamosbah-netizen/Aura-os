@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface ToolboxTalk {
   id: string;
@@ -73,7 +74,11 @@ export default function ToolboxTalksClient({ initialTalks }: { initialTalks: Too
 
       <h2 style={st.h2}>Talk history</h2>
       {talks.length === 0 ? (
-        <p style={st.muted}>No toolbox talks recorded yet.</p>
+        <EmptyState
+          compact
+          title="No toolbox talks recorded yet"
+          description="Log daily safety briefings and record worker attendance for compliance."
+        />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Date</th><th style={st.th}>Topic</th><th style={st.th}>Conducted by</th><th style={st.th}>Project</th><th style={st.thR}>Attendees</th><th style={st.th}>Notes</th></tr></thead>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import EmptyState from './ui/empty-state';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
@@ -258,7 +259,7 @@ export default function FleetControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Active Fleet Directory</h3>
             {vehicles.length === 0 ? (
-              <p style={st.muted}>No vehicles or equipment registered in the fleet yet.</p>
+              <EmptyState compact title="No fleet assets registered yet" description="Register vehicles and equipment to track fuel, maintenance and fines." />
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={st.table}>
@@ -337,7 +338,7 @@ export default function FleetControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Fuel Consumption Entries</h3>
             {fuelLogs.length === 0 ? (
-              <p style={st.muted}>No fuel logs recorded yet.</p>
+              <EmptyState compact title="No fuel logs recorded yet" description="Log fuel consumption to monitor cost per vehicle." />
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={st.table}>
@@ -388,7 +389,7 @@ export default function FleetControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Maintenance Ledger</h3>
             {maintenance.length === 0 ? (
-              <p style={st.muted}>No scheduled maintenance items recorded.</p>
+              <EmptyState compact title="No scheduled maintenance yet" description="Schedule preventive maintenance to keep the fleet roadworthy." />
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={st.table}>
@@ -523,7 +524,7 @@ export default function FleetControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Real-time GPS Fleet Positions</h3>
             {vehicles.filter(v => v.lastLatitude).length === 0 ? (
-              <p style={st.muted}>No real-time telematics coordinates logged yet.</p>
+              <EmptyState compact title="No telematics data yet" description="Live vehicle coordinates appear here once telematics is connected." />
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={st.table}>

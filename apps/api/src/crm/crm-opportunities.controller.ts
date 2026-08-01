@@ -1,8 +1,9 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { FORECAST_CATEGORIES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
+import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
 import { type Quotation, AccountService, ContactService, OpportunityService, QuotationService } from '@aura/crm';
+import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
 /** The create drawer posts select values as strings — accept both. */
@@ -23,6 +24,7 @@ class CreateOpportunityDto {
   @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() requiresTender?: boolean | string;
+  @IsOptional() @IsIn(EXECUTION_TYPES as readonly string[]) executionType?: ExecutionType;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
   @IsOptional() @IsString() nextActionDueDate?: string;
@@ -46,6 +48,7 @@ class UpdateOpportunityDto {
   @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() requiresTender?: boolean | string;
+  @IsOptional() @IsIn(EXECUTION_TYPES as readonly string[]) executionType?: ExecutionType;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() nextAction?: string;
   @IsOptional() @IsString() nextActionDueDate?: string;
@@ -75,8 +78,50 @@ export class CrmOpportunitiesController {
     private readonly quotations: QuotationService,
     private readonly contacts: ContactService,
     private readonly accounts: AccountService,
+    private readonly tenders: TenderService,
     private readonly tenant: TenantContext,
   ) {}
+
+  /**
+   * The TENDER execution path — the mirror of convert-to-quotation (the direct-sale path). Starts a
+   * competitive bid for this opportunity: creates ONE linked Tender in `draft`, to be qualified
+   * (Go/No-Go), estimated, priced and submitted through the tender lifecycle gate. Bidding PRECEDES
+   * winning, so — unlike the deal-chain reactor's already-won formality — it starts at `draft`, not
+   * `submitted`.
+   *
+   * A deal has a SINGLE bid: a second click (or a deal whose tender was already started) hands back
+   * the existing tender. The guard reads the PERSISTED link (sourceOpportunityId), so it stays
+   * idempotent across restarts, not only within one process's command cache.
+   */
+  @Post(':id/start-tender')
+  async startTender(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Tender> {
+    const opp = await this.opportunities.get(id);
+    if (!opp) throw new NotFoundException(`opportunity ${id} not found`);
+    if (opp.executionType !== 'tender') {
+      throw new BadRequestException(`set execution to Tender before starting a tender (is '${opp.executionType}')`);
+    }
+    const ctx = this.tenant.get();
+    const existing = (await this.tenders.list({ tenantId: ctx.tenantId, accountId: opp.accountId ?? undefined }))
+      .find((t) => t.sourceOpportunityId === id);
+    if (existing) return existing;
+    return this.tenders.create(
+      {
+        tenantId: ctx.tenantId,
+        companyId: opp.companyId,
+        title: opp.title,
+        accountId: opp.accountId,
+        accountName: opp.accountName,
+        value: opp.value,
+        status: 'draft',
+        sourceOpportunityId: id,
+        ownerId: opp.ownerId,
+        createdBy: ctx.actorId,
+      },
+      // Shares the deal-chain reactor's key so the two paths can never both spawn a tender for the
+      // same opportunity within one process (the persisted-link check above covers restarts).
+      `tender-from-opportunity:${id}`,
+    );
+  }
 
   /** One-click convert a won opportunity into a draft quotation (carries value + account). */
   @Post(':id/convert-to-quotation')
@@ -118,6 +163,7 @@ export class CrmOpportunitiesController {
       forecastCategory: dto.forecastCategory,
       closeDate: dto.closeDate,
       requiresTender: coerceBool(dto.requiresTender),
+      executionType: dto.executionType,
       ownerId: dto.ownerId,
       nextAction: dto.nextAction,
       nextActionDueDate: dto.nextActionDueDate,
@@ -164,6 +210,7 @@ export class CrmOpportunitiesController {
       ...dto,
       ...(await accountSnapshotPatch(this.accounts, dto.accountId, dto.accountName)),
       ...(dto.requiresTender !== undefined ? { requiresTender: coerceBool(dto.requiresTender) } : {}),
+      ...(dto.executionType !== undefined ? { executionType: dto.executionType } : {}),
       ...(dto.budgetConfirmed !== undefined ? { budgetConfirmed: coerceBool(dto.budgetConfirmed) } : {}),
       ...(dto.authorityConfirmed !== undefined ? { authorityConfirmed: coerceBool(dto.authorityConfirmed) } : {}),
       ...(dto.needConfirmed !== undefined ? { needConfirmed: coerceBool(dto.needConfirmed) } : {}),

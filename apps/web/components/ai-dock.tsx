@@ -52,6 +52,24 @@ export default function AiDock() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [record, setRecord] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // ⌘J / Ctrl+J toggles the Copilot from anywhere; Escape closes it. AI is ambient — a keystroke
+  // away on every page, not a place you navigate to.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key.toLowerCase() === 'j' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setOpen((o) => !o);
+      } else if (e.key === 'Escape' && open) {
+        setOpen(false);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+  // Focus the input the moment the dock opens.
+  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
 
   // Track the open record so suggestions and chat context name it.
   useEffect(() => setRecord(null), [pathname]);
@@ -134,8 +152,9 @@ export default function AiDock() {
 
   if (!open) {
     return (
-      <button type="button" style={s.fab} onClick={() => setOpen(true)} aria-label="Open AURA AI">
+      <button type="button" style={s.fab} onClick={() => setOpen(true)} aria-label="Open AURA Copilot" title="Ask AURA Copilot (⌘J)">
         <span style={{ fontSize: 16 }}>✦</span> Ask AURA Copilot
+        <span style={s.fabKbd}>⌘J</span>
       </button>
     );
   }
@@ -200,10 +219,11 @@ export default function AiDock() {
 
       <form onSubmit={handleSend} style={s.inputRow}>
         <input
+          ref={inputRef}
           style={s.input}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask Copilot..."
+          placeholder="Ask Copilot…  (⌘J)"
           disabled={busy}
         />
         <button type="submit" style={s.send} disabled={busy || !input.trim()}>
@@ -232,6 +252,15 @@ const s = {
     cursor: 'pointer',
     boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
     zIndex: 1000,
+  } as CSSProperties,
+  fabKbd: {
+    fontFamily: 'ui-monospace, monospace',
+    fontSize: 11,
+    fontWeight: 700,
+    background: 'rgba(0,0,0,0.18)',
+    borderRadius: 6,
+    padding: '2px 6px',
+    marginLeft: 2,
   } as CSSProperties,
   panel: {
     // Right-docked side window (matches the CRM Advisor's geometry) — a full-height

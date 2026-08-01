@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -16,7 +17,7 @@ export default function ViewsClient({ initial }: { initial: SavedView[] }) {
     finally { setBusy(null); }
   }
 
-  if (initial.length === 0) return <p style={s.muted}>No saved views yet.</p>;
+  if (initial.length === 0) return <EmptyState compact title="No saved views yet" description="Save a filter on any list with the Save view action to pin it here." />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

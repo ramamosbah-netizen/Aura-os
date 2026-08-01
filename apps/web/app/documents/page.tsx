@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import EmptyState from '@/components/ui/empty-state';
 import type { Document } from '@aura/shared';
 import { getJson } from '@/lib/api';
 
@@ -22,7 +23,7 @@ export default async function DocumentsPage() {
         {docs === null ? (
           <p style={st.muted}>API offline.</p>
         ) : docs.length === 0 ? (
-          <p style={st.muted}>No documents yet.</p>
+          <EmptyState compact title="No documents yet" description="Upload or generate documents to build the register." />
         ) : (
           <table style={st.table}>
             <thead>

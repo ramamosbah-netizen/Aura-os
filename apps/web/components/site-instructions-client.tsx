@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface SiteInstruction {
   id: string;
@@ -80,7 +81,11 @@ export default function SiteInstructionsClient({ initialInstructions }: { initia
 
       <h2 style={st.h2}>Instructions</h2>
       {items.length === 0 ? (
-        <p style={st.muted}>No site instructions recorded.</p>
+        <EmptyState
+          compact
+          title="No site instructions recorded"
+          description="Issue a formal site instruction (SI) with cost and time-impact flags to the contractor."
+        />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Date</th><th style={st.th}>Ref</th><th style={st.th}>Issued by</th><th style={st.th}>Instruction</th><th style={st.th}>Impact</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>

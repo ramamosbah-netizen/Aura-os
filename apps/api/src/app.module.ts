@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CoreModule } from '@aura/core';
 import { CrmModule } from '@aura/crm';
+import { MarketIntelligenceModule } from '@aura/market-intelligence';
 import { TenderingModule } from '@aura/tendering';
 import { ContractsModule } from '@aura/contracts';
 import { ProjectsModule } from '@aura/projects';
@@ -51,6 +52,10 @@ import { PreAwardController } from './crm/pre-award.controller';
 import { PipelineCommandController } from './crm/pipeline-command.controller';
 import { ForecastController } from './crm/forecast.controller';
 import { NegotiationController } from './crm/negotiation.controller';
+import { MarketIntelligenceController } from './market-intelligence/market-intelligence.controller';
+import { ProductKnowledgeController } from './market-intelligence/product-knowledge.controller';
+import { EstimationController } from './estimation/estimation.controller';
+import { PricingSheetsController } from './crm/pricing-sheets.controller';
 import { AccountDocumentAccessProvider } from './documents/account-document-access.provider';
 import { CrmQuotationsController } from './crm/crm-quotations.controller';
 import { TenderingController } from './tendering/tendering.controller';
@@ -108,6 +113,13 @@ import { AuthSeeder } from './auth/auth.seeder';
 import { BuilderController } from './builder/builder.controller';
 import { AuditController } from './audit/audit.controller';
 import { AmcModule } from '@aura/amc';
+import { CommissioningModule } from '@aura/commissioning';
+import { CommissioningController } from './commissioning/commissioning.controller';
+import { HandoverController } from './commissioning/handover.controller';
+import { SerialsController } from './inventory/serials.controller';
+import { LocationsController } from './inventory/locations.controller';
+import { ThreeWayMatchController } from './procurement/three-way-match.controller';
+import { SpendAnalyticsController } from './procurement/spend-analytics.controller';
 import { AmcController } from './amc/amc.controller';
 import { SearchController } from './search/search.controller';
 import { ViewsController } from './views/views.controller';
@@ -135,8 +147,8 @@ import { CommsService } from './comms/comms.service';
  * an events demo. Business modules (modules/*) register here as they land.
  */
 @Module({
-  imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule],
-  controllers: [HealthController, EventsController, DocumentsController, DocumentRequirementsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmSignalsController, LeadCommandController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, MyDayController, SourceFunnelController, ExecutiveCrmController, CrmAutomationController, DealBriefController, CrmActivitiesController, Opportunity360Controller, OpportunityDepthController, PreAwardController, PipelineCommandController, ForecastController, NegotiationController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, FrameworkAgreementsController, InventoryController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
+  imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, MarketIntelligenceModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule, CommissioningModule],
+  controllers: [HealthController, EventsController, DocumentsController, DocumentRequirementsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmSignalsController, LeadCommandController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, MyDayController, SourceFunnelController, ExecutiveCrmController, CrmAutomationController, DealBriefController, CrmActivitiesController, Opportunity360Controller, OpportunityDepthController, PreAwardController, PipelineCommandController, ForecastController, NegotiationController, MarketIntelligenceController, ProductKnowledgeController, EstimationController, PricingSheetsController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, ThreeWayMatchController, SpendAnalyticsController, FrameworkAgreementsController, InventoryController, SerialsController, LocationsController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, CommissioningController, HandoverController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
   providers: [MigrationGateService, SampleEventSubscriber, CrossModuleSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService, AccountDocumentAccessProvider,
     // Global permission guard — enforces @Permissions(...) on any handler. No-op until auth
     // is turned on (staged pass-through); undeclared handlers always pass.

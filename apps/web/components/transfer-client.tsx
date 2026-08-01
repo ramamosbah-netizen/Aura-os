@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface StockItem {
   id: string;
@@ -93,7 +94,7 @@ export default function TransferClient({ initialItems, initialTransfers }: { ini
 
       <h2 style={st.h2}>Recent Transfers</h2>
       {transfers.length === 0 ? (
-        <p style={st.muted}>No transfers yet.</p>
+        <EmptyState compact title="No transfers yet" description="Move stock between warehouses to keep site inventory balanced." />
       ) : (
         <table style={st.table}>
           <thead>

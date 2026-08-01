@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import EmptyState from './ui/empty-state';
 
 interface ItpPoint { activity: string; pointType: string; acceptanceCriteria: string; result: string }
 interface Itp {
@@ -98,7 +99,11 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
 
       <h2 style={st.h2}>Plans</h2>
       {itps.length === 0 ? (
-        <p style={st.muted}>No ITPs yet.</p>
+        <EmptyState
+          compact
+          title="No ITPs yet"
+          description="Create an Inspection & Test Plan with hold and witness points to govern quality sign-off."
+        />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Reference</th><th style={st.th}>Title</th><th style={st.th}>Disc.</th><th style={st.th}>Points</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import EmptyState from './ui/empty-state';
 
 interface Project {
   id: string;
@@ -216,7 +217,11 @@ export default function SiteControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Daily Reports Register</h3>
             {dailyReports.length === 0 ? (
-              <p style={st.muted}>No daily reports logged yet.</p>
+              <EmptyState
+                compact
+                title="No daily reports logged yet"
+                description="Log a daily site report to capture progress, weather, manpower and events on site."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -292,7 +297,11 @@ export default function SiteControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Logged Site Delays</h3>
             {delayLogs.length === 0 ? (
-              <p style={st.muted}>No site delays registered.</p>
+              <EmptyState
+                compact
+                title="No site delays registered"
+                description="Record delays with cause and impact to support extension-of-time (EOT) claims."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -359,7 +368,11 @@ export default function SiteControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Material Consumption Log</h3>
             {materialConsumption.length === 0 ? (
-              <p style={st.muted}>No material consumption entries recorded.</p>
+              <EmptyState
+                compact
+                title="No material consumption recorded"
+                description="Track materials consumed on site against budget and the BOQ."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -411,7 +424,11 @@ export default function SiteControlClient({
           <section style={st.panel}>
             <h3 style={st.panelTitle}>Labour Allocation Log</h3>
             {labourAllocations.length === 0 ? (
-              <p style={st.muted}>No labour allocations recorded.</p>
+              <EmptyState
+                compact
+                title="No labour allocations recorded"
+                description="Allocate labour and plant to activities to track site productivity."
+              />
             ) : (
               <table style={st.table}>
                 <thead>
@@ -451,7 +468,13 @@ export default function SiteControlClient({
             </p>
 
             {schedules.length === 0 ? (
-              <p style={st.muted}>No schedules available. Please set up Gantt schedules under Projects.</p>
+              <EmptyState
+                compact
+                title="No schedules available"
+                description="Gantt schedules are set up under Projects; once created they appear here for site tracking."
+                actionHref="/projects/schedule"
+                actionLabel="Go to Schedules"
+              />
             ) : (
               schedules.map((sch) => {
                 const totalTasks = sch.tasks.length;

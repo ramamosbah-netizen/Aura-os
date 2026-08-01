@@ -21,7 +21,7 @@ import {
 
 interface Opportunity {
   id: string; title: string; value: number; stage: string; winProbability: number;
-  closeDate: string | null; requiresTender: boolean; ownerId: string | null; nextAction: string | null;
+  closeDate: string | null; requiresTender: boolean; executionType?: string; ownerId: string | null; nextAction: string | null;
   accountId: string | null; accountName: string | null;
   budgetConfirmed: boolean; authorityConfirmed: boolean; needConfirmed: boolean; timelineConfirmed: boolean;
   competitors: string | null; source: string | null; lossReason: string | null; createdAt: string;
@@ -31,11 +31,13 @@ interface Step { key: string; label: string; reached: boolean; count: number; va
 interface ActivityRec { id: string; type: string; subject: string; status: string; dueDate: string | null; createdAt: string }
 
 interface QuotationLite { id: string; quoteNumber: string; status: string; total: number }
+interface TenderLite { id: string; reference: string | null; title: string; status: string; value: number }
 
 interface Payload {
   opportunity: Opportunity;
   account: { id: string; name: string; status: string } | null;
   stakeholders: Stakeholder[];
+  tenders: TenderLite[];
   quotations: QuotationLite[];
   activities: ActivityRec[];
   qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number };
@@ -53,6 +55,14 @@ const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFract
 const d = (iso: string): string => new Date(iso).toLocaleDateString();
 
 const STAGE_OPTIONS = ['qualification', 'proposal', 'negotiation', 'won', 'lost'];
+// The execution fork — how this opportunity is delivered once discovery is done.
+const EXECUTION_OPTIONS = [
+  { value: 'direct_sale', label: 'Direct sale' },
+  { value: 'tender', label: 'Tender' },
+  { value: 'framework_agreement', label: 'Framework agreement' },
+  { value: 'amc_renewal', label: 'AMC renewal' },
+  { value: 'variation_order', label: 'Variation order' },
+];
 const BANT: Array<{ key: 'budget' | 'authority' | 'need' | 'timeline'; field: string; label: string }> = [
   { key: 'budget', field: 'budgetConfirmed', label: 'Budget' },
   { key: 'authority', field: 'authorityConfirmed', label: 'Authority' },
@@ -105,6 +115,32 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     }
   }, [opportunityId, load]);
 
+  // The tender path (mirror of generateQuotation). One click starts the competitive bid and takes
+  // the seller into the tender workspace. Ref-guarded against the double-click that would otherwise
+  // race a second POST before `busy` re-renders (the endpoint is idempotent, but the jump is not).
+  const startTender = useCallback(async (): Promise<void> => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/crm/opportunities/${opportunityId}/start-tender`, { method: 'POST' });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        setErr(d.message ?? d.error ?? 'Could not start a tender from this deal.');
+        return;
+      }
+      const tender = (await res.json().catch(() => null)) as { id?: string } | null;
+      if (tender?.id) { window.location.href = `/tendering/tenders/${tender.id}`; return; }
+      await load();
+    } catch {
+      setErr('Could not reach the server — no tender was started.');
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [opportunityId, load]);
+
   const patch = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true); setErr(null);
     try {
@@ -123,7 +159,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate } = data;
+  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)', tone: 'accent' as Tone },
     won: { label: 'Won', color: 'var(--good)', tone: 'good' as Tone },
@@ -215,6 +251,12 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         }} style={st.select}>
         {STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
+      <span style={st.metaLabel}>Execution</span>
+      <select disabled={busy} value={o.executionType ?? (o.requiresTender ? 'tender' : 'direct_sale')}
+        onChange={(e) => void patch({ executionType: e.target.value })} style={st.select}
+        title="How this opportunity is executed — the fork between the sales and tender lifecycles">
+        {EXECUTION_OPTIONS.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
+      </select>
       {closing && (
         <>
           <input autoFocus value={closing.reason} placeholder={closing.stage === 'won' ? 'Why did we win?' : 'Why did we lose?'}
@@ -231,6 +273,15 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       )}
       {o.stage === 'won' && !o.requiresTender && (
         <button disabled={busy} onClick={() => { void generateQuotation(); }} style={st.actionBtn}>{busy ? 'Generating…' : '→ Quotation'}</button>
+      )}
+      {/* The tender path: start the bid while the deal is still open (bidding precedes winning).
+          Once a tender exists, the button becomes a link into its workspace. */}
+      {route === 'tender' && (
+        tenders.length > 0
+          ? <a href={`/tendering/tenders/${tenders[0].id}`} style={st.actionBtn}>→ Tender{tenders[0].reference ? ` ${tenders[0].reference}` : ''}</a>
+          : outcome.status !== 'lost'
+            ? <button disabled={busy} onClick={() => { void startTender(); }} style={st.actionBtn}>{busy ? 'Starting…' : '▶ Start Tender'}</button>
+            : null
       )}
       {err && <span style={{ color: 'var(--bad)', fontSize: 12.5, fontWeight: 600 }}>{err}</span>}
     </>

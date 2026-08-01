@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
 
 interface Employee { id: string; firstName?: string; lastName?: string; name?: string }
@@ -101,7 +102,7 @@ export default function StaffAdvancesClient({ initialAdvances, employees }: { in
       <h2 style={st.h2}>Advances</h2>
       <div style={{ margin: '8px 0' }}><div style={{ margin: '8px 0' }}><ExportButton filename="staff-advances" rows={advances as unknown as Array<Record<string, unknown>>} /></div></div>
       {advances.length === 0 ? (
-        <p style={st.muted}>No staff advances yet.</p>
+        <EmptyState compact title="No staff advances yet" description="Issue a salary advance or loan with an installment repayment plan." />
       ) : (
         <table style={st.table}>
           <thead><tr><th style={st.th}>Date</th><th style={st.th}>Employee</th><th style={st.th}>Amount</th><th style={st.th}>Repaid</th><th style={st.th}>×</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>

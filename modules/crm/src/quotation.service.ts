@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, type EstimationLineInput, estimateLine, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   QUOTATION_EVENT,
@@ -15,7 +15,7 @@ import {
   buildQuotationLine,
   computeQuotationTotals,
 } from './domain/quotation';
-import { type QuotationPricingView, computeQuotationPricing, normalizePricingInput, deriveSellUnitPrice } from './domain/quotation-pricing';
+import { type QuotationPricingView, computeQuotationPricing } from './domain/quotation-pricing';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
@@ -228,84 +228,55 @@ export class QuotationService {
   }
 
   /**
-   * Persist the per-line cost build-up for this revision; returns the recomputed
-   * sheet. Accepts the legacy lean shape (`{ unitCosts }`) — normalize lifts it.
+   * What we have quoted this item for before — the historic half of the pricing library. Aggregates
+   * the line items of past quotes into distinct descriptions with how many times and at what price,
+   * so an estimator sees "you quoted this 6 times, most recently at 780" instead of guessing afresh.
    *
-   * Governance: refused once the quotation is approved — the build-up that
-   * justified the approved price is immutable. Re-price by raising a revision.
+   * Uses the SELL unit price actually put on the line, not a cost. It is history, so it is honest
+   * about spread: min/max as well as the most recent.
    */
-  async setPricing(id: Id, input: unknown): Promise<QuotationPricingView> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
-    if (isPricingLocked(q)) {
-      throw new Error(
-        `pricing sheet is locked: only a draft or in-review quotation can be re-priced — ` +
-          `${q.quoteNumber} Rev ${q.revision} is ${q.status}. Raise a revision to re-price.`,
-      );
+  async priceHistory(
+    tenantId: string,
+    q?: string,
+    excludeQuotationId?: string,
+  ): Promise<Array<{ description: string; count: number; lastPrice: number; minPrice: number; maxPrice: number; lastAt: string }>> {
+    const quotes = await this.store.list({ tenantId, limit: 500 });
+    const needle = q?.trim().toLowerCase();
+    const map = new Map<string, { name: string; prices: number[]; last: { price: number; at: string } }>();
+    for (const quote of quotes) {
+      // For pricing advice, the quote being priced must not compare against itself.
+      if (excludeQuotationId && quote.id === excludeQuotationId) continue;
+      for (const l of quote.lines) {
+        const desc = l.description?.trim();
+        if (!desc || l.unitPrice <= 0) continue;
+        if (needle && !desc.toLowerCase().includes(needle)) continue;
+        const key = desc.toLowerCase();
+        const e = map.get(key) ?? { name: desc, prices: [], last: { price: 0, at: '' } };
+        e.prices.push(l.unitPrice);
+        // Latest by the quote's createdAt — the price the market last bore.
+        if (quote.createdAt > e.last.at) e.last = { price: l.unitPrice, at: quote.createdAt };
+        map.set(key, e);
+      }
     }
-    const lines = normalizePricingInput(q.lines.length, input);
-    await this.store.save({ ...q, pricing: { lines } });
-    this.logger.log(`Pricing sheet saved for ${q.quoteNumber} Rev ${q.revision}`);
-    return {
-      ...computeQuotationPricing(q.lines, { lines }),
-      locked: false,
-      status: q.status,
-      quoteNumber: q.quoteNumber,
-      revision: q.revision,
-    };
+    return [...map.values()]
+      .map((e) => ({
+        description: e.name,
+        count: e.prices.length,
+        lastPrice: e.last.price,
+        minPrice: Math.min(...e.prices),
+        maxPrice: Math.max(...e.prices),
+        lastAt: e.last.at,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
   }
 
   /**
-   * AUTHORING direction — price the quote FROM its sheet. Persists the per-line cost
-   * build-up, then derives each line's sell price from its all-in unit cost + the
-   * per-line target margin and writes those prices back onto the quotation lines
-   * (recomputing line/quote totals). This is how a quote is generated from its
-   * pricing sheet rather than by typing sell prices directly.
-   *
-   * Governance: refused once approved (same lock as setPricing) — the sheet behind
-   * an approved price is immutable; re-price by raising a revision.
+   * Save the Pricing Workspace: each line's full Estimation Engine build-up is stored AND the quote
+   * lines are regenerated from it — description + quantity + the engine's derived unit sell price.
+   * The build-up is the source; the lines are the output. Refused (409) once approved, same lock.
    */
-  async applyPricing(id: Id, input: { lines?: unknown; targetMargins?: unknown }): Promise<QuotationPricingView> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
-    if (isPricingLocked(q)) {
-      throw new Error(
-        `pricing sheet is locked: only a draft or in-review quotation can be re-priced — ` +
-          `${q.quoteNumber} Rev ${q.revision} is ${q.status}. Raise a revision to re-price.`,
-      );
-    }
-    const buildups = normalizePricingInput(q.lines.length, input);
-    // Cost side is independent of price — compute all-in unit cost per line from the build-up.
-    const costed = computeQuotationPricing(q.lines, { lines: buildups });
-    const margins = Array.isArray(input?.targetMargins) ? (input.targetMargins as unknown[]) : [];
-    const lines = q.lines.map((l, i) => {
-      const targetMargin = Number(margins[i]) || 0;
-      const unitPrice = deriveSellUnitPrice(costed.lines[i]?.unitCostTotal ?? 0, targetMargin);
-      return buildQuotationLine({ description: l.description, quantity: l.quantity, unitPrice, vatRate: l.vatRate });
-    });
-    const { subtotal, vatTotal, total } = computeQuotationTotals(lines);
-    await this.store.save({ ...q, lines, subtotal, vatTotal, total, pricing: { lines: buildups } });
-    this.logger.log(`Pricing applied to ${q.quoteNumber} Rev ${q.revision}: total ${total}`);
-    return {
-      ...computeQuotationPricing(lines, { lines: buildups }),
-      locked: false,
-      status: q.status,
-      quoteNumber: q.quoteNumber,
-      revision: q.revision,
-    };
-  }
-
-  /**
-   * Author the quote's LINES from the pricing sheet — the sheet is the source of items, not a
-   * cost layer over lines someone already typed. Each item carries its own description, quantity,
-   * cost build-up and target margin; the line is generated with a sell price derived from cost and
-   * margin. This is what "the items are imported from the sheet, with selling prices" means.
-   *
-   * The item identity is stored back onto the sheet (description/quantity/targetMarginPercent
-   * alongside the build-up), so reopening the sheet shows the same items and margins rather than
-   * bare cost columns. Refused (409) once approved — same lock as applyPricing.
-   */
-  async generateFromSheet(id: Id, items: unknown): Promise<Quotation> {
+  async saveEstimation(id: Id, items: EstimationLineInput[]): Promise<Quotation> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
     if (isPricingLocked(q)) {
@@ -315,45 +286,29 @@ export class QuotationService {
       );
     }
     const rows = Array.isArray(items) ? items : [];
-    if (rows.length === 0) throw new Error('the pricing sheet needs at least one item to generate lines');
+    if (rows.length === 0) throw new Error('the pricing workspace needs at least one item');
 
-    const buildups = normalizePricingInput(rows.length, { lines: rows });
-    // Temp lines carry each item's description + quantity so the sheet engine computes unit cost
-    // against the right quantity; an item with no description gets a stable fallback name.
-    const temp = rows.map((r, i) => {
-      const it = (r ?? {}) as { description?: string; quantity?: number };
+    const lines = rows.map((it, i) => {
+      const r = estimateLine(it);
       return buildQuotationLine({
         description: (it.description ?? '').trim() || `Item ${i + 1}`,
-        quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
-        unitPrice: 0,
+        quantity: r.quantity,
+        unitPrice: r.unitSellPrice,
         vatRate: 5,
       });
     });
-    const costed = computeQuotationPricing(temp, { lines: buildups });
-    const lines = temp.map((t, i) => {
-      const margin = Number((rows[i] as { targetMarginPercent?: number })?.targetMarginPercent) || 0;
-      const unitPrice = deriveSellUnitPrice(costed.lines[i]?.unitCostTotal ?? 0, margin);
-      return buildQuotationLine({ description: t.description, quantity: t.quantity, unitPrice, vatRate: t.vatRate });
-    });
     const { subtotal, vatTotal, total } = computeQuotationTotals(lines);
-    // Persist item identity WITH the build-up, so the sheet reopens as items + margins, not columns.
-    const pricingLines = buildups.map((b, i) => ({
-      ...b,
-      description: temp[i].description,
-      quantity: temp[i].quantity,
-      targetMarginPercent: Number((rows[i] as { targetMarginPercent?: number })?.targetMarginPercent) || 0,
-    }));
-    const updated: Quotation = { ...q, lines, subtotal, vatTotal, total, pricing: { lines: pricingLines } };
+    const updated: Quotation = { ...q, lines, subtotal, vatTotal, total, estimation: rows };
     await this.store.save(updated);
     await this.events.append([
       makeEvent({
         type: QUOTATION_EVENT.updated,
         tenantId: q.tenantId, companyId: q.companyId, actorId: q.createdBy,
         aggregateType: 'crm.quotation', aggregateId: id,
-        payload: { quoteNumber: q.quoteNumber, field: 'lines_from_sheet', lineCount: lines.length, total },
+        payload: { quoteNumber: q.quoteNumber, field: 'estimation', lineCount: lines.length, total },
       }),
     ]);
-    this.logger.log(`Generated ${lines.length} line(s) from the pricing sheet for ${q.quoteNumber}: total ${total}`);
+    this.logger.log(`Estimation saved for ${q.quoteNumber}: ${lines.length} line(s), total ${total}`);
     return updated;
   }
 

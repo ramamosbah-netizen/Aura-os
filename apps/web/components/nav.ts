@@ -105,6 +105,7 @@ export const NAV: NavGroup[] = [
           { label: 'Transfers', href: '/inventory/transfers', glyph: '⇄', desc: 'Warehouse-to-warehouse' },
           { label: 'Valuation', href: '/inventory/valuation', glyph: '▣', desc: 'Stock value at moving-average cost (WAC)' },
           { label: 'Serial Tracking', href: '/inventory/serials', glyph: '#', desc: 'Per-unit device ledger — serial → issued → installed → warranty (ELV asset lifecycle)' },
+          { label: 'Warehouses & Bins', href: '/inventory/locations', glyph: '▦', desc: 'Storage-location master — warehouses, stores, vans & their bin codes' },
         ],
       },
       {

@@ -93,6 +93,7 @@ export const NAV: NavGroup[] = [
           { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
           { label: 'Purchase Orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' },
           { label: '3-Way Match', href: '/procurement/three-way-match', glyph: '⚖', desc: 'PO ↔ goods-received ↔ invoiced reconciliation — catches billing over-exposure' },
+          { label: 'Spend Analytics', href: '/procurement/spend-analytics', glyph: '📊', desc: 'Total & committed spend by supplier, project, status & month' },
         ],
       },
       {

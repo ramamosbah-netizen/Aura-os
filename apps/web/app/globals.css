@@ -280,6 +280,30 @@ a {
   }
 }
 
+/* ── Topbar: responsive on phones ───────────────────────────────────────
+   Same lesson as .app-sidebar: the topbar and its children are inline-styled,
+   so these overrides must live here (a stylesheet rule) and carry !important to
+   beat the inline style. At 375px the fixed 340px search + breadcrumbs + full
+   company name overflowed the bar and clipped the company switcher / theme
+   toggle off-screen. On phones: tighten the gutter, drop the breadcrumbs (the
+   workspace tab row already names the location), and collapse the company
+   switcher to its dot — so search + company + theme all fit. */
+@media (max-width: 720px) {
+  .app-topbar {
+    padding-inline: 12px !important;
+    gap: 8px !important;
+  }
+  .app-topbar-search {
+    max-width: 48vw !important;
+  }
+  .app-topbar-crumbs {
+    display: none !important;
+  }
+  .app-topbar-company-name {
+    display: none !important;
+  }
+}
+
 /* ── CRM Advisor: responsive overlay ────────────────────────────────── */
 
 .crm-advisor-panel {

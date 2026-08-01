@@ -20,7 +20,7 @@
 | Search | 7/10 | Real global search + command palette + recent items. |
 | Filters | 6/10 | Saved-view pattern (per doctrine, queues = saved views not sidebar items). |
 | Dashboards | 6/10 | Per-module cockpits (pipeline, portfolio, operations overview); no unified BI yet. |
-| **Mobile** | **2/10** | Desktop-first; no field/PWA app. Critical miss for site/technician personas. |
+| **Mobile** | **3.5/10** *(was 2)* | 2026-08-01: the app **shell** is now phone-usable — sidebar → bottom bar, CRM advisor → bottom sheet (both pre-existing), and the **topbar** now fits at 375px (breadcrumbs dropped, company switcher collapses to its dot, gutter tightened). Still desktop-first at the **page** level: dense cockpit grids and wide tables need per-page responsive work, and there is no field/PWA app. Improved from "broken" to "navigable", not "optimized". |
 | Empty/loading/error states | **8.5/10** *(was 3)* | ✅ App-wide `loading.tsx` (skeletons) + `error.tsx` (recoverable) across root + 28 segments + `global-error`. ✅ `EmptyState` rolled out across the module list/register pages — Engineering, Site, Quality, HSE, Finance, CRM, Procurement, HR, Inventory, Fleet, Doc Control, AMC, Subcontracts (~48 lists total). Remaining bare empties are intentional inline micro-notes (positive "all-clear" panels, 360-detail sub-sections) where a full empty-card would be heavier, not better. |
 
 ## Role-based walkthroughs

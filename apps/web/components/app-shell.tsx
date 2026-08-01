@@ -234,7 +234,7 @@ export default function AppShell({
       )}
 
       <div style={s.col}>
-        <header style={s.topbar}>
+        <header className="app-topbar" style={s.topbar}>
           <button
             type="button"
             style={s.hamburger}
@@ -244,12 +244,12 @@ export default function AppShell({
           >
             ☰
           </button>
-          <button type="button" style={s.search} onClick={() => setPaletteOpen(true)}>
+          <button type="button" className="app-topbar-search" style={s.search} onClick={() => setPaletteOpen(true)}>
             <span style={{ color: 'var(--muted)' }}>Search or jump to…</span>
             <span style={s.kbdHint}>⌘K</span>
           </button>
 
-          <div style={s.crumbSlot}>
+          <div className="app-topbar-crumbs" style={s.crumbSlot}>
             <Breadcrumbs />
           </div>
 
@@ -261,7 +261,7 @@ export default function AppShell({
               onClick={() => setCompanyDropdownOpen((o) => !o)}
             >
               <span style={s.companyDot} />
-              <span style={s.companyName}>{activeCompany}</span>
+              <span className="app-topbar-company-name" style={s.companyName}>{activeCompany}</span>
               <span style={s.companyChevron}>{companyDropdownOpen ? '▴' : '▾'}</span>
             </button>
             {companyDropdownOpen && (

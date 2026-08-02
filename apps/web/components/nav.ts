@@ -138,6 +138,7 @@ export const NAV: NavGroup[] = [
         title: 'HSE', glyph: '🛡',
         items: [
           { label: 'HSE Control', href: '/hse/control', glyph: '🛡', desc: 'Safety incident logs, permits to work, & CAPA' },
+          { label: 'Risk Assessments', href: '/hse/risk-assessments', glyph: '⚠️', desc: 'JSA — hazard scoring (L×S), controls & residual risk; approve before work' },
           { label: 'Toolbox Talks', href: '/hse/toolbox-talks', glyph: '📋', desc: 'Daily safety briefings & attendance log' },
         ],
       },
@@ -148,6 +149,7 @@ export const NAV: NavGroup[] = [
           { label: 'HR & Payroll', href: '/hr/control', glyph: '👤', desc: 'Employee profiles, leave logs, & payroll processing' },
           { label: 'Timesheets', href: '/hr/timesheets', glyph: '⏱', desc: 'Daily hours logging & approval' },
           { label: 'Attendance', href: '/hr/attendance', glyph: '🗓', desc: 'Daily presence — check-in/out, status & worked hours' },
+          { label: 'Appraisals', href: '/hr/appraisals', glyph: '📈', desc: 'Performance reviews — weighted competency scores → 0–100; submit & acknowledge' },
           { label: 'Expense Claims', href: '/hr/expense-claims', glyph: '🧾', desc: 'Employee reimbursements — submit, approve, pay' },
           { label: 'Staff Advances', href: '/hr/staff-advances', glyph: '💵', desc: 'Salary advances / loans with installment repayment' },
           { label: 'Gratuity (EOSB)', href: '/hr/eosb', glyph: '◷', desc: 'End-of-service benefit calculator' },
@@ -162,6 +164,7 @@ export const NAV: NavGroup[] = [
           { label: 'Salik (Tolls)', href: '/fleet/salik', glyph: '🛣', desc: 'Dubai road tolls — record, allocate to cost owner, dispute' },
           { label: 'Assets & Equipment', href: '/assets/control', glyph: '🔧', desc: 'Asset register, calibration, inspections, & warranties' },
           { label: 'Depreciation', href: '/assets/depreciation', glyph: '📉', desc: 'Asset depreciation schedule & net book value' },
+          { label: 'Disposals', href: '/assets/disposals', glyph: '🗑', desc: 'End-of-life — sale/scrap/write-off with gain/loss vs net book value' },
         ],
       },
       {
@@ -176,6 +179,7 @@ export const NAV: NavGroup[] = [
         title: 'Subcontracts', glyph: '▧',
         items: [
           { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
+          { label: 'Progress Claims', href: '/subcontracts/claims', glyph: '🧾', desc: 'Subcontractor payment claims — period gross, retention & net; certify → pay' },
           { label: 'Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
           { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
         ],

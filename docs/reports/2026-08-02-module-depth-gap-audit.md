@@ -1,9 +1,23 @@
 # AURA OS — Module Depth Gap Audit (all modules)
 
-**Date:** 2026-08-02
+**Date:** 2026-08-02 · **Last updated:** 2026-08-02 (P1/P2 slices)
 **Method:** per-module inventory of domain aggregates (`modules/<m>/src/domain`), service layer,
 API routes (`apps/api/src`), and operating UIs (`apps/web/app`), verified against the live tree.
 Baseline completeness figures carried from `analysis/11-ERP-FUNCTIONALITY-REVIEW.md` and re-checked.
+
+## Status at a glance
+
+| Tier | Scope | State |
+|------|-------|-------|
+| **P0** | Quality IR/NCR/snag · Site daily reports (Engineering already complete) | ✅ **merged to `main`** (PR #179) |
+| **P1** | HSE risk-assessments · HR appraisals · Assets disposals (Fleet needed nothing) | ✅ built + verified — **PR #180** |
+| **P2** | Subcontract progress claims | ✅ built + verified — **PR #180** |
+| **P2 remaining** | Contract authoring · Analytics OS · field/mobile · MDM · subcontractor portal | ⬜ not started (larger platform efforts) |
+
+Every shipped slice was **UI-on-existing-endpoints — no backend changes** — and verified
+full-stack through the web proxy. The recurring theme: the delivery modules were **much more built
+than a file-count implied**; each has a 500–1,850-line tabbed control hub, so only the genuinely
+missing registers were added and two "gaps" (Engineering, Fleet) turned out to need nothing.
 
 ## Headline finding
 
@@ -24,15 +38,18 @@ CRM, procurement, inventory, HR-core) is reference-grade; the field is where the
 | Projects | 9 | many | dashboard, projects, schedule (Gantt), variations, delays, CBS | ~72% |
 | Tendering | 11 | many | tenders, BOQ, estimate, bid-scores, win-loss | ~70% |
 | Contracts | 5 | many | contract 360, bonds, payment certs, obligations, clauses | ~65% |
-| HR | 13 | many | attendance, timesheets, expenses, advances, EOSB, doc-expiry | ~65% |
+| HR | 13 | many | + **appraisals**; attendance, timesheets, expenses, advances, EOSB, doc-expiry | ~72% ↑ |
 | AMC | 4 | 22 | amc, ppm, dispatch | ~62% |
-| Engineering | **8** | 37 | **engineering (1 page)** | ~60% |
-| Subcontracts | 4 | 20 | subcontracts, variations, back-charges | ~60% |
-| Fleet | 6 | 27 | control, fines, salik | ~55% |
-| HSE | 6 | 20 | control, toolbox-talks | ~55% |
-| Assets | 6 | 16 | control, depreciation | ~52% |
-| Quality | 7 | 33 | control, itps, material-approvals | ~52% |
-| Site | 5 | 20 | control, instructions | ~48% |
+| Engineering | 8 | 37 | engineering (tabbed hub: drawings/RFIs/submittals/design-changes/docs/TQ/BIM) | ~78% ↑* |
+| Subcontracts | 4 | 20 | subcontracts, + **claims**, variations, back-charges | ~72% ↑ |
+| Fleet | 6 | 27 | control (vehicles/fuel/maintenance/telematics hub), fines, salik | ~70% ↑* |
+| HSE | 6 | 20 | control (incidents/PTW/CAPA/training hub), + **risk-assessments**, toolbox-talks | ~72% ↑ |
+| Assets | 6 | 16 | control (register/maintenance/inspections hub), depreciation, + **disposals** | ~68% ↑ |
+| Quality | 7 | 33 | control, + **inspection-requests / ncrs / snags**, itps, material-approvals | ~78% ↑ |
+| Site | 5 | 20 | control, + **daily-reports (+ labour)**, instructions | ~68% ↑ |
+
+*Engineering & Fleet depth figures corrected upward after verifying the existing tabbed hubs — no
+new build; the original ~60/~55% reflected a page-file miscount, not the real coverage.
 
 ## Closed since the last audit (verified this session, now on `main`)
 
@@ -62,35 +79,47 @@ CRM, procurement, inventory, HR-core) is reference-grade; the field is where the
 
 ### P1 — asset / field operations & HR
 
-4. **HSE — incident / PTW / risk-assessment / CAPA UIs.** Backend lifecycle exists (PTW close-out
-   shipped); UI only exposes control + toolbox-talks. Missing: incident report→investigate→CAPA,
-   PTW issue/close screen, risk-assessment register, training matrix.
-5. **Fleet — maintenance scheduling + fuel log UIs.** Domain has `maintenance`, `fuel-log`,
-   `telemetry`; UI has fines + salik only. Missing: PM schedule board, service history, fuel/
-   consumption, driver assignment.
-6. **Assets — lifecycle + inspection UIs (+ QR/barcode).** Domain has `asset-maintenance`,
-   `asset-inspection`, `asset-tag`, `asset-disposal`; UI has control + depreciation. Missing:
-   asset 360 lifecycle, condition/inspection capture, QR tag scan — important for ELV installed-base + AMC.
-7. **HR — payroll-run, leave management, appraisal UIs.** Rich domain (`payroll-run`, `leave`,
-   `appraisal`, `eosb`, `wps`) but no payroll-run operating screen (only print), no leave
-   request/approval UI, no appraisal cycle, no org chart.
+**Verification correction:** on inspection, the P1 modules were far more built than the file-count
+basis implied — each has a comprehensive tabbed control hub. Only the genuinely-missing registers
+(domain + API present, no UI) were built; the rest were already covered.
+
+4. **HSE.** `hse-control-client` (733 lines) already covered incidents/PTW/CAPA/training. The one
+   gap — **risk assessments (JSA)** — ✅ **SHIPPED 2026-08-02** (`/hse/risk-assessments`: hazard
+   L×S scoring, controls, residual band, draft→approved).
+5. **Fleet.** `fleet-control-client` (713 lines) already covered vehicles/fuel/maintenance/
+   telematics + fines + salik pages. Remaining item (driver assignment) has **no backend route** —
+   not a UI-only gap. **No slice needed.**
+6. **Assets.** `assets-control-client` already covered register/maintenance/inspections + depreciation.
+   The gap — **disposals** — ✅ **SHIPPED 2026-08-02** (`/assets/disposals`: sale/scrap/write-off →
+   gain/loss vs net book value). (QR-tag print endpoints exist; a print utility remains minor.)
+7. **HR.** `hr-control-client` (554 lines) already covered employees/leaves/payroll-run. The gap —
+   **appraisals** — ✅ **SHIPPED 2026-08-02** (`/hr/appraisals`: weighted competency scores → 0–100,
+   draft→submitted→acknowledged). (Org chart remains a nice-to-have.)
 
 ### P2 — commercial & platform
 
-8. **Subcontracts — progress-claim workflow + subcontractor portal.** `claim`, `variation`,
-   `back-charge` modelled; missing the claim certify→pay workflow UI and any external portal.
-9. **Contracts — authoring/templating + variation↔value automation.** No template-driven
-   contract authoring; variation approval doesn't auto-adjust contract value.
-10. **Analytics OS / report builder.** Per-module dashboards exist; the unified Phase-6
+8. **Subcontracts — progress claims.** ✅ **SHIPPED 2026-08-02** (`/subcontracts/claims`: IPC-style
+   cumulative work → period gross, retention withheld, net payable; certify→pay). *A subcontractor
+   self-service portal remains a separate, larger effort (see below).*
+9. **Contracts — authoring/templating + variation↔value automation.** ⬜ No template-driven
+   contract authoring; variation approval doesn't auto-adjust contract value. **Needs backend work**
+   (not a UI-only slice).
+10. **Analytics OS / report builder.** ⬜ Per-module dashboards exist; the unified Phase-6
     Analytics workspace + report builder is planned, not shipped.
-11. **Field/mobile surface.** No technician/site-staff mobile UI for the P0/P1 field flows above.
-12. **Master data management.** Items/materials catalog + cost/rate libraries are implied
+11. **Field/mobile surface.** ⬜ No technician/site-staff mobile UI for the P0/P1 field flows above.
+12. **Master data management.** ⬜ Items/materials catalog + cost/rate libraries are implied
     (market-intelligence exists) but not surfaced as a governed MDM.
+13. **Subcontractor portal.** ⬜ External self-service for claims/variations — new auth surface + backend.
 
-## Recommended build order
+## What's done vs what's left
 
-Tackle P0 top-down — each is a domain-complete aggregate needing only an operating UI + a few
-lifecycle routes, so they are high-value, low-risk slices (one module per PR, the established
-pattern). Suggested sequence: **Quality IR/NCR/snag → Site daily report → Engineering RFI/submittal**,
-then the P1 field/asset UIs. P2 (portal, Analytics OS, MDM) are larger platform efforts to schedule
-after the field cliff is closed.
+**Done (P0 + P1 + the UI-only P2 slice):** every delivery module that had a domain + API but no
+operating surface now has one — Quality (IR/NCR/snag), Site (daily reports + labour), HSE (JSA),
+HR (appraisals), Assets (disposals), Subcontracts (progress claims). Combined with the already-built
+hubs (Engineering, Fleet, and the incident/PTW/maintenance/leave/payroll tabs), the **delivery-side
+operating-UI cliff is effectively closed**.
+
+**Left (items 9–13):** all require backend work or are net-new platform surfaces — contract
+authoring + variation↔value automation, Analytics OS / report builder, a field/mobile app, governed
+MDM, and a subcontractor portal. These are proper projects, not one-PR UI slices, and should be
+scoped and sequenced deliberately rather than pattern-matched.

@@ -62,18 +62,22 @@ CRM, procurement, inventory, HR-core) is reference-grade; the field is where the
 
 ### P1 — asset / field operations & HR
 
-4. **HSE — incident / PTW / risk-assessment / CAPA UIs.** Backend lifecycle exists (PTW close-out
-   shipped); UI only exposes control + toolbox-talks. Missing: incident report→investigate→CAPA,
-   PTW issue/close screen, risk-assessment register, training matrix.
-5. **Fleet — maintenance scheduling + fuel log UIs.** Domain has `maintenance`, `fuel-log`,
-   `telemetry`; UI has fines + salik only. Missing: PM schedule board, service history, fuel/
-   consumption, driver assignment.
-6. **Assets — lifecycle + inspection UIs (+ QR/barcode).** Domain has `asset-maintenance`,
-   `asset-inspection`, `asset-tag`, `asset-disposal`; UI has control + depreciation. Missing:
-   asset 360 lifecycle, condition/inspection capture, QR tag scan — important for ELV installed-base + AMC.
-7. **HR — payroll-run, leave management, appraisal UIs.** Rich domain (`payroll-run`, `leave`,
-   `appraisal`, `eosb`, `wps`) but no payroll-run operating screen (only print), no leave
-   request/approval UI, no appraisal cycle, no org chart.
+**Verification correction:** on inspection, the P1 modules were far more built than the file-count
+basis implied — each has a comprehensive tabbed control hub. Only the genuinely-missing registers
+(domain + API present, no UI) were built; the rest were already covered.
+
+4. **HSE.** `hse-control-client` (733 lines) already covered incidents/PTW/CAPA/training. The one
+   gap — **risk assessments (JSA)** — ✅ **SHIPPED 2026-08-02** (`/hse/risk-assessments`: hazard
+   L×S scoring, controls, residual band, draft→approved).
+5. **Fleet.** `fleet-control-client` (713 lines) already covered vehicles/fuel/maintenance/
+   telematics + fines + salik pages. Remaining item (driver assignment) has **no backend route** —
+   not a UI-only gap. **No slice needed.**
+6. **Assets.** `assets-control-client` already covered register/maintenance/inspections + depreciation.
+   The gap — **disposals** — ✅ **SHIPPED 2026-08-02** (`/assets/disposals`: sale/scrap/write-off →
+   gain/loss vs net book value). (QR-tag print endpoints exist; a print utility remains minor.)
+7. **HR.** `hr-control-client` (554 lines) already covered employees/leaves/payroll-run. The gap —
+   **appraisals** — ✅ **SHIPPED 2026-08-02** (`/hr/appraisals`: weighted competency scores → 0–100,
+   draft→submitted→acknowledged). (Org chart remains a nice-to-have.)
 
 ### P2 — commercial & platform
 

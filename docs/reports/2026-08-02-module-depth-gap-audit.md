@@ -47,19 +47,18 @@ CRM, procurement, inventory, HR-core) is reference-grade; the field is where the
 
 ### P0 — core ELV field execution & QA (highest value)
 
-1. **Quality — IR / NCR / snag operating UIs.** Domain has `inspection-request`, `ncr`, `snag`,
-   `calibration`, `audit-schedule` and 33 routes, but only `control`/`itps`/`material-approvals`
-   pages exist. Missing: inspection-request raise→inspect→close workflow UI, NCR register +
-   disposition, snag list + close-out, calibration due register. *This is the construction QA
-   compliance backbone.*
-2. **Site — daily site report + labour/plant returns.** Domain has `daily-report`,
-   `labour-allocation`, `material-consumption`, `delay-log` but only `control`/`instructions`
-   pages. Missing: the foreman's daily diary (manpower, plant, weather, progress, photos) —
-   the field's most-used tool and the feed for project progress.
-3. **Engineering — RFI / submittal / drawing registers.** 8 aggregates
-   (`rfi`, `submittal`, `drawing`, `design-change`, `technical-query`, `bim-model`,
-   `engineering-document`) and 37 routes behind a **single page**. Missing: RFI log,
-   submittal register with review cycle, drawing/transmittal register. *Design-coordination backbone.*
+1. **Quality — IR / NCR / snag operating UIs.** ✅ **SHIPPED 2026-08-02.** Added
+   `/quality/inspection-requests`, `/quality/ncrs`, `/quality/snags` on the existing domain+API
+   (no backend change). Full lifecycle UIs (IR approve/reject, NCR raised→corrected→closed, snag
+   open→resolved→closed) + nav. *Construction QA compliance backbone now operable.*
+2. **Site — daily site report + labour/plant returns.** ✅ **SHIPPED 2026-08-02.** Added
+   `/site/daily-reports` — the foreman's daily diary (work, manpower, plant → draft→submit) plus
+   the labour return by trade with man-hour roll-up. The field's most-used tool now has a surface.
+3. **Engineering — RFI / submittal / drawing registers.** ✅ **ALREADY COMPLETE (audit
+   correction).** The "single page" is a 1,853-line tabbed hub (`engineering-client.tsx`) covering
+   all 8 aggregates — drawings, RFIs, submittals, design-changes, documents, technical-queries,
+   BIM — with create + lifecycle actions. The gap register had counted page *files*, not the tabs
+   inside; verified working E2E (RFI open→answered). No build needed. *Not a gap.*
 
 ### P1 — asset / field operations & HR
 

@@ -10,36 +10,53 @@ import { McpServerService } from './mcp-server.service';
 import { AiPlatformService } from './ai-platform.service';
 import { AiGuardrailsService } from './ai-guardrails.service';
 import { VectorStoreService } from './vector-store.service';
+import { AgentMetricsService } from './agent-metrics.service';
+import { AgentTracerService } from './agent-tracer.service';
+import { PolicyEngineService } from './policy-engine.service';
+import { KnowledgeProviderService } from './knowledge-provider.service';
+import { ConnectorFrameworkService } from './connector-framework.service';
+import { AgentRuntimeService } from './agent-runtime.service';
+import { SkillPackageService } from './skill-package.service';
+import { MemoryManagerService } from './memory-manager.service';
+import { ModelRouterService } from './model-router.service';
+import { AgentCollaborationService } from './agent-collaboration.service';
+import { AgentWorkflowEngine } from './agent-workflow.engine';
+import { AgentMarketplaceService } from './agent-marketplace.service';
+import { DigitalTwinService } from './digital-twin.service';
+import { CapabilityGuardService } from './capability-guard.service';
+import { DocumentIngestionService } from './document-ingestion.service';
+import { AgentPilotSuiteService } from './agent-pilot-suite';
+import { AgentEvaluationService } from './agent-evaluation.service';
+import { RevenueAgentsService } from './revenue-agents.service';
+import { ManagementAgentsService } from './management-agents.service';
+import { SaasCreditBillingService } from './saas-credit-billing.service';
 
 /**
  * The Intelligence layer (L3) — read-only consumers of the event spine on the kernel AI
  * substrate. Observes + proposes (insights), never writes another module's tables.
- *
- * Includes:
- * - Pipeline funnel projection (deal-chain read-model)
- * - Executive AI briefing (insight.service)
- * - IEC Pricing Engine (pricing.service)
- * - Autonomy Engine (autonomy.service)
- * 
- * Phase 6.5 — Next-Gen Intelligence:
- * - AI Context Engine & Digital Twin Projections (ai-context.engine)
- * - Process Mining & Cashflow Forecasting (process-mining.service)
- * - Semantic API / MCP Server (mcp-server.service)
- * - AI Platform: Prompt, Tool, Agent Registries (ai-platform.service)
- * - AI Safety & Guardrails (ai-guardrails.service)
- * - Vector Store & Semantic RAG Search (vector-store.service)
  */
 @Module({
   imports: [CoreModule],
   providers: [
     PipelineProjection, InsightService, PricingService, AutonomyService,
     AiContextEngine, ProcessMiningService, McpServerService, AiPlatformService, AiGuardrailsService,
-    VectorStoreService,
+    VectorStoreService, AgentMetricsService, AgentTracerService, PolicyEngineService,
+    KnowledgeProviderService, ConnectorFrameworkService,
+    AgentRuntimeService, SkillPackageService, MemoryManagerService, ModelRouterService,
+    AgentCollaborationService, AgentWorkflowEngine, AgentMarketplaceService, DigitalTwinService,
+    CapabilityGuardService, DocumentIngestionService, AgentPilotSuiteService,
+    AgentEvaluationService, RevenueAgentsService, ManagementAgentsService, SaasCreditBillingService,
   ],
   exports: [
     PipelineProjection, InsightService, PricingService, AutonomyService,
     AiContextEngine, ProcessMiningService, McpServerService, AiPlatformService, AiGuardrailsService,
-    VectorStoreService,
+    VectorStoreService, AgentMetricsService, AgentTracerService, PolicyEngineService,
+    KnowledgeProviderService, ConnectorFrameworkService,
+    AgentRuntimeService, SkillPackageService, MemoryManagerService, ModelRouterService,
+    AgentCollaborationService, AgentWorkflowEngine, AgentMarketplaceService, DigitalTwinService,
+    CapabilityGuardService, DocumentIngestionService, AgentPilotSuiteService,
+    AgentEvaluationService, RevenueAgentsService, ManagementAgentsService, SaasCreditBillingService,
   ],
 })
 export class IntelligenceModule {}
+

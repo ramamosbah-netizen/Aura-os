@@ -38,10 +38,10 @@ export interface AutonomyProposal {
 }
 
 /** Safety threshold: proposals valued above this amount require human confirmation. */
-const OPERATE_VALUE_LIMIT = 10_000;
+let OPERATE_VALUE_LIMIT = 10_000;
 
 /** Safety threshold: budget variance above this % forces Assist mode. */
-const OPERATE_VARIANCE_LIMIT = 5;
+let OPERATE_VARIANCE_LIMIT = 5;
 
 export const AUTONOMY_PROPOSED_EVENT = 'intelligence.autonomy.proposed';
 export const AUTONOMY_EXECUTED_EVENT = 'intelligence.autonomy.executed';
@@ -68,6 +68,17 @@ export class AutonomyService {
     @Inject(PG_POOL) private readonly pool: Pool,
     @Inject(EVENT_STORE) private readonly events: EventStore,
   ) {}
+
+  getThresholds(): { valueLimit: number; varianceLimit: number } {
+    return { valueLimit: OPERATE_VALUE_LIMIT, varianceLimit: OPERATE_VARIANCE_LIMIT };
+  }
+
+  setThresholds(valueLimit?: number, varianceLimit?: number): { valueLimit: number; varianceLimit: number } {
+    if (valueLimit !== undefined && valueLimit >= 0) OPERATE_VALUE_LIMIT = valueLimit;
+    if (varianceLimit !== undefined && varianceLimit >= 0) OPERATE_VARIANCE_LIMIT = varianceLimit;
+    this.logger.log(`Autonomy thresholds updated: valueLimit=$${OPERATE_VALUE_LIMIT}, varianceLimit=${OPERATE_VARIANCE_LIMIT}%`);
+    return this.getThresholds();
+  }
 
   /**
    * Create a new autonomy proposal. The mode is auto-determined from the value and

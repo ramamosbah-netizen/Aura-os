@@ -129,6 +129,7 @@ describe('Next-Gen Intelligence Platform — Phase 6.5', () => {
         key: 'procurement-agent', label: 'Procurement Agent',
         description: 'Automates PO validation', promptKey: 'po-prompt',
         toolKeys: ['check-credit'], model: 'gemini-2.0-flash', maxIterations: 3, enabled: true,
+        grantedCapabilities: ['procurement.po.read'],
       });
 
       const result = await svc.runAgent('procurement-agent', { supplier: 'Steel Corp' });

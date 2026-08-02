@@ -164,6 +164,7 @@ export const NAV: NavGroup[] = [
           { label: 'Salik (Tolls)', href: '/fleet/salik', glyph: '🛣', desc: 'Dubai road tolls — record, allocate to cost owner, dispute' },
           { label: 'Assets & Equipment', href: '/assets/control', glyph: '🔧', desc: 'Asset register, calibration, inspections, & warranties' },
           { label: 'Depreciation', href: '/assets/depreciation', glyph: '📉', desc: 'Asset depreciation schedule & net book value' },
+          { label: 'Disposals', href: '/assets/disposals', glyph: '🗑', desc: 'End-of-life — sale/scrap/write-off with gain/loss vs net book value' },
         ],
       },
       {

@@ -132,6 +132,7 @@ export const NAV: NavGroup[] = [
           { label: 'Snagging', href: '/quality/snags', glyph: '📌', desc: 'Punch list — pre-handover defects, open → resolved → closed' },
           { label: 'Inspection & Test Plans', href: '/quality/itps', glyph: '☑', desc: 'ITPs — hold/witness points & sign-off' },
           { label: 'Material Approvals', href: '/quality/material-approvals', glyph: '🧱', desc: 'MAR — material submittals & consultant approval' },
+          { label: 'Calibrations', href: '/quality/calibrations', glyph: '🎛', desc: 'Test-equipment calibration register — due-soon / expired watch-list' },
         ],
       },
       {

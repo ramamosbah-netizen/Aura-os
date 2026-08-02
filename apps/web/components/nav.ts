@@ -126,6 +126,9 @@ export const NAV: NavGroup[] = [
         title: 'Quality', glyph: '✓',
         items: [
           { label: 'Quality Control', href: '/quality/control', glyph: '✓', desc: 'Non-conformance reports, inspections, & snags' },
+          { label: 'Inspection Requests', href: '/quality/inspection-requests', glyph: '🔍', desc: 'IRs — call the consultant for hold/witness inspection; approve or reject' },
+          { label: 'Non-Conformance', href: '/quality/ncrs', glyph: '⚠️', desc: 'NCR register — raise → corrected → closed with root cause' },
+          { label: 'Snagging', href: '/quality/snags', glyph: '📌', desc: 'Punch list — pre-handover defects, open → resolved → closed' },
           { label: 'Inspection & Test Plans', href: '/quality/itps', glyph: '☑', desc: 'ITPs — hold/witness points & sign-off' },
           { label: 'Material Approvals', href: '/quality/material-approvals', glyph: '🧱', desc: 'MAR — material submittals & consultant approval' },
         ],

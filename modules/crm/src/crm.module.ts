@@ -63,6 +63,10 @@ import { PostgresAccountRelationshipStore } from './postgres-account-relationshi
 import { AccountRelationshipService } from './account-relationship.service';
 
 import { CRM_INSTALLED_BASE_STORE } from './installed-base-store';
+import { CAMPAIGN_STORE } from './campaign-store';
+import { InMemoryCampaignStore } from './in-memory-campaign-store';
+import { PostgresCampaignStore } from './postgres-campaign-store';
+import { CampaignService } from './campaign.service';
 import { InMemoryInstalledBaseStore } from './in-memory-installed-base-store';
 import { PostgresInstalledBaseStore } from './postgres-installed-base-store';
 import { InstalledBaseService } from './installed-base.service';
@@ -163,9 +167,16 @@ import { LeadConversionService } from './lead-conversion.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresInstalledBaseStore(pool) : new InMemoryInstalledBaseStore(),
     },
+    {
+      provide: CAMPAIGN_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCampaignStore(pool) : new InMemoryCampaignStore(),
+    },
     AccountService,
     AccountRelationshipService,
     InstalledBaseService,
+    CampaignService,
     LeadService,
     OpportunityService,
     QuotationService,
@@ -177,6 +188,6 @@ import { LeadConversionService } from './lead-conversion.service';
     PreAwardService,
     LeadConversionService,
   ],
-  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
+  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
 })
 export class CrmModule {}

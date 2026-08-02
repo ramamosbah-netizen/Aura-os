@@ -38,6 +38,8 @@ interface PermitToWork {
   status: 'draft' | 'requested' | 'approved' | 'expired' | 'closed';
   approvedBy: string | null;
   approvedAt: string | null;
+  closedBy: string | null;
+  closedAt: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

@@ -12,7 +12,7 @@ const OTHER = 'user-other';
 const activity = (over: Partial<Activity> = {}): Activity => ({
   id: 'act-1', tenantId: 't1', companyId: null, type: 'task', subject: 'Call back', notes: null,
   relatedType: 'opportunity', relatedId: 'opp-1', relatedName: 'Deal', dueDate: TODAY,
-  status: 'open', startedAt: null, completedAt: null, outcome: null, assigneeId: ME,
+  status: 'open', startedAt: null, completedAt: null, outcome: null, direction: null, counterparty: null, assigneeId: ME,
   createdAt: '2026-07-15T00:00:00Z', createdBy: ME, ...over,
 });
 

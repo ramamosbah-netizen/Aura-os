@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { deriveSellUnitPrice, computeQuotationPricing } from './quotation-pricing';
+import { deriveSellUnitPrice, computeQuotationPricing, computeEstimationPricing } from './quotation-pricing';
 import { buildQuotationLine } from './quotation';
+import { emptyEstimationInput, estimateLine, type EstimationLineInput } from '@aura/shared';
 
 describe('deriveSellUnitPrice — the authoring direction (cost + target margin → sell)', () => {
   it('derives the price that yields the target margin on the sell', () => {
@@ -39,6 +40,41 @@ describe('computeQuotationPricing — all-in unit cost drives the authored sell'
     expect(sheet.lines[0].unitCostTotal).toBe(100);
     // At a 25% target, that unit cost authors a 133.33 sell.
     expect(deriveSellUnitPrice(sheet.lines[0].unitCostTotal, 25)).toBeCloseTo(133.33, 2);
+  });
+});
+
+describe('computeEstimationPricing — the read view reflects the CANONICAL estimateLine engine', () => {
+  it('projects the estimation build-up into the sheet shape with real cost (not the empty legacy field)', () => {
+    const est: EstimationLineInput = {
+      ...emptyEstimationInput(),
+      description: 'Camera install',
+      quantity: 10,
+      materialUnitCost: 100,
+      labour: { hoursPerUnit: 2, crewSize: 2, hourlyRate: 50 },
+      overheadPercent: 10,
+      targetMarginPercent: 25,
+    };
+    const r = estimateLine(est);
+    // The quote line is generated from the engine's derived sell price.
+    const line = buildQuotationLine({ description: 'Camera install', quantity: 10, unitPrice: r.unitSellPrice, vatRate: 5 });
+
+    const sheet = computeEstimationPricing([line], [est]);
+    // Real cost surfaces — the whole point of the fix.
+    expect(sheet.lines[0].costTotal).toBe(r.totalCost);
+    expect(sheet.lines[0].unitCostTotal).toBe(r.unitCost);
+    expect(sheet.totalCost).toBe(r.totalCost);
+    // Labour lands in the technician row; loadings fold into the single indirect bucket.
+    expect(sheet.lines[0].labourTotal).toBe(r.labourCost);
+    expect(sheet.lines[0].indirectCost).toBe(r.overheadCost + r.riskCost + r.warrantyCost + r.contingencyCost);
+    // Margin is honest against the quoted price ≈ the target margin.
+    expect(sheet.lines[0].marginPercent).toBeCloseTo(25, 0);
+  });
+
+  it('surfaces the quoted line with cost unknown when no build-up is aligned', () => {
+    const line = buildQuotationLine({ description: 'Orphan', quantity: 1, unitPrice: 500, vatRate: 5 });
+    const sheet = computeEstimationPricing([line], []);
+    expect(sheet.lines[0].costTotal).toBe(0);
+    expect(sheet.lines[0].sellTotal).toBe(500);
   });
 });
 

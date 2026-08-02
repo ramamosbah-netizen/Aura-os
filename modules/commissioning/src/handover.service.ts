@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EVENT_STORE, type EventStore } from '@aura/core';
+import { makeEvent } from '@aura/shared';
 import { COMMISSIONING_STORE, type CommissioningStore } from './store.interface';
 import {
   type HandoverPackage,
@@ -24,7 +26,10 @@ export type HandoverView = HandoverPackage & {
 export class HandoverService {
   private readonly logger = new Logger('HandoverService');
 
-  constructor(@Inject(COMMISSIONING_STORE) private readonly store: CommissioningStore) {}
+  constructor(
+    @Inject(COMMISSIONING_STORE) private readonly store: CommissioningStore,
+    @Inject(EVENT_STORE) private readonly events: EventStore,
+  ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
     const systems = await this.store.list(pkg.tenantId, pkg.projectId);
@@ -79,6 +84,25 @@ export class HandoverService {
   ): Promise<HandoverView> {
     const next = accept(await this.mustFind(id, tenantId), patch);
     await this.store.saveHandover(next);
+    // Client acceptance closes delivery and starts the warranty/DLP clock — the trigger for AMC.
+    // A reactor turns this into a service contract (deliver → maintain).
+    await this.events.append([
+      makeEvent({
+        type: 'commissioning.handover.accepted',
+        tenantId: next.tenantId,
+        companyId: next.companyId,
+        actorId: next.createdBy,
+        aggregateType: 'commissioning.handover',
+        aggregateId: next.id,
+        payload: {
+          projectId: next.projectId,
+          projectName: next.projectName,
+          clientRepresentative: next.clientRepresentative,
+          warrantyStartDate: next.warrantyStartDate,
+          warrantyMonths: next.warrantyMonths,
+        },
+      }),
+    ]);
     this.logger.log(`[Handover] ${next.code} accepted by ${patch.clientRepresentative} — warranty starts ${next.warrantyStartDate}`);
     return this.withStats(next);
   }

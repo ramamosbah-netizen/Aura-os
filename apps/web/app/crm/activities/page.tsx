@@ -16,6 +16,8 @@ interface Activity {
   status: string;
   completedAt: string | null;
   outcome: string | null;
+  direction: 'inbound' | 'outbound' | null;
+  counterparty: string | null;
   assigneeId: string | null;
   createdAt: string;
 }

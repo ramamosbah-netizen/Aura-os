@@ -28,6 +28,7 @@ import {
 export const HSE_EVENT = {
   incidentReported: 'hse.incident.reported',
   ptwIssued: 'hse.ptw.issued',
+  ptwClosed: 'hse.ptw.closed',
   capaRaised: 'hse.capa.raised',
   toolboxTalkRecorded: 'hse.toolbox_talk.recorded',
 };
@@ -176,6 +177,47 @@ export class HseService {
     });
 
     this.logger.log(`Permit approved & issued: ${permit.permitType} (${permit.id})`);
+    return permit;
+  }
+
+  /**
+   * Close a permit when the work is finished and the area is made safe — the auditable end of a
+   * high-risk activity. Only an approved (issued) permit can be closed; a permit left open past its
+   * window is a real safety-and-compliance liability, so this is the step that shuts it.
+   */
+  async closePermit(tenantId: Id, actorId: Id | null, id: Id): Promise<PermitToWork> {
+    const permit = await this.ptwStore.findById(id, tenantId);
+    if (!permit) throw new Error(`Permit with ID ${id} not found`);
+    if (permit.status === 'closed') throw new Error('permit is already closed');
+    if (permit.status !== 'approved') throw new Error('only an approved permit can be closed');
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (permit.companyId) orgPath.push({ level: 'company', id: permit.companyId });
+      this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath });
+    }
+
+    permit.status = 'closed';
+    permit.closedBy = actorId;
+    permit.closedAt = new Date().toISOString();
+    permit.updatedAt = new Date().toISOString();
+
+    const event = makeEvent({
+      type: HSE_EVENT.ptwClosed,
+      tenantId: permit.tenantId,
+      companyId: permit.companyId,
+      actorId,
+      aggregateType: 'hse.ptw',
+      aggregateId: permit.id,
+      payload: { permitType: permit.permitType, projectId: permit.projectId },
+    });
+
+    await this.tx.run(async (handle) => {
+      await this.ptwStore.save(permit, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(`Permit closed: ${permit.permitType} (${permit.id})`);
     return permit;
   }
 

@@ -1,3 +1,4 @@
+import { type EstimationLineInput, estimateLine } from '@aura/shared';
 import type { QuotationLine, QuotationStatus } from './quotation';
 
 // Quotation pricing sheet — the INTERNAL rate build-up behind a client quotation
@@ -203,6 +204,100 @@ export function deriveSellUnitPrice(unitCostAllIn: number, targetMarginPercent: 
   return round2(m <= 0 ? cost : cost / (1 - m));
 }
 
+function rollup(rows: QuotationPricingLine[]): QuotationPricingSheet {
+  const sum = (pick: (r: QuotationPricingLine) => number): number => round2(rows.reduce((s, r) => s + pick(r), 0));
+  const totalCost = sum((r) => r.costTotal);
+  const totalSell = sum((r) => r.sellTotal);
+  const profit = round2(totalSell - totalCost);
+  return {
+    lines: rows,
+    totalSupply: sum((r) => r.supplyTotal),
+    totalWastage: sum((r) => r.wastageTotal),
+    totalAccessories: sum((r) => r.accessories),
+    totalMaterial: sum((r) => r.materialTotal),
+    totalLabour: sum((r) => r.labourTotal),
+    totalTransport: sum((r) => r.transport),
+    totalEquipment: sum((r) => r.equipmentRent),
+    totalSubcontract: sum((r) => r.subcontract),
+    totalOtherDirect: sum((r) => r.otherDirect),
+    totalDirect: sum((r) => r.directCost),
+    totalIndirect: sum((r) => r.indirectCost),
+    totalCost,
+    totalSell,
+    profit,
+    marginPercent: totalSell > 0 ? round2((profit / totalSell) * 100) : null,
+    markupPercent: totalCost > 0 ? round2((profit / totalCost) * 100) : null,
+  };
+}
+
+/**
+ * Project the CANONICAL Estimation Engine (`@aura/shared` `estimateLine`) into the rate-build-up
+ * sheet shape the pricing view + AI advice already consume. This is the unification seam: quotes are
+ * now authored through the PricingSheet aggregate (which computes with `estimateLine`), so the read
+ * view must reflect the SAME engine — not the legacy `computeQuotationPricing` over the abandoned
+ * `pricing` field, which read zero cost for sheet-authored quotes and broke every margin/loss finding.
+ *
+ * The estimation engine's single productivity-driven labour block maps to the technician row; its
+ * overhead/risk/warranty/contingency loadings sum into the sheet's one `indirect` bucket (the % is
+ * derived back from direct cost so the column still reads). The quoted sell price is the line's own
+ * `unitPrice`, so profit is honest about what was actually offered.
+ */
+export function computeEstimationPricing(lines: QuotationLine[], estimation: EstimationLineInput[]): QuotationPricingSheet {
+  const rows: QuotationPricingLine[] = lines.map((l, i) => {
+    const input = estimation[i];
+    if (!input) {
+      // No aligned build-up — surface the quoted line with cost unknown rather than a phantom number.
+      const sellTotal = l.lineNet;
+      return {
+        description: l.description, quantity: l.quantity,
+        supplyUnitPrice: 0, supplyTotal: 0, wastagePercent: 0, wastageTotal: 0, accessories: 0, materialTotal: 0,
+        technician: { count: 0, hours: 0, rate: 0, manHours: 0, total: 0 },
+        engineer: { count: 0, hours: 0, rate: 0, manHours: 0, total: 0 },
+        projectManager: { count: 0, hours: 0, rate: 0, manHours: 0, total: 0 },
+        labourTotal: 0, transport: 0, equipmentRent: 0, subcontract: 0, otherDirect: 0,
+        directCost: 0, indirectPercent: 0, indirectCost: 0, costTotal: 0, unitCostTotal: 0,
+        unitPrice: l.unitPrice, sellTotal, profit: round2(sellTotal), marginPercent: sellTotal > 0 ? 100 : null, markupPercent: null,
+      };
+    }
+    const r = estimateLine(input);
+    const supplyTotal = round2(num(input.materialUnitCost) * r.quantity);
+    const wastageTotal = round2(r.materialCost - supplyTotal);
+    const accessories = r.consumablesCost;
+    const materialTotal = round2(supplyTotal + wastageTotal + accessories);
+    const technician: ManpowerLine = {
+      count: Math.max(1, Math.floor(num(input.labour?.crewSize) || 1)),
+      hours: num(input.labour?.hoursPerUnit) * r.quantity,
+      rate: num(input.labour?.hourlyRate),
+      manHours: r.labourHours,
+      total: r.labourCost,
+    };
+    const zero: ManpowerLine = { count: 0, hours: 0, rate: 0, manHours: 0, total: 0 };
+    const indirectCost = round2(r.overheadCost + r.riskCost + r.warrantyCost + r.contingencyCost);
+    const sellTotal = l.lineNet;
+    const profit = round2(sellTotal - r.totalCost);
+    return {
+      description: input.description || l.description,
+      quantity: r.quantity,
+      supplyUnitPrice: num(input.materialUnitCost),
+      supplyTotal, wastagePercent: num(input.wastagePercent), wastageTotal, accessories, materialTotal,
+      technician, engineer: zero, projectManager: zero,
+      labourTotal: r.labourCost,
+      transport: 0, equipmentRent: r.equipmentCost, subcontract: r.subcontractCost, otherDirect: 0,
+      directCost: r.directCost,
+      indirectPercent: r.directCost > 0 ? round2((indirectCost / r.directCost) * 100) : 0,
+      indirectCost,
+      costTotal: r.totalCost,
+      unitCostTotal: r.unitCost,
+      unitPrice: l.unitPrice,
+      sellTotal,
+      profit,
+      marginPercent: sellTotal > 0 ? round2((profit / sellTotal) * 100) : null,
+      markupPercent: r.totalCost > 0 ? round2((profit / r.totalCost) * 100) : null,
+    };
+  });
+  return rollup(rows);
+}
+
 /** Compile the full sheet from the quote lines + their build-ups. */
 export function computeQuotationPricing(lines: QuotationLine[], input?: unknown): QuotationPricingSheet {
   const buildups = normalizePricingInput(lines.length, input);
@@ -257,28 +352,5 @@ export function computeQuotationPricing(lines: QuotationLine[], input?: unknown)
     };
   });
 
-  const sum = (pick: (r: QuotationPricingLine) => number): number => round2(rows.reduce((s, r) => s + pick(r), 0));
-  const totalCost = sum((r) => r.costTotal);
-  const totalSell = sum((r) => r.sellTotal);
-  const profit = round2(totalSell - totalCost);
-
-  return {
-    lines: rows,
-    totalSupply: sum((r) => r.supplyTotal),
-    totalWastage: sum((r) => r.wastageTotal),
-    totalAccessories: sum((r) => r.accessories),
-    totalMaterial: sum((r) => r.materialTotal),
-    totalLabour: sum((r) => r.labourTotal),
-    totalTransport: sum((r) => r.transport),
-    totalEquipment: sum((r) => r.equipmentRent),
-    totalSubcontract: sum((r) => r.subcontract),
-    totalOtherDirect: sum((r) => r.otherDirect),
-    totalDirect: sum((r) => r.directCost),
-    totalIndirect: sum((r) => r.indirectCost),
-    totalCost,
-    totalSell,
-    profit,
-    marginPercent: totalSell > 0 ? round2((profit / totalSell) * 100) : null,
-    markupPercent: totalCost > 0 ? round2((profit / totalCost) * 100) : null,
-  };
+  return rollup(rows);
 }

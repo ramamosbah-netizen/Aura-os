@@ -12,22 +12,24 @@ interface ScheduleTask {
 interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
 }
+interface Project { id: string; title: string }
 
 export default async function SchedulePage() {
-  const schedules = await getJson<ProjectSchedule[]>('/api/projects/schedules');
+  const [schedules, projects] = await Promise.all([
+    getJson<ProjectSchedule[]>('/api/projects/schedules'),
+    getJson<Project[]>('/api/projects/projects'),
+  ]);
   return (
     <div style={st.page}>
       <h1 style={st.h1}>Projects · Schedule (Gantt)</h1>
       <p style={st.sub}>
         Planned vs baseline vs actual per task, with duration-weighted % complete and finish
-        variance. Set a baseline to freeze the current plan and track slippage.
+        variance. Add tasks, then set a baseline to freeze the plan and track slippage.
       </p>
       {schedules === null ? (
         <p style={st.muted}>API offline.</p>
-      ) : schedules.length === 0 ? (
-        <p style={st.muted}>No schedules yet. POST tasks to /api/projects/schedules.</p>
       ) : (
-        <GanttClient schedules={schedules} />
+        <GanttClient schedules={schedules} projects={projects ?? []} />
       )}
     </div>
   );

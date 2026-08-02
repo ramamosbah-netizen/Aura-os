@@ -22,6 +22,8 @@ interface Activity {
   status: string;
   completedAt: string | null;
   outcome: string | null;
+  direction: 'inbound' | 'outbound' | null;
+  counterparty: string | null;
   assigneeId: string | null;
   createdAt: string;
 }
@@ -176,6 +178,11 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
               options: ALL_TYPES.map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
             },
             { name: 'subject', label: 'Subject', kind: 'text', required: true, placeholder: 'e.g. Follow up on QT-2026-001', span: 2 },
+            {
+              name: 'direction', label: 'Direction', kind: 'select', placeholder: '— (not a communication)',
+              options: [{ value: 'outbound', label: '→ Outbound (we reached out)' }, { value: 'inbound', label: '← Inbound (they reached us)' }],
+            },
+            { name: 'counterparty', label: 'With', kind: 'text', placeholder: 'e.g. john@acme.com / +971…' },
             { name: 'relatedId', label: 'Related to', kind: 'select', placeholder: 'Nothing linked', options: relatedOptions },
             { name: 'dueDate', label: 'Due date', kind: 'date' },
             { name: 'assigneeId', label: 'Assignee', kind: 'text', placeholder: 'e.g. u-sales' },
@@ -228,7 +235,15 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                 <tr style={!isLive(a.status) ? { opacity: 0.7 } : undefined}>
                   <td style={{ width: 90 }}><span style={st.typeTag}>{TYPE_GLYPH[a.type] ?? '·'} {a.type.replace(/_/g, ' ')}</span></td>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{a.subject}</div>
+                    <div style={{ fontWeight: 600 }}>
+                      {a.subject}
+                      {a.counterparty && (
+                        <span style={st.comms}>
+                          {a.direction === 'outbound' ? '→ to ' : a.direction === 'inbound' ? '← from ' : 'with '}
+                          {a.counterparty}
+                        </span>
+                      )}
+                    </div>
                     {a.notes && <div style={st.notes}>{a.notes}</div>}
                     {a.outcome && <div style={st.outcome}>→ {a.outcome}</div>}
                   </td>
@@ -327,6 +342,7 @@ const st = {
   groupHead: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, padding: '10px 12px 4px' } as CSSProperties,
   groupCount: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 7px', fontSize: 11, color: 'var(--muted)' } as CSSProperties,
   typeTag: { fontSize: 11.5, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', textTransform: 'capitalize' } as CSSProperties,
+  comms: { fontSize: 11.5, fontWeight: 500, color: 'var(--accent)', marginLeft: 8 } as CSSProperties,
   notes: { fontSize: 12, color: 'var(--muted)', marginTop: 2, maxWidth: 520, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   outcome: { fontSize: 12, color: 'var(--good)', marginTop: 3, fontWeight: 600 } as CSSProperties,
   smBtn: { padding: '4px 10px', fontSize: 12 } as CSSProperties,

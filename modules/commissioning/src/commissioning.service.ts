@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Page, PageParams } from '@aura/shared';
+import { type Page, type PageParams, makeEvent } from '@aura/shared';
+import { EVENT_STORE, type EventStore } from '@aura/core';
 import { COMMISSIONING_STORE, type CommissioningStore } from './store.interface';
 import {
   type CommissioningRecord,
@@ -20,7 +21,10 @@ import {
 export class CommissioningService {
   private readonly logger = new Logger('CommissioningService');
 
-  constructor(@Inject(COMMISSIONING_STORE) private readonly store: CommissioningStore) {}
+  constructor(
+    @Inject(COMMISSIONING_STORE) private readonly store: CommissioningStore,
+    @Inject(EVENT_STORE) private readonly events: EventStore,
+  ) {}
 
   async register(params: {
     tenantId: string;
@@ -71,6 +75,19 @@ export class CommissioningService {
     const rec = await this.mustFind(id, tenantId);
     const next = commission(rec, patch);
     await this.store.save(next);
+    // A commissioned system is a step toward project handover; a reactor watches for the last one
+    // on a project and opens the handover package (commission → handover).
+    await this.events.append([
+      makeEvent({
+        type: 'commissioning.record.commissioned',
+        tenantId: next.tenantId,
+        companyId: next.companyId,
+        actorId: next.createdBy,
+        aggregateType: 'commissioning.record',
+        aggregateId: next.id,
+        payload: { projectId: next.projectId, projectName: next.projectName, system: next.system },
+      }),
+    ]);
     this.logger.log(`[Commissioning] ${rec.code} commissioned by ${patch.commissionedBy}, witnessed by ${patch.witnessedBy}`);
     return next;
   }

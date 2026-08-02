@@ -139,6 +139,12 @@ export class HseController {
     return this.hseService.approvePermit(ctx.tenantId, ctx.actorId, id);
   }
 
+  @Put('ptws/:id/close')
+  closePermit(@Param('id') id: string): Promise<PermitToWork> {
+    const ctx = this.tenant.get();
+    return this.hseService.closePermit(ctx.tenantId, ctx.actorId, id);
+  }
+
   @Get('ptws')
   listPermits(): Promise<PermitToWork[]> {
     const ctx = this.tenant.get();

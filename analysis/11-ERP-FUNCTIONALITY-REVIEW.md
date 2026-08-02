@@ -42,7 +42,8 @@
 
 ### Projects — ~70% *(was ~65% — 2026-08-01 update)*
 - WBS/CBS, variations, schedules, cashflow forecasts, closeouts. Execution lifecycle + closeout→contract.completed reactor.
-- **2026-08-01 update — a real Delivery/PM Portfolio Cockpit shipped.** New `GET projects/projects/portfolio` composes **Earned-Value** (SPI/CPI, planned/earned/actual, cost & schedule variance) across all projects in one call; `/projects/dashboard` was upgraded from a status-count widget to a cockpit: portfolio KPIs (value, completion, portfolio SPI/CPI), an **at-risk callout** (active projects with SPI or CPI < 1), and a per-project health table. Verified against the live API (15 projects with EVM). Remaining PM gaps: an interactive Gantt (the `/projects/schedule` page exists but is basic) and resource loading.
+- **2026-08-01 update — a real Delivery/PM Portfolio Cockpit shipped.** New `GET projects/projects/portfolio` composes **Earned-Value** (SPI/CPI, planned/earned/actual, cost & schedule variance) across all projects in one call; `/projects/dashboard` was upgraded from a status-count widget to a cockpit: portfolio KPIs (value, completion, portfolio SPI/CPI), an **at-risk callout** (active projects with SPI or CPI < 1), and a per-project health table. Verified against the live API (15 projects with EVM).
+- **2026-08-01 update — the Gantt is now operable.** `/projects/schedule` already rendered planned/baseline/%-complete bars but was view-only (tasks had to be POSTed by hand); added a **"Start a schedule"** form (for projects without one) and a per-schedule **"Add task"** row + working **"Set baseline"**, over the existing schedule endpoints (new POST proxy). Verified E2E (save task → set baseline freezes it). Remaining PM gap: resource loading / critical-path.
 
 ### Tendering — ~70%
 - Lifecycle, BOQ (Excel import productionized), submissions, risk layer, register depth. Bid review + vendor comparison (T6) was the last piece. **Strong domain, 4 pages** — needs an estimator's workspace UI.
@@ -73,8 +74,9 @@
 ### Quality — ~50%
 - ITPs, material approvals, calibrations. **Missing:** inspection request (IR) workflow UI, NCR management, snag lists — core construction QA.
 
-### HSE — ~45%
-- Toolbox talks, incidents. **Missing:** permit-to-work, observation cards, audit/inspection UI, incident investigation workflow.
+### HSE — ~52% *(was ~45% — 2026-08-01 update)*
+- Toolbox talks, incidents, permits-to-work (request→approve), CAPA, risk assessments, safety training.
+- **2026-08-01 update — permit-to-work close-out added.** The PTW lifecycle was request→approve with no way to close; added `PUT ptws/:id/close` (approved→closed, records closedBy/closedAt, guarded so only an approved permit can close and a closed one can't re-close) + migration 0201 + a "Close permit" action in the HSE control UI. Verified E2E (request → 409-before-approve → approve → close → 409-already-closed). **Still missing:** observation cards, audit/inspection UI, incident-investigation workflow.
 
 ### Site — ~45%
 - Site instructions, delay logs. **Missing:** daily site reports, labor/plant returns, progress photos, site diary — the field foreman's daily tools.

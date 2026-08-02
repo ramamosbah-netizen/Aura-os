@@ -179,6 +179,7 @@ export const NAV: NavGroup[] = [
         title: 'Subcontracts', glyph: '▧',
         items: [
           { label: 'Subcontracts', href: '/subcontracts/subcontracts', glyph: '▧', desc: 'Subcontractor agreements & claims' },
+          { label: 'Progress Claims', href: '/subcontracts/claims', glyph: '🧾', desc: 'Subcontractor payment claims — period gross, retention & net; certify → pay' },
           { label: 'Variations', href: '/subcontracts/variations', glyph: '◑', desc: 'Subcontract additions/omissions & approval' },
           { label: 'Back-Charges', href: '/subcontracts/back-charges', glyph: '⊟', desc: 'Subcontractor contra-charges — recover costs from claims' },
         ],

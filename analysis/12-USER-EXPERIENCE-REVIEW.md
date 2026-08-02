@@ -35,7 +35,7 @@
 
 ### Project Manager — 6.5/10 *(was 5 — 2026-08-01)*
 - **Has:** project backend depth (WBS/CBS/variations/schedules/cashflow); Engineering RFI/submittal/TQ cockpit (built this session); and now a **Delivery Portfolio Cockpit** (`/projects/dashboard`) with earned-value health (portfolio + per-project SPI/CPI, at-risk callout, budget-vs-actual variance).
-- **Still missing:** an interactive Gantt and resource loading. The EVM "at a glance" gap is now closed; the schedule-visualisation gap remains.
+- **Still missing:** resource loading / critical-path. *(2026-08-01: the Gantt is now operable — add tasks + set baseline from the UI, planned/baseline/%-complete bars; EVM cockpit + schedule visualisation both in place.)*
 
 ### Engineer — 3/10
 - **Has:** 1 engineering page over 36 backend files.

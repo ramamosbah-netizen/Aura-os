@@ -138,6 +138,7 @@ export const NAV: NavGroup[] = [
         title: 'HSE', glyph: '🛡',
         items: [
           { label: 'HSE Control', href: '/hse/control', glyph: '🛡', desc: 'Safety incident logs, permits to work, & CAPA' },
+          { label: 'Risk Assessments', href: '/hse/risk-assessments', glyph: '⚠️', desc: 'JSA — hazard scoring (L×S), controls & residual risk; approve before work' },
           { label: 'Toolbox Talks', href: '/hse/toolbox-talks', glyph: '📋', desc: 'Daily safety briefings & attendance log' },
         ],
       },

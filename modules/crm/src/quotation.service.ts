@@ -15,7 +15,7 @@ import {
   buildQuotationLine,
   computeQuotationTotals,
 } from './domain/quotation';
-import { type QuotationPricingView, computeQuotationPricing } from './domain/quotation-pricing';
+import { type QuotationPricingView, computeQuotationPricing, computeEstimationPricing } from './domain/quotation-pricing';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
@@ -214,12 +214,20 @@ export class QuotationService {
     return distinct ? [...candidates].sort((a, b) => a.revision - b.revision) : [q];
   }
 
-  /** The internal rate build-up for this revision, plus whether it's frozen. */
+  /**
+   * The internal rate build-up for this revision, plus whether it's frozen. Sourced from the
+   * CANONICAL Estimation Engine when the quote was authored through the pricing sheet (`estimation`
+   * present) — the same engine the sheet computes with — so the view and the AI pricing advice read
+   * real cost. Only a legacy quote with no estimation falls back to the old `pricing` build-up.
+   */
   async getPricing(id: Id): Promise<QuotationPricingView> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
+    const sheet = q.estimation && q.estimation.length > 0
+      ? computeEstimationPricing(q.lines, q.estimation)
+      : computeQuotationPricing(q.lines, q.pricing);
     return {
-      ...computeQuotationPricing(q.lines, q.pricing),
+      ...sheet,
       locked: isPricingLocked(q),
       status: q.status,
       quoteNumber: q.quoteNumber,

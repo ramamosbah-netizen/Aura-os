@@ -535,6 +535,32 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             {contacts.length === 0 ? (
               <p style={{ color: 'var(--muted)', margin: 0, padding: '8px 0' }}>No contacts yet — add the people you deal with at this client.</p>
             ) : (
+              <>
+              {(() => {
+                // Influence map: the reports-to hierarchy of the buying unit. Roots = anyone whose
+                // manager isn't a contact here; children indent under them. Colored by relationship
+                // strength so weak spots near decision-makers are obvious.
+                const ids = new Set(contacts.map((c) => c.id));
+                const childrenOf = (pid: string | null) =>
+                  contacts.filter((c) => (c.reportsToId && ids.has(c.reportsToId) ? c.reportsToId : null) === pid);
+                const node = (c: Contact, depth: number) => (
+                  <div key={c.id} style={{ marginLeft: depth * 22 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 10px', margin: '3px 0', borderRadius: 8, border: '1px solid var(--border)', borderLeft: `3px solid ${c.relationshipStrength ? STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--border)' : 'var(--border)'}`, background: 'var(--panel-2)' }}>
+                      <span style={{ fontWeight: 600, fontSize: 12.5 }}>{c.isPrimary ? '★ ' : ''}{c.name}</span>
+                      {c.stakeholderRole ? <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>{STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole}</span> : null}
+                      {c.relationshipStrength ? <span style={{ fontSize: 10.5, color: STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--muted)' }}>● {STRENGTH_LABEL[c.relationshipStrength] ?? c.relationshipStrength}</span> : null}
+                    </div>
+                    {childrenOf(c.id).map((k) => node(k, depth + 1))}
+                  </div>
+                );
+                const roots = childrenOf(null);
+                return (
+                  <div style={{ marginBottom: 16, padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Influence map</div>
+                    {roots.map((c) => node(c, 0))}
+                  </div>
+                );
+              })()}
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead><tr>
@@ -612,6 +638,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         )}

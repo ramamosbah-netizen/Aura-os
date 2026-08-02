@@ -119,6 +119,7 @@ export const NAV: NavGroup[] = [
         title: 'Site', glyph: '▤',
         items: [
           { label: 'Site Control', href: '/site/control', glyph: '▤', desc: 'Site diaries, delay logs, & material consumption' },
+          { label: 'Daily Reports', href: '/site/daily-reports', glyph: '📓', desc: "Foreman's daily diary — work done, manpower & plant + labour returns by trade" },
           { label: 'Site Instructions', href: '/site/instructions', glyph: '✋', desc: 'Formal site instructions (SI) with cost/time flags' },
         ],
       },

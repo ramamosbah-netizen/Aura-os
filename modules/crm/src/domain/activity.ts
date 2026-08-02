@@ -26,6 +26,17 @@ export const ACTIVITY_TYPES: readonly ActivityType[] = [
  */
 export type ActivityStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
 
+/**
+ * Communication direction — who reached out. Only meaningful for the conversational types
+ * (call/email/whatsapp/meeting): it turns a bare "email" activity into a real communications log
+ * entry ("→ sent to" vs "← received from"). Null for tasks/notes and legacy rows.
+ */
+export type CommunicationDirection = 'inbound' | 'outbound';
+export const COMMUNICATION_DIRECTIONS: readonly CommunicationDirection[] = ['inbound', 'outbound'];
+/** The types that read as a two-party communication (as opposed to a to-do or a note). */
+export const COMMUNICATION_TYPES: readonly ActivityType[] = ['call', 'email', 'whatsapp', 'meeting', 'presentation', 'demo'];
+export const isCommunication = (type: string): boolean => (COMMUNICATION_TYPES as readonly string[]).includes(type);
+
 /** Statuses where the work is still LIVE — every "open work" read must use this, not `=== 'open'`,
  * or in-progress work silently vanishes from next-action projections and attention. */
 export const ACTIVITY_OPEN_STATUSES: readonly ActivityStatus[] = ['open', 'in_progress'];
@@ -92,6 +103,10 @@ export interface Activity {
   completedAt: string | null;
   /** What happened — captured when the activity is logged/completed (the outcome). */
   outcome: string | null;
+  /** Comms log: who initiated (only for communication types; null otherwise). */
+  direction: CommunicationDirection | null;
+  /** Comms log: the person/email/number on the other end of the communication. */
+  counterparty: string | null;
   assigneeId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -109,6 +124,8 @@ export interface NewActivity {
   dueDate?: string | null;
   status?: ActivityStatus;
   outcome?: string | null;
+  direction?: CommunicationDirection | null;
+  counterparty?: string | null;
   assigneeId?: Id | null;
   createdBy?: Id | null;
 }
@@ -129,6 +146,9 @@ export function makeActivity(input: NewActivity): Activity {
     startedAt: null,
     completedAt: null,
     outcome: input.outcome?.trim() || null,
+    // Direction only carries for communication types — a task has no "inbound/outbound".
+    direction: isCommunication(input.type) ? (input.direction ?? null) : null,
+    counterparty: input.counterparty?.trim() || null,
     assigneeId: input.assigneeId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

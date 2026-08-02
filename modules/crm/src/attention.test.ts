@@ -5,7 +5,7 @@ import type { Activity } from './domain/activity';
 const activity = (over: Partial<Activity> = {}): Activity => ({
   id: 'act-1', tenantId: 't1', companyId: null, type: 'call', subject: 'Intro call', notes: null,
   relatedType: 'lead', relatedId: 'lead-1', relatedName: 'Ali', dueDate: null,
-  status: 'open', startedAt: null, completedAt: null, outcome: null, assigneeId: 'u1',
+  status: 'open', startedAt: null, completedAt: null, outcome: null, direction: null, counterparty: null, assigneeId: 'u1',
   createdAt: '2026-07-01T00:00:00Z', createdBy: 'u1', ...over,
 });
 

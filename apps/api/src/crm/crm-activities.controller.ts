@@ -4,7 +4,8 @@ import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Activity, type ActivityType, type ActivityStatus, type ActivityRelatedType,
-  ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, ActivityService,
+  type CommunicationDirection,
+  ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, COMMUNICATION_DIRECTIONS, ActivityService,
 } from '@aura/crm';
 
 class CreateActivityDto {
@@ -23,6 +24,9 @@ class CreateActivityDto {
   @IsOptional() @IsString() assigneeId?: string;
   @IsOptional() @IsString() relatedName?: string;
   @IsOptional() @IsString() outcome?: string;
+  // Comms log — who initiated + the other party. Ignored by the domain for non-communication types.
+  @IsOptional() @IsIn(COMMUNICATION_DIRECTIONS as readonly string[]) direction?: CommunicationDirection;
+  @IsOptional() @IsString() counterparty?: string;
 }
 
 class FollowUpDto {
@@ -63,6 +67,8 @@ export class CrmActivitiesController {
       relatedName: dto.relatedName ?? null,
       dueDate: dto.dueDate ?? null,
       status: dto.status,
+      direction: dto.direction ?? null,
+      counterparty: dto.counterparty ?? null,
       assigneeId: dto.assigneeId ?? ctx.actorId,
       createdBy: ctx.actorId,
     });

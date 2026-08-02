@@ -19,13 +19,15 @@ interface Row {
   started_at: Date | string | null;
   completed_at: Date | string | null;
   outcome: string | null;
+  direction: string | null;
+  counterparty: string | null;
   assignee_id: string | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
-  'id, tenant_id, company_id, type, subject, notes, related_type, related_id, related_name, due_date, status, started_at, completed_at, outcome, assignee_id, created_by, created_at';
+  'id, tenant_id, company_id, type, subject, notes, related_type, related_id, related_name, due_date, status, started_at, completed_at, outcome, direction, counterparty, assignee_id, created_by, created_at';
 
 function rowToActivity(r: Row): Activity {
   return {
@@ -43,6 +45,8 @@ function rowToActivity(r: Row): Activity {
     startedAt: r.started_at instanceof Date ? r.started_at.toISOString() : (r.started_at ? String(r.started_at) : null),
     completedAt: r.completed_at instanceof Date ? r.completed_at.toISOString() : (r.completed_at ? String(r.completed_at) : null),
     outcome: r.outcome,
+    direction: r.direction as Activity['direction'],
+    counterparty: r.counterparty,
     assigneeId: r.assignee_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
@@ -55,12 +59,13 @@ export class PostgresActivityStore implements ActivityStore {
 
   async save(a: Activity): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_crm_activities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      `INSERT INTO public.aura_crm_activities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (id) DO UPDATE SET
          subject = EXCLUDED.subject, notes = EXCLUDED.notes, due_date = EXCLUDED.due_date,
          status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, outcome = EXCLUDED.outcome,
+         direction = EXCLUDED.direction, counterparty = EXCLUDED.counterparty,
          assignee_id = EXCLUDED.assignee_id`,
-      [a.id, a.tenantId, a.companyId, a.type, a.subject, a.notes, a.relatedType, a.relatedId, a.relatedName, a.dueDate, a.status, a.startedAt, a.completedAt, a.outcome, a.assigneeId, a.createdBy, a.createdAt],
+      [a.id, a.tenantId, a.companyId, a.type, a.subject, a.notes, a.relatedType, a.relatedId, a.relatedName, a.dueDate, a.status, a.startedAt, a.completedAt, a.outcome, a.direction, a.counterparty, a.assigneeId, a.createdBy, a.createdAt],
     );
   }
 

@@ -754,6 +754,30 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Plant strand: plant/equipment usage logged to a project cost line → ACTUAL = hours × rate ──
+    // No module touches the CBS directly. A coded, rated plant-usage record becomes an actual
+    // CostTransaction (source 'plant_usage'), with hours as the signed quantity — seeding both the
+    // Cost Ledger and the Quantity Ledger (plant-hours). Unrated/uncoded records post nothing.
+    this.bus.subscribe('site.plant.logged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const cost = Number(p.cost) || 0;
+      const hours = Number(p.hours) || 0;
+      if (!cbsNodeId || !projectId || cost <= 0) return;
+      try {
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'actual', amount: cost, quantity: hours, source: 'plant_usage',
+          sourceRef: `${(p.equipment as string) ?? 'Plant'} — ${hours}h`,
+          dimensions: { plantId: e.aggregateId, equipment: (p.equipment as string) ?? '' },
+        });
+        this.logger.log(`⚡ plant logged → posted actual ${cost} (${hours}h) on CBS ${cbsNodeId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post plant cost txn for CBS node ${cbsNodeId}: ${err}`);
+      }
+    });
+
     // ── Subcontract: certified retention-release claim → auto-draft AP invoice ──
     // A certified retention-release claim is the signal to pay the subcontractor the retention we
     // held back — a positive supplier (AP) invoice for the released amount, carrying the

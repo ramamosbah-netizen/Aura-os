@@ -9,6 +9,7 @@ import {
   type SiteInstruction,
   type LabourAllocation,
   type TradeManHours,
+  type PlantUsage,
   SiteService,
 } from '@aura/site';
 
@@ -263,5 +264,35 @@ export class SiteController {
   @Get('labour/by-trade/:projectId')
   labourByTrade(@Param('projectId') projectId: string): Promise<TradeManHours[]> {
     return this.siteService.labourByTrade(this.tenant.get().tenantId, projectId);
+  }
+
+  // ── Plant / equipment usage ─────────────────────────────────────────────────
+
+  @Post('plant')
+  createPlant(
+    @Body() dto: { projectId: string; projectName?: string; cbsNodeId?: string | null; date: string; equipment: string; hours: number; rate?: number; notes?: string },
+  ): Promise<PlantUsage> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.equipment?.trim()) throw new BadRequestException('equipment is required');
+    if (!dto?.date) throw new BadRequestException('date is required');
+    const ctx = this.tenant.get();
+    return this.siteService.createPlantUsage({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? undefined,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      cbsNodeId: dto.cbsNodeId ?? null,
+      date: dto.date,
+      equipment: dto.equipment,
+      hours: Number(dto.hours) || 0,
+      rate: dto.rate !== undefined ? Number(dto.rate) : undefined,
+      notes: dto.notes,
+      createdBy: ctx.actorId ?? undefined,
+    });
+  }
+
+  @Get('plant')
+  listPlant(): Promise<PlantUsage[]> {
+    return this.siteService.listPlantUsage(this.tenant.get().tenantId);
   }
 }

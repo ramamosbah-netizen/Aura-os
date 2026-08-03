@@ -5,8 +5,9 @@ import type { DelayLog } from './domain/delay-log';
 import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
 import type { LabourAllocation } from './domain/labour-allocation';
+import type { PlantUsage } from './domain/plant-usage';
 import { type Page, PageParams, makePage } from '@aura/shared';
-import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, DailyReportFilter } from './store.interface';
+import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, PlantUsageStore, DailyReportFilter } from './store.interface';
 
 export class PostgresLabourAllocationStore implements LabourAllocationStore {
   constructor(private readonly pool: Pool) {}
@@ -60,6 +61,62 @@ export class PostgresLabourAllocationStore implements LabourAllocationStore {
       labourCost: Number(row.labour_cost ?? 0),
       cbsNodeId: row.cbs_node_id ?? null,
       subcontractorName: row.subcontractor_name,
+      notes: row.notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    };
+  }
+}
+
+export class PostgresPlantUsageStore implements PlantUsageStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(u: PlantUsage, tx?: TxHandle): Promise<void> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_site_plant_usage (
+        id, tenant_id, company_id, project_id, project_name, cbs_node_id, date, equipment, hours, rate, cost, notes, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      on conflict (id) do update set
+        hours = excluded.hours, rate = excluded.rate, cost = excluded.cost,
+        notes = excluded.notes, cbs_node_id = excluded.cbs_node_id, updated_at = excluded.updated_at`,
+      [u.id, u.tenantId, u.companyId, u.projectId, u.projectName, u.cbsNodeId, u.date, u.equipment, u.hours, u.rate, u.cost, u.notes, u.createdBy, u.createdAt, u.updatedAt],
+    );
+  }
+
+  async findById(id: string, tenantId: string): Promise<PlantUsage | null> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_plant_usage where id = $1 and tenant_id = $2`, [id, tenantId]);
+    if (res.rowCount === 0) return null;
+    return this.mapUsage(res.rows[0]);
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<PlantUsage[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_plant_usage where project_id = $1 and tenant_id = $2 order by date desc`, [projectId, tenantId]);
+    return res.rows.map(this.mapUsage);
+  }
+
+  async findAll(tenantId: string): Promise<PlantUsage[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_plant_usage where tenant_id = $1 order by date desc`, [tenantId]);
+    return res.rows.map(this.mapUsage);
+  }
+
+  private mapUsage(row: any): PlantUsage {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      cbsNodeId: row.cbs_node_id ?? null,
+      date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
+      equipment: row.equipment,
+      hours: Number(row.hours),
+      rate: Number(row.rate ?? 0),
+      cost: Number(row.cost ?? 0),
       notes: row.notes,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),

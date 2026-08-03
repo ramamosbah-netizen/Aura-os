@@ -4,12 +4,20 @@ import type { DelayLog } from './domain/delay-log';
 import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
 import type { LabourAllocation } from './domain/labour-allocation';
+import type { PlantUsage } from './domain/plant-usage';
 
 export interface LabourAllocationStore {
   save(allocation: LabourAllocation, tx?: TxHandle): Promise<void>;
   findById(id: string, tenantId: string): Promise<LabourAllocation | null>;
   findByProject(projectId: string, tenantId: string): Promise<LabourAllocation[]>;
   findAll(tenantId: string): Promise<LabourAllocation[]>;
+}
+
+export interface PlantUsageStore {
+  save(usage: PlantUsage, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<PlantUsage | null>;
+  findByProject(projectId: string, tenantId: string): Promise<PlantUsage[]>;
+  findAll(tenantId: string): Promise<PlantUsage[]>;
 }
 
 import type { Page, PageParams } from '@aura/shared';

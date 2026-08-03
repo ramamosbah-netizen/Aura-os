@@ -8,6 +8,7 @@ import {
   MATERIAL_CONSUMPTION_STORE,
   SITE_INSTRUCTION_STORE,
   LABOUR_ALLOCATION_STORE,
+  PLANT_USAGE_STORE,
   SiteService,
 } from './site.service';
 
@@ -17,6 +18,7 @@ import {
   InMemoryMaterialConsumptionStore,
   InMemorySiteInstructionStore,
   InMemoryLabourAllocationStore,
+  InMemoryPlantUsageStore,
 } from './in-memory-site-store';
 
 import {
@@ -25,6 +27,7 @@ import {
   PostgresMaterialConsumptionStore,
   PostgresSiteInstructionStore,
   PostgresLabourAllocationStore,
+  PostgresPlantUsageStore,
 } from './postgres-site-store';
 
 @Module({
@@ -59,6 +62,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresLabourAllocationStore(pool) : new InMemoryLabourAllocationStore(),
+    },
+    {
+      provide: PLANT_USAGE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPlantUsageStore(pool) : new InMemoryPlantUsageStore(),
     },
     SiteService,
   ],

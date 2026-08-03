@@ -206,4 +206,27 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     expect(afterOmit[0].budgetAmount).toBe(115_000);
     expect((await ledger(node.id)).filter((t) => t.type === 'budget')).toHaveLength(2);
   });
+
+  it('Plant: equipment usage coded to a cost line → ACTUAL cost = hours × rate (qty = hours)', async () => {
+    // 1. A project + a CBS cost line for plant.
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'Crane Job', value: 400_000 }).expect(201)).body;
+    const node = (await http.post('/api/v1/projects/cbs').send({ projectId: project.id, code: '6.1', title: 'Cranage' }).expect(201)).body;
+
+    // 2. Tower crane 10h @ AED 300/h → ACTUAL 3,000 (qty 10 plant-hours).
+    await http.post('/api/v1/site/plant')
+      .send({ projectId: project.id, cbsNodeId: node.id, date: '2026-08-03', equipment: 'Tower Crane TC-01', hours: 10, rate: 300 })
+      .expect(201);
+    const after1 = await eventually(async () => { const rows = await ledger(node.id); return rows.some((t) => t.source === 'plant_usage') ? rows : []; });
+    expect(after1.find((t) => t.source === 'plant_usage')).toMatchObject({ type: 'actual', amount: 3_000, quantity: 10 });
+    const p1 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 3_000 ? [n] : []; });
+    expect(p1[0].actualAmount).toBe(3_000);
+
+    // 3. A second shift 4h @ 300 → +1,200. Plant actual = 4,200 (SUM of the ledger).
+    await http.post('/api/v1/site/plant')
+      .send({ projectId: project.id, cbsNodeId: node.id, date: '2026-08-04', equipment: 'Tower Crane TC-01', hours: 4, rate: 300 })
+      .expect(201);
+    const p2 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 4_200 ? [n] : []; });
+    expect(p2[0].actualAmount).toBe(4_200);
+    expect((await ledger(node.id)).filter((t) => t.source === 'plant_usage')).toHaveLength(2);
+  });
 });

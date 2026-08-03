@@ -19,6 +19,8 @@ import {
 class CreateSubcontractDto {
   @IsString() projectId!: string;
   @IsOptional() @IsString() projectName?: string;
+  /** CBS cost line — codes the subcontract's committed/actual cost to a project cost line. */
+  @IsOptional() @IsString() cbsNodeId?: string;
   @IsString() title!: string;
   @IsString() subcontractorName!: string;
   @IsNumber() value!: number;
@@ -74,6 +76,7 @@ export class SubcontractsController {
       tenantId: ctx.tenantId,
       projectId: dto.projectId,
       projectName: dto.projectName,
+      cbsNodeId: dto.cbsNodeId ?? null,
       title: dto.title,
       subcontractorName: dto.subcontractorName,
       value: dto.value,

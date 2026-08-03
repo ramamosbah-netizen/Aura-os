@@ -6,10 +6,13 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { AccessService, TenantContext } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
+
+const TENANT = 'ledger-tenant';
+const ACTOR = '00000000-0000-0000-0000-0000000000aa'; // a granted actor (certify requires an authenticated approver)
 
 /** Poll until the fetcher returns a non-empty array (reactor handlers are async). */
 async function eventually<T>(fetcher: () => Promise<T[]>, tries = 25): Promise<T[]> {
@@ -29,9 +32,14 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     app = await NestFactory.create(AppModule, { logger: false });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false, transformOptions: { exposeUnsetFields: false } }));
+    // Grant the acting user everything at tenant scope so authenticated gates (e.g. claim certify)
+    // pass — the cost postings under test are driven by the reactors, not by who is signed in.
+    const access = app.get(AccessService);
+    access.registerRole({ id: 'role-e2e-super', name: 'E2E Super', permissions: ['*'] });
+    access.grant({ userId: ACTOR, roleId: 'role-e2e-super', scope: { kind: 'org', level: 'tenant', id: TENANT } });
     const tenant = app.get(TenantContext);
     app.use((_req: unknown, _res: unknown, next: () => void) =>
-      tenant.run({ tenantId: 'ledger-tenant', companyId: null, actorId: null, correlationId: 'e2e-ledger' }, () => next()),
+      tenant.run({ tenantId: TENANT, companyId: null, actorId: ACTOR, correlationId: 'e2e-ledger' }, () => next()),
     );
     await app.init();
     http = request(app.getHttpServer());
@@ -110,5 +118,40 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     // Material cost on the line = 10,000 − 2,500 = 7,500 (a DERIVED sum of the ledger, net qty 15).
     const netted = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 7_500 ? [n] : []; });
     expect(netted[0].actualAmount).toBe(7_500);
+  });
+
+  it('Subcontract: active → COMMITTED; each certified claim → ACTUAL (gross this period); mirrors the PO', async () => {
+    // 1. A project + a CBS cost line, and a subcontract CODED to it (like a PO to a cost line).
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'Mall Fit-out', value: 1_000_000 }).expect(201)).body;
+    const node = (await http.post('/api/v1/projects/cbs').send({ projectId: project.id, code: '3.1', title: 'Fire Alarm' }).expect(201)).body;
+    const sc = (
+      await http.post('/api/v1/subcontracts')
+        .send({ projectId: project.id, cbsNodeId: node.id, title: 'FA Installation', subcontractorName: 'SafeCo', value: 100_000, retentionPercentage: 10 })
+        .expect(201)
+    ).body;
+
+    // 2. Award (activate) → COMMITTED 100,000 on the cost line (mirrors PO create → committed).
+    await http.patch(`/api/v1/subcontracts/${sc.id}/status`).send({ status: 'active' }).expect(200);
+    const committed = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.committedAmount === 100_000 ? [n] : []; });
+    expect(committed[0].committedAmount).toBe(100_000);
+
+    // 3. Certify claim #1 (40,000 gross work done) → ACTUAL 40,000. Retention is withheld payment, not a cost cut.
+    const c1 = (await http.post('/api/v1/subcontracts/claims').send({ subcontractId: sc.id, workCompletedValue: 40_000 }).expect(201)).body;
+    await http.patch(`/api/v1/subcontracts/claims/${c1.id}/certify`).send({}).expect(200);
+    const act1 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 40_000 ? [n] : []; });
+    expect(act1[0].actualAmount).toBe(40_000);
+
+    // 4. Certify claim #2 (cumulative 70,000) → ACTUAL += 30,000 (this-period gross). Total actual = 70,000.
+    const c2 = (await http.post('/api/v1/subcontracts/claims').send({ subcontractId: sc.id, workCompletedValue: 70_000 }).expect(201)).body;
+    await http.patch(`/api/v1/subcontracts/claims/${c2.id}/certify`).send({}).expect(200);
+    const act2 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 70_000 ? [n] : []; });
+    expect(act2[0].actualAmount).toBe(70_000);
+    // Committed is unchanged by claims — committed (100k) and actual (70k) are independent columns.
+    expect((await nodeById(project.id, node.id)).committedAmount).toBe(100_000);
+
+    // Drill-down: 1 committed (subcontract) + 2 actual (subcontract_claim).
+    const rows = await ledger(node.id);
+    expect(rows.filter((t) => t.source === 'subcontract')).toHaveLength(1);
+    expect(rows.filter((t) => t.source === 'subcontract_claim')).toHaveLength(2);
   });
 });

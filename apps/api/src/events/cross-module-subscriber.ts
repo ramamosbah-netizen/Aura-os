@@ -509,6 +509,58 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Subcontract strand (mirrors the PO): active → COMMITTED cost on the CBS line ──
+    // A subcontract is a commitment like a PO. When it goes 'active' (awarded), the engine posts a
+    // committed CostTransaction for its value. Idempotent: guarded on an existing committed entry for
+    // this subcontract, so re-activation (or a redelivered event) cannot double-commit.
+    this.bus.subscribe('subcontracts.subcontract.statusChanged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'active') return;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const value = Number(p.value) || 0;
+      if (!cbsNodeId || !projectId || value <= 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'subcontract' && t.dimensions?.subcontractId === e.aggregateId)) return;
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'committed', amount: value, source: 'subcontract',
+          sourceRef: `${(p.title as string) ?? 'Subcontract'} — awarded`, dimensions: { subcontractId: e.aggregateId },
+        });
+        this.logger.log(`⚡ subcontract active → committed ${value} on CBS ${cbsNodeId} (SC ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post committed cost for subcontract ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Subcontract strand: claim (IPC) certified → ACTUAL cost = gross work done this period ──
+    // Each certified interim claim recognises the gross value of work put in place this period as
+    // actual cost on the CBS line (retention is withheld payment, not a cost reduction). Append-only,
+    // so Subcontract actual = SUM(certified gross). Idempotent: guarded on an existing actual for this
+    // claim. Retention-release claims have thisPeriodGrossValue=0 → skipped (handled by the AP reactor).
+    this.bus.subscribe('subcontracts.claim.statusChanged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'certified') return;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const gross = Number(p.thisPeriodGrossValue) || 0;
+      if (!cbsNodeId || !projectId || gross <= 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'subcontract_claim' && t.dimensions?.claimId === e.aggregateId)) return;
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'actual', amount: gross, source: 'subcontract_claim',
+          sourceRef: `${(p.subcontractTitle as string) ?? 'Subcontract'} — claim #${p.claimNumber ?? ''}`.trim(),
+          dimensions: { claimId: e.aggregateId, subcontractId: (p.subcontractId as string) ?? '' },
+        });
+        this.logger.log(`⚡ subcontract claim certified → actual ${gross} on CBS ${cbsNodeId} (claim ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post actual cost for certified claim ${e.aggregateId}: ${err}`);
+      }
+    });
+
     // ── Operate: GRN created → auto-transition PO to 'received' & suggest AP invoice ─────
     this.bus.subscribe('inventory.grn.created', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;

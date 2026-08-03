@@ -19,7 +19,7 @@ export type CostTxnType = 'committed' | 'actual';
 /** Where the transaction came from — provenance, for the drill-down + reversals. */
 export type CostTxnSource =
   | 'po' | 'invoice' | 'material_issue' | 'material_return' | 'plant_usage'
-  | 'labour_timesheet' | 'subcontract_claim' | 'variation' | 'expense'
+  | 'subcontract' | 'labour_timesheet' | 'subcontract_claim' | 'variation' | 'expense'
   | 'credit_note' | 'reversal' | 'adjustment' | 'other';
 
 export interface CostTransaction {

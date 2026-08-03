@@ -14,6 +14,9 @@ class CreateGoodsReceiptDto {
   @IsOptional() @IsString() projectName?: string | null;
   @IsOptional() @IsString() status?: GoodsReceiptStatus;
   @IsOptional() @IsNumber() value?: number;
+  @IsOptional() @IsString() boqItemId?: string | null;
+  @IsOptional() @IsNumber() receivedQuantity?: number | null;
+  @IsOptional() @IsString() unit?: string | null;
 }
 
 /** Inventory API — stamps tenant/actor from context, delegates to GoodsReceiptService. */
@@ -40,6 +43,9 @@ export class InventoryController {
       projectName: dto.projectName ?? null,
       status: dto.status,
       value: dto.value,
+      boqItemId: dto.boqItemId ?? null,
+      receivedQuantity: dto.receivedQuantity ?? null,
+      unit: dto.unit ?? null,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);

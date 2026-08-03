@@ -111,4 +111,28 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     await new Promise((r) => setTimeout(r, 200));
     expect((await ledger(boqItemId)).filter((t) => t.type === 'ordered')).toHaveLength(2);
   });
+
+  it('the delivery chain on one BOQ item: BOQ → Ordered → Received → Issued, gaps read off the ledger', async () => {
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'Blockwork', value: 600_000 }).expect(201)).body;
+    const boqItemId = 'boq-block-200';
+
+    // BOQ target 1000 nr; order 800; receive 700; issue 500 to site.
+    await http.post('/api/v1/projects/quantity-ledger/baseline').send({ projectId: project.id, boqItemId, quantity: 1000, unit: 'nr' }).expect(201);
+    await http.post('/api/v1/procurement/purchase-orders')
+      .send({ title: '200mm blocks', value: 40_000, projectId: project.id, boqItemId, orderedQuantity: 800, unit: 'nr' }).expect(201);
+    await http.post('/api/v1/inventory/grns')
+      .send({ title: 'Blocks delivery #1', projectId: project.id, boqItemId, receivedQuantity: 700, unit: 'nr', value: 35_000 }).expect(201);
+
+    const item = (await http.post('/api/v1/inventory/stock').send({ code: 'BLK-200', name: '200mm Block', unit: 'nr', openingQty: 700, openingCost: 5 }).expect(201)).body;
+    await http.post(`/api/v1/inventory/stock/${item.id}/movements`).send({ direction: 'out', quantity: 500, projectId: project.id, boqItemId }).expect(201);
+
+    // The whole chain, each figure = SUM(ledger) by type; the gaps are the operational signals.
+    const pos = await until(async () => { const p = await position(boqItemId); return p.issued === 500 && p.received === 700 && p.ordered === 800 ? p : null; });
+    expect(pos).toMatchObject({
+      boq: 1000, ordered: 800, received: 700, issued: 500,
+      remainingToOrder: 200, // 1000 − 800
+      inTransit: 100,        // 800 − 700
+      onSite: 200,           // 700 − 500 (received, not yet issued — site stock)
+    });
+  });
 });

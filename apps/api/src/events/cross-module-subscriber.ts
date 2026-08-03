@@ -558,6 +558,27 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Quantity Ledger (Phase 2): GRN created → post RECEIVED quantity on the BOQ item ──
+    // A goods receipt coded to a BOQ item (boqItemId + receivedQuantity) accrues the received quantity
+    // so the item's Received position = SUM(this). The gap Ordered − Received is what is still in transit.
+    this.bus.subscribe('inventory.grn.created', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const qty = Number(p.receivedQuantity) || 0;
+      if (!boqItemId || !project?.id || qty <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          boqItemId, type: 'received', quantity: qty, unit: (p.unit as string | null) ?? null,
+          source: 'grn', sourceRef: (p.title as string) ?? null, dimensions: { grnId: e.aggregateId },
+        });
+        this.logger.log(`📏 grn.created → posted received ${qty} on BOQ ${boqItemId} (GRN ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post received quantity for GRN ${e.aggregateId}: ${err}`);
+      }
+    });
+
     // ── Subcontract strand (mirrors the PO): active → COMMITTED cost on the CBS line ──
     // A subcontract is a commitment like a PO. When it goes 'active' (awarded), the engine posts a
     // committed CostTransaction for its value. Idempotent: guarded on an existing committed entry for

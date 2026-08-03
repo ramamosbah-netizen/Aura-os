@@ -21,10 +21,13 @@ interface Row {
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
+  boq_item_id: string | null;
+  received_quantity: string | number | null;
+  unit: string | null;
 }
 
 const COLS =
-  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, status, value, owner_id, created_by, created_at, boq_item_id, received_quantity, unit';
 
 function rowToGrn(r: Row): GoodsReceipt {
   return {
@@ -40,6 +43,9 @@ function rowToGrn(r: Row): GoodsReceipt {
     projectName: r.project_name,
     status: r.status as GoodsReceipt['status'],
     value: Number(r.value),
+    boqItemId: r.boq_item_id,
+    receivedQuantity: r.received_quantity != null ? Number(r.received_quantity) : null,
+    unit: r.unit,
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
@@ -61,8 +67,8 @@ export class PostgresGoodsReceiptStore implements GoodsReceiptStore {
 
   private insert(executor: Pool | PoolClient, g: GoodsReceipt): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_inventory_grns (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [g.id, g.tenantId, g.companyId, g.reference, g.title, g.poId, g.poTitle, g.supplierName, g.projectId, g.projectName, g.status, g.value, g.ownerId, g.createdBy, g.createdAt],
+      `INSERT INTO public.aura_inventory_grns (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      [g.id, g.tenantId, g.companyId, g.reference, g.title, g.poId, g.poTitle, g.supplierName, g.projectId, g.projectName, g.status, g.value, g.ownerId, g.createdBy, g.createdAt, g.boqItemId, g.receivedQuantity, g.unit],
     );
   }
 

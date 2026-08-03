@@ -11,6 +11,8 @@ import {
   priorCertifiedNet,
 } from './domain/payment-certificate';
 import { PAYMENT_CERTIFICATE_STORE, type CertificateFilter, type PaymentCertificateStore } from './payment-certificate-store';
+import { IPC_LINE_STORE, type IpcLineStore } from './ipc-line-store';
+import { type IpcLine, makeIpcLine } from './domain/ipc-line';
 import { ContractService } from './contract.service';
 
 /** What a caller supplies to raise an IPC — the service fills the contract snapshot, sequence, and prior-net. */
@@ -44,11 +46,37 @@ export class PaymentCertificateService {
 
   constructor(
     @Inject(PAYMENT_CERTIFICATE_STORE) private readonly store: PaymentCertificateStore,
+    @Inject(IPC_LINE_STORE) private readonly lineStore: IpcLineStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly contracts: ContractService,
     private readonly access: AccessService,
   ) {}
+
+  /** Add a valuation line to a draft IPC — a BOQ item's certified quantity × rate. On certification
+   *  the Quantity Ledger accrues these as the items' INVOICED position. */
+  async addLine(input: { certificateId: Id; projectId: Id; boqItemId: Id; description: string; quantity: number; unit?: string | null; rate?: number }): Promise<IpcLine> {
+    const cert = await this.store.get(input.certificateId);
+    if (!cert) throw new Error(`payment certificate ${input.certificateId} not found`);
+    const line = makeIpcLine({
+      tenantId: cert.tenantId,
+      companyId: cert.companyId,
+      certificateId: cert.id,
+      projectId: input.projectId,
+      boqItemId: input.boqItemId,
+      description: input.description,
+      quantity: input.quantity,
+      unit: input.unit,
+      rate: input.rate,
+    });
+    await this.lineStore.add(line);
+    this.logger.log(`IPC ${cert.reference} line: ${line.quantity} ${line.unit} of "${line.description}" (BOQ ${line.boqItemId})`);
+    return line;
+  }
+
+  listLines(certificateId: Id, tenantId: Id): Promise<IpcLine[]> {
+    return this.lineStore.listByCertificate(certificateId, tenantId);
+  }
 
   async create(input: CreateCertificateInput): Promise<PaymentCertificate> {
     if (input.createdBy) {
@@ -133,6 +161,14 @@ export class PaymentCertificateService {
       : status === 'rejected' ? CERTIFICATE_EVENT.rejected
       : CERTIFICATE_EVENT.created;
 
+    // On certification, carry the valuation lines so the Quantity Ledger posts each BOQ item's
+    // certified quantity as INVOICED (the last link in the delivery chain).
+    const lines = certifying
+      ? (await this.lineStore.listByCertificate(updated.id, updated.tenantId)).map((l) => ({
+          projectId: l.projectId, boqItemId: l.boqItemId, quantity: l.quantity, unit: l.unit, description: l.description,
+        }))
+      : [];
+
     const event = makeEvent({
       type: eventType,
       tenantId: updated.tenantId,
@@ -147,6 +183,7 @@ export class PaymentCertificateService {
         status,
         netThisCertificate: updated.netThisCertificate,
         account: updated.accountId ? { id: updated.accountId, name: updated.accountName } : null,
+        lines,
       },
     });
 

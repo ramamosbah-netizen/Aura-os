@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type CertificateStatus, type PaymentCertificate, PaymentCertificateService } from '@aura/contracts';
+import { type CertificateStatus, type PaymentCertificate, type IpcLine, PaymentCertificateService } from '@aura/contracts';
 
 class CreateCertificateDto {
   @IsString() contractId!: string;
@@ -14,6 +14,15 @@ class CreateCertificateDto {
   @IsOptional() @IsNumber() retentionCapPercent?: number;
   @IsOptional() @IsNumber() advanceRecoveredToDate?: number;
   @IsOptional() @IsString() reference?: string;
+}
+
+class AddIpcLineDto {
+  @IsString() projectId!: string;
+  @IsString() boqItemId!: string;
+  @IsString() description!: string;
+  @IsNumber() quantity!: number;
+  @IsOptional() @IsString() unit?: string;
+  @IsOptional() @IsNumber() rate?: number;
 }
 
 const VALID: CertificateStatus[] = ['draft', 'submitted', 'certified', 'paid', 'rejected'];
@@ -77,6 +86,30 @@ export class PaymentCertificatesController {
     const found = await this.certificates.get(id);
     if (!found) throw new NotFoundException(`payment certificate ${id} not found`);
     return found;
+  }
+
+  /** Add a valuation line (a BOQ item's certified quantity × rate) to a draft IPC. On certification
+   *  each line posts its quantity to the Quantity Ledger as the item's INVOICED position. */
+  @Post(':id/lines')
+  addLine(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AddIpcLineDto): Promise<IpcLine> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.boqItemId) throw new BadRequestException('boqItemId is required');
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
+    return this.certificates.addLine({
+      certificateId: id,
+      projectId: dto.projectId,
+      boqItemId: dto.boqItemId,
+      description: dto.description,
+      quantity: Number(dto.quantity),
+      unit: dto.unit ?? null,
+      rate: dto.rate,
+    });
+  }
+
+  @Get(':id/lines')
+  listLines(@Param('id', ParseUuidOr404Pipe) id: string): Promise<IpcLine[]> {
+    return this.certificates.listLines(id, this.tenant.get().tenantId);
   }
 
   @Patch(':id/status')

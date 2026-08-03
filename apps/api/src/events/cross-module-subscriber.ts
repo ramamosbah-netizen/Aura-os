@@ -881,6 +881,32 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Quantity Ledger (Phase 2): IPC certified → post INVOICED quantity per valuation line ──
+    // The last link in the delivery chain. A remeasurement IPC certifies work per BOQ item; each
+    // valuation line's certified quantity becomes the item's Invoiced position. The gap Approved −
+    // Invoiced is work that is billable but not yet certified to the client.
+    this.bus.subscribe('contracts.ipc.certified', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const lines = (p.lines as Array<{ projectId?: string; boqItemId?: string; quantity?: number; unit?: string | null; description?: string }> | undefined) ?? [];
+      for (const line of lines) {
+        const boqItemId = line.boqItemId;
+        const projectId = line.projectId;
+        const qty = Number(line.quantity) || 0;
+        if (!boqItemId || !projectId || qty <= 0) continue;
+        try {
+          await this.quantityLedger.post({
+            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+            boqItemId, type: 'invoiced', quantity: qty, unit: line.unit ?? null,
+            source: 'ipc', sourceRef: `${(p.reference as string) ?? 'IPC'} — ${line.description ?? ''}`.trim(),
+            dimensions: { ipcId: e.aggregateId },
+          });
+          this.logger.log(`📏 ipc.certified → posted invoiced ${qty} on BOQ ${boqItemId} (IPC ${e.aggregateId})`);
+        } catch (err) {
+          this.logger.error(`Failed to post invoiced quantity for IPC ${e.aggregateId} BOQ ${boqItemId}: ${err}`);
+        }
+      }
+    });
+
     // ── Labour strand: daily labour logged to a project cost line → ACTUAL cost = man-hours × rate ──
     // No module touches the CBS directly. A coded, rated labour allocation becomes an actual
     // CostTransaction (source 'labour_timesheet'), with man-hours as the signed quantity — seeding

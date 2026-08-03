@@ -47,8 +47,8 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     (await http.get(`/api/v1/projects/quantity-ledger?boqItemId=${boqItemId}`).expect(200)).body as Array<{ type: string; quantity: number; source: string }>;
   const position = async (boqItemId: string) =>
     (await http.get(`/api/v1/projects/quantity-ledger/position/${boqItemId}`).expect(200)).body as {
-      boq: number; ordered: number; received: number; issued: number; installed: number; approved: number; onSite: number; inTransit: number;
-      wastage: number; pendingApproval: number; remainingToOrder: number; progressPct: number; unit: string | null;
+      boq: number; ordered: number; received: number; issued: number; installed: number; approved: number; invoiced: number; onSite: number; inTransit: number;
+      wastage: number; pendingApproval: number; pendingBilling: number; remainingToOrder: number; progressPct: number; unit: string | null;
     };
 
   it('BOQ baseline + material issue/return → the ISSUED position nets to what is on site', async () => {
@@ -137,15 +137,23 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
       .expect(201)).body;
     await http.put(`/api/v1/quality/irs/${ir.id}/resolve`).send({ status: 'approved' }).expect(200);
 
+    // Certify a remeasurement IPC for 350 of the 400 approved (50 pending billing) → INVOICED.
+    const contract = (await http.post('/api/v1/contracts/contracts').send({ title: 'Blockwork main contract', value: 600_000 }).expect(201)).body;
+    const ipc = (await http.post('/api/v1/contracts/certificates').send({ contractId: contract.id, cumulativeWorkDone: 200_000 }).expect(201)).body;
+    await http.post(`/api/v1/contracts/certificates/${ipc.id}/lines`)
+      .send({ projectId: project.id, boqItemId, description: 'Blockwork L1', quantity: 350, unit: 'nr', rate: 25 }).expect(201);
+    await http.patch(`/api/v1/contracts/certificates/${ipc.id}/status`).send({ status: 'certified' }).expect(200);
+
     // The whole chain, each figure = SUM(ledger) by type; the gaps are the operational signals.
-    const pos = await until(async () => { const p = await position(boqItemId); return p.approved === 400 && p.installed === 450 && p.issued === 500 && p.received === 700 && p.ordered === 800 ? p : null; });
+    const pos = await until(async () => { const p = await position(boqItemId); return p.invoiced === 350 && p.approved === 400 && p.installed === 450 && p.issued === 500 && p.received === 700 && p.ordered === 800 ? p : null; });
     expect(pos).toMatchObject({
-      boq: 1000, ordered: 800, received: 700, issued: 500, installed: 450, approved: 400,
+      boq: 1000, ordered: 800, received: 700, issued: 500, installed: 450, approved: 400, invoiced: 350,
       remainingToOrder: 200, // 1000 − 800
       inTransit: 100,        // 800 − 700
       onSite: 200,           // 700 − 500 (received, not yet issued — site stock)
       wastage: 50,           // 500 − 450 (issued, not yet installed)
       pendingApproval: 50,   // 450 − 400 (installed, not yet approved)
+      pendingBilling: 50,    // 400 − 350 (approved, not yet invoiced)
       progressPct: 45,       // installed 450 / BOQ 1000 — the physical % complete
     });
   });

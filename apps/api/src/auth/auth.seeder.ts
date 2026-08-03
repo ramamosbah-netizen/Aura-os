@@ -25,6 +25,13 @@ export class AuthSeeder implements OnModuleInit {
       roleId: 'dealChainAdmin',
       scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
     });
-    this.logger.log('Seeded deal-chain admin grant (u-admin can create across the chain in dev-tenant).');
+    // A second granted admin so maker-checker flows (e.g. quotation approval, where the
+    // preparer may not approve their own) have a distinct, authorised checker in dev.
+    this.access.grant({
+      userId: 'u-approver',
+      roleId: 'dealChainAdmin',
+      scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
+    });
+    this.logger.log('Seeded deal-chain admin grant (u-admin + u-approver can create/approve across the chain in dev-tenant).');
   }
 }

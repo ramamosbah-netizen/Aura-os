@@ -859,6 +859,28 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Quantity Ledger (Phase 2): inspection approved → post APPROVED quantity on the BOQ item ──
+    // Quality-accepted work. The item's Approved position = SUM(this). The gap Installed − Approved is
+    // the inspection backlog; Approved − Invoiced is what is billable but not yet certified.
+    this.bus.subscribe('quality.ir.approved', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const projectId = p.projectId as string | null;
+      const qty = Number(p.approvedQuantity) || 0;
+      if (!boqItemId || !projectId || qty <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          boqItemId, type: 'approved', quantity: qty, unit: (p.unit as string | null) ?? null,
+          source: 'inspection', sourceRef: `IR ${(p.irNumber as string) ?? ''}`.trim(),
+          dimensions: { irId: e.aggregateId },
+        });
+        this.logger.log(`📏 ir.approved → posted approved ${qty} on BOQ ${boqItemId} (IR ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post approved quantity for IR ${e.aggregateId}: ${err}`);
+      }
+    });
+
     // ── Labour strand: daily labour logged to a project cost line → ACTUAL cost = man-hours × rate ──
     // No module touches the CBS directly. A coded, rated labour allocation becomes an actual
     // CostTransaction (source 'labour_timesheet'), with man-hours as the signed quantity — seeding

@@ -47,8 +47,8 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     (await http.get(`/api/v1/projects/quantity-ledger?boqItemId=${boqItemId}`).expect(200)).body as Array<{ type: string; quantity: number; source: string }>;
   const position = async (boqItemId: string) =>
     (await http.get(`/api/v1/projects/quantity-ledger/position/${boqItemId}`).expect(200)).body as {
-      boq: number; ordered: number; received: number; issued: number; installed: number; onSite: number; inTransit: number;
-      wastage: number; remainingToOrder: number; progressPct: number; unit: string | null;
+      boq: number; ordered: number; received: number; issued: number; installed: number; approved: number; onSite: number; inTransit: number;
+      wastage: number; pendingApproval: number; remainingToOrder: number; progressPct: number; unit: string | null;
     };
 
   it('BOQ baseline + material issue/return → the ISSUED position nets to what is on site', async () => {
@@ -131,14 +131,21 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     await http.post('/api/v1/site/installations')
       .send({ projectId: project.id, boqItemId, date: '2026-08-03', description: 'Blockwork L1', quantity: 450, unit: 'nr' }).expect(201);
 
+    // Inspect & APPROVE 400 of the 450 installed (50 pending approval).
+    const ir = (await http.post('/api/v1/quality/irs')
+      .send({ projectId: project.id, irNumber: 'IR-BLK-01', discipline: 'civil', locationDetail: 'L1 grid A-C', inspectionDate: '2026-08-04', boqItemId, approvedQuantity: 400, unit: 'nr' })
+      .expect(201)).body;
+    await http.put(`/api/v1/quality/irs/${ir.id}/resolve`).send({ status: 'approved' }).expect(200);
+
     // The whole chain, each figure = SUM(ledger) by type; the gaps are the operational signals.
-    const pos = await until(async () => { const p = await position(boqItemId); return p.installed === 450 && p.issued === 500 && p.received === 700 && p.ordered === 800 ? p : null; });
+    const pos = await until(async () => { const p = await position(boqItemId); return p.approved === 400 && p.installed === 450 && p.issued === 500 && p.received === 700 && p.ordered === 800 ? p : null; });
     expect(pos).toMatchObject({
-      boq: 1000, ordered: 800, received: 700, issued: 500, installed: 450,
+      boq: 1000, ordered: 800, received: 700, issued: 500, installed: 450, approved: 400,
       remainingToOrder: 200, // 1000 − 800
       inTransit: 100,        // 800 − 700
       onSite: 200,           // 700 − 500 (received, not yet issued — site stock)
       wastage: 50,           // 500 − 450 (issued, not yet installed)
+      pendingApproval: 50,   // 450 − 400 (installed, not yet approved)
       progressPct: 45,       // installed 450 / BOQ 1000 — the physical % complete
     });
   });

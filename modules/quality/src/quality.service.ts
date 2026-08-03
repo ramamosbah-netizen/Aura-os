@@ -151,6 +151,9 @@ export class QualityService {
     locationDetail: string;
     inspectionDate: string;
     inspectedBy?: string;
+    boqItemId?: string | null;
+    approvedQuantity?: number | null;
+    unit?: string | null;
   }): Promise<InspectionRequest> {
     if (input.inspectedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
@@ -193,7 +196,8 @@ export class QualityService {
           actorId,
           aggregateType: 'quality.ir',
           aggregateId: ir.id,
-          payload: { irNumber: ir.irNumber, discipline: ir.discipline, projectId: ir.projectId },
+          // BOQ coding → the Quantity Ledger accrues APPROVED quantity on this measured line.
+          payload: { irNumber: ir.irNumber, discipline: ir.discipline, projectId: ir.projectId, boqItemId: ir.boqItemId, approvedQuantity: ir.approvedQuantity, unit: ir.unit },
         });
         await this.events.appendWithClient(handle, [event]);
       }

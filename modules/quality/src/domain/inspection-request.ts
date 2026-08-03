@@ -13,6 +13,11 @@ export interface InspectionRequest {
   status: 'requested' | 'approved' | 'rejected';
   inspectedBy: string | null;
   comments: string | null;
+  /** The BOQ (measured) item this inspection covers — where the APPROVED quantity accrues on the
+   * Quantity Ledger when the IR is approved. With `approvedQuantity` + `unit`. Nullable + additive. */
+  boqItemId: string | null;
+  approvedQuantity: number | null;
+  unit: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,6 +34,9 @@ export interface NewInspectionRequest {
   status?: InspectionRequest['status'];
   inspectedBy?: string | null;
   comments?: string | null;
+  boqItemId?: string | null;
+  approvedQuantity?: number | null;
+  unit?: string | null;
 }
 
 export function makeInspectionRequest(input: NewInspectionRequest): InspectionRequest {
@@ -46,6 +54,9 @@ export function makeInspectionRequest(input: NewInspectionRequest): InspectionRe
     status: input.status ?? 'requested',
     inspectedBy: input.inspectedBy ?? null,
     comments: input.comments ?? null,
+    boqItemId: input.boqItemId ?? null,
+    approvedQuantity: input.approvedQuantity != null ? Number(input.approvedQuantity) : null,
+    unit: input.unit?.trim() || null,
     createdAt: now,
     updatedAt: now,
   };

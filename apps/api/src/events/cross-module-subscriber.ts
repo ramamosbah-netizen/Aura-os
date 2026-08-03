@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
-import { ProjectService, WbsService, CbsService, CostLedgerService, VariationService } from '@aura/projects';
+import { ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
@@ -42,6 +42,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
     private readonly ledger: CostLedgerService,
+    private readonly quantityLedger: QuantityLedgerService,
     private readonly variations: VariationService,
     private readonly tenant: TenantContext,
     private readonly pos: PurchaseOrderService,
@@ -727,6 +728,41 @@ export class CrossModuleSubscriber implements OnModuleInit {
         this.logger.log(`⚡ material ${direction === 'out' ? 'issue' : 'return'} → posted actual ${sign * cost} (qty ${sign * quantity}) on CBS ${cbsNodeId} for ${code}`);
       } catch (err) {
         this.logger.error(`Failed to post material cost txn for CBS node ${cbsNodeId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger (Phase 2): material moved against a BOQ item → post to the ISSUED position ──
+    // The physical twin of the material cost reactor above. Keyed on boqItemId (the measured line),
+    // independent of cost coding: an issue is +issued, a return is −issued, so net issued to site =
+    // SUM(type='issued'). A movement can be coded to a BOQ item, a CBS node, both, or neither — this
+    // fires whenever a boqItemId is present. Uncoded warehouse moves post nothing here.
+    this.bus.subscribe('inventory.stock.movement_recorded', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const projectId = p.projectId as string | null;
+      if (!boqItemId || !projectId) return; // only BOQ-coded movements move the quantity ledger
+      const direction = p.direction as string;
+      const quantity = Number(p.quantity) || 0;
+      if (quantity <= 0) return;
+      const sign = direction === 'out' ? 1 : -1; // issue adds to issued; return reverses it
+      const code = (p.code as string) ?? '';
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId,
+          companyId: e.companyId ?? null,
+          projectId,
+          boqItemId,
+          cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'issued',
+          quantity: sign * quantity,
+          unit: (p.unit as string | null) ?? null,
+          source: direction === 'out' ? 'material_issue' : 'material_return',
+          sourceRef: `${code} — material ${direction === 'out' ? 'issue' : 'return'}`,
+          dimensions: { movementId: e.aggregateId, itemCode: code },
+        });
+        this.logger.log(`📏 material ${direction === 'out' ? 'issue' : 'return'} → posted issued ${sign * quantity} on BOQ ${boqItemId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post material quantity txn for BOQ item ${boqItemId}: ${err}`);
       }
     });
 

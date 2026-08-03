@@ -15,6 +15,8 @@ import {
   type CbsSummary,
   CbsService,
   CostLedgerService,
+  type QuantityPosition,
+  QuantityLedgerService,
   type DelayEvent,
   type EotClaim,
   type DelayAnalysisSummary,
@@ -105,6 +107,7 @@ export class ProjectsController {
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
     private readonly ledger: CostLedgerService,
+    private readonly quantityLedger: QuantityLedgerService,
     private readonly delayEot: DelayEotService,
     private readonly variations: VariationService,
     private readonly closeouts: CloseoutService,
@@ -308,6 +311,44 @@ export class ProjectsController {
   @Get('cost-ledger')
   costLedger(@Query('projectId') projectId?: string, @Query('cbsNodeId') cbsNodeId?: string, @Query('limit') limit?: string) {
     return this.ledger.list({ tenantId: this.tenant.get().tenantId, projectId, cbsNodeId, limit: limit ? Number(limit) : undefined });
+  }
+
+  /**
+   * The quantity ledger — the physical twin of the cost ledger. Every quantity movement behind a BOQ
+   * item's numbers. Filter by `boqItemId` to drill into one measured line ("show transactions"), or by
+   * `projectId` for the whole project. A BOQ item's position IS SUM(this).
+   */
+  @Get('quantity-ledger')
+  quantityLedgerList(@Query('projectId') projectId?: string, @Query('boqItemId') boqItemId?: string, @Query('limit') limit?: string) {
+    return this.quantityLedger.list({ tenantId: this.tenant.get().tenantId, projectId, boqItemId, limit: limit ? Number(limit) : undefined });
+  }
+
+  /** A BOQ item's live position: BOQ target → ordered → received → issued → installed → approved →
+   *  invoiced, plus the derived gaps (remaining-to-order, in-transit, on-site, wastage, …). */
+  @Get('quantity-ledger/position/:boqItemId')
+  quantityPosition(@Param('boqItemId') boqItemId: string): Promise<QuantityPosition> {
+    return this.quantityLedger.position(this.tenant.get().tenantId, boqItemId);
+  }
+
+  /** Set/adjust a BOQ item's target quantity — the baseline its position is measured against. */
+  @Post('quantity-ledger/baseline')
+  setQuantityBaseline(
+    @Body() dto: { projectId: string; boqItemId: string; quantity: number; unit?: string; cbsNodeId?: string | null },
+  ) {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.boqItemId) throw new BadRequestException('boqItemId is required');
+    if (!(Number(dto.quantity) >= 0)) throw new BadRequestException('quantity must be a non-negative number');
+    const ctx = this.tenant.get();
+    return this.quantityLedger.setBaseline({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId,
+      projectId: dto.projectId,
+      boqItemId: dto.boqItemId,
+      quantity: Number(dto.quantity),
+      unit: dto.unit ?? null,
+      cbsNodeId: dto.cbsNodeId ?? null,
+      createdBy: ctx.actorId,
+    });
   }
 
   @Patch('cbs/:id')

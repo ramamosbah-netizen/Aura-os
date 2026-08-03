@@ -5,6 +5,7 @@ import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
 import type { LabourAllocation } from './domain/labour-allocation';
 import type { PlantUsage } from './domain/plant-usage';
+import type { InstallationRecord } from './domain/installation';
 
 export interface LabourAllocationStore {
   save(allocation: LabourAllocation, tx?: TxHandle): Promise<void>;
@@ -18,6 +19,13 @@ export interface PlantUsageStore {
   findById(id: string, tenantId: string): Promise<PlantUsage | null>;
   findByProject(projectId: string, tenantId: string): Promise<PlantUsage[]>;
   findAll(tenantId: string): Promise<PlantUsage[]>;
+}
+
+export interface InstallationStore {
+  save(record: InstallationRecord, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<InstallationRecord | null>;
+  findByProject(projectId: string, tenantId: string): Promise<InstallationRecord[]>;
+  findAll(tenantId: string): Promise<InstallationRecord[]>;
 }
 
 import type { Page, PageParams } from '@aura/shared';

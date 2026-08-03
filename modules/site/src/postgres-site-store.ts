@@ -6,8 +6,9 @@ import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
 import type { LabourAllocation } from './domain/labour-allocation';
 import type { PlantUsage } from './domain/plant-usage';
+import type { InstallationRecord } from './domain/installation';
 import { type Page, PageParams, makePage } from '@aura/shared';
-import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, PlantUsageStore, DailyReportFilter } from './store.interface';
+import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, PlantUsageStore, InstallationStore, DailyReportFilter } from './store.interface';
 
 export class PostgresLabourAllocationStore implements LabourAllocationStore {
   constructor(private readonly pool: Pool) {}
@@ -117,6 +118,62 @@ export class PostgresPlantUsageStore implements PlantUsageStore {
       hours: Number(row.hours),
       rate: Number(row.rate ?? 0),
       cost: Number(row.cost ?? 0),
+      notes: row.notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    };
+  }
+}
+
+export class PostgresInstallationStore implements InstallationStore {
+  constructor(private readonly pool: Pool) {}
+
+  async save(r: InstallationRecord, tx?: TxHandle): Promise<void> {
+    const conn = (tx as PoolClient) || this.pool;
+    await conn.query(
+      `insert into public.aura_site_installations (
+        id, tenant_id, company_id, project_id, project_name, boq_item_id, cbs_node_id, date, description, quantity, unit, notes, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      on conflict (id) do update set
+        quantity = excluded.quantity, description = excluded.description,
+        notes = excluded.notes, updated_at = excluded.updated_at`,
+      [r.id, r.tenantId, r.companyId, r.projectId, r.projectName, r.boqItemId, r.cbsNodeId, r.date, r.description, r.quantity, r.unit, r.notes, r.createdBy, r.createdAt, r.updatedAt],
+    );
+  }
+
+  async findById(id: string, tenantId: string): Promise<InstallationRecord | null> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_installations where id = $1 and tenant_id = $2`, [id, tenantId]);
+    if (res.rowCount === 0) return null;
+    return this.mapRecord(res.rows[0]);
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<InstallationRecord[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_installations where project_id = $1 and tenant_id = $2 order by date desc`, [projectId, tenantId]);
+    return res.rows.map(this.mapRecord);
+  }
+
+  async findAll(tenantId: string): Promise<InstallationRecord[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_site_installations where tenant_id = $1 order by date desc`, [tenantId]);
+    return res.rows.map(this.mapRecord);
+  }
+
+  private mapRecord(row: any): InstallationRecord {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      companyId: row.company_id,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      boqItemId: row.boq_item_id,
+      cbsNodeId: row.cbs_node_id ?? null,
+      date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
+      description: row.description,
+      quantity: Number(row.quantity),
+      unit: row.unit,
       notes: row.notes,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),

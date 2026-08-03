@@ -103,7 +103,7 @@ export interface QuantityPosition {
   wastage: number;          // issued − installed (issued, not yet installed — offcut/wastage/WIP)
   pendingApproval: number;  // installed − approved
   pendingBilling: number;   // approved − invoiced
-  /** Physical progress against the target: approved / boq (0 when no target set). */
+  /** Physical progress against the target: installed / boq (the EV "% complete" input; 0 when no target). */
   progressPct: number;
 }
 
@@ -136,6 +136,6 @@ export function quantityPosition(boqItemId: Id, txns: QuantityTransaction[]): Qu
     wastage: r2(issued - installed),
     pendingApproval: r2(installed - approved),
     pendingBilling: r2(approved - invoiced),
-    progressPct: boq > 0 ? r2((approved / boq) * 100) : 0,
+    progressPct: boq > 0 ? r2((installed / boq) * 100) : 0,
   };
 }

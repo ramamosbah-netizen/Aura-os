@@ -4,8 +4,9 @@ import type { MaterialConsumption } from './domain/material-consumption';
 import type { SiteInstruction } from './domain/site-instruction';
 import type { LabourAllocation } from './domain/labour-allocation';
 import type { PlantUsage } from './domain/plant-usage';
+import type { InstallationRecord } from './domain/installation';
 import { type Page, PageParams, paginate } from '@aura/shared';
-import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, PlantUsageStore, DailyReportFilter } from './store.interface';
+import type { DailyReportStore, DelayLogStore, MaterialConsumptionStore, SiteInstructionStore, LabourAllocationStore, PlantUsageStore, InstallationStore, DailyReportFilter } from './store.interface';
 
 export class InMemoryLabourAllocationStore implements LabourAllocationStore {
   private readonly items = new Map<string, LabourAllocation>();
@@ -53,6 +54,32 @@ export class InMemoryPlantUsageStore implements PlantUsageStore {
   }
 
   async findAll(tenantId: string): Promise<PlantUsage[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+}
+
+export class InMemoryInstallationStore implements InstallationStore {
+  private readonly items = new Map<string, InstallationRecord>();
+
+  async save(record: InstallationRecord): Promise<void> {
+    this.items.set(record.id, { ...record });
+  }
+
+  async findById(id: string, tenantId: string): Promise<InstallationRecord | null> {
+    const item = this.items.get(id);
+    if (!item || item.tenantId !== tenantId) return null;
+    return { ...item };
+  }
+
+  async findByProject(projectId: string, tenantId: string): Promise<InstallationRecord[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.projectId === projectId && i.tenantId === tenantId)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  async findAll(tenantId: string): Promise<InstallationRecord[]> {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)
       .sort((a, b) => b.date.localeCompare(a.date));

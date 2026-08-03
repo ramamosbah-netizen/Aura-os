@@ -4,6 +4,7 @@ export * from './domain/material-consumption';
 export * from './domain/site-instruction';
 export * from './domain/labour-allocation';
 export * from './domain/plant-usage';
+export * from './domain/installation';
 export * from './site.service';
 export * from './site.module';
 export * from './store.interface';

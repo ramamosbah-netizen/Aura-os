@@ -835,6 +835,30 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Quantity Ledger (Phase 2): work installed on site → post INSTALLED quantity on the BOQ item ──
+    // Physical work fixed in place is the production measure behind progress. The item's Installed
+    // position = SUM(this). The gap Issued − Installed is wastage/WIP; Installed − Approved is the
+    // inspection backlog. (This same signal feeds the Phase-3 Progress Engine → WBS %.)
+    this.bus.subscribe('site.installation.recorded', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const projectId = p.projectId as string | null;
+      const quantity = Number(p.quantity) || 0;
+      if (!boqItemId || !projectId || quantity <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'installed', quantity, unit: (p.unit as string | null) ?? null,
+          source: 'installation', sourceRef: (p.description as string) ?? null,
+          dimensions: { installationId: e.aggregateId },
+        });
+        this.logger.log(`📏 installation → posted installed ${quantity} on BOQ ${boqItemId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post installed quantity for BOQ item ${boqItemId}: ${err}`);
+      }
+    });
+
     // ── Labour strand: daily labour logged to a project cost line → ACTUAL cost = man-hours × rate ──
     // No module touches the CBS directly. A coded, rated labour allocation becomes an actual
     // CostTransaction (source 'labour_timesheet'), with man-hours as the signed quantity — seeding

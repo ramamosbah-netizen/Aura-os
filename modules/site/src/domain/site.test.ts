@@ -9,6 +9,7 @@ import {
   InMemorySiteInstructionStore,
   InMemoryLabourAllocationStore,
   InMemoryPlantUsageStore,
+  InMemoryInstallationStore,
 } from '../in-memory-site-store';
 import { SiteService } from '../site.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -55,6 +56,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
+        new InMemoryInstallationStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -86,6 +88,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
+        new InMemoryInstallationStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -134,6 +137,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
+        new InMemoryInstallationStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -171,6 +175,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
+        new InMemoryInstallationStore(),
         mockEvents,
         mockTx,
         mockAccess,

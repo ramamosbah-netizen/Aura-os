@@ -10,6 +10,7 @@ import {
   type LabourAllocation,
   type TradeManHours,
   type PlantUsage,
+  type InstallationRecord,
   SiteService,
 } from '@aura/site';
 
@@ -294,5 +295,38 @@ export class SiteController {
   @Get('plant')
   listPlant(): Promise<PlantUsage[]> {
     return this.siteService.listPlantUsage(this.tenant.get().tenantId);
+  }
+
+  // ── Installation records (INSTALLED quantity against a BOQ item) ─────────────
+
+  @Post('installations')
+  createInstallation(
+    @Body() dto: { projectId: string; projectName?: string; boqItemId: string; cbsNodeId?: string | null; date: string; description: string; quantity: number; unit?: string; notes?: string },
+  ): Promise<InstallationRecord> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.boqItemId?.trim()) throw new BadRequestException('boqItemId is required');
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    if (!dto?.date) throw new BadRequestException('date is required');
+    if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
+    const ctx = this.tenant.get();
+    return this.siteService.createInstallation({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? undefined,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      boqItemId: dto.boqItemId,
+      cbsNodeId: dto.cbsNodeId ?? null,
+      date: dto.date,
+      description: dto.description,
+      quantity: Number(dto.quantity),
+      unit: dto.unit ?? null,
+      notes: dto.notes,
+      createdBy: ctx.actorId ?? undefined,
+    });
+  }
+
+  @Get('installations')
+  listInstallations(): Promise<InstallationRecord[]> {
+    return this.siteService.listInstallations(this.tenant.get().tenantId);
   }
 }

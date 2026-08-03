@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
-import { ProjectService, WbsService, CbsService, VariationService } from '@aura/projects';
+import { ProjectService, WbsService, CbsService, CostLedgerService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
@@ -41,6 +41,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly projects: ProjectService,
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
+    private readonly ledger: CostLedgerService,
     private readonly variations: VariationService,
     private readonly tenant: TenantContext,
     private readonly pos: PurchaseOrderService,
@@ -460,19 +461,23 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
-    // ── Operate: PO created → accrue committed cost against the CBS cost line ───────
-    // The CBS node is the single source of truth for cost (Primavera/SAP PS pattern): a PO coded to
-    // a cost line accrues committed cost THERE, which rolls up to the parent nodes and the project
-    // summary. Untagged POs accrue nothing — cost is tracked only where it's coded, never guessed.
+    // ── Operate: PO created → post a COMMITTED cost transaction to the ledger ───────
+    // No module touches the CBS directly. The PO becomes a CostTransaction; the Transaction Engine
+    // appends it to the ledger (source of truth + audit trail) and moves the CBS node's balance.
+    // Committed cost is tracked only where the PO is coded (cbsNodeId) — never guessed.
     this.bus.subscribe('procurement.po.created', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
       const cbsNodeId = p.cbsNodeId as string | null;
+      const project = p.project as { id: string; name: string } | null;
       const value = Number(p.value) || 0;
-      if (cbsNodeId && value > 0) {
+      if (cbsNodeId && project?.id && value > 0) {
         try {
-          await this.cbs.recordCommittedCost(cbsNodeId, value);
+          await this.ledger.post({
+            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+            cbsNodeId, type: 'committed', amount: value, source: 'po', sourceRef: (p.title as string) ?? null,
+          });
         } catch (err) {
-          this.logger.error(`Failed to accrue committed cost against CBS node ${cbsNodeId}: ${err}`);
+          this.logger.error(`Failed to post committed cost txn for CBS node ${cbsNodeId}: ${err}`);
         }
       }
     });
@@ -655,11 +660,15 @@ export class CrossModuleSubscriber implements OnModuleInit {
       const value = Number(p.value) || 0;
 
       const cbsNodeId = p.cbsNodeId as string | null;
-      if (cbsNodeId && value > 0) {
+      const project = p.project as { id: string; name: string } | null;
+      if (cbsNodeId && project?.id && value > 0) {
         try {
-          await this.cbs.recordActualCost(cbsNodeId, value);
+          await this.ledger.post({
+            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+            cbsNodeId, type: 'actual', amount: value, source: 'invoice', sourceRef: (p.reference as string) ?? null,
+          });
         } catch (err) {
-          this.logger.error(`Failed to accrue actual cost against CBS node ${cbsNodeId}: ${err}`);
+          this.logger.error(`Failed to post actual cost txn for CBS node ${cbsNodeId}: ${err}`);
         }
       }
 

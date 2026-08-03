@@ -14,6 +14,7 @@ import {
   type CbsCategory,
   type CbsSummary,
   CbsService,
+  CostLedgerService,
   type DelayEvent,
   type EotClaim,
   type DelayAnalysisSummary,
@@ -103,6 +104,7 @@ export class ProjectsController {
     private readonly projects: ProjectService,
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
+    private readonly ledger: CostLedgerService,
     private readonly delayEot: DelayEotService,
     private readonly variations: VariationService,
     private readonly closeouts: CloseoutService,
@@ -296,6 +298,16 @@ export class ProjectsController {
   @Get('cbs/summary/:projectId')
   getCbsSummary(@Param('projectId') projectId: string): Promise<CbsSummary> {
     return this.cbs.getSummary(projectId);
+  }
+
+  /**
+   * The cost ledger — every transaction behind the numbers, like a bank statement. Filter by
+   * `cbsNodeId` to drill into a single cost line ("show transactions"), or by `projectId` for the
+   * whole project. This is what makes the CBS balance auditable: it is SUM(this).
+   */
+  @Get('cost-ledger')
+  costLedger(@Query('projectId') projectId?: string, @Query('cbsNodeId') cbsNodeId?: string, @Query('limit') limit?: string) {
+    return this.ledger.list({ tenantId: this.tenant.get().tenantId, projectId, cbsNodeId, limit: limit ? Number(limit) : undefined });
   }
 
   @Patch('cbs/:id')

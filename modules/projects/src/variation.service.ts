@@ -79,7 +79,8 @@ export class VariationService {
         actorId: actorId ?? null,
         aggregateType: 'projects.variation',
         aggregateId: updated.id,
-        payload: { projectId: updated.projectId, title: updated.title, status, signedAmount: updated.signedAmount },
+        // cbsNodeId + signedAmount let the cost engine post a BUDGET change to the cost line on approval.
+        payload: { projectId: updated.projectId, cbsNodeId: updated.cbsNodeId, title: updated.title, status, signedAmount: updated.signedAmount },
       }),
     ]);
     this.logger.log(`Variation ${updated.title} (${updated.id}) → ${status}`);

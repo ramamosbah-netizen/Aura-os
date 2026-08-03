@@ -50,7 +50,7 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
   });
 
   const nodeById = async (projectId: string, nodeId: string) =>
-    ((await http.get(`/api/v1/projects/cbs?projectId=${projectId}`).expect(200)).body as Array<{ id: string; committedAmount: number; actualAmount: number }>).find((n) => n.id === nodeId)!;
+    ((await http.get(`/api/v1/projects/cbs?projectId=${projectId}`).expect(200)).body as Array<{ id: string; budgetAmount: number; committedAmount: number; actualAmount: number }>).find((n) => n.id === nodeId)!;
   const ledger = async (cbsNodeId: string) =>
     (await http.get(`/api/v1/projects/cost-ledger?cbsNodeId=${cbsNodeId}`).expect(200)).body as Array<{ type: string; amount: number; quantity: number | null; source: string }>;
 
@@ -176,5 +176,34 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     const l2 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 2_800 ? [n] : []; });
     expect(l2[0].actualAmount).toBe(2_800);
     expect((await ledger(node.id)).filter((t) => t.source === 'labour_timesheet')).toHaveLength(2);
+  });
+
+  it('Variation: approved change order → BUDGET adjustment on the cost line (addition +, omission −)', async () => {
+    // 1. A project + a CBS cost line with an opening budget of 100,000.
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'Budget Villa', value: 500_000 }).expect(201)).body;
+    const node = (await http.post('/api/v1/projects/cbs').send({ projectId: project.id, code: '5.1', title: 'Facade', budgetAmount: 100_000 }).expect(201)).body;
+    expect((await nodeById(project.id, node.id)).budgetAmount).toBe(100_000);
+
+    // 2. An APPROVED addition variation (+20,000) coded to the line → budget baseline 120,000.
+    const add = (
+      await http.post('/api/v1/projects/variations')
+        .send({ projectId: project.id, cbsNodeId: node.id, title: 'Extra cladding', type: 'addition', amount: 20_000 })
+        .expect(201)
+    ).body;
+    await http.patch(`/api/v1/projects/variations/${add.id}/status`).send({ status: 'approved' }).expect(200);
+    const afterAdd = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.budgetAmount === 120_000 ? [n] : []; });
+    expect(afterAdd[0].budgetAmount).toBe(120_000);
+    expect((await ledger(node.id)).find((t) => t.source === 'variation')).toMatchObject({ type: 'budget', amount: 20_000 });
+
+    // 3. An APPROVED omission (−5,000) → budget nets to 115,000 (a −budget ledger entry).
+    const omit = (
+      await http.post('/api/v1/projects/variations')
+        .send({ projectId: project.id, cbsNodeId: node.id, title: 'Descope trims', type: 'omission', amount: 5_000 })
+        .expect(201)
+    ).body;
+    await http.patch(`/api/v1/projects/variations/${omit.id}/status`).send({ status: 'approved' }).expect(200);
+    const afterOmit = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.budgetAmount === 115_000 ? [n] : []; });
+    expect(afterOmit[0].budgetAmount).toBe(115_000);
+    expect((await ledger(node.id)).filter((t) => t.type === 'budget')).toHaveLength(2);
   });
 });

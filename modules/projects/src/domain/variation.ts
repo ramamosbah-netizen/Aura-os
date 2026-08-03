@@ -14,6 +14,9 @@ export interface VariationOrder {
   companyId: Id | null;
   projectId: Id;
   projectTitle: string | null;
+  /** CBS cost line whose approved budget this variation changes. When set, an approved variation
+   * posts a `budget` ledger entry (+addition / −omission) to that line. Nullable + additive. */
+  cbsNodeId: Id | null;
   reference: string | null;
   title: string;
   description: string | null;
@@ -32,6 +35,7 @@ export interface NewVariationOrder {
   companyId?: Id | null;
   projectId: Id;
   projectTitle?: string | null;
+  cbsNodeId?: Id | null;
   reference?: string | null;
   title: string;
   description?: string | null;
@@ -52,6 +56,7 @@ export function makeVariationOrder(input: NewVariationOrder): VariationOrder {
     companyId: input.companyId ?? null,
     projectId: input.projectId,
     projectTitle: input.projectTitle ?? null,
+    cbsNodeId: input.cbsNodeId ?? null,
     reference: input.reference?.trim() || null,
     title: input.title.trim(),
     description: input.description?.trim() || null,

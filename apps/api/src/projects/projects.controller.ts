@@ -401,7 +401,7 @@ export class ProjectsController {
   // ── VARIATION ORDERS (change orders) ─────────────────────────────────────
 
   @Post('variations')
-  createVariation(@Body() dto: { projectId: string; projectTitle?: string; title: string; description?: string; type: VariationType; amount: number; reference?: string }): Promise<VariationOrder> {
+  createVariation(@Body() dto: { projectId: string; projectTitle?: string; cbsNodeId?: string | null; title: string; description?: string; type: VariationType; amount: number; reference?: string }): Promise<VariationOrder> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     if (dto?.type !== 'addition' && dto?.type !== 'omission') throw new BadRequestException("type must be 'addition' or 'omission'");
@@ -412,6 +412,7 @@ export class ProjectsController {
       companyId: ctx.companyId,
       projectId: dto.projectId,
       projectTitle: dto.projectTitle ?? null,
+      cbsNodeId: dto.cbsNodeId ?? null,
       title: dto.title,
       description: dto.description ?? null,
       type: dto.type,

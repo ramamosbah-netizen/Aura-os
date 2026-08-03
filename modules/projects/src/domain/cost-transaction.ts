@@ -13,8 +13,9 @@ import { type Id, newId } from '@aura/shared';
 // activity, floor, zone…) so the system can later answer "cost of Access Control on level 2 for
 // supplier X" by filtering the ledger — no schema change, no new development.
 
-/** The ledger effect. Sign lives in `amount` (negative = credit/reversal/return). */
-export type CostTxnType = 'committed' | 'actual';
+/** The ledger effect. Sign lives in `amount` (negative = credit/reversal/return/omission).
+ * `budget` = the approved cost baseline (BAC): opening estimate + approved variation changes. */
+export type CostTxnType = 'committed' | 'actual' | 'budget';
 
 /** Where the transaction came from — provenance, for the drill-down + reversals. */
 export type CostTxnSource =

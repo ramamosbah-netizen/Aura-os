@@ -25,6 +25,7 @@ export class CostLedgerService {
     if (txn.cbsNodeId && txn.amount !== 0) {
       try {
         if (txn.type === 'committed') await this.cbs.recordCommittedCost(txn.cbsNodeId, txn.amount);
+        else if (txn.type === 'budget') await this.cbs.recordBudget(txn.cbsNodeId, txn.amount);
         else await this.cbs.recordActualCost(txn.cbsNodeId, txn.amount);
       } catch (err) {
         // The ledger entry stands regardless — the CBS cache can be rebuilt from it.

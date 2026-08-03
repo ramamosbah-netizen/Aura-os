@@ -561,6 +561,31 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Variation strand (the BUDGET side): approved change order → adjust the cost line's budget ──
+    // A variation is not a spend — it moves the approved budget baseline (BAC). On approval, the
+    // engine posts a `budget` CostTransaction of the signed amount (addition +, omission −) so the
+    // line's budget = opening estimate + SUM(approved variations). Append-only + idempotent
+    // (guarded per variationId), so a redelivered approval cannot double-adjust the budget.
+    this.bus.subscribe('projects.variation.approved', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const signedAmount = Number(p.signedAmount) || 0;
+      if (!cbsNodeId || !projectId || signedAmount === 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'variation' && t.dimensions?.variationId === e.aggregateId)) return;
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'budget', amount: signedAmount, source: 'variation',
+          sourceRef: `${(p.title as string) ?? 'Variation'} — approved`, dimensions: { variationId: e.aggregateId },
+        });
+        this.logger.log(`⚡ variation approved → budget ${signedAmount >= 0 ? '+' : ''}${signedAmount} on CBS ${cbsNodeId} (VO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post budget change for approved variation ${e.aggregateId}: ${err}`);
+      }
+    });
+
     // ── Operate: GRN created → auto-transition PO to 'received' & suggest AP invoice ─────
     this.bus.subscribe('inventory.grn.created', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;

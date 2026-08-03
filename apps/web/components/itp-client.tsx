@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
@@ -73,7 +75,7 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
     <>
       <h2 style={st.h2}>New ITP</h2>
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Project<ProjectPicker value={projectId} onChange={setProjectId} /></label>
         <label style={st.label}>Reference<input style={st.input} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="ITP-CONC-001" /></label>
         <label style={{ ...st.label, minWidth: 220 }}>Title<input style={st.input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Concrete pour ITP" /></label>
         <label style={st.label}>Discipline<input style={st.input} value={discipline} onChange={(e) => setDiscipline(e.target.value)} /></label>

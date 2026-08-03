@@ -23,6 +23,7 @@ export class SubcontractsService {
     tenantId: Id;
     projectId: Id;
     projectName?: string | null;
+    cbsNodeId?: Id | null;
     title: string;
     subcontractorName: string;
     value: number;
@@ -39,6 +40,7 @@ export class SubcontractsService {
       tenantId: input.tenantId,
       projectId: input.projectId,
       projectName: input.projectName,
+      cbsNodeId: input.cbsNodeId,
       title: input.title,
       subcontractorName: input.subcontractorName,
       value: input.value,
@@ -89,7 +91,9 @@ export class SubcontractsService {
         actorId: actorId ?? null,
         aggregateType: 'subcontracts.subcontract',
         aggregateId: updated.id,
-        payload: { status },
+        // Carried so the cost engine can accrue COMMITTED cost when the subcontract goes active
+        // (a positive ledger entry on this cost line) — mirrors PO create → committed.
+        payload: { status, projectId: updated.projectId, cbsNodeId: updated.cbsNodeId, value: updated.value, title: updated.title },
       }),
     ]);
 
@@ -182,6 +186,9 @@ export class SubcontractsService {
           status: updated.status,
           claimNumber: updated.claimNumber,
           netCertifiedValue: updated.netCertifiedValue,
+          // Gross work done this period = the ACTUAL cost incurred (retention is withheld payment,
+          // not a cost reduction). Carried with the cost line so the engine posts actual on certify.
+          thisPeriodGrossValue: updated.thisPeriodGrossValue,
           retentionWithheld: updated.retentionWithheld,
           isRetentionRelease: updated.isRetentionRelease,
           retentionReleased: updated.retentionReleased,
@@ -190,6 +197,7 @@ export class SubcontractsService {
           subcontractTitle: subcontract?.title ?? null,
           projectId: subcontract?.projectId ?? null,
           projectName: subcontract?.projectName ?? null,
+          cbsNodeId: subcontract?.cbsNodeId ?? null,
         },
       }),
     ]);

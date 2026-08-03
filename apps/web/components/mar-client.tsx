@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useState } from 'react';
 
 interface MaterialApproval {
@@ -86,7 +88,7 @@ export default function MarClient({ initialMars }: { initialMars: MaterialApprov
   return (
     <div>
       <div style={s.createBar}>
-        <input style={s.inputSm} placeholder="Project ID" value={projectId} onChange={(e) => setProjectId(e.target.value)} />
+        <ProjectPicker value={projectId} onChange={setProjectId} style={{ minWidth: 180 }} />
         <input style={s.inputSm} placeholder="Ref (MAR-001)" value={reference} onChange={(e) => setReference(e.target.value)} />
         <input style={s.input} placeholder="Material" value={materialName} onChange={(e) => setMaterialName(e.target.value)} />
         <input style={s.inputSm} placeholder="Manufacturer" value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} />

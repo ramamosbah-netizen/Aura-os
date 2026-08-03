@@ -10,6 +10,7 @@ interface Row {
   company_id: string | null;
   project_id: string;
   project_title: string | null;
+  cbs_node_id: string | null;
   reference: string | null;
   title: string;
   description: string | null;
@@ -24,7 +25,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, project_id, project_title, reference, title, description, type, amount, signed_amount, status, created_by, decided_by, decided_at, created_at';
+  'id, tenant_id, company_id, project_id, project_title, cbs_node_id, reference, title, description, type, amount, signed_amount, status, created_by, decided_by, decided_at, created_at';
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 const isoOrNull = (v: Date | string | null): string | null => (v == null ? null : iso(v));
@@ -36,6 +37,7 @@ function rowToVariation(r: Row): VariationOrder {
     companyId: r.company_id,
     projectId: r.project_id,
     projectTitle: r.project_title,
+    cbsNodeId: r.cbs_node_id,
     reference: r.reference,
     title: r.title,
     description: r.description,
@@ -56,8 +58,8 @@ export class PostgresVariationStore implements VariationStore {
 
   async create(v: VariationOrder): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_projects_variations (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [v.id, v.tenantId, v.companyId, v.projectId, v.projectTitle, v.reference, v.title, v.description, v.type, v.amount, v.signedAmount, v.status, v.createdBy, v.decidedBy, v.decidedAt, v.createdAt],
+      `INSERT INTO public.aura_projects_variations (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+      [v.id, v.tenantId, v.companyId, v.projectId, v.projectTitle, v.cbsNodeId, v.reference, v.title, v.description, v.type, v.amount, v.signedAmount, v.status, v.createdBy, v.decidedBy, v.decidedAt, v.createdAt],
     );
   }
 

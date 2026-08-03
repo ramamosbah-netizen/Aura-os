@@ -58,6 +58,25 @@ export class CbsService {
     return updated;
   }
 
+  /** Adjust the approved budget baseline (BAC) of a cost line — e.g. an approved variation
+   *  (addition +, omission −). Variance (budget − forecast) is recomputed. */
+  async recordBudget(id: Id, amount: number): Promise<CbsNode> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`CBS Node ${id} not found`);
+
+    const budget = Number((existing.budgetAmount + amount).toFixed(2));
+    const updated: CbsNode = {
+      ...existing,
+      budgetAmount: budget,
+      variance: Number((budget - existing.forecastAmount).toFixed(2)),
+    };
+    await this.store.update(updated);
+    this.logger.log(`CBS Node ${updated.code} budget ${amount >= 0 ? '+' : ''}${amount} (total=${budget})`);
+
+    if (updated.parentId) await this.rollup(updated.parentId);
+    return updated;
+  }
+
   async recordCommittedCost(id: Id, amount: number): Promise<CbsNode> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`CBS Node ${id} not found`);

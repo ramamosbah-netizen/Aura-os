@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
 
 export interface Subcontract {
   id: string;
@@ -105,7 +106,11 @@ export default function SubcontractClaimsClient({ initial, subcontracts }: { ini
         </div>
       )}
 
-      <h2 style={st.h2}>Claim register</h2>
+      <div style={st.regHead}>
+        <h2 style={st.h2}>Claim register</h2>
+        <ExportButton filename="subcontract-claims" title="Subcontract Progress Claims" rows={rows.map((r) => ({ ...r, subcontract: scName(r.subcontractId) })) as unknown as Array<Record<string, unknown>>}
+          columns={[{ key: 'claimNumber', label: '#' }, { key: 'subcontract', label: 'Subcontract' }, { key: 'thisPeriodGrossValue', label: 'Period gross' }, { key: 'retentionWithheld', label: 'Retention' }, { key: 'netCertifiedValue', label: 'Net payable' }, { key: 'status', label: 'Status' }]} />
+      </div>
       {rows.length === 0 ? (
         <EmptyState compact title="No claims raised" description="Raise a progress claim against a subcontract's cumulative work done — the period gross, retention and net payable are computed, then certify and pay." />
       ) : (
@@ -157,6 +162,7 @@ const st = {
   err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 14 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
+  regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
   th: { textAlign: 'left' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
   thR: { textAlign: 'right' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,

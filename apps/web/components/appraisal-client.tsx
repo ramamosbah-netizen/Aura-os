@@ -1,7 +1,10 @@
 'use client';
 
+import EmployeePicker from './ui/employee-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
 
 interface Criterion { name: string; weight: number; score: number }
 export interface Appraisal {
@@ -80,7 +83,7 @@ export default function AppraisalClient({ initial }: { initial: Appraisal[] }) {
 
       <h2 style={st.h2}>New appraisal</h2>
       <div style={st.form}>
-        <label style={st.label}>Employee ID<input style={st.input} value={f.employeeId} onChange={(e) => setField('employeeId', e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Employee<EmployeePicker value={f.employeeId} onChange={(id) => setField('employeeId', id)} /></label>
         <label style={st.label}>Employee name<input style={st.input} value={f.employeeName} onChange={(e) => setField('employeeName', e.target.value)} placeholder="optional" /></label>
         <label style={st.label}>Period<input style={st.input} value={f.period} onChange={(e) => setField('period', e.target.value)} placeholder="2026-H1" /></label>
         <label style={{ ...st.label, minWidth: 200 }}>Strengths<input style={st.input} value={f.strengths} onChange={(e) => setField('strengths', e.target.value)} placeholder="optional" /></label>
@@ -105,7 +108,11 @@ export default function AppraisalClient({ initial }: { initial: Appraisal[] }) {
         {error && <span style={st.err}>{error}</span>}
       </div>
 
-      <h2 style={st.h2}>Appraisals</h2>
+      <div style={st.regHead}>
+        <h2 style={st.h2}>Appraisals</h2>
+        <ExportButton filename="appraisals" title="Performance Appraisals" rows={rows as unknown as Array<Record<string, unknown>>}
+          columns={[{ key: 'employeeName', label: 'Employee' }, { key: 'employeeId', label: 'Employee ID' }, { key: 'period', label: 'Period' }, { key: 'overallScore', label: 'Overall' }, { key: 'status', label: 'Status' }]} />
+      </div>
       {rows.length === 0 ? (
         <EmptyState compact title="No appraisals" description="Score each competency by weight to produce an overall 0–100 rating, then submit for the employee to acknowledge." />
       ) : (
@@ -174,6 +181,7 @@ const st = {
   linkBtn: { background: 'none', border: 'none', color: 'var(--accent, #2563eb)', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 14 } as CSSProperties,
   err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
+  regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   note: { fontSize: 13, color: 'var(--muted)', margin: '6px 0 0' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
   th: { textAlign: 'left' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,

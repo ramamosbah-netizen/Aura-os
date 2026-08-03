@@ -15,6 +15,14 @@ import { CBS_STORE } from './cbs-store';
 import { InMemoryCbsStore } from './in-memory-cbs-store';
 import { PostgresCbsStore } from './postgres-cbs-store';
 import { CbsService } from './cbs.service';
+import { COST_LEDGER_STORE } from './cost-ledger-store';
+import { InMemoryCostLedgerStore } from './in-memory-cost-ledger-store';
+import { PostgresCostLedgerStore } from './postgres-cost-ledger-store';
+import { CostLedgerService } from './cost-ledger.service';
+import { QUANTITY_LEDGER_STORE } from './quantity-ledger-store';
+import { InMemoryQuantityLedgerStore } from './in-memory-quantity-ledger-store';
+import { PostgresQuantityLedgerStore } from './postgres-quantity-ledger-store';
+import { QuantityLedgerService } from './quantity-ledger.service';
 
 import { DELAY_STORE, EOT_STORE } from './delay-eot-store';
 import { InMemoryDelayStore, InMemoryEotStore } from './in-memory-delay-eot-store';
@@ -99,15 +107,29 @@ import { ScheduleService } from './schedule.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresScheduleStore(pool) : new InMemoryScheduleStore(),
     },
+    {
+      provide: COST_LEDGER_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCostLedgerStore(pool) : new InMemoryCostLedgerStore(),
+    },
+    {
+      provide: QUANTITY_LEDGER_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresQuantityLedgerStore(pool) : new InMemoryQuantityLedgerStore(),
+    },
     ProjectService,
     WbsService,
     CbsService,
+    CostLedgerService,
+    QuantityLedgerService,
     DelayEotService,
     VariationService,
     CloseoutService,
     CashflowForecastService,
     ScheduleService,
   ],
-  exports: [ProjectService, WbsService, CbsService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService],
 })
 export class ProjectsModule {}

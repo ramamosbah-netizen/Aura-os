@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
@@ -81,7 +83,7 @@ export default function SubmittalsClient({ initialSubmittals }: { initialSubmitt
       </div>
 
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Project<ProjectPicker value={projectId} onChange={setProjectId} /></label>
         <label style={st.label}>Reference<input style={st.input} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="SUB-CCTV-001" /></label>
         <label style={{ ...st.label, minWidth: 240 }}>Title<input style={st.input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="CCTV head-end shop drawing" /></label>
         <label style={st.label}>Discipline

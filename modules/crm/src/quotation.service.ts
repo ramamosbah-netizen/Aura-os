@@ -94,6 +94,15 @@ export class QuotationService {
   async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null): Promise<Quotation> {
     const q = await this.store.get(id);
     if (!q) throw new Error(`quotation ${id} not found`);
+    // Segregation of duties (P0-3): whoever prepared a quotation cannot approve it — approval is a
+    // maker-checker control. Engages only when the actor is known (auth on); with auth off actorId
+    // is null and the check is skipped, consistent with the rest of the access seam. "access denied"
+    // phrasing maps to HTTP 403 via the error taxonomy.
+    if (action === 'approve' && actorId && q.createdBy && actorId === q.createdBy) {
+      throw new Error(
+        `access denied: the preparer of quotation ${q.quoteNumber} cannot approve their own quotation — segregation of duties requires a different approver`,
+      );
+    }
     const updated = applyQuotationAction(q, action);
     await this.store.save(updated);
     const eventType =

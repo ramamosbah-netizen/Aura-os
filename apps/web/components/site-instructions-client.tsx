@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
@@ -68,7 +70,7 @@ export default function SiteInstructionsClient({ initialInstructions }: { initia
       </div>
 
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Project<ProjectPicker value={projectId} onChange={setProjectId} /></label>
         <label style={st.label}>Reference<input style={st.input} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="SI-001" /></label>
         <label style={st.label}>Issued by<input style={st.input} value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder="Consultant" /></label>
         <label style={st.label}>Date<input style={st.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>

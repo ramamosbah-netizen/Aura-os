@@ -24,6 +24,10 @@ class CreatePurchaseOrderDto {
   @IsOptional() @IsString() supplierName?: string | null;
   @IsOptional() @IsString() projectId?: string | null;
   @IsOptional() @IsString() projectName?: string | null;
+  @IsOptional() @IsString() cbsNodeId?: string | null;
+  @IsOptional() @IsString() boqItemId?: string | null;
+  @IsOptional() @IsNumber() orderedQuantity?: number | null;
+  @IsOptional() @IsString() unit?: string | null;
   @IsOptional() @IsString() discipline?: Discipline;
   @IsOptional() @IsString() status?: PurchaseOrderStatus;
   @IsOptional() @IsNumber() value?: number;
@@ -100,6 +104,10 @@ export class ProcurementController {
       supplierName: dto.supplierName ?? null,
       projectId: dto.projectId ?? null,
       projectName: dto.projectName ?? null,
+      cbsNodeId: dto.cbsNodeId ?? null,
+      boqItemId: dto.boqItemId ?? null,
+      orderedQuantity: dto.orderedQuantity ?? null,
+      unit: dto.unit ?? null,
       discipline: dto.discipline,
       status: dto.status,
       value: dto.value,

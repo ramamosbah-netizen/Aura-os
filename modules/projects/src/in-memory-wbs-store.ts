@@ -22,6 +22,7 @@ export class InMemoryWbsStore implements WbsStore {
     let out = [...this.nodes.values()];
     if (filter.tenantId) out = out.filter((n) => n.tenantId === filter.tenantId);
     if (filter.projectId) out = out.filter((n) => n.projectId === filter.projectId);
+    if (filter.boqItemId) out = out.filter((n) => n.boqItemId === filter.boqItemId);
     if (filter.parentId !== undefined) {
       out = out.filter((n) => n.parentId === filter.parentId);
     }

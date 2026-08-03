@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
@@ -70,7 +72,7 @@ export default function SnagClient({ initial }: { initial: Snag[] }) {
 
       <h2 style={st.h2}>Log snag</h2>
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={f.projectId} onChange={(e) => set('projectId', e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Project<ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></label>
         <label style={{ ...st.label, minWidth: 240 }}>Description<input style={st.input} value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Scratched faceplate" /></label>
         <label style={{ ...st.label, minWidth: 200 }}>Location<input style={st.input} value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="Room 204, door" /></label>
         <label style={st.label}>Severity<select style={st.input} value={f.severity} onChange={(e) => set('severity', e.target.value)}>{SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>

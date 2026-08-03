@@ -1,5 +1,7 @@
 'use client';
 
+import EmployeePicker from './ui/employee-picker';
+
 import { type CSSProperties, useState } from 'react';
 import ExportButton from './export-button';
 
@@ -98,7 +100,7 @@ export default function AttendanceClient({ initialRecords }: { initialRecords: A
     <div>
       <div style={s.createBar}>
         <input style={s.input} placeholder="Employee name" value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} />
-        <input style={s.input} placeholder="Employee ID (uuid)" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} />
+        <EmployeePicker value={employeeId} onChange={setEmployeeId} style={{ minWidth: 180 }} />
         <input style={s.inputSm} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <select style={s.inputSm} value={status} onChange={(e) => setStatus(e.target.value as (typeof STATUSES)[number])}>
           {STATUSES.map((st2) => <option key={st2} value={st2}>{st2.replace('_', '-')}</option>)}

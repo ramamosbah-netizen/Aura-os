@@ -9,6 +9,8 @@ import {
   type SiteInstruction,
   type LabourAllocation,
   type TradeManHours,
+  type PlantUsage,
+  type InstallationRecord,
   SiteService,
 } from '@aura/site';
 
@@ -227,7 +229,7 @@ export class SiteController {
 
   @Post('labour')
   createLabour(
-    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; subcontractorName?: string; notes?: string },
+    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; costRate?: number; cbsNodeId?: string | null; subcontractorName?: string; notes?: string },
   ): Promise<LabourAllocation> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.trade?.trim()) throw new BadRequestException('trade is required');
@@ -242,6 +244,8 @@ export class SiteController {
       trade: dto.trade,
       headcount: Number(dto.headcount) || 0,
       hours: Number(dto.hours) || 0,
+      costRate: dto.costRate !== undefined ? Number(dto.costRate) : undefined,
+      cbsNodeId: dto.cbsNodeId ?? null,
       subcontractorName: dto.subcontractorName,
       notes: dto.notes,
       createdBy: ctx.actorId ?? undefined,
@@ -261,5 +265,68 @@ export class SiteController {
   @Get('labour/by-trade/:projectId')
   labourByTrade(@Param('projectId') projectId: string): Promise<TradeManHours[]> {
     return this.siteService.labourByTrade(this.tenant.get().tenantId, projectId);
+  }
+
+  // ── Plant / equipment usage ─────────────────────────────────────────────────
+
+  @Post('plant')
+  createPlant(
+    @Body() dto: { projectId: string; projectName?: string; cbsNodeId?: string | null; date: string; equipment: string; hours: number; rate?: number; notes?: string },
+  ): Promise<PlantUsage> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.equipment?.trim()) throw new BadRequestException('equipment is required');
+    if (!dto?.date) throw new BadRequestException('date is required');
+    const ctx = this.tenant.get();
+    return this.siteService.createPlantUsage({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? undefined,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      cbsNodeId: dto.cbsNodeId ?? null,
+      date: dto.date,
+      equipment: dto.equipment,
+      hours: Number(dto.hours) || 0,
+      rate: dto.rate !== undefined ? Number(dto.rate) : undefined,
+      notes: dto.notes,
+      createdBy: ctx.actorId ?? undefined,
+    });
+  }
+
+  @Get('plant')
+  listPlant(): Promise<PlantUsage[]> {
+    return this.siteService.listPlantUsage(this.tenant.get().tenantId);
+  }
+
+  // ── Installation records (INSTALLED quantity against a BOQ item) ─────────────
+
+  @Post('installations')
+  createInstallation(
+    @Body() dto: { projectId: string; projectName?: string; boqItemId: string; cbsNodeId?: string | null; date: string; description: string; quantity: number; unit?: string; notes?: string },
+  ): Promise<InstallationRecord> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.boqItemId?.trim()) throw new BadRequestException('boqItemId is required');
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    if (!dto?.date) throw new BadRequestException('date is required');
+    if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
+    const ctx = this.tenant.get();
+    return this.siteService.createInstallation({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? undefined,
+      projectId: dto.projectId,
+      projectName: dto.projectName,
+      boqItemId: dto.boqItemId,
+      cbsNodeId: dto.cbsNodeId ?? null,
+      date: dto.date,
+      description: dto.description,
+      quantity: Number(dto.quantity),
+      unit: dto.unit ?? null,
+      notes: dto.notes,
+      createdBy: ctx.actorId ?? undefined,
+    });
+  }
+
+  @Get('installations')
+  listInstallations(): Promise<InstallationRecord[]> {
+    return this.siteService.listInstallations(this.tenant.get().tenantId);
   }
 }

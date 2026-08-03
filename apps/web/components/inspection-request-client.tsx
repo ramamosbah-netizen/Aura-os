@@ -2,6 +2,8 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import { Badge, Button, Field, Input, KpiTile, Select, Table, Td, Th } from './ui/kit';
+import ProjectPicker from './ui/project-picker';
 
 export interface InspectionRequest {
   id: string;
@@ -18,7 +20,6 @@ export interface InspectionRequest {
 }
 
 const DISCIPLINES = ['civil', 'mechanical', 'electrical', 'plumbing'];
-const statusColor: Record<string, string> = { requested: '#d97706', approved: '#16a34a', rejected: '#dc2626' };
 
 export default function InspectionRequestClient({ initial }: { initial: InspectionRequest[] }) {
   const [rows, setRows] = useState(initial);
@@ -64,22 +65,24 @@ export default function InspectionRequestClient({ initial }: { initial: Inspecti
     } catch (e) { setError((e as Error).message); }
   };
 
+  const statusTone = (s: string): 'good' | 'bad' | 'warn' => (s === 'approved' ? 'good' : s === 'rejected' ? 'bad' : 'warn');
+
   return (
     <>
       <div style={st.kpis}>
-        <Kpi label="Awaiting inspection" value={kpi.pending} bad={kpi.pending > 0} />
-        <Kpi label="Approved" value={kpi.approved} good />
-        <Kpi label="Rejected" value={kpi.rejected} bad={kpi.rejected > 0} />
+        <KpiTile label="Awaiting inspection" value={kpi.pending} tone={kpi.pending > 0 ? 'warn' : undefined} />
+        <KpiTile label="Approved" value={kpi.approved} tone="good" />
+        <KpiTile label="Rejected" value={kpi.rejected} tone={kpi.rejected > 0 ? 'bad' : undefined} />
       </div>
 
       <h2 style={st.h2}>Request inspection</h2>
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={f.projectId} onChange={(e) => set('projectId', e.target.value)} placeholder="uuid" /></label>
-        <label style={st.label}>IR number<input style={st.input} value={f.irNumber} onChange={(e) => set('irNumber', e.target.value)} placeholder="IR-001" /></label>
-        <label style={st.label}>Discipline<select style={st.input} value={f.discipline} onChange={(e) => set('discipline', e.target.value)}>{DISCIPLINES.map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
-        <label style={{ ...st.label, minWidth: 220 }}>Location<input style={st.input} value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="L3 riser, grid C4" /></label>
-        <label style={st.label}>Date<input type="date" style={st.input} value={f.inspectionDate} onChange={(e) => set('inspectionDate', e.target.value)} /></label>
-        <button style={st.btn} onClick={request} disabled={busy}>{busy ? 'Requesting…' : 'Request'}</button>
+        <Field label="Project"><ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></Field>
+        <Field label="IR number"><Input value={f.irNumber} onChange={(e) => set('irNumber', e.target.value)} placeholder="IR-001" /></Field>
+        <Field label="Discipline"><Select value={f.discipline} onChange={(e) => set('discipline', e.target.value)}>{DISCIPLINES.map((d) => <option key={d} value={d}>{d}</option>)}</Select></Field>
+        <Field label="Location" style={{ minWidth: 220 }}><Input value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="L3 riser, grid C4" /></Field>
+        <Field label="Date"><Input type="date" value={f.inspectionDate} onChange={(e) => set('inspectionDate', e.target.value)} /></Field>
+        <Button onClick={request} disabled={busy}>{busy ? 'Requesting…' : 'Request'}</Button>
         {error && <span style={st.err}>{error}</span>}
       </div>
 
@@ -87,60 +90,41 @@ export default function InspectionRequestClient({ initial }: { initial: Inspecti
       {rows.length === 0 ? (
         <EmptyState compact title="No inspection requests" description="Raise an IR to call the consultant/QA for a hold or witness point before covering up the works." />
       ) : (
-        <table style={st.table}>
-          <thead><tr><th style={st.th}>IR</th><th style={st.th}>Discipline</th><th style={st.th}>Location</th><th style={st.th}>Date</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>
+        <Table>
+          <thead><tr><Th>IR</Th><Th>Discipline</Th><Th>Location</Th><Th>Date</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
-                <td style={st.td}>{r.irNumber}</td>
-                <td style={st.td}>{r.discipline}</td>
-                <td style={st.td}>{r.locationDetail}</td>
-                <td style={st.td}>{r.inspectionDate}</td>
-                <td style={{ ...st.td, color: statusColor[r.status], fontWeight: 600 }}>
-                  {r.status}{r.comments ? <div style={st.cmt}>{r.comments}</div> : null}
-                </td>
-                <td style={st.td}>
+                <Td>{r.irNumber}</Td>
+                <Td>{r.discipline}</Td>
+                <Td>{r.locationDetail}</Td>
+                <Td>{r.inspectionDate}</Td>
+                <Td>
+                  <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                  {r.comments ? <div style={st.cmt}>{r.comments}</div> : null}
+                </Td>
+                <Td>
                   {r.status === 'requested' ? (
-                    <>
-                      <input style={{ ...st.input, minWidth: 140, marginRight: 6 }} placeholder="comments" value={comments[r.id] || ''} onChange={(e) => setComments((c) => ({ ...c, [r.id]: e.target.value }))} />
-                      <button style={st.smGreen} onClick={() => resolve(r.id, 'approved')}>Approve</button>
-                      <button style={st.smRed} onClick={() => resolve(r.id, 'rejected')}>Reject</button>
-                    </>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <Input style={{ minWidth: 140 }} placeholder="comments" value={comments[r.id] || ''} onChange={(e) => setComments((c) => ({ ...c, [r.id]: e.target.value }))} />
+                      <Button size="sm" tone="neutral" onClick={() => resolve(r.id, 'approved')}>Approve</Button>
+                      <Button size="sm" tone="danger" onClick={() => resolve(r.id, 'rejected')}>Reject</Button>
+                    </div>
                   ) : '—'}
-                </td>
+                </Td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       )}
     </>
   );
 }
 
-function Kpi({ label, value, good, bad }: { label: string; value: number; good?: boolean; bad?: boolean }) {
-  return (
-    <div style={st.kpi}>
-      <div style={st.kpiLabel}>{label}</div>
-      <div style={{ ...st.kpiValue, color: bad && value > 0 ? '#dc2626' : good ? '#16a34a' : 'var(--fg)' }}>{value}</div>
-    </div>
-  );
-}
-
 const st = {
   kpis: { display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' as const } as CSSProperties,
-  kpi: { border: '1px solid var(--border)', borderRadius: 10, padding: '12px 18px', minWidth: 130, background: 'var(--surface)' } as CSSProperties,
-  kpiLabel: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } as CSSProperties,
-  kpiValue: { fontSize: 24, fontWeight: 700, letterSpacing: -0.5 } as CSSProperties,
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
-  label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
-  input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--surface)', color: 'var(--fg)' } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
-  smRed: { padding: '4px 10px', borderRadius: 4, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
-  h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
+  err: { color: 'var(--bad)', marginLeft: 12, fontSize: 13, alignSelf: 'center' } as CSSProperties,
+  h2: { fontSize: 20, margin: '18px 0 10px', color: 'var(--text)' } as CSSProperties,
   cmt: { fontSize: 12, color: 'var(--muted)', fontWeight: 400, marginTop: 2 } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
-  th: { textAlign: 'left' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
-  td: { padding: '8px 12px', borderBottom: '1px solid var(--border, #e5e7eb)', verticalAlign: 'top' } as CSSProperties,
 };

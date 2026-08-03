@@ -13,6 +13,9 @@ export interface WbsNode {
   earnedValue: number; // Calculated: plannedValue * (progress / 100)
   actualCost: number; // Sum of actual approved invoices/expenses
   progress: number; // 0 to 100
+  /** The BOQ (measured) item that drives this work package's progress. When set, the Progress Engine
+   * syncs progress = the item's physical % complete (installed / BOQ) from the Quantity Ledger. */
+  boqItemId: Id | null;
   status: WbsNodeStatus;
   createdAt: string;
 }
@@ -26,6 +29,7 @@ export interface NewWbsNode {
   plannedValue?: number;
   actualCost?: number;
   progress?: number;
+  boqItemId?: Id | null;
   status?: WbsNodeStatus;
 }
 
@@ -45,6 +49,7 @@ export function makeWbsNode(input: NewWbsNode): WbsNode {
     earnedValue: Number((planned * (progress / 100)).toFixed(2)),
     actualCost: actual,
     progress: Math.min(100, Math.max(0, progress)),
+    boqItemId: input.boqItemId ?? null,
     status: input.status ?? 'pending',
     createdAt: new Date().toISOString(),
   };

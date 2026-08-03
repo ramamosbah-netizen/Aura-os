@@ -18,8 +18,8 @@ export class PostgresInspectionRequestStore implements InspectionRequestStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_quality_irs (
-        id, tenant_id, company_id, project_id, project_name, ir_number, discipline, location_detail, inspection_date, status, inspected_by, comments, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        id, tenant_id, company_id, project_id, project_name, ir_number, discipline, location_detail, inspection_date, status, inspected_by, comments, created_at, updated_at, boq_item_id, approved_quantity, unit
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       on conflict (id) do update set
         status = excluded.status,
         inspected_by = excluded.inspected_by,
@@ -40,6 +40,9 @@ export class PostgresInspectionRequestStore implements InspectionRequestStore {
         ir.comments,
         ir.createdAt,
         ir.updatedAt,
+        ir.boqItemId,
+        ir.approvedQuantity,
+        ir.unit,
       ],
     );
   }
@@ -92,6 +95,9 @@ export class PostgresInspectionRequestStore implements InspectionRequestStore {
       status: row.status,
       inspectedBy: row.inspected_by,
       comments: row.comments,
+      boqItemId: row.boq_item_id ?? null,
+      approvedQuantity: row.approved_quantity != null ? Number(row.approved_quantity) : null,
+      unit: row.unit ?? null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

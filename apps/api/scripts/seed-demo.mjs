@@ -12,13 +12,17 @@ const USER = process.env.SEED_USER ?? 'u-admin';
 const PASS = process.env.SEED_PASS ?? 'demo';
 
 let token = '';
+// A distinct, authorised checker for maker-checker flows (e.g. quotation approval, where the
+// preparer may not approve their own quotation — segregation of duties).
+const APPROVER = process.env.SEED_APPROVER ?? 'u-approver';
+let approverToken = '';
 
-async function api(method, path, body) {
+async function api(method, path, body, tok = token) {
   const res = await fetch(`${BASE}/api/v1${path}`, {
     method,
     headers: {
       'content-type': 'application/json',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(tok ? { authorization: `Bearer ${tok}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -30,16 +34,21 @@ async function api(method, path, body) {
 }
 
 const post = (p, b) => api('POST', p, b);
-const patch = (p, b) => api('PATCH', p, b);
+const patch = (p, b, tok) => api('PATCH', p, b, tok);
 
-async function login() {
+async function loginAs(username) {
   const res = await fetch(`${BASE}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: USER, password: PASS }),
+    body: JSON.stringify({ username, password: PASS }),
   });
   if (!res.ok) throw new Error(`login failed (${res.status}). Is AUTH_JWT_SECRET set on the API?`);
-  token = (await res.json()).token;
+  return (await res.json()).token;
+}
+
+async function login() {
+  token = await loginAs(USER);
+  approverToken = await loginAs(APPROVER);
 }
 
 // ── Demo dataset ────────────────────────────────────────────────────────────
@@ -124,7 +133,8 @@ async function main() {
         issueDate: new Date().toISOString().slice(0, 10),
         lines: [{ description: title, quantity: 1, unitPrice: value, vatRate: 5 }],
       });
-      await patch(`/crm/quotations/${quote.id}/status`, { action: 'approve' });
+      // Maker-checker: a different authorised user approves the quotation the preparer raised.
+      await patch(`/crm/quotations/${quote.id}/status`, { action: 'approve' }, approverToken);
       await patch(`/crm/quotations/${quote.id}/status`, { action: 'send' });
     }
 

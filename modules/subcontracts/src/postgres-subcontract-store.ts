@@ -12,6 +12,7 @@ interface SubcontractRow {
   tenant_id: string;
   project_id: string;
   project_name: string | null;
+  cbs_node_id: string | null;
   title: string;
   subcontractor_name: string;
   status: string;
@@ -59,7 +60,7 @@ interface BackChargeRow {
   updated_at: Date | string;
 }
 
-const SUB_COLS = 'id, tenant_id, project_id, project_name, title, subcontractor_name, status, value, retention_percentage, created_at';
+const SUB_COLS = 'id, tenant_id, project_id, project_name, cbs_node_id, title, subcontractor_name, status, value, retention_percentage, created_at';
 const CLAIM_COLS = 'id, tenant_id, subcontract_id, claim_number, status, work_completed_value, previously_certified_value, this_period_gross_value, retention_withheld, net_certified_value, is_retention_release, retention_released, certified_at, certified_by, created_at';
 const BC_COLS = 'id, tenant_id, subcontract_id, subcontractor_name, reference, category, description, gross_amount, markup_percent, markup_amount, recoverable_amount, recovered_amount, outstanding_amount, status, raised_at, agreed_at, created_at, updated_at';
 const VAR_COLS = 'id, tenant_id, subcontract_id, reference, type, amount, description, status, approved_by, created_at';
@@ -98,6 +99,7 @@ function rowToSubcontract(r: SubcontractRow): Subcontract {
     tenantId: r.tenant_id,
     projectId: r.project_id,
     projectName: r.project_name,
+    cbsNodeId: r.cbs_node_id,
     title: r.title,
     subcontractorName: r.subcontractor_name,
     status: r.status as Subcontract['status'],
@@ -159,12 +161,13 @@ export class PostgresSubcontractStore implements SubcontractStore {
 
   async createSubcontract(s: Subcontract): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_subcontracts (${SUB_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO public.aura_subcontracts (${SUB_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         s.id,
         s.tenantId,
         s.projectId,
         s.projectName,
+        s.cbsNodeId,
         s.title,
         s.subcontractorName,
         s.status,
@@ -177,8 +180,8 @@ export class PostgresSubcontractStore implements SubcontractStore {
 
   async updateSubcontract(s: Subcontract): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_subcontracts SET title=$2, subcontractor_name=$3, status=$4, value=$5, retention_percentage=$6 WHERE id=$1`,
-      [s.id, s.title, s.subcontractorName, s.status, s.value, s.retentionPercentage],
+      `UPDATE public.aura_subcontracts SET title=$2, subcontractor_name=$3, status=$4, value=$5, retention_percentage=$6, cbs_node_id=$7 WHERE id=$1`,
+      [s.id, s.title, s.subcontractorName, s.status, s.value, s.retentionPercentage, s.cbsNodeId],
     );
   }
 

@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
@@ -61,7 +63,7 @@ export default function ToolboxTalksClient({ initialTalks }: { initialTalks: Too
       </div>
 
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Project<ProjectPicker value={projectId} onChange={setProjectId} /></label>
         <label style={st.label}>Project name<input style={st.input} value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Tower A" /></label>
         <label style={st.label}>Topic<input style={st.input} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Working at height" /></label>
         <label style={st.label}>Conducted by<input style={st.input} value={conductedBy} onChange={(e) => setConductedBy(e.target.value)} placeholder="HSE Officer" /></label>

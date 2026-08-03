@@ -25,6 +25,11 @@ export interface GoodsReceipt {
   status: GoodsReceiptStatus;
   /** Received value. */
   value: number;
+  /** The BOQ (measured) item these goods are received against — where the RECEIVED quantity accrues
+   * on the Quantity Ledger. With `receivedQuantity` + `unit`, grn.created posts +received. */
+  boqItemId: Id | null;
+  receivedQuantity: number | null;
+  unit: string | null;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -42,6 +47,9 @@ export interface NewGoodsReceipt {
   projectName?: string | null;
   status?: GoodsReceiptStatus;
   value?: number;
+  boqItemId?: Id | null;
+  receivedQuantity?: number | null;
+  unit?: string | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
@@ -60,6 +68,9 @@ export function makeGoodsReceipt(input: NewGoodsReceipt): GoodsReceipt {
     projectName: input.projectName ?? null,
     status: input.status ?? 'received',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    boqItemId: input.boqItemId ?? null,
+    receivedQuantity: input.receivedQuantity != null ? Number(input.receivedQuantity) : null,
+    unit: input.unit?.trim() || null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

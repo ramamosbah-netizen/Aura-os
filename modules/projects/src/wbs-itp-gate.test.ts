@@ -12,6 +12,10 @@ import {
 } from '@aura/quality';
 import { WbsService } from './wbs.service';
 import { InMemoryWbsStore } from './in-memory-wbs-store';
+import { QuantityLedgerService } from './quantity-ledger.service';
+import { InMemoryQuantityLedgerStore } from './in-memory-quantity-ledger-store';
+
+const qtyLedger = () => new QuantityLedgerService(new InMemoryQuantityLedgerStore());
 
 /**
  * ITP release gate — a WBS work package cannot be marked complete while the
@@ -46,7 +50,7 @@ describe('WBS completion — ITP release gate', () => {
 
   beforeEach(() => {
     quality = buildQuality();
-    wbs = new WbsService(new InMemoryWbsStore(), mockEvents, access, quality);
+    wbs = new WbsService(new InMemoryWbsStore(), mockEvents, access, qtyLedger(), quality);
   });
 
   async function makeNode() {
@@ -107,7 +111,7 @@ describe('WBS completion — ITP release gate', () => {
   });
 
   it('completes without a gate when the Quality module is absent', async () => {
-    const ungated = new WbsService(new InMemoryWbsStore(), mockEvents, access);
+    const ungated = new WbsService(new InMemoryWbsStore(), mockEvents, access, qtyLedger());
     const node = await ungated.create({ tenantId, projectId, code: '1', title: 'Root', plannedValue: 10 });
     const done = await ungated.updateProgress(node.id, 100);
     expect(done.status).toBe('completed');

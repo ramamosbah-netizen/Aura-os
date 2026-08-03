@@ -15,16 +15,20 @@ interface Row {
   supplier_name: string | null;
   project_id: string | null;
   project_name: string | null;
+  cbs_node_id: string | null;
   discipline: string;
   status: string;
   value: string | number;
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
+  boq_item_id: string | null;
+  ordered_quantity: string | number | null;
+  unit: string | null;
 }
 
 const COLS =
-  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, project_id, project_name, discipline, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, project_id, project_name, cbs_node_id, discipline, status, value, owner_id, created_by, created_at, boq_item_id, ordered_quantity, unit';
 
 function rowToPo(r: Row): PurchaseOrder {
   return {
@@ -37,12 +41,16 @@ function rowToPo(r: Row): PurchaseOrder {
     supplierName: r.supplier_name,
     projectId: r.project_id,
     projectName: r.project_name,
+    cbsNodeId: r.cbs_node_id,
     discipline: r.discipline as PurchaseOrder['discipline'],
     status: r.status as PurchaseOrder['status'],
     value: Number(r.value),
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    boqItemId: r.boq_item_id,
+    orderedQuantity: r.ordered_quantity != null ? Number(r.ordered_quantity) : null,
+    unit: r.unit,
   };
 }
 
@@ -61,8 +69,8 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
 
   private insert(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierId, p.supplierName, p.projectId, p.projectName, p.discipline, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
+      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierId, p.supplierName, p.projectId, p.projectName, p.cbsNodeId, p.discipline, p.status, p.value, p.ownerId, p.createdBy, p.createdAt, p.boqItemId, p.orderedQuantity, p.unit],
     );
   }
 

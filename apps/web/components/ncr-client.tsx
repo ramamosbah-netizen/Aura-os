@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
@@ -76,7 +78,7 @@ export default function NcrClient({ initial }: { initial: Ncr[] }) {
 
       <h2 style={st.h2}>Raise NCR</h2>
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={f.projectId} onChange={(e) => set('projectId', e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Project<ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></label>
         <label style={st.label}>NCR number<input style={st.input} value={f.ncrNumber} onChange={(e) => set('ncrNumber', e.target.value)} placeholder="NCR-001" /></label>
         <label style={{ ...st.label, minWidth: 260 }}>Description<input style={st.input} value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Cable tray not per spec" /></label>
         <label style={st.label}>Severity<select style={st.input} value={f.severity} onChange={(e) => set('severity', e.target.value)}><option value="minor">minor</option><option value="major">major</option></select></label>

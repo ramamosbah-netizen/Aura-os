@@ -10,6 +10,9 @@ import { PAYMENT_CERTIFICATE_STORE } from './payment-certificate-store';
 import { InMemoryPaymentCertificateStore } from './in-memory-payment-certificate-store';
 import { PostgresPaymentCertificateStore } from './postgres-payment-certificate-store';
 import { PaymentCertificateService } from './payment-certificate.service';
+import { IPC_LINE_STORE } from './ipc-line-store';
+import { InMemoryIpcLineStore } from './in-memory-ipc-line-store';
+import { PostgresIpcLineStore } from './postgres-ipc-line-store';
 
 import { CLAUSE_STORE } from './clause-store';
 import { InMemoryClauseStore } from './in-memory-clause-store';
@@ -48,6 +51,12 @@ import { ObligationService } from './obligation.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresPaymentCertificateStore(pool) : new InMemoryPaymentCertificateStore(),
+    },
+    {
+      provide: IPC_LINE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresIpcLineStore(pool) : new InMemoryIpcLineStore(),
     },
     PaymentCertificateService,
     {

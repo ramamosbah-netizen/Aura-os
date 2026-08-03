@@ -13,6 +13,8 @@ export const DELAY_LOG_STORE = Symbol('DELAY_LOG_STORE');
 export const MATERIAL_CONSUMPTION_STORE = Symbol('MATERIAL_CONSUMPTION_STORE');
 export const SITE_INSTRUCTION_STORE = Symbol('SITE_INSTRUCTION_STORE');
 export const LABOUR_ALLOCATION_STORE = Symbol('LABOUR_ALLOCATION_STORE');
+export const PLANT_USAGE_STORE = Symbol('PLANT_USAGE_STORE');
+export const INSTALLATION_STORE = Symbol('INSTALLATION_STORE');
 
 import {
   type DailyReportStore,
@@ -20,8 +22,12 @@ import {
   type MaterialConsumptionStore,
   type SiteInstructionStore,
   type LabourAllocationStore,
+  type PlantUsageStore,
+  type InstallationStore,
   type DailyReportFilter,
 } from './store.interface';
+import { type PlantUsage, makePlantUsage } from './domain/plant-usage';
+import { type InstallationRecord, makeInstallationRecord } from './domain/installation';
 
 export const SITE_EVENT = {
   dailyReportSubmitted: 'site.daily_report.submitted',
@@ -29,6 +35,9 @@ export const SITE_EVENT = {
   delayLogged: 'site.delay.logged',
   instructionIssued: 'site.instruction.issued',
   instructionClosed: 'site.instruction.closed',
+  labourLogged: 'site.labour.logged',
+  plantLogged: 'site.plant.logged',
+  installationRecorded: 'site.installation.recorded',
 };
 
 @Injectable()
@@ -41,6 +50,8 @@ export class SiteService {
     @Inject(MATERIAL_CONSUMPTION_STORE) private readonly materialConsumptionStore: MaterialConsumptionStore,
     @Inject(SITE_INSTRUCTION_STORE) private readonly siteInstructionStore: SiteInstructionStore,
     @Inject(LABOUR_ALLOCATION_STORE) private readonly labourStore: LabourAllocationStore,
+    @Inject(PLANT_USAGE_STORE) private readonly plantStore: PlantUsageStore,
+    @Inject(INSTALLATION_STORE) private readonly installationStore: InstallationStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -322,6 +333,8 @@ export class SiteService {
     trade: string;
     headcount: number;
     hours: number;
+    costRate?: number;
+    cbsNodeId?: string | null;
     subcontractorName?: string;
     notes?: string;
     createdBy?: string;
@@ -332,8 +345,28 @@ export class SiteService {
       this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
     }
     const allocation = makeLabourAllocation(input);
-    await this.tx.run(async (handle) => { await this.labourStore.save(allocation, handle); });
-    this.logger.log(`Labour logged: ${allocation.headcount}× ${allocation.trade} @ ${allocation.hours}h = ${allocation.manHours}mh on ${allocation.projectId}`);
+    // Carry the labour cost + coding so the Transaction Engine posts it as ACTUAL on the CBS line.
+    const event = makeEvent({
+      type: SITE_EVENT.labourLogged,
+      tenantId: allocation.tenantId,
+      companyId: allocation.companyId,
+      actorId: allocation.createdBy,
+      aggregateType: 'site.labour',
+      aggregateId: allocation.id,
+      payload: {
+        projectId: allocation.projectId,
+        cbsNodeId: allocation.cbsNodeId,
+        trade: allocation.trade,
+        manHours: allocation.manHours,
+        costRate: allocation.costRate,
+        labourCost: allocation.labourCost,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.labourStore.save(allocation, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Labour logged: ${allocation.headcount}× ${allocation.trade} @ ${allocation.hours}h = ${allocation.manHours}mh (cost ${allocation.labourCost}) on ${allocation.projectId}`);
     return allocation;
   }
 
@@ -350,5 +383,106 @@ export class SiteService {
   async labourByTrade(tenantId: Id, projectId: Id): Promise<TradeManHours[]> {
     const rows = await this.labourStore.findByProject(projectId, tenantId);
     return summariseByTrade(rows);
+  }
+
+  // ── Plant / equipment usage ─────────────────────────────────────────────────
+
+  async createPlantUsage(input: {
+    tenantId: string;
+    companyId?: string;
+    projectId: string;
+    projectName?: string;
+    cbsNodeId?: string | null;
+    date: string;
+    equipment: string;
+    hours: number;
+    rate?: number;
+    notes?: string;
+    createdBy?: string;
+  }): Promise<PlantUsage> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
+    }
+    const usage = makePlantUsage(input);
+    // Carry the plant cost + coding so the Transaction Engine posts it as ACTUAL on the CBS line.
+    const event = makeEvent({
+      type: SITE_EVENT.plantLogged,
+      tenantId: usage.tenantId,
+      companyId: usage.companyId,
+      actorId: usage.createdBy,
+      aggregateType: 'site.plant',
+      aggregateId: usage.id,
+      payload: {
+        projectId: usage.projectId,
+        cbsNodeId: usage.cbsNodeId,
+        equipment: usage.equipment,
+        hours: usage.hours,
+        rate: usage.rate,
+        cost: usage.cost,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.plantStore.save(usage, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Plant logged: ${usage.equipment} @ ${usage.hours}h × ${usage.rate} = ${usage.cost} on ${usage.projectId}`);
+    return usage;
+  }
+
+  listPlantUsage(tenantId: Id): Promise<PlantUsage[]> {
+    return this.plantStore.findAll(tenantId);
+  }
+
+  // ── Installation records (physical work fixed in place = INSTALLED quantity) ────────────────
+
+  async createInstallation(input: {
+    tenantId: string;
+    companyId?: string;
+    projectId: string;
+    projectName?: string;
+    boqItemId: string;
+    cbsNodeId?: string | null;
+    date: string;
+    description: string;
+    quantity: number;
+    unit?: string | null;
+    notes?: string;
+    createdBy?: string;
+  }): Promise<InstallationRecord> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
+    }
+    const record = makeInstallationRecord(input);
+    // Carry the installed quantity + BOQ coding so the Quantity Ledger posts +installed on this line.
+    const event = makeEvent({
+      type: SITE_EVENT.installationRecorded,
+      tenantId: record.tenantId,
+      companyId: record.companyId,
+      actorId: record.createdBy,
+      aggregateType: 'site.installation',
+      aggregateId: record.id,
+      payload: {
+        projectId: record.projectId,
+        boqItemId: record.boqItemId,
+        cbsNodeId: record.cbsNodeId,
+        quantity: record.quantity,
+        unit: record.unit,
+        description: record.description,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.installationStore.save(record, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Installed: ${record.quantity} ${record.unit} of "${record.description}" (BOQ ${record.boqItemId}) on ${record.projectId}`);
+    return record;
+  }
+
+  listInstallations(tenantId: Id): Promise<InstallationRecord[]> {
+    return this.installationStore.findAll(tenantId);
   }
 }

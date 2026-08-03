@@ -5,6 +5,8 @@ import {
   InMemoryMaterialConsumptionStore,
   InMemorySiteInstructionStore,
   InMemoryLabourAllocationStore,
+  InMemoryPlantUsageStore,
+  InMemoryInstallationStore,
 } from '../in-memory-site-store';
 import { SiteService } from '../site.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
@@ -29,6 +31,8 @@ function build(): { svc: SiteService; emitted: Array<{ type: string; payload: Re
     new InMemoryMaterialConsumptionStore(),
     new InMemorySiteInstructionStore(),
     new InMemoryLabourAllocationStore(),
+    new InMemoryPlantUsageStore(),
+    new InMemoryInstallationStore(),
     events,
     mockTx,
     new AccessService(),

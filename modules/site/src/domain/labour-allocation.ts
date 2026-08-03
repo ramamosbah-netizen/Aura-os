@@ -16,6 +16,13 @@ export interface LabourAllocation {
   hours: number;
   /** Convenience roll-up: headcount × hours. */
   manHours: number;
+  /** All-in cost per man-hour (labour rate). 0 = untracked → no cost posts. */
+  costRate: number;
+  /** Derived labour cost for this allocation: manHours × costRate. */
+  labourCost: number;
+  /** CBS cost line this labour is charged to. When set (with a costRate), the Transaction
+   * Engine posts the labour cost as ACTUAL against it. Nullable + additive. */
+  cbsNodeId: string | null;
   subcontractorName: string | null;
   notes: string | null;
   createdBy: string | null;
@@ -32,6 +39,8 @@ export interface NewLabourAllocation {
   trade: string;
   headcount: number;
   hours: number;
+  costRate?: number;
+  cbsNodeId?: string | null;
   subcontractorName?: string | null;
   notes?: string | null;
   createdBy?: string | null;
@@ -43,6 +52,8 @@ export function makeLabourAllocation(input: NewLabourAllocation): LabourAllocati
   const now = new Date().toISOString();
   const headcount = Number(input.headcount) || 0;
   const hours = Number(input.hours) || 0;
+  const manHours = r2(headcount * hours);
+  const costRate = Math.max(0, Number(input.costRate) || 0);
   return {
     id: randomUUID(),
     tenantId: input.tenantId,
@@ -53,7 +64,10 @@ export function makeLabourAllocation(input: NewLabourAllocation): LabourAllocati
     trade: input.trade.trim(),
     headcount,
     hours,
-    manHours: r2(headcount * hours),
+    manHours,
+    costRate,
+    labourCost: r2(manHours * costRate),
+    cbsNodeId: input.cbsNodeId ?? null,
     subcontractorName: input.subcontractorName?.trim() || null,
     notes: input.notes?.trim() || null,
     createdBy: input.createdBy ?? null,

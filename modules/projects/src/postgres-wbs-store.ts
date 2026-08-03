@@ -16,10 +16,11 @@ interface Row {
   progress: string | number;
   status: string;
   created_at: Date | string;
+  boq_item_id: string | null;
 }
 
 const COLS =
-  'id, tenant_id, project_id, parent_id, code, title, planned_value, earned_value, actual_cost, progress, status, created_at';
+  'id, tenant_id, project_id, parent_id, code, title, planned_value, earned_value, actual_cost, progress, status, created_at, boq_item_id';
 
 function rowToNode(r: Row): WbsNode {
   return {
@@ -33,6 +34,7 @@ function rowToNode(r: Row): WbsNode {
     earnedValue: Number(r.earned_value),
     actualCost: Number(r.actual_cost),
     progress: Number(r.progress),
+    boqItemId: r.boq_item_id ?? null,
     status: r.status as WbsNode['status'],
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
@@ -43,7 +45,7 @@ export class PostgresWbsStore implements WbsStore {
 
   async create(n: WbsNode): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_projects_wbs_nodes (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      `INSERT INTO public.aura_projects_wbs_nodes (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         n.id,
         n.tenantId,
@@ -57,6 +59,7 @@ export class PostgresWbsStore implements WbsStore {
         n.progress,
         n.status,
         n.createdAt,
+        n.boqItemId,
       ],
     );
   }
@@ -91,6 +94,7 @@ export class PostgresWbsStore implements WbsStore {
     };
     add('tenant_id', filter.tenantId);
     add('project_id', filter.projectId);
+    add('boq_item_id', filter.boqItemId);
     if (filter.parentId !== undefined) {
       add('parent_id', filter.parentId);
     }

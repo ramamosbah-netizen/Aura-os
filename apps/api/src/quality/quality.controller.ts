@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -41,6 +41,9 @@ class RequestInspectionDto {
   @IsString() discipline!: InspectionRequest['discipline'];
   @IsString() locationDetail!: string;
   @IsString() inspectionDate!: string;
+  @IsOptional() @IsString() boqItemId?: string | null;
+  @IsOptional() @IsNumber() approvedQuantity?: number | null;
+  @IsOptional() @IsString() unit?: string | null;
 }
 
 class ResolveInspectionDto {
@@ -154,6 +157,9 @@ export class QualityController {
       locationDetail: dto.locationDetail,
       inspectionDate: dto.inspectionDate,
       inspectedBy: ctx.actorId || undefined,
+      boqItemId: dto.boqItemId ?? null,
+      approvedQuantity: dto.approvedQuantity ?? null,
+      unit: dto.unit ?? null,
     });
   }
 

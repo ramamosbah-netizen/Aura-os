@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
-import { ProjectService, WbsService, CbsService, VariationService } from '@aura/projects';
+import { ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
@@ -41,6 +41,8 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly projects: ProjectService,
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
+    private readonly ledger: CostLedgerService,
+    private readonly quantityLedger: QuantityLedgerService,
     private readonly variations: VariationService,
     private readonly tenant: TenantContext,
     private readonly pos: PurchaseOrderService,
@@ -460,14 +462,197 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
-    // ── Operate: PO created → log committed cost against project ───────
-    this.bus.subscribe('procurement.po.created', (e: DomainEvent) => {
+    // ── Operate: PO created → post a COMMITTED cost transaction to the ledger ───────
+    // No module touches the CBS directly. The PO becomes a CostTransaction; the Transaction Engine
+    // appends it to the ledger (source of truth + audit trail) and moves the CBS node's balance.
+    // Committed cost is tracked only where the PO is coded (cbsNodeId) — never guessed.
+    this.bus.subscribe('procurement.po.created', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
       const project = p.project as { id: string; name: string } | null;
-      if (project) {
-        this.logger.log(
-          `📊 po.created → committed cost +${p.value} against project "${project.name}" (${project.id})`,
-        );
+      const value = Number(p.value) || 0;
+      if (cbsNodeId && project?.id && value > 0) {
+        try {
+          await this.ledger.post({
+            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+            cbsNodeId, type: 'committed', amount: value, source: 'po', sourceRef: (p.title as string) ?? null,
+            dimensions: { poId: e.aggregateId },
+          });
+        } catch (err) {
+          this.logger.error(`Failed to post committed cost txn for CBS node ${cbsNodeId}: ${err}`);
+        }
+      }
+    });
+
+    // ── Committed-cost lifecycle: PO cancelled → REVERSE its committed cost (a NEGATIVE entry) ──
+    // The ledger is append-only, so un-committing a cancelled PO is a negative posting, never a
+    // mutation — the CBS balance drops by exactly what the PO put on it, and the drill-down keeps
+    // both the +commit and the −reversal. Idempotent: guarded on an existing reversal for this PO,
+    // so an at-least-once redelivery cannot double-reverse and corrupt the balance.
+    this.bus.subscribe('procurement.po.updated', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'cancelled') return;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const value = Number(p.value) || 0;
+      if (!cbsNodeId || !project?.id || value <= 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'reversal' && t.dimensions?.poId === e.aggregateId)) return; // already reversed
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          cbsNodeId, type: 'committed', amount: -value, source: 'reversal',
+          sourceRef: `${(p.title as string) ?? 'PO'} — cancelled`, dimensions: { poId: e.aggregateId, reverses: 'po' },
+        });
+        this.logger.log(`↩ po.cancelled → reversed committed ${value} on CBS ${cbsNodeId} (PO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to reverse committed cost for cancelled PO ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger (Phase 2): PO created → post ORDERED quantity on the BOQ item ──
+    // The physical twin of the committed-cost reactor above. A PO coded to a BOQ item (boqItemId +
+    // orderedQuantity) accrues the ordered quantity so the item's Ordered position = SUM(this).
+    this.bus.subscribe('procurement.po.created', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const qty = Number(p.orderedQuantity) || 0;
+      if (!boqItemId || !project?.id || qty <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'ordered', quantity: qty, unit: (p.unit as string | null) ?? null,
+          source: 'po', sourceRef: (p.title as string) ?? null, dimensions: { poId: e.aggregateId },
+        });
+        this.logger.log(`📏 po.created → posted ordered ${qty} on BOQ ${boqItemId} (PO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post ordered quantity for PO ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger: PO cancelled → REVERSE the ordered quantity (a negative entry) ──
+    // Append-only + idempotent (guarded on an existing reversal for this PO), mirroring the committed-
+    // cost reversal so the Ordered position drops by exactly what the PO put on it.
+    this.bus.subscribe('procurement.po.updated', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'cancelled') return;
+      const boqItemId = p.boqItemId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const qty = Number(p.orderedQuantity) || 0;
+      if (!boqItemId || !project?.id || qty <= 0) return;
+      try {
+        const existing = await this.quantityLedger.list({ tenantId: e.tenantId, boqItemId });
+        if (existing.some((t) => t.source === 'reversal' && t.dimensions?.poId === e.aggregateId)) return;
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'ordered', quantity: -qty, unit: (p.unit as string | null) ?? null,
+          source: 'reversal', sourceRef: `${(p.title as string) ?? 'PO'} — cancelled`,
+          dimensions: { poId: e.aggregateId, reverses: 'po' },
+        });
+        this.logger.log(`↩ po.cancelled → reversed ordered ${qty} on BOQ ${boqItemId} (PO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to reverse ordered quantity for cancelled PO ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger (Phase 2): GRN created → post RECEIVED quantity on the BOQ item ──
+    // A goods receipt coded to a BOQ item (boqItemId + receivedQuantity) accrues the received quantity
+    // so the item's Received position = SUM(this). The gap Ordered − Received is what is still in transit.
+    this.bus.subscribe('inventory.grn.created', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const qty = Number(p.receivedQuantity) || 0;
+      if (!boqItemId || !project?.id || qty <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          boqItemId, type: 'received', quantity: qty, unit: (p.unit as string | null) ?? null,
+          source: 'grn', sourceRef: (p.title as string) ?? null, dimensions: { grnId: e.aggregateId },
+        });
+        this.logger.log(`📏 grn.created → posted received ${qty} on BOQ ${boqItemId} (GRN ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post received quantity for GRN ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Subcontract strand (mirrors the PO): active → COMMITTED cost on the CBS line ──
+    // A subcontract is a commitment like a PO. When it goes 'active' (awarded), the engine posts a
+    // committed CostTransaction for its value. Idempotent: guarded on an existing committed entry for
+    // this subcontract, so re-activation (or a redelivered event) cannot double-commit.
+    this.bus.subscribe('subcontracts.subcontract.statusChanged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'active') return;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const value = Number(p.value) || 0;
+      if (!cbsNodeId || !projectId || value <= 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'subcontract' && t.dimensions?.subcontractId === e.aggregateId)) return;
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'committed', amount: value, source: 'subcontract',
+          sourceRef: `${(p.title as string) ?? 'Subcontract'} — awarded`, dimensions: { subcontractId: e.aggregateId },
+        });
+        this.logger.log(`⚡ subcontract active → committed ${value} on CBS ${cbsNodeId} (SC ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post committed cost for subcontract ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Subcontract strand: claim (IPC) certified → ACTUAL cost = gross work done this period ──
+    // Each certified interim claim recognises the gross value of work put in place this period as
+    // actual cost on the CBS line (retention is withheld payment, not a cost reduction). Append-only,
+    // so Subcontract actual = SUM(certified gross). Idempotent: guarded on an existing actual for this
+    // claim. Retention-release claims have thisPeriodGrossValue=0 → skipped (handled by the AP reactor).
+    this.bus.subscribe('subcontracts.claim.statusChanged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'certified') return;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const gross = Number(p.thisPeriodGrossValue) || 0;
+      if (!cbsNodeId || !projectId || gross <= 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'subcontract_claim' && t.dimensions?.claimId === e.aggregateId)) return;
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'actual', amount: gross, source: 'subcontract_claim',
+          sourceRef: `${(p.subcontractTitle as string) ?? 'Subcontract'} — claim #${p.claimNumber ?? ''}`.trim(),
+          dimensions: { claimId: e.aggregateId, subcontractId: (p.subcontractId as string) ?? '' },
+        });
+        this.logger.log(`⚡ subcontract claim certified → actual ${gross} on CBS ${cbsNodeId} (claim ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post actual cost for certified claim ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Variation strand (the BUDGET side): approved change order → adjust the cost line's budget ──
+    // A variation is not a spend — it moves the approved budget baseline (BAC). On approval, the
+    // engine posts a `budget` CostTransaction of the signed amount (addition +, omission −) so the
+    // line's budget = opening estimate + SUM(approved variations). Append-only + idempotent
+    // (guarded per variationId), so a redelivered approval cannot double-adjust the budget.
+    this.bus.subscribe('projects.variation.approved', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const signedAmount = Number(p.signedAmount) || 0;
+      if (!cbsNodeId || !projectId || signedAmount === 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'variation' && t.dimensions?.variationId === e.aggregateId)) return;
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'budget', amount: signedAmount, source: 'variation',
+          sourceRef: `${(p.title as string) ?? 'Variation'} — approved`, dimensions: { variationId: e.aggregateId },
+        });
+        this.logger.log(`⚡ variation approved → budget ${signedAmount >= 0 ? '+' : ''}${signedAmount} on CBS ${cbsNodeId} (VO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post budget change for approved variation ${e.aggregateId}: ${err}`);
       }
     });
 
@@ -576,6 +761,203 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Material cost strand: stock issued to / returned from a project → ACTUAL cost on the CBS line ──
+    // No module touches the CBS directly. A coded stock movement (cbsNodeId set) becomes a CostTransaction:
+    //   issue  (out) → ACTUAL  +qty, amount = qty × unitCost (the WAC/COGS rate), source 'material_issue'
+    //   return (in)  → NEGATIVE actual −qty, −amount,                             source 'material_return'
+    // So Material cost on a line = SUM(issues) − SUM(returns), append-only. The txn also carries the
+    // signed `quantity`, which seeds the Quantity Ledger (issued/returned) with no extra plumbing.
+    // Uncoded moves (plain warehouse receipts/GRNs) have no cbsNodeId → skipped; their cost lives on the PO.
+    this.bus.subscribe('inventory.stock.movement_recorded', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      if (!cbsNodeId || !projectId) return; // only project-coded movements post material cost
+      const direction = p.direction as string;
+      const quantity = Number(p.quantity) || 0;
+      const unitCost = Number(p.unitCost) || 0;
+      const cost = Math.round(quantity * unitCost * 100) / 100;
+      if (quantity <= 0) return;
+      const sign = direction === 'out' ? 1 : -1; // issue adds cost/qty; return reverses both
+      const code = (p.code as string) ?? '';
+      const boqItemId = (p.boqItemId as string | null) ?? null;
+      try {
+        await this.ledger.post({
+          tenantId: e.tenantId,
+          companyId: e.companyId ?? null,
+          projectId,
+          cbsNodeId,
+          type: 'actual',
+          amount: sign * cost,
+          quantity: sign * quantity,
+          source: direction === 'out' ? 'material_issue' : 'material_return',
+          sourceRef: `${code} — material ${direction === 'out' ? 'issue' : 'return'}`,
+          dimensions: { movementId: e.aggregateId, itemCode: code, ...(boqItemId ? { boqItemId } : {}) },
+        });
+        this.logger.log(`⚡ material ${direction === 'out' ? 'issue' : 'return'} → posted actual ${sign * cost} (qty ${sign * quantity}) on CBS ${cbsNodeId} for ${code}`);
+      } catch (err) {
+        this.logger.error(`Failed to post material cost txn for CBS node ${cbsNodeId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger (Phase 2): material moved against a BOQ item → post to the ISSUED position ──
+    // The physical twin of the material cost reactor above. Keyed on boqItemId (the measured line),
+    // independent of cost coding: an issue is +issued, a return is −issued, so net issued to site =
+    // SUM(type='issued'). A movement can be coded to a BOQ item, a CBS node, both, or neither — this
+    // fires whenever a boqItemId is present. Uncoded warehouse moves post nothing here.
+    this.bus.subscribe('inventory.stock.movement_recorded', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const projectId = p.projectId as string | null;
+      if (!boqItemId || !projectId) return; // only BOQ-coded movements move the quantity ledger
+      const direction = p.direction as string;
+      const quantity = Number(p.quantity) || 0;
+      if (quantity <= 0) return;
+      const sign = direction === 'out' ? 1 : -1; // issue adds to issued; return reverses it
+      const code = (p.code as string) ?? '';
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId,
+          companyId: e.companyId ?? null,
+          projectId,
+          boqItemId,
+          cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'issued',
+          quantity: sign * quantity,
+          unit: (p.unit as string | null) ?? null,
+          source: direction === 'out' ? 'material_issue' : 'material_return',
+          sourceRef: `${code} — material ${direction === 'out' ? 'issue' : 'return'}`,
+          dimensions: { movementId: e.aggregateId, itemCode: code },
+        });
+        this.logger.log(`📏 material ${direction === 'out' ? 'issue' : 'return'} → posted issued ${sign * quantity} on BOQ ${boqItemId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post material quantity txn for BOQ item ${boqItemId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger (Phase 2): work installed on site → post INSTALLED quantity on the BOQ item ──
+    // Physical work fixed in place is the production measure behind progress. The item's Installed
+    // position = SUM(this). The gap Issued − Installed is wastage/WIP; Installed − Approved is the
+    // inspection backlog. (This same signal feeds the Phase-3 Progress Engine → WBS %.)
+    this.bus.subscribe('site.installation.recorded', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const projectId = p.projectId as string | null;
+      const quantity = Number(p.quantity) || 0;
+      if (!boqItemId || !projectId || quantity <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'installed', quantity, unit: (p.unit as string | null) ?? null,
+          source: 'installation', sourceRef: (p.description as string) ?? null,
+          dimensions: { installationId: e.aggregateId },
+        });
+        this.logger.log(`📏 installation → posted installed ${quantity} on BOQ ${boqItemId}`);
+        // Progress Engine (Phase 3): installed quantity is physical progress — sync any WBS work
+        // package linked to this BOQ item so its progress + earned value update automatically.
+        await this.wbs.syncProgressFromQuantity(e.tenantId, boqItemId);
+      } catch (err) {
+        this.logger.error(`Failed to post installed quantity for BOQ item ${boqItemId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger (Phase 2): inspection approved → post APPROVED quantity on the BOQ item ──
+    // Quality-accepted work. The item's Approved position = SUM(this). The gap Installed − Approved is
+    // the inspection backlog; Approved − Invoiced is what is billable but not yet certified.
+    this.bus.subscribe('quality.ir.approved', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const projectId = p.projectId as string | null;
+      const qty = Number(p.approvedQuantity) || 0;
+      if (!boqItemId || !projectId || qty <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          boqItemId, type: 'approved', quantity: qty, unit: (p.unit as string | null) ?? null,
+          source: 'inspection', sourceRef: `IR ${(p.irNumber as string) ?? ''}`.trim(),
+          dimensions: { irId: e.aggregateId },
+        });
+        this.logger.log(`📏 ir.approved → posted approved ${qty} on BOQ ${boqItemId} (IR ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post approved quantity for IR ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger (Phase 2): IPC certified → post INVOICED quantity per valuation line ──
+    // The last link in the delivery chain. A remeasurement IPC certifies work per BOQ item; each
+    // valuation line's certified quantity becomes the item's Invoiced position. The gap Approved −
+    // Invoiced is work that is billable but not yet certified to the client.
+    this.bus.subscribe('contracts.ipc.certified', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const lines = (p.lines as Array<{ projectId?: string; boqItemId?: string; quantity?: number; unit?: string | null; description?: string }> | undefined) ?? [];
+      for (const line of lines) {
+        const boqItemId = line.boqItemId;
+        const projectId = line.projectId;
+        const qty = Number(line.quantity) || 0;
+        if (!boqItemId || !projectId || qty <= 0) continue;
+        try {
+          await this.quantityLedger.post({
+            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+            boqItemId, type: 'invoiced', quantity: qty, unit: line.unit ?? null,
+            source: 'ipc', sourceRef: `${(p.reference as string) ?? 'IPC'} — ${line.description ?? ''}`.trim(),
+            dimensions: { ipcId: e.aggregateId },
+          });
+          this.logger.log(`📏 ipc.certified → posted invoiced ${qty} on BOQ ${boqItemId} (IPC ${e.aggregateId})`);
+        } catch (err) {
+          this.logger.error(`Failed to post invoiced quantity for IPC ${e.aggregateId} BOQ ${boqItemId}: ${err}`);
+        }
+      }
+    });
+
+    // ── Labour strand: daily labour logged to a project cost line → ACTUAL cost = man-hours × rate ──
+    // No module touches the CBS directly. A coded, rated labour allocation becomes an actual
+    // CostTransaction (source 'labour_timesheet'), with man-hours as the signed quantity — seeding
+    // both the Cost Ledger and the Quantity Ledger (man-hours). Unrated/uncoded logs post nothing.
+    this.bus.subscribe('site.labour.logged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const labourCost = Number(p.labourCost) || 0;
+      const manHours = Number(p.manHours) || 0;
+      if (!cbsNodeId || !projectId || labourCost <= 0) return;
+      try {
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'actual', amount: labourCost, quantity: manHours, source: 'labour_timesheet',
+          sourceRef: `${(p.trade as string) ?? 'Labour'} — ${manHours}mh`,
+          dimensions: { labourId: e.aggregateId, trade: (p.trade as string) ?? '' },
+        });
+        this.logger.log(`⚡ labour logged → posted actual ${labourCost} (${manHours}mh) on CBS ${cbsNodeId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post labour cost txn for CBS node ${cbsNodeId}: ${err}`);
+      }
+    });
+
+    // ── Plant strand: plant/equipment usage logged to a project cost line → ACTUAL = hours × rate ──
+    // No module touches the CBS directly. A coded, rated plant-usage record becomes an actual
+    // CostTransaction (source 'plant_usage'), with hours as the signed quantity — seeding both the
+    // Cost Ledger and the Quantity Ledger (plant-hours). Unrated/uncoded records post nothing.
+    this.bus.subscribe('site.plant.logged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const cost = Number(p.cost) || 0;
+      const hours = Number(p.hours) || 0;
+      if (!cbsNodeId || !projectId || cost <= 0) return;
+      try {
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'actual', amount: cost, quantity: hours, source: 'plant_usage',
+          sourceRef: `${(p.equipment as string) ?? 'Plant'} — ${hours}h`,
+          dimensions: { plantId: e.aggregateId, equipment: (p.equipment as string) ?? '' },
+        });
+        this.logger.log(`⚡ plant logged → posted actual ${cost} (${hours}h) on CBS ${cbsNodeId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post plant cost txn for CBS node ${cbsNodeId}: ${err}`);
+      }
+    });
+
     // ── Subcontract: certified retention-release claim → auto-draft AP invoice ──
     // A certified retention-release claim is the signal to pay the subcontractor the retention we
     // held back — a positive supplier (AP) invoice for the released amount, carrying the
@@ -640,14 +1022,25 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
-    // ── Operate: Invoice paid → log actual cost against project ────────
+    // ── Operate: Invoice paid → accrue actual cost against the CBS cost line ────────
+    // Actual cost is money truly spent. Accrued to the CBS node it's coded to (source of truth,
+    // rolls up to the project summary), AND to the WBS node for earned-value. Both are optional
+    // codings — actual cost lands where the invoice is coded, never smeared across the project.
     this.bus.subscribe('finance.invoice.paid', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
+      const value = Number(p.value) || 0;
+
+      const cbsNodeId = p.cbsNodeId as string | null;
       const project = p.project as { id: string; name: string } | null;
-      if (project) {
-        this.logger.log(
-          `📊 invoice.paid → actual cost +${p.value} against project "${project.name}" (${project.id})`,
-        );
+      if (cbsNodeId && project?.id && value > 0) {
+        try {
+          await this.ledger.post({
+            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+            cbsNodeId, type: 'actual', amount: value, source: 'invoice', sourceRef: (p.reference as string) ?? null,
+          });
+        } catch (err) {
+          this.logger.error(`Failed to post actual cost txn for CBS node ${cbsNodeId}: ${err}`);
+        }
       }
 
       const wbsNodeId = p.wbsNodeId as string | null;

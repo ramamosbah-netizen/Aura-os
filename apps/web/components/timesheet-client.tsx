@@ -1,5 +1,8 @@
 'use client';
 
+import EmployeePicker from './ui/employee-picker';
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
@@ -74,11 +77,11 @@ export default function TimesheetClient({ initialEntries }: { initialEntries: Ti
   return (
     <>
       <div style={st.form}>
-        <label style={st.label}>Employee ID<input style={st.input} value={empId} onChange={(e) => setEmpId(e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Employee<EmployeePicker value={empId} onChange={setEmpId} /></label>
         <label style={st.label}>Date<input style={st.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
         <label style={st.label}>Hours<input style={st.input} type="number" min="0" max="24" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} /></label>
         <label style={st.label}>OT<input style={st.input} type="number" min="0" max="24" step="0.5" value={ot} onChange={(e) => setOt(e.target.value)} /></label>
-        <label style={st.label}>Project ID<input style={st.input} value={projId} onChange={(e) => setProjId(e.target.value)} placeholder="optional" /></label>
+        <label style={st.label}>Project (optional)<ProjectPicker value={projId} onChange={setProjId} placeholder="— none —" /></label>
         <label style={st.label}>Description<input style={st.input} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="cable pulling B2" /></label>
         <button style={st.btn} disabled={busy} onClick={submit}>{busy ? 'Saving…' : 'Log Hours'}</button>
         {error && <p style={st.err}>{error}</p>}

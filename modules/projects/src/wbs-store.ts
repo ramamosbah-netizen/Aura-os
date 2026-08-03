@@ -7,6 +7,7 @@ export interface WbsNodeFilter {
   tenantId?: string;
   projectId?: string;
   parentId?: string | null;
+  boqItemId?: string;
 }
 
 export interface WbsStore {

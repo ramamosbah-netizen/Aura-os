@@ -70,6 +70,11 @@ export class PurchaseOrderService implements OnModuleInit {
             value: po.value,
             supplier: po.supplierName,
             project: po.projectId ? { id: po.projectId, name: po.projectName } : null,
+            cbsNodeId: po.cbsNodeId,
+            // BOQ coding → the Quantity Ledger accrues ORDERED quantity on this measured line.
+            boqItemId: po.boqItemId,
+            orderedQuantity: po.orderedQuantity,
+            unit: po.unit,
           },
         });
         await this.store.createWithClient(tx, po);
@@ -199,7 +204,14 @@ export class PurchaseOrderService implements OnModuleInit {
         status: updated.status,
         value: updated.value,
         supplier: updated.supplierName,
+        // Carried so the cost engine can REVERSE the committed cost when the PO is cancelled
+        // (a negative ledger entry on this same cost line) — the ledger never mutates.
+        cbsNodeId: updated.cbsNodeId,
         project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
+        // BOQ coding → the Quantity Ledger reverses the ORDERED quantity on cancel too.
+        boqItemId: updated.boqItemId,
+        orderedQuantity: updated.orderedQuantity,
+        unit: updated.unit,
       },
     });
 

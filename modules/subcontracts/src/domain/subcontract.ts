@@ -7,6 +7,9 @@ export interface Subcontract {
   tenantId: Id;
   projectId: Id;
   projectName: string | null;
+  /** CBS cost line this subcontract is spent against. When set, the Transaction Engine accrues
+   * committed cost on activation and actual cost as claims are certified. Nullable + additive. */
+  cbsNodeId: Id | null;
   title: string;
   subcontractorName: string;
   status: SubcontractStatus;
@@ -19,6 +22,7 @@ export interface NewSubcontract {
   tenantId: Id;
   projectId: Id;
   projectName?: string | null;
+  cbsNodeId?: Id | null;
   title: string;
   subcontractorName: string;
   status?: SubcontractStatus;
@@ -32,6 +36,7 @@ export function makeSubcontract(input: NewSubcontract): Subcontract {
     tenantId: input.tenantId,
     projectId: input.projectId,
     projectName: input.projectName ?? null,
+    cbsNodeId: input.cbsNodeId ?? null,
     title: input.title.trim(),
     subcontractorName: input.subcontractorName.trim(),
     status: input.status ?? 'draft',

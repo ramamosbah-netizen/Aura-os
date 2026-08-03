@@ -73,7 +73,17 @@ export class StockService {
    * `unit` may be any of the item's UOMs — quantity converts to base, and a receipt's
    * unitCost (priced per entered unit) converts to a per-base-unit rate.
    */
-  async recordMovement(stockItemId: Id, direction: StockDirection, quantity: number, reason?: string, unitCost?: number, unit?: string): Promise<{ item: StockItem; movement: StockMovement }> {
+  async recordMovement(
+    stockItemId: Id,
+    direction: StockDirection,
+    quantity: number,
+    reason?: string,
+    unitCost?: number,
+    unit?: string,
+    // Project coding: when an issue/return is coded to a CBS cost line, the Transaction Engine
+    // reacts to the emitted event and posts the material cost + quantity to that line.
+    coding?: { projectId?: Id | null; cbsNodeId?: Id | null; boqItemId?: Id | null },
+  ): Promise<{ item: StockItem; movement: StockMovement }> {
     const item = await this.store.getItem(stockItemId);
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
 
@@ -85,7 +95,11 @@ export class StockService {
 
     const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
     let newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));
-    const movement = makeStockMovement({ stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost }, balanceAfter, newAvgCost);
+    const movement = makeStockMovement(
+      { stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost, projectId: coding?.projectId ?? null, cbsNodeId: coding?.cbsNodeId ?? null, boqItemId: coding?.boqItemId ?? null },
+      balanceAfter,
+      newAvgCost,
+    );
 
     // FIFO costing: value the issue (COGS) and remaining inventory from the item's cost layers,
     // replayed from its movement history. The movement's unitCost then carries the FIFO issue rate
@@ -132,6 +146,10 @@ export class StockService {
           valueAfter: movement.valueAfter,
           reorderLevel: item.reorderLevel,
           reorderQty: item.reorderQty,
+          // Project coding (null for plain warehouse receipts) — drives the Material cost strand.
+          projectId: movement.projectId,
+          cbsNodeId: movement.cbsNodeId,
+          boqItemId: movement.boqItemId,
         },
       }),
     ]);

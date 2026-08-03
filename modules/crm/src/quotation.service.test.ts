@@ -33,6 +33,18 @@ describe('QuotationService — commercial governance (R3)', () => {
     expect((events.append as any).mock.calls.flat(2).some((e: any) => e?.type === 'crm.commercial_baseline.locked')).toBe(true);
   });
 
+  it('refuses self-approval — the preparer cannot approve their own quotation (SoD, P0-3)', async () => {
+    const { svc } = harness();
+    const q = await newQuote(svc); // createdBy: 'u1'
+    // Same user who prepared it tries to approve → 403-shaped "access denied".
+    await expect(svc.changeStatus(q.id, 'approve', 'u1')).rejects.toThrow(/access denied/i);
+    // No baseline was locked — the action was rejected before any state change.
+    expect(await svc.getBaseline('t1', q.id)).toBeNull();
+    // A different approver succeeds.
+    await svc.changeStatus(q.id, 'approve', 'u-manager');
+    expect(await svc.getBaseline('t1', q.id)).not.toBeNull();
+  });
+
   it('cannot send a quotation that was never approved (governance gate)', async () => {
     const { svc } = harness();
     const q = await newQuote(svc);

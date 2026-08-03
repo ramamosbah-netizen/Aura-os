@@ -47,6 +47,10 @@ export class GoodsReceiptService implements OnModuleInit {
             supplier: grn.supplierName,
             po: grn.poId ? { id: grn.poId, title: grn.poTitle } : null,
             project: grn.projectId ? { id: grn.projectId, name: grn.projectName } : null,
+            // BOQ coding → the Quantity Ledger accrues RECEIVED quantity on this measured line.
+            boqItemId: grn.boqItemId,
+            receivedQuantity: grn.receivedQuantity,
+            unit: grn.unit,
           },
         });
         await this.store.createWithClient(tx, grn);

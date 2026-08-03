@@ -157,4 +157,25 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
       progressPct: 45,       // installed 450 / BOQ 1000 — the physical % complete
     });
   });
+
+  it('Progress Engine (Phase 3): installing work drives the linked WBS node progress + earned value', async () => {
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'EV Job', value: 400_000 }).expect(201)).body;
+    const boqItemId = 'boq-ev-duct';
+
+    // A WBS work package (planned value 100,000) linked to the BOQ item; BOQ target 200 m².
+    const wbs = (await http.post('/api/v1/projects/wbs')
+      .send({ projectId: project.id, code: '1.1', title: 'Duct install', plannedValue: 100_000, boqItemId }).expect(201)).body;
+    await http.post('/api/v1/projects/quantity-ledger/baseline').send({ projectId: project.id, boqItemId, quantity: 200, unit: 'm2' }).expect(201);
+    expect(wbs.progress).toBe(0);
+
+    // Install 150 of 200 m² → the Progress Engine syncs WBS progress to 75% and earnedValue to 75,000.
+    await http.post('/api/v1/site/installations')
+      .send({ projectId: project.id, boqItemId, date: '2026-08-05', description: 'Duct L2', quantity: 150, unit: 'm2' }).expect(201);
+    const node = await until(async () => {
+      const nodes = (await http.get(`/api/v1/projects/wbs?projectId=${project.id}`).expect(200)).body as Array<{ id: string; progress: number; earnedValue: number }>;
+      const n = nodes.find((x) => x.id === wbs.id);
+      return n && n.progress === 75 ? n : null;
+    });
+    expect(node).toMatchObject({ progress: 75, earnedValue: 75_000 });
+  });
 });

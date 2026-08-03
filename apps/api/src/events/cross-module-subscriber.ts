@@ -854,6 +854,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
           dimensions: { installationId: e.aggregateId },
         });
         this.logger.log(`📏 installation → posted installed ${quantity} on BOQ ${boqItemId}`);
+        // Progress Engine (Phase 3): installed quantity is physical progress — sync any WBS work
+        // package linked to this BOQ item so its progress + earned value update automatically.
+        await this.wbs.syncProgressFromQuantity(e.tenantId, boqItemId);
       } catch (err) {
         this.logger.error(`Failed to post installed quantity for BOQ item ${boqItemId}: ${err}`);
       }

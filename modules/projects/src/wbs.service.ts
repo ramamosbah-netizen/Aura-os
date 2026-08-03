@@ -3,6 +3,7 @@ import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shar
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import { type WbsNode, type WbsNodeStatus, makeWbsNode, calculateEvm, type EvmMetrics } from './domain/wbs';
 import { WBS_STORE, type WbsNodeFilter, type WbsStore } from './wbs-store';
+import { QuantityLedgerService } from './quantity-ledger.service';
 
 /** Optional ITP release gate — injected when the Quality module is loaded (mirrors procurement's QUALITY_GATE). */
 export const ITP_GATE = Symbol('ITP_GATE');
@@ -18,6 +19,7 @@ export class WbsService {
     @Inject(WBS_STORE) private readonly store: WbsStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    private readonly quantityLedger: QuantityLedgerService,
     @Optional() @Inject(ITP_GATE) private readonly itpGate?: ItpGate,
   ) {}
 
@@ -28,6 +30,7 @@ export class WbsService {
     code: string;
     title: string;
     plannedValue?: number;
+    boqItemId?: Id | null;
     createdBy?: Id | null;
   }): Promise<WbsNode> {
     if (input.createdBy) {
@@ -45,6 +48,7 @@ export class WbsService {
       plannedValue: input.plannedValue ?? 0,
       progress: 0,
       actualCost: 0,
+      boqItemId: input.boqItemId ?? null,
     });
 
     await this.store.create(node);
@@ -100,6 +104,25 @@ export class WbsService {
     }
 
     return updatedNode;
+  }
+
+  /**
+   * The Progress Engine (Phase 3): sync every WBS node linked to a BOQ item so its progress = the
+   * item's physical % complete (installed / BOQ), read off the Quantity Ledger. Updating progress
+   * recomputes earnedValue = plannedValue × progress, so Earned Value / SPI / CPI flow automatically
+   * from site installation. Returns the nodes it moved. No-op when nothing is linked to the item.
+   */
+  async syncProgressFromQuantity(tenantId: Id, boqItemId: Id): Promise<WbsNode[]> {
+    const nodes = await this.store.list({ tenantId, boqItemId });
+    if (nodes.length === 0) return [];
+    const { progressPct } = await this.quantityLedger.position(tenantId, boqItemId);
+    const moved: WbsNode[] = [];
+    for (const node of nodes) {
+      if (node.progress === progressPct) continue;
+      moved.push(await this.updateProgress(node.id, progressPct));
+    }
+    if (moved.length > 0) this.logger.log(`Progress Engine: BOQ ${boqItemId} @ ${progressPct}% → synced ${moved.length} WBS node(s)`);
+    return moved;
   }
 
   async recordActualSpend(id: Id, amount: number): Promise<WbsNode> {

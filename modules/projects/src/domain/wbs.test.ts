@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { makeWbsNode, calculateEvm } from './wbs';
 import { InMemoryWbsStore } from '../in-memory-wbs-store';
 import { WbsService } from '../wbs.service';
+import { QuantityLedgerService } from '../quantity-ledger.service';
+import { InMemoryQuantityLedgerStore } from '../in-memory-quantity-ledger-store';
 import { AccessService, type EventStore } from '@aura/core';
 
 const mockAccess = {
@@ -36,7 +38,7 @@ describe('Projects WBS & EVM', () => {
   describe('Recursive Hierarchy rollup', () => {
     it('aggregates PV, EV, and AC from child nodes up to parent nodes', async () => {
       const store = new InMemoryWbsStore();
-      const service = new WbsService(store, mockEvents, mockAccess);
+      const service = new WbsService(store, mockEvents, mockAccess, new QuantityLedgerService(new InMemoryQuantityLedgerStore()));
 
       // Create Parent Node
       const parent = await service.create({

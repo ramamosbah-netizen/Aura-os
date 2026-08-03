@@ -65,6 +65,7 @@ class CreateWbsNodeDto {
   @IsString() code!: string;
   @IsString() title!: string;
   @IsOptional() @IsNumber() plannedValue?: number;
+  @IsOptional() @IsString() boqItemId?: string | null;
 }
 
 class CreateCbsNodeDto {
@@ -237,6 +238,7 @@ export class ProjectsController {
       code: dto.code,
       title: dto.title,
       plannedValue: dto.plannedValue ?? 0,
+      boqItemId: dto.boqItemId ?? null,
       createdBy: ctx.actorId,
     });
   }

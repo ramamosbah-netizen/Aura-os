@@ -614,6 +614,45 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Material cost strand: stock issued to / returned from a project → ACTUAL cost on the CBS line ──
+    // No module touches the CBS directly. A coded stock movement (cbsNodeId set) becomes a CostTransaction:
+    //   issue  (out) → ACTUAL  +qty, amount = qty × unitCost (the WAC/COGS rate), source 'material_issue'
+    //   return (in)  → NEGATIVE actual −qty, −amount,                             source 'material_return'
+    // So Material cost on a line = SUM(issues) − SUM(returns), append-only. The txn also carries the
+    // signed `quantity`, which seeds the Quantity Ledger (issued/returned) with no extra plumbing.
+    // Uncoded moves (plain warehouse receipts/GRNs) have no cbsNodeId → skipped; their cost lives on the PO.
+    this.bus.subscribe('inventory.stock.movement_recorded', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      if (!cbsNodeId || !projectId) return; // only project-coded movements post material cost
+      const direction = p.direction as string;
+      const quantity = Number(p.quantity) || 0;
+      const unitCost = Number(p.unitCost) || 0;
+      const cost = Math.round(quantity * unitCost * 100) / 100;
+      if (quantity <= 0) return;
+      const sign = direction === 'out' ? 1 : -1; // issue adds cost/qty; return reverses both
+      const code = (p.code as string) ?? '';
+      const boqItemId = (p.boqItemId as string | null) ?? null;
+      try {
+        await this.ledger.post({
+          tenantId: e.tenantId,
+          companyId: e.companyId ?? null,
+          projectId,
+          cbsNodeId,
+          type: 'actual',
+          amount: sign * cost,
+          quantity: sign * quantity,
+          source: direction === 'out' ? 'material_issue' : 'material_return',
+          sourceRef: `${code} — material ${direction === 'out' ? 'issue' : 'return'}`,
+          dimensions: { movementId: e.aggregateId, itemCode: code, ...(boqItemId ? { boqItemId } : {}) },
+        });
+        this.logger.log(`⚡ material ${direction === 'out' ? 'issue' : 'return'} → posted actual ${sign * cost} (qty ${sign * quantity}) on CBS ${cbsNodeId} for ${code}`);
+      } catch (err) {
+        this.logger.error(`Failed to post material cost txn for CBS node ${cbsNodeId}: ${err}`);
+      }
+    });
+
     // ── Subcontract: certified retention-release claim → auto-draft AP invoice ──
     // A certified retention-release claim is the signal to pay the subcontractor the retention we
     // held back — a positive supplier (AP) invoice for the released amount, carrying the

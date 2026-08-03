@@ -128,6 +128,12 @@ export interface StockMovement {
   unitCost: number;
   /** Inventory value (balanceAfter × avgCost) after this movement. */
   valueAfter: number;
+  // ── Project coding: when a movement is issued to / returned from a project, it carries the cost
+  // and quantity to that project's CBS line via the Transaction Engine. Warehouse receipts leave
+  // these null (their cost lives on the PO/invoice), so the cost engine only reacts to coded moves.
+  projectId: Id | null;
+  cbsNodeId: Id | null;
+  boqItemId: Id | null;
   createdAt: string;
 }
 
@@ -138,6 +144,9 @@ export interface NewStockMovement {
   quantity: number;
   reason?: string;
   unitCost?: number;
+  projectId?: Id | null;
+  cbsNodeId?: Id | null;
+  boqItemId?: Id | null;
 }
 
 /** Compute the new on-hand after applying a movement; throws if an issue would go negative. */
@@ -173,6 +182,9 @@ export function makeStockMovement(input: NewStockMovement, balanceAfter: number,
     balanceAfter,
     unitCost,
     valueAfter: Math.round(balanceAfter * newAvgCost * 100) / 100,
+    projectId: input.projectId ?? null,
+    cbsNodeId: input.cbsNodeId ?? null,
+    boqItemId: input.boqItemId ?? null,
     createdAt: new Date().toISOString(),
   };
 }

@@ -42,9 +42,9 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
   });
 
   const nodeById = async (projectId: string, nodeId: string) =>
-    ((await http.get(`/api/v1/projects/cbs?projectId=${projectId}`).expect(200)).body as Array<{ id: string; committedAmount: number }>).find((n) => n.id === nodeId)!;
+    ((await http.get(`/api/v1/projects/cbs?projectId=${projectId}`).expect(200)).body as Array<{ id: string; committedAmount: number; actualAmount: number }>).find((n) => n.id === nodeId)!;
   const ledger = async (cbsNodeId: string) =>
-    (await http.get(`/api/v1/projects/cost-ledger?cbsNodeId=${cbsNodeId}`).expect(200)).body as Array<{ type: string; amount: number; source: string }>;
+    (await http.get(`/api/v1/projects/cost-ledger?cbsNodeId=${cbsNodeId}`).expect(200)).body as Array<{ type: string; amount: number; quantity: number | null; source: string }>;
 
   it('PO lifecycle: create → committed entry → cancel → −reversal → CBS balance nets to 0 (idempotent)', async () => {
     // 1. A project with a single CBS cost line.
@@ -78,5 +78,37 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'cancelled' }).expect(200);
     await new Promise((r) => setTimeout(r, 250)); // let the (guarded) reactor run
     expect(await ledger(node.id)).toHaveLength(2);
+  });
+
+  it('Material: issue to a project → ACTUAL cost (+qty); return → NEGATIVE actual (−qty); CBS actual = net', async () => {
+    // 1. A project + a CBS cost line for materials, and stock on hand valued at AED 500/unit.
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'Villa 22', value: 200_000 }).expect(201)).body;
+    const node = (await http.post('/api/v1/projects/cbs').send({ projectId: project.id, code: '2.1', title: 'Cable & Containment' }).expect(201)).body;
+    const item = (
+      await http.post('/api/v1/inventory/stock')
+        .send({ code: 'CBL-2.5', name: '2.5mm² Cable', unit: 'm', openingQty: 100, openingCost: 500 })
+        .expect(201)
+    ).body;
+
+    // 2. ISSUE 20 to the project's cost line → the engine posts an ACTUAL cost = 20 × 500 = 10,000 (+20 qty).
+    await http.post(`/api/v1/inventory/stock/${item.id}/movements`)
+      .send({ direction: 'out', quantity: 20, projectId: project.id, cbsNodeId: node.id })
+      .expect(201);
+
+    const afterIssue = await eventually(async () => { const rows = await ledger(node.id); return rows.some((t) => t.source === 'material_issue') ? rows : []; });
+    expect(afterIssue.find((t) => t.source === 'material_issue')).toMatchObject({ type: 'actual', amount: 10_000, quantity: 20 });
+    const issued = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 10_000 ? [n] : []; });
+    expect(issued[0].actualAmount).toBe(10_000);
+
+    // 3. RETURN 5 from the project (valued at the same 500 rate) → a NEGATIVE actual −2,500 (−5 qty).
+    await http.post(`/api/v1/inventory/stock/${item.id}/movements`)
+      .send({ direction: 'in', quantity: 5, unitCost: 500, projectId: project.id, cbsNodeId: node.id })
+      .expect(201);
+
+    const afterReturn = await eventually(async () => { const rows = await ledger(node.id); return rows.some((t) => t.source === 'material_return') ? rows : []; });
+    expect(afterReturn.find((t) => t.source === 'material_return')).toMatchObject({ type: 'actual', amount: -2_500, quantity: -5 });
+    // Material cost on the line = 10,000 − 2,500 = 7,500 (a DERIVED sum of the ledger, net qty 15).
+    const netted = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 7_500 ? [n] : []; });
+    expect(netted[0].actualAmount).toBe(7_500);
   });
 });

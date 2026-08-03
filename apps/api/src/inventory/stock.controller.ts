@@ -23,6 +23,10 @@ interface MovementDto {
   unitCost?: number;
   /** Optional UOM the quantity (and unitCost) are entered in — converts to base. */
   unit?: string;
+  // Project coding: issue (out) / return (in) to a CBS cost line → the cost engine posts material cost.
+  projectId?: string | null;
+  cbsNodeId?: string | null;
+  boqItemId?: string | null;
 }
 
 class UomDto {
@@ -125,7 +129,11 @@ export class StockController {
     if (dto?.direction !== 'in' && dto?.direction !== 'out') throw new BadRequestException("direction must be 'in' or 'out'");
     if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
     // Domain rejections (e.g. insufficient stock → 409) are classified by the global taxonomy filter.
-    return this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost, dto.unit);
+    return this.stock.recordMovement(id, dto.direction, dto.quantity, dto.reason, dto.unitCost, dto.unit, {
+      projectId: dto.projectId ?? null,
+      cbsNodeId: dto.cbsNodeId ?? null,
+      boqItemId: dto.boqItemId ?? null,
+    });
   }
 
   @Patch(':id/uom')

@@ -20,6 +20,8 @@ export interface PurchaseOrder {
   /** The project this PO is spent against — reference + snapshot, not a join. */
   projectId: Id | null;
   projectName: string | null;
+  /** The CBS cost line this PO is coded to — where its committed cost accrues (source of truth). */
+  cbsNodeId: Id | null;
   /** Shared dimension (ADR-0012) — the trade/discipline this spend belongs to. */
   discipline: Discipline;
   status: PurchaseOrderStatus;
@@ -38,6 +40,7 @@ export interface NewPurchaseOrder {
   supplierName?: string | null;
   projectId?: Id | null;
   projectName?: string | null;
+  cbsNodeId?: Id | null;
   discipline?: Discipline;
   status?: PurchaseOrderStatus;
   value?: number;
@@ -56,6 +59,7 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     supplierName: input.supplierName?.trim() || null,
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,
+    cbsNodeId: input.cbsNodeId ?? null,
     discipline: toDiscipline(input.discipline),
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,

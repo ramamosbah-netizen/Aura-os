@@ -15,6 +15,7 @@ interface Row {
   supplier_name: string | null;
   project_id: string | null;
   project_name: string | null;
+  cbs_node_id: string | null;
   discipline: string;
   status: string;
   value: string | number;
@@ -24,7 +25,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, project_id, project_name, discipline, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, project_id, project_name, cbs_node_id, discipline, status, value, owner_id, created_by, created_at';
 
 function rowToPo(r: Row): PurchaseOrder {
   return {
@@ -37,6 +38,7 @@ function rowToPo(r: Row): PurchaseOrder {
     supplierName: r.supplier_name,
     projectId: r.project_id,
     projectName: r.project_name,
+    cbsNodeId: r.cbs_node_id,
     discipline: r.discipline as PurchaseOrder['discipline'],
     status: r.status as PurchaseOrder['status'],
     value: Number(r.value),
@@ -61,8 +63,8 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
 
   private insert(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierId, p.supplierName, p.projectId, p.projectName, p.discipline, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
+      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierId, p.supplierName, p.projectId, p.projectName, p.cbsNodeId, p.discipline, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
     );
   }
 

@@ -460,14 +460,20 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
-    // ── Operate: PO created → log committed cost against project ───────
-    this.bus.subscribe('procurement.po.created', (e: DomainEvent) => {
+    // ── Operate: PO created → accrue committed cost against the CBS cost line ───────
+    // The CBS node is the single source of truth for cost (Primavera/SAP PS pattern): a PO coded to
+    // a cost line accrues committed cost THERE, which rolls up to the parent nodes and the project
+    // summary. Untagged POs accrue nothing — cost is tracked only where it's coded, never guessed.
+    this.bus.subscribe('procurement.po.created', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
-      const project = p.project as { id: string; name: string } | null;
-      if (project) {
-        this.logger.log(
-          `📊 po.created → committed cost +${p.value} against project "${project.name}" (${project.id})`,
-        );
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const value = Number(p.value) || 0;
+      if (cbsNodeId && value > 0) {
+        try {
+          await this.cbs.recordCommittedCost(cbsNodeId, value);
+        } catch (err) {
+          this.logger.error(`Failed to accrue committed cost against CBS node ${cbsNodeId}: ${err}`);
+        }
       }
     });
 
@@ -640,14 +646,21 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
-    // ── Operate: Invoice paid → log actual cost against project ────────
+    // ── Operate: Invoice paid → accrue actual cost against the CBS cost line ────────
+    // Actual cost is money truly spent. Accrued to the CBS node it's coded to (source of truth,
+    // rolls up to the project summary), AND to the WBS node for earned-value. Both are optional
+    // codings — actual cost lands where the invoice is coded, never smeared across the project.
     this.bus.subscribe('finance.invoice.paid', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
-      const project = p.project as { id: string; name: string } | null;
-      if (project) {
-        this.logger.log(
-          `📊 invoice.paid → actual cost +${p.value} against project "${project.name}" (${project.id})`,
-        );
+      const value = Number(p.value) || 0;
+
+      const cbsNodeId = p.cbsNodeId as string | null;
+      if (cbsNodeId && value > 0) {
+        try {
+          await this.cbs.recordActualCost(cbsNodeId, value);
+        } catch (err) {
+          this.logger.error(`Failed to accrue actual cost against CBS node ${cbsNodeId}: ${err}`);
+        }
       }
 
       const wbsNodeId = p.wbsNodeId as string | null;

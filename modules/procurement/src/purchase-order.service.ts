@@ -70,6 +70,7 @@ export class PurchaseOrderService implements OnModuleInit {
             value: po.value,
             supplier: po.supplierName,
             project: po.projectId ? { id: po.projectId, name: po.projectName } : null,
+            cbsNodeId: po.cbsNodeId,
           },
         });
         await this.store.createWithClient(tx, po);

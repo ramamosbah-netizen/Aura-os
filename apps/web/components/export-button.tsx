@@ -83,7 +83,7 @@ export default function ExportButton({ rows, filename, columns, title }: ExportP
       <h2>${htmlEsc(heading)}</h2>
       <p class="meta">${rows.length} row(s) · ${stamp()}</p>
       ${tableHtml()}
-      <script>window.onload=function(){window.print()}<\/script>
+      <script>window.onload=function(){window.print()}</script>
     </body></html>`);
     w.document.close();
   }

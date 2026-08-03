@@ -65,7 +65,7 @@ export default function InspectionRequestClient({ initial }: { initial: Inspecti
     } catch (e) { setError((e as Error).message); }
   };
 
-  const statusTone = (s: string) => (s === 'approved' ? 'good' : s === 'rejected' ? 'bad' : 'warn') as const;
+  const statusTone = (s: string): 'good' | 'bad' | 'warn' => (s === 'approved' ? 'good' : s === 'rejected' ? 'bad' : 'warn');
 
   return (
     <>

@@ -31,6 +31,7 @@ create index if not exists idx_site_install_project on public.aura_site_installa
 create index if not exists idx_site_install_boq     on public.aura_site_installations (tenant_id, boq_item_id);
 
 alter table public.aura_site_installations enable row level security;
+alter table public.aura_site_installations force row level security;
 
 do $$ begin
   if not exists (

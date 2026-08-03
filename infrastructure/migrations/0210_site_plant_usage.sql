@@ -29,6 +29,7 @@ create index if not exists idx_site_plant_tenant  on public.aura_site_plant_usag
 create index if not exists idx_site_plant_project on public.aura_site_plant_usage (project_id, date);
 
 alter table public.aura_site_plant_usage enable row level security;
+alter table public.aura_site_plant_usage force row level security;
 
 do $$ begin
   if not exists (

@@ -28,6 +28,7 @@ create index if not exists idx_ipc_lines_cert on public.aura_contracts_ipc_lines
 create index if not exists idx_ipc_lines_boq  on public.aura_contracts_ipc_lines (tenant_id, boq_item_id);
 
 alter table public.aura_contracts_ipc_lines enable row level security;
+alter table public.aura_contracts_ipc_lines force row level security;
 
 do $$ begin
   if not exists (

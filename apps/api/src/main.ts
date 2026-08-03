@@ -6,7 +6,6 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import crypto from 'node:crypto';
 import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, metrics } from '@aura/core';
-import { readSecret } from '@aura/shared';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { MigrationGateService } from './health/migration-gate.service';
@@ -50,9 +49,23 @@ async function bootstrap(): Promise<void> {
   // a small public allowlist — the lockdown.
   const auth = app.get(AuthService);
   const tenant = app.get(TenantContext);
-  const enforce = process.env.AUTH_REQUIRED === 'true';
-  if (enforce && !readSecret('AUTH_JWT_SECRET')) {
-    new Logger('Bootstrap').error('AUTH_REQUIRED is set but AUTH_JWT_SECRET is missing — cannot enforce; running open.');
+  // Fail-closed (P0-1): production MUST run with a verifier configured. Refuse to boot "open"
+  // rather than silently serving every tenant's data unauthenticated. A loud, explicit
+  // ALLOW_INSECURE_NO_AUTH=true override remains for deployments fronted by an external gateway.
+  const isProd = process.env.NODE_ENV === 'production';
+  const allowInsecure = process.env.ALLOW_INSECURE_NO_AUTH === 'true';
+  if (isProd && !auth.enabled && !allowInsecure) {
+    new Logger('Bootstrap').error(
+      'FATAL: NODE_ENV=production but auth is OFF (no AUTH_JWKS_URL / AUTH_JWT_SECRET). Refusing to ' +
+        'boot open — configure a verifier, or set ALLOW_INSECURE_NO_AUTH=true to override (NOT recommended).',
+    );
+    process.exit(1);
+  }
+  // Reject anonymous requests when AUTH_REQUIRED=true, and by default in production once a verifier
+  // is present. Uses auth.enabled so a JWKS-only (Supabase/IdP) config counts, not just the HS256 secret.
+  const enforce = process.env.AUTH_REQUIRED === 'true' || (isProd && auth.enabled);
+  if (enforce && !auth.enabled) {
+    new Logger('Bootstrap').error('AUTH_REQUIRED is set but no verifier is configured (AUTH_JWKS_URL / AUTH_JWT_SECRET) — cannot enforce; running open.');
   }
   const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status'];
   // Spine create endpoints where an Idempotency-Key may be *required* (not just honored).

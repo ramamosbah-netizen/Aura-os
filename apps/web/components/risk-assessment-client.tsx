@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectPicker from './ui/project-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
@@ -88,7 +90,7 @@ export default function RiskAssessmentClient({ initial }: { initial: RiskAssessm
 
       <h2 style={st.h2}>New risk assessment (JSA)</h2>
       <div style={st.form}>
-        <label style={st.label}>Project ID<input style={st.input} value={f.projectId} onChange={(e) => setField('projectId', e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Project<ProjectPicker value={f.projectId} onChange={(id) => setField('projectId', id)} /></label>
         <label style={st.label}>Reference<input style={st.input} value={f.reference} onChange={(e) => setField('reference', e.target.value)} placeholder="RA-001" /></label>
         <label style={{ ...st.label, minWidth: 240 }}>Activity<input style={st.input} value={f.activity} onChange={(e) => setField('activity', e.target.value)} placeholder="Working at height — cable tray install" /></label>
         <label style={st.label}>Assessor<input style={st.input} value={f.assessor} onChange={(e) => setField('assessor', e.target.value)} placeholder="optional" /></label>

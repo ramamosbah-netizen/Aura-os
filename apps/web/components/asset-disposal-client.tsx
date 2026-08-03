@@ -1,5 +1,7 @@
 'use client';
 
+import AssetPicker from './ui/asset-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
@@ -61,7 +63,7 @@ export default function AssetDisposalClient({ initial }: { initial: AssetDisposa
 
       <h2 style={st.h2}>Dispose asset</h2>
       <div style={st.form}>
-        <label style={st.label}>Asset ID<input style={st.input} value={f.assetId} onChange={(e) => set('assetId', e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Asset<AssetPicker value={f.assetId} onChange={(id) => set('assetId', id)} /></label>
         <label style={st.label}>Date<input type="date" style={st.input} value={f.disposalDate} onChange={(e) => set('disposalDate', e.target.value)} /></label>
         <label style={st.label}>Method<select style={st.input} value={f.method} onChange={(e) => set('method', e.target.value)}>{METHODS.map((m) => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}</select></label>
         <label style={st.label}>Proceeds<input style={{ ...st.input, minWidth: 110 }} inputMode="numeric" value={f.proceeds} onChange={(e) => set('proceeds', e.target.value)} placeholder="0" /></label>

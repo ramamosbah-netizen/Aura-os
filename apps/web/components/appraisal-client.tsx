@@ -1,5 +1,7 @@
 'use client';
 
+import EmployeePicker from './ui/employee-picker';
+
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
@@ -81,7 +83,7 @@ export default function AppraisalClient({ initial }: { initial: Appraisal[] }) {
 
       <h2 style={st.h2}>New appraisal</h2>
       <div style={st.form}>
-        <label style={st.label}>Employee ID<input style={st.input} value={f.employeeId} onChange={(e) => setField('employeeId', e.target.value)} placeholder="uuid" /></label>
+        <label style={st.label}>Employee<EmployeePicker value={f.employeeId} onChange={(id) => setField('employeeId', id)} /></label>
         <label style={st.label}>Employee name<input style={st.input} value={f.employeeName} onChange={(e) => setField('employeeName', e.target.value)} placeholder="optional" /></label>
         <label style={st.label}>Period<input style={st.input} value={f.period} onChange={(e) => setField('period', e.target.value)} placeholder="2026-H1" /></label>
         <label style={{ ...st.label, minWidth: 200 }}>Strengths<input style={st.input} value={f.strengths} onChange={(e) => setField('strengths', e.target.value)} placeholder="optional" /></label>

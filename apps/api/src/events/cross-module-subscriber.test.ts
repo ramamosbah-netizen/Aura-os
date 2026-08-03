@@ -22,6 +22,10 @@ import {
   InMemoryWbsStore,
   CbsService,
   InMemoryCbsStore,
+  CostLedgerService,
+  InMemoryCostLedgerStore,
+  QuantityLedgerService,
+  InMemoryQuantityLedgerStore,
 } from '@aura/projects';
 import { CustomerInvoiceService, InMemoryCustomerInvoiceStore } from '@aura/finance';
 import { CrossModuleSubscriber } from './cross-module-subscriber';
@@ -77,8 +81,10 @@ function buildHarness() {
   );
   const contracts = new ContractService(new InMemoryContractStore(), events, tx, commands);
   const projects = new ProjectService(new InMemoryProjectStore(), events, tx, commands);
-  const wbs = new WbsService(new InMemoryWbsStore(), events, access);
   const cbs = new CbsService(new InMemoryCbsStore(), events);
+  const quantityLedger = new QuantityLedgerService(new InMemoryQuantityLedgerStore());
+  const wbs = new WbsService(new InMemoryWbsStore(), events, access, quantityLedger);
+  const ledger = new CostLedgerService(new InMemoryCostLedgerStore(), cbs);
   const customerInvoices = new CustomerInvoiceService(new InMemoryCustomerInvoiceStore(), events, { getRate: async () => 1 } as any);
 
   // Register command handlers (Nest would call these via OnModuleInit).
@@ -171,6 +177,8 @@ function buildHarness() {
     projects,
     wbs,
     cbs,
+    ledger, // CostLedgerService
+    quantityLedger, // QuantityLedgerService
     mockVariations, // VariationService
     tenant,
     noop, // PurchaseOrderService

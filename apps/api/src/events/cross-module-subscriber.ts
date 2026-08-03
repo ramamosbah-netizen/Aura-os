@@ -510,6 +510,54 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Quantity Ledger (Phase 2): PO created → post ORDERED quantity on the BOQ item ──
+    // The physical twin of the committed-cost reactor above. A PO coded to a BOQ item (boqItemId +
+    // orderedQuantity) accrues the ordered quantity so the item's Ordered position = SUM(this).
+    this.bus.subscribe('procurement.po.created', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const boqItemId = p.boqItemId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const qty = Number(p.orderedQuantity) || 0;
+      if (!boqItemId || !project?.id || qty <= 0) return;
+      try {
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'ordered', quantity: qty, unit: (p.unit as string | null) ?? null,
+          source: 'po', sourceRef: (p.title as string) ?? null, dimensions: { poId: e.aggregateId },
+        });
+        this.logger.log(`📏 po.created → posted ordered ${qty} on BOQ ${boqItemId} (PO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to post ordered quantity for PO ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Quantity Ledger: PO cancelled → REVERSE the ordered quantity (a negative entry) ──
+    // Append-only + idempotent (guarded on an existing reversal for this PO), mirroring the committed-
+    // cost reversal so the Ordered position drops by exactly what the PO put on it.
+    this.bus.subscribe('procurement.po.updated', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'cancelled') return;
+      const boqItemId = p.boqItemId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const qty = Number(p.orderedQuantity) || 0;
+      if (!boqItemId || !project?.id || qty <= 0) return;
+      try {
+        const existing = await this.quantityLedger.list({ tenantId: e.tenantId, boqItemId });
+        if (existing.some((t) => t.source === 'reversal' && t.dimensions?.poId === e.aggregateId)) return;
+        await this.quantityLedger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          type: 'ordered', quantity: -qty, unit: (p.unit as string | null) ?? null,
+          source: 'reversal', sourceRef: `${(p.title as string) ?? 'PO'} — cancelled`,
+          dimensions: { poId: e.aggregateId, reverses: 'po' },
+        });
+        this.logger.log(`↩ po.cancelled → reversed ordered ${qty} on BOQ ${boqItemId} (PO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to reverse ordered quantity for cancelled PO ${e.aggregateId}: ${err}`);
+      }
+    });
+
     // ── Subcontract strand (mirrors the PO): active → COMMITTED cost on the CBS line ──
     // A subcontract is a commitment like a PO. When it goes 'active' (awarded), the engine posts a
     // committed CostTransaction for its value. Idempotent: guarded on an existing committed entry for

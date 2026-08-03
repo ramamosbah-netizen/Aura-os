@@ -47,7 +47,7 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     (await http.get(`/api/v1/projects/quantity-ledger?boqItemId=${boqItemId}`).expect(200)).body as Array<{ type: string; quantity: number; source: string }>;
   const position = async (boqItemId: string) =>
     (await http.get(`/api/v1/projects/quantity-ledger/position/${boqItemId}`).expect(200)).body as {
-      boq: number; ordered: number; received: number; issued: number; onSite: number; remainingToOrder: number; unit: string | null;
+      boq: number; ordered: number; received: number; issued: number; onSite: number; inTransit: number; remainingToOrder: number; unit: string | null;
     };
 
   it('BOQ baseline + material issue/return → the ISSUED position nets to what is on site', async () => {
@@ -84,5 +84,31 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     const rows = await ledger(boqItemId);
     expect(rows.filter((t) => t.type === 'boq')).toHaveLength(1);
     expect(rows.filter((t) => t.type === 'issued')).toHaveLength(2);
+  });
+
+  it('PO coded to a BOQ item → ORDERED position; cancel → −reversal (mirrors committed cost)', async () => {
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'Ductwork', value: 800_000 }).expect(201)).body;
+    const boqItemId = 'boq-gi-duct';
+
+    // Target 500 m², then order 300 m² of it → ORDERED 300 (net remaining-to-order = 200).
+    await http.post('/api/v1/projects/quantity-ledger/baseline').send({ projectId: project.id, boqItemId, quantity: 500, unit: 'm2' }).expect(201);
+    const po = (
+      await http.post('/api/v1/procurement/purchase-orders')
+        .send({ title: 'GI duct supply', value: 90_000, projectId: project.id, boqItemId, orderedQuantity: 300, unit: 'm2' })
+        .expect(201)
+    ).body;
+    const ordered = await until(async () => { const p = await position(boqItemId); return p.ordered === 300 ? p : null; });
+    expect(ordered).toMatchObject({ boq: 500, ordered: 300, remainingToOrder: 200 });
+
+    // Cancel the PO → a −ordered reversal. Ordered nets back to 0 (append-only, never a mutation).
+    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'cancelled' }).expect(200);
+    const reversed = await until(async () => { const p = await position(boqItemId); return p.ordered === 0 ? p : null; });
+    expect(reversed!.ordered).toBe(0);
+    expect((await ledger(boqItemId)).filter((t) => t.type === 'ordered')).toHaveLength(2); // +300 and −300
+
+    // Idempotent: a redelivered cancel must not double-reverse.
+    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'cancelled' }).expect(200);
+    await new Promise((r) => setTimeout(r, 200));
+    expect((await ledger(boqItemId)).filter((t) => t.type === 'ordered')).toHaveLength(2);
   });
 });

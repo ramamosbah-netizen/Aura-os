@@ -22,6 +22,11 @@ export interface PurchaseOrder {
   projectName: string | null;
   /** The CBS cost line this PO is coded to — where its committed cost accrues (source of truth). */
   cbsNodeId: Id | null;
+  /** The BOQ (measured) item this PO orders against — where its ORDERED quantity accrues on the
+   * Quantity Ledger. With `orderedQuantity` + `unit`, po.created posts +ordered, cancel reverses it. */
+  boqItemId: Id | null;
+  orderedQuantity: number | null;
+  unit: string | null;
   /** Shared dimension (ADR-0012) — the trade/discipline this spend belongs to. */
   discipline: Discipline;
   status: PurchaseOrderStatus;
@@ -41,6 +46,9 @@ export interface NewPurchaseOrder {
   projectId?: Id | null;
   projectName?: string | null;
   cbsNodeId?: Id | null;
+  boqItemId?: Id | null;
+  orderedQuantity?: number | null;
+  unit?: string | null;
   discipline?: Discipline;
   status?: PurchaseOrderStatus;
   value?: number;
@@ -60,6 +68,9 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,
     cbsNodeId: input.cbsNodeId ?? null,
+    boqItemId: input.boqItemId ?? null,
+    orderedQuantity: input.orderedQuantity != null ? Number(input.orderedQuantity) : null,
+    unit: input.unit?.trim() || null,
     discipline: toDiscipline(input.discipline),
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,

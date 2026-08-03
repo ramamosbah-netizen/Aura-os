@@ -154,4 +154,27 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     expect(rows.filter((t) => t.source === 'subcontract')).toHaveLength(1);
     expect(rows.filter((t) => t.source === 'subcontract_claim')).toHaveLength(2);
   });
+
+  it('Labour: daily allocation coded to a cost line → ACTUAL cost = man-hours × rate (qty = man-hours)', async () => {
+    // 1. A project + a CBS cost line for labour.
+    const project = (await http.post('/api/v1/projects/projects').send({ title: 'Tower Labour', value: 300_000 }).expect(201)).body;
+    const node = (await http.post('/api/v1/projects/cbs').send({ projectId: project.id, code: '4.1', title: 'MEP Labour' }).expect(201)).body;
+
+    // 2. Log 5 electricians × 8h = 40 man-hours @ AED 50/mh → ACTUAL 2,000 (qty 40).
+    await http.post('/api/v1/site/labour')
+      .send({ projectId: project.id, cbsNodeId: node.id, date: '2026-08-03', trade: 'Electrician', headcount: 5, hours: 8, costRate: 50 })
+      .expect(201);
+    const after1 = await eventually(async () => { const rows = await ledger(node.id); return rows.some((t) => t.source === 'labour_timesheet') ? rows : []; });
+    expect(after1.find((t) => t.source === 'labour_timesheet')).toMatchObject({ type: 'actual', amount: 2_000, quantity: 40 });
+    const l1 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 2_000 ? [n] : []; });
+    expect(l1[0].actualAmount).toBe(2_000);
+
+    // 3. Log 2 more × 8h = 16 mh @ 50 → +800. Labour actual = 2,800 (SUM of the ledger).
+    await http.post('/api/v1/site/labour')
+      .send({ projectId: project.id, cbsNodeId: node.id, date: '2026-08-04', trade: 'Electrician', headcount: 2, hours: 8, costRate: 50 })
+      .expect(201);
+    const l2 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 2_800 ? [n] : []; });
+    expect(l2[0].actualAmount).toBe(2_800);
+    expect((await ledger(node.id)).filter((t) => t.source === 'labour_timesheet')).toHaveLength(2);
+  });
 });

@@ -15,12 +15,13 @@ export class PostgresLabourAllocationStore implements LabourAllocationStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_site_labour_allocations (
-        id, tenant_id, company_id, project_id, project_name, date, trade, headcount, hours, man_hours, subcontractor_name, notes, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        id, tenant_id, company_id, project_id, project_name, date, trade, headcount, hours, man_hours, subcontractor_name, notes, created_by, created_at, updated_at, cost_rate, labour_cost, cbs_node_id
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       on conflict (id) do update set
         headcount = excluded.headcount, hours = excluded.hours, man_hours = excluded.man_hours,
-        notes = excluded.notes, updated_at = excluded.updated_at`,
-      [a.id, a.tenantId, a.companyId, a.projectId, a.projectName, a.date, a.trade, a.headcount, a.hours, a.manHours, a.subcontractorName, a.notes, a.createdBy, a.createdAt, a.updatedAt],
+        notes = excluded.notes, updated_at = excluded.updated_at,
+        cost_rate = excluded.cost_rate, labour_cost = excluded.labour_cost, cbs_node_id = excluded.cbs_node_id`,
+      [a.id, a.tenantId, a.companyId, a.projectId, a.projectName, a.date, a.trade, a.headcount, a.hours, a.manHours, a.subcontractorName, a.notes, a.createdBy, a.createdAt, a.updatedAt, a.costRate, a.labourCost, a.cbsNodeId],
     );
   }
 
@@ -55,6 +56,9 @@ export class PostgresLabourAllocationStore implements LabourAllocationStore {
       headcount: Number(row.headcount),
       hours: Number(row.hours),
       manHours: Number(row.man_hours),
+      costRate: Number(row.cost_rate ?? 0),
+      labourCost: Number(row.labour_cost ?? 0),
+      cbsNodeId: row.cbs_node_id ?? null,
       subcontractorName: row.subcontractor_name,
       notes: row.notes,
       createdBy: row.created_by,

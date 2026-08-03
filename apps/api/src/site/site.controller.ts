@@ -227,7 +227,7 @@ export class SiteController {
 
   @Post('labour')
   createLabour(
-    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; subcontractorName?: string; notes?: string },
+    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; costRate?: number; cbsNodeId?: string | null; subcontractorName?: string; notes?: string },
   ): Promise<LabourAllocation> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.trade?.trim()) throw new BadRequestException('trade is required');
@@ -242,6 +242,8 @@ export class SiteController {
       trade: dto.trade,
       headcount: Number(dto.headcount) || 0,
       hours: Number(dto.hours) || 0,
+      costRate: dto.costRate !== undefined ? Number(dto.costRate) : undefined,
+      cbsNodeId: dto.cbsNodeId ?? null,
       subcontractorName: dto.subcontractorName,
       notes: dto.notes,
       createdBy: ctx.actorId ?? undefined,

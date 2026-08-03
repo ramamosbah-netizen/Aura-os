@@ -705,6 +705,30 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Labour strand: daily labour logged to a project cost line → ACTUAL cost = man-hours × rate ──
+    // No module touches the CBS directly. A coded, rated labour allocation becomes an actual
+    // CostTransaction (source 'labour_timesheet'), with man-hours as the signed quantity — seeding
+    // both the Cost Ledger and the Quantity Ledger (man-hours). Unrated/uncoded logs post nothing.
+    this.bus.subscribe('site.labour.logged', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const projectId = p.projectId as string | null;
+      const labourCost = Number(p.labourCost) || 0;
+      const manHours = Number(p.manHours) || 0;
+      if (!cbsNodeId || !projectId || labourCost <= 0) return;
+      try {
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
+          cbsNodeId, type: 'actual', amount: labourCost, quantity: manHours, source: 'labour_timesheet',
+          sourceRef: `${(p.trade as string) ?? 'Labour'} — ${manHours}mh`,
+          dimensions: { labourId: e.aggregateId, trade: (p.trade as string) ?? '' },
+        });
+        this.logger.log(`⚡ labour logged → posted actual ${labourCost} (${manHours}mh) on CBS ${cbsNodeId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post labour cost txn for CBS node ${cbsNodeId}: ${err}`);
+      }
+    });
+
     // ── Subcontract: certified retention-release claim → auto-draft AP invoice ──
     // A certified retention-release claim is the signal to pay the subcontractor the retention we
     // held back — a positive supplier (AP) invoice for the released amount, carrying the

@@ -29,6 +29,7 @@ export const SITE_EVENT = {
   delayLogged: 'site.delay.logged',
   instructionIssued: 'site.instruction.issued',
   instructionClosed: 'site.instruction.closed',
+  labourLogged: 'site.labour.logged',
 };
 
 @Injectable()
@@ -322,6 +323,8 @@ export class SiteService {
     trade: string;
     headcount: number;
     hours: number;
+    costRate?: number;
+    cbsNodeId?: string | null;
     subcontractorName?: string;
     notes?: string;
     createdBy?: string;
@@ -332,8 +335,28 @@ export class SiteService {
       this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
     }
     const allocation = makeLabourAllocation(input);
-    await this.tx.run(async (handle) => { await this.labourStore.save(allocation, handle); });
-    this.logger.log(`Labour logged: ${allocation.headcount}× ${allocation.trade} @ ${allocation.hours}h = ${allocation.manHours}mh on ${allocation.projectId}`);
+    // Carry the labour cost + coding so the Transaction Engine posts it as ACTUAL on the CBS line.
+    const event = makeEvent({
+      type: SITE_EVENT.labourLogged,
+      tenantId: allocation.tenantId,
+      companyId: allocation.companyId,
+      actorId: allocation.createdBy,
+      aggregateType: 'site.labour',
+      aggregateId: allocation.id,
+      payload: {
+        projectId: allocation.projectId,
+        cbsNodeId: allocation.cbsNodeId,
+        trade: allocation.trade,
+        manHours: allocation.manHours,
+        costRate: allocation.costRate,
+        labourCost: allocation.labourCost,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.labourStore.save(allocation, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Labour logged: ${allocation.headcount}× ${allocation.trade} @ ${allocation.hours}h = ${allocation.manHours}mh (cost ${allocation.labourCost}) on ${allocation.projectId}`);
     return allocation;
   }
 

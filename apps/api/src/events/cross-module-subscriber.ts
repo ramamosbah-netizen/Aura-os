@@ -475,10 +475,37 @@ export class CrossModuleSubscriber implements OnModuleInit {
           await this.ledger.post({
             tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
             cbsNodeId, type: 'committed', amount: value, source: 'po', sourceRef: (p.title as string) ?? null,
+            dimensions: { poId: e.aggregateId },
           });
         } catch (err) {
           this.logger.error(`Failed to post committed cost txn for CBS node ${cbsNodeId}: ${err}`);
         }
+      }
+    });
+
+    // ── Committed-cost lifecycle: PO cancelled → REVERSE its committed cost (a NEGATIVE entry) ──
+    // The ledger is append-only, so un-committing a cancelled PO is a negative posting, never a
+    // mutation — the CBS balance drops by exactly what the PO put on it, and the drill-down keeps
+    // both the +commit and the −reversal. Idempotent: guarded on an existing reversal for this PO,
+    // so an at-least-once redelivery cannot double-reverse and corrupt the balance.
+    this.bus.subscribe('procurement.po.updated', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      if (p.status !== 'cancelled') return;
+      const cbsNodeId = p.cbsNodeId as string | null;
+      const project = p.project as { id: string; name: string } | null;
+      const value = Number(p.value) || 0;
+      if (!cbsNodeId || !project?.id || value <= 0) return;
+      try {
+        const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
+        if (existing.some((t) => t.source === 'reversal' && t.dimensions?.poId === e.aggregateId)) return; // already reversed
+        await this.ledger.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
+          cbsNodeId, type: 'committed', amount: -value, source: 'reversal',
+          sourceRef: `${(p.title as string) ?? 'PO'} — cancelled`, dimensions: { poId: e.aggregateId, reverses: 'po' },
+        });
+        this.logger.log(`↩ po.cancelled → reversed committed ${value} on CBS ${cbsNodeId} (PO ${e.aggregateId})`);
+      } catch (err) {
+        this.logger.error(`Failed to reverse committed cost for cancelled PO ${e.aggregateId}: ${err}`);
       }
     });
 

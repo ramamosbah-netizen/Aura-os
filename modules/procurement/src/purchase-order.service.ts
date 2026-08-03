@@ -200,6 +200,9 @@ export class PurchaseOrderService implements OnModuleInit {
         status: updated.status,
         value: updated.value,
         supplier: updated.supplierName,
+        // Carried so the cost engine can REVERSE the committed cost when the PO is cancelled
+        // (a negative ledger entry on this same cost line) — the ledger never mutates.
+        cbsNodeId: updated.cbsNodeId,
         project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
       },
     });

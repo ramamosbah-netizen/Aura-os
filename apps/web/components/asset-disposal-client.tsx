@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
 
 export interface AssetDisposal {
   id: string;
@@ -70,7 +71,11 @@ export default function AssetDisposalClient({ initial }: { initial: AssetDisposa
         {error && <span style={st.err}>{error}</span>}
       </div>
 
-      <h2 style={st.h2}>Disposal register</h2>
+      <div style={st.regHead}>
+        <h2 style={st.h2}>Disposal register</h2>
+        <ExportButton filename="asset-disposals" title="Asset Disposal Register" rows={rows as unknown as Array<Record<string, unknown>>}
+          columns={[{ key: 'disposalDate', label: 'Date' }, { key: 'assetName', label: 'Asset' }, { key: 'method', label: 'Method' }, { key: 'proceeds', label: 'Proceeds' }, { key: 'bookValue', label: 'Book value' }, { key: 'gainLoss', label: 'Gain/Loss' }]} />
+      </div>
       {rows.length === 0 ? (
         <EmptyState compact title="No disposals recorded" description="Record an asset sale, scrap or write-off — the gain or loss against net book value is computed and posted to the register." />
       ) : (
@@ -114,6 +119,7 @@ const st = {
   btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
+  regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
   th: { textAlign: 'left' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
   thR: { textAlign: 'right' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,

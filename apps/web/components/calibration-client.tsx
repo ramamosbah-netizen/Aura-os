@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
 
 export interface Calibration {
   id: string;
@@ -78,7 +79,11 @@ export default function CalibrationClient({ initial }: { initial: Calibration[] 
         {error && <span style={st.err}>{error}</span>}
       </div>
 
-      <h2 style={st.h2}>Calibration register</h2>
+      <div style={st.regHead}>
+        <h2 style={st.h2}>Calibration register</h2>
+        <ExportButton filename="calibrations" title="Calibration Register" rows={sorted as unknown as Array<Record<string, unknown>>}
+          columns={[{ key: 'equipmentName', label: 'Equipment' }, { key: 'equipmentSerial', label: 'Serial' }, { key: 'instrumentType', label: 'Type' }, { key: 'calibrationDate', label: 'Calibrated' }, { key: 'dueDate', label: 'Due' }, { key: 'certificateNumber', label: 'Certificate' }, { key: 'calibratedBy', label: 'Lab' }, { key: 'status', label: 'Status' }]} />
+      </div>
       {rows.length === 0 ? (
         <EmptyState compact title="No equipment calibrated" description="Register the calibration of test & measurement equipment with its due date — the register flags what is due soon or expired so uncalibrated instruments never sign off work." />
       ) : (
@@ -124,6 +129,7 @@ const st = {
   btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
+  regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
   th: { textAlign: 'left' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
   td: { padding: '8px 12px', borderBottom: '1px solid var(--border, #e5e7eb)' } as CSSProperties,

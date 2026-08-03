@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
 
 interface RiskLine {
   hazard: string;
@@ -115,7 +116,11 @@ export default function RiskAssessmentClient({ initial }: { initial: RiskAssessm
         {error && <span style={st.err}>{error}</span>}
       </div>
 
-      <h2 style={st.h2}>Register</h2>
+      <div style={st.regHead}>
+        <h2 style={st.h2}>Register</h2>
+        <ExportButton filename="risk-assessments" title="Risk Assessment Register" rows={rows as unknown as Array<Record<string, unknown>>}
+          columns={[{ key: 'reference', label: 'Reference' }, { key: 'activity', label: 'Activity' }, { key: 'assessor', label: 'Assessor' }, { key: 'initialScore', label: 'Initial' }, { key: 'residualScore', label: 'Residual' }, { key: 'residualBand', label: 'Band' }, { key: 'status', label: 'Status' }, { key: 'reviewDate', label: 'Review date' }]} />
+      </div>
       {rows.length === 0 ? (
         <EmptyState compact title="No risk assessments" description="Assess the hazards of each high-risk activity, score likelihood × severity before and after controls, and approve before work starts." />
       ) : (
@@ -188,6 +193,7 @@ const st = {
   linkBtn: { background: 'none', border: 'none', color: 'var(--accent, #2563eb)', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 14 } as CSSProperties,
   err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
+  regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
   th: { textAlign: 'left' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
   thC: { textAlign: 'center' as const, padding: '8px 8px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,

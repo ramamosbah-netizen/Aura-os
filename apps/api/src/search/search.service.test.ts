@@ -8,6 +8,7 @@ import type { InvoiceService } from '@aura/finance';
 import type { SubcontractsService } from '@aura/subcontracts';
 import type { HrService } from '@aura/hr';
 import type { AssetsService } from '@aura/assets';
+import type { StockService, SerialService } from '@aura/inventory';
 import { SearchService } from './search.service';
 
 const svc = (rows: unknown[]) => ({ list: async () => rows }) as unknown;
@@ -27,6 +28,8 @@ function build(over: Partial<Record<string, unknown[]>> = {}) {
     { listEmployees: async () => over.employees ?? [] } as unknown as HrService,
     { listAssets: async () => over.assets ?? [] } as unknown as AssetsService,
     svc(over.leads ?? []) as LeadService,
+    { listItems: async () => over.stockItems ?? [] } as unknown as StockService,
+    { list: async () => over.serials ?? [] } as unknown as SerialService,
   );
 }
 
@@ -76,5 +79,29 @@ describe('SearchService', () => {
     const hits = await s.search('t1', 'ahmed');
     expect(hits.map((h) => h.type).sort()).toEqual(['Employee', 'Supplier']);
     expect(hits.find((h) => h.type === 'Employee')?.title).toBe('Ahmed Ali');
+  });
+
+  it('the ELV lookup — finds a model across the inventory catalog AND installed serials (P1-3)', async () => {
+    const s = build({
+      stockItems: [{ id: 'sk1', code: 'CAM-DS2CD1143', name: 'Hikvision DS-2CD1143 4MP Dome', barcode: '69001234', warehouse: 'Main' }],
+      serials: [
+        { id: 'sn1', serialNumber: 'DS2CD1143-A17', itemCode: 'CAM-DS2CD1143', itemName: 'Hikvision DS-2CD1143', projectName: 'Marina Tower', status: 'installed' },
+        { id: 'sn2', serialNumber: 'OTHER-1', itemCode: 'CBL-2.5', itemName: '2.5mm Cable', projectName: null, status: 'in_stock' },
+      ],
+    });
+    const hits = await s.search('t1', 'ds-2cd1143');
+    // the SKU and the one matching installed unit; the unrelated cable serial is excluded.
+    expect(hits.map((h) => h.type).sort()).toEqual(['Serial', 'Stock Item']);
+    expect(hits.find((h) => h.type === 'Serial')?.title).toBe('Hikvision DS-2CD1143 — DS2CD1143-A17');
+    expect(hits.find((h) => h.type === 'Serial')?.subtitle).toBe('Marina Tower');
+    expect(hits.find((h) => h.type === 'Stock Item')?.href).toBe('/inventory/stock');
+  });
+
+  it('finds an installed unit by its exact serial number', async () => {
+    const s = build({ serials: [{ id: 'sn1', serialNumber: 'DS2CD1143-A17', itemCode: 'CAM', itemName: 'Camera', projectName: 'Marina Tower', status: 'installed' }] });
+    const hits = await s.search('t1', 'a17');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].type).toBe('Serial');
+    expect(hits[0].href).toBe('/inventory/serials');
   });
 });

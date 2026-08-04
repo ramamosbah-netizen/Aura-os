@@ -11,6 +11,14 @@
     { "child": "aura_finance_invoices", "column": "po_id", "parent": "aura_procurement_purchase_orders" },
     { "child": "aura_finance_invoices", "column": "project_id", "parent": "aura_projects_projects" },
     { "child": "aura_inventory_grns", "column": "po_id", "parent": "aura_procurement_purchase_orders" },
-    { "child": "aura_inventory_grns", "column": "project_id", "parent": "aura_projects_projects" }
+    { "child": "aura_inventory_grns", "column": "project_id", "parent": "aura_projects_projects" },
+    { "child": "aura_crm_quotations", "column": "account_id", "parent": "aura_crm_accounts" },
+    { "child": "aura_crm_quotations", "column": "source_opportunity_id", "parent": "aura_crm_opportunities" },
+    { "child": "aura_crm_quotations", "column": "source_tender_id", "parent": "aura_tendering_tenders" },
+    { "child": "aura_crm_quotations", "column": "converted_contract_id", "parent": "aura_contracts_contracts" },
+    { "child": "aura_tendering_tenders", "column": "source_opportunity_id", "parent": "aura_crm_opportunities" },
+    { "child": "aura_contracts_contracts", "column": "commercial_baseline_id", "parent": "aura_crm_commercial_baselines" },
+    { "child": "aura_contracts_payment_certificates", "column": "contract_id", "parent": "aura_contracts_contracts" },
+    { "child": "aura_contracts_payment_certificates", "column": "account_id", "parent": "aura_crm_accounts" }
   ]
 }

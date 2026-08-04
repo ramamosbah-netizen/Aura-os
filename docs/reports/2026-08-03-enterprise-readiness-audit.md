@@ -75,10 +75,11 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 
 ## 4. High Priority Issues (P1)
 
-### P1-1 — Soft referential integrity: relationships have no DB foreign keys
-- **Evidence:** Across 216 migrations, only **9** contain `REFERENCES` (FK), **3** `ON DELETE CASCADE`, **0** `ON DELETE RESTRICT`. The deal-chain links (opportunityId, contractId, projectId, boqId…) are plain text columns.
-- **Impact:** Orphan records and dangling references are possible; deleting a parent is not blocked at the DB level; data-quality drift over time.
-- **Fix:** Add FK constraints (or at minimum RESTRICT) on the core chain; add an orphan-scan job.
+### P1-1 — Soft referential integrity across modules — ⚠️ BY DESIGN (ADR-0001); mitigation extended
+- **CORRECTION (2026-08-04):** the original "only 9 FKs" was a migration-file grep undercount — the live schema has **64 FK constraints**, all **intra-module** (line-items→parent, AMC/PPM→contract, journal-lines→journal, etc.). The **absence of cross-module FKs is a deliberate architectural decision: ADR-0001 "Foreign-Key Policy: snapshot-by-reference, not referential joins."** Cross-module links are stored as `referenceId + denormalised snapshot` (e.g. contract carries `tenderId` + `tenderTitle`) so modules stay independently deployable, reads survive source deletes, and tenancy is enforced by RLS — never a cross-module `JOIN`/FK. So "add FKs to the deal chain" would **violate the ADR** and couple module schemas. (A second, practical blocker: id columns are inconsistently typed `uuid` vs `text` across tables, which would fail FK creation regardless.)
+- **Consequence (acknowledged in the ADR):** cross-module orphan references are *possible*; the chosen mitigation is a **catalogued orphan scan** (`apps/api/scripts/orphan-scan.mjs` ← `infrastructure/orphan-references.json`), run `--enforce` in CI against the seeded deal chain and monthly against prod.
+- **✅ FIX (2026-08-04):** the scan's catalog was **incomplete** (11 references — it missed the quotation provenance links, tender→opportunity, contract→commercial-baseline, and IPC→contract/account). **Extended to 19 references** covering the full commercial spine. Verified CI-safe (the fresh seed sets valid `sourceOpportunityId` and creates no IPCs). **Data-hygiene finding:** the long-lived local DB carries **7 dangling refs** (tenders/opportunities/contracts/IPC → missing `account_id`, and one tender→opportunity) — dev/test artifacts, not present in the clean seed; worth a one-off cleanup, not a code fix.
+- **Remaining (optional, ADR-compliant):** add real FK constraints only for *intra-module* deal-chain links that are orphan-free and type-consistent (e.g. `payment_certificates.contract_id → contracts.id`) — a separate, reviewed step, since even intra-module FKs need the `uuid`/`text` id typing reconciled first.
 
 ### P1-2 — Audit trail lacks field-level change history
 - **Evidence:** Event store `0001_kernel_events.sql` records `actor_id`, `payload` (jsonb), `occurred_at` — but **0 tables have `updated_by`**, and no old→new diff is captured. With auth off, `actor_id` is null.

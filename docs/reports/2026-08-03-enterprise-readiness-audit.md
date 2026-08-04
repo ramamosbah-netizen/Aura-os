@@ -29,7 +29,7 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 
 | Area | Score | Note |
 |------|:----:|------|
-| 1. Security & RBAC | 25 | Mechanism exists but OFF; unauth access confirmed; no SoD |
+| 1. Security & RBAC | 25 | Mechanism exists but OFF; unauth access confirmed (SoD maker-checker now fixed; auth-off + RLS-bypass still dominate) |
 | 2. Data Integrity | 45 | Value inheritance works; ~no FKs → orphans possible |
 | 3. Audit Trail | 50 | Event log good; no updated_by / old-new diff; actor null |
 | 4. ELV Lifecycle | 75 | End-to-end chain real; survey-start & handover→AMC manual |
@@ -63,12 +63,12 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **Severity:** P0 (defence-in-depth; deployment/config fix, not a code fix).
 - **Fix:** Connect as a non-owner `aura_app` role with `FORCE ROW LEVEL SECURITY`; add a fitness test asserting every store query binds tenant. *(No store code change needed — verified all scope tenant.)*
 
-### P0-3 — No segregation of duties in the commercial money cycle
-- **Issue:** Quotation approve, contract sign, IPC certify, and invoice post are plain status transitions with no role/threshold check and no maker-checker. A junior can approve their **own** quotation.
-- **Evidence:** `modules/crm/src/quotation.service.ts` `approve` action only locks the baseline — no approver-role or not-own-record check. Threshold approval (`ApprovalMatrixService`) exists **only** in Procurement (`purchase-order.service.ts:119`, `purchase-request.service.ts:65`). Even with auth ON, a role holding `crm.quotation.approve` self-approves.
-- **Business impact:** Financial control failure — deals can be self-authorised end to end; fails audit/ISO/finance governance.
-- **Severity:** P0.
-- **Fix:** Extend the Procurement approval-matrix pattern (value thresholds + approver role + "cannot approve own") to quotation/contract/IPC/invoice.
+### P0-3 — No segregation of duties in the commercial money cycle — ✅ FIXED (maker-checker)
+- **Issue (original):** Quotation approve, contract sign, IPC certify, and invoice post were plain status transitions with no not-own-record check. A junior could authorise their **own** records end to end.
+- **✅ FIX (2026-08-03):** "Cannot authorise your own record" maker-checker now enforced on all four money-cycle transitions — the preparer (`createdBy`) may not approve/sign/certify/post; a different authorised user must. Returns 403 (`access denied` → taxonomy). Engages only when an actor is known (auth on); **system/auto transitions carry no actor and are unaffected** (the `contract.signed → auto-project` and `ipc.certified → auto-invoice` reactor chains still work).
+  - `modules/crm/src/quotation.service.ts` (approve), `modules/contracts/src/contract.service.ts` (sign→active, actorId threaded), `modules/contracts/src/payment-certificate.service.ts` (certify), `modules/finance/src/invoice.service.ts` (approve) + the two controllers thread `ctx.actorId`.
+  - **Verified:** new `apps/api/test/sod.e2e-spec.ts` (3 HTTP tests: self→403, checker→200) green; contracts 21 + finance 110 unit tests green; chains/cost-ledger/quantity-ledger e2e (16) green (no-actor auto-flows unaffected).
+- **Still open (P1):** value-**threshold** routing (auto-approve below a limit, else → a *named approver*) — currently any different authorised user satisfies the check. Extend the Procurement `ApprovalMatrixService` pattern next.
 
 ---
 
@@ -119,7 +119,7 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 |---|---------|----------|:---:|
 | S1 | Auth/RBAC off → unauth access | guard `:100/:125`; live 200 w/ 34 recs, no token | P0 |
 | S2 | RLS bypassed (owner-role conn) | `.env.local` postgres role; 13 RLS migs only | P0 |
-| S3 | No SoD / self-approval | quotation.service approve; matrix only in procurement | P0 |
+| S3 | ~~No SoD / self-approval~~ **✅ FIXED** — maker-checker on quotation/contract/IPC/invoice (self→403); threshold-routing still P1 | sod.e2e-spec.ts green | ✅ |
 | S4 | ~~2 stores without tenant filter~~ **RETRACTED** — false positive (barrel files); all real stores scope `tenant_id` | verified 2026-08-03 | ✅ |
 | S5 | Guard mechanism is sound when ON | route-derived perms cover ~600 handlers, server-side, deny-on-assert | ✅ strength |
 
@@ -154,12 +154,12 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 |-----------|:-----------:|:---------:|:-------------:|:---------:|
 | Survey → Opportunity | ❌ missing | — | — | — |
 | Opportunity → Quotation | Manual | none | partial | ✅ print |
-| Quotation → Contract | Manual (1-click) | 🔴 none/self | ✅ | ✅ |
-| Contract → Project | **Auto** on sign | 🔴 none | ✅ | — |
+| Quotation → Contract | Manual (1-click) | ✅ maker-checker (self→403) | ✅ | ✅ |
+| Contract → Project | **Auto** on sign | ✅ maker-checker on sign | ✅ | — |
 | Project → PO → GRN → Inventory | Manual + auto PO-received on GRN | Procurement matrix ✅ | ✅ | ✅ PO |
 | Install → Commission → Handover | Manual | 🔴 none | partial | ✅ handover pkg |
 | Handover → AMC | ❌ manual | — | — | — |
-| IPC → Invoice → Payment | Auto-draft invoice on IPC certify | 🔴 none | ✅ | ✅ |
+| IPC → Invoice → Payment | Auto-draft invoice on IPC certify | ✅ maker-checker on certify + invoice approve | ✅ | ✅ |
 
 ---
 
@@ -189,7 +189,7 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 **Phase 0 — Security hardening (ship-blocking, ~1–2 wks)**
 1. Fail-closed auth in production; boot assertion + CI check (P0-1).
 2. Least-privilege `aura_app` DB role + force RLS; fix 2 unscoped stores; tenant-binding fitness test (P0-2, P1-5, S4).
-3. Approval matrix + maker-checker across quotation/contract/IPC/invoice; "cannot approve own" (P0-3).
+3. ~~Approval matrix + maker-checker across quotation/contract/IPC/invoice; "cannot approve own"~~ — **✅ maker-checker done** (P0-3); value-threshold *approval matrix* still to add.
 
 **Phase 1 — Integrity & audit (~2–3 wks)**
 4. FK/RESTRICT on the deal chain + orphan-scan (P1-1).

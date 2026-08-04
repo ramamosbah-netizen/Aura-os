@@ -102,9 +102,16 @@ export class ContractService implements OnModuleInit {
    * Transition a contract's status. Emits specific events like `contract.signed`
    * that trigger cross-module automation (e.g. auto-create a Project).
    */
-  async changeStatus(id: Id, status: ContractStatus): Promise<Contract> {
+  async changeStatus(id: Id, status: ContractStatus, actorId?: Id): Promise<Contract> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`contract ${id} not found`);
+    // Segregation of duties: the preparer may not sign (activate) their own contract. Skipped for
+    // system/auto transitions (no actor), so the deal-chain reactors are unaffected.
+    if (status === 'active' && actorId && existing.createdBy && actorId === existing.createdBy) {
+      throw new Error(
+        `access denied: the preparer of contract ${existing.reference ?? id} cannot sign their own contract — segregation of duties requires a different signatory`,
+      );
+    }
     const updated: Contract = { ...existing, status };
 
     const eventType = status === 'active' ? CONTRACT_EVENT.signed
@@ -115,7 +122,7 @@ export class ContractService implements OnModuleInit {
       type: eventType,
       tenantId: updated.tenantId,
       companyId: updated.companyId,
-      actorId: null,
+      actorId: actorId ?? null,
       aggregateType: 'contracts.contract',
       aggregateId: updated.id,
       payload: {

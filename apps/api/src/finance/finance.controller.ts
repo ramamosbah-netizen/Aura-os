@@ -268,7 +268,7 @@ export class FinanceController {
     if (!found) throw new NotFoundException(`invoice ${id} not found`);
     // No try/catch: the global error taxonomy maps a failed 3-way match ("… validation failed …")
     // to 400 VALIDATION with the same envelope (see all-exceptions.filter + its fitness test).
-    return this.invoices.changeStatus(id, dto.status);
+    return this.invoices.changeStatus(id, dto.status, this.tenant.get().actorId ?? undefined);
   }
 
   // ── CHART OF ACCOUNTS ───────────────────────────────────────────────────

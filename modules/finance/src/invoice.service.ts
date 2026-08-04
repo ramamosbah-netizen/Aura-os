@@ -167,11 +167,18 @@ export class InvoiceService implements OnModuleInit {
     return updated;
   }
 
-  async changeStatus(id: Id, status: InvoiceStatus): Promise<Invoice> {
+  async changeStatus(id: Id, status: InvoiceStatus, actorId?: Id): Promise<Invoice> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`Invoice ${id} not found`);
 
     if (status === 'approved') {
+      // Segregation of duties: the preparer may not approve their own invoice. Skipped for
+      // system/auto transitions (no actor).
+      if (actorId && existing.createdBy && actorId === existing.createdBy) {
+        throw new Error(
+          `access denied: the preparer of invoice ${existing.reference ?? id} cannot approve their own invoice — segregation of duties requires a different approver`,
+        );
+      }
       const match = await this.checkThreeWayMatch(id);
       if (!match.matched) {
         throw new Error(`3-Way Match validation failed: ${match.reason}`);

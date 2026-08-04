@@ -147,6 +147,13 @@ export class PaymentCertificateService {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`payment certificate ${id} not found`);
     const certifying = status === 'certified';
+    // Segregation of duties: the preparer may not certify their own IPC (a different, authorised
+    // certifier must). Skipped for system/auto transitions (no actor). Mirrors quotation approval.
+    if (certifying && actorId && existing.createdBy && actorId === existing.createdBy) {
+      throw new Error(
+        `access denied: the preparer of certificate ${existing.reference ?? id} cannot certify their own IPC — segregation of duties requires a different certifier`,
+      );
+    }
     const updated: PaymentCertificate = {
       ...existing,
       status,

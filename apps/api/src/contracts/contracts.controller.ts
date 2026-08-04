@@ -85,7 +85,7 @@ export class ContractsController {
     if (!dto?.status) throw new BadRequestException('status is required');
     const found = await this.contracts.get(id);
     if (!found) throw new NotFoundException(`contract ${id} not found`);
-    return this.contracts.changeStatus(id, dto.status);
+    return this.contracts.changeStatus(id, dto.status, this.tenant.get().actorId ?? undefined);
   }
 
   @Get()

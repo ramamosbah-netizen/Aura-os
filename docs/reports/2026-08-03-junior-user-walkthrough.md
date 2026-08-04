@@ -72,14 +72,14 @@ Traced the full money cycle from the deal-chain reactor (`cross-module-subscribe
 |---|------|-------------|---------------------------|-------------------------|
 | 1 | Lead → qualify → **Convert** to Opportunity | Manual (1 click) | none | ✅ Lead 360 next-action |
 | 2 | Opportunity → **create Quotation** | Manual | none | ✅ Opp 360 next-action |
-| 3 | Quotation **Approve → Send → Accept** | Manual clicks | 🔴 **no role check**; approve only *locks the baseline*, does **not** auto-send | ✅ Quotation 360 (per-status next-action) |
+| 3 | Quotation **Approve → Send → Accept** | Manual clicks | ✅ **maker-checker** (preparer can't self-approve → 403); approve locks the baseline, does **not** auto-send | ✅ Quotation 360 (per-status next-action) |
 | 4 | Accepted quote → **Convert to Contract** | Manual (1 click); *tender path: award → **auto** contract* | none | ✅ Quotation 360 |
-| 5 | Contract **Sign** → Project | Sign manual → **Project auto-created** (+WBS/CBS) | 🔴 no role check | ❌ none on contract screen |
-| 6 | Project → measure → **IPC certify** → AR invoice | Certify manual → **AR invoice auto-drafted** | 🔴 no role check | ❌ none |
-| 7 | AR Invoice **post/send** | Auto-*drafted*, then manual post | 🔴 no role check | ❌ none |
+| 5 | Contract **Sign** → Project | Sign manual → **Project auto-created** (+WBS/CBS) | ✅ maker-checker (self→403) | ❌ none on contract screen |
+| 6 | Project → measure → **IPC certify** → AR invoice | Certify manual → **AR invoice auto-drafted** | ✅ maker-checker (self→403) | ❌ none |
+| 7 | AR Invoice **post/send** | Auto-*drafted*, then manual post | ✅ maker-checker on approve (self→403) | ❌ none |
 
 **Findings:**
-- **"Automatic after a manager/admin approves" is NOT how the commercial cycle works.** True threshold approval (auto-approve below a limit, else → `pending_approval`) exists **only in Procurement** (`ApprovalMatrixService`, PO/PR). The commercial money cycle (quotation-approve, contract-sign, IPC-certify, invoice-post) has **no approval matrix, no role enforcement, no maker-checker** — a junior can run a deal from quote to invoice alone, and each approval only *unlocks* the next step, never auto-advances it.
+- **"Automatic after a manager/admin approves" is NOT how the commercial cycle works.** True threshold approval (auto-approve below a limit, else → `pending_approval`) exists **only in Procurement** (`ApprovalMatrixService`, PO/PR). **UPDATE (2026-08-03): a maker-checker control now blocks self-authorisation across quotation-approve / contract-sign / IPC-certify / invoice-approve** (preparer → 403, a different user must authorise; verified in `sod.e2e-spec.ts`). Still missing: value-threshold routing to a *named* approver, and the steps only *unlock* the next — they don't auto-advance it.
 - **Segregation-of-duties risk:** same user can approve + send + sign + certify + invoice with no second sign-off.
 - **Guidance stops at the contract.** The next-best-action helper exists on only 4 CRM records (Lead/Opp/Quotation/Account 360). Contract → Project → IPC → Invoice have **no next-action guide** — and those are the raw-UUID / undefined-token screens above.
 - **AI can help but isn't wired to guide.** Copilot (⌘J) is context-aware chat and there's an autonomy engine that can *execute* proposals — but it is not surfaced as a step-by-step "how do I do this" guide on the delivery/finance screens.

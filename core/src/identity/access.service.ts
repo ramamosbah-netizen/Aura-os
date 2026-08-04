@@ -144,4 +144,21 @@ export class AccessService implements OnModuleInit {
       throw new AccessDeniedError(decision.reason);
     }
   }
+
+  /**
+   * Value-threshold authorisation for an amount-bearing action (e.g. approving a quotation/contract/
+   * IPC/invoice). Passes when a grant both permits the action AND carries enough `approvalLimit` for
+   * `target.amount`. When the user *could* do the action but their approval limit is too low, throws a
+   * clear "above your approval limit" message (rather than the generic no-grant reason) so the money
+   * cycle can distinguish an authority ceiling from a missing permission. Reuses the existing ABAC.
+   */
+  assertApprovalAuthority(userId: Id, target: AccessTarget & { amount: number }, label = 'this action'): void {
+    if (this.can(userId, target).allowed) return;
+    // Would it pass without the amount? Then it's an approval-limit ceiling, not a missing permission.
+    const { amount: _amount, ...withoutAmount } = target;
+    if (this.can(userId, withoutAmount).allowed) {
+      throw new AccessDeniedError(`${label} of ${target.amount} is above your approval limit — a more senior approver is required`);
+    }
+    throw new AccessDeniedError(this.can(userId, target).reason);
+  }
 }

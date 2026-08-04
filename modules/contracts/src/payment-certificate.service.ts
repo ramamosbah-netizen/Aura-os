@@ -154,6 +154,15 @@ export class PaymentCertificateService {
         `access denied: the preparer of certificate ${existing.reference ?? id} cannot certify their own IPC — segregation of duties requires a different certifier`,
       );
     }
+    // Value-threshold approval (P0-3): the certifier's grant must carry enough approvalLimit for the
+    // net amount being certified. Skipped for system/auto transitions. Reuses the ABAC ceiling.
+    if (certifying && actorId) {
+      this.access.assertApprovalAuthority(
+        actorId,
+        { permission: 'contracts.ipc.certify', orgPath: [{ level: 'tenant', id: existing.tenantId }], amount: existing.netThisCertificate },
+        `certificate ${existing.reference ?? id} certification`,
+      );
+    }
     const updated: PaymentCertificate = {
       ...existing,
       status,

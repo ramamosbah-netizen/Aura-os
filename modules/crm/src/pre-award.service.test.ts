@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { EventStore } from '@aura/core';
+import type { EventStore, AccessService } from '@aura/core';
 import { PreAwardService } from './pre-award.service';
 import { InMemoryPreAwardStore } from './in-memory-pre-award-store';
 import { QuotationService } from './quotation.service';
@@ -8,7 +8,7 @@ import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline
 
 function harness() {
   const events = { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
-  const quotations = new QuotationService(new InMemoryQuotationStore(), new InMemoryCommercialBaselineStore(), events);
+  const quotations = new QuotationService(new InMemoryQuotationStore(), new InMemoryCommercialBaselineStore(), events, { assert: () => {}, assertApprovalAuthority: () => {} } as unknown as AccessService);
   const svc = new PreAwardService(new InMemoryPreAwardStore(), events, quotations);
   return { svc, quotations };
 }

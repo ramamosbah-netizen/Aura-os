@@ -5,7 +5,7 @@ import { config } from 'dotenv';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import crypto from 'node:crypto';
-import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, metrics } from '@aura/core';
+import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, evaluateRlsPosture, metrics } from '@aura/core';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { MigrationGateService } from './health/migration-gate.service';
@@ -60,6 +60,41 @@ async function bootstrap(): Promise<void> {
         'boot open — configure a verifier, or set ALLOW_INSECURE_NO_AUTH=true to override (NOT recommended).',
     );
     process.exit(1);
+  }
+
+  // Fail-closed (P0-2): row-level security is the DB-level tenant isolation net. It is INERT when the
+  // runtime connects as a superuser / BYPASSRLS role (the policies simply never apply), leaving
+  // isolation resting on app-level `WHERE tenant_id` alone. Verify the actual connection role's
+  // posture and refuse to boot that way in production — the least-privilege `aura_app` role
+  // (migration 0163, NOSUPERUSER/NOBYPASSRLS) is what makes FORCE RLS take effect. See
+  // docs/runbooks/rls-tenant-isolation.md. A loud ALLOW_RLS_BYPASS=true override remains for
+  // deployments that intentionally isolate at another layer.
+  const rlsPool = app.get<Pool | null>(PG_POOL, { strict: false });
+  if (rlsPool) {
+    try {
+      const res = await rlsPool.query<{ role: string; bypasses: boolean }>(
+        'SELECT current_user AS role, (rolsuper OR rolbypassrls) AS bypasses FROM pg_roles WHERE rolname = current_user',
+      );
+      const posture = res.rows[0];
+      if (posture) {
+        const decision = evaluateRlsPosture({
+          role: posture.role,
+          bypasses: posture.bypasses,
+          isProduction: isProd,
+          allowBypass: process.env.ALLOW_RLS_BYPASS === 'true',
+        });
+        if (decision.level === 'fatal') {
+          new Logger('Bootstrap').error(`FATAL: ${decision.message}`);
+          process.exit(1);
+        } else if (decision.level === 'warn') {
+          new Logger('Bootstrap').warn(`⚠️  ${decision.message}`);
+        } else {
+          new Logger('Bootstrap').log(`✓ RLS posture: ${decision.message}`);
+        }
+      }
+    } catch (err) {
+      new Logger('Bootstrap').warn(`Could not verify DB RLS posture: ${(err as Error).message}`);
+    }
   }
   // Reject anonymous requests when AUTH_REQUIRED=true, and by default in production once a verifier
   // is present. Uses auth.enabled so a JWKS-only (Supabase/IdP) config counts, not just the HS256 secret.

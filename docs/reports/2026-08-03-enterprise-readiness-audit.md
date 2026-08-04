@@ -55,13 +55,13 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **Severity:** P0.
 - **Fix:** Require a verifier in non-dev environments; fail-closed if `NODE_ENV=production` and auth is off. Add a boot assertion + CI check.
 
-### P0-2 — DB RLS is bypassed at runtime (isolation is app-code-only)
+### P0-2 — DB RLS is bypassed at runtime (isolation is app-code-only) — ✅ FAIL-CLOSED AT BOOT (operator flip remains)
 - **Issue:** Postgres RLS is inert because the running app connects to Supabase as the **`postgres` owner role**, which bypasses all RLS policies. Tenant isolation therefore rests entirely on app-level `WHERE tenant_id = $`.
 - **Evidence:** `apps/api/.env.local` `DATABASE_URL=postgresql://postgres.<proj>:…@…supabase.com` (owner role). Only 13 migrations define RLS policies.
 - **CORRECTION (verified 2026-08-03):** the earlier draft claimed "2 of 102 stores don't filter tenant_id." That was a **false positive** — the 2 files are barrel *re-export* files (`postgres-hr-store.ts`, `postgres-quality-store.ts`) with no queries. **Every real query-store (incl. all 15 hr/quality per-entity stores) scopes `tenant_id`.** App-level isolation is complete; the only isolation gap is the RLS bypass below.
 - **Business impact:** App-level filtering is solid, but there is **no DB safety net** — a future missing `WHERE tenant_id` would leak cross-tenant data undetected.
 - **Severity:** P0 (defence-in-depth; deployment/config fix, not a code fix).
-- **Fix:** Connect as a non-owner `aura_app` role with `FORCE ROW LEVEL SECURITY`; add a fitness test asserting every store query binds tenant. *(No store code change needed — verified all scope tenant.)*
+- **✅ FIX (2026-08-04) — boot-time fail-closed:** the mechanism already existed (R1 migration `0163`: least-privilege `aura_app` role `NOSUPERUSER/NOBYPASSRLS`, `FORCE RLS` on every tenant table maintained by the CI `rls-fitness` gate, per-connection tenant-GUC binding, + an `rls-isolation-test` proving cross-tenant denial under `aura_app`). What was missing was preventing the app from silently *running* under the bypass role. The API now checks the connection role's posture at startup (`main.ts` → `evaluateRlsPosture`, `core/src/identity/rls-posture.ts`) and **refuses to boot in production** when the role is superuser/`BYPASSRLS` (RLS inert), unless `ALLOW_RLS_BYPASS=true`; dev logs a loud warning. **Verified:** live boot against the current Supabase `postgres` role (confirmed `rolbypassrls=true`) with `NODE_ENV=production` → process exits 1 with the FATAL log; unit test `rls-posture.test.ts` (4 cases); new CI step asserts the production-under-owner boot exits non-zero. **Remaining (operator/config, unchanged):** flip the runtime `DATABASE_URL` to the `aura_app` DSN per `docs/runbooks/rls-tenant-isolation.md` — now *enforced* by the boot gate, not merely recommended.
 
 ### P0-3 — No segregation of duties in the commercial money cycle — ✅ FIXED (maker-checker + value-threshold)
 - **Issue (original):** Quotation approve, contract sign, IPC certify, and invoice post were plain status transitions with no not-own-record check. A junior could authorise their **own** records end to end.
@@ -94,10 +94,10 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **Impact:** Site/QA/HSE engineers — the heaviest field users — cannot realistically create daily reports, inspections, NCRs or capture photos/signatures on a tablet with no connectivity.
 - **Fix:** ProjectPicker + camera/signature capture + offline queue (PWA). **⏳ STARTED (2026-08-03):** `ProjectPicker` + `EmployeePicker` + `AssetPicker` shipped and wired into **all 14 UUID forms** (Site/Quality/HSE/Engineering/HR/Assets); typecheck clean, DOM-verified. **Zero raw UUID inputs remain app-wide.** Camera/signature/offline PWA still outstanding.
 
-### P1-5 — RLS bypass + superuser DB connection (production posture)
+### P1-5 — RLS bypass + superuser DB connection (production posture) — ✅ boot-time fail-closed (see P0-2)
 - **Evidence:** Running connection uses the Supabase `postgres` owner role (see P0-2). `.env.local` is correctly gitignored (no credential leak), but the runtime role choice defeats DB-level isolation.
 - **Impact:** Removes the last line of defence behind app-level tenant filtering.
-- **Fix:** Least-privilege runtime role; force RLS.
+- **✅ FIX (2026-08-04):** the API now refuses to boot in production under a superuser/`BYPASSRLS` role (`evaluateRlsPosture` boot gate). `FORCE RLS` is already in place + maintained by the CI `rls-fitness` gate. The operator still flips `DATABASE_URL` to the least-privilege `aura_app` role (runbook) — now enforced by the gate. See P0-2.
 
 ---
 
@@ -118,7 +118,7 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 | # | Finding | Evidence | Sev |
 |---|---------|----------|:---:|
 | S1 | Auth/RBAC off → unauth access | guard `:100/:125`; live 200 w/ 34 recs, no token | P0 |
-| S2 | RLS bypassed (owner-role conn) | `.env.local` postgres role; 13 RLS migs only | P0 |
+| S2 | RLS bypassed (owner-role conn) — **✅ fail-closed at boot** (refuses prod boot under BYPASSRLS role; operator flip to `aura_app` remains) | `main.ts`→`evaluateRlsPosture`; live boot exits 1; CI-proven | ◑ |
 | S3 | ~~No SoD / self-approval~~ **✅ FIXED** — maker-checker (self→403) **+ value-threshold matrix** (approver `approvalLimit ≥ amount`, else→403) on quotation/contract/IPC/invoice | sod.e2e-spec.ts green | ✅ |
 | S4 | ~~2 stores without tenant filter~~ **RETRACTED** — false positive (barrel files); all real stores scope `tenant_id` | verified 2026-08-03 | ✅ |
 | S5 | Guard mechanism is sound when ON | route-derived perms cover ~600 handlers, server-side, deny-on-assert | ✅ strength |

@@ -8,6 +8,7 @@ import { InvoiceService } from '@aura/finance';
 import { SubcontractsService } from '@aura/subcontracts';
 import { HrService } from '@aura/hr';
 import { AssetsService } from '@aura/assets';
+import { StockService, SerialService } from '@aura/inventory';
 
 export interface SearchHit {
   type: string;
@@ -40,6 +41,8 @@ export class SearchService {
     private readonly hr: HrService,
     private readonly assets: AssetsService,
     private readonly leads: LeadService,
+    private readonly stock: StockService,
+    private readonly serials: SerialService,
   ) {}
 
   async search(tenantId: string, q: string, limit = 20): Promise<SearchHit[]> {
@@ -62,6 +65,8 @@ export class SearchService {
       employees,
       assets,
       leads,
+      stockItems,
+      serials,
     ] = await Promise.all([
       this.accounts.list({ tenantId, limit: 50 }),
       this.tenders.list({ tenantId, limit: 50 }),
@@ -76,6 +81,8 @@ export class SearchService {
       this.hr.listEmployees(tenantId),
       this.assets.listAssets(tenantId),
       this.leads.list({ tenantId, limit: 50 }),
+      this.stock.listItems({ tenantId, limit: 100 }),
+      this.serials.list(tenantId),
     ]);
 
     const hits: SearchHit[] = [];
@@ -107,6 +114,14 @@ export class SearchService {
     }
     for (const a of assets)
       if (has(a.name, a.serialNumber)) hits.push({ type: 'Asset', id: a.id, title: a.name, subtitle: a.serialNumber, href: '/assets/control' });
+    // Inventory catalog — the SKU (code/name/barcode); the ELV "find the model" entry point.
+    for (const s of stockItems)
+      if (has(s.code, s.name, s.barcode)) hits.push({ type: 'Stock Item', id: s.id, title: s.name, subtitle: `${s.code} · ${s.warehouse}`, href: '/inventory/stock' });
+    // Serialised equipment — the physical unit (serial number + model), with its warranty/site link.
+    // This is the core ELV lookup: "Hikvision DS-2CD1143" → the installed cameras + their warranty.
+    for (const u of serials)
+      if (has(u.serialNumber, u.itemName, u.itemCode))
+        hits.push({ type: 'Serial', id: u.id, title: `${u.itemName} — ${u.serialNumber}`, subtitle: u.projectName ?? u.status, href: '/inventory/serials' });
 
     return hits.slice(0, limit);
   }

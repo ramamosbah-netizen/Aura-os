@@ -35,7 +35,7 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 | 4. ELV Lifecycle | 75 | End-to-end chain real; survey-start & handover→AMC manual |
 | 5. Document Mgmt | 55 | Revisions on drawings; no unified version/approval/expiry layer |
 | 6. Notifications | 70 | Real engine + event subscriber + tenant routing |
-| 7. Global Search | 55 | 10 commercial entities; **no serial/equipment/inventory** |
+| 7. Global Search | 70 | now spans commercial + **inventory + serialised equipment** (ELV model/serial lookup works); full-text index still pending |
 | 8. Dashboards | 75 | Real live data, honest offline fallbacks |
 | 9. Field/Mobile | 30 | No PWA/offline; minimal photo/signature; UUID forms |
 | 10. Performance/Scale | 50 | 72 indexes; in-memory search & list loads = O(n) risk |
@@ -87,10 +87,11 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **✅ FIX (2026-08-04):** added a reusable, pure `diffFields(before, after, fields)` helper (`shared/src/domain/change-diff.ts`, returns `{field:{from,to}}` for changed fields only) and wired it into the money-cycle's most audit-sensitive edits — quotation **commercial-terms** update and **re-price** (`saveEstimation`) — which now emit the field-level diff in the event payload (`changes`) **and stamp the real actor from the request context (ALS/`TenantContext`)** instead of falling back to `createdBy`. This flows straight into the existing CRM timeline. **Verified:** `change-diff.test.ts` (3) + a new quotation service test asserting `changes.paymentConditions = {from,to}` + correct actor — green; shared + crm typecheck clean.
 - **Remaining:** extend the same `diffFields` pattern to the other value mutations (contract value change, invoice edits, PO line changes); optional `updated_by`/`updated_at` only where a column-level stamp is specifically wanted over the event log.
 
-### P1-3 — Global search misses inventory / serials / equipment
+### P1-3 — Global search misses inventory / serials / equipment — ✅ INVENTORY + SERIALS ADDED (full-text index still pending)
 - **Evidence:** `apps/api/src/search/search.service.ts` indexes Account, Tender, Contract, Project, PO, Invoice, Lead, Opportunity, Quotation, Supplier — matching title/name/reference **in memory**. No serial numbers, equipment models, or stock items.
 - **Impact:** The core ELV test — search "Hikvision DS-2CD1143" → inventory/installation/warranty — **fails**. Also O(n) in-memory scan won't scale.
-- **Fix:** Add inventory/serial/installation to the search projection; move to a DB/full-text index.
+- **✅ FIX (2026-08-04):** the search fan-out now also indexes **inventory stock items** (`StockService.listItems` — code/name/barcode → a "Stock Item" hit, deep-links `/inventory/stock`) and **serialised equipment** (`SerialService.list` — serialNumber/itemCode/itemName → a "Serial" hit titled `model — serial`, subtitled by its project, deep-links `/inventory/serials`). The core ELV lookup now resolves: `"Hikvision DS-2CD1143"` → the SKU **and** each installed unit (with its site/warranty link), and an exact serial number finds its unit. Proven in `search.service.test.ts` (SKU + matching serial returned, unrelated serial excluded; exact-serial hit). Both `StockService`/`SerialService` are exported by `InventoryModule` (already imported) — no new wiring.
+- **Remaining:** the in-memory O(n) fan-out → a DB / full-text search projection (shared with the P2-7 scale item); functional coverage of the ELV lookup is now closed.
 
 ### P1-4 — Field/mobile experience is not production-grade
 - **Evidence:** No PWA manifest/service-worker/offline (`apps/web/public` has none). Only ~3 components with file upload, ~2 with signature. Operational forms (Site/Quality/HSE) require hand-typed project **UUIDs** (14 forms, placeholder `"uuid"`).

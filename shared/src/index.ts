@@ -1,5 +1,6 @@
 ﻿// @aura/shared — framework-free kernel of types every layer reuses.
 export * from './domain/id';
+export * from './domain/change-diff';
 export * from './domain/money';
 export * from './domain/cdm';
 export * from './dimensions/discipline';

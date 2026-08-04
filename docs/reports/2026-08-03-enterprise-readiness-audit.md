@@ -80,10 +80,11 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **Impact:** Orphan records and dangling references are possible; deleting a parent is not blocked at the DB level; data-quality drift over time.
 - **Fix:** Add FK constraints (or at minimum RESTRICT) on the core chain; add an orphan-scan job.
 
-### P1-2 — Audit trail lacks field-level change history
-- **Evidence:** Event store `0001_kernel_events.sql` records `actor_id`, `payload` (jsonb), `occurred_at` — but **0 tables have `updated_by`**, and no old→new diff is captured. With auth off, `actor_id` is null.
-- **Impact:** "Who changed the quotation price 80k→95k, when, from what?" is only partially answerable (time yes; who = null now; previous value only by event replay if that mutation emits a full-payload event).
-- **Fix:** Add `updated_by`/`updated_at`; emit before/after on value-bearing mutations; surface a record History tab.
+### P1-2 — Audit trail: old→new value diffs — ⏳ FIX STARTED (quotation authoring path)
+- **CORRECTION (2026-08-04):** the audit trail is more built than the draft implied. Three surfaces already exist: (1) the append-only **event store** (actor + payload + time, keyed by aggregate + version); (2) a dedicated **`aura_audit_log`** ledger with a `changes jsonb` column + the **`/api/v1/audit`** query endpoint (filter by entity, CSV export); (3) a per-record **CRM timeline** (`/crm/timeline?id=`) that reconstructs history from events. So "who/when" is answered today; **`updated_by`/`updated_at` columns are largely redundant** given the event log records actor+time per mutation, and a "History tab" already exists for CRM records.
+- **The genuine gap:** value mutations recorded only the **new** state, not the **before→after** — so "changed the total from 80k to *what*" wasn't answerable from the log.
+- **✅ FIX (2026-08-04):** added a reusable, pure `diffFields(before, after, fields)` helper (`shared/src/domain/change-diff.ts`, returns `{field:{from,to}}` for changed fields only) and wired it into the money-cycle's most audit-sensitive edits — quotation **commercial-terms** update and **re-price** (`saveEstimation`) — which now emit the field-level diff in the event payload (`changes`) **and stamp the real actor from the request context (ALS/`TenantContext`)** instead of falling back to `createdBy`. This flows straight into the existing CRM timeline. **Verified:** `change-diff.test.ts` (3) + a new quotation service test asserting `changes.paymentConditions = {from,to}` + correct actor — green; shared + crm typecheck clean.
+- **Remaining:** extend the same `diffFields` pattern to the other value mutations (contract value change, invoice edits, PO line changes); optional `updated_by`/`updated_at` only where a column-level stamp is specifically wanted over the event log.
 
 ### P1-3 — Global search misses inventory / serials / equipment
 - **Evidence:** `apps/api/src/search/search.service.ts` indexes Account, Tender, Contract, Project, PO, Invoice, Lead, Opportunity, Quotation, Supplier — matching title/name/reference **in memory**. No serial numbers, equipment models, or stock items.

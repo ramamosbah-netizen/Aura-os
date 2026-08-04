@@ -133,6 +133,17 @@ describe('QuotationService.updateCommercialTerms — editable only while worked 
     expect(updated.deliveryTerms).toBeNull(); // not passed → unchanged
   });
 
+  it('records a before→after diff + actor on the audit event (P1-2)', async () => {
+    const { svc, events } = harness();
+    const q = await withTerms(svc);
+    await svc.updateCommercialTerms(q.id, { paymentConditions: '50/50' });
+    const appended = (events.append as any).mock.calls.flat(2);
+    const evt = appended.find((e: any) => e?.payload?.field === 'commercial_terms');
+    expect(evt.payload.changes.paymentConditions).toEqual({ from: null, to: '50/50' });
+    expect(evt.payload.changes.terms).toBeUndefined(); // untouched field is not in the diff
+    expect(evt.actorId).toBe('u1'); // falls back to createdBy when no request context is bound
+  });
+
   it('refuses once approved — a 409-shaped "only … can" message, not "cannot"', async () => {
     const { svc } = harness();
     const q = await withTerms(svc);

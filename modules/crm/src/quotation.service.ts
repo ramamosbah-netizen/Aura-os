@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type EstimationLineInput, estimateLine, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore, AccessService } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type Id, type EstimationLineInput, estimateLine, makeEvent, diffFields } from '@aura/shared';
+import { EVENT_STORE, type EventStore, AccessService, TenantContext } from '@aura/core';
 import {
   QUOTATION_EVENT,
   QUOTATION_ACTIONS,
@@ -35,7 +35,13 @@ export class QuotationService {
     @Inject(CRM_COMMERCIAL_BASELINE_STORE) private readonly baselines: CommercialBaselineStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
+
+  /** The acting user for an audit record: the real request actor (ALS) when known, else the fallback. */
+  private actor(fallback: Id | null): Id | null {
+    return this.tenant?.get().actorId ?? fallback;
+  }
 
   async create(input: NewQuotation): Promise<Quotation> {
     const q = makeQuotation(input);
@@ -81,12 +87,15 @@ export class QuotationService {
       deliveryTerms: input.deliveryTerms !== undefined ? (input.deliveryTerms?.trim() || null) : q.deliveryTerms,
     };
     await this.store.save(updated);
+    // Audit trail (P1-2): capture the field-level before→after so the timeline can answer
+    // "who changed which term, from what, to what". Real actor from the request context (ALS).
+    const changes = diffFields(q, updated, ['terms', 'exclusions', 'paymentConditions', 'deliveryTerms']);
     await this.events.append([
       makeEvent({
         type: QUOTATION_EVENT.updated,
-        tenantId: q.tenantId, companyId: q.companyId, actorId: q.createdBy,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: this.actor(q.createdBy),
         aggregateType: 'crm.quotation', aggregateId: id,
-        payload: { quoteNumber: q.quoteNumber, field: 'commercial_terms' },
+        payload: { quoteNumber: q.quoteNumber, field: 'commercial_terms', changes },
       }),
     ]);
     return updated;
@@ -327,12 +336,15 @@ export class QuotationService {
     const { subtotal, vatTotal, total } = computeQuotationTotals(lines);
     const updated: Quotation = { ...q, lines, subtotal, vatTotal, total, estimation: rows };
     await this.store.save(updated);
+    // Audit trail (P1-2): the re-price is the money-cycle's most audit-sensitive edit — record the
+    // value before→after (subtotal/vat/total) and the real actor so "who moved the total from X to Y".
+    const changes = diffFields(q, updated, ['subtotal', 'vatTotal', 'total']);
     await this.events.append([
       makeEvent({
         type: QUOTATION_EVENT.updated,
-        tenantId: q.tenantId, companyId: q.companyId, actorId: q.createdBy,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: this.actor(q.createdBy),
         aggregateType: 'crm.quotation', aggregateId: id,
-        payload: { quoteNumber: q.quoteNumber, field: 'estimation', lineCount: lines.length, total },
+        payload: { quoteNumber: q.quoteNumber, field: 'estimation', lineCount: lines.length, total, changes },
       }),
     ]);
     this.logger.log(`Estimation saved for ${q.quoteNumber}: ${lines.length} line(s), total ${total}`);

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type { Pool } from 'pg';
@@ -47,6 +47,15 @@ export class MigrationGateService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     this.status = await this.evaluate();
+    // Dev convenience: a fresh checkout / new migration shouldn't 503 the whole app until someone
+    // remembers to run `db:migrate` and restart. In dev we apply the pending migrations in-process
+    // and re-check, so `pnpm dev` just works. NEVER in production (deploys migrate-before-serve, so
+    // the boot snapshot stays the contract), and opt-out with DEV_AUTOMIGRATE=false — which the CI
+    // schema-drift gate sets so it can still prove the degraded-503 behaviour.
+    if (this.status.degraded && this.autoMigrateEnabled()) {
+      await this.autoMigrate(this.status.pending);
+      this.status = await this.evaluate();
+    }
     if (this.status.degraded) {
       this.logger.error(
         `SCHEMA BEHIND CODE — ${this.status.pending.length} pending migration(s): ${this.status.pending.join(', ')}. ` +
@@ -54,6 +63,38 @@ export class MigrationGateService implements OnModuleInit {
       );
     } else {
       this.logger.log(`Schema up to date (${this.status.reason}).`);
+    }
+  }
+
+  private autoMigrateEnabled(): boolean {
+    return process.env.NODE_ENV !== 'production' && process.env.DEV_AUTOMIGRATE !== 'false';
+  }
+
+  /**
+   * Apply the given pending migrations in-process (dev only), each in its own transaction and
+   * recorded in the ledger — the same contract as `scripts/migrate.mjs`. Best-effort: on any
+   * failure it logs and leaves the gate degraded (so the app still refuses business routes rather
+   * than serving against a half-migrated schema).
+   */
+  private async autoMigrate(pending: string[]): Promise<void> {
+    const dir = resolveMigrationsDir();
+    if (!this.pool || !dir || pending.length === 0) return;
+    this.logger.log(`DEV_AUTOMIGRATE: applying ${pending.length} pending migration(s) in-process…`);
+    for (const file of pending) {
+      const sql = readFileSync(join(dir, file), 'utf8');
+      const down = sql.indexOf('-- @DOWN');
+      const up = down < 0 ? sql : sql.slice(0, down);
+      try {
+        await this.pool.query('BEGIN');
+        await this.pool.query(up);
+        await this.pool.query('INSERT INTO public.aura_migrations (filename) VALUES ($1)', [file]);
+        await this.pool.query('COMMIT');
+        this.logger.log(`DEV_AUTOMIGRATE: ✓ ${file}`);
+      } catch (err) {
+        await this.pool.query('ROLLBACK').catch(() => undefined);
+        this.logger.error(`DEV_AUTOMIGRATE: ✗ ${file} — ${(err as Error).message}. Leaving gate degraded.`);
+        return;
+      }
     }
   }
 

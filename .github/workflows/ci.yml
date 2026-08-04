@@ -198,7 +198,9 @@ jobs:
           latest=$(psql "$DATABASE_URL" -tAc "SELECT filename FROM public.aura_migrations ORDER BY filename DESC LIMIT 1" | tr -d '[:space:]')
           echo "Simulating drift by un-recording latest migration: $latest"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DELETE FROM public.aura_migrations WHERE filename='$latest';"
-          PORT=4500 nohup node dist/main.js > api-gate.log 2>&1 &
+          # DEV_AUTOMIGRATE=false so the boot gate does NOT re-apply the un-recorded migration — this
+          # step exists to prove the degraded-503 behaviour when the schema is behind the code.
+          DEV_AUTOMIGRATE=false PORT=4500 nohup node dist/main.js > api-gate.log 2>&1 &
           echo $! > api-gate.pid
           for i in $(seq 1 60); do
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4500/api/v1/health || true)

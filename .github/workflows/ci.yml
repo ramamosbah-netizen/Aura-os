@@ -121,6 +121,20 @@ jobs:
           done
           curl -sf http://localhost:4300/api/v1/health || { echo '--- api.log'; cat api.log; exit 1; }
 
+      - name: RLS posture — production refuses to boot under a BYPASSRLS role (P0-2)
+        run: |
+          cd apps/api
+          # The CI DB owner ('aura') bypasses RLS. In production, booting against it must fail closed
+          # rather than serve with tenant policies inert. Auth is configured so the auth fail-closed
+          # gate passes and we actually reach the RLS-posture gate. Expect a non-zero exit + the log.
+          set +e
+          NODE_ENV=production AUTH_JWT_SECRET=ci-drill-secret PORT=4600 node dist/main.js > api-rls.log 2>&1
+          code=$?
+          set -e
+          grep -qi "bypasses row-level security" api-rls.log || { echo "expected RLS-posture FATAL in log"; cat api-rls.log; exit 1; }
+          test "$code" -ne 0 || { echo "expected non-zero exit (refuse to boot open)"; cat api-rls.log; exit 1; }
+          echo "✓ production boot refused under a BYPASSRLS role (fail-closed)"
+
       - name: SDK drift — regenerated client must match the committed one (Vol 23 #21)
         run: |
           SPEC_URL=http://localhost:4300/api/docs-json node scripts/generate-sdk.mjs

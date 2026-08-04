@@ -3,6 +3,8 @@
 **Status:** enforcement mechanism (`0163`) **+ activation closure** (`0164` + runtime hardening + a full execution-path audit + CI runtime proof). The runtime is **proven to operate under the non-BYPASSRLS `aura_app` role** — API business flows, the outbox relay, cross-module reactors, projections and the demo seeder all run correctly under it, and RLS denies cross-tenant access.
 **Activation:** one operator step — point the runtime `DATABASE_URL` at `aura_app` (exact procedure + rollback below). No unresolved runtime prerequisite remains.
 
+**Boot-time enforcement (P0-2, 2026-08-04):** the API now verifies the connection role's RLS posture at startup (`main.ts` → `evaluateRlsPosture`, `core/src/identity/rls-posture.ts`). If the runtime connects as a superuser / `BYPASSRLS` role — so RLS policies are inert — it **refuses to boot in production** (`NODE_ENV=production`) with a FATAL log, unless `ALLOW_RLS_BYPASS=true` is set explicitly. In dev it logs a loud warning instead. So the "flip to `aura_app`" step below is now *enforced*, not merely recommended. CI proves both paths (owner boot warns; `aura_app` boot is OK; a production boot under the owner role is asserted to exit non-zero).
+
 ---
 
 ## Why this exists (live-tree re-audit, 2026-07-14)

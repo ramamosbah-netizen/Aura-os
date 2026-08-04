@@ -14,6 +14,7 @@ export * from './identity/access.service';
 export * from './identity/auth.service';
 export * from './identity/mfa.service';
 export * from './identity/users.service';
+export * from './identity/rls-posture';
 export * from './identity/service-accounts.service';
 export * from './identity/companies.service';
 export * from './forms/form-overrides.service';

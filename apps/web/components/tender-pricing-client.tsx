@@ -378,7 +378,7 @@ function Stat({ label, value, strong, accent }: { label: string; value: string; 
   return (
     <div style={{ minWidth: 110 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: strong ? 15 : 13.5, fontWeight: strong ? 800 : 600, color: accent ? 'var(--accent)' : 'var(--fg)' }}>{value}</div>
+      <div style={{ fontSize: strong ? 15 : 13.5, fontWeight: strong ? 800 : 600, color: accent ? 'var(--accent)' : 'var(--text)' }}>{value}</div>
     </div>
   );
 }
@@ -394,7 +394,7 @@ function Field({ label, value, onChange, width = 90, disabled }: { label: string
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        style={{ width, padding: '6px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontSize: 12.5 }}
+        style={{ width, padding: '6px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', fontSize: 12.5 }}
       />
     </label>
   );
@@ -490,7 +490,7 @@ function SheetEditor({
 
 const st = {
   // Same lock bar as the quotation sheet — one governance state should read the same everywhere.
-  lockBar: { display: 'block', fontSize: 12.5, lineHeight: 1.5, color: 'var(--fg)', background: 'rgba(255,193,7,0.07)', border: '1px solid rgba(255,193,7,0.35)', borderRadius: 10, padding: '10px 13px', marginBottom: 12 } as CSSProperties,
+  lockBar: { display: 'block', fontSize: 12.5, lineHeight: 1.5, color: 'var(--text)', background: 'rgba(255,193,7,0.07)', border: '1px solid rgba(255,193,7,0.35)', borderRadius: 10, padding: '10px 13px', marginBottom: 12 } as CSSProperties,
   lockLink: { color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   err: { padding: '10px 12px', border: '1px solid var(--bad)', borderRadius: 10, color: 'var(--bad)', marginBottom: 14, fontSize: 13 } as CSSProperties,
   ok: { padding: '10px 12px', border: '1px solid var(--good)', borderRadius: 10, color: 'var(--good)', marginBottom: 14, fontSize: 13 } as CSSProperties,
@@ -501,8 +501,8 @@ const st = {
   td: { padding: '9px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   priced: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
   unpriced: { color: 'var(--warn, #d97706)', fontSize: 12 } as CSSProperties,
-  btnGhost: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--fg)', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  btnGhostLink: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--fg)', borderRadius: 9, padding: '9px 14px', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
+  btnGhost: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  btnGhostLink: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', borderRadius: 9, padding: '9px 14px', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
   btnPrimary: { border: 'none', background: 'var(--accent-grad, var(--accent))', color: 'var(--accent-ink, #fff)', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   bridge: { display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'space-between', marginTop: 16, padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' } as CSSProperties,
   quoteChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '4px 10px', color: 'var(--accent)', textDecoration: 'none' } as CSSProperties,

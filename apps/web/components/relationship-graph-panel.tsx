@@ -157,7 +157,7 @@ const st = {
   removeBtn: { position: 'absolute', right: 0, top: 6, border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 } as CSSProperties,
   mentionTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', marginBottom: 2 } as CSSProperties,
   form: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 } as CSSProperties,
-  input: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 7, padding: '6px 8px', fontSize: 12.5 } as CSSProperties,
-  primaryBtn: { border: '1px solid var(--fg)', background: 'var(--fg)', color: 'var(--panel)', borderRadius: 7, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  input: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontSize: 12.5 } as CSSProperties,
+  primaryBtn: { border: '1px solid var(--text)', background: 'var(--text)', color: 'var(--panel)', borderRadius: 7, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   ghostBtn: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', borderRadius: 7, padding: '5px 10px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
 };

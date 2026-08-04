@@ -262,5 +262,5 @@ const st: Record<string, CSSProperties> = {
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
   lbl: { fontSize: 11, color: 'var(--muted)' },
-  input: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '7px 10px', fontSize: 13, outline: 'none' },
+  input: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none' },
 };

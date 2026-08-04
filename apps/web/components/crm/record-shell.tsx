@@ -22,7 +22,7 @@ export type Tone = 'neutral' | 'good' | 'warn' | 'bad' | 'accent';
 
 const toneColor = (t?: Tone): string =>
   t === 'good' ? 'var(--good)' : t === 'bad' ? 'var(--bad)' : t === 'warn' ? 'var(--warn, #d97706)'
-    : t === 'accent' ? 'var(--accent)' : 'var(--fg)';
+    : t === 'accent' ? 'var(--accent)' : 'var(--text)';
 
 // ── Header ─────────────────────────────────────────────────────────────────────
 export interface MetaItem { label?: string; value: ReactNode }
@@ -332,7 +332,7 @@ const rs: Record<string, CSSProperties> = {
   scoreLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
   recBadge: { marginTop: 5, fontSize: 10.5, fontWeight: 700, borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '1px 8px', letterSpacing: 0.4 },
   primaryBtn: { border: '1px solid var(--accent)', background: 'var(--accent)', color: '#0b1020', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  ghostBtn: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--fg)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },
+  ghostBtn: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },
   kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 16 },
   kpi: { border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', background: 'var(--panel)' },
   kpiLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },

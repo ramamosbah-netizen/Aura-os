@@ -206,7 +206,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       <div style={st.tabBar} role="tablist">
         {groups.map((g) => {
           const on = g.key === activeKey;
-          const tone = g.tone === 'bad' ? 'var(--bad)' : g.tone === 'accent' ? 'var(--accent)' : 'var(--fg)';
+          const tone = g.tone === 'bad' ? 'var(--bad)' : g.tone === 'accent' ? 'var(--accent)' : 'var(--text)';
           return (
             <button key={g.key} type="button" role="tab" aria-selected={on} onClick={() => setTab(g.key)}
               style={{ ...st.tab, ...(on ? { ...st.tabOn, color: tone, borderColor: tone } : {}) }}>
@@ -359,8 +359,8 @@ const st = {
   outcomeForm: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 720 } as CSSProperties,
   outcomeRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } as CSSProperties,
   outcomeLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', width: 64 } as CSSProperties,
-  outcomeInput: { flex: 3, minWidth: 180, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '6px 10px', fontSize: 12.5 } as CSSProperties,
+  outcomeInput: { flex: 3, minWidth: 180, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '6px 10px', fontSize: 12.5 } as CSSProperties,
   fuToggle: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
-  fuSelect: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '6px 8px', fontSize: 12.5, textTransform: 'capitalize' } as CSSProperties,
-  fuDate: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '6px 8px', fontSize: 12.5 } as CSSProperties,
+  fuSelect: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '6px 8px', fontSize: 12.5, textTransform: 'capitalize' } as CSSProperties,
+  fuDate: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '6px 8px', fontSize: 12.5 } as CSSProperties,
 };

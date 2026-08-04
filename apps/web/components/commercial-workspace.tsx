@@ -162,7 +162,7 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, evi
 }
 
 function Kpi({ label, value, sub, accent, good, warn }: { label: string; value: string; sub?: string; accent?: boolean; good?: boolean; warn?: boolean }) {
-  const color = accent ? 'var(--accent)' : good ? 'var(--good)' : warn ? 'var(--warn, #d97706)' : 'var(--fg)';
+  const color = accent ? 'var(--accent)' : good ? 'var(--good)' : warn ? 'var(--warn, #d97706)' : 'var(--text)';
   return (
     <div style={st.kpi}>
       <span style={st.kpiLabel}>{label}</span>
@@ -204,7 +204,7 @@ const st: Record<string, CSSProperties> = {
   tabBar: { display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', marginBottom: 8 },
   tab: { display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', color: 'var(--muted)', padding: '10px 16px', fontSize: 14, cursor: 'pointer', borderBottomWidth: 2.5, borderBottomStyle: 'solid', borderBottomColor: 'transparent', marginBottom: -1, fontWeight: 600 },
   tabOn: { color: 'var(--accent)', borderBottomColor: 'var(--accent)' },
-  badge: { fontSize: 11, fontWeight: 800, background: 'var(--panel-2)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 999, padding: '0 7px', color: 'var(--fg)' },
+  badge: { fontSize: 11, fontWeight: 800, background: 'var(--panel-2)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 999, padding: '0 7px', color: 'var(--text)' },
   badgeOn: { borderColor: 'var(--accent)', color: 'var(--accent)' },
   hintLine: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 16px' },
   cards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 },

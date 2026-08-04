@@ -91,7 +91,7 @@ const st = {
   head: { display: 'flex', alignItems: 'flex-start', gap: 16, justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap' } as CSSProperties,
   h1: { fontSize: 24, margin: '0 0 6px', color: 'var(--accent)' } as CSSProperties,
   sub: { color: 'var(--muted)', fontSize: 13, margin: 0, lineHeight: 1.5, maxWidth: 640 } as CSSProperties,
-  btn: { border: '1px solid var(--border)', borderRadius: 9, padding: '9px 14px', fontSize: 13, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)' } as CSSProperties,
+  btn: { border: '1px solid var(--border)', borderRadius: 9, padding: '9px 14px', fontSize: 13, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', background: 'var(--panel)' } as CSSProperties,
   tableWrap: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 900 } as CSSProperties,
   th: { padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)' } as CSSProperties,
@@ -101,5 +101,5 @@ const st = {
   status: { fontSize: 11.5, textTransform: 'capitalize', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px' } as CSSProperties,
   pricedFull: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
   pricedPart: { color: 'var(--warn, #d97706)', fontWeight: 600 } as CSSProperties,
-  rowBtn: { display: 'inline-block', marginLeft: 6, border: '1px solid var(--border)', borderRadius: 7, padding: '4px 9px', fontSize: 12, color: 'var(--fg)', textDecoration: 'none' } as CSSProperties,
+  rowBtn: { display: 'inline-block', marginLeft: 6, border: '1px solid var(--border)', borderRadius: 7, padding: '4px 9px', fontSize: 12, color: 'var(--text)', textDecoration: 'none' } as CSSProperties,
 };

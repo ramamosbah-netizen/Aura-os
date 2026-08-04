@@ -112,7 +112,7 @@ const st = {
   cardTop: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 3 } as CSSProperties,
   kind: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap' } as CSSProperties,
   sev: { fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.4 } as CSSProperties,
-  name: { fontSize: 13, fontWeight: 700, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  name: { fontSize: 13, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   reason: { fontSize: 11.5, color: 'var(--muted)', marginTop: 1 } as CSSProperties,
   rec: { fontSize: 12, color: 'var(--accent)', fontWeight: 600, marginTop: 5 } as CSSProperties,
   footer: { display: 'block', textAlign: 'center', padding: '10px 12px', borderTop: '1px solid var(--border)', color: 'var(--accent)', textDecoration: 'none', fontSize: 12.5, fontWeight: 700 } as CSSProperties,

@@ -97,10 +97,10 @@ export default function PricingAdvicePanel({ id }: { id: string }) {
 const st = {
   wrap: { border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 18, background: 'var(--panel)' } as CSSProperties,
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 } as CSSProperties,
-  run: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--fg))', padding: '6px 13px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
+  run: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--text))', padding: '6px 13px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   idle: { color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.6, margin: 0 } as CSSProperties,
   headline: { fontSize: 13.5, fontWeight: 700, margin: '0 0 8px' } as CSSProperties,
-  narrative: { fontSize: 13, lineHeight: 1.6, color: 'var(--text, var(--fg))', margin: '0 0 12px', padding: '10px 12px', background: 'var(--panel-2, var(--panel))', borderRadius: 8, borderLeft: '3px solid var(--accent)' } as CSSProperties,
+  narrative: { fontSize: 13, lineHeight: 1.6, color: 'var(--text, var(--text))', margin: '0 0 12px', padding: '10px 12px', background: 'var(--panel-2, var(--panel))', borderRadius: 8, borderLeft: '3px solid var(--accent)' } as CSSProperties,
   noAi: { fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5, margin: '0 0 12px' } as CSSProperties,
   clean: { color: 'var(--good)', fontSize: 12.5, margin: 0 } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,

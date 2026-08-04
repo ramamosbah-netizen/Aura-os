@@ -1797,7 +1797,7 @@ const st = {
   statCard: {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
     padding: '16px 18px', borderRadius: 12, border: '1px solid var(--border)',
-    background: 'var(--surface, transparent)', cursor: 'pointer', textAlign: 'left',
+    background: 'var(--panel)', cursor: 'pointer', textAlign: 'left',
   } as CSSProperties,
   statNum: { fontSize: 26, fontWeight: 700, letterSpacing: -0.5 } as CSSProperties,
   statLabel: { fontSize: 13, fontWeight: 600 } as CSSProperties,

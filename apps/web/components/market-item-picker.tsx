@@ -135,10 +135,10 @@ export default function MarketItemPicker({ value, placeholder, onType, onPick, s
 }
 
 const st = {
-  input: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text, var(--fg))', padding: '7px 9px', fontSize: 13, width: '100%', boxSizing: 'border-box' } as CSSProperties,
+  input: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text, var(--text))', padding: '7px 9px', fontSize: 13, width: '100%', boxSizing: 'border-box' } as CSSProperties,
   menu: { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 4, background: 'var(--panel)', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, boxShadow: '0 10px 30px rgba(0,0,0,0.35)', overflow: 'hidden', maxHeight: 320, overflowY: 'auto' } as CSSProperties,
   group: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', padding: '7px 10px 3px' } as CSSProperties,
-  opt: { display: 'flex', flexDirection: 'column', gap: 1, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderTop: '1px solid var(--border)', color: 'var(--text, var(--fg))', padding: '7px 10px', cursor: 'pointer' } as CSSProperties,
+  opt: { display: 'flex', flexDirection: 'column', gap: 1, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderTop: '1px solid var(--border)', color: 'var(--text, var(--text))', padding: '7px 10px', cursor: 'pointer' } as CSSProperties,
   optName: { fontSize: 12.5 } as CSSProperties,
   brand: { color: 'var(--muted)' } as CSSProperties,
   optMeta: { fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' } as CSSProperties,

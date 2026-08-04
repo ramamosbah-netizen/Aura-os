@@ -427,7 +427,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
               {healthReasons.length === 0 ? (
                 <p style={st.oMuted}>No open issues — receivables current{a.ownerId ? ', owner assigned' : ''}.</p>
               ) : (
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--fg)' }}>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--text)' }}>
                   {healthReasons.map((r) => <li key={r} style={{ marginBottom: 3 }}>{r}</li>)}
                 </ul>
               )}
@@ -740,7 +740,7 @@ function Stat({ label, value, strong, accent, tone }: { label: string; value: st
   return (
     <div style={{ minWidth: 110 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: strong ? 16 : 14, fontWeight: strong ? 800 : 600, color: tone === 'bad' ? 'var(--bad)' : accent ? 'var(--accent)' : 'var(--fg)' }}>{value}</div>
+      <div style={{ fontSize: strong ? 16 : 14, fontWeight: strong ? 800 : 600, color: tone === 'bad' ? 'var(--bad)' : accent ? 'var(--accent)' : 'var(--text)' }}>{value}</div>
     </div>
   );
 }
@@ -798,14 +798,14 @@ function Table({ cols, rows, empty }: { cols: string[]; rows: Array<Array<React.
 const st = {
   header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 } as CSSProperties,
   h1: { fontSize: 26, margin: '0 0 6px', color: 'var(--accent)', letterSpacing: -0.4 } as CSSProperties,
-  stagePill: { fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px', color: 'var(--fg)', fontWeight: 700, background: 'var(--panel)' } as CSSProperties,
+  stagePill: { fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px', color: 'var(--text)', fontWeight: 700, background: 'var(--panel)' } as CSSProperties,
   subline: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
   healthLine: { marginTop: 8, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } as CSSProperties,
   inlineAction: { marginLeft: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
-  ownerSelect: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--fg)', borderRadius: 6, padding: '2px 6px', fontSize: 11.5, cursor: 'pointer', maxWidth: 200 } as CSSProperties,
-  actionBtn: { display: 'inline-block', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
+  ownerSelect: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', borderRadius: 6, padding: '2px 6px', fontSize: 11.5, cursor: 'pointer', maxWidth: 200 } as CSSProperties,
+  actionBtn: { display: 'inline-block', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
   menu: { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 6, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', gap: 2 } as CSSProperties,
-  menuItem: { display: 'block', padding: '7px 10px', borderRadius: 7, color: 'var(--fg)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600 } as CSSProperties,
+  menuItem: { display: 'block', padding: '7px 10px', borderRadius: 7, color: 'var(--text)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600 } as CSSProperties,
   snapshotRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 10, marginBottom: 12 } as CSSProperties,
   snapshotGroup: { border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', padding: '12px 16px' } as CSSProperties,
   groupTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--accent)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
@@ -817,7 +817,7 @@ const st = {
   chainAccount: { fontWeight: 800, color: 'var(--accent)' } as CSSProperties,
   routeLabel: { color: 'var(--muted)', fontSize: 11.5, fontStyle: 'italic', width: 66 } as CSSProperties,
   chainNode: { border: '1px solid var(--border)', background: 'transparent', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)', textDecoration: 'none', fontSize: 12.5 } as CSSProperties,
-  chainNodeActive: { color: 'var(--fg)', borderColor: 'var(--accent)' } as CSSProperties,
+  chainNodeActive: { color: 'var(--text)', borderColor: 'var(--accent)' } as CSSProperties,
   tabs: { display: 'inline-flex', gap: 4, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, marginBottom: 12, flexWrap: 'wrap' } as CSSProperties,
   tab: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 } as CSSProperties,
   tabOn: { background: 'var(--accent-grad, var(--accent))', color: 'var(--accent-ink, #fff)', fontWeight: 700 } as CSSProperties,

@@ -418,7 +418,7 @@ export default async function MyDayPage() {
 function Kpi({ n, label, bad = false }: { n: number; label: string; bad?: boolean }) {
   return (
     <div style={st.kpi}>
-      <div style={{ ...st.kpiN, color: bad && n > 0 ? 'var(--bad)' : 'var(--fg)' }}>{n}</div>
+      <div style={{ ...st.kpiN, color: bad && n > 0 ? 'var(--bad)' : 'var(--text)' }}>{n}</div>
       <div style={st.kpiL}>{label}</div>
     </div>
   );
@@ -443,7 +443,7 @@ const st = {
   // Three columns (verb / what / worth) declared in .day-pend-row (globals.css).
   pendRow: { padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: 13 } as CSSProperties,
   desk: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 } as CSSProperties,
-  deskCard: { display: 'flex', alignItems: 'baseline', gap: 10, background: 'var(--panel)', borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--border)', borderRadius: 10, padding: '10px 14px', textDecoration: 'none', color: 'var(--fg)' } as CSSProperties,
+  deskCard: { display: 'flex', alignItems: 'baseline', gap: 10, background: 'var(--panel)', borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--border)', borderRadius: 10, padding: '10px 14px', textDecoration: 'none', color: 'var(--text)' } as CSSProperties,
   deskCardHot: { borderStyle: 'solid', borderColor: 'var(--accent)' } as CSSProperties,
   deskN: { fontSize: 20, fontWeight: 800 } as CSSProperties,
   deskL: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,

@@ -375,7 +375,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
             {outcome.status === 'open' && <p style={st.muted}>Move the stage to Won or Lost to capture the outcome.</p>}
             {nextAction.subject && (
               <p style={{ ...st.muted, marginTop: 8 }}>
-                Next action: <b style={{ color: 'var(--fg)' }}>{nextAction.subject}</b>
+                Next action: <b style={{ color: 'var(--text)' }}>{nextAction.subject}</b>
                 {nextAction.dueDate && <> · due {d(nextAction.dueDate)}</>}
                 {nextAction.fromActivity && <span style={st.fromActivity} title="Derived from the next open activity — complete it and this moves automatically">from activity</span>}
               </p>
@@ -474,25 +474,25 @@ const st = {
   h1: { fontSize: 25, margin: '0 0 6px', color: 'var(--accent)', letterSpacing: -0.4 } as CSSProperties,
   subline: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
   outcomePill: { fontSize: 11.5, borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '2px 10px', fontWeight: 700 } as CSSProperties,
-  routePill: { fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', color: 'var(--fg)' } as CSSProperties,
+  routePill: { fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', color: 'var(--text)' } as CSSProperties,
   metaLabel: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' } as CSSProperties,
-  select: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '5px 9px', fontSize: 12.5, textTransform: 'capitalize' } as CSSProperties,
-  actionBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', background: 'var(--panel)', cursor: 'pointer' } as CSSProperties,
+  select: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '5px 9px', fontSize: 12.5, textTransform: 'capitalize' } as CSSProperties,
+  actionBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', background: 'var(--panel)', cursor: 'pointer' } as CSSProperties,
   ghostBtn: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer', padding: '7px 6px' } as CSSProperties,
   stats: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 12 } as CSSProperties,
   section: { padding: '12px 16px', border: '1px dashed var(--border)', borderRadius: 12, marginBottom: 14 } as CSSProperties,
   sectionTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--accent)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
   chainRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 } as CSSProperties,
   chainNode: { border: '1px solid var(--border)', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)' } as CSSProperties,
-  chainNodeOn: { color: 'var(--fg)', borderColor: 'var(--accent)' } as CSSProperties,
+  chainNodeOn: { color: 'var(--text)', borderColor: 'var(--accent)' } as CSSProperties,
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 } as CSSProperties,
   block: { border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--panel)' } as CSSProperties,
   blockTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--muted)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
   checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   competitorChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', background: 'var(--panel-2, var(--panel))' } as CSSProperties,
-  input: { width: '100%', boxSizing: 'border-box', background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '6px 10px', fontSize: 12.5 } as CSSProperties,
+  input: { width: '100%', boxSizing: 'border-box', background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '6px 10px', fontSize: 12.5 } as CSSProperties,
   stkRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13 } as CSSProperties,
-  rolePill: { fontSize: 10.5, border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', color: 'var(--fg)' } as CSSProperties,
+  rolePill: { fontSize: 10.5, border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', color: 'var(--text)' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12.5, margin: '4px 0' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
   linkBtn: { background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0 } as CSSProperties,

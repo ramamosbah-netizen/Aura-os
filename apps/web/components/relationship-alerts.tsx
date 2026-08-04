@@ -82,6 +82,6 @@ const st: Record<string, CSSProperties> = {
   entity: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' },
   name: { fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   reason: { fontSize: 11.5, color: 'var(--muted)', marginTop: 1 },
-  rec: { fontSize: 11, color: 'var(--fg)', marginTop: 4, opacity: 0.85 },
+  rec: { fontSize: 11, color: 'var(--text)', marginTop: 4, opacity: 0.85 },
   more: { fontSize: 11, color: 'var(--muted)', marginTop: 8 },
 };

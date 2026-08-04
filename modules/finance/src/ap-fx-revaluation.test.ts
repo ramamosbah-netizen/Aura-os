@@ -28,7 +28,7 @@ describe('AP FX revaluation', () => {
       append: vi.fn().mockResolvedValue(undefined),
       appendWithClient: vi.fn().mockResolvedValue(undefined),
     } as unknown as EventStore;
-    const access = { assert: vi.fn() } as unknown as AccessService;
+    const access = { assert: vi.fn(), assertApprovalAuthority: vi.fn() } as unknown as AccessService;
     const numbering = { generateNextNumber: vi.fn().mockResolvedValue('AP-2026-0001') } as unknown as NumberingService;
     const audit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
     const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
@@ -41,7 +41,7 @@ describe('AP FX revaluation', () => {
     const journals = new JournalService(new InMemoryJournalStore(), events, new InMemoryPeriodCloseStore(), access);
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
-      fx, journals, accounts,
+      fx, journals, accounts, access,
     );
     invoices.onModuleInit();
     return { invoices, journals };

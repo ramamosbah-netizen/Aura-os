@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService } from '@aura/core';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService, AccessService } from '@aura/core';
 import type { Currency } from '@aura/shared';
 import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeInvoice } from './domain/invoice';
 import { type ApAgingReport, buildApAging } from './domain/ap-aging';
@@ -40,6 +40,7 @@ export class InvoiceService implements OnModuleInit {
     private readonly fx: ExchangeRateService,
     private readonly journals: JournalService,
     private readonly accounts: AccountService,
+    private readonly access: AccessService,
     // Cross-context data for the 3-way match — bound by the app layer (ADR-0004). Optional so the
     // module is self-contained; when unbound the match is skipped (mirrors procurement's gate).
     @Optional() @Inject(PO_MATCH_PORT) private readonly poMatch?: PoMatchPort,
@@ -177,6 +178,15 @@ export class InvoiceService implements OnModuleInit {
       if (actorId && existing.createdBy && actorId === existing.createdBy) {
         throw new Error(
           `access denied: the preparer of invoice ${existing.reference ?? id} cannot approve their own invoice — segregation of duties requires a different approver`,
+        );
+      }
+      // Value-threshold approval (P0-3): the approver's grant must carry enough approvalLimit for the
+      // invoice value. Skipped for system/auto transitions. Reuses the ABAC ceiling.
+      if (actorId) {
+        this.access.assertApprovalAuthority(
+          actorId,
+          { permission: 'finance.invoice.approve', orgPath: [{ level: 'tenant', id: existing.tenantId }], amount: existing.value },
+          `invoice ${existing.reference ?? id} approval`,
         );
       }
       const match = await this.checkThreeWayMatch(id);

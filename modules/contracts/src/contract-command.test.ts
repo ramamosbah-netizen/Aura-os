@@ -19,7 +19,7 @@ function buildService() {
   } as unknown as EventStore;
   const access = { assert: vi.fn() } as unknown as AccessService;
   const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
-  const service = new ContractService(store, events, new NullTxRunner(), bus);
+  const service = new ContractService(store, events, new NullTxRunner(), bus, access);
   service.onModuleInit();
   return { service, store, events };
 }

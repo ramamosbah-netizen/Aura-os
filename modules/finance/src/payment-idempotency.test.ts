@@ -31,14 +31,14 @@ describe('Payment recording idempotency', () => {
       append: vi.fn().mockResolvedValue(undefined),
       appendWithClient: vi.fn().mockResolvedValue(undefined),
     } as unknown as EventStore;
-    const access = { assert: vi.fn() } as unknown as AccessService;
+    const access = { assert: vi.fn(), assertApprovalAuthority: vi.fn() } as unknown as AccessService;
     const numbering = { generateNextNumber: vi.fn().mockResolvedValue('INV-2026-0001') } as unknown as NumberingService;
     const audit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
     const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
 
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
-      { getRate: async () => 1 } as any, {} as any, {} as any,
+      { getRate: async () => 1 } as any, {} as any, {} as any, access,
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);
@@ -63,14 +63,14 @@ describe('Payment recording idempotency', () => {
       append: vi.fn().mockResolvedValue(undefined),
       appendWithClient: vi.fn().mockResolvedValue(undefined),
     } as unknown as EventStore;
-    const access = { assert: vi.fn() } as unknown as AccessService;
+    const access = { assert: vi.fn(), assertApprovalAuthority: vi.fn() } as unknown as AccessService;
     const numbering = { generateNextNumber: vi.fn().mockResolvedValue('INV-2026-0002') } as unknown as NumberingService;
     const audit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
     const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
 
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
-      { getRate: async () => 1 } as any, {} as any, {} as any,
+      { getRate: async () => 1 } as any, {} as any, {} as any, access,
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);

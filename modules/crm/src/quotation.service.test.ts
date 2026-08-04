@@ -1,13 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { EventStore } from '@aura/core';
+import type { EventStore, AccessService } from '@aura/core';
 import { QuotationService } from './quotation.service';
 import { InMemoryQuotationStore } from './in-memory-quotation-store';
 import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline-store';
 
+// Permissive access mock — these tests don't exercise the value-threshold/SoD approval gate.
+const noopAccess = { assert: () => {}, assertApprovalAuthority: () => {} } as unknown as AccessService;
+
 function harness() {
   const events = { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
   const baselines = new InMemoryCommercialBaselineStore();
-  const svc = new QuotationService(new InMemoryQuotationStore(), baselines, events);
+  const svc = new QuotationService(new InMemoryQuotationStore(), baselines, events, noopAccess);
   return { svc, baselines, events };
 }
 
@@ -100,7 +103,7 @@ describe('QuotationService.listRevisions — the chain is links, not the number'
     const { svc } = harness();
     const store = new InMemoryQuotationStore();
     const svc2 = new QuotationService(store, new InMemoryCommercialBaselineStore(),
-      { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore);
+      { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore, noopAccess);
     const r0 = await quote(svc2, 'QT-LEGACY');
     // A revision 1 with no parent link — legacy data, but distinct revision numbers prove it is
     // one chain rather than two quotes.

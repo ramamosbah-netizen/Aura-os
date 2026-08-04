@@ -63,12 +63,12 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **Severity:** P0 (defence-in-depth; deployment/config fix, not a code fix).
 - **Fix:** Connect as a non-owner `aura_app` role with `FORCE ROW LEVEL SECURITY`; add a fitness test asserting every store query binds tenant. *(No store code change needed — verified all scope tenant.)*
 
-### P0-3 — No segregation of duties in the commercial money cycle — ✅ FIXED (maker-checker)
+### P0-3 — No segregation of duties in the commercial money cycle — ✅ FIXED (maker-checker + value-threshold)
 - **Issue (original):** Quotation approve, contract sign, IPC certify, and invoice post were plain status transitions with no not-own-record check. A junior could authorise their **own** records end to end.
 - **✅ FIX (2026-08-03):** "Cannot authorise your own record" maker-checker now enforced on all four money-cycle transitions — the preparer (`createdBy`) may not approve/sign/certify/post; a different authorised user must. Returns 403 (`access denied` → taxonomy). Engages only when an actor is known (auth on); **system/auto transitions carry no actor and are unaffected** (the `contract.signed → auto-project` and `ipc.certified → auto-invoice` reactor chains still work).
   - `modules/crm/src/quotation.service.ts` (approve), `modules/contracts/src/contract.service.ts` (sign→active, actorId threaded), `modules/contracts/src/payment-certificate.service.ts` (certify), `modules/finance/src/invoice.service.ts` (approve) + the two controllers thread `ctx.actorId`.
-  - **Verified:** new `apps/api/test/sod.e2e-spec.ts` (3 HTTP tests: self→403, checker→200) green; contracts 21 + finance 110 unit tests green; chains/cost-ledger/quantity-ledger e2e (16) green (no-actor auto-flows unaffected).
-- **Still open (P1):** value-**threshold** routing (auto-approve below a limit, else → a *named approver*) — currently any different authorised user satisfies the check. Extend the Procurement `ApprovalMatrixService` pattern next.
+  - **Verified:** `apps/api/test/sod.e2e-spec.ts` (self→403, checker→200) green; contracts 21 + finance 110 unit tests green; chains/cost-ledger/quantity-ledger e2e green (no-actor auto-flows unaffected).
+- **✅ FIX 2 (2026-08-04) — value-threshold matrix:** the same four transitions now also check the approver's **approval authority against the record's value**, reusing the access layer's existing `approvalLimit` ABAC (no new state machine). A new `AccessService.assertApprovalAuthority(userId, {permission, orgPath, amount}, label)` passes only when a grant both permits the action *and* carries `approvalLimit ≥ amount`; when the user could act but their limit is too low it throws `"…above your approval limit — a more senior approver is required"` (→403). Skipped when there is no actor (auto-flows). Tiered demo approvers seeded (`auth.seeder`: u-manager ≤50k · u-director ≤500k · u-admin/u-approver unlimited). Proven by `sod.e2e-spec.ts` (500k contract: ≤50k approver→403 "above your approval limit", unlimited→200; 30k→ the ≤50k approver signs). api e2e 160/32 green. **P0-3 fully closed.**
 
 ---
 
@@ -119,7 +119,7 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 |---|---------|----------|:---:|
 | S1 | Auth/RBAC off → unauth access | guard `:100/:125`; live 200 w/ 34 recs, no token | P0 |
 | S2 | RLS bypassed (owner-role conn) | `.env.local` postgres role; 13 RLS migs only | P0 |
-| S3 | ~~No SoD / self-approval~~ **✅ FIXED** — maker-checker on quotation/contract/IPC/invoice (self→403); threshold-routing still P1 | sod.e2e-spec.ts green | ✅ |
+| S3 | ~~No SoD / self-approval~~ **✅ FIXED** — maker-checker (self→403) **+ value-threshold matrix** (approver `approvalLimit ≥ amount`, else→403) on quotation/contract/IPC/invoice | sod.e2e-spec.ts green | ✅ |
 | S4 | ~~2 stores without tenant filter~~ **RETRACTED** — false positive (barrel files); all real stores scope `tenant_id` | verified 2026-08-03 | ✅ |
 | S5 | Guard mechanism is sound when ON | route-derived perms cover ~600 handlers, server-side, deny-on-assert | ✅ strength |
 

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, type EstimationLineInput, estimateLine, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { EVENT_STORE, type EventStore, AccessService } from '@aura/core';
 import {
   QUOTATION_EVENT,
   QUOTATION_ACTIONS,
@@ -34,6 +34,7 @@ export class QuotationService {
     @Inject(CRM_QUOTATION_STORE) private readonly store: QuotationStore,
     @Inject(CRM_COMMERCIAL_BASELINE_STORE) private readonly baselines: CommercialBaselineStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    private readonly access: AccessService,
   ) {}
 
   async create(input: NewQuotation): Promise<Quotation> {
@@ -101,6 +102,15 @@ export class QuotationService {
     if (action === 'approve' && actorId && q.createdBy && actorId === q.createdBy) {
       throw new Error(
         `access denied: the preparer of quotation ${q.quoteNumber} cannot approve their own quotation — segregation of duties requires a different approver`,
+      );
+    }
+    // Value-threshold approval (P0-3): the approver's grant must carry enough approvalLimit for the
+    // quote total. Skipped when the actor is unknown (auth off / auto flows). Reuses the ABAC ceiling.
+    if (action === 'approve' && actorId) {
+      this.access.assertApprovalAuthority(
+        actorId,
+        { permission: 'crm.quotation.approve', orgPath: [{ level: 'tenant', id: q.tenantId }], amount: q.total },
+        `quotation ${q.quoteNumber} approval`,
       );
     }
     const updated = applyQuotationAction(q, action);

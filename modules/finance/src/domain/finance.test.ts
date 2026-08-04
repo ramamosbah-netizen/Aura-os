@@ -47,6 +47,7 @@ function fakeBus(): CommandBus {
 // Mock AccessService, EventStore, NumberingService, and AuditService
 const mockAccess = {
   assert: () => {},
+  assertApprovalAuthority: () => {},
 } as unknown as AccessService;
 
 const mockEvents = {
@@ -148,6 +149,7 @@ describe('Finance depth features', () => {
         { getRate: async () => 1 } as any,
         {} as any,
         {} as any,
+        mockAccess,
       );
       invoiceService.onModuleInit();
       const accountService = new AccountService(accountStore, mockAccess);
@@ -234,6 +236,7 @@ describe('Finance depth features', () => {
         { getRate: async () => 1 } as any,
         {} as any,
         {} as any,
+        mockAccess,
         poMatchFrom(poService, grnService),
       );
       invoiceService.onModuleInit();
@@ -299,6 +302,7 @@ describe('Finance depth features', () => {
         { getRate: async () => 1 } as any,
         {} as any,
         {} as any,
+        mockAccess,
         poMatchFrom(poService, grnService),
       );
       invoiceService.onModuleInit();

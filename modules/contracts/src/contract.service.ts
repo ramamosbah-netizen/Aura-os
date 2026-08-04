@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AccessService } from '@aura/core';
 import { CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, makeContract } from './domain/contract';
 import { CONTRACT_STORE, type ContractFilter, type ContractStore } from './contract-store';
 
@@ -25,6 +25,7 @@ export class ContractService implements OnModuleInit {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
+    private readonly access: AccessService,
   ) {}
 
   onModuleInit(): void {
@@ -110,6 +111,15 @@ export class ContractService implements OnModuleInit {
     if (status === 'active' && actorId && existing.createdBy && actorId === existing.createdBy) {
       throw new Error(
         `access denied: the preparer of contract ${existing.reference ?? id} cannot sign their own contract — segregation of duties requires a different signatory`,
+      );
+    }
+    // Value-threshold approval (P0-3): the signatory's grant must carry enough approvalLimit for the
+    // contract value. Skipped for system/auto transitions (no actor). Reuses the ABAC ceiling.
+    if (status === 'active' && actorId) {
+      this.access.assertApprovalAuthority(
+        actorId,
+        { permission: 'contracts.contract.sign', orgPath: [{ level: 'tenant', id: existing.tenantId }], amount: existing.value },
+        `contract ${existing.reference ?? id} signing`,
       );
     }
     const updated: Contract = { ...existing, status };

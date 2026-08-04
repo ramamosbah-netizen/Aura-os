@@ -16,6 +16,7 @@ import { AccessDeniedFilter } from '../src/auth/access-denied.filter';
 const TENANT = 'sod-tenant';
 const MAKER = '00000000-0000-0000-0000-0000000000a1';
 const CHECKER = '00000000-0000-0000-0000-0000000000a2';
+const LIMITED = '00000000-0000-0000-0000-0000000000a3'; // authorised, but only up to a 50k approval limit
 
 describe('segregation of duties — maker-checker across the money cycle (HTTP)', () => {
   let app: INestApplication;
@@ -32,6 +33,8 @@ describe('segregation of duties — maker-checker across the money cycle (HTTP)'
     const access = app.get(AccessService);
     access.registerRole({ id: 'role-sod', name: 'SoD Super', permissions: ['*'] });
     for (const u of [MAKER, CHECKER]) access.grant({ userId: u, roleId: 'role-sod', scope: { kind: 'org', level: 'tenant', id: TENANT } });
+    // A limited approver: same wildcard permissions, but capped at 50k (the value-threshold matrix).
+    access.grant({ userId: LIMITED, roleId: 'role-sod', scope: { kind: 'org', level: 'tenant', id: TENANT }, attributes: { approvalLimit: 50_000 } });
     // The acting user comes from the x-actor header (defaults to MAKER), so one suite can act as either.
     const tenant = app.get(TenantContext);
     app.use((req: { headers: Record<string, string | string[] | undefined> }, _res: unknown, next: () => void) => {
@@ -47,6 +50,7 @@ describe('segregation of duties — maker-checker across the money cycle (HTTP)'
   });
 
   const asChecker = (r: request.Test) => r.set('x-actor', CHECKER);
+  const asActor = (r: request.Test, actor: string) => r.set('x-actor', actor);
 
   it('Contract sign: the preparer cannot sign their own contract; a different user can', async () => {
     const contract = (await http.post('/api/v1/contracts/contracts').send({ title: 'Fire Alarm Supply', value: 500_000 }).expect(201)).body; // created by MAKER
@@ -80,5 +84,20 @@ describe('segregation of duties — maker-checker across the money cycle (HTTP)'
     const self = await http.patch(`/api/v1/finance/invoices/${invoice.id}/status`).send({ status: 'approved' });
     expect(self.status).toBe(403);
     expect(self.body.message).toMatch(/cannot approve their own invoice/i);
+  });
+
+  it('Value-threshold matrix: an approver below the value limit is refused; a sufficiently senior one passes', async () => {
+    // A 500k contract (created by MAKER). The limited approver (≤50k) is authorised but under-ranked.
+    const big = (await http.post('/api/v1/contracts/contracts').send({ title: 'Tower ELV', value: 500_000 }).expect(201)).body;
+    const over = await asActor(http.patch(`/api/v1/contracts/contracts/${big.id}/status`), LIMITED).send({ status: 'active' });
+    expect(over.status).toBe(403);
+    expect(over.body.message).toMatch(/above your approval limit/i);
+    // A Board-tier approver (no cap) signs the same 500k contract.
+    await asChecker(http.patch(`/api/v1/contracts/contracts/${big.id}/status`)).send({ status: 'active' }).expect(200);
+
+    // A 30k contract is within the limited approver's authority → they can sign it.
+    const small = (await http.post('/api/v1/contracts/contracts').send({ title: 'Small works', value: 30_000 }).expect(201)).body;
+    await asActor(http.patch(`/api/v1/contracts/contracts/${small.id}/status`), LIMITED).send({ status: 'active' }).expect(200);
+    expect((await http.get(`/api/v1/contracts/contracts/${small.id}`).expect(200)).body.status).toBe('active');
   });
 });

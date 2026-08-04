@@ -32,6 +32,23 @@ export class AuthSeeder implements OnModuleInit {
       roleId: 'dealChainAdmin',
       scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
     });
-    this.logger.log('Seeded deal-chain admin grant (u-admin + u-approver can create/approve across the chain in dev-tenant).');
+    // Tiered approvers demonstrate the value-threshold approval matrix (P0-3): the same wildcard
+    // permissions, but capped by an `approvalLimit` on the grant. An amount-bearing authorisation
+    // (quotation approve / contract sign / IPC certify / invoice approve) above the cap is refused
+    // with "above your approval limit" (→403), so a more senior approver is required. u-admin +
+    // u-approver carry no cap (Board tier — unlimited).
+    this.access.grant({
+      userId: 'u-manager',
+      roleId: 'dealChainAdmin',
+      scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
+      attributes: { approvalLimit: 50_000 },
+    });
+    this.access.grant({
+      userId: 'u-director',
+      roleId: 'dealChainAdmin',
+      scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
+      attributes: { approvalLimit: 500_000 },
+    });
+    this.logger.log('Seeded approval matrix: u-admin/u-approver (unlimited) · u-director (≤500k) · u-manager (≤50k) in dev-tenant.');
   }
 }

@@ -109,7 +109,7 @@ export default function CalibrationClient({ initial }: { initial: Calibration[] 
 }
 
 function Kpi({ label, value, good, warn, bad }: { label: string; value: number; good?: boolean; warn?: boolean; bad?: boolean }) {
-  const color = bad && value > 0 ? '#dc2626' : warn && value > 0 ? '#d97706' : good ? '#16a34a' : 'var(--fg)';
+  const color = bad && value > 0 ? '#dc2626' : warn && value > 0 ? '#d97706' : good ? '#16a34a' : 'var(--text)';
   return (
     <div style={st.kpi}>
       <div style={st.kpiLabel}>{label}</div>
@@ -120,12 +120,12 @@ function Kpi({ label, value, good, warn, bad }: { label: string; value: number; 
 
 const st = {
   kpis: { display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' as const } as CSSProperties,
-  kpi: { border: '1px solid var(--border)', borderRadius: 10, padding: '12px 18px', minWidth: 120, background: 'var(--surface)' } as CSSProperties,
+  kpi: { border: '1px solid var(--border)', borderRadius: 10, padding: '12px 18px', minWidth: 120, background: 'var(--panel)' } as CSSProperties,
   kpiLabel: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } as CSSProperties,
   kpiValue: { fontSize: 24, fontWeight: 700, letterSpacing: -0.5 } as CSSProperties,
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
-  input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--surface)', color: 'var(--fg)' } as CSSProperties,
+  input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--panel)', color: 'var(--text)' } as CSSProperties,
   btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,

@@ -871,7 +871,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                     title="Drag to another stage"
                   >
                     <div style={s.cardTitle}>
-                      <a href={`/crm/opportunities/${o.id}`} style={{ color: 'var(--fg)', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>{o.title}</a>
+                      <a href={`/crm/opportunities/${o.id}`} style={{ color: 'var(--text)', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>{o.title}</a>
                     </div>
                     {o.accountName && <div style={s.cardSub}>{o.accountName}</div>}
                     <div style={s.cardMetaRow}>

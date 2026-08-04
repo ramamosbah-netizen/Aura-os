@@ -1239,7 +1239,7 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
           </span>
           <span style={{ fontSize: 22, fontWeight: 800 }}>{latest.totalScore}<span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>/100</span></span>
           <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>decided {new Date(latest.createdAt).toLocaleDateString()}</span>
-          {latest.notes && <span style={{ fontSize: 13, color: 'var(--fg)', fontStyle: 'italic' }}>“{latest.notes}”</span>}
+          {latest.notes && <span style={{ fontSize: 13, color: 'var(--text)', fontStyle: 'italic' }}>“{latest.notes}”</span>}
         </div>
       ) : (
         !adding && <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>Not yet qualified — score the tender against the checklist to make the bid/no-bid call before estimating.</p>
@@ -1287,7 +1287,7 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
               {records.slice(1).map((r) => (
                 <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5, color: 'var(--muted)' }}>
                   <span style={{ fontWeight: 700, color: REC[r.recommendation].color, minWidth: 96 }}>{REC[r.recommendation].label}</span>
-                  <span style={{ fontWeight: 700, color: 'var(--fg)' }}>{r.totalScore}/100</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>{r.totalScore}/100</span>
                   <span>{new Date(r.createdAt).toLocaleDateString()}</span>
                   {r.notes && <span style={{ fontStyle: 'italic' }}>“{r.notes}”</span>}
                 </div>
@@ -1364,7 +1364,7 @@ function ClarificationsPanel({ tenderId, onDeadlineMoved }: { tenderId: string; 
   };
 
   const open = records.filter((c) => !c.answeredAt).length;
-  const input: CSSProperties = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '7px 10px', fontSize: 13, outline: 'none' };
+  const input: CSSProperties = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none' };
 
   return (
     <section style={s.boqSection}>
@@ -1425,7 +1425,7 @@ function ClarificationsPanel({ tenderId, onDeadlineMoved }: { tenderId: string; 
                   {c.answeredAt ? (c.kind === 'addendum' ? 'acknowledged' : 'answered') : 'open'}
                 </span>
               </div>
-              {c.body && <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--fg)' }}>{c.body}</p>}
+              {c.body && <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text)' }}>{c.body}</p>}
               {c.deadlineExtendedTo && <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--accent)' }}>Deadline extended to {c.deadlineExtendedTo} — mirrored onto the tender.</p>}
               {c.answer ? (
                 <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}><b>{c.kind === 'addendum' ? 'Acknowledgement' : 'Answer'}:</b> {c.answer}</p>

@@ -110,7 +110,7 @@ export default function PettyCashClient({ initialFunds }: { initialFunds: PettyC
           <thead><tr><th style={st.th}>Fund</th><th style={st.th}>Balance</th><th style={st.th}>Status</th><th style={st.th}></th></tr></thead>
           <tbody>
             {funds.map((f) => (
-              <tr key={f.id} style={f.id === selected ? { background: 'var(--surface-2, #f1f5f9)' } : undefined}>
+              <tr key={f.id} style={f.id === selected ? { background: 'var(--panel-2)' } : undefined}>
                 <td style={st.td}>{f.name}</td>
                 <td style={st.td}>{f.balance.toLocaleString()} AED</td>
                 <td style={st.td}>{f.status}</td>

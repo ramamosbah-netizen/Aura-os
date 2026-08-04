@@ -130,7 +130,7 @@ const st = {
   cardLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 } as CSSProperties,
   cardVal: { fontSize: 20, fontWeight: 700, marginTop: 4 } as CSSProperties,
   filters: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 } as CSSProperties,
-  chip: { display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 999, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
+  chip: { display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 999, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   chipOn: { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   chipCount: { fontSize: 11, background: 'var(--panel-2)', borderRadius: 999, padding: '0 6px', color: 'var(--muted)' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 4px' } as CSSProperties,

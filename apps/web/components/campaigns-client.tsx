@@ -180,18 +180,18 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent?: 
   return (
     <div style={st.kpi}>
       <div style={st.kpiLabel}>{label}</div>
-      <div style={{ ...st.kpiValue, color: accent == null ? 'var(--fg)' : accent ? '#16a34a' : '#dc2626' }}>{value}</div>
+      <div style={{ ...st.kpiValue, color: accent == null ? 'var(--text)' : accent ? '#16a34a' : '#dc2626' }}>{value}</div>
     </div>
   );
 }
 
 const st = {
   kpis: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 } as CSSProperties,
-  kpi: { border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--surface)' } as CSSProperties,
+  kpi: { border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--panel)' } as CSSProperties,
   kpiLabel: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } as CSSProperties,
   kpiValue: { fontSize: 22, fontWeight: 600, letterSpacing: -0.5 } as CSSProperties,
   form: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20, alignItems: 'center' } as CSSProperties,
-  input: { padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 14 } as CSSProperties,
+  input: { padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', fontSize: 14 } as CSSProperties,
   btn: { padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
   tableWrap: { border: '1px solid var(--border)', borderRadius: 10, overflowX: 'auto' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 } as CSSProperties,
@@ -199,6 +199,6 @@ const st = {
   thR: { textAlign: 'right', padding: '10px 14px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' } as CSSProperties,
   td: { padding: '10px 14px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' } as CSSProperties,
   tdR: { padding: '10px 14px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap' } as CSSProperties,
-  statusSel: { padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 13 } as CSSProperties,
+  statusSel: { padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', fontSize: 13 } as CSSProperties,
   link: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 13, padding: 0 } as CSSProperties,
 };

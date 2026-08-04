@@ -271,7 +271,7 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
                       </div>
                     </td>
                     <td style={st.td}>
-                      <span style={{ ...st.stageTag, color: STAGE_COLOR[r.stage] ?? 'var(--fg)', borderColor: 'var(--border)' }}>
+                      <span style={{ ...st.stageTag, color: STAGE_COLOR[r.stage] ?? 'var(--text)', borderColor: 'var(--border)' }}>
                         {STAGE_LABEL[r.stage] ?? r.stage}
                       </span>
                       {r.suggestedStage ? (
@@ -354,17 +354,17 @@ const st = {
   page: { maxWidth: 1240, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 18px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
-  exportBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
+  exportBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
   kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 10, margin: '4px 0 18px' } as CSSProperties,
   kpi: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px' } as CSSProperties,
   kpiLabel: { color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, whiteSpace: 'nowrap' } as CSSProperties,
   kpiValue: { fontSize: 19, fontWeight: 700, letterSpacing: -0.3, whiteSpace: 'nowrap' } as CSSProperties,
   toolbar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', margin: '14px 0 12px' } as CSSProperties,
   viewsRow: { display: 'flex', gap: 6, flexWrap: 'wrap' } as CSSProperties,
-  viewBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
+  viewBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   viewBtnActive: { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   viewCount: { fontSize: 11, background: 'var(--panel-2)', borderRadius: 999, padding: '1px 7px', color: 'var(--muted)' } as CSSProperties,
-  search: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 9, padding: '8px 12px', fontSize: 13, minWidth: 260 } as CSSProperties,
+  search: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 12px', fontSize: 13, minWidth: 260 } as CSSProperties,
   panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '4px 8px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
@@ -377,5 +377,5 @@ const st = {
   stageTag: { display: 'inline-block', fontSize: 12, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', fontWeight: 600, whiteSpace: 'nowrap' } as CSSProperties,
   fixBtn: { display: 'block', marginTop: 4, border: '1px dashed var(--accent)', background: 'transparent', color: 'var(--accent)', borderRadius: 6, padding: '1px 7px', fontSize: 11, cursor: 'pointer' } as CSSProperties,
   assignBtn: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
-  ownerSelect: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--fg)', borderRadius: 6, padding: '2px 6px', fontSize: 11.5, cursor: 'pointer', maxWidth: 190 } as CSSProperties,
+  ownerSelect: { border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', borderRadius: 6, padding: '2px 6px', fontSize: 11.5, cursor: 'pointer', maxWidth: 190 } as CSSProperties,
 };

@@ -48,7 +48,7 @@ export default function OpportunityActivitiesCard() {
 }
 
 function Stat({ label, value, tone }: { label: string; value?: number; tone?: 'bad' | 'accent' }) {
-  const color = value && tone === 'bad' ? 'var(--bad)' : value && tone === 'accent' ? 'var(--accent)' : 'var(--fg)';
+  const color = value && tone === 'bad' ? 'var(--bad)' : value && tone === 'accent' ? 'var(--accent)' : 'var(--text)';
   return (
     <div style={st.stat}>
       <span style={{ ...st.statVal, color }}>{value ?? '—'}</span>

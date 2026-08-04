@@ -121,7 +121,7 @@ const st: Record<string, CSSProperties> = {
     marginBottom: -1, fontWeight: 600,
   },
   tabOn: { color: 'var(--accent)', borderBottomColor: 'var(--accent)' },
-  badge: { fontSize: 11, fontWeight: 800, background: 'var(--panel-2)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 999, padding: '0 7px', color: 'var(--fg)' },
+  badge: { fontSize: 11, fontWeight: 800, background: 'var(--panel-2)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 999, padding: '0 7px', color: 'var(--text)' },
   badgeOn: { borderColor: 'var(--accent)', color: 'var(--accent)' },
   hintLine: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 16px' },
   subBar: { display: 'inline-flex', gap: 4, border: '1px solid var(--border)', borderRadius: 10, padding: 3, background: 'var(--panel)', marginBottom: 14 },

@@ -387,7 +387,7 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
             <div style={st.revChain}>
               {revisions.map((r) => (
                 <a key={r.id} href={`/crm/quotations/${r.id}`}
-                  style={{ ...st.revChip, ...(r.id === q.id ? st.revChipActive : {}), color: r.id === q.id ? 'var(--accent)' : 'var(--fg)' }}>
+                  style={{ ...st.revChip, ...(r.id === q.id ? st.revChipActive : {}), color: r.id === q.id ? 'var(--accent)' : 'var(--text)' }}>
                   <b>Rev {r.revision}</b>
                   <span style={st.revChipMeta}>{(STATUS_LABEL[r.status] ?? r.status).toLowerCase()} · {aed0(r.total)}</span>
                 </a>
@@ -505,17 +505,17 @@ const st: Record<string, CSSProperties> = {
   td: { padding: '8px', borderBottom: '1px solid var(--border)' },
   tdR: { padding: '8px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap' },
   tfLabel: { padding: '8px', textAlign: 'right', color: 'var(--muted)' },
-  terms: { fontSize: 13, color: 'var(--fg)', margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 },
+  terms: { fontSize: 13, color: 'var(--text)', margin: '8px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 },
   empty: { fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' },
   termsBlock: { marginBottom: 8 },
   termsHead: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' },
   exclList: { margin: '4px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 },
-  exclItem: { fontSize: 13, color: 'var(--fg)', lineHeight: 1.5 },
+  exclItem: { fontSize: 13, color: 'var(--text)', lineHeight: 1.5 },
   termsNote: { fontSize: 11.5, color: 'var(--muted)', margin: '8px 0 0', lineHeight: 1.5 },
   termsEdit: { display: 'flex', flexDirection: 'column', gap: 10 },
   termsLabel: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11.5, color: 'var(--muted)' },
-  termsArea: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--fg)', padding: '7px 9px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical' },
-  termsInput: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--fg)', padding: '7px 9px', fontSize: 12.5 },
+  termsArea: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text)', padding: '7px 9px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical' },
+  termsInput: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text)', padding: '7px 9px', fontSize: 12.5 },
   termsErr: { color: 'var(--bad)', fontSize: 12, margin: 0 },
   termsBtns: { display: 'flex', gap: 8 },
   revChain: { display: 'flex', gap: 8, flexWrap: 'wrap' },

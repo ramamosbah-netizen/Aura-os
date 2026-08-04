@@ -154,13 +154,13 @@ function AddItem({ onAdded }: { onAdded: () => void }) {
 
 const st = {
   toolbar: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 } as CSSProperties,
-  search: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--fg))', padding: '8px 11px', fontSize: 13, minWidth: 220 } as CSSProperties,
-  select: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--fg))', padding: '8px 11px', fontSize: 13 } as CSSProperties,
+  search: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--text))', padding: '8px 11px', fontSize: 13, minWidth: 220 } as CSSProperties,
+  select: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--text))', padding: '8px 11px', fontSize: 13 } as CSSProperties,
   addBtn: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#0b1020', padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
-  seedBtn: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--fg))', padding: '8px 14px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
+  seedBtn: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 8, color: 'var(--text, var(--text))', padding: '8px 14px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   msg: { color: 'var(--good)', fontSize: 12.5 } as CSSProperties,
   addBox: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr) auto', gap: 8, alignItems: 'center', padding: 12, border: '1px solid var(--border)', borderRadius: 10, marginBottom: 14, background: 'var(--panel)' } as CSSProperties,
-  f: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text, var(--fg))', padding: '7px 9px', fontSize: 12.5, width: '100%', boxSizing: 'border-box' } as CSSProperties,
+  f: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border-strong, var(--border))', borderRadius: 7, color: 'var(--text, var(--text))', padding: '7px 9px', fontSize: 12.5, width: '100%', boxSizing: 'border-box' } as CSSProperties,
   saveBtn: { background: 'var(--accent)', border: 'none', borderRadius: 7, color: '#0b1020', padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 } as CSSProperties,
   th: { textAlign: 'left', padding: '7px 9px', borderBottom: '1px solid var(--border)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--muted)', whiteSpace: 'nowrap' } as CSSProperties,

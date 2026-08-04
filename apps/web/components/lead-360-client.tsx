@@ -139,7 +139,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
 
   // ── Header meta + actions ─────────────────────────────────────────────────
   const meta: MetaItem[] = [
-    ...(lead.companyName ? [{ value: <b style={{ color: 'var(--fg)' }}>{lead.companyName}</b> }] : []),
+    ...(lead.companyName ? [{ value: <b style={{ color: 'var(--text)' }}>{lead.companyName}</b> }] : []),
     ...(lead.source ? [{ label: 'Source', value: lead.source.replace('_', ' ') }] : []),
     { label: 'Captured', value: d(lead.createdAt) },
     {
@@ -314,7 +314,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
                     <div style={{ width: `${a!.score}%`, height: '100%', background: scoreColor(a!.score) }} />
                   </div>
                 </div>
-                <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Confidence <b style={{ color: 'var(--fg)' }}>{a!.confidence}</b> · {a!.coverage.rated}/{a!.coverage.total} rated</div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Confidence <b style={{ color: 'var(--text)' }}>{a!.confidence}</b> · {a!.coverage.rated}/{a!.coverage.total} rated</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div>
@@ -360,7 +360,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
           ) : (
             <div>
               <p style={{ ...s.muted, marginBottom: 12 }}>
-                Converting links this lead to an <b style={{ color: 'var(--fg)' }}>Account</b> and a <b style={{ color: 'var(--fg)' }}>Primary Contact</b> (linking an existing match or creating fresh), then opens the <b style={{ color: 'var(--fg)' }}>Opportunity</b> — all in one transactional step, with lineage preserved.
+                Converting links this lead to an <b style={{ color: 'var(--text)' }}>Account</b> and a <b style={{ color: 'var(--text)' }}>Primary Contact</b> (linking an existing match or creating fresh), then opens the <b style={{ color: 'var(--text)' }}>Opportunity</b> — all in one transactional step, with lineage preserved.
               </p>
               <LeadConvertDrawer lead={lead} accounts={accounts} onDone={() => { setMsg('Converted to an opportunity.'); router.refresh(); }} />
             </div>
@@ -389,6 +389,6 @@ const s: Record<string, CSSProperties> = {
   subhead: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', marginBottom: 6 },
   assessBox: { marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 },
   dimRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  dimInput: { width: 80, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--fg)', padding: '5px 8px', fontSize: 12.5, outline: 'none' },
-  notes: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '8px 10px', fontSize: 13, minHeight: 54, outline: 'none', resize: 'vertical' },
+  dimInput: { width: 80, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '5px 8px', fontSize: 12.5, outline: 'none' },
+  notes: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', fontSize: 13, minHeight: 54, outline: 'none', resize: 'vertical' },
 };

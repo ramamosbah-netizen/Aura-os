@@ -170,9 +170,9 @@ const st = {
   subTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', marginBottom: 2 } as CSSProperties,
   kindTag: { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid var(--border)', borderRadius: 5, padding: '0 5px', marginRight: 6 } as CSSProperties,
   form: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } as CSSProperties,
-  input: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 7, padding: '5px 8px', fontSize: 12 } as CSSProperties,
+  input: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 7, padding: '5px 8px', fontSize: 12 } as CSSProperties,
   dateLabel: { display: 'inline-flex', gap: 4, alignItems: 'center', fontSize: 11, color: 'var(--muted)' } as CSSProperties,
-  primaryBtn: { fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid var(--fg)', background: 'var(--fg)', color: 'var(--panel)', cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  primaryBtn: { fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid var(--text)', background: 'var(--text)', color: 'var(--panel)', cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   ghostBtn: { fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' } as CSSProperties,
   scanBtn: { fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 } as CSSProperties,
 };

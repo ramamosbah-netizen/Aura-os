@@ -114,8 +114,8 @@ const st = {
   label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', marginBottom: 4 } as CSSProperties,
   gapTag: { color: '#d97706', textTransform: 'none', letterSpacing: 0 } as CSSProperties,
   value: { fontSize: 13, lineHeight: 1.45, cursor: 'pointer', minHeight: 18, whiteSpace: 'pre-wrap' } as CSSProperties,
-  input: { width: '100%', border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 7, padding: '6px 8px', fontSize: 12.5, resize: 'vertical' } as CSSProperties,
-  saveBtn: { fontSize: 12, padding: '3px 12px', borderRadius: 6, border: '1px solid var(--fg)', background: 'var(--fg)', color: 'var(--panel)', cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  input: { width: '100%', border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontSize: 12.5, resize: 'vertical' } as CSSProperties,
+  saveBtn: { fontSize: 12, padding: '3px 12px', borderRadius: 6, border: '1px solid var(--text)', background: 'var(--text)', color: 'var(--panel)', cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   ghostBtn: { fontSize: 12, padding: '3px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 13, margin: 0 } as CSSProperties,
 };

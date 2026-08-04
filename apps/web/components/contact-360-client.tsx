@@ -264,7 +264,7 @@ function Stat({ label, value, accent, tone }: { label: string; value: string; ac
   return (
     <div style={{ minWidth: 110 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: tone === 'warn' ? 'var(--warn, #d97706)' : accent ? 'var(--accent)' : 'var(--fg)' }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: tone === 'warn' ? 'var(--warn, #d97706)' : accent ? 'var(--accent)' : 'var(--text)' }}>{value}</div>
     </div>
   );
 }
@@ -307,8 +307,8 @@ const st = {
   h1: { fontSize: 25, margin: '0 0 6px', color: 'var(--accent)', letterSpacing: -0.4 } as CSSProperties,
   subline: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
   metaLabel: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)' } as CSSProperties,
-  select: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)', padding: '4px 8px', fontSize: 12.5 } as CSSProperties,
-  actionBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
+  select: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '4px 8px', fontSize: 12.5 } as CSSProperties,
+  actionBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', background: 'var(--panel)', whiteSpace: 'nowrap' } as CSSProperties,
   stats: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 12 } as CSSProperties,
   tabs: { display: 'inline-flex', gap: 4, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, marginBottom: 12, flexWrap: 'wrap' } as CSSProperties,
   tab: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 } as CSSProperties,
@@ -320,7 +320,7 @@ const st = {
   blockTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--muted)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
   mapRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13 } as CSSProperties,
   mapTag: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, padding: '1px 6px', color: 'var(--muted)' } as CSSProperties,
-  rolePill: { fontSize: 10.5, border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', color: 'var(--fg)' } as CSSProperties,
+  rolePill: { fontSize: 10.5, border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', color: 'var(--text)' } as CSSProperties,
   peerRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 12.5 } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12.5, margin: '4px 0' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,

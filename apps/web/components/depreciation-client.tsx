@@ -85,7 +85,7 @@ export default function DepreciationClient({ assets }: { assets: Asset[] }) {
             <thead><tr><th style={st.th}>Month</th><th style={st.thR}>Depreciation</th><th style={st.thR}>Accumulated</th><th style={st.thR}>Book value</th></tr></thead>
             <tbody>
               {schedule.periods.map((p) => (
-                <tr key={p.period} style={p.period === schedule.monthsElapsed ? { background: 'var(--surface-2, #f1f5f9)' } : undefined}>
+                <tr key={p.period} style={p.period === schedule.monthsElapsed ? { background: 'var(--panel-2)' } : undefined}>
                   <td style={st.td}>{p.period}</td>
                   <td style={st.tdR}>{fmt(p.depreciation)}</td>
                   <td style={st.tdR}>{fmt(p.accumulated)}</td>

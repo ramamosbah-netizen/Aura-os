@@ -165,7 +165,7 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
 }
 
 function btnStyle(a: Action): CSSProperties {
-  const bg = a === 'clear' ? '#16a34a' : a === 'bounce' ? '#dc2626' : a === 'deposit' ? '#7c3aed' : a === 'represent' ? '#2563eb' : 'var(--surface-2, #e5e7eb)';
+  const bg = a === 'clear' ? '#16a34a' : a === 'bounce' ? '#dc2626' : a === 'deposit' ? '#7c3aed' : a === 'represent' ? '#2563eb' : 'var(--panel-2)';
   const color = a === 'cancel' ? 'inherit' : '#fff';
   return { padding: '4px 10px', borderRadius: 4, background: bg, color, border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 };
 }

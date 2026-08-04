@@ -127,7 +127,7 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
                   </tr>
                   {expanded === itp.id && (
                     <tr key={itp.id + '-points'}>
-                      <td style={{ ...st.td, background: 'var(--surface-2, #f8fafc)' }} colSpan={6}>
+                      <td style={{ ...st.td, background: 'var(--panel-2)' }} colSpan={6}>
                         <table style={{ ...st.table, margin: 0 }}>
                           <thead><tr><th style={st.thSm}>Activity</th><th style={st.thSm}>Type</th><th style={st.thSm}>Criteria</th><th style={st.thSm}>Result</th><th style={st.thSm}></th></tr></thead>
                           <tbody>
@@ -168,7 +168,7 @@ const st = {
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120 } as CSSProperties,
   btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
-  smGray: { padding: '5px 12px', borderRadius: 4, background: 'var(--surface-2, #e5e7eb)', color: 'inherit', border: 'none', fontSize: 13, cursor: 'pointer' } as CSSProperties,
+  smGray: { padding: '5px 12px', borderRadius: 4, background: 'var(--panel-2)', color: 'inherit', border: 'none', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
   smRed: { padding: '4px 10px', borderRadius: 4, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   linkBtn: { background: 'none', border: 'none', color: 'var(--accent, #2563eb)', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 14 } as CSSProperties,

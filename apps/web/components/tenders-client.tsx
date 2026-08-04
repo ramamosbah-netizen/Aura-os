@@ -252,7 +252,7 @@ const st = {
   tab: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', borderRadius: 999, padding: '5px 13px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   tabActive: { color: 'var(--accent)', borderColor: 'var(--accent)', background: 'var(--panel)' } as CSSProperties,
   search: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none', minWidth: 170 } as CSSProperties,
-  linkBtn: { border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none' } as CSSProperties,
+  linkBtn: { border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none' } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,

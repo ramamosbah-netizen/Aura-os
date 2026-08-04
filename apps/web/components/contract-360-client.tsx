@@ -360,7 +360,7 @@ function Stat({ label, value, strong, accent, bad }: { label: string; value: str
   return (
     <div style={{ minWidth: 130 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: strong ? 16 : 13.5, fontWeight: strong ? 800 : 600, color: bad ? 'var(--bad)' : accent ? 'var(--accent)' : 'var(--fg)' }}>{value}</div>
+      <div style={{ fontSize: strong ? 16 : 13.5, fontWeight: strong ? 800 : 600, color: bad ? 'var(--bad)' : accent ? 'var(--accent)' : 'var(--text)' }}>{value}</div>
     </div>
   );
 }
@@ -373,11 +373,11 @@ const st = {
   subline: { display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)', marginTop: 6, alignItems: 'center' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
   actBtn: { padding: '8px 14px', fontSize: 12.5, fontWeight: 700 } as CSSProperties,
-  linkBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--fg)', textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
+  linkBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
   stats: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 12 } as CSSProperties,
   chain: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 16px', border: '1px dashed var(--border)', borderRadius: 12, marginBottom: 14, fontSize: 12.5 } as CSSProperties,
   chainNode: { border: '1px solid var(--border)', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)', textDecoration: 'none' } as CSSProperties,
-  chainOn: { color: 'var(--fg)', borderColor: 'var(--accent)' } as CSSProperties,
+  chainOn: { color: 'var(--text)', borderColor: 'var(--accent)' } as CSSProperties,
   arrow: { color: 'var(--muted)' } as CSSProperties,
   tabs: { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,
   tab: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '7px 12px', borderRadius: 9, cursor: 'pointer' } as CSSProperties,

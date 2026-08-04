@@ -148,7 +148,7 @@ const st = {
   btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
   smRed: { padding: '4px 10px', borderRadius: 4, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
-  smGray: { padding: '4px 10px', borderRadius: 4, background: 'var(--surface-2, #e5e7eb)', color: 'inherit', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  smGray: { padding: '4px 10px', borderRadius: 4, background: 'var(--panel-2)', color: 'inherit', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,

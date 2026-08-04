@@ -211,7 +211,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
             <button key={g.key} type="button" role="tab" aria-selected={on} onClick={() => setTab(g.key)}
               style={{ ...st.tab, ...(on ? { ...st.tabOn, color: tone, borderColor: tone } : {}) }}>
               {g.label}
-              <span style={{ ...st.tabCount, ...(g.key === 'overdue' && g.items.length > 0 ? { background: 'var(--bad)', color: '#fff' } : {}) }}>{g.items.length}</span>
+              <span style={{ ...st.tabCount, ...(g.key === 'overdue' && g.items.length > 0 ? { background: 'var(--bad)', color: 'var(--accent-ink)' } : {}) }}>{g.items.length}</span>
             </button>
           );
         })}

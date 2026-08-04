@@ -96,7 +96,7 @@ const PRINT_CSS = `
 const s = {
   wrap: { maxWidth: 1080, margin: '0 auto', padding: 16 } as CSSProperties,
   toolbar: { display: 'flex', gap: 8, marginBottom: 12 } as CSSProperties,
-  printBtn: { background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 14px', fontSize: 13.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  printBtn: { background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 14px', fontSize: 13.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   backBtn: { background: 'transparent', border: '1px solid var(--border, #d0d5dd)', borderRadius: 8, padding: '9px 14px', fontSize: 13.5, cursor: 'pointer', color: 'var(--text, #111)' } as CSSProperties,
   sheet: { background: '#fff', color: '#111', border: '1px solid #e5e7eb', borderRadius: 4, padding: '28px 32px', boxShadow: '0 1px 8px rgba(0,0,0,0.08)', fontSize: 12.5 } as CSSProperties,
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111', paddingBottom: 14, marginBottom: 16 } as CSSProperties,

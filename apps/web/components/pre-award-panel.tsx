@@ -94,7 +94,7 @@ export default function PreAwardPanel({ opportunityId }: { opportunityId: string
           <div key={s.id} style={st.scopeCard}>
             <div style={st.scopeHead}>
               <span style={st.name}>{s.title}</span>
-              <span style={{ ...st.statusTag, color: s.status === 'approved' ? '#16a34a' : 'var(--muted)' }}>{s.status}</span>
+              <span style={{ ...st.statusTag, color: s.status === 'approved' ? 'var(--good)' : 'var(--muted)' }}>{s.status}</span>
               <span style={st.total}>AED {aed(s.total)}</span>
             </div>
             {s.lines.length > 0 && (
@@ -152,7 +152,7 @@ const st = {
   row: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 } as CSSProperties,
   name: { fontWeight: 600 } as CSSProperties,
   meta: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  prio: (p: string): CSSProperties => ({ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border)', color: p === 'must' ? '#dc2626' : p === 'should' ? '#d97706' : 'var(--muted)' }),
+  prio: (p: string): CSSProperties => ({ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border)', color: p === 'must' ? 'var(--bad)' : p === 'should' ? '#d97706' : 'var(--muted)' }),
   form: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 } as CSSProperties,
   input: { flex: '1 1 200px', minWidth: 140, padding: '6px 9px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12.5 } as CSSProperties,
   inputSm: { flex: '0 1 160px', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12.5 } as CSSProperties,

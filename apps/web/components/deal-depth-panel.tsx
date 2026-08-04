@@ -26,16 +26,16 @@ interface Depth {
 
 const S_ROLES = ['DECISION_MAKER', 'ECONOMIC_BUYER', 'CHAMPION', 'INFLUENCER', 'TECHNICAL_EVALUATOR', 'PROCUREMENT', 'FINANCE', 'EXECUTIVE_SPONSOR', 'END_USER', 'BLOCKER', 'OTHER'];
 const T_ROLES = ['OWNER', 'ACCOUNT_OWNER', 'SALES_MANAGER', 'PRESALES', 'ESTIMATION', 'PROCUREMENT', 'FINANCE', 'LEGAL', 'EXECUTIVE_SPONSOR', 'OTHER'];
-const scoreColor = (n: number): string => (n >= 80 ? '#16a34a' : n >= 50 ? '#d97706' : '#dc2626');
-const bandColor = (b: string): string => (b === 'HEALTHY' ? '#16a34a' : b === 'AT_RISK' ? '#d97706' : '#dc2626');
+const scoreColor = (n: number): string => (n >= 80 ? 'var(--good)' : n >= 50 ? '#d97706' : 'var(--bad)');
+const bandColor = (b: string): string => (b === 'HEALTHY' ? 'var(--good)' : b === 'AT_RISK' ? '#d97706' : 'var(--bad)');
 const bandDot = (b: string): string => (b === 'HEALTHY' ? '🟢' : b === 'AT_RISK' ? '🟠' : '🔴');
 const bandLabel = (b: string): string => (b === 'HEALTHY' ? 'Healthy' : b === 'AT_RISK' ? 'At risk' : 'Critical');
 /** The five-state verdict — what KIND of trouble, not just how much (stale ≠ blocked). */
 const STATE_META: Record<string, { dot: string; label: string; color: string }> = {
-  ON_TRACK: { dot: '🟢', label: 'On track', color: '#16a34a' },
+  ON_TRACK: { dot: '🟢', label: 'On track', color: 'var(--good)' },
   NEEDS_ATTENTION: { dot: '🟠', label: 'Needs attention', color: '#d97706' },
-  AT_RISK: { dot: '🔴', label: 'At risk', color: '#dc2626' },
-  BLOCKED: { dot: '⛔', label: 'Blocked', color: '#dc2626' },
+  AT_RISK: { dot: '🔴', label: 'At risk', color: 'var(--bad)' },
+  BLOCKED: { dot: '⛔', label: 'Blocked', color: 'var(--bad)' },
   STALE: { dot: '💤', label: 'Stale', color: '#6b7280' },
 };
 const isOverdue = (c: Commitment): boolean => c.status === 'OPEN' && !!c.dueAt && c.dueAt.slice(0, 10) < new Date().toISOString().slice(0, 10);
@@ -174,7 +174,7 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
               <li key={c.id} style={st.row}>
                 <span style={st.dirChip}>{c.direction === 'OURS' ? 'we' : 'they'}</span>
                 <span style={{ ...st.name, textDecoration: c.status === 'FULFILLED' ? 'line-through' : 'none' }}>{c.description}</span>
-                {c.dueAt ? <span style={{ ...st.meta, color: isOverdue(c) ? '#dc2626' : 'var(--muted)' }}>due {c.dueAt.slice(0, 10)}</span> : null}
+                {c.dueAt ? <span style={{ ...st.meta, color: isOverdue(c) ? 'var(--bad)' : 'var(--muted)' }}>due {c.dueAt.slice(0, 10)}</span> : null}
                 {c.status === 'OPEN'
                   ? <button style={st.smallBtn} disabled={busy} onClick={() => void post(`commitments/${c.id}/fulfil`, {})}>Fulfil</button>
                   : <span style={st.statusTag}>{c.status.toLowerCase()}</span>}
@@ -220,7 +220,7 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
                           onClick={() => void post(`register/${r.id}/resolve`, { to: r.kind === 'DECISION' ? 'DECIDED' : 'RESOLVED' })}>
                           {r.kind === 'DECISION' ? 'Decide' : 'Resolve'}
                         </button>)
-                  : <span style={{ ...st.statusTag, color: r.status === 'INVALIDATED' ? '#dc2626' : 'var(--muted)' }}>{r.status.toLowerCase()}</span>}
+                  : <span style={{ ...st.statusTag, color: r.status === 'INVALIDATED' ? 'var(--bad)' : 'var(--muted)' }}>{r.status.toLowerCase()}</span>}
               </li>
             ))}
           </ul>
@@ -309,7 +309,7 @@ const st = {
   whyLabel: { fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.3 } as CSSProperties,
   whyChip: { fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'var(--panel)', border: '1px solid #d9770655', color: '#b45309' } as CSSProperties,
   chips: { display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 } as CSSProperties,
-  gap: { fontSize: 11, padding: '2px 7px', borderRadius: 5, background: 'var(--panel-2)', border: '1px solid #dc262655', color: '#dc2626' } as CSSProperties,
+  gap: { fontSize: 11, padding: '2px 7px', borderRadius: 5, background: 'var(--panel-2)', border: '1px solid var(--bad)55', color: 'var(--bad)' } as CSSProperties,
   list: { listStyle: 'none', margin: '0 0 10px', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
   row: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 } as CSSProperties,
   name: { fontWeight: 600 } as CSSProperties,
@@ -320,7 +320,7 @@ const st = {
   riskType: { color: 'var(--muted)', fontWeight: 400, textTransform: 'capitalize' } as CSSProperties,
   dimSel: { fontSize: 11.5, padding: '3px 6px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)' } as CSSProperties,
   meta: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  overdueTag: { color: '#dc2626' } as CSSProperties,
+  overdueTag: { color: 'var(--bad)' } as CSSProperties,
   statusTag: { fontSize: 11, color: 'var(--muted)', textTransform: 'capitalize' } as CSSProperties,
   form: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } as CSSProperties,
   input: { flex: '1 1 160px', minWidth: 120, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12.5 } as CSSProperties,

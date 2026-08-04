@@ -17,7 +17,7 @@ interface Opp {
 const BUYING_OPTIONS: BuyingStage[] = [...BUYING_LADDER, 'DEFERRED'];
 const RATING = { '': null, low: 30, medium: 60, high: 90 } as const;
 type RatingKey = keyof typeof RATING;
-const sevColor = (s: string | null): string => (s === 'HIGH' ? '#dc2626' : s === 'MEDIUM' ? '#d97706' : 'var(--muted)');
+const sevColor = (s: string | null): string => (s === 'HIGH' ? 'var(--bad)' : s === 'MEDIUM' ? '#d97706' : 'var(--muted)');
 const nice = (s: string): string => s.replace(/_/g, ' ').toLowerCase();
 const dimLabel = (k: string): string => k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 
@@ -86,7 +86,7 @@ export default function BuyingJourneyPanel({ opportunityId }: { opportunityId: s
           </div>
         </div>
         {align.assessed && (
-          <div style={{ ...st.alignBadge, color: align.aligned ? '#16a34a' : sevColor(align.severity) }}>
+          <div style={{ ...st.alignBadge, color: align.aligned ? 'var(--good)' : sevColor(align.severity) }}>
             {align.aligned ? '✓ aligned with the buyer' : `⚠ ${align.reason}`}
           </div>
         )}
@@ -96,7 +96,7 @@ export default function BuyingJourneyPanel({ opportunityId }: { opportunityId: s
         <div style={st.blockHead}>
           <h3 style={st.h3}>Pursue / No-Pursue</h3>
           {opp.pursuitDecision
-            ? <span style={{ ...st.decisionTag, color: opp.pursuitDecision === 'PURSUE' ? '#16a34a' : '#dc2626' }}>
+            ? <span style={{ ...st.decisionTag, color: opp.pursuitDecision === 'PURSUE' ? 'var(--good)' : 'var(--bad)' }}>
                 {opp.pursuitDecision === 'PURSUE' ? 'Pursuing' : 'Not pursuing'}{opp.pursuitScore != null ? ` · ${opp.pursuitScore}` : ''}
               </span>
             : <span style={st.meta}>not yet assessed</span>}
@@ -150,7 +150,7 @@ const st = {
   scoreRow: { fontSize: 12.5, color: 'var(--muted)', marginBottom: 10 } as CSSProperties,
   form: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } as CSSProperties,
   input: { flex: '1 1 220px', minWidth: 160, padding: '6px 9px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12.5 } as CSSProperties,
-  pursueBtn: { fontSize: 12.5, padding: '6px 12px', borderRadius: 6, border: '1px solid #16a34a', background: '#16a34a', color: '#fff', cursor: 'pointer' } as CSSProperties,
+  pursueBtn: { fontSize: 12.5, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--good)', background: 'var(--good)', color: 'var(--accent-ink)', cursor: 'pointer' } as CSSProperties,
   walkBtn: { fontSize: 12.5, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', cursor: 'pointer' } as CSSProperties,
   empty: { color: 'var(--muted)', fontSize: 13, margin: 0 } as CSSProperties,
 };

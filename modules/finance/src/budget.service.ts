@@ -62,6 +62,15 @@ export class BudgetService {
     // never a cross-tenant delete. The store call is tenant-scoped too (belt and suspenders).
     const budget = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'budget', id);
     await this.store.setDeleted(budget.tenantId, id, true);
+    // Soft-deleting a budget is an auditable act — leave a trace on the spine, as create() does.
+    await this.events.append([
+      makeEvent({
+        type: 'finance.budget.deleted',
+        tenantId: budget.tenantId, companyId: null, actorId: this.tenant?.get().actorId ?? null,
+        aggregateType: 'finance.budget', aggregateId: id,
+        payload: { name: budget.name, from: budget.from, to: budget.to },
+      }),
+    ]);
   }
 
   /** Undo a soft-delete. The row is hidden from get() while deleted, so we cannot re-fetch it to
@@ -69,6 +78,18 @@ export class BudgetService {
    *  restore touches no rows (fail-closed). */
   async restore(id: Id): Promise<void> {
     await this.store.setDeleted(this.tenant?.boundTenantId() ?? '', id, false);
+    // Only announce a restore that actually happened: after a tenant-scoped un-hide, the row is
+    // visible again to its owner; a cross-tenant/missing no-op leaves get() null → no event.
+    const restored = await this.store.get(id);
+    if (!restored) return;
+    await this.events.append([
+      makeEvent({
+        type: 'finance.budget.restored',
+        tenantId: restored.tenantId, companyId: null, actorId: this.tenant?.get().actorId ?? null,
+        aggregateType: 'finance.budget', aggregateId: id,
+        payload: { name: restored.name, from: restored.from, to: restored.to },
+      }),
+    ]);
   }
 
   /** Budget-vs-actual for a budget, folding the GL over its date range. */

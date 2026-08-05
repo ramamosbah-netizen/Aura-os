@@ -21,10 +21,14 @@ const emptyStore = { list: vi.fn().mockResolvedValue([]) } as any;
 const asA = <T>(t: TenantContext, fn: () => Promise<T>) => t.run({ tenantId: A, companyId: null, actorId: null }, fn);
 const asB = <T>(t: TenantContext, fn: () => Promise<T>) => t.run({ tenantId: B, companyId: null, actorId: null }, fn);
 
+const emittedTypes = (append: ReturnType<typeof vi.fn>): string[] =>
+  append.mock.calls.flatMap((c) => (c[0] as Array<{ type: string }>).map((e) => e.type));
+
 function budgetHarness() {
   const store = new InMemoryBudgetStore();
   const tenant = new TenantContext();
-  const svc = new BudgetService(store, emptyStore, emptyStore, events(), tenant);
+  const append = vi.fn().mockResolvedValue(undefined);
+  const svc = new BudgetService(store, emptyStore, emptyStore, { append } as any, tenant);
   const seedA = async () => {
     const b = makeBudget({
       tenantId: A, name: 'FY26', from: '2026-01-01', to: '2026-12-31',
@@ -33,7 +37,7 @@ function budgetHarness() {
     await store.save(b);
     return b;
   };
-  return { store, svc, tenant, seedA };
+  return { store, svc, tenant, seedA, append };
 }
 
 describe('BudgetService — tenant isolation', () => {
@@ -73,6 +77,46 @@ describe('BudgetService — tenant isolation', () => {
     await asA(tenant, () => svc.remove(b.id));
     await asB(tenant, () => svc.restore(b.id)); // touches no rows
     expect(await asA(tenant, () => svc.get(b.id))).toBeNull(); // still deleted for its owner
+  });
+});
+
+describe('BudgetService — soft-delete audit trail', () => {
+  it('emits a deleted event on remove and a restored event on restore', async () => {
+    const { svc, tenant, seedA, append } = budgetHarness();
+    const b = await seedA();
+    await asA(tenant, () => svc.remove(b.id));
+    await asA(tenant, () => svc.restore(b.id));
+    const types = emittedTypes(append);
+    expect(types).toContain('finance.budget.deleted');
+    expect(types).toContain('finance.budget.restored');
+  });
+
+  it('a cross-tenant restore no-op announces nothing', async () => {
+    const { svc, tenant, seedA, append } = budgetHarness();
+    const b = await seedA();
+    await asA(tenant, () => svc.remove(b.id));
+    append.mockClear();
+    await asB(tenant, () => svc.restore(b.id)); // touches no rows
+    expect(emittedTypes(append)).not.toContain('finance.budget.restored');
+  });
+});
+
+describe('makeBudget — no silent coercion', () => {
+  it('rejects a non-numeric line amount instead of budgeting it as zero', () => {
+    expect(() =>
+      makeBudget({
+        tenantId: A, name: 'X', from: '2026-01-01', to: '2026-12-31',
+        lines: [{ accountId: 'a', accountCode: '5000', accountName: 'M', amount: 'oops' as unknown as number }],
+      }),
+    ).toThrow(/must be a number/i);
+  });
+
+  it('still accepts a legitimate zero line', () => {
+    const b = makeBudget({
+      tenantId: A, name: 'X', from: '2026-01-01', to: '2026-12-31',
+      lines: [{ accountId: 'a', accountCode: '5000', accountName: 'M', amount: 0 }],
+    });
+    expect(b.lines[0].amount).toBe(0);
   });
 });
 

@@ -66,12 +66,13 @@ export function makeBudget(input: NewBudget): Budget {
     name,
     from: input.from,
     to: input.to,
-    lines: input.lines.map((l) => ({
-      accountId: l.accountId,
-      accountCode: l.accountCode,
-      accountName: l.accountName,
-      amount: r2(Number(l.amount) || 0),
-    })),
+    lines: input.lines.map((l) => {
+      // Validate rather than silently coerce: `Number(x) || 0` turned a NaN/undefined amount into
+      // a budgeted 0, hiding bad input as a real (wrong) figure. A budget line must be a number.
+      const amount = Number(l.amount);
+      if (!Number.isFinite(amount)) throw new Error(`budget line amount must be a number (got ${String(l.amount)})`);
+      return { accountId: l.accountId, accountCode: l.accountCode, accountName: l.accountName, amount: r2(amount) };
+    }),
     deletedAt: null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

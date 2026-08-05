@@ -29,8 +29,8 @@ export interface RiskAssessment {
   createdAt: string;
 }
 
-const bandColor: Record<string, string> = { low: '#16a34a', medium: '#d97706', high: '#dc2626', critical: '#991b1b' };
-const statusColor: Record<string, string> = { draft: '#d97706', approved: '#16a34a', expired: '#6b7280' };
+const bandColor: Record<string, string> = { low: 'var(--good)', medium: 'var(--warn)', high: 'var(--bad)', critical: '#991b1b' };
+const statusColor: Record<string, string> = { draft: 'var(--warn)', approved: 'var(--good)', expired: 'var(--muted)' };
 const emptyHazard = (): RiskLine => ({ hazard: '', likelihood: 3, severity: 3, controls: '', residualLikelihood: 1, residualSeverity: 2 });
 const SCORES = [1, 2, 3, 4, 5];
 
@@ -175,7 +175,7 @@ function Kpi({ label, value, good, bad }: { label: string; value: number; good?:
   return (
     <div style={st.kpi}>
       <div style={st.kpiLabel}>{label}</div>
-      <div style={{ ...st.kpiValue, color: bad && value > 0 ? '#dc2626' : good ? '#16a34a' : 'var(--fg)' }}>{value}</div>
+      <div style={{ ...st.kpiValue, color: bad && value > 0 ? 'var(--bad)' : good ? 'var(--good)' : 'var(--fg)' }}>{value}</div>
     </div>
   );
 }
@@ -188,12 +188,12 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--surface)', color: 'var(--fg)' } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   smGray: { padding: '5px 12px', borderRadius: 4, background: 'var(--surface-2, #e5e7eb)', color: 'inherit', border: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' } as CSSProperties,
-  smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  smRed: { padding: '4px 10px', borderRadius: 4, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  linkBtn: { background: 'none', border: 'none', color: 'var(--accent, #2563eb)', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 14 } as CSSProperties,
-  err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
+  smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  smRed: { padding: '4px 10px', borderRadius: 4, background: 'var(--bad)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  linkBtn: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 14 } as CSSProperties,
+  err: { color: 'var(--bad)', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
   regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,

@@ -51,7 +51,7 @@ function timeAgo(iso: string): string {
 // ── Mode badge colors ────────────────────────────────────────────────────────
 
 const MODE_COLORS: Record<string, string> = {
-  observe: '#6b7280',
+  observe: 'var(--muted)',
   suggest: '#3b82f6',
   assist: '#f59e0b',
   operate: '#10b981',
@@ -248,10 +248,10 @@ export default function IntelligencePanel({
               {proposals.map((p) => (
                 <div key={p.id} style={s.proposalCard}>
                   <div style={s.proposalHeader}>
-                    <span style={{ ...s.modeBadge, background: MODE_COLORS[p.mode] ?? '#6b7280' }}>
+                    <span style={{ ...s.modeBadge, background: MODE_COLORS[p.mode] ?? 'var(--muted)' }}>
                       {p.mode.toUpperCase()}
                     </span>
-                    <span style={{ ...s.severityBadge, color: SEVERITY_COLORS[p.severity] ?? '#6b7280' }}>
+                    <span style={{ ...s.severityBadge, color: SEVERITY_COLORS[p.severity] ?? 'var(--muted)' }}>
                       {p.severity === 'critical' ? '🔴' : p.severity === 'warning' ? '🟡' : '🔵'} {p.severity}
                     </span>
                     <span style={{ ...s.statusBadge, color: STATUS_COLORS[p.status] ?? 'var(--muted)' }}>

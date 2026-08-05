@@ -46,7 +46,7 @@ const daysSince = (iso: string): number => Math.max(0, Math.floor((Date.now() - 
 
 const band = (c: number): { name: string; color: string } =>
   c >= 70 ? { name: 'Strong', color: 'var(--good)' }
-    : c >= 40 ? { name: 'Moderate', color: 'var(--warn, #d97706)' }
+    : c >= 40 ? { name: 'Moderate', color: 'var(--warn, var(--warn))' }
       : { name: 'Weak', color: 'var(--bad)' };
 
 // ── AI read — heuristic composition over the signal's own facts (source reliability,
@@ -74,7 +74,7 @@ function analyzeSignal(s: RadarSignal): AiRead {
     return { verdict: 'PROMOTE', tone: 'var(--good)', reasons, action: `${b.name} ${s.confidence}% confidence — promote to a lead and assign an owner.` };
   }
   if (s.confidence >= 40) {
-    return { verdict: 'INVESTIGATE', tone: 'var(--warn, #d97706)', reasons, action: `${b.name} ${s.confidence}% confidence — advance to research and firm up the evidence.` };
+    return { verdict: 'INVESTIGATE', tone: 'var(--warn, var(--warn))', reasons, action: `${b.name} ${s.confidence}% confidence — advance to research and firm up the evidence.` };
   }
   return { verdict: 'VERIFY', tone: 'var(--bad)', reasons, action: `${b.name} ${s.confidence}% confidence — verify it is real or dismiss to keep the radar clean.` };
 }
@@ -109,8 +109,8 @@ function ConfidenceRing({ value, size = 52 }: { value: number; size?: number }) 
 function FunnelStrip({ counts }: { counts: RadarData['counts'] }) {
   const steps = [
     { label: 'New', n: counts.new, color: 'var(--accent)' },
-    { label: 'Reviewing', n: counts.reviewing, color: 'var(--warn, #d97706)' },
-    { label: 'Researching', n: counts.researching, color: 'var(--warn, #d97706)' },
+    { label: 'Reviewing', n: counts.reviewing, color: 'var(--warn, var(--warn))' },
+    { label: 'Researching', n: counts.researching, color: 'var(--warn, var(--warn))' },
     { label: 'Promoted', n: counts.promoted, color: 'var(--good)' },
     { label: 'Dismissed', n: counts.dismissed, color: 'var(--muted)' },
   ];

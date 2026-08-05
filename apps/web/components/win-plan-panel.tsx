@@ -68,7 +68,7 @@ export default function WinPlanPanel({ opportunityId }: { opportunityId: string 
       <div style={st.head}>
         <h2 style={st.h2}>Win Plan</h2>
         {coverage && (
-          <span style={{ ...st.cov, color: coverage.coverage >= 100 ? 'var(--good)' : coverage.coverage >= 50 ? '#d97706' : 'var(--bad)' }}
+          <span style={{ ...st.cov, color: coverage.coverage >= 100 ? 'var(--good)' : coverage.coverage >= 50 ? 'var(--warn)' : 'var(--bad)' }}
             title={coverage.gaps.length ? `Expected for this deal size and still empty: ${coverage.gaps.map((g) => g.label).join(', ')}` : 'Complete for this deal size'}>
             {coverage.coverage}% for this deal size · {coverage.filled}/{coverage.total} fields
           </span>
@@ -110,9 +110,9 @@ const st = {
   cov: { fontSize: 12.5, fontWeight: 700, cursor: 'help' } as CSSProperties,
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel-2)', padding: '8px 10px' } as CSSProperties,
-  cardGap: { borderColor: '#d97706' } as CSSProperties,
+  cardGap: { borderColor: 'var(--warn)' } as CSSProperties,
   label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', marginBottom: 4 } as CSSProperties,
-  gapTag: { color: '#d97706', textTransform: 'none', letterSpacing: 0 } as CSSProperties,
+  gapTag: { color: 'var(--warn)', textTransform: 'none', letterSpacing: 0 } as CSSProperties,
   value: { fontSize: 13, lineHeight: 1.45, cursor: 'pointer', minHeight: 18, whiteSpace: 'pre-wrap' } as CSSProperties,
   input: { width: '100%', border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', borderRadius: 7, padding: '6px 8px', fontSize: 12.5, resize: 'vertical' } as CSSProperties,
   saveBtn: { fontSize: 12, padding: '3px 12px', borderRadius: 6, border: '1px solid var(--fg)', background: 'var(--fg)', color: 'var(--panel)', cursor: 'pointer', fontWeight: 600 } as CSSProperties,

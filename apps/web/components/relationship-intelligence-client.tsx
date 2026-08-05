@@ -36,7 +36,7 @@ export const KIND_GLYPH: Record<string, string> = {
 };
 export const SEV = {
   high: { label: 'High', color: 'var(--bad)' },
-  medium: { label: 'Medium', color: 'var(--warn, #d97706)' },
+  medium: { label: 'Medium', color: 'var(--warn, var(--warn))' },
   low: { label: 'Low', color: 'var(--muted)' },
 } as const;
 
@@ -66,7 +66,7 @@ export default function RelationshipIntelligenceClient({ data }: { data: AlertsP
       <div style={st.cards}>
         <Kpi label="Total signals" value={String(counts.total ?? data.alerts.length)} />
         <Kpi label="High" value={String(bySev.high)} color={bySev.high > 0 ? 'var(--bad)' : undefined} />
-        <Kpi label="Medium" value={String(bySev.medium)} color={bySev.medium > 0 ? 'var(--warn, #d97706)' : undefined} />
+        <Kpi label="Medium" value={String(bySev.medium)} color={bySev.medium > 0 ? 'var(--warn, var(--warn))' : undefined} />
         <Kpi label="Low" value={String(bySev.low)} />
       </div>
 

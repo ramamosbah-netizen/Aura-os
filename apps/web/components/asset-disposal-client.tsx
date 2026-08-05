@@ -58,7 +58,7 @@ export default function AssetDisposalClient({ initial }: { initial: AssetDisposa
       <div style={st.kpis}>
         <Kpi label="Disposals" value={String(kpi.count)} />
         <Kpi label="Total proceeds" value={aed(kpi.proceeds)} />
-        <Kpi label="Net gain / loss" value={aed(kpi.gainLoss)} color={kpi.gainLoss >= 0 ? '#16a34a' : '#dc2626'} />
+        <Kpi label="Net gain / loss" value={aed(kpi.gainLoss)} color={kpi.gainLoss >= 0 ? 'var(--good)' : 'var(--bad)'} />
       </div>
 
       <h2 style={st.h2}>Dispose asset</h2>
@@ -91,7 +91,7 @@ export default function AssetDisposalClient({ initial }: { initial: AssetDisposa
                 <td style={st.td}>{r.method.replace('_', ' ')}</td>
                 <td style={st.tdR}>{aed(r.proceeds)}</td>
                 <td style={st.tdR}>{aed(r.bookValue)}</td>
-                <td style={{ ...st.tdR, color: r.gainLoss >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>{aed(r.gainLoss)}</td>
+                <td style={{ ...st.tdR, color: r.gainLoss >= 0 ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>{aed(r.gainLoss)}</td>
               </tr>
             ))}
           </tbody>
@@ -118,8 +118,8 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--surface)', color: 'var(--fg)' } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  err: { color: 'var(--bad)', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
   regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,

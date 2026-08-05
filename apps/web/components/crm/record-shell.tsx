@@ -21,7 +21,7 @@ import { type CSSProperties, type ReactNode, useState } from 'react';
 export type Tone = 'neutral' | 'good' | 'warn' | 'bad' | 'accent';
 
 const toneColor = (t?: Tone): string =>
-  t === 'good' ? 'var(--good)' : t === 'bad' ? 'var(--bad)' : t === 'warn' ? 'var(--warn, #d97706)'
+  t === 'good' ? 'var(--good)' : t === 'bad' ? 'var(--bad)' : t === 'warn' ? 'var(--warn, var(--warn))'
     : t === 'accent' ? 'var(--accent)' : 'var(--fg)';
 
 // ── Header ─────────────────────────────────────────────────────────────────────
@@ -366,7 +366,7 @@ const rs: Record<string, CSSProperties> = {
   sChips: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 },
   sMissChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', color: 'var(--bad)', background: 'color-mix(in srgb, var(--bad) 8%, transparent)' },
   sGateOk: { fontSize: 12.5, color: 'var(--good)', fontWeight: 600, marginTop: 6 },
-  sGateChip: { fontSize: 12, border: '1px solid var(--warn, #d97706)', borderRadius: 8, padding: '3px 10px', color: 'var(--warn, #d97706)', background: 'color-mix(in srgb, var(--warn, #d97706) 8%, transparent)' },
+  sGateChip: { fontSize: 12, border: '1px solid var(--warn, var(--warn))', borderRadius: 8, padding: '3px 10px', color: 'var(--warn, var(--warn))', background: 'color-mix(in srgb, var(--warn, var(--warn)) 8%, transparent)' },
   sLogBtn: { border: '1px dashed var(--border)', background: 'transparent', color: 'var(--muted)', borderRadius: 8, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
   sOutcomeChip: { border: '1px solid var(--border)', background: 'transparent', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   sOutcomeCancel: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', alignSelf: 'center' },

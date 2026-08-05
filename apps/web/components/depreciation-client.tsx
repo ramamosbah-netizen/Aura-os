@@ -79,7 +79,7 @@ export default function DepreciationClient({ assets }: { assets: Asset[] }) {
           <div style={st.cards}>
             <div style={st.card}><div style={st.cardLabel}>Months elapsed</div><div style={st.cardVal}>{schedule.monthsElapsed}</div></div>
             <div style={st.card}><div style={st.cardLabel}>Accumulated dep.</div><div style={st.cardVal}>{fmt(schedule.accumulatedToDate)}</div></div>
-            <div style={st.card}><div style={st.cardLabel}>Net book value</div><div style={{ ...st.cardVal, color: 'var(--accent, #2563eb)' }}>{fmt(schedule.netBookValue)}</div></div>
+            <div style={st.card}><div style={st.cardLabel}>Net book value</div><div style={{ ...st.cardVal, color: 'var(--accent)' }}>{fmt(schedule.netBookValue)}</div></div>
           </div>
           <table style={st.table}>
             <thead><tr><th style={st.th}>Month</th><th style={st.thR}>Depreciation</th><th style={st.thR}>Accumulated</th><th style={st.thR}>Book value</th></tr></thead>
@@ -104,8 +104,8 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 150 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
   note: { fontSize: 14, color: 'var(--muted)', margin: '0 0 14px' } as CSSProperties,
   cards: { display: 'flex', gap: 14, marginBottom: 18 } as CSSProperties,
   card: { padding: '12px 18px', borderRadius: 8, border: '1px solid var(--border, #e5e7eb)', minWidth: 150 } as CSSProperties,

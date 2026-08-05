@@ -491,7 +491,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 return (
                   <div key={a.key} style={{ marginBottom: 8 }}>
                     <div style={s.agingRow}><span>{a.label}</span><span style={{ color: 'var(--muted)' }}>{a.deals} · {money(a.value)}</span></div>
-                    <div style={s.agingTrack}><div style={{ ...s.agingFill, width: `${(a.value / max) * 100}%`, background: a.key === 'stale' ? 'var(--bad)' : a.key === 'aging' ? 'var(--warn, #d97706)' : 'var(--accent)' }} /></div>
+                    <div style={s.agingTrack}><div style={{ ...s.agingFill, width: `${(a.value / max) * 100}%`, background: a.key === 'stale' ? 'var(--bad)' : a.key === 'aging' ? 'var(--warn, var(--warn))' : 'var(--accent)' }} /></div>
                   </div>
                 );
               })}

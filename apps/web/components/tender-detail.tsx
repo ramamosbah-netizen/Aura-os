@@ -1421,7 +1421,7 @@ function ClarificationsPanel({ tenderId, onDeadlineMoved }: { tenderId: string; 
                 <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
                   issued {c.issuedAt}{c.responseDue && !c.answeredAt ? ` · due ${c.responseDue}` : ''}
                 </span>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: c.answeredAt ? 'var(--good, #10b981)' : 'var(--warn, #d97706)' }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: c.answeredAt ? 'var(--good, #10b981)' : 'var(--warn, var(--warn))' }}>
                   {c.answeredAt ? (c.kind === 'addendum' ? 'acknowledged' : 'answered') : 'open'}
                 </span>
               </div>

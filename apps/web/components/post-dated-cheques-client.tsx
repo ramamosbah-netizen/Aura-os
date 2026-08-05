@@ -21,7 +21,7 @@ interface PostDatedCheque {
 type Action = 'deposit' | 'clear' | 'bounce' | 'represent' | 'cancel';
 
 const statusColor: Record<string, string> = {
-  pending: '#2563eb', deposited: '#7c3aed', cleared: '#16a34a', bounced: '#dc2626', cancelled: '#6b7280',
+  pending: '#2563eb', deposited: '#7c3aed', cleared: 'var(--good)', bounced: 'var(--bad)', cancelled: 'var(--muted)',
 };
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -98,10 +98,10 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
   return (
     <>
       <div style={st.cards}>
-        <div style={st.card}><div style={st.cardLabel}>Receivable (open)</div><div style={{ ...st.cardVal, color: '#16a34a' }}>{totals.receivable.toLocaleString()} AED</div></div>
-        <div style={st.card}><div style={st.cardLabel}>Payable (open)</div><div style={{ ...st.cardVal, color: '#dc2626' }}>{totals.payable.toLocaleString()} AED</div></div>
-        <div style={st.card}><div style={st.cardLabel}>Maturing ≤7d</div><div style={{ ...st.cardVal, color: totals.maturingSoon > 0 ? '#d97706' : undefined }}>{totals.maturingSoon}</div></div>
-        <div style={st.card}><div style={st.cardLabel}>Bounced</div><div style={{ ...st.cardVal, color: totals.bounced > 0 ? '#dc2626' : undefined }}>{totals.bounced}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Receivable (open)</div><div style={{ ...st.cardVal, color: 'var(--good)' }}>{totals.receivable.toLocaleString()} AED</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Payable (open)</div><div style={{ ...st.cardVal, color: 'var(--bad)' }}>{totals.payable.toLocaleString()} AED</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Maturing ≤7d</div><div style={{ ...st.cardVal, color: totals.maturingSoon > 0 ? 'var(--warn)' : undefined }}>{totals.maturingSoon}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Bounced</div><div style={{ ...st.cardVal, color: totals.bounced > 0 ? 'var(--bad)' : undefined }}>{totals.bounced}</div></div>
       </div>
 
       <h2 style={st.h2}>New cheque</h2>
@@ -139,11 +139,11 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
               return (
                 <tr key={c.id}>
                   <td style={st.td}>{c.chequeNumber}{c.reference && <span style={st.ref}> · {c.reference}</span>}</td>
-                  <td style={st.td}><span style={{ color: c.direction === 'received' ? '#16a34a' : '#dc2626', fontWeight: 600 }}>{c.direction === 'received' ? 'in' : 'out'}</span></td>
+                  <td style={st.td}><span style={{ color: c.direction === 'received' ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>{c.direction === 'received' ? 'in' : 'out'}</span></td>
                   <td style={st.td}>{c.partyName}</td>
                   <td style={st.td}>{c.bankName}</td>
                   <td style={st.td}>{c.amount.toLocaleString()} {c.currency}</td>
-                  <td style={{ ...st.td, color: soon ? '#d97706' : undefined, fontWeight: soon ? 600 : 400 }}>
+                  <td style={{ ...st.td, color: soon ? 'var(--warn)' : undefined, fontWeight: soon ? 600 : 400 }}>
                     {c.maturityDate}{c.status === 'pending' && ` (${d}d)`}
                   </td>
                   <td style={{ ...st.td, color: statusColor[c.status] || '#000', fontWeight: 600 }}>
@@ -165,7 +165,7 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
 }
 
 function btnStyle(a: Action): CSSProperties {
-  const bg = a === 'clear' ? '#16a34a' : a === 'bounce' ? '#dc2626' : a === 'deposit' ? '#7c3aed' : a === 'represent' ? '#2563eb' : 'var(--surface-2, #e5e7eb)';
+  const bg = a === 'clear' ? 'var(--good)' : a === 'bounce' ? 'var(--bad)' : a === 'deposit' ? '#7c3aed' : a === 'represent' ? '#2563eb' : 'var(--surface-2, #e5e7eb)';
   const color = a === 'cancel' ? 'inherit' : '#fff';
   return { padding: '4px 10px', borderRadius: 4, background: bg, color, border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 };
 }
@@ -178,13 +178,13 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 10 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 110 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,
   th: { textAlign: 'left' as const, padding: '8px 12px', borderBottom: '2px solid var(--border, #e5e7eb)', fontWeight: 600 } as CSSProperties,
   td: { padding: '8px 12px', borderBottom: '1px solid var(--border, #e5e7eb)' } as CSSProperties,
   ref: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
-  bounce: { color: '#dc2626', fontSize: 12 } as CSSProperties,
+  bounce: { color: 'var(--bad)', fontSize: 12 } as CSSProperties,
 };

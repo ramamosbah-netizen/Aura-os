@@ -22,8 +22,8 @@ export interface Appraisal {
   createdAt: string;
 }
 
-const statusColor: Record<string, string> = { draft: '#d97706', submitted: '#2563eb', acknowledged: '#16a34a' };
-const scoreColor = (n: number) => (n >= 70 ? '#16a34a' : n >= 50 ? '#d97706' : '#dc2626');
+const statusColor: Record<string, string> = { draft: 'var(--warn)', submitted: '#2563eb', acknowledged: 'var(--good)' };
+const scoreColor = (n: number) => (n >= 70 ? 'var(--good)' : n >= 50 ? 'var(--warn)' : 'var(--bad)');
 const emptyCriterion = (): Criterion => ({ name: '', weight: 1, score: 3 });
 const SCORES = [0, 1, 2, 3, 4, 5];
 
@@ -173,13 +173,13 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--surface)', color: 'var(--fg)' } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   smGray: { padding: '5px 12px', borderRadius: 4, background: 'var(--surface-2, #e5e7eb)', color: 'inherit', border: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' } as CSSProperties,
-  smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  smRed: { padding: '4px 10px', borderRadius: 4, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  linkBtn: { background: 'none', border: 'none', color: 'var(--accent, #2563eb)', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 14 } as CSSProperties,
-  err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
+  smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  smRed: { padding: '4px 10px', borderRadius: 4, background: 'var(--bad)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  linkBtn: { background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 14 } as CSSProperties,
+  err: { color: 'var(--bad)', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
   regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   note: { fontSize: 13, color: 'var(--muted)', margin: '6px 0 0' } as CSSProperties,

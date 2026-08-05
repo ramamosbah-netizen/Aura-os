@@ -43,7 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 const REC_TONE: Record<string, Tone> = { QUALIFY: 'good', REVIEW: 'warn', DISQUALIFY: 'bad' };
 const scoreTone = (n: number): Tone => (n >= 70 ? 'good' : n >= 40 ? 'warn' : 'bad');
-const scoreColor = (n: number): string => (n >= 70 ? 'var(--good)' : n >= 40 ? 'var(--warn, #d97706)' : 'var(--bad)');
+const scoreColor = (n: number): string => (n >= 70 ? 'var(--good)' : n >= 40 ? 'var(--warn, var(--warn))' : 'var(--bad)');
 const statusTone = (s: string): Tone => (s === 'converted' ? 'good' : s === 'disqualified' ? 'bad' : s === 'qualified' ? 'accent' : 'neutral');
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
 const d = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString() : '—');
@@ -286,7 +286,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
             <InfoRow label="Email" value={lead.email ? <a href={`mailto:${lead.email}`} style={s.link}>{lead.email}</a> : '—'} />
             <InfoRow label="Phone" value={lead.phone ? <a href={`tel:${lead.phone}`} style={s.link}>{lead.phone}</a> : '—'} />
             <InfoRow label="Company" value={lead.companyName ?? '—'} />
-            <InfoRow label="First response" value={lead.firstRespondedAt ? d(lead.firstRespondedAt) : <span style={{ color: 'var(--warn, #d97706)' }}>not yet</span>} />
+            <InfoRow label="First response" value={lead.firstRespondedAt ? d(lead.firstRespondedAt) : <span style={{ color: 'var(--warn, var(--warn))' }}>not yet</span>} />
           </RecordCard>
           <RecordCard title="The job (ELV context)">
             <InfoRow label="Requirement" value={lead.requirement ?? '—'} />

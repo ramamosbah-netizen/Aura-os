@@ -18,7 +18,7 @@ interface SiteInstruction {
   status: string;
 }
 
-const statusColor: Record<string, string> = { open: '#d97706', acknowledged: '#2563eb', closed: '#16a34a' };
+const statusColor: Record<string, string> = { open: 'var(--warn)', acknowledged: '#2563eb', closed: 'var(--good)' };
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function SiteInstructionsClient({ initialInstructions }: { initialInstructions: SiteInstruction[] }) {
@@ -65,7 +65,7 @@ export default function SiteInstructionsClient({ initialInstructions }: { initia
   return (
     <>
       <div style={st.cards}>
-        <div style={st.card}><div style={st.cardLabel}>Open</div><div style={{ ...st.cardVal, color: '#d97706' }}>{counts.open}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Open</div><div style={{ ...st.cardVal, color: 'var(--warn)' }}>{counts.open}</div></div>
         <div style={st.card}><div style={st.cardLabel}>Open w/ cost or time impact</div><div style={st.cardVal}>{counts.withImplication}</div></div>
       </div>
 
@@ -122,10 +122,10 @@ const st = {
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   check: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 130 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
-  smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
+  smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,

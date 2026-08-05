@@ -264,7 +264,7 @@ function Stat({ label, value, accent, tone }: { label: string; value: string; ac
   return (
     <div style={{ minWidth: 110 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: tone === 'warn' ? 'var(--warn, #d97706)' : accent ? 'var(--accent)' : 'var(--fg)' }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: tone === 'warn' ? 'var(--warn, var(--warn))' : accent ? 'var(--accent)' : 'var(--fg)' }}>{value}</div>
     </div>
   );
 }

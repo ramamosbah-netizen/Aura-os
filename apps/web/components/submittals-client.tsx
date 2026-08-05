@@ -18,8 +18,8 @@ interface Submittal {
 }
 
 const DISCIPLINES = ['architectural', 'structural', 'mep', 'elv', 'civil', 'other'];
-const statusColor: Record<string, string> = { draft: '#6b7280', submitted: '#2563eb', returned: '#16a34a' };
-const codeColor: Record<string, string> = { A: '#16a34a', B: '#16a34a', C: '#d97706', D: '#dc2626' };
+const statusColor: Record<string, string> = { draft: 'var(--muted)', submitted: '#2563eb', returned: 'var(--good)' };
+const codeColor: Record<string, string> = { A: 'var(--good)', B: 'var(--good)', C: 'var(--warn)', D: 'var(--bad)' };
 
 export default function SubmittalsClient({ initialSubmittals }: { initialSubmittals: Submittal[] }) {
   const [items, setItems] = useState(initialSubmittals);
@@ -79,7 +79,7 @@ export default function SubmittalsClient({ initialSubmittals }: { initialSubmitt
     <>
       <div style={st.cards}>
         <div style={st.card}><div style={st.cardLabel}>Under review</div><div style={{ ...st.cardVal, color: '#2563eb' }}>{counts.underReview}</div></div>
-        <div style={st.card}><div style={st.cardLabel}>Awaiting resubmission</div><div style={{ ...st.cardVal, color: '#d97706' }}>{counts.resubmit}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Awaiting resubmission</div><div style={{ ...st.cardVal, color: 'var(--warn)' }}>{counts.resubmit}</div></div>
       </div>
 
       <div style={st.form}>
@@ -131,10 +131,10 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 22 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 130 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,

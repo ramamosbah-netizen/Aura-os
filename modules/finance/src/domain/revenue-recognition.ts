@@ -35,6 +35,21 @@ export interface RevenueRecognition {
   overBilling: number;
   /** Recognised in excess of billed — a contract asset (accrued/unbilled revenue). */
   underBilling: number;
+  /** True when the contract is expected to lose money (EAC exceeds contract value). */
+  isOnerous: boolean;
+  /** Total loss expected over the whole contract — 0 when profitable. */
+  expectedTotalLoss: number;
+  /**
+   * The loss NOT yet captured by percentage-of-completion, which IAS 37 requires to be booked
+   * immediately rather than spread over the remaining work. 0 for a profitable contract.
+   */
+  lossProvision: number;
+  /**
+   * True when the supplied estimate-at-completion was below the cost already incurred and had to
+   * be raised to it. The estimate is stale: the job is then treated as 100% complete and the FULL
+   * contract value is recognised, so this flag marks a figure that needs a re-forecast, not trust.
+   */
+  eacOverridden: boolean;
 }
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
@@ -50,6 +65,19 @@ export function recognizeRevenue(input: RevenueRecognitionInput): RevenueRecogni
   const recognizedRevenue = r2(contractValue * fraction);
   const diff = recognizedRevenue - billedToDate;
 
+  // Onerous contracts (IAS 37, as applied to IFRS-15 contracts): when a contract is expected to
+  // lose money, the ENTIRE expected loss is recognised as soon as it is known — it is not spread
+  // across the remaining percentage of completion.
+  //
+  // Percentage-of-completion alone recognised only the share of the loss earned so far, so a job
+  // worth 1,000,000 with a 1,200,000 forecast cost showed a 100,000 loss at halfway instead of the
+  // required 200,000 — and, worse, showed NOTHING on the day it was signed, when the loss was
+  // already certain. Profit was overstated for the whole life of every loss-making contract, which
+  // for a contractor is exactly the contract someone needs to hear about early.
+  const expectedTotalLoss = Math.max(0, r2(estimatedTotalCost - contractValue));
+  const lossRecognisedByPoc = costIncurred - recognizedRevenue;
+  const lossProvision = expectedTotalLoss > 0 ? Math.max(0, r2(expectedTotalLoss - lossRecognisedByPoc)) : 0;
+
   return {
     contractValue: r2(contractValue),
     costIncurred: r2(costIncurred),
@@ -57,9 +85,14 @@ export function recognizeRevenue(input: RevenueRecognitionInput): RevenueRecogni
     percentComplete: r2(fraction * 100),
     recognizedRevenue,
     recognizedCost: r2(costIncurred),
-    grossProfitToDate: r2(recognizedRevenue - costIncurred),
+    // Includes the onerous-contract provision, so this is the real P&L effect to date.
+    grossProfitToDate: r2(recognizedRevenue - costIncurred - lossProvision),
     billedToDate: r2(billedToDate),
     overBilling: diff < 0 ? r2(-diff) : 0,
     underBilling: diff > 0 ? r2(diff) : 0,
+    isOnerous: expectedTotalLoss > 0,
+    expectedTotalLoss,
+    lossProvision,
+    eacOverridden: (Number(input.estimatedTotalCost) || 0) < costIncurred,
   };
 }

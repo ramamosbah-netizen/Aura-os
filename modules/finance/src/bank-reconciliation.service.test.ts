@@ -111,3 +111,54 @@ describe('BankReconciliationService — matching rules', () => {
     expect(await svc.autoMatch(T, BANK)).toHaveLength(0); // a human decides
   });
 });
+
+describe('BankReconciliationService — idempotent statement import', () => {
+  const line = (amount: number, description: string, reference: string) => ({ transactionDate: DAY, amount, description, reference });
+
+  it('re-importing the same statement adds nothing the second time', async () => {
+    // An accountant re-uploads yesterday's file. Every line used to land again, and the account
+    // read twice its real movement.
+    const { svc } = await harness();
+    const lines = [line(50_000, 'ACME', 'REF-1'), line(12_000, 'Etisalat', 'REF-2')];
+    expect(await svc.importStatement(T, BANK, lines)).toHaveLength(2);
+    expect(await svc.importStatement(T, BANK, lines)).toHaveLength(0); // idempotent
+    expect(await svc.listTransactions(T, BANK)).toHaveLength(2); // not doubled
+  });
+
+  it('still imports genuinely new lines on a later statement', async () => {
+    const { svc } = await harness();
+    await svc.importStatement(T, BANK, [line(50_000, 'ACME', 'REF-1')]);
+    expect(await svc.importStatement(T, BANK, [line(7_000, 'DEWA', 'REF-3')])).toHaveLength(1);
+    expect(await svc.listTransactions(T, BANK)).toHaveLength(2);
+  });
+});
+
+describe('BankReconciliationService — manual reconcile guards', () => {
+  const line = (amount: number, description: string, reference: string) => ({ transactionDate: DAY, amount, description, reference });
+
+  it('refuses to re-reconcile a line that is already reconciled', async () => {
+    const { svc, pay } = await harness();
+    const p = await pay(50_000);
+    const [tx] = await svc.importStatement(T, BANK, [line(50_000, 'ACME', 'R1')]);
+    await svc.reconcileManually(T, tx.id, p.id); // ok
+    const p2 = await pay(50_000);
+    await expect(svc.reconcileManually(T, tx.id, p2.id)).rejects.toThrow(/already reconciled/i);
+  });
+
+  it('refuses to let one payment settle a second bank line, even manually', async () => {
+    const { svc, pay } = await harness();
+    const p = await pay(50_000);
+    const txs = await svc.importStatement(T, BANK, [line(50_000, 'ACME', 'R1'), line(50_000, 'ACME2', 'R2')]);
+    await svc.reconcileManually(T, txs[0].id, p.id);
+    await expect(svc.reconcileManually(T, txs[1].id, p.id)).rejects.toThrow(/already reconciled to another bank line/i);
+  });
+
+  it('allows a clean manual reconcile of an unreconciled line', async () => {
+    const { svc, pay } = await harness();
+    const p = await pay(50_000);
+    const [tx] = await svc.importStatement(T, BANK, [line(50_000, 'ACME', 'R1')]);
+    const res = await svc.reconcileManually(T, tx.id, p.id);
+    expect(res.status).toBe('manual');
+    expect(res.reconciledPaymentId).toBe(p.id);
+  });
+});

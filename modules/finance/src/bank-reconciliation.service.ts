@@ -6,6 +6,10 @@ import { BANK_TRANSACTION_STORE, type BankTransactionStore } from './bank-transa
 import { PAYMENT_STORE, type PaymentStore } from './payment-store';
 import { assertSameTenant } from './domain/tenant-guard';
 
+/** Natural key for a bank statement line within its account — the basis for idempotent re-import. */
+const bankLineKey = (t: BankTransaction): string =>
+  `${t.transactionDate}|${Number(t.amount)}|${(t.reference ?? '').trim().toLowerCase()}|${(t.description ?? '').trim().toLowerCase()}`;
+
 @Injectable()
 export class BankReconciliationService {
   private readonly logger = new Logger('BankReconciliation');
@@ -21,6 +25,13 @@ export class BankReconciliationService {
     bankAccountId: Id,
     txs: Array<{ transactionDate: string; amount: number; description: string; reference?: string | null }>,
   ): Promise<BankTransaction[]> {
+    // Idempotent import: re-running the same statement must not double the ledger. Nothing stopped
+    // an accountant re-uploading a file — every line landed a second time, and the account read
+    // twice its real movement. A line is keyed by (date, amount, reference, description) within its
+    // account; one already present is skipped. Genuinely repeated movements are expected to carry
+    // distinct references — the reference is what makes a re-import safe.
+    const existing = await this.txStore.list({ tenantId, bankAccountId });
+    const seen = new Set(existing.map(bankLineKey));
     const imported: BankTransaction[] = [];
     for (const raw of txs) {
       const tx = makeBankTransaction({
@@ -31,11 +42,16 @@ export class BankReconciliationService {
         description: raw.description,
         reference: raw.reference,
       });
+      if (seen.has(bankLineKey(tx))) continue; // already imported — skip (idempotent)
       await this.txStore.create(tx);
       imported.push(tx);
     }
 
-    this.logger.log(`Imported ${imported.length} bank transactions for bank account ${bankAccountId}`);
+    const skipped = txs.length - imported.length;
+    this.logger.log(
+      `Imported ${imported.length} of ${txs.length} bank transactions for bank account ${bankAccountId}` +
+        (skipped ? ` (${skipped} already present)` : ''),
+    );
     return imported;
   }
 
@@ -133,7 +149,18 @@ export class BankReconciliationService {
     // existence oracle. Both fetch-by-id lookups now report "not found" for a foreign or a
     // missing record alike, so the two are indistinguishable.
     const tx = assertSameTenant(await this.txStore.get(transactionId), tenantId, 'bank transaction', transactionId);
+    // State guard: a line already settled must be unreconciled first — re-pointing it silently
+    // would strand the payment it used to carry. "already" → 409 via the error taxonomy.
+    if (tx.status !== 'unreconciled') {
+      throw new Error(`bank transaction ${transactionId} is already reconciled`);
+    }
     const payment = assertSameTenant(await this.paymentStore.get(paymentId), tenantId, 'payment', paymentId);
+    // One payment settles ONE line. autoMatch enforces this; a manual match must not be the
+    // back door that lets a single payment clear two bank debits.
+    const forAccount = await this.txStore.list({ tenantId, bankAccountId: tx.bankAccountId });
+    if (forAccount.some((t) => t.id !== tx.id && t.reconciledPaymentId === payment.id)) {
+      throw new Error(`payment ${paymentId} is already reconciled to another bank line`);
+    }
 
     tx.status = 'manual';
     tx.reconciledPaymentId = payment.id;

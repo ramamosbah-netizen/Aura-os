@@ -34,7 +34,21 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 | # | Gap | Home | Effort | Risk if ignored |
 |--:|---|---|---|---|
 | 1 | RLS enforcement bundle (least-priv role, tenant GUC, FORCE RLS, isolation test) | Vol 7 §3 | M | cross-tenant data exposure — existential |
-| 2 | Auth ON + refresh/revocation + lockout — **DONE 2026-07-07**: `AUTH_REQUIRED=true` fail-closed 401 (main.ts, public allowlist) · brute-force `LoginThrottle` (429 after N, `AUTH_LOCKOUT_*`) · JWT `jti` + `TokenRevocationStore` denylist checked on verify · `POST /auth/refresh` (sliding session) + `POST /auth/logout` (revoke). ~19 new tests. *Turning auth on also makes the #7 permission guard enforce.* | Vol 7 §1 | ✅ | open API in any misconfig |
+| 2 | Auth ON + refresh/revocation + lockout — **MECHANISM DONE 2026-07-07, DEFAULT NOT** (⚠️ status corrected 2026-08-05, see below): `AUTH_REQUIRED=true` fail-closed 401 (main.ts, public allowlist) · brute-force `LoginThrottle` (429 after N, `AUTH_LOCKOUT_*`) · JWT `jti` + `TokenRevocationStore` denylist checked on verify · `POST /auth/refresh` (sliding session) + `POST /auth/logout` (revoke). ~19 new tests. *Turning auth on also makes the #7 permission guard enforce.* | Vol 7 §1 | ◑ | open API in any misconfig |
+
+> ### ⚠️ Correction to row 2 — "Auth ON by default" is not true of the current tree (verified live 2026-08-05)
+>
+> The row above was marked ✅ on the strength of the *mechanism* landing. The mechanism is real and everything listed in it works. **What does not hold is "ON by default."**
+>
+> `apps/api/src/main.ts:101` — `const enforce = process.env.AUTH_REQUIRED === 'true' || (isProd && auth.enabled);`
+>
+> Enforcement therefore needs either an explicit `AUTH_REQUIRED=true`, or production **plus a verifier already configured**. `auth.enabled` is false whenever neither `AUTH_JWKS_URL` nor `AUTH_JWT_SECRET` is set — so **deploying to production without a verifier yields `enforce === false` and an API that runs wide open**, with only a log line at `:103`. Note that line only fires when `AUTH_REQUIRED` was set; the silent path prints nothing.
+>
+> **Measured on the running instance (2026-08-05):** `/auth/status` → `{"enabled":false}`; `GET /api/v1/crm/opportunities` with no token → **200, 34 records**; `/crm/accounts` → **200, 35 records**. `AuthService` logs *"Auth OFF … access seam passes through."*
+>
+> This is the same finding as **P0-1** in [2026-08-03-enterprise-readiness-audit.md](../reports/2026-08-03-enterprise-readiness-audit.md) — the last remaining P0 and the one blocker between AURA and a hosted deployment. The fix shape already exists in the same file: `evaluateRlsPosture` refuses to boot in production under an RLS-bypassing role. Auth deserves the identical treatment — **production + no verifier should fail to boot, not run open.**
+>
+> Row 2 is downgraded ✅ → ◑ until that gate lands.
 | 3 | Secrets vault + rotation — **DONE 2026-07-09**: `readSecret()` vault seam (`<NAME>_FILE` convention for Docker/K8s/vault-CSI mounts, env fallback, unreadable explicit mount fails at boot) wired at every secret read (`DATABASE_URL`, `AUTH_JWT_SECRET`, `ANTHROPIC_API_KEY`, `PII_ENCRYPTION_KEY`) · staged PII key rotation (`PII_ENCRYPTION_KEY_PREVIOUS` decrypt fallback, +1 test) · gitleaks CI job · `docs/runbooks/secrets-rotation.md` (inventory, windows, revocation drill; history greps clean) | Vol 7 §10 | ✅ | ~~credential compromise~~ (residual: rotate dev keys per runbook) |
 | 4 | Docker + deploy target + migration gate in CI — **DONE 2026-07-09**: multi-stage `apps/api/Dockerfile` (same image = migration job) + `apps/web/Dockerfile` (Next standalone) + `docker-compose.yml` (pgvector PG → migration gate → api → web) · CI `deploy-readiness` (full 136-chain from zero + idempotence rerun + built API boots) · CI `docker-images` (build per PR, GHCR publish on main). Production `next build` verified. First cloud target (Azure, Vol 19 §4) is the remaining deploy step — tracked in Vol 19 §11, not a register row | Vol 19 §2–3 | ✅ | ~~cannot ship~~ |
 | 5 | Backups/DR + restore drill — **DONE 2026-07-09**: `docs/runbooks/backup-dr.md` (RPO ≤5 min PITR / RTO ≤4 h, portable `pg_dump -Fc` secondary, DMS bucket versioning, failure scenarios, quarterly-drill policy + log) · **drill automated in CI**: seed via live API → freeze → dump → restore into fresh DB → `verify-restore.mjs` fails on any per-table count drift or empty source | Vol 19 §8–9 | ✅ | ~~unrecoverable data loss~~ |

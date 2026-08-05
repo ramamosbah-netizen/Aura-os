@@ -1,5 +1,13 @@
 # AURA OS — Final Execution Roadmap
 
+> ## 📍 Progress note — reviewed 2026-08-05
+>
+> **Waves 0–1 have largely shipped since this was written.** Slices **R1–R5 are merged** (RLS enforcement, migration deploy-gate, commercial baseline, scope→quotation, bid-sourcing); **R6 (measurement → IPC) was never started** and remains the next slice in dependency order. The slice specs below are still the authority on *what each slice means* — treat only the "build this first" ordering as spent.
+>
+> **One correction carried from live verification:** R1 shipped the RLS *mechanism* (least-privilege `aura_app` role, tenant GUC binding, `FORCE RLS` on 182/182 tenant tables, CI fitness gate, isolation test, boot-time fail-closed in production) — but the running instance still connects as the `postgres` owner, so **RLS is inert at runtime**. R1's acceptance criteria are met in CI; the deployment posture is not. See [readiness audit P0-2](../reports/2026-08-03-enterprise-readiness-audit.md).
+>
+> **Work has since been sequenced by the P0/P1/P2 register in the [2026-08-03 readiness audit](../reports/2026-08-03-enterprise-readiness-audit.md), not by this roadmap.** For the current build order start there.
+
 **Date:** 2026-07-14 · Verified against live tree (`main` @ `6e099e1`).
 Ordered by **dependency**, not excitement: Foundation → Authoritative truth → Core chain → Handoffs → Controls →
 Work experience → Analytics → Integrations → AI. Each slice is additive; **no rewrites**. Reuses existing engines

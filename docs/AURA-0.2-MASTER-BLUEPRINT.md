@@ -1,6 +1,8 @@
 # Aura 0.2 — Master Consolidation Blueprint (7 repos → one system)
 
-> Extends [`AURA-0.2-CONSOLIDATION-AUDIT.md`](AURA-0.2-CONSOLIDATION-AUDIT.md) from a 2-repo (AURA ↔ NEW-ERP) merge to the **full 7-project consolidation**. That audit's architecture, layer rules, and AURA↔NEW-ERP decisions still stand — this document does **not** repeat them; it adds the three repos the audit never considered (**Base 44**, **jeet-erp-enterprise**, and the older iterations) and folds them into one build order.
+> 🗄️ **Historical — founding document (2026-06-23).** The build it gates has long since happened; read this as design intent, not as current instruction. Current state: [readiness audit](reports/2026-08-03-enterprise-readiness-audit.md) · [docs index](README.md).
+>
+> Extends `AURA-0.2-CONSOLIDATION-AUDIT.md` — ⚠️ **that document is not in this repo** (it predates the greenfield rebuild and was never carried over), so the architecture and AURA↔NEW-ERP decisions it is said to carry are not recoverable from here. The authoritative architecture is [`AURA-OS-V2-BLUEPRINT.md`](AURA-OS-V2-BLUEPRINT.md), which supersedes the build-on-NEW-ERP path anyway. Extends it from a 2-repo (AURA ↔ NEW-ERP) merge to the **full 7-project consolidation**. That audit's architecture, layer rules, and AURA↔NEW-ERP decisions still stand — this document does **not** repeat them; it adds the three repos the audit never considered (**Base 44**, **jeet-erp-enterprise**, and the older iterations) and folds them into one build order.
 >
 > **Date:** 2026-06-23 · **Status:** Draft for sign-off · **No code is written until each phase below is approved.**
 

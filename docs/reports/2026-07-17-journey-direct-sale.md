@@ -56,10 +56,10 @@ Every journey audit ends with this scorecard. Six categories, each 0–10, score
 
 Reading: governance is the system's spine (10/10); every point lost is a *visibility or first-hop continuity* loss, not a rule failure. The score should climb to ~90 by closing gaps #2, #4, #6 alone — no new features required.
 
-> **Status as of 2026-07-19 — score NOT re-measured.**
-> A re-run on 2026-07-17 (after the Deal-Room consolidation) measured **85/100** — see `2026-07-17-journey-direct-sale-rerun.md`.
-> Since then PRs **#150 · #151 · #152 · #153 · #154** merged, each targeting a specific lost point (see the commit table below). Those merges are verified; **their effect on the score is not.**
-> This file previously asserted a re-audited **100/100**. That run never happened and the claim has been withdrawn. **The close-out re-audit on merged `main` is still outstanding** and is the gate for declaring CRM closed — a score may be claimed only once it is driven live.
+> **Status as of 2026-08-05 — superseded by a later measured run.**
+> Score history, all measured: **82** (this run, 2026-07-17) → **85** ([same-day re-run](2026-07-17-journey-direct-sale-rerun.md) after the Deal-Room consolidation) → **87** (close-out on merged `main` @ `f829007`, [2026-07-20-journey-direct-sale-closeout.md](2026-07-20-journey-direct-sale-closeout.md)).
+> **The close-out re-audit is no longer outstanding — it ran on 2026-07-20 and measured 87/100 with the E2E gate passing.** The current Direct Sale figure is 87, not 82.
+> This file previously asserted a re-audited **100/100**. That run never happened and the claim was withdrawn; no 100/100 has ever been measured.
 
 ## Gap closure evidence (commits)
 

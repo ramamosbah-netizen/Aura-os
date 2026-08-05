@@ -79,10 +79,10 @@ From the **L1 Journey re-run** (which scored 82 → 85 and surfaced further gaps
 
 **Watch items (not yet actioned):** converge the 3 attention *render* surfaces (My Day / Advisor / Alerts); reassess Opportunity 360 tab density (9 tabs vs progressive disclosure).
 
-## Close-out status — NOT yet closed
-Honest state as of this writing:
+## Close-out status — gate PASSED 2026-07-20 (updated 2026-08-05)
 - **Merged to `main`:** #146–**#154** — all 9 CRM PRs. *(Verified 2026-07-19: `0182_crm_lead_account_id.sql` is present on `origin/main`.)*
-- **Outstanding:** the **L1 Journey re-audit on merged `main`** — the last gate. Nothing left to build for it.
-- **Last measured Journey Score: 85/100** (the re-run, `2026-07-17-journey-direct-sale-rerun.md`). The **post-merge re-audit has NOT been run yet** — no 100/100 has been measured, and no score should be claimed until it is.
+- **✅ The outstanding gate is closed:** the L1 Journey re-audit ran on merged `main` (`f829007`) on 2026-07-20 — [2026-07-20-journey-direct-sale-closeout.md](2026-07-20-journey-direct-sale-closeout.md). **Measured 87/100**, End-to-End Completion **PASS** (Signal → issued AR invoice in one sitting). Automation and Governance both 10/10.
+- **Score history (all measured):** 82 → 85 → **87**. No 100/100 has been measured and none should be claimed.
+- **Residual condition from that run:** the close-out report recommends calling CRM closed only once the **seeder is idempotent and the duplicated MAF accounts are merged** (gap A — three identical accounts, reached through an Admin Center button). That data-hygiene item is still open as of 2026-08-05; it also shows up as **P2-2 (test/junk data)** in the current [enterprise readiness audit](2026-08-03-enterprise-readiness-audit.md).
 
-**Definition of closed (unchanged):** all 3 layers reviewed · resulting PRs merged · **L1 Journey Audit re-run on merged `main` and the score confirmed**. Only then does CRM count as closed and **Tendering** start as the same three-layer template.
+**Definition of closed (unchanged):** all 3 layers reviewed · resulting PRs merged · **L1 Journey Audit re-run on merged `main` and the score confirmed** ✅. Tendering follows as the same three-layer template.

@@ -87,6 +87,8 @@ export interface BudgetVsActualRow {
   actual: number;
   variance: number;       // budget − actual
   variancePct: number | null;
+  /** True when the GL moved on this account but no budget line planned for it. */
+  unbudgeted: boolean;
 }
 
 export interface BudgetVsActual {
@@ -98,18 +100,33 @@ export interface BudgetVsActual {
   totalBudget: number;
   totalActual: number;
   totalVariance: number;
+  /** Actual spend/income on accounts with no budget line at all — the overspend a plan didn't see. */
+  totalUnbudgeted: number;
 }
 
 /**
  * Fold a budget against the GL actuals for its date range. Variance = budget − actual
  * (positive = under budget for an expense line; the UI colours by account type).
+ *
+ * **Unbudgeted spend is included.** The report used to iterate the budget's own lines only, so
+ * money spent on an account nobody had planned for was invisible: a 10,000 rent budget with 8,000
+ * of rent and 50,000 of unbudgeted consultancy reported "2,000 under budget" while the business
+ * was 48,000 over. That is the single failure a budget-control report exists to prevent — the
+ * overspend you most need to see was the one it could not show.
+ *
+ * P&L accounts (revenue/expense) that moved in the period now appear with a zero budget and are
+ * flagged `unbudgeted`. Balance-sheet accounts are not swept in — a budget plans performance, not
+ * position — but a budgeted account of any type is always shown, because someone planned it.
  */
 export function buildBudgetVsActual(budget: Budget, accounts: Account[], journals: Journal[]): BudgetVsActual {
   const balances = accountBalances(accounts, journals, budget.from, budget.to);
   const accountById = new Map(accounts.map((a) => [a.id, a]));
+  const budgeted = new Set(budget.lines.map((l) => l.accountId));
 
   let totalBudget = 0;
   let totalActual = 0;
+  let totalUnbudgeted = 0;
+
   const rows: BudgetVsActualRow[] = budget.lines.map((line) => {
     const a = accountById.get(line.accountId);
     const actual = r2(balances.get(line.accountId) ?? 0);
@@ -125,8 +142,31 @@ export function buildBudgetVsActual(budget: Budget, accounts: Account[], journal
       actual,
       variance,
       variancePct: line.amount !== 0 ? r2((variance / Math.abs(line.amount)) * 100) : null,
+      unbudgeted: false,
     };
   });
+
+  for (const a of accounts) {
+    if (budgeted.has(a.id)) continue;
+    if (a.type !== 'expense' && a.type !== 'revenue') continue;
+    const actual = r2(balances.get(a.id) ?? 0);
+    if (actual === 0) continue;
+    totalActual += actual;
+    totalUnbudgeted += actual;
+    rows.push({
+      accountId: a.id,
+      code: a.code,
+      name: a.name,
+      type: a.type,
+      budget: 0,
+      actual,
+      variance: r2(-actual), // every unbudgeted dirham is variance
+      variancePct: null,     // no budget to be a percentage of
+      unbudgeted: true,
+    });
+  }
+
+  rows.sort((x, y) => x.code.localeCompare(y.code));
 
   return {
     budgetId: budget.id,
@@ -137,5 +177,6 @@ export function buildBudgetVsActual(budget: Budget, accounts: Account[], journal
     totalBudget: r2(totalBudget),
     totalActual: r2(totalActual),
     totalVariance: r2(totalBudget - totalActual),
+    totalUnbudgeted: r2(totalUnbudgeted),
   };
 }

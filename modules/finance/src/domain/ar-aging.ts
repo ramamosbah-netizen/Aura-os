@@ -4,6 +4,13 @@ import type { CustomerInvoice } from './customer-invoice';
  * AR aging — buckets outstanding customer-invoice balances by how overdue they are, as of a
  * given date. Only issued / partially_paid invoices carry a receivable; the outstanding amount
  * is total − amountPaid. Age is measured from the due date (falling back to the issue date).
+ *
+ * **Amounts are reported in the BASE currency.** An invoice's `total`/`amountPaid` are denominated
+ * in its own currency, so adding them straight together produced a figure in no currency at all:
+ * a USD 10,000 invoice alongside an AED 100,000 one reported 110,000 exposure when the truth was
+ * AED 136,725 — a quarter of the receivable missing from the report used to chase it. Each invoice
+ * already carries the `exchangeRate` that was resolved when it was raised, so the conversion uses
+ * the rate on the invoice rather than a live one, and the report is reproducible after the fact.
  */
 export type AgingBucketKey = 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90_plus';
 
@@ -55,7 +62,9 @@ export function buildArAging(invoices: CustomerInvoice[], asOf: string): ArAging
 
   for (const inv of invoices) {
     if (inv.status !== 'issued' && inv.status !== 'partially_paid') continue;
-    const outstanding = round2(inv.total - inv.amountPaid);
+    // Outstanding in BASE currency, at the rate captured on the invoice.
+    const rate = Number(inv.exchangeRate) > 0 ? Number(inv.exchangeRate) : 1;
+    const outstanding = round2((inv.total - inv.amountPaid) * rate);
     if (outstanding <= 0) continue;
     const ageFrom = inv.dueDate ?? inv.issueDate;
     const bucket = bucketFor(daysBetween(ageFrom, asOf));

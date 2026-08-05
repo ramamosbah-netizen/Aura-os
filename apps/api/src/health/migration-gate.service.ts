@@ -27,6 +27,15 @@ export interface MigrationGateStatus {
   degraded: boolean;
   /** Migration filenames present on disk but not recorded in public.aura_migrations. */
   pending: string[];
+  /**
+   * Filenames recorded APPLIED that no longer exist on disk — schema history drift (gap register
+   * **G-09**). Not degrading: the schema is ahead of the code, not behind, and the app runs fine.
+   * It matters because it is the fingerprint of a migration that was **renamed or renumbered after
+   * it had already been applied** — and an applied migration never re-runs, so edits to it silently
+   * never reach a long-lived database while CI, which builds a fresh schema every time, stays green.
+   * That is exactly how the P0-2 RLS `FORCE` clauses went missing in production while CI passed.
+   */
+  appliedButAbsent: string[];
   /** Total migration files shipped with this build (null when the dir couldn't be located). */
   onDisk: number | null;
   /** How many are recorded applied (null when the DB/table couldn't be read). */
@@ -56,6 +65,7 @@ export class MigrationGateService implements OnModuleInit {
   private status: MigrationGateStatus = {
     degraded: false,
     pending: [],
+    appliedButAbsent: [],
     onDisk: null,
     applied: null,
     reason: 'not evaluated',
@@ -92,6 +102,18 @@ export class MigrationGateService implements OnModuleInit {
       );
     } else {
       this.logger.log(`Schema up to date (${this.status.reason}).`);
+    }
+
+    // Drift in the other direction (G-09). Deliberately separate from `degraded`: the app is
+    // healthy and refusing traffic would be wrong. But "up to date" alone is a misleading thing to
+    // log at a database whose history no longer matches the code that built it, so say it out loud.
+    if (this.status.appliedButAbsent.length > 0) {
+      this.logger.warn(
+        `MIGRATION HISTORY DRIFT — ${this.status.appliedButAbsent.length} applied migration(s) no longer exist on disk: ` +
+          `${this.status.appliedButAbsent.join(', ')}. Usually a rename/renumber AFTER the file was applied. ` +
+          'Harmless today, but an applied migration never re-runs — so later edits to it will never reach this ' +
+          'database while CI (fresh schema every run) stays green. Never renumber a migration that has shipped.',
+      );
     }
   }
 
@@ -150,13 +172,13 @@ export class MigrationGateService implements OnModuleInit {
    */
   async evaluate(): Promise<MigrationGateStatus> {
     if (!this.pool) {
-      return { degraded: false, pending: [], onDisk: null, applied: null, reason: 'no database (in-memory mode)' };
+      return { degraded: false, pending: [], appliedButAbsent: [], onDisk: null, applied: null, reason: 'no database (in-memory mode)' };
     }
 
     const dir = resolveMigrationsDir();
     if (!dir) {
       this.logger.warn('Could not locate infrastructure/migrations — deploy-gate inert (set MIGRATIONS_DIR to enable).');
-      return { degraded: false, pending: [], onDisk: null, applied: null, reason: 'migrations dir not found' };
+      return { degraded: false, pending: [], appliedButAbsent: [], onDisk: null, applied: null, reason: 'migrations dir not found' };
     }
 
     const onDisk = readdirSync(dir)
@@ -173,6 +195,7 @@ export class MigrationGateService implements OnModuleInit {
       return {
         degraded: onDisk.length > 0,
         pending: onDisk,
+        appliedButAbsent: [],
         onDisk: onDisk.length,
         applied: 0,
         reason: 'aura_migrations ledger missing — no migrations applied',
@@ -180,9 +203,13 @@ export class MigrationGateService implements OnModuleInit {
     }
 
     const pending = onDisk.filter((f) => !applied.has(f));
+    // The other direction: applied rows with no file. Reported, never degrading — see the field doc.
+    const onDiskSet = new Set(onDisk);
+    const appliedButAbsent = [...applied].filter((f) => !onDiskSet.has(f)).sort();
     return {
       degraded: pending.length > 0,
       pending,
+      appliedButAbsent,
       onDisk: onDisk.length,
       applied: applied.size,
       reason: pending.length > 0 ? `${pending.length} migration(s) pending` : 'all migrations applied',

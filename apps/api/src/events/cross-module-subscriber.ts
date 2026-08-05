@@ -91,6 +91,43 @@ export class CrossModuleSubscriber implements OnModuleInit {
     this.logger.log(`⚡ tender.${outcome} → Opportunity "${opp.title}" (${opp.id}) closed ${outcome} (tender ${ref})`);
   }
 
+  /**
+   * The approved commercial baseline behind a tender's bid, if it was priced through a quotation
+   * (gap register **G-50**).
+   *
+   * The tender pricing sheet generates a quotation carrying `sourceTenderId`; approving that
+   * quotation locks an immutable baseline (R3). This finds it so a tender-won contract can inherit
+   * the same governed number a direct-sale contract does.
+   *
+   * Prefers the quotation the customer actually accepted, then the approved/sent one — a tender can
+   * accumulate revisions, and only a decided quotation should set a contract's value. Returns null
+   * when the tender was awarded without a priced quotation, which is legitimate (a bid submitted
+   * straight from the estimate) — the caller then falls back to the tender value, as before.
+   */
+  private async findTenderBaseline(
+    tenantId: string,
+    tenderId: string,
+  ): Promise<{ quotationId: string; baselineId: string; value: number } | null> {
+    // Whole-body guard, deliberately. This is an *enrichment* lookup on the deal chain's critical
+    // path: if it fails for any reason the contract must still be created from the tender value,
+    // exactly as it was before this existed. An award that produces no contract would be a far
+    // worse outcome than one that produces an unbaselined contract.
+    try {
+      const quotes = await this.quotations.list({ tenantId, sourceTenderId: tenderId, limit: 50 });
+      if (!quotes?.length) return null;
+      const rank = (status: string): number => (status === 'accepted' ? 0 : status === 'approved' ? 1 : status === 'sent' ? 2 : 3);
+      const decided = quotes.filter((q) => rank(q.status) < 3).sort((a, b) => rank(a.status) - rank(b.status));
+      for (const q of decided) {
+        const baseline = await this.quotations.getBaseline(tenantId, q.id);
+        if (baseline) return { quotationId: q.id, baselineId: baseline.id, value: baseline.total };
+      }
+      return null;
+    } catch (err) {
+      this.logger.warn(`Baseline lookup for tender ${tenderId} failed (${(err as Error).message}) — contract will use the tender value.`);
+      return null;
+    }
+  }
+
   onModuleInit(): void {
     // ── Causality (J3): winning an Opportunity does NOT create its tender ──────────────
     // Bidding PRECEDES winning. The tender is started from the still-open opportunity ("Start
@@ -203,6 +240,14 @@ export class CrossModuleSubscriber implements OnModuleInit {
       try {
         const p = e.payload as Record<string, unknown>;
         const account = p.account as { id: string; name: string } | null;
+        // R3 parity (gap register G-50). The DIRECT path locks an immutable Commercial Baseline when
+        // the quotation is approved, and the contract inherits it — value and all — so the contract
+        // is provably tied to what was approved rather than re-invented. The tender path used to
+        // skip all of that: it took `p.value`, the tender's own ESTIMATE, and left
+        // quotationId/commercialBaselineId null. Same business intent, two levels of governance —
+        // the path-asymmetry class. A tender that was priced through a quotation now inherits that
+        // quotation's baseline exactly as a direct deal does.
+        const priced = await this.findTenderBaseline(e.tenantId, e.aggregateId);
         const contract = await this.contracts.create(
           {
             tenantId: e.tenantId,
@@ -212,15 +257,24 @@ export class CrossModuleSubscriber implements OnModuleInit {
             tenderTitle: (p.title as string) ?? null,
             accountId: account?.id ?? null,
             accountName: account?.name ?? null,
-            value: (p.value as number) ?? 0,
+            // The bid the customer accepted beats the internal estimate. Falls back to the tender
+            // value when the tender was awarded without a priced quotation (a legitimate path).
+            value: priced?.value ?? (p.value as number) ?? 0,
+            commercialBaselineId: priced?.baselineId ?? null,
             status: 'draft',
           },
           // Idempotency: re-awarding the same tender (or an outbox retry) must not
           // create a duplicate contract — keyed by the source tender id.
           `contract-from-tender:${e.aggregateId}`,
         );
+        // Close the provenance loop the same way the direct path does, so the quotation remembers
+        // the contract it became and the Opportunity 360 progression can find it.
+        if (priced) await this.quotations.linkContract(priced.quotationId, contract.id).catch(() => undefined);
         this.logger.log(
-          `⚡ tender.awarded → auto-created Contract "${contract.title}" (${contract.id})`,
+          `⚡ tender.awarded → auto-created Contract "${contract.title}" (${contract.id})` +
+            (priced
+              ? ` — inherited baseline ${priced.baselineId} from quotation ${priced.quotationId} (value ${priced.value})`
+              : ' — no priced quotation; value from the tender estimate, no baseline'),
         );
       } catch (err) {
         this.logger.error(`Failed to auto-create contract from tender.awarded: ${err}`);

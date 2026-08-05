@@ -91,4 +91,6 @@ All 4 Architectural Phases + Productionization Items (P0.1, P0.2, P1, P2, P3) ar
 ✅ 22/22 tasks successful
 ```
 
-> **AURA OS is fully productionized and ready for pilot customer deployment.** 🚀
+> **The AI platform's productionization items (P0.1–P3) are implemented and compile clean.** 🚀
+>
+> ⚠️ **Scope correction (2026-08-05).** This line originally read *"AURA OS is fully productionized and ready for pilot customer deployment."* That overstated a build-verification result into a platform-wide deployment verdict. The claim above is what was actually verified: the four AI-platform items land and 22/22 build tasks pass. **Platform readiness is measured elsewhere and is not "fully productionized"** — see [2026-08-03-enterprise-readiness-audit.md](2026-08-03-enterprise-readiness-audit.md) (54/100; authentication still OFF by default, re-verified live 2026-08-05).

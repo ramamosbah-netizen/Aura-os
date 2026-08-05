@@ -11,6 +11,7 @@ export * from './invoice-store';
 export * from './in-memory-invoice-store';
 export * from './postgres-invoice-store';
 export * from './po-match.port';
+export * from './contract-cap.port';
 export * from './invoice.service';
 
 export * from './account-store';

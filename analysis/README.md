@@ -33,5 +33,13 @@ Evidence-based CTO-level audit of AURA OS. No code was modified. Every structura
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **7.2/10** | ~58% | ~64% | 6.3/10 | 5.5/10 | 6.0/10 | 8.3/10 |
 
+> ### ✅ Re-confirmed 2026-08-05 — this audit holds up
+>
+> Independently re-verified against the **running** app (not just the tree). The two headline security findings were confirmed exactly as written: **auth off by default** (`/auth/status` → `{"enabled":false}`; unauthenticated `GET /crm/opportunities` → **200 with 34 records**) and **RLS inert on the runtime** (the API logs `⚠️ DB connection role "postgres" bypasses row-level security` at boot). `06-SECURITY-AUDIT.md:28` called the risk precisely — *"a production deploy that never flips it"* — and that is still the platform's last P0.
+>
+> **Two debt rows have since closed** and are marked in [09-CODE-QUALITY-REPORT.md](09-CODE-QUALITY-REPORT.md): report-doc sprawl (the folder is now normalised and indexed, partly *because* of this audit's finding) and the 59 uncommitted files (down to 3 scratch `.txt`s). The duplicated `if (!this.auth.enabled) return true` block is **still there** — `permissions.guard.ts:100` and `:125`, identical including the comment.
+>
+> **On the two readiness numbers:** this audit's *~58% enterprise-ready* (2026-08-01, estimate) and the readiness audit's *54/100* (2026-08-03, [measured across 12 areas](../docs/reports/2026-08-03-enterprise-readiness-audit.md)) are different instruments, not a contradiction — they agree on the diagnosis and rank the same blockers first. **Quote 54/100**, which is the measured one; treat every percentage in this folder as the informed estimate it was labelled as.
+
 ## The audit in one line
 > AURA OS has already built the expensive, defensible core of a world-class ELV/construction ERP; the gap to market-leading is mostly *turning on what's built (auth/RLS/deploy) and finishing what's started (delivery UX + the ELV lifecycle)* — a 6–12 month execution-risk program, not an invention-risk one.

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
+import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, TenantContext } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
 import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
@@ -37,7 +37,15 @@ export class PurchaseOrderService implements OnModuleInit {
     private readonly audit: AuditService,
     @Inject(SUPPLIER_STORE) private readonly suppliers: SupplierStore,
     @Optional() @Inject(QUALITY_GATE) private readonly qualityGate?: QualityGate,
+    // Explicit @Inject: a union-typed ctor param emits `Object` in design:paramtypes, which
+    // silently injects null (see auth.service). Optional so in-memory tests need no context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
+
+  /** The real acting user from the request context (ALS), falling back to the record's creator. */
+  private actor(fallback: Id | null): Id | null {
+    return this.tenant?.get().actorId ?? fallback;
+  }
 
   onModuleInit(): void {
     this.commands.register<NewPurchaseOrder, PurchaseOrder>({
@@ -149,14 +157,24 @@ export class PurchaseOrderService implements OnModuleInit {
     if (!existing) throw new Error(`PO ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: PurchaseOrder = { ...existing, ...defined };
+    // Audit trail (P1-2 / gap register G-12): capture the field-level before→after so the timeline
+    // can answer "who re-pointed this PO at a different supplier, and from whom" — previously the
+    // event carried only the new state, and no actor at all.
+    //
+    // Note the PO has no line items: it is a header with a `value`, and value is deliberately NOT
+    // editable here (committed project cost was posted as a delta at creation, so re-pricing a PO
+    // in place would silently desync the cost ledger). The auditable surface is therefore the
+    // supplier snapshot and the descriptive fields — a supplier swap being the one with real
+    // commercial consequence.
+    const changes = diffFields(existing, updated, ['title', 'reference', 'supplierId', 'supplierName']);
     const event = makeEvent({
       type: PROCUREMENT_EVENT.poUpdated,
       tenantId: updated.tenantId,
       companyId: updated.companyId,
-      actorId: null,
+      actorId: this.actor(updated.createdBy ?? null),
       aggregateType: 'procurement.po',
       aggregateId: updated.id,
-      payload: { title: updated.title, value: updated.value },
+      payload: { title: updated.title, value: updated.value, changes },
     });
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);

@@ -8,6 +8,8 @@ export interface BudgetStore {
   get(id: Id): Promise<Budget | null>;
   list(tenantId: string): Promise<Budget[]>;
   listPaged(tenantId: string, page: PageParams): Promise<Page<Budget>>;
-  /** Soft-delete flag: true hides the budget from finds; false restores. */
-  setDeleted(id: Id, deleted: boolean): Promise<void>;
+  /** Soft-delete flag: true hides the budget from finds; false restores. Tenant-scoped so a
+   *  restore (which cannot re-fetch the hidden row to check ownership) can only touch the
+   *  caller's own budget. */
+  setDeleted(tenantId: Id, id: Id, deleted: boolean): Promise<void>;
 }

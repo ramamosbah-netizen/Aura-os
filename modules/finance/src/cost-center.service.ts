@@ -25,6 +25,11 @@ export class CostCenterService {
 
   async create(input: NewCostCenter): Promise<CostCenter> {
     const cc = makeCostCenter(input);
+    // Codes are the human key finance posts and reports against — they must be unique per tenant.
+    // "already exists" maps to 409 via the error taxonomy (a conflict, not a bad request).
+    if ((await this.store.list(cc.tenantId)).some((c) => c.code === cc.code)) {
+      throw new Error(`cost centre code ${cc.code} already exists`);
+    }
     await this.store.save(cc);
     await this.events.append([
       makeEvent({

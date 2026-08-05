@@ -26,31 +26,47 @@ export class StatementsService {
     @Inject(JOURNAL_STORE) private readonly journals: JournalStore,
   ) {}
 
-  private async load(tenantId: Id) {
+  /**
+   * Load the chart of accounts and the journals a statement folds over.
+   *
+   * `companyId` scopes the journals to ONE company in the group. The statements used to be
+   * tenant-wide with no company filter at all, even though every journal carries a companyId and
+   * the platform models a multi-company group (that is what `consolidated()` below exists for). A
+   * user signed into Company A therefore saw a balance sheet containing Company B's assets — the
+   * group's numbers mixed into a single entity's accounts, which is both wrong and a disclosure
+   * inside the group.
+   *
+   * A null companyId keeps the whole-tenant view, which is what a group-level user should get and
+   * what `consolidated()` needs.
+   *
+   * The chart of accounts stays tenant-wide: it is shared, and an account with no movement in a
+   * company simply contributes nothing.
+   */
+  private async load(tenantId: Id, companyId?: Id | null) {
     const [accounts, journals] = await Promise.all([
       this.accounts.list({ tenantId }),
       this.journals.list({ tenantId, limit: 1_000_000 }),
     ]);
-    return { accounts, journals };
+    return { accounts, journals: companyId ? journals.filter((j) => j.companyId === companyId) : journals };
   }
 
-  async trialBalance(tenantId: Id, asOf?: string | null): Promise<TrialBalance> {
-    const { accounts, journals } = await this.load(tenantId);
+  async trialBalance(tenantId: Id, asOf?: string | null, companyId?: Id | null): Promise<TrialBalance> {
+    const { accounts, journals } = await this.load(tenantId, companyId);
     return buildTrialBalance(accounts, journals, asOf);
   }
 
-  async incomeStatement(tenantId: Id, from?: string | null, to?: string | null): Promise<IncomeStatement> {
-    const { accounts, journals } = await this.load(tenantId);
+  async incomeStatement(tenantId: Id, from?: string | null, to?: string | null, companyId?: Id | null): Promise<IncomeStatement> {
+    const { accounts, journals } = await this.load(tenantId, companyId);
     return buildIncomeStatement(accounts, journals, from, to);
   }
 
-  async balanceSheet(tenantId: Id, asOf?: string | null): Promise<BalanceSheet> {
-    const { accounts, journals } = await this.load(tenantId);
+  async balanceSheet(tenantId: Id, asOf?: string | null, companyId?: Id | null): Promise<BalanceSheet> {
+    const { accounts, journals } = await this.load(tenantId, companyId);
     return buildBalanceSheet(accounts, journals, asOf);
   }
 
-  async cashFlow(tenantId: Id, from?: string | null, to?: string | null): Promise<CashFlow> {
-    const { accounts, journals } = await this.load(tenantId);
+  async cashFlow(tenantId: Id, from?: string | null, to?: string | null, companyId?: Id | null): Promise<CashFlow> {
+    const { accounts, journals } = await this.load(tenantId, companyId);
     return buildCashFlow(accounts, journals, from, to);
   }
 

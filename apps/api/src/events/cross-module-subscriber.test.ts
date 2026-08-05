@@ -42,7 +42,13 @@ import { CrossModuleSubscriber } from './cross-module-subscriber';
  */
 const tenantId = 'tenant-e2e';
 
-function buildHarness() {
+/**
+ * `pricedQuote` seeds a tender-sourced quotation with a locked commercial baseline, so the
+ * tender→contract reactor's R3 inheritance (G-50) can be exercised. Omitted → no quotes, which is
+ * the "awarded straight off the estimate" path every other test here uses.
+ */
+function buildHarness(pricedQuote?: { id: string; status: string; baselineId: string; total: number }) {
+  const linkedContracts: Array<{ quotationId: string; contractId: string }> = [];
   const bus = new EventBus();
   const events = new InMemoryEventStore(bus);
   const tx = new NullTxRunner();
@@ -188,9 +194,18 @@ function buildHarness() {
     noop, // AccountService (CRM)
     opportunities, // OpportunityService (CRM) — required for the tender.awarded → close-opportunity reactor
     mockSignals, // SignalService (CRM)
-    // QuotationService (CRM) — the award reactor asks it whether a tender's quotation is already
-    // committed, so a frozen estimate is never silently restamped. No quotes here → nothing frozen.
-    { listBySourceTender: async () => [] } as any,
+    // QuotationService (CRM). Two jobs on the award path: whether a tender's quotation is already
+    // committed (so a frozen estimate is never silently restamped), and — since G-50 — supplying
+    // the approved commercial baseline the contract must inherit.
+    {
+      listBySourceTender: async () => [],
+      list: async () => (pricedQuote ? [{ id: pricedQuote.id, status: pricedQuote.status }] : []),
+      getBaseline: async (_t: string, qid: string) =>
+        pricedQuote && qid === pricedQuote.id ? { id: pricedQuote.baselineId, total: pricedQuote.total } : null,
+      linkContract: async (qid: string, contractId: string) => {
+        linkedContracts.push({ quotationId: qid, contractId });
+      },
+    } as any,
     customerInvoices,
     mockSupplierInvoices, // InvoiceService (AP)
     mockFinanceAccounts, // AccountService (Finance) — GL account resolver
@@ -199,7 +214,7 @@ function buildHarness() {
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, createdSignals };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, createdSignals, linkedContracts };
 }
 
 /**
@@ -260,6 +275,39 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(projects[0].contractId).toBe(contract.id);
     expect(projects[0].accountName).toBe('Acme Developments LLC');
     expect(projects[0].value).toBe(1_000_000);
+  });
+
+  // G-50 — path-asymmetry. The DIRECT path locks a commercial baseline on quotation approval and
+  // the contract inherits it. The tender path used to take the tender's own ESTIMATE and leave the
+  // baseline null: same business intent, weaker governance, purely because of which route the deal
+  // took. A tender priced through a quotation must now produce the same governed contract.
+  it('a tender-won contract inherits the approved commercial baseline, not the estimate', async () => {
+    const priced = buildHarness({ id: 'q-tender-1', status: 'accepted', baselineId: 'baseline-77', total: 1_575_000 });
+    const opp = await priced.opportunities.create({ tenantId, title: 'Baselined Job', value: 1_400_000 });
+    // The tender's own estimate is 1.4M; the bid the customer accepted is 1.575M.
+    const tender = await priced.tenders.create({ tenantId, title: 'Tender: Baselined Job', value: 1_400_000 });
+    await priced.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(priced, tender.id);
+    await priced.tenders.changeStatus(tender.id, 'won');
+
+    const [contract] = await priced.contracts.list({ tenderId: tender.id });
+    expect(contract.commercialBaselineId).toBe('baseline-77'); // was null before G-50
+    expect(contract.value).toBe(1_575_000); // the accepted bid, NOT the 1.4M estimate
+    // Provenance closes both ways, as it does on the direct path.
+    expect(priced.linkedContracts).toEqual([{ quotationId: 'q-tender-1', contractId: contract.id }]);
+  });
+
+  it('still creates the contract from the tender value when the tender was never priced through a quotation', async () => {
+    const opp = await h.opportunities.create({ tenantId, title: 'Unpriced Job', value: 800_000 });
+    const tender = await h.tenders.create({ tenantId, title: 'Tender: Unpriced Job', value: 800_000 });
+    await h.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(h, tender.id);
+    await h.tenders.changeStatus(tender.id, 'won');
+
+    const [contract] = await h.contracts.list({ tenderId: tender.id });
+    expect(contract.value).toBe(800_000);
+    expect(contract.commercialBaselineId).toBeNull();
+    expect(h.linkedContracts).toEqual([]);
   });
 
   it('is idempotent: re-delivered award/sign events do not duplicate downstream records', async () => {

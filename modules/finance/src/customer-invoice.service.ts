@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, type PageParams, type Currency, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore, ExchangeRateService } from '@aura/core';
 import {
@@ -12,6 +12,8 @@ import {
 } from './domain/customer-invoice';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
+import { evaluateContractCap } from './domain/contract-cap';
+import { CONTRACT_CAP_PORT, type ContractCapPort } from './contract-cap.port';
 import { CUSTOMER_INVOICE_STORE, type CustomerInvoiceFilter, type CustomerInvoiceStore } from './customer-invoice-store';
 import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
@@ -31,7 +33,41 @@ export class CustomerInvoiceService {
     private readonly fx: ExchangeRateService,
     private readonly journals: JournalService,
     private readonly accounts: AccountService,
+    // Cross-context contract data for the AR billing cap — bound by the app layer (ADR-0004).
+    // Optional so the module stays self-contained; unbound → the cap is skipped, mirroring the
+    // AP 3-way match's PO_MATCH_PORT.
+    @Optional() @Inject(CONTRACT_CAP_PORT) private readonly contractCap?: ContractCapPort,
   ) {}
+
+  /**
+   * The AR billing cap (G-08): total billed against a contract may exceed neither the approved
+   * contract value nor the net certified to date. The AP side has had a 3-way match from the
+   * start; this is its receivable mirror. IPC-driven invoices pass by construction (the
+   * certificate that generated them is what raises the certified figure); the bound exists for
+   * invoices raised by hand.
+   */
+  private async assertWithinContractCap(input: NewCustomerInvoice, newInvoiceNet: number): Promise<void> {
+    const contractId = input.contractRef?.trim();
+    if (!contractId || !this.contractCap) return; // no contract, or no data source bound → skip
+
+    const snapshot = await this.contractCap.getSnapshot(input.tenantId, contractId);
+    if (!snapshot.contractExists) return;
+
+    // Cumulative: per-invoice checks are defeated by splitting one over-cap invoice into two.
+    // Compared NET of VAT throughout — contract values and certified figures are VAT-exclusive,
+    // so summing VAT-inclusive totals would refuse a correct final invoice by exactly the tax.
+    const existing = await this.store.list({ tenantId: input.tenantId, limit: 500 });
+    const alreadyInvoiced = existing
+      .filter((i) => i.contractRef === contractId && i.status !== 'cancelled' && !i.deletedAt)
+      .reduce((sum, i) => sum + i.subtotal, 0);
+
+    const verdict = evaluateContractCap({ snapshot, alreadyInvoiced, newInvoiceTotal: newInvoiceNet });
+    if (!verdict.withinCap) {
+      // "cannot"/"exceeds" phrasing maps to 409 via the error taxonomy — a state conflict, not
+      // a malformed request.
+      throw new Error(`cannot raise invoice: ${verdict.reason}`);
+    }
+  }
 
   private async ensureAccount(tenantId: string, code: string, name: string, type: AccountType) {
     const existing = await this.accounts.getByCode(tenantId, code);
@@ -68,6 +104,7 @@ export class CustomerInvoiceService {
       input = { ...input, exchangeRate: rate };
     }
     const inv = makeCustomerInvoice(input);
+    await this.assertWithinContractCap(input, inv.subtotal);
     await this.store.save(inv);
     await this.events.append([
       makeEvent({

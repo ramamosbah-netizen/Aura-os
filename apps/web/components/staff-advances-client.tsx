@@ -16,7 +16,7 @@ interface StaffAdvance {
   requestDate: string;
 }
 
-const statusColor: Record<string, string> = { requested: '#d97706', approved: 'var(--accent)', rejected: 'var(--bad)', disbursed: '#7c3aed', settled: 'var(--good)' };
+const statusColor: Record<string, string> = { requested: 'var(--warn)', approved: 'var(--accent)', rejected: 'var(--bad)', disbursed: '#7c3aed', settled: 'var(--good)' };
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function StaffAdvancesClient({ initialAdvances, employees }: { initialAdvances: StaffAdvance[]; employees: Employee[] }) {

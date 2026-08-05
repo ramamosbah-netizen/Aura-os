@@ -22,8 +22,8 @@ export interface Appraisal {
   createdAt: string;
 }
 
-const statusColor: Record<string, string> = { draft: '#d97706', submitted: 'var(--accent)', acknowledged: 'var(--good)' };
-const scoreColor = (n: number) => (n >= 70 ? 'var(--good)' : n >= 50 ? '#d97706' : 'var(--bad)');
+const statusColor: Record<string, string> = { draft: 'var(--warn)', submitted: 'var(--accent)', acknowledged: 'var(--good)' };
+const scoreColor = (n: number) => (n >= 70 ? 'var(--good)' : n >= 50 ? 'var(--warn)' : 'var(--bad)');
 const emptyCriterion = (): Criterion => ({ name: '', weight: 1, score: 3 });
 const SCORES = [0, 1, 2, 3, 4, 5];
 

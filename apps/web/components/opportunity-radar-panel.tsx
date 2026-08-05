@@ -29,7 +29,7 @@ export interface RadarData {
 const SOURCES = ['MANUAL', 'INBOUND', 'REFERRAL', 'MARKET', 'RELATIONSHIP', 'ACCOUNT_GROWTH', 'TENDER_DISCOVERY', 'INTELLIGENCE'];
 const TYPES = ['NEW_PROJECT', 'RFQ_RECEIVED', 'TENDER_DETECTED', 'RENEWAL_DUE', 'CROSS_SELL', 'UPSELL', 'EXPANSION', 'REFERRAL', 'MARKET_EVENT', 'OTHER'];
 
-const confColor = (c: number): string => (c >= 70 ? 'var(--good)' : c >= 40 ? '#d97706' : 'var(--muted)');
+const confColor = (c: number): string => (c >= 70 ? 'var(--good)' : c >= 40 ? 'var(--warn)' : 'var(--muted)');
 
 export default function OpportunityRadarPanel({ data }: { data: RadarData | null }) {
   const router = useRouter();

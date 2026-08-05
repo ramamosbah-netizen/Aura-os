@@ -19,8 +19,8 @@ export interface Snag {
 }
 
 const SEVERITIES = ['low', 'medium', 'high'];
-const statusColor: Record<string, string> = { open: 'var(--bad)', resolved: '#d97706', closed: 'var(--good)' };
-const sevColor: Record<string, string> = { low: '#6b7280', medium: '#d97706', high: 'var(--bad)' };
+const statusColor: Record<string, string> = { open: 'var(--bad)', resolved: 'var(--warn)', closed: 'var(--good)' };
+const sevColor: Record<string, string> = { low: 'var(--muted)', medium: 'var(--warn)', high: 'var(--bad)' };
 
 export default function SnagClient({ initial }: { initial: Snag[] }) {
   const [rows, setRows] = useState(initial);

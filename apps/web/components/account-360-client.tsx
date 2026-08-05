@@ -224,7 +224,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   const health: 'healthy' | 'attention' | 'at_risk' = receivables.overdue > 0 ? 'at_risk' : healthReasons.length ? 'attention' : 'healthy';
   const HEALTH = {
     healthy: { dot: '🟢', label: 'Healthy', color: 'var(--good)' },
-    attention: { dot: '🟠', label: 'Attention Required', color: 'var(--warn, #d97706)' },
+    attention: { dot: '🟠', label: 'Attention Required', color: 'var(--warn, var(--warn))' },
     at_risk: { dot: '🔴', label: 'At Risk', color: 'var(--bad)' },
   }[health];
   const healthTone: Tone = health === 'at_risk' ? 'bad' : health === 'attention' ? 'warn' : 'good';

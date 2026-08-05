@@ -19,8 +19,8 @@ export interface Ncr {
   createdAt: string;
 }
 
-const statusColor: Record<string, string> = { raised: 'var(--bad)', corrected: '#d97706', closed: 'var(--good)' };
-const sevColor: Record<string, string> = { minor: '#6b7280', major: 'var(--bad)' };
+const statusColor: Record<string, string> = { raised: 'var(--bad)', corrected: 'var(--warn)', closed: 'var(--good)' };
+const sevColor: Record<string, string> = { minor: 'var(--muted)', major: 'var(--bad)' };
 
 export default function NcrClient({ initial }: { initial: Ncr[] }) {
   const [rows, setRows] = useState(initial);

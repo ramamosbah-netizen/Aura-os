@@ -62,7 +62,7 @@ const GAP_LABEL: Record<Gap, string> = {
   STALE: 'Stale',
   QUALIFICATION_STALLED: 'Qualification stalled',
 };
-const SEV_COLOR: Record<Severity, string> = { HIGH: 'var(--bad)', MEDIUM: '#d97706', LOW: 'var(--muted)' };
+const SEV_COLOR: Record<Severity, string> = { HIGH: 'var(--bad)', MEDIUM: 'var(--warn)', LOW: 'var(--muted)' };
 
 /** G3 verdicts. REVIEW is not a failure — it means "go and find out", which is real work. */
 const REC_LABEL: Record<string, string> = {
@@ -255,7 +255,7 @@ function SourcesTable({ sources }: { sources: SourcePerformance[] }) {
               <td style={{ ...st.srcTdNum, color: s.converted ? 'var(--good)' : undefined, fontWeight: s.converted ? 700 : 400 }}>{s.converted || '—'}</td>
               <td style={{ ...st.srcTdNum, color: s.disqualified ? 'var(--bad)' : undefined }}>{s.disqualified || '—'}</td>
               <td style={st.srcTdNum}>{s.nurturing || '—'}</td>
-              <td style={{ ...st.srcTdNum, color: s.needsAttention ? '#d97706' : undefined }}>{s.needsAttention || '—'}</td>
+              <td style={{ ...st.srcTdNum, color: s.needsAttention ? 'var(--warn)' : undefined }}>{s.needsAttention || '—'}</td>
               <td style={{ ...st.srcTdNum, fontWeight: 700 }}>{s.conversionRate}%</td>
               <td style={st.srcTdNum}>{s.avgAgeDays}d</td>
             </tr>

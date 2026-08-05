@@ -23,7 +23,7 @@ const nice = (s: string): string => s.replace(/_/g, ' ');
 const COV_META: Record<Coverage['status'], { label: string; color: string }> = {
   ours: { label: 'ours', color: 'var(--good)' },
   competitor: { label: 'competitor', color: 'var(--bad)' },
-  mixed: { label: 'mixed', color: '#d97706' },
+  mixed: { label: 'mixed', color: 'var(--warn)' },
   missing: { label: 'white space', color: 'var(--muted)' },
 };
 const KIND_LABEL: Record<string, string> = {

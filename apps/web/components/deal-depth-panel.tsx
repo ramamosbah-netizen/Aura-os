@@ -26,17 +26,17 @@ interface Depth {
 
 const S_ROLES = ['DECISION_MAKER', 'ECONOMIC_BUYER', 'CHAMPION', 'INFLUENCER', 'TECHNICAL_EVALUATOR', 'PROCUREMENT', 'FINANCE', 'EXECUTIVE_SPONSOR', 'END_USER', 'BLOCKER', 'OTHER'];
 const T_ROLES = ['OWNER', 'ACCOUNT_OWNER', 'SALES_MANAGER', 'PRESALES', 'ESTIMATION', 'PROCUREMENT', 'FINANCE', 'LEGAL', 'EXECUTIVE_SPONSOR', 'OTHER'];
-const scoreColor = (n: number): string => (n >= 80 ? 'var(--good)' : n >= 50 ? '#d97706' : 'var(--bad)');
-const bandColor = (b: string): string => (b === 'HEALTHY' ? 'var(--good)' : b === 'AT_RISK' ? '#d97706' : 'var(--bad)');
+const scoreColor = (n: number): string => (n >= 80 ? 'var(--good)' : n >= 50 ? 'var(--warn)' : 'var(--bad)');
+const bandColor = (b: string): string => (b === 'HEALTHY' ? 'var(--good)' : b === 'AT_RISK' ? 'var(--warn)' : 'var(--bad)');
 const bandDot = (b: string): string => (b === 'HEALTHY' ? '🟢' : b === 'AT_RISK' ? '🟠' : '🔴');
 const bandLabel = (b: string): string => (b === 'HEALTHY' ? 'Healthy' : b === 'AT_RISK' ? 'At risk' : 'Critical');
 /** The five-state verdict — what KIND of trouble, not just how much (stale ≠ blocked). */
 const STATE_META: Record<string, { dot: string; label: string; color: string }> = {
   ON_TRACK: { dot: '🟢', label: 'On track', color: 'var(--good)' },
-  NEEDS_ATTENTION: { dot: '🟠', label: 'Needs attention', color: '#d97706' },
+  NEEDS_ATTENTION: { dot: '🟠', label: 'Needs attention', color: 'var(--warn)' },
   AT_RISK: { dot: '🔴', label: 'At risk', color: 'var(--bad)' },
   BLOCKED: { dot: '⛔', label: 'Blocked', color: 'var(--bad)' },
-  STALE: { dot: '💤', label: 'Stale', color: '#6b7280' },
+  STALE: { dot: '💤', label: 'Stale', color: 'var(--muted)' },
 };
 const isOverdue = (c: Commitment): boolean => c.status === 'OPEN' && !!c.dueAt && c.dueAt.slice(0, 10) < new Date().toISOString().slice(0, 10);
 
@@ -244,7 +244,7 @@ export default function DealDepthPanel({ opportunityId }: { opportunityId: strin
           <span style={st.meta}>
             {depth.riskSummary.open} open
             {depth.riskSummary.openCritical > 0 ? <b style={st.overdueTag}> · {depth.riskSummary.openCritical} critical</b> : null}
-            {depth.riskSummary.openHigh > 0 ? <b style={{ color: '#d97706' }}> · {depth.riskSummary.openHigh} high</b> : null}
+            {depth.riskSummary.openHigh > 0 ? <b style={{ color: 'var(--warn)' }}> · {depth.riskSummary.openHigh} high</b> : null}
           </span>
         </div>
         {depth.risks.length > 0 && (
@@ -307,7 +307,7 @@ const st = {
   dimReason: { fontSize: 10.5, color: 'var(--muted)' } as CSSProperties,
   whyRow: { display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 } as CSSProperties,
   whyLabel: { fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.3 } as CSSProperties,
-  whyChip: { fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'var(--panel)', border: '1px solid #d9770655', color: '#b45309' } as CSSProperties,
+  whyChip: { fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'var(--panel)', border: '1px solid var(--warn)55', color: '#b45309' } as CSSProperties,
   chips: { display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 } as CSSProperties,
   gap: { fontSize: 11, padding: '2px 7px', borderRadius: 5, background: 'var(--panel-2)', border: '1px solid var(--bad)55', color: 'var(--bad)' } as CSSProperties,
   list: { listStyle: 'none', margin: '0 0 10px', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,

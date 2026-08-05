@@ -27,7 +27,7 @@ export interface Claim {
   createdAt: string;
 }
 
-const statusColor: Record<string, string> = { draft: '#d97706', certified: 'var(--accent)', paid: 'var(--good)' };
+const statusColor: Record<string, string> = { draft: 'var(--warn)', certified: 'var(--accent)', paid: 'var(--good)' };
 const aed = (n: number) => `AED ${Math.round(n).toLocaleString()}`;
 
 export default function SubcontractClaimsClient({ initial, subcontracts }: { initial: Claim[]; subcontracts: Subcontract[] }) {

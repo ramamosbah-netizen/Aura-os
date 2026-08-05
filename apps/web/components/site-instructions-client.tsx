@@ -18,7 +18,7 @@ interface SiteInstruction {
   status: string;
 }
 
-const statusColor: Record<string, string> = { open: '#d97706', acknowledged: 'var(--accent)', closed: 'var(--good)' };
+const statusColor: Record<string, string> = { open: 'var(--warn)', acknowledged: 'var(--accent)', closed: 'var(--good)' };
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function SiteInstructionsClient({ initialInstructions }: { initialInstructions: SiteInstruction[] }) {
@@ -65,7 +65,7 @@ export default function SiteInstructionsClient({ initialInstructions }: { initia
   return (
     <>
       <div style={st.cards}>
-        <div style={st.card}><div style={st.cardLabel}>Open</div><div style={{ ...st.cardVal, color: '#d97706' }}>{counts.open}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Open</div><div style={{ ...st.cardVal, color: 'var(--warn)' }}>{counts.open}</div></div>
         <div style={st.card}><div style={st.cardLabel}>Open w/ cost or time impact</div><div style={st.cardVal}>{counts.withImplication}</div></div>
       </div>
 

@@ -18,7 +18,7 @@ interface BankGuarantee {
 }
 
 const TYPES = ['tender', 'performance', 'advance_payment', 'retention', 'other'];
-const statusColor: Record<string, string> = { active: 'var(--accent)', released: 'var(--good)', claimed: 'var(--bad)', expired: '#6b7280' };
+const statusColor: Record<string, string> = { active: 'var(--accent)', released: 'var(--good)', claimed: 'var(--bad)', expired: 'var(--muted)' };
 const today = () => new Date().toISOString().slice(0, 10);
 
 function daysTo(expiry: string): number {
@@ -82,7 +82,7 @@ export default function BankGuaranteesClient({ initialGuarantees }: { initialGua
       <div style={st.cards}>
         <div style={st.card}><div style={st.cardLabel}>Active exposure</div><div style={st.cardVal}>{totals.exposure.toLocaleString()} AED</div></div>
         <div style={st.card}><div style={st.cardLabel}>Active count</div><div style={st.cardVal}>{totals.activeCount}</div></div>
-        <div style={st.card}><div style={st.cardLabel}>Expiring ≤30d</div><div style={{ ...st.cardVal, color: totals.expiringSoon > 0 ? '#d97706' : undefined }}>{totals.expiringSoon}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Expiring ≤30d</div><div style={{ ...st.cardVal, color: totals.expiringSoon > 0 ? 'var(--warn)' : undefined }}>{totals.expiringSoon}</div></div>
       </div>
 
       <h2 style={st.h2}>New guarantee</h2>
@@ -118,7 +118,7 @@ export default function BankGuaranteesClient({ initialGuarantees }: { initialGua
                   <td style={st.td}>{g.type.replace('_', ' ')}</td>
                   <td style={st.td}>{g.beneficiary}</td>
                   <td style={st.td}>{g.amount.toLocaleString()} {g.currency}</td>
-                  <td style={{ ...st.td, color: soon ? '#d97706' : undefined, fontWeight: soon ? 600 : 400 }}>
+                  <td style={{ ...st.td, color: soon ? 'var(--warn)' : undefined, fontWeight: soon ? 600 : 400 }}>
                     {g.expiryDate}{g.status === 'active' && ` (${d}d)`}
                   </td>
                   <td style={{ ...st.td, color: statusColor[g.status] || '#000', fontWeight: 600 }}>{g.status}</td>

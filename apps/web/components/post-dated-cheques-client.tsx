@@ -21,7 +21,7 @@ interface PostDatedCheque {
 type Action = 'deposit' | 'clear' | 'bounce' | 'represent' | 'cancel';
 
 const statusColor: Record<string, string> = {
-  pending: 'var(--accent)', deposited: '#7c3aed', cleared: 'var(--good)', bounced: 'var(--bad)', cancelled: '#6b7280',
+  pending: 'var(--accent)', deposited: '#7c3aed', cleared: 'var(--good)', bounced: 'var(--bad)', cancelled: 'var(--muted)',
 };
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -100,7 +100,7 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
       <div style={st.cards}>
         <div style={st.card}><div style={st.cardLabel}>Receivable (open)</div><div style={{ ...st.cardVal, color: 'var(--good)' }}>{totals.receivable.toLocaleString()} AED</div></div>
         <div style={st.card}><div style={st.cardLabel}>Payable (open)</div><div style={{ ...st.cardVal, color: 'var(--bad)' }}>{totals.payable.toLocaleString()} AED</div></div>
-        <div style={st.card}><div style={st.cardLabel}>Maturing ≤7d</div><div style={{ ...st.cardVal, color: totals.maturingSoon > 0 ? '#d97706' : undefined }}>{totals.maturingSoon}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Maturing ≤7d</div><div style={{ ...st.cardVal, color: totals.maturingSoon > 0 ? 'var(--warn)' : undefined }}>{totals.maturingSoon}</div></div>
         <div style={st.card}><div style={st.cardLabel}>Bounced</div><div style={{ ...st.cardVal, color: totals.bounced > 0 ? 'var(--bad)' : undefined }}>{totals.bounced}</div></div>
       </div>
 
@@ -143,7 +143,7 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
                   <td style={st.td}>{c.partyName}</td>
                   <td style={st.td}>{c.bankName}</td>
                   <td style={st.td}>{c.amount.toLocaleString()} {c.currency}</td>
-                  <td style={{ ...st.td, color: soon ? '#d97706' : undefined, fontWeight: soon ? 600 : 400 }}>
+                  <td style={{ ...st.td, color: soon ? 'var(--warn)' : undefined, fontWeight: soon ? 600 : 400 }}>
                     {c.maturityDate}{c.status === 'pending' && ` (${d}d)`}
                   </td>
                   <td style={{ ...st.td, color: statusColor[c.status] || '#000', fontWeight: 600 }}>

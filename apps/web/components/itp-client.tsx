@@ -18,8 +18,8 @@ interface Itp {
 interface DraftPoint { activity: string; pointType: string; acceptanceCriteria: string }
 
 const POINT_TYPES = ['hold', 'witness', 'review', 'surveillance'];
-const statusColor: Record<string, string> = { draft: '#6b7280', active: 'var(--accent)', closed: 'var(--good)' };
-const resultColor: Record<string, string> = { pending: '#6b7280', passed: 'var(--good)', failed: 'var(--bad)' };
+const statusColor: Record<string, string> = { draft: 'var(--muted)', active: 'var(--accent)', closed: 'var(--good)' };
+const resultColor: Record<string, string> = { pending: 'var(--muted)', passed: 'var(--good)', failed: 'var(--bad)' };
 const emptyPoint = (): DraftPoint => ({ activity: '', pointType: 'hold', acceptanceCriteria: '' });
 
 export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {

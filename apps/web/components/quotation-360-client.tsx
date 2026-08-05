@@ -356,7 +356,7 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
                       <td style={st.tdR}>{money(r.unitPrice)}</td>
                       <td style={st.tdR}>{money(r.lineNet)}</td>
                       <td style={{ ...st.tdR, color: r.margin >= 0 ? 'var(--good)' : 'var(--bad)' }}>{money(r.margin)}</td>
-                      <td style={{ ...st.tdR, color: r.marginPct >= 20 ? 'var(--good)' : r.marginPct >= 10 ? 'var(--warn, #d97706)' : 'var(--bad)' }}>{pct(r.marginPct)}</td>
+                      <td style={{ ...st.tdR, color: r.marginPct >= 20 ? 'var(--good)' : r.marginPct >= 10 ? 'var(--warn, var(--warn))' : 'var(--bad)' }}>{pct(r.marginPct)}</td>
                     </tr>
                   ))}
                 </tbody>

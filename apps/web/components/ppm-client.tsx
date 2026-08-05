@@ -96,7 +96,7 @@ export default function PpmClient({ initialSchedules, contracts }: { initialSche
                 <td style={st.td}>{s.frequency.replace('_', '-')}</td>
                 <td style={st.td}>{fmt(s.nextDueDate)}</td>
                 <td style={st.td}>{s.visitsGenerated}</td>
-                <td style={{ ...st.td, color: s.active ? 'var(--good)' : '#6b7280', fontWeight: 600 }}>{s.active ? 'yes' : 'no'}</td>
+                <td style={{ ...st.td, color: s.active ? 'var(--good)' : 'var(--muted)', fontWeight: 600 }}>{s.active ? 'yes' : 'no'}</td>
               </tr>
             ))}
           </tbody>

@@ -22,7 +22,7 @@ function fmtDate(d: string): string {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const statusColor: Record<string, string> = { draft: '#6b7280', submitted: 'var(--accent)', approved: 'var(--good)', rejected: 'var(--bad)' };
+const statusColor: Record<string, string> = { draft: 'var(--muted)', submitted: 'var(--accent)', approved: 'var(--good)', rejected: 'var(--bad)' };
 
 export default function TimesheetClient({ initialEntries }: { initialEntries: TimesheetEntry[] }) {
   const [entries, setEntries] = useState(initialEntries);

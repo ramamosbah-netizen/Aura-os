@@ -25,7 +25,7 @@ interface TrafficFine {
   paidDate: string | null;
 }
 
-const statusColor: Record<string, string> = { pending: '#d97706', assigned: 'var(--accent)', disputed: '#7c3aed', paid: 'var(--good)' };
+const statusColor: Record<string, string> = { pending: 'var(--warn)', assigned: 'var(--accent)', disputed: '#7c3aed', paid: 'var(--good)' };
 
 export default function FinesClient({ initialFines, vehicles }: { initialFines: TrafficFine[]; vehicles: Vehicle[] }) {
   const [fines, setFines] = useState(initialFines);

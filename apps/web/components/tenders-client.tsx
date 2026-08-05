@@ -185,7 +185,7 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
                             : <span style={{ color: 'var(--muted)' }}>unclassified</span>}
                       </td>
                       <td style={{ fontWeight: 600 }}>{money(t.value)}</td>
-                      <td style={{ whiteSpace: 'nowrap', color: overdue ? 'var(--bad)' : dueSoon ? 'var(--warn, #d97706)' : 'var(--muted)', fontWeight: overdue || dueSoon ? 700 : 400 }}>
+                      <td style={{ whiteSpace: 'nowrap', color: overdue ? 'var(--bad)' : dueSoon ? 'var(--warn, var(--warn))' : 'var(--muted)', fontWeight: overdue || dueSoon ? 700 : 400 }}>
                         {t.submissionDeadline ?? '—'}{dueSoon ? ' ⚠' : ''}{overdue ? ' ✗' : ''}
                       </td>
                       <td>

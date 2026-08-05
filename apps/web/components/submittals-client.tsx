@@ -18,8 +18,8 @@ interface Submittal {
 }
 
 const DISCIPLINES = ['architectural', 'structural', 'mep', 'elv', 'civil', 'other'];
-const statusColor: Record<string, string> = { draft: '#6b7280', submitted: 'var(--accent)', returned: 'var(--good)' };
-const codeColor: Record<string, string> = { A: 'var(--good)', B: 'var(--good)', C: '#d97706', D: 'var(--bad)' };
+const statusColor: Record<string, string> = { draft: 'var(--muted)', submitted: 'var(--accent)', returned: 'var(--good)' };
+const codeColor: Record<string, string> = { A: 'var(--good)', B: 'var(--good)', C: 'var(--warn)', D: 'var(--bad)' };
 
 export default function SubmittalsClient({ initialSubmittals }: { initialSubmittals: Submittal[] }) {
   const [items, setItems] = useState(initialSubmittals);
@@ -79,7 +79,7 @@ export default function SubmittalsClient({ initialSubmittals }: { initialSubmitt
     <>
       <div style={st.cards}>
         <div style={st.card}><div style={st.cardLabel}>Under review</div><div style={{ ...st.cardVal, color: 'var(--accent)' }}>{counts.underReview}</div></div>
-        <div style={st.card}><div style={st.cardLabel}>Awaiting resubmission</div><div style={{ ...st.cardVal, color: '#d97706' }}>{counts.resubmit}</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Awaiting resubmission</div><div style={{ ...st.cardVal, color: 'var(--warn)' }}>{counts.resubmit}</div></div>
       </div>
 
       <div style={st.form}>

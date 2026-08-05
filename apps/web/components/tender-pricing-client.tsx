@@ -500,7 +500,7 @@ const st = {
   th: { padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)' } as CSSProperties,
   td: { padding: '9px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   priced: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
-  unpriced: { color: 'var(--warn, #d97706)', fontSize: 12 } as CSSProperties,
+  unpriced: { color: 'var(--warn, var(--warn))', fontSize: 12 } as CSSProperties,
   btnGhost: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   btnGhostLink: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', borderRadius: 9, padding: '9px 14px', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
   btnPrimary: { border: 'none', background: 'var(--accent-grad, var(--accent))', color: 'var(--accent-ink, #fff)', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,

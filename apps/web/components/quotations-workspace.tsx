@@ -41,10 +41,10 @@ type TabId = (typeof TABS)[number]['id'];
 // Board columns map the user-facing stage to the REAL statuses behind it (no invented state).
 const STAGES: Array<{ key: string; label: string; statuses: string[]; tone: string }> = [
   { key: 'draft', label: 'Draft', statuses: ['draft'], tone: 'var(--muted)' },
-  { key: 'review', label: 'Review', statuses: ['internal_review'], tone: 'var(--warn, #d97706)' },
+  { key: 'review', label: 'Review', statuses: ['internal_review'], tone: 'var(--warn, var(--warn))' },
   { key: 'approved', label: 'Approved', statuses: ['approved'], tone: 'var(--accent)' },
   { key: 'sent', label: 'Sent', statuses: ['sent'], tone: 'var(--accent)' },
-  { key: 'negotiation', label: 'Negotiation', statuses: ['under_negotiation', 'negotiation'], tone: 'var(--warn, #d97706)' },
+  { key: 'negotiation', label: 'Negotiation', statuses: ['under_negotiation', 'negotiation'], tone: 'var(--warn, var(--warn))' },
   { key: 'accepted', label: 'Accepted', statuses: ['accepted'], tone: 'var(--good)' },
   { key: 'lost', label: 'Lost', statuses: ['rejected', 'expired', 'cancelled'], tone: 'var(--bad)' },
 ];

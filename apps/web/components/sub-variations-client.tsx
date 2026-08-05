@@ -14,7 +14,7 @@ interface Variation {
   status: string;
 }
 
-const statusColor: Record<string, string> = { pending: '#d97706', approved: 'var(--good)', rejected: 'var(--bad)' };
+const statusColor: Record<string, string> = { pending: 'var(--warn)', approved: 'var(--good)', rejected: 'var(--bad)' };
 
 export default function SubVariationsClient({ initialVariations, subcontracts }: { initialVariations: Variation[]; subcontracts: Subcontract[] }) {
   const [variations, setVariations] = useState(initialVariations);

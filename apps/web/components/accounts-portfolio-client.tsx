@@ -51,7 +51,7 @@ const STAGE_COLOR: Record<string, string> = {
   qualified: 'var(--accent)',
   active_customer: 'var(--good)',
   strategic: 'var(--accent)',
-  dormant: 'var(--warn, #d97706)',
+  dormant: 'var(--warn, var(--warn))',
   inactive: 'var(--muted)',
 };
 
@@ -70,7 +70,7 @@ const PARTY_LABEL: Record<string, string> = {
 
 const HEALTH = {
   healthy: { dot: '🟢', label: 'Healthy', color: 'var(--good)' },
-  attention: { dot: '🟠', label: 'Attention', color: 'var(--warn, #d97706)' },
+  attention: { dot: '🟠', label: 'Attention', color: 'var(--warn, var(--warn))' },
   at_risk: { dot: '🔴', label: 'At Risk', color: 'var(--bad)' },
 } as const;
 
@@ -208,7 +208,7 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
           { label: 'Active Opportunities', value: String(kpis.activeOpps) },
           { label: 'Open Pipeline', value: `AED ${money(kpis.pipeline)}`, color: 'var(--accent)' },
           { label: 'Contracted Value', value: `AED ${money(kpis.contracted)}`, color: 'var(--good)' },
-          { label: 'Outstanding AR', value: `AED ${money(kpis.outstanding)}`, color: kpis.outstanding > 0 ? 'var(--warn, #d97706)' : undefined },
+          { label: 'Outstanding AR', value: `AED ${money(kpis.outstanding)}`, color: kpis.outstanding > 0 ? 'var(--warn, var(--warn))' : undefined },
           { label: 'At-Risk Accounts', value: String(kpis.atRisk), color: kpis.atRisk > 0 ? 'var(--bad)' : undefined },
         ].map((k) => (
           <div key={k.label} style={st.kpi}>

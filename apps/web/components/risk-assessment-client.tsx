@@ -29,8 +29,8 @@ export interface RiskAssessment {
   createdAt: string;
 }
 
-const bandColor: Record<string, string> = { low: 'var(--good)', medium: '#d97706', high: 'var(--bad)', critical: '#991b1b' };
-const statusColor: Record<string, string> = { draft: '#d97706', approved: 'var(--good)', expired: '#6b7280' };
+const bandColor: Record<string, string> = { low: 'var(--good)', medium: 'var(--warn)', high: 'var(--bad)', critical: '#991b1b' };
+const statusColor: Record<string, string> = { draft: 'var(--warn)', approved: 'var(--good)', expired: 'var(--muted)' };
 const emptyHazard = (): RiskLine => ({ hazard: '', likelihood: 3, severity: 3, controls: '', residualLikelihood: 1, residualSeverity: 2 });
 const SCORES = [1, 2, 3, 4, 5];
 

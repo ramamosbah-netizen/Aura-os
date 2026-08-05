@@ -17,7 +17,7 @@ interface Opp {
 const BUYING_OPTIONS: BuyingStage[] = [...BUYING_LADDER, 'DEFERRED'];
 const RATING = { '': null, low: 30, medium: 60, high: 90 } as const;
 type RatingKey = keyof typeof RATING;
-const sevColor = (s: string | null): string => (s === 'HIGH' ? 'var(--bad)' : s === 'MEDIUM' ? '#d97706' : 'var(--muted)');
+const sevColor = (s: string | null): string => (s === 'HIGH' ? 'var(--bad)' : s === 'MEDIUM' ? 'var(--warn)' : 'var(--muted)');
 const nice = (s: string): string => s.replace(/_/g, ' ').toLowerCase();
 const dimLabel = (k: string): string => k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 

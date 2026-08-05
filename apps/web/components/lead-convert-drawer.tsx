@@ -24,7 +24,7 @@ interface LeadLite { id: string; name: string; companyName: string | null }
 interface AccountLite { id: string; name: string }
 
 const CONF_COLOR: Record<Exclude<Confidence, 'NONE'>, string> = {
-  EXACT: 'var(--good)', PROBABLE: 'var(--warn, #d97706)', POSSIBLE: 'var(--muted)',
+  EXACT: 'var(--good)', PROBABLE: 'var(--warn, var(--warn))', POSSIBLE: 'var(--muted)',
 };
 
 export default function LeadConvertDrawer({ lead, accounts, onDone }: {

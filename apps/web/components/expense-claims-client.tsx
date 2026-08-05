@@ -25,7 +25,7 @@ interface ExpenseClaim {
 }
 
 const CATEGORIES = ['travel', 'accommodation', 'meals', 'fuel', 'materials', 'other'];
-const statusColor: Record<string, string> = { draft: '#6b7280', submitted: '#d97706', approved: 'var(--accent)', rejected: 'var(--bad)', reimbursed: 'var(--good)' };
+const statusColor: Record<string, string> = { draft: 'var(--muted)', submitted: 'var(--warn)', approved: 'var(--accent)', rejected: 'var(--bad)', reimbursed: 'var(--good)' };
 
 export default function ExpenseClaimsClient({ initialClaims, employees }: { initialClaims: ExpenseClaim[]; employees: Employee[] }) {
   const [claims, setClaims] = useState(initialClaims);

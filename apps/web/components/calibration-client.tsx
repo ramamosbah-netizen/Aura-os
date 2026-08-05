@@ -18,7 +18,7 @@ export interface Calibration {
   createdAt: string;
 }
 
-const statusColor: Record<string, string> = { valid: 'var(--good)', due_soon: '#d97706', expired: 'var(--bad)' };
+const statusColor: Record<string, string> = { valid: 'var(--good)', due_soon: 'var(--warn)', expired: 'var(--bad)' };
 const statusLabel: Record<string, string> = { valid: 'valid', due_soon: 'due soon', expired: 'expired' };
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -109,7 +109,7 @@ export default function CalibrationClient({ initial }: { initial: Calibration[] 
 }
 
 function Kpi({ label, value, good, warn, bad }: { label: string; value: number; good?: boolean; warn?: boolean; bad?: boolean }) {
-  const color = bad && value > 0 ? 'var(--bad)' : warn && value > 0 ? '#d97706' : good ? 'var(--good)' : 'var(--text)';
+  const color = bad && value > 0 ? 'var(--bad)' : warn && value > 0 ? 'var(--warn)' : good ? 'var(--good)' : 'var(--text)';
   return (
     <div style={st.kpi}>
       <div style={st.kpiLabel}>{label}</div>

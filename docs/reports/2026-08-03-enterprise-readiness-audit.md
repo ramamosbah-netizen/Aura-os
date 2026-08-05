@@ -113,7 +113,7 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **P2-4 AMC module inconsistency:** self-labelled "Asset Management & Contracts" vs "Annual Maintenance" elsewhere; different visual language. *Fix: reconcile.*
 - **P2-5 IA discoverability:** "Opportunities" not a nav word (under Pipeline→/crm/leads); orphan pages `/crm/commercial`, `/tendering/pricing`; ~5–7s first paint.
 - **P2-6 Document layer:** revisions exist on drawings (`revision` default '0') but there's no unified version-history / approval-workflow / expiry-tracking surface across submittals, method statements, certificates, warranties.
-- **P2-7 Scale:** in-memory search and some full-list loads are O(n); validate dashboard/list/report latency at 1k–10k projects; confirm index coverage on hot filter columns.
+- **P2-7 Scale:** in-memory search and some full-list loads are O(n); validate dashboard/list/report latency at 1k–10k projects; confirm index coverage on hot filter columns. **⏳ INDEX COVERAGE DONE (2026-08-05):** an index audit found 23 tenant-scoped tables with **no** index referencing `tenant_id` (every list there was a seq scan); migration `0219` adds a composite `(tenant_id, <hot col>)` index per table on the column each is actually filtered/joined by (parent FK, else status/date) — verified live (23/23 created; `EXPLAIN` on `aura_amc_tickets` now shows `Index Scan using idx_amc_tickets_status`). **Remaining (larger, deferred):** replace the in-memory cross-module search fan-out (capped at 50/module) with a denormalised search projection; latency validation at 1k–10k rows.
 
 ---
 

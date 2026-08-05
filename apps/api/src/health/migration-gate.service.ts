@@ -1,8 +1,26 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { PG_POOL } from '@aura/core';
+
+/**
+ * Decide whether boot should auto-apply pending migrations. The first-run failure mode this
+ * repairs: a fresh clone boots with an empty schema, every migration pending, so the deploy-gate
+ * refuses ALL business routes (503) until someone manually runs `db:migrate` and restarts — a
+ * dead app on first launch. In development we instead migrate-then-serve automatically.
+ *
+ * PRODUCTION IS NEVER auto-migrated: prod deploys run migrations as a separate, ordered, reviewed
+ * step (migrate-before-serve), and letting an app node apply DDL to a shared cluster on boot is a
+ * foot-gun (races between replicas, partial applies, wrong-role DDL). There, the 503 gate stands.
+ * A dev user who wants the strict gate behaviour can opt out with `AUTO_MIGRATE=off|false|0|no`.
+ */
+export function shouldAutoMigrate(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NODE_ENV === 'production') return false;
+  const flag = env.AUTO_MIGRATE?.trim().toLowerCase();
+  if (flag === 'off' || flag === 'false' || flag === '0' || flag === 'no') return false;
+  return true;
+}
 
 export interface MigrationGateStatus {
   /** True when the DB schema is BEHIND the code (migration files exist that aren't applied). */
@@ -47,6 +65,26 @@ export class MigrationGateService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     this.status = await this.evaluate();
+
+    // First-run repair (dev only): rather than serve a dead 503 app, apply the pending migrations
+    // and re-check. Production keeps the strict gate (see shouldAutoMigrate). A failure here leaves
+    // the app degraded exactly as before — auto-migrate can only improve on the 503, never brick it.
+    if (this.status.degraded && this.pool && shouldAutoMigrate()) {
+      const dir = resolveMigrationsDir();
+      if (dir) {
+        this.logger.warn(
+          `Schema behind code — auto-applying ${this.status.pending.length} pending migration(s) (dev). ` +
+            'Set AUTO_MIGRATE=off to keep the strict deploy-gate instead.',
+        );
+        try {
+          await this.applyPending(this.status.pending, dir);
+          this.status = await this.evaluate();
+        } catch (err) {
+          this.logger.error(`Auto-migrate failed: ${(err as Error).message}. Business routes remain gated (503).`);
+        }
+      }
+    }
+
     if (this.status.degraded) {
       this.logger.error(
         `SCHEMA BEHIND CODE — ${this.status.pending.length} pending migration(s): ${this.status.pending.join(', ')}. ` +
@@ -54,6 +92,44 @@ export class MigrationGateService implements OnModuleInit {
       );
     } else {
       this.logger.log(`Schema up to date (${this.status.reason}).`);
+    }
+  }
+
+  /**
+   * Apply pending migration files in filename order, each in its own transaction, recording the
+   * ledger row — the same contract as `apps/api/scripts/migrate.mjs`, but reusing the app pool so
+   * boot needs no second DB config. One client is held for the whole run so each file's
+   * BEGIN/DDL/INSERT/COMMIT lands on a single connection. Any failure aborts the run (throws);
+   * files already applied by this point stay applied (the ledger is the source of truth).
+   */
+  private async applyPending(pending: string[], dir: string): Promise<void> {
+    if (!this.pool) return;
+    const client: PoolClient = await this.pool.connect();
+    try {
+      // The ledger may not exist yet on a truly fresh DB — create it exactly as the runner does.
+      await client.query(
+        `create table if not exists public.aura_migrations (
+           filename   text        primary key,
+           applied_at timestamptz not null default now()
+         )`,
+      );
+      for (const file of pending) {
+        const sql = readFileSync(join(dir, file), 'utf8');
+        const marker = sql.indexOf('-- @DOWN');
+        const up = marker < 0 ? sql : sql.slice(0, marker);
+        await client.query('BEGIN');
+        try {
+          await client.query(up);
+          await client.query('insert into public.aura_migrations (filename) values ($1)', [file]);
+          await client.query('COMMIT');
+          this.logger.log(`✓ auto-applied ${file}`);
+        } catch (err) {
+          await client.query('ROLLBACK').catch(() => undefined);
+          throw new Error(`migration ${file} failed: ${(err as Error).message}`);
+        }
+      }
+    } finally {
+      client.release();
     }
   }
 

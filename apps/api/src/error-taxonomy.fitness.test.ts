@@ -20,6 +20,7 @@ const REPO = resolve(__dirname, '../../..');
 const INTERNAL_ALLOWLIST: RegExp[] = [
   /^no handler for X$/, // CommandBus misconfiguration — a programming error, not client input
   /^poison: simulated handler failure$/, // poison-queue test subscriber — intentional failure
+  /^migration X failed: X$/, // boot-time auto-migrate error — caught in onModuleInit, never reaches a request
 ];
 
 function tsFiles(dir: string): string[] {

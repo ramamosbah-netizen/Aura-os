@@ -210,7 +210,7 @@ const st = {
   hint: { fontSize: 12.5, color: 'var(--muted)', margin: '4px 0 14px' } as CSSProperties,
   empty: { fontSize: 13, color: 'var(--muted)', margin: '6px 0', padding: '18px 0', textAlign: 'center' } as CSSProperties,
   itemBox: { padding: 14, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 } as CSSProperties,
-  btnApprove: { padding: '8px 14px', background: 'var(--accent, #2563eb)', border: 'none', borderRadius: 8, color: '#0b0e14', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
+  btnApprove: { padding: '8px 14px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#0b0e14', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   btnGhost: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   input: { flex: 1, padding: '8px 12px', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--foreground, var(--text))', fontSize: 13, outline: 'none' } as CSSProperties,
   successBanner: { padding: '10px 14px', borderRadius: 8, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: 13, fontWeight: 600 } as CSSProperties,

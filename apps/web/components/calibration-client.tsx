@@ -18,7 +18,7 @@ export interface Calibration {
   createdAt: string;
 }
 
-const statusColor: Record<string, string> = { valid: '#16a34a', due_soon: '#d97706', expired: '#dc2626' };
+const statusColor: Record<string, string> = { valid: 'var(--good)', due_soon: '#d97706', expired: 'var(--bad)' };
 const statusLabel: Record<string, string> = { valid: 'valid', due_soon: 'due soon', expired: 'expired' };
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -96,7 +96,7 @@ export default function CalibrationClient({ initial }: { initial: Calibration[] 
                 <td style={st.td}>{r.equipmentSerial}</td>
                 <td style={st.td}>{r.instrumentType || '—'}</td>
                 <td style={st.td}>{r.calibrationDate}</td>
-                <td style={{ ...st.td, fontWeight: r.status === 'expired' ? 700 : 400, color: r.status === 'expired' ? '#dc2626' : 'inherit' }}>{r.dueDate}</td>
+                <td style={{ ...st.td, fontWeight: r.status === 'expired' ? 700 : 400, color: r.status === 'expired' ? 'var(--bad)' : 'inherit' }}>{r.dueDate}</td>
                 <td style={st.td}>{r.certificateNumber || '—'}</td>
                 <td style={{ ...st.td, color: statusColor[r.status], fontWeight: 600 }}>{statusLabel[r.status]}</td>
               </tr>
@@ -109,7 +109,7 @@ export default function CalibrationClient({ initial }: { initial: Calibration[] 
 }
 
 function Kpi({ label, value, good, warn, bad }: { label: string; value: number; good?: boolean; warn?: boolean; bad?: boolean }) {
-  const color = bad && value > 0 ? '#dc2626' : warn && value > 0 ? '#d97706' : good ? '#16a34a' : 'var(--text)';
+  const color = bad && value > 0 ? 'var(--bad)' : warn && value > 0 ? '#d97706' : good ? 'var(--good)' : 'var(--text)';
   return (
     <div style={st.kpi}>
       <div style={st.kpiLabel}>{label}</div>
@@ -126,8 +126,8 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--panel)', color: 'var(--text)' } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  err: { color: '#dc2626', marginLeft: 12, fontSize: 13 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  err: { color: 'var(--bad)', marginLeft: 12, fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px' } as CSSProperties,
   regHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,

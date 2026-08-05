@@ -14,7 +14,7 @@ interface Variation {
   status: string;
 }
 
-const statusColor: Record<string, string> = { pending: '#d97706', approved: '#16a34a', rejected: '#dc2626' };
+const statusColor: Record<string, string> = { pending: '#d97706', approved: 'var(--good)', rejected: 'var(--bad)' };
 
 export default function SubVariationsClient({ initialVariations, subcontracts }: { initialVariations: Variation[]; subcontracts: Subcontract[] }) {
   const [variations, setVariations] = useState(initialVariations);
@@ -65,7 +65,7 @@ export default function SubVariationsClient({ initialVariations, subcontracts }:
   return (
     <>
       <div style={st.cards}>
-        <div style={st.card}><div style={st.cardLabel}>Approved net</div><div style={{ ...st.cardVal, color: totalApproved >= 0 ? '#16a34a' : '#dc2626' }}>{totalApproved.toLocaleString()} AED</div></div>
+        <div style={st.card}><div style={st.cardLabel}>Approved net</div><div style={{ ...st.cardVal, color: totalApproved >= 0 ? 'var(--good)' : 'var(--bad)' }}>{totalApproved.toLocaleString()} AED</div></div>
       </div>
 
       <div style={st.form}>
@@ -100,7 +100,7 @@ export default function SubVariationsClient({ initialVariations, subcontracts }:
                 <td style={st.td}>{v.reference}</td>
                 <td style={st.td}>{subLabel(v.subcontractId)}</td>
                 <td style={st.td}>{v.type}</td>
-                <td style={{ ...st.td, color: v.type === 'omission' ? '#dc2626' : '#16a34a' }}>{v.type === 'omission' ? '−' : '+'}{v.amount.toLocaleString()}</td>
+                <td style={{ ...st.td, color: v.type === 'omission' ? 'var(--bad)' : 'var(--good)' }}>{v.type === 'omission' ? '−' : '+'}{v.amount.toLocaleString()}</td>
                 <td style={{ ...st.td, color: statusColor[v.status] || '#000', fontWeight: 600 }}>{v.status}</td>
                 <td style={st.td}>
                   {v.status === 'pending' && <button style={st.smGreen} onClick={() => act(v.id, 'approve')}>Approve</button>}
@@ -123,10 +123,10 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 22 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 130 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
-  smRed: { padding: '4px 10px', borderRadius: 4, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
+  smRed: { padding: '4px 10px', borderRadius: 4, background: 'var(--bad)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,

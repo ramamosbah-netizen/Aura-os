@@ -36,7 +36,7 @@ export default async function DocumentExpiryPage() {
       ) : (
         <>
           <div style={st.cards}>
-            <div style={st.card}><div style={st.cardLabel}>Expired</div><div style={{ ...st.cardVal, color: '#dc2626' }}>{report.expiredCount}</div></div>
+            <div style={st.card}><div style={st.cardLabel}>Expired</div><div style={{ ...st.cardVal, color: 'var(--bad)' }}>{report.expiredCount}</div></div>
             <div style={st.card}><div style={st.cardLabel}>Expiring ≤90d</div><div style={{ ...st.cardVal, color: '#d97706' }}>{report.expiringCount}</div></div>
             <div style={st.card}><div style={st.cardLabel}>As of</div><div style={st.cardValSm}>{report.asOf}</div></div>
           </div>
@@ -52,7 +52,7 @@ export default async function DocumentExpiryPage() {
                     <td style={st.td}>{labelOf(i.documentType)}</td>
                     <td style={st.td}>{i.expiryDate}</td>
                     <td style={{ ...st.tdR, fontWeight: 600 }}>{i.daysToExpiry}</td>
-                    <td style={{ ...st.td, color: i.status === 'expired' ? '#dc2626' : '#d97706', fontWeight: 600 }}>
+                    <td style={{ ...st.td, color: i.status === 'expired' ? 'var(--bad)' : '#d97706', fontWeight: 600 }}>
                       {i.status === 'expired' ? `expired ${-i.daysToExpiry}d ago` : 'expiring'}
                     </td>
                   </tr>

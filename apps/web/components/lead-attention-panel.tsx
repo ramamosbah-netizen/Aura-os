@@ -62,7 +62,7 @@ const GAP_LABEL: Record<Gap, string> = {
   STALE: 'Stale',
   QUALIFICATION_STALLED: 'Qualification stalled',
 };
-const SEV_COLOR: Record<Severity, string> = { HIGH: '#dc2626', MEDIUM: '#d97706', LOW: 'var(--muted)' };
+const SEV_COLOR: Record<Severity, string> = { HIGH: 'var(--bad)', MEDIUM: '#d97706', LOW: 'var(--muted)' };
 
 /** G3 verdicts. REVIEW is not a failure — it means "go and find out", which is real work. */
 const REC_LABEL: Record<string, string> = {
@@ -343,7 +343,7 @@ const st = {
   linkBtn: { fontSize: 12, padding: '3px 6px', borderRadius: 5, border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', textDecoration: 'underline' } as CSSProperties,
   dupNote: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   busy: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  err: { fontSize: 12, color: '#dc2626' } as CSSProperties,
+  err: { fontSize: 12, color: 'var(--bad)' } as CSSProperties,
   srcTable: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
   srcTh: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, padding: '8px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' } as CSSProperties,
   srcTd: { padding: '8px 10px', borderBottom: '1px solid var(--border)' } as CSSProperties,

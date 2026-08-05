@@ -160,7 +160,7 @@ export default function CampaignsClient({ initial }: { initial: Campaign[] }) {
                   <td style={st.tdR}>{c.leadsGenerated}{c.targetLeads ? ` / ${c.targetLeads}` : ''}</td>
                   <td style={st.tdR}>{c.metrics.costPerLead == null ? '—' : money(c.metrics.costPerLead)}</td>
                   <td style={st.tdR}>{money(c.wonValue)}</td>
-                  <td style={{ ...st.tdR, color: c.metrics.roi == null ? 'var(--muted)' : c.metrics.roi >= 0 ? '#16a34a' : '#dc2626' }}>
+                  <td style={{ ...st.tdR, color: c.metrics.roi == null ? 'var(--muted)' : c.metrics.roi >= 0 ? 'var(--good)' : 'var(--bad)' }}>
                     {pct(c.metrics.roi)}
                   </td>
                   <td style={st.td}>
@@ -180,7 +180,7 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent?: 
   return (
     <div style={st.kpi}>
       <div style={st.kpiLabel}>{label}</div>
-      <div style={{ ...st.kpiValue, color: accent == null ? 'var(--text)' : accent ? '#16a34a' : '#dc2626' }}>{value}</div>
+      <div style={{ ...st.kpiValue, color: accent == null ? 'var(--text)' : accent ? 'var(--good)' : 'var(--bad)' }}>{value}</div>
     </div>
   );
 }

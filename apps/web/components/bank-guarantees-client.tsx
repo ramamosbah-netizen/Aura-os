@@ -18,7 +18,7 @@ interface BankGuarantee {
 }
 
 const TYPES = ['tender', 'performance', 'advance_payment', 'retention', 'other'];
-const statusColor: Record<string, string> = { active: '#2563eb', released: '#16a34a', claimed: '#dc2626', expired: '#6b7280' };
+const statusColor: Record<string, string> = { active: 'var(--accent)', released: 'var(--good)', claimed: 'var(--bad)', expired: '#6b7280' };
 const today = () => new Date().toISOString().slice(0, 10);
 
 function daysTo(expiry: string): number {
@@ -145,11 +145,11 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 10 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  smGreen: { padding: '4px 10px', borderRadius: 4, background: '#16a34a', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
-  smRed: { padding: '4px 10px', borderRadius: 4, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
+  smRed: { padding: '4px 10px', borderRadius: 4, background: 'var(--bad)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
   smGray: { padding: '4px 10px', borderRadius: 4, background: 'var(--panel-2)', color: 'inherit', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
-  err: { color: '#dc2626', margin: '6px 0 0', fontSize: 13 } as CSSProperties,
+  err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 14 } as CSSProperties,

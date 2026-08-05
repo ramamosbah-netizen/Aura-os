@@ -45,7 +45,7 @@ const btnSize = {
 const btnTone: Record<Tone, CSSProperties> = {
   primary: { background: 'var(--accent)', color: 'var(--accent-ink)', borderColor: 'var(--accent)' },
   neutral: { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--border-strong)' },
-  danger: { background: 'var(--bad)', color: '#fff', borderColor: 'var(--bad)' },
+  danger: { background: 'var(--bad)', color: 'var(--accent-ink)', borderColor: 'var(--bad)' },
   ghost: { background: 'transparent', color: 'var(--text)', borderColor: 'transparent' },
 };
 

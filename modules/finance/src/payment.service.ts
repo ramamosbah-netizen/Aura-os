@@ -1,9 +1,10 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore } from '@aura/core';
+import { CommandBus, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { FINANCE_EVENT } from './domain/invoice';
 import { type Payment, type NewPayment, makePayment } from './domain/payment';
 import { PAYMENT_STORE, type PaymentFilter, type PaymentStore } from './payment-store';
+import { assertSameTenant, sameTenantOrNull } from './domain/tenant-guard';
 import { InvoiceService } from './invoice.service';
 import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
@@ -28,6 +29,9 @@ export class PaymentService implements OnModuleInit {
     private readonly invoices: InvoiceService,
     private readonly journals: JournalService,
     private readonly accounts: AccountService,
+    // Explicit @Inject: a union-typed ctor param emits `Object` and silently injects null.
+    // Optional so in-memory tests need no request context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   onModuleInit(): void {
@@ -56,9 +60,11 @@ export class PaymentService implements OnModuleInit {
   }
 
   private async doRecord(input: NewPayment, actorId?: Id): Promise<Payment> {
-    // 1. Verify invoice exists
-    const invoice = await this.invoices.get(input.invoiceId);
-    if (!invoice) throw new Error(`Invoice ${input.invoiceId} not found`);
+    // 1. Verify the invoice exists AND belongs to the tenant the payment is booked under.
+    //    The payment declares its own tenant (input.tenantId); paying an invoice from another
+    //    tenant used to fetch it freely and then, at step 4, flip THAT tenant's invoice to
+    //    'paid' — a cross-tenant write. Assert ownership up front; wrong tenant → "not found".
+    const invoice = assertSameTenant(await this.invoices.get(input.invoiceId), input.tenantId, 'invoice', input.invoiceId);
 
     // 2. Create the payment (rejects a non-positive or non-numeric amount)
     const payment = makePayment(input);
@@ -106,7 +112,9 @@ export class PaymentService implements OnModuleInit {
       });
     }
 
-    let bankAccount = await this.accounts.get(payment.bankAccountId);
+    // A bank account from another tenant is treated as absent, so the journal never posts
+    // against a foreign account — we fall through to this tenant's own default bank account.
+    let bankAccount = sameTenantOrNull(await this.accounts.get(payment.bankAccountId), payment.tenantId);
     if (!bankAccount) {
       bankAccount = await this.accounts.list({ tenantId: payment.tenantId, type: 'asset' })
         .then(list => list.find(a => a.code === '1010') || null);
@@ -165,8 +173,9 @@ export class PaymentService implements OnModuleInit {
     return payment;
   }
 
-  get(id: Id): Promise<Payment | null> {
-    return this.store.get(id);
+  async get(id: Id): Promise<Payment | null> {
+    // Getter keeps its null contract but will not return another tenant's payment.
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: PaymentFilter): Promise<Payment[]> {

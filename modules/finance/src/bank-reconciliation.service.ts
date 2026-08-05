@@ -4,6 +4,7 @@ import { EVENT_STORE, type EventStore } from '@aura/core';
 import { type BankTransaction, type BankTransactionStatus, makeBankTransaction } from './domain/bank-transaction';
 import { BANK_TRANSACTION_STORE, type BankTransactionStore } from './bank-transaction-store';
 import { PAYMENT_STORE, type PaymentStore } from './payment-store';
+import { assertSameTenant } from './domain/tenant-guard';
 
 @Injectable()
 export class BankReconciliationService {
@@ -128,13 +129,11 @@ export class BankReconciliationService {
   }
 
   async reconcileManually(tenantId: Id, transactionId: Id, paymentId: Id, actorId?: Id): Promise<BankTransaction> {
-    const tx = await this.txStore.get(transactionId);
-    if (!tx) throw new Error(`Bank transaction ${transactionId} not found`);
-    if (tx.tenantId !== tenantId) throw new Error(`Access denied`);
-
-    const payment = await this.paymentStore.get(paymentId);
-    if (!payment) throw new Error(`Payment ${paymentId} not found`);
-    if (payment.tenantId !== tenantId) throw new Error(`Access denied`);
+    // A wrong-tenant "Access denied" told a caller the record EXISTS in another tenant — an
+    // existence oracle. Both fetch-by-id lookups now report "not found" for a foreign or a
+    // missing record alike, so the two are indistinguishable.
+    const tx = assertSameTenant(await this.txStore.get(transactionId), tenantId, 'bank transaction', transactionId);
+    const payment = assertSameTenant(await this.paymentStore.get(paymentId), tenantId, 'payment', paymentId);
 
     tx.status = 'manual';
     tx.reconciledPaymentId = payment.id;
@@ -161,9 +160,8 @@ export class BankReconciliationService {
   }
 
   async unreconcile(tenantId: Id, transactionId: Id, actorId?: Id): Promise<BankTransaction> {
-    const tx = await this.txStore.get(transactionId);
-    if (!tx) throw new Error(`Bank transaction ${transactionId} not found`);
-    if (tx.tenantId !== tenantId) throw new Error(`Access denied`);
+    // Not-found parity — see reconcileManually above.
+    const tx = assertSameTenant(await this.txStore.get(transactionId), tenantId, 'bank transaction', transactionId);
 
     tx.status = 'unreconciled';
     tx.reconciledPaymentId = null;

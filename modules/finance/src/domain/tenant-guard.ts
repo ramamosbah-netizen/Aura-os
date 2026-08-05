@@ -30,3 +30,21 @@ export function assertSameTenant<T extends { tenantId: Id }>(
   if (tenantId && record.tenantId !== tenantId) throw new Error(`${label} ${id} not found`);
   return record;
 }
+
+/**
+ * Read-side companion to {@link assertSameTenant}. Returns the record when it belongs to the
+ * tenant, and `null` when it is missing OR belongs to another tenant — so a plain getter keeps
+ * its `T | null` contract (callers that already handle "missing" as 404 keep working) while
+ * still refusing to hand a caller another tenant's row. A null bound tenant passes the record
+ * through unchanged, for the same system/boot reasons as {@link assertSameTenant}.
+ *
+ * Use this on getters; use {@link assertSameTenant} on the fetch that precedes a mutation.
+ */
+export function sameTenantOrNull<T extends { tenantId: Id }>(
+  record: T | null | undefined,
+  tenantId: Id | null | undefined,
+): T | null {
+  if (!record) return null;
+  if (tenantId && record.tenantId !== tenantId) return null;
+  return record;
+}

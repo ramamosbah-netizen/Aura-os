@@ -133,4 +133,13 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
       [tenantId, id],
     );
   }
+
+  async existsByNumber(tenantId: Id, invoiceNumber: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `SELECT 1 FROM public.aura_finance_customer_invoices
+       WHERE tenant_id = $1 AND invoice_number = $2 AND deleted_at IS NULL LIMIT 1`,
+      [tenantId, invoiceNumber],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
 }

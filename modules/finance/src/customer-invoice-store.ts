@@ -18,4 +18,7 @@ export interface CustomerInvoiceStore {
   listPaged(filter: CustomerInvoiceFilter, page: PageParams): Promise<Page<CustomerInvoice>>;
   /** Soft-delete / restore (sets or clears deleted_at). */
   setDeleted(tenantId: string, id: Id, deleted: boolean): Promise<void>;
+  /** True when a LIVE (non-deleted) invoice already carries this number for the tenant. Backs the
+   *  per-tenant invoice-number uniqueness guard — an exact lookup, not a limit-bounded list scan. */
+  existsByNumber(tenantId: Id, invoiceNumber: string): Promise<boolean>;
 }

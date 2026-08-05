@@ -108,6 +108,14 @@ export class CustomerInvoiceService {
       input = { ...input, exchangeRate: rate };
     }
     const inv = makeCustomerInvoice(input);
+    // Invoice numbers are the legal identifier on an AR document and the key the customer, the FTA
+    // VAT return and the audit trail all cite. They are user-supplied here (unlike AP references,
+    // which the numbering service generates), so nothing stopped two different invoices sharing a
+    // number. Reject a duplicate live number within the tenant — "already exists" → 409. A number
+    // freed by a soft-deleted/cancelled invoice may be reused (existsByNumber ignores deleted).
+    if (await this.store.existsByNumber(inv.tenantId, inv.invoiceNumber)) {
+      throw new Error(`customer invoice number ${inv.invoiceNumber} already exists`);
+    }
     await this.assertWithinContractCap(input, inv.subtotal);
     await this.store.save(inv);
     await this.events.append([

@@ -48,6 +48,13 @@ export default async function StatementsPage() {
         The three primary statements + trial balance, derived live from the double-entry general ledger.
         Every figure folds from balanced journal entries — if the GL balances, these balance.
       </p>
+      {/* The print view existed but had no link anywhere in the app (audit wave 1) — every other
+          /print page in the platform is reachable from its record, this one was not. */}
+      <p style={{ margin: '0 0 18px' }}>
+        <a href="/finance/statements/print" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13.5 }}>
+          🖨 Print / export statement pack (PDF)
+        </a>
+      </p>
 
       {/* Income Statement */}
       <section style={st.card}>

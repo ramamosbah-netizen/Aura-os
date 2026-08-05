@@ -198,7 +198,9 @@ jobs:
           latest=$(psql "$DATABASE_URL" -tAc "SELECT filename FROM public.aura_migrations ORDER BY filename DESC LIMIT 1" | tr -d '[:space:]')
           echo "Simulating drift by un-recording latest migration: $latest"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DELETE FROM public.aura_migrations WHERE filename='$latest';"
-          PORT=4500 nohup node dist/main.js > api-gate.log 2>&1 &
+          # AUTO_MIGRATE=off keeps the STRICT gate under test — this step verifies the production
+          # behaviour (refuse, don't self-heal). Dev auto-migrate is proven in the next step.
+          AUTO_MIGRATE=off PORT=4500 nohup node dist/main.js > api-gate.log 2>&1 &
           echo $! > api-gate.pid
           for i in $(seq 1 60); do
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4500/api/v1/health || true)
@@ -218,6 +220,37 @@ jobs:
           test "$biz_code" = "503" || { echo "::error::business route not refused (got $biz_code)"; cat api-gate.log; exit 1; }
           echo "$biz_body" | grep -q 'SCHEMA_MIGRATION_PENDING' || { echo '::error::business refusal code missing'; exit 1; }
           echo "✓ deploy-gate: degraded health + business routes refused while a migration is pending"
+
+      # ── P2-1 first-run auto-migrate (dev) ──────────────────────────────────────────────────────
+      # Prove the fresh-clone repair: with a migration pending and AUTO_MIGRATE at its dev default,
+      # boot must APPLY the pending migration and serve (200) instead of sitting at a dead 503.
+      # A throwaway, idempotent probe migration is used so the real schema + ledger are restored to
+      # byte-parity afterwards (the later restore drill compares per-table row counts).
+      - name: P2-1 dev auto-migrate — pending migration ⇒ applied on boot, app serves
+        run: |
+          cd apps/api
+          probe=9990_ci_auto_migrate_probe.sql
+          echo 'create table if not exists public.ci_auto_migrate_probe (id int);' > ../../infrastructure/migrations/$probe
+          PORT=4501 nohup node dist/main.js > api-automig.log 2>&1 &
+          echo $! > api-automig.pid
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4501/api/v1/health || true)
+            [ "$code" != "000" ] && break; sleep 1
+          done
+          health_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4501/api/v1/health)
+          health_body=$(curl -s http://localhost:4501/api/v1/health)
+          recorded=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM public.aura_migrations WHERE filename='$probe'" | tr -d '[:space:]')
+          echo "health: $health_code $health_body"
+          echo "probe recorded: $recorded"
+          kill "$(cat api-automig.pid)" 2>/dev/null || true
+          # Clean up the probe entirely BEFORE asserting so the restore-drill parity is unaffected
+          # regardless of outcome.
+          rm -f ../../infrastructure/migrations/$probe
+          psql "$DATABASE_URL" -c "DROP TABLE IF EXISTS public.ci_auto_migrate_probe;"
+          psql "$DATABASE_URL" -c "DELETE FROM public.aura_migrations WHERE filename='$probe';"
+          test "$health_code" = "200" || { echo "::error::auto-migrate did not heal (health $health_code)"; cat api-automig.log; exit 1; }
+          test "$recorded" = "1" || { echo "::error::probe migration not applied on boot"; cat api-automig.log; exit 1; }
+          echo "✓ dev auto-migrate: pending migration applied on boot, app served 200"
 
       - name: Freeze the source (stop the API) before backup
         run: |

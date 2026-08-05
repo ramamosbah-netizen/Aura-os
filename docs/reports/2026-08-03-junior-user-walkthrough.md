@@ -25,9 +25,9 @@ Migrated **all 13 project/employee forms** onto them (verified 0 `placeholder="u
 - **Result: ZERO raw UUID input elements remain app-wide** (`grep '<input … placeholder="uuid"'` → 0).
 - **Verification:** typecheck clean on all migrated files; live DOM on `/site/daily-reports`, `/quality/ncrs`, `/assets/disposals` shows `remainingUuidInputs: 0` and the pickers rendering.
 
-## 🔴 P0 — first-run dead wall
+## 🔴 P0 — first-run dead wall — ✅ FIXED (2026-08-05)
 Fresh copy had 11 pending migrations → **every business route 503** until `db:migrate` **and an API restart**. No in-app remedy. An evaluator opening it cold sees a fully dead app.
-**Fix:** auto-run migrations on boot in dev, or a friendly "setup needed" screen instead of blanket 503.
+**Fix (shipped):** the boot deploy-gate now **auto-runs pending migrations on boot in development** (migrate-then-serve), so a fresh clone comes up healthy instead of 503. Production keeps the strict gate (migrations are a separate ordered deploy step); `AUTO_MIGRATE=off` opts a dev machine back into the strict gate. Verified live (behind→auto-applied→healthy) and covered by a new CI step.
 
 ## 🟠 P1 — test/junk records pollute real lists
 Projects, Commissioning, Handover, Quotations show `Ledger Test`, `Cost Engine Test` (dupes), `tst`, `test`, `QT-AUTHOR-1` as primary rows. A newcomer can't tell demo/real from dev-junk → app looks unfinished.

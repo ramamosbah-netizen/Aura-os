@@ -5,6 +5,19 @@
 
 This is the **umbrella register** — one list, stable IDs, honest provenance. It does not replace the source documents; each row cites the one that owns it, and those remain the authority on their own detail. Where a row was re-tested against the running app on 2026-08-05, it says so.
 
+## Where this stands
+
+**50 rows, of which 38 remain open.** Ten were closed and one part-closed on 2026-08-05 (change log at the end); G-49 and G-02 are retracted, G-13 a deliberate architectural decision with a working mitigation, and G-38 a *retired claim* recorded so nobody re-adopts it.
+
+**One P0: G-03.** Row-level security is complete in code, gated at boot and CI-proven — but the running deployment connects as the database owner, so every policy is bypassed. It is a configuration change, not construction: point `DATABASE_URL` at the least-privilege `aura_app` role.
+
+The rest cluster in four places:
+
+1. **Security hardening at the HTTP edge** — no Helmet, no CSP, no rate limiting, no SCIM (G-07, verified absent rather than the "partial" that was carried).
+2. **The delivery-to-service spine (stages 10–14)** — where an ELV contractor actually makes and protects margin.
+3. **The ELV vertical itself** — SIRA/DCD compliance, device schedules, cable schedules are absent, and those are what make this an *ELV* ERP rather than a good generic one.
+4. **The field** — no offline, no mobile, minimal capture.
+
 ---
 
 ## How to read this
@@ -19,43 +32,6 @@ This is the **umbrella register** — one list, stable IDs, honest provenance. I
 
 **A note on the estimates.** Module-completeness percentages and star ratings quoted below were labelled by their authors as informed estimates, not measured functional audits. They are reproduced with that label intact. The only measured figures on this platform are in [the reports index](README.md#numbers-you-may-quote).
 
----
-
-## The short version
-
-> ## ✅ Fix wave — 2026-08-05 (same day)
->
-> **Ten rows closed, one part-closed, one retracted.** All verified by test and, where observable, against the running app.
->
-> | Row | What shipped | Proof |
-> |---|---|---|
-> | **G-04 / G-05** | Standard ELV role matrix seeded — 11 roles (Sales · Sales Manager · PM · Site Engineer · QA/QC · HSE · Procurement · Store · Finance · Admin) plus a read-only external **Client**. `apps/api/src/auth/elv-roles.ts`, registered idempotently at boot | 11 unit tests asserting segregation of duties against **real controller routes**; live boot log confirms all 11 seeded |
-> | **G-06** | Dead duplicate guard branch removed (`permissions.guard.ts:125`) | 9 guard tests green |
-> | **G-08** | **AR billing cap** — the receivable mirror of the AP 3-way match. Billed may exceed neither the contract value nor the net certified to date, cumulatively. New `CONTRACT_CAP_PORT` + pure rule in `domain/contract-cap.ts`, adapter at the app layer (ADR-0004) | 10 domain tests + **5 HTTP e2e**; deal-chain e2e still green |
-> | **G-09** | Migration gate now reports **applied-but-absent** migrations | 11 gate tests; **live boot names exactly the 5 drifted files** |
-> | **G-28 / G-29** | The 3 undefined `var(--fg)` and 4 `#d97706` residuals fixed. All four token classes now genuinely **0** | Verified in the **CSS the dev server actually serves** |
-> | **G-50** | **Tender-path baseline inheritance.** A tender-won contract now inherits the approved commercial baseline and the accepted bid value, and back-links the quotation — exactly as the direct path does | 2 new reactor tests (inherits · falls back when unpriced); 15 reactor tests green |
-> | **G-12** | PO update now emits a field-level before→after diff **and stamps the real actor** (it recorded `actorId: null`). *Scope corrected: the PO has no line items.* | 5 unit tests |
-> | **G-24** | A 10-SKU ELV catalogue (Hikvision · Dahua · HID · ZKTeco · Bosch · Commscope · Cisco), seeded outside the once-only guard so it tops up an existing DB | **Live:** `?q=Hikvision` → 3 SKUs · `?q=DS-2CD2143G2-I` → the exact model |
-> | ◑ **G-11** | Seeder accounts are now get-or-create by name — converges instead of multiplying | 5 triplicated accounts measured live; **cleanup still owed** |
-> | ~~**G-49**~~ | **RETRACTED — was already fixed.** `tender.awarded → closeSourceOpportunity('won')` and `tender.lost → 'lost'` are both wired in the reactor. The row was carried from the 2026-07-17 tender audit and never re-verified | Read at `cross-module-subscriber.ts:235` |
->
-> **G-49 is the more instructive one.** It sat in a register for three weeks describing a hole that had already been closed. A stale *open* row costs less than a stale *closed* one, but it is the same failure: **a register is only as good as its last verification**, which is why every row above carries a provenance mark.
->
-> API 65/65 · procurement 33/33 · finance 119/119 · e2e (chains · SoD · AR cap · cost ledger) 21/21.
->
-> **One thing this wave did NOT do:** merge the 5 triplicated accounts. That is a destructive change to a live database — it needs a decision about which record survives and what re-points at it, not a code change made in passing. G-11 stays part-open and CRM close-out stays blocked on it.
-
-**50 rows, of which 38 remain open** — 10 closed and 1 part-closed in the fix wave above, G-49 retracted, G-13 a deliberate architectural decision with a working mitigation, and G-38 a *retired claim* recorded so nobody re-adopts it.
-
-The platform's commercial-to-cash spine is genuinely built and event-driven. The gaps cluster in four places:
-
-1. **Enforcement is built and switched off** — auth, RLS. Configuration and one boot gate, not construction.
-2. **The delivery-to-service spine (stages 10–14)** — where an ELV contractor actually makes and protects margin.
-3. **The ELV vertical itself** — SIRA/DCD compliance, device schedules, cable schedules are absent, and those are what make this an *ELV* ERP rather than a good generic one.
-4. **The field** — no offline, no mobile, minimal capture.
-
-**The single most important row is G-01.** It is the only thing between this platform and a hosted deployment.
 
 ---
 
@@ -63,13 +39,13 @@ The platform's commercial-to-cash spine is genuinely built and event-driven. The
 
 | ID | Gap | Sev | Evidence | Source |
 |---|---|:--:|---|---|
-| **G-01** | **Authentication is off by default — an unauthenticated request returns live data.** `GET /api/v1/crm/opportunities` with no token → **200, 34 records**; `/crm/accounts` → **200, 35 records**; `/auth/status` → `{"enabled":false}` | **P0** | ✅ | [readiness P0-1](2026-08-03-enterprise-readiness-audit.md) |
-| **G-02** | **A production deploy without a verifier runs open, and says nothing.** `main.ts:101` — `enforce = AUTH_REQUIRED==='true' \|\| (isProd && auth.enabled)`. `auth.enabled` is false with no `AUTH_JWKS_URL`/`AUTH_JWT_SECRET`, so `enforce` is false. The error log at `:103` only fires when `AUTH_REQUIRED` was set — the silent path prints nothing | **P0** | ✅ | 🆕 — *was recorded ✅ DONE in [Vol 23](../master-report/vol-23-gap-analysis.md), corrected 2026-08-05* |
+| **G-01** | **The dev/default configuration runs with auth off**, and unauthenticated reads return live data: `GET /api/v1/crm/opportunities` no token → **200, 34 records**; `/auth/status` → `{"enabled":false}`. This is the documented staged pass-through for development — **not** a production hole (see G-02). It is still worth closing, because "the demo instance answers strangers" is a real exposure the moment that instance is reachable, and because dev-off/prod-on means the permission taxonomy is never exercised in day-to-day use | **P2** *(was P0 — see G-02)* | ✅ | [readiness P0-1](2026-08-03-enterprise-readiness-audit.md) |
+| ~~**G-02**~~ | ❌ **RETRACTED 2026-08-05 — the finding was wrong.** I claimed a production deploy without a verifier runs open and silently. **It refuses to boot.** `apps/api/src/main.ts:52-63` — `if (isProd && !auth.enabled && !allowInsecure) { FATAL; process.exit(1) }`. **Measured:** `NODE_ENV=production`, no `AUTH_JWKS_URL`/`AUTH_JWT_SECRET` → FATAL log, **exit code 1**, never listens. The error came from reading `main.ts:101` in isolation and never reading the gate 40 lines above it; `:101` governs anonymous-request rejection *once running*, and is unreachable in the case I described. The claim also propagated into the master report, where it downgraded a correct ✅ — now restored. | — | ✅ | 🆕 *retraction* |
 | **G-03** | **RLS is inert at runtime.** Mechanism is complete — least-privilege `aura_app` role, tenant GUC binding, `FORCE RLS` on 182/182 tables, CI fitness gate, isolation test, and a boot gate that refuses production under a `BYPASSRLS` role. The running instance still connects as `postgres` owner: `⚠️ … RLS policies are INERT` | **P0** | ✅ | [readiness P0-2](2026-08-03-enterprise-readiness-audit.md) · [runbook](../runbooks/rls-tenant-isolation.md) |
 | ~~**G-04**~~ | ✅ **CLOSED 2026-08-05.** 11 standard ELV roles seeded at boot (`apps/api/src/auth/elv-roles.ts`), registered not granted — assigning people stays an admin action | — | ✅ | 11 SoD tests |
 | ~~**G-05**~~ | ✅ **CLOSED 2026-08-05.** A `client` role, strictly read-only (a test asserts every one of its permissions ends in `.read`). Grant it scoped to the account, never at tenant level | — | ✅ | elv-roles.test.ts |
 | ~~**G-06**~~ | ✅ **CLOSED 2026-08-05.** Removed; 9 guard tests green | — | ✅ | — |
-| **G-07** | **SSO/SCIM built but not operationalized**; Helmet/CSP and per-route rate limits partial | P2 | 📄 08-01 | analysis 06 |
+| **G-07** | **⚠️ WORSE than reported (verified 2026-08-05).** The carried row said Helmet/CSP and rate limits were "partial". They are **absent** — no `helmet`, no `Content-Security-Policy`, no `Throttler`/rate-limit anywhere in `main.ts` or the API's dependencies. **SCIM is likewise absent** (0 files); SSO exists only as JWKS acceptance + Entra group→role mapping. An internet-facing deploy has no header hardening and no brute-force protection at the HTTP edge (the login throttle is application-level) | **P1** *(was P2)* | ✅ | 🆕 severity corrected |
 
 > **Closed and verified:** maker-checker SoD + value-threshold approval matrix on all four money-cycle transitions · secrets vault seam (`_FILE`) + staged PII rotation + gitleaks · MFA (TOTP) · field-level PII encryption · route-derived permission taxonomy over ~600 handlers.
 
@@ -95,7 +71,7 @@ The commercial-to-cash spine (Lead → … → Payment) is connected and event-d
 | **G-16** | **Handover O&M / as-built bundle isn't generated** from the DMS — the package exists, its contents are assembled by hand | P2 | 📄 08-01 | analysis 13 |
 | **G-17** | **Survey → Opportunity intake missing.** No pre-sales site survey anywhere; the site module is execution diaries only. The ELV deal starts with a survey | **P1** | 📄 08-03 | readiness §7 |
 | **G-18** | **No progress-tracking UI** for execution (stage 10) | P2 | 📄 08-01 | analysis 13 |
-| **G-19** | **PM cockpit missing** — project backend is strong (WBS/CBS/schedule/cashflow); the EVM/controls cockpit isn't built | **P1** | 📄 08-01 | analysis 13 |
+| ◑ **G-19** | **⚠️ OVERSTATED — partly retracted (verified 2026-08-05).** The carried row said the EVM/controls cockpit "isn't built". **EVM is surfaced**: a BFF route (`app/api/projects/projects/[id]/evm`) plus earned-value on both `projects/dashboard` and the projects list, across 5 project pages. What is genuinely thin is depth, not existence — no dedicated per-project controls cockpit pulling WBS/CBS/schedule/cashflow/EVM into one view. Re-scoped from "missing" to "shallow" | P2 *(was P1)* | ✅ | 🆕 partly retracted |
 
 > **Closed 2026-08-01 — two of the three named dead-ends:** a commissioning module (test-point pass rates, witnessed sign-off, guarded state machine) and structured handover packages (close-out checklist, client acceptance, warranty clock). And the chain between them is automated: last system commissioned → draft handover auto-opens → client acceptance auto-creates the AMC contract. All three links verified E2E through the event spine.
 
@@ -105,7 +81,7 @@ The commercial-to-cash spine (Lead → … → Payment) is connected and event-d
 |---|---|:--:|---|---|
 | **G-20** | **No SIRA / DCD compliance layer (Dubai)** — no approval workflow, guard licensing, or compliance register. **Essential for UAE ELV security systems**; its absence is a market-entry blocker, not a nice-to-have | **P1** | 📄 08-01 🔴 | [analysis 14](../../analysis/14-ENTERPRISE-GAP-ANALYSIS.md) |
 | **G-21** | **No system-type templates, device schedules, or as-built device registers** — CCTV/ACS/fire/AV are carried as generic BOQ line items | **P1** | 📄 08-01 🟡 | analysis 14 |
-| **G-22** | **KNX / BMS** — no integration points, no commissioning data capture | P2 | 📄 08-01 🔴 | analysis 14 |
+| **G-22** | **KNX / BMS** — no integration points, no commissioning data capture. *Verified 2026-08-05: "BMS" exists in the tree only as a **discipline label** in `solution-scope.ts` (an ELV/MEP enum value alongside CCTV and Fire Alarm). KNX appears nowhere. So the domain knows BMS is a thing to sell; nothing knows how to commission one.* | P2 | ✅ | analysis 14 |
 | **G-23** | **Structured cabling** — no cable schedule, no port mapping | P2 | 📄 08-01 🟡 | analysis 14 |
 | ~~**G-24**~~ | ✅ **CLOSED 2026-08-05.** A 10-SKU ELV catalogue with real part numbers across CCTV · access control · fire · networking (Hikvision · Dahua · HID · ZKTeco · Bosch · Commscope · Cisco). Seeded **outside** the once-only guard — reference data must top up an existing database, and the all-or-nothing guard was exactly why this kept being skipped. **Live-verified:** `?q=Hikvision` → 3 SKUs, `?q=DS-2CD2143G2-I` → the exact model, `?q=Bosch` → 2, `?q=Cat-6A` → the cable | — | ✅ | live search |
 
@@ -114,7 +90,7 @@ The commercial-to-cash spine (Lead → … → Payment) is connected and event-d
 | ID | Gap | Sev | Evidence | Source |
 |---|---|:--:|---|---|
 | **G-25** | **No PWA, no service worker, no offline.** `apps/web/public/` is empty. Site/QA/HSE engineers — the heaviest field users — cannot work disconnected. **The largest wholly-untouched item in the register** | **P1** | ✅ | readiness P1-4 |
-| **G-26** | **Minimal photo/signature capture** — ~3 components with file upload, ~2 with signature | **P1** | 📄 08-03 | readiness P1-4 |
+| **G-26** | **⚠️ WORSE than reported (verified 2026-08-05).** The carried row said "~3 with upload, ~2 with signature". Upload is right — **3** `type="file"` inputs. Signature is **0**: no signature pad, no canvas capture, no `toDataURL`. Camera capture is also **0** — not one `capture=` attribute in the app. So a client cannot sign anything and an engineer cannot photograph anything, on any device | **P1** | ✅ | 🆕 severity corrected |
 | **G-27** | **No technician/site mobile surface** for the field flows that now have desktop UIs | **P1** | 📄 08-02 | [module depth](2026-08-02-module-depth-gap-audit.md) |
 
 > **Closed and verified:** all 14 forms that demanded a hand-typed project UUID now use `ProjectPicker`/`EmployeePicker`/`AssetPicker` — **zero raw UUID inputs remain app-wide** (✅ re-confirmed 2026-08-05).
@@ -192,7 +168,6 @@ Where AURA trails the incumbents — strategic, not defects:
 
 **Against that — the advantages worth protecting:** purpose-built for ELV/MEP/FM (BOQ, tender, ITP, WPS, Salik, retention, back-charges, AMC), UAE/GCC localization baked in, no per-seat licence, an event-sourced architecture more adaptable than legacy incumbents, and a commercial-to-cash cockpit already better than Odoo/NetSuite.
 
----
 
 ## The order I would work it
 
@@ -204,7 +179,6 @@ Where AURA trails the incumbents — strategic, not defects:
 6. **G-09 — warn on applied-but-absent migrations.** Small change; closes a drift class that has already cost one production-coverage bug.
 7. **Then the two big programs:** the field/mobile surface (G-14, G-25–27) and the ELV vertical layer (G-20–23). Neither is a weekend; both are what make this an ELV contractor's operating system rather than a very good generic one.
 
----
 
 ## Provenance
 
@@ -215,3 +189,56 @@ Where AURA trails the incumbents — strategic, not defects:
 **Not measured, and therefore not claimed anywhere here:** any readiness or journey score beyond the ones already measured and cited, production-build performance, test-suite results, and functional-completeness percentages.
 
 **Full method and the documentation-accuracy findings:** [2026-08-05-platform-state-verification.md](2026-08-05-platform-state-verification.md).
+
+
+---
+
+## Change log — 2026-08-05
+
+This register was assembled, corrected and partly worked through in a single day. The process is recorded here rather than at the top, because a reader wants the gaps first.
+
+> ## ✅ Fix wave — 2026-08-05 (same day)
+>
+> **Ten rows closed, one part-closed, two retracted — one of them mine.** All verified by test and, where observable, against the running app.
+>
+> | Row | What shipped | Proof |
+> |---|---|---|
+> | **G-04 / G-05** | Standard ELV role matrix seeded — 11 roles (Sales · Sales Manager · PM · Site Engineer · QA/QC · HSE · Procurement · Store · Finance · Admin) plus a read-only external **Client**. `apps/api/src/auth/elv-roles.ts`, registered idempotently at boot | 11 unit tests asserting segregation of duties against **real controller routes**; live boot log confirms all 11 seeded |
+> | **G-06** | Dead duplicate guard branch removed (`permissions.guard.ts:125`) | 9 guard tests green |
+> | **G-08** | **AR billing cap** — the receivable mirror of the AP 3-way match. Billed may exceed neither the contract value nor the net certified to date, cumulatively. New `CONTRACT_CAP_PORT` + pure rule in `domain/contract-cap.ts`, adapter at the app layer (ADR-0004) | 10 domain tests + **5 HTTP e2e**; deal-chain e2e still green |
+> | **G-09** | Migration gate now reports **applied-but-absent** migrations | 11 gate tests; **live boot names exactly the 5 drifted files** |
+> | **G-28 / G-29** | The 3 undefined `var(--fg)` and 4 `#d97706` residuals fixed. All four token classes now genuinely **0** | Verified in the **CSS the dev server actually serves** |
+> | **G-50** | **Tender-path baseline inheritance.** A tender-won contract now inherits the approved commercial baseline and the accepted bid value, and back-links the quotation — exactly as the direct path does | 2 new reactor tests (inherits · falls back when unpriced); 15 reactor tests green |
+> | **G-12** | PO update now emits a field-level before→after diff **and stamps the real actor** (it recorded `actorId: null`). *Scope corrected: the PO has no line items.* | 5 unit tests |
+> | **G-24** | A 10-SKU ELV catalogue (Hikvision · Dahua · HID · ZKTeco · Bosch · Commscope · Cisco), seeded outside the once-only guard so it tops up an existing DB | **Live:** `?q=Hikvision` → 3 SKUs · `?q=DS-2CD2143G2-I` → the exact model |
+> | ◑ **G-11** | Seeder accounts are now get-or-create by name — converges instead of multiplying | 5 triplicated accounts measured live; **cleanup still owed** |
+> | ~~**G-02**~~ | ❌ **RETRACTED — my own finding was wrong.** Production already refuses to boot without an auth verifier; I reported a hole that does not exist and downgraded a correct ✅ in the master report on the strength of it | Measured: `NODE_ENV=production` → FATAL, **exit 1** |
+> | **P0-1 hardening** | The gate was a untested inline `if` in a 300-line bootstrap — which is *why* it was missable. Extracted to a pure, exported, tested `evaluateAuthPosture()`, symmetric with `evaluateRlsPosture` | 5 tests; prod boot still exits 1 |
+> | ◑ **G-11 (cont.)** | `scripts/merge-duplicate-accounts.mjs` — dry-run by default, deterministic survivor, discovers referencing tables, single transaction, undo file, renames rather than deletes | Dry run: **47 rows, 12 accounts**, not applied |
+> | ~~**G-49**~~ | **RETRACTED — was already fixed.** `tender.awarded → closeSourceOpportunity('won')` and `tender.lost → 'lost'` are both wired in the reactor. The row was carried from the 2026-07-17 tender audit and never re-verified | Read at `cross-module-subscriber.ts:235` |
+>
+> **G-49 is the more instructive one.** It sat in a register for three weeks describing a hole that had already been closed. A stale *open* row costs less than a stale *closed* one, but it is the same failure: **a register is only as good as its last verification**, which is why every row above carries a provenance mark.
+>
+> API 65/65 · procurement 33/33 · finance 119/119 · e2e (chains · SoD · AR cap · cost ledger) 21/21.
+>
+> **One thing this wave did NOT do:** merge the 5 triplicated accounts. That is a destructive change to a live database — it needs a decision about which record survives and what re-points at it, not a code change made in passing. G-11 stays part-open and CRM close-out stays blocked on it.
+
+## Verification pass — 2026-08-05
+
+Every row below was driven against the tree or the running app, not carried. **Four of the twenty-five carried rows were wrong**, and not in a comforting direction — three understated the gap:
+
+| Row | Carried claim | Verified |
+|---|---|---|
+| **G-07** | Helmet/CSP + rate limits "partial", SSO/SCIM "not operationalized" | **Absent.** No helmet, no CSP, no rate limiter, no SCIM. Raised P2 → **P1** |
+| **G-26** | "~2 components with signature" | **Zero** signature capture. Zero camera capture. Upload (3) was right |
+| **G-22** | KNX/BMS "no integration points" | True, and sharper: BMS exists only as a *label* in a discipline enum |
+| **G-19** | PM/EVM cockpit "isn't built" | **Overstated.** EVM is surfaced on 2 pages + a BFF route. Re-scoped to "shallow", P1 → **P2** |
+
+Confirmed exactly as written: G-17 (no site survey), G-20 (no SIRA/DCD), G-23 (no cable schedule), G-34 (no approvals inbox), G-36 (no full-text projection — still in-memory), G-39 (no cache/APM), G-40 (no contract templating), G-41 (no `/analytics` route), G-42 (no MDM screen), G-43/G-44 (no `/portal` route), G-46 (no version-history layer).
+
+**Why this pass happened:** the register shipped with roughly half its rows carried on an older report's authority. Two of those turned out to be fiction — G-49 described a hole that had already been closed, and G-02 was mine, describing one that never existed. A register nobody re-drives is a rumour with a table around it.
+
+
+### Retractions
+
+**Correction, 2026-08-05.** An earlier revision of this document opened by calling authentication the last P0 and "the only thing between this platform and a hosted deployment." **That was wrong** — the production gate exists and refuses to boot without a verifier (G-02, retracted, with the measurement). What survives is smaller and honest: the *dev* default runs open, and the RLS bundle is complete in code but **inert in the running deployment** because it connects as the DB owner. **G-03 is now the only true P0, and it is a configuration change, not construction** — flip `DATABASE_URL` to the least-privilege `aura_app` role per the runbook.

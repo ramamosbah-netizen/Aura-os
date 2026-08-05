@@ -29,7 +29,9 @@ Everything else — module completeness percentages, maturity scores, the `/anal
 
 ## The one thing to know before deploying
 
-**Authentication is off by default and an unauthenticated request returns live data** — verified against the running app on 2026-08-05 (`GET /api/v1/crm/opportunities`, no token → 200 with 34 records). Enforcement is opt-in via `AUTH_REQUIRED=true`, or automatic only when production *already has a verifier configured* (`apps/api/src/main.ts:101`), so a production deploy without `AUTH_JWKS_URL`/`AUTH_JWT_SECRET` runs open. Row-level security has the opposite shape: fully built and CI-proven, but **inert at runtime** because the app connects as the DB owner — though that one now refuses to boot in production. This is readiness-audit **P0-1**, the last remaining P0.
+**Row-level security is inert in the running deployment.** The mechanism is complete — least-privilege `aura_app` role, tenant GUC binding, `FORCE RLS` on 182/182 tables, a CI fitness gate, an isolation test, and a boot gate that refuses production under a bypassing role. But the instance connects as the Postgres **owner**, which bypasses every policy, so tenant isolation currently rests on app-level `WHERE tenant_id` alone. Fixing it is a configuration change: point `DATABASE_URL` at `aura_app` per [the runbook](runbooks/rls-tenant-isolation.md).
+
+**Authentication is not the problem it was briefly reported to be.** Production *cannot* boot without a verifier — `apps/api/src/main.ts:52-63` logs FATAL and exits 1, verified 2026-08-05. What is true: the **dev default runs with auth off** (the documented staged pass-through), so a development instance answers unauthenticated requests with live data. Don't expose one.
 
 ---
 

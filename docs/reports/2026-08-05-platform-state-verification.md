@@ -9,7 +9,9 @@
 
 ## 1. Headline
 
-The platform **boots clean and works**. The verification found no new functional defect. What it did find is a **gap between what the reports claim and what the tree does** — five claims of "0 remaining" or "complete" that are not, one report asserting `PRODUCTION READY` against a tree whose API answers unauthenticated requests with live data, and one measured score cited for three weeks after a better measurement superseded it.
+The platform **boots clean and works**. The verification found no new functional defect. What it did find is a **gap between what the reports claim and what the tree does** — five claims of "0 remaining" or "complete" that are not, one report asserting `PRODUCTION READY` against a tree whose dev instance answers unauthenticated requests with live data, and one measured score cited for three weeks after a better measurement superseded it.
+
+**And one it found in this report.** §2.2 originally claimed production could deploy with no auth gate at all. It cannot — the gate exists and exits 1. That claim is retracted in place rather than quietly edited out, because a report about verification discipline that hides its own miss is worth nothing. The pattern is identical to the ones it criticises: a conclusion drawn from one line read in isolation.
 
 The single most useful output of this pass is not a bug. It is this: **the running build had drifted from source, and the first live check of a "fixed" feature failed because of it.** Any verification that skips "does the running build match HEAD" is measuring a ghost.
 
@@ -30,7 +32,7 @@ The single most useful output of this pass is not a bug. It is this: **the runni
 | Approval matrix seed | ✅ `u-admin/u-approver (unlimited) · u-director (≤500k) · u-manager (≤50k)` |
 | AI platform | ✅ 9 agents + tools registered; ⚠️ `No ANTHROPIC_API_KEY — LOCAL fallback mode (no model calls)` |
 
-### 2.2 Security posture — unchanged, and P0-1 is now the only P0
+### 2.2 Security posture — and a finding I got wrong
 
 ```
 WARN [AuthService] Auth OFF (no AUTH_JWKS_URL / AUTH_JWT_SECRET) — requests run as the dev default
@@ -44,7 +46,13 @@ WARN [Bootstrap] ⚠️ DB connection role "postgres" bypasses row-level securit
 | `GET /api/v1/crm/accounts` | **200 · 35 records** |
 | `GET /api/v1/auth/status` | `{"enabled":false}` |
 
-**P0-1 (auth off) is open and unchanged.** Worth stating plainly, because it is easy to lose in a long gap register: the RLS bypass (P0-2) got a boot-time fail-closed gate and the money cycle got maker-checker plus a value-threshold matrix — both real, both verified — while **the plainest hole, an API that answers strangers, still has no gate at all.** The `evaluateRlsPosture` pattern in `main.ts` is the ready-made home for the same treatment.
+**⚠️ Correction (added 2026-08-05, after this section was first written).** The paragraph that stood here claimed auth "still has no gate at all" and called it the last P0. **That was wrong, and it was wrong in the direction that does most damage: it invented a hole.**
+
+`apps/api/src/main.ts:52-63` already refuses to boot in production when no verifier is configured. **Measured:** `NODE_ENV=production` with no `AUTH_JWKS_URL`/`AUTH_JWT_SECRET` → `FATAL: … Refusing to boot open`, **exit code 1**, never listens. `ALLOW_INSECURE_NO_AUTH=true` is a deliberate escape hatch for gateway-fronted deployments.
+
+The error came from reading `main.ts:101` — `enforce = AUTH_REQUIRED==='true' || (isProd && auth.enabled)` — in isolation, concluding production could fall through it, and never reading the 40 lines above. `:101` governs anonymous-request rejection *once the app is running*; in the scenario I described the process has already exited.
+
+**What is actually true:** the dev default runs with auth off, which is the documented staged pass-through, and the local instance is a dev instance. That is a much smaller finding than the one this report originally carried, and the difference matters to anyone deciding whether this platform can be deployed.
 
 ### 2.3 P1-3 (global search) — now genuinely closed, and how it nearly wasn't
 
@@ -117,6 +125,7 @@ The 6.0s on `/` reproduces the audit's "~5–7s first paint" — **but this is t
 | 1 | `PRODUCTION READY` verdict on a tree that serves unauthenticated data and runs RLS-inert | `2026-07-19-master-platform-status.md` | ⛔ SUPERSEDED banner with a claim-vs-verified table |
 | 2 | "Production Candidate" status, now three weeks stale | `2026-07-19-technical-architecture-assessment.md` | 🗄️ HISTORICAL banner |
 | 3 | **904 lines duplicated verbatim** — sections 7/8/9 appeared twice; the first copy's §9 was a broken render claiming **0** domain events, the second had the real **399** | `2026-07-19-master-platform-status.md` | Duplicate removed, §9 repaired (2573 → 1661 lines, no content lost) |
+| 0 | **This report's own §2.2** — claimed production deploys with no auth gate; it exits 1. Retracted in place, with the measurement | this file | ❌ **RETRACTED** — see §2.2 |
 | 4 | "The close-out re-audit is still outstanding" — it ran on 2026-07-20 and measured **87/100**, E2E gate PASS | `2026-07-17-journey-direct-sale.md`, `2026-07-17-crm-operating-review.md` | Both updated; score history 82 → 85 → **87** recorded in one place |
 | 5 | **Dangling citation:** `2026-07-17-journey-direct-sale-rerun.md` cited by three documents as the source of the 85/100 — **no such file in the repo** | 3 documents | ✅ **RECOVERED** — see below; citations now resolve |
 | 6 | "AURA OS is fully productionized and ready for pilot customer deployment" — a 22/22 build result inflated into a platform verdict | `2026-07-24-walkthrough-ai-platform-phases1-4.md` | Rewritten to the claim actually verified, with a pointer to the readiness audit |
@@ -174,7 +183,7 @@ The five AI-platform walkthroughs (`phase1` → `phases1-4` → `phase6-1` → `
 
 ## 4. What to do next
 
-1. **Fail-closed auth in production (P0-1).** The last P0, and the one thing that keeps this from being deployable. Same boot-gate pattern as `evaluateRlsPosture`: **production + no verifier should refuse to boot, not run open.** Three separate documents now describe this hole and one of them called it ✅ done — that gap between the record and the tree is itself the argument for shipping the gate rather than re-documenting it.
+1. **Flip `DATABASE_URL` to the least-privilege `aura_app` role.** Now the only true P0, and it is configuration, not code — everything else in the RLS bundle is built, gated and CI-proven. See [the runbook](../runbooks/rls-tenant-isolation.md).
 2. **Fix the 3 `var(--fg)` lines in `globals.css`.** Two-minute fix; it restores the form engine's active tab. Then the P2-3 claim becomes true.
 3. **Clean demo seed (P2-2).** Now blocking two other things: the ELV search demo has nothing branded to find, and CRM close-out is holding on the duplicated MAF accounts. Seed real ELV brand/model SKUs.
 4. **Warn on applied-but-absent migrations (P2-8).** Small change to the gate; closes the drift class that already cost one production-coverage bug.

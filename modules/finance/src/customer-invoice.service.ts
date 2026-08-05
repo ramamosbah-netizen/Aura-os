@@ -171,6 +171,17 @@ export class CustomerInvoiceService {
     const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
     const updated = cancelInvoice(inv);
     await this.store.save(updated);
+    // Voiding a receivable is an auditable financial act — it must leave a trace on the spine, as
+    // create/issue/receipt already do. Without this, a cancelled invoice vanished silently.
+    await this.events.append([
+      makeEvent({
+        type: CUSTOMER_INVOICE_EVENT.cancelled,
+        tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
+        aggregateType: 'finance.customer_invoice', aggregateId: id,
+        payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
+      }),
+    ]);
+    this.logger.log(`Customer invoice ${inv.invoiceNumber} (${id}) cancelled`);
     return updated;
   }
 

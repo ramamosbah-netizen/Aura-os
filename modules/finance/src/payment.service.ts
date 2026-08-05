@@ -60,14 +60,40 @@ export class PaymentService implements OnModuleInit {
     const invoice = await this.invoices.get(input.invoiceId);
     if (!invoice) throw new Error(`Invoice ${input.invoiceId} not found`);
 
-    // 2. Create the payment
+    // 2. Create the payment (rejects a non-positive or non-numeric amount)
     const payment = makePayment(input);
+
+    // 3. Cumulative settlement check. An AP invoice carries no `amountPaid` column, so the paid
+    //    total is folded from the payments already recorded against it. Two rules follow:
+    //
+    //    - a payment may not take the invoice past its own value. Nothing stopped paying a
+    //      supplier twice for the same invoice, and the second payment posted a second GL entry.
+    //    - the invoice becomes `paid` only once it is actually COVERED. It used to be marked paid
+    //      on ANY payment of ANY amount — a 100 payment against a 50,000 invoice closed it, and so
+    //      did a zero-amount payment back when the amount was silently coerced to 0. Part-payments
+    //      are normal for a contractor, so the invoice now stays open until it is settled.
+    const priorPayments = await this.store.list({ tenantId: payment.tenantId, invoiceId: payment.invoiceId });
+    const alreadyPaid = priorPayments.reduce((sum, p) => sum + p.amount, 0);
+    const cumulative = Math.round((alreadyPaid + payment.amount) * 100) / 100;
+    if (cumulative > invoice.value + 0.001) {
+      // Phrased "insufficient …" deliberately: the error taxonomy classifies that as a 409
+      // state conflict, which is what this is — the invoice's remaining balance forbids the
+      // payment. The classifier reads the literal up to the first interpolation, so the
+      // classifying word has to lead. Mirrors "insufficient petty cash".
+      throw new Error(
+        `insufficient invoice balance — payment of ${payment.amount} would take invoice ` +
+          `${invoice.reference ?? invoice.id} to ${cumulative}, above its value of ` +
+          `${invoice.value} (${alreadyPaid} already paid)`,
+      );
+    }
     await this.store.create(payment);
 
-    // 3. Mark the invoice as paid
-    await this.invoices.changeStatus(payment.invoiceId, 'paid');
+    // 4. Close the invoice only when it is fully settled.
+    if (cumulative >= invoice.value - 0.001) {
+      await this.invoices.changeStatus(payment.invoiceId, 'paid');
+    }
 
-    // 4. Double-Entry: Resolve accounts
+    // 5. Double-Entry: Resolve accounts
     // Look up or auto-create AP and Bank accounts for this tenant
     let apAccount = await this.accounts.list({ tenantId: payment.tenantId, type: 'liability' })
       .then(list => list.find(a => a.code === '2010') || null);

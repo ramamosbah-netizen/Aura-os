@@ -1,5 +1,11 @@
 # AURA OS — Technical Architecture Assessment & Gap Closure Audit
 
+> ## 🗄️ HISTORICAL — superseded 2026-08-03
+>
+> "Production Candidate" describes the July-19 tree, not the current one. The current readiness measurement is **54/100** with auth still off by default (re-verified live 2026-08-05).
+> **Read instead:** [2026-08-03-enterprise-readiness-audit.md](2026-08-03-enterprise-readiness-audit.md) · [2026-08-05-platform-state-verification.md](2026-08-05-platform-state-verification.md).
+> **Keep this file for:** §0 verification provenance (the model example of the project's report-integrity rule) and the July-19 architecture evidence map.
+
 **Prepared for:** AURA Core Architecture Team, SI Partners, Investors, and Technical Due Diligence Auditors  
 **Prepared by:** Senior Enterprise Architecture Audit Group (Big Four Methodology Alignment)  
 **Date:** July 19, 2026  
@@ -162,7 +168,7 @@ Audit verification of security control points:
 
 ## 7. Business Journey Validation: Majid Al Futtaim ELV Upgrade
 
-> ⚠️ **Provenance correction (2026-07-19 verification pass).** This section previously presented invented record IDs (`lead-9832`, `opp-2931`, `con-338`, `inv-2026-0001`, …) as a "Trace Events & Lineage Log", implying captured runtime traces. **They were illustrative, not captured.** Three of the eight event names also did not exist in the codebase and have been corrected below. Treat this section as a **schematic of the chain**, not as evidence of a specific traced run. The *evidence-backed* journey validation is the L1 Journey Audit — see `docs/reports/2026-07-17-journey-direct-sale.md` (**82/100**) and its re-run `2026-07-17-journey-direct-sale-rerun.md` (**85/100**), both driven live in the app.
+> ⚠️ **Provenance correction (2026-07-19 verification pass).** This section previously presented invented record IDs (`lead-9832`, `opp-2931`, `con-338`, `inv-2026-0001`, …) as a "Trace Events & Lineage Log", implying captured runtime traces. **They were illustrative, not captured.** Three of the eight event names also did not exist in the codebase and have been corrected below. Treat this section as a **schematic of the chain**, not as evidence of a specific traced run. The *evidence-backed* journey validation is the L1 Journey Audit — see [2026-07-17-journey-direct-sale.md](2026-07-17-journey-direct-sale.md) (**82/100**), its [same-day re-run](2026-07-17-journey-direct-sale-rerun.md) (**85/100**), and the close-out re-run [2026-07-20-journey-direct-sale-closeout.md](2026-07-20-journey-direct-sale-closeout.md) (**87/100**, E2E gate PASS), all driven live in the app.
 
 Event names below are verified to exist in the codebase (corrected names marked ✏️):
 

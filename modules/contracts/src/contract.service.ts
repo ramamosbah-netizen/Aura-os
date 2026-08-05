@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AccessService } from '@aura/core';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
+import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AccessService, TenantContext } from '@aura/core';
 import { CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, makeContract } from './domain/contract';
 import { CONTRACT_STORE, type ContractFilter, type ContractStore } from './contract-store';
 
@@ -26,7 +26,13 @@ export class ContractService implements OnModuleInit {
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
     private readonly access: AccessService,
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
+
+  /** The acting user for an audit record: the real request actor (ALS) when known, else null. */
+  private actor(): Id | null {
+    return this.tenant?.get().actorId ?? null;
+  }
 
   onModuleInit(): void {
     this.commands.register<NewContract, Contract>({
@@ -82,14 +88,17 @@ export class ContractService implements OnModuleInit {
     if (!existing) throw new Error(`contract ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Contract = { ...existing, ...defined };
+    // Audit trail (P1-2): record the field-level before→after (esp. the contract value) + the real
+    // actor, so the timeline can answer "who changed the contract value from X to Y, and when".
+    const changes = diffFields(existing, updated, ['title', 'reference', 'value', 'accountName']);
     const event = makeEvent({
       type: CONTRACT_EVENT.updated,
       tenantId: updated.tenantId,
       companyId: updated.companyId,
-      actorId: null,
+      actorId: this.actor(),
       aggregateType: 'contracts.contract',
       aggregateId: updated.id,
-      payload: { title: updated.title, value: updated.value },
+      payload: { title: updated.title, value: updated.value, changes },
     });
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);

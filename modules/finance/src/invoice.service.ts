@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService, AccessService } from '@aura/core';
+import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService, AccessService, TenantContext } from '@aura/core';
 import type { Currency } from '@aura/shared';
 import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeInvoice } from './domain/invoice';
 import { type ApAgingReport, buildApAging } from './domain/ap-aging';
@@ -44,7 +44,13 @@ export class InvoiceService implements OnModuleInit {
     // Cross-context data for the 3-way match — bound by the app layer (ADR-0004). Optional so the
     // module is self-contained; when unbound the match is skipped (mirrors procurement's gate).
     @Optional() @Inject(PO_MATCH_PORT) private readonly poMatch?: PoMatchPort,
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
+
+  /** The acting user for an audit record: the real request actor (ALS) when known, else null. */
+  private actor(): Id | null {
+    return this.tenant?.get().actorId ?? null;
+  }
 
   onModuleInit(): void {
     this.commands.register<NewInvoice, Invoice>({
@@ -151,14 +157,16 @@ export class InvoiceService implements OnModuleInit {
     if (!existing) throw new Error(`Invoice ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Invoice = { ...existing, ...defined };
+    // Audit trail (P1-2): field-level before→after + the real actor, for the record History.
+    const changes = diffFields(existing, updated, ['title', 'reference', 'supplierName']);
     const event = makeEvent({
       type: FINANCE_EVENT.invoiceUpdated,
       tenantId: updated.tenantId,
       companyId: updated.companyId,
-      actorId: null,
+      actorId: this.actor(),
       aggregateType: 'finance.invoice',
       aggregateId: updated.id,
-      payload: { title: updated.title, value: updated.value },
+      payload: { title: updated.title, value: updated.value, changes },
     });
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);

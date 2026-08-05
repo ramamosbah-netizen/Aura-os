@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   PETTY_CASH_EVENT,
   type PettyCashFund,
@@ -13,6 +13,7 @@ import {
   applyPettyCashTx,
 } from './domain/petty-cash';
 import { PETTY_CASH_STORE, type PettyCashFilter, type PettyCashStore } from './petty-cash-store';
+import { assertSameTenant } from './domain/tenant-guard';
 
 /**
  * Petty cash service — imprest floats and their movements. Owns
@@ -25,6 +26,9 @@ export class PettyCashService {
   constructor(
     @Inject(PETTY_CASH_STORE) private readonly store: PettyCashStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Explicit @Inject: a union-typed ctor param emits `Object` in design:paramtypes and
+    // silently injects null. Optional so in-memory tests need no request context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async createFund(input: NewPettyCashFund): Promise<PettyCashFund> {
@@ -54,8 +58,7 @@ export class PettyCashService {
     category?: PettyCashCategory,
     description?: string,
   ): Promise<{ fund: PettyCashFund; transaction: PettyCashTransaction }> {
-    const fund = await this.store.getFund(fundId);
-    if (!fund) throw new Error(`petty cash fund ${fundId} not found`);
+    const fund = assertSameTenant(await this.store.getFund(fundId), this.tenant?.get().tenantId, 'petty cash fund', fundId);
     if (fund.status !== 'active') throw new Error('cannot transact on a closed fund');
 
     const balanceAfter = applyPettyCashTx(fund.balance, type, amount);
@@ -84,7 +87,7 @@ export class PettyCashService {
   }
 
   async getFundWithTransactions(id: Id): Promise<{ fund: PettyCashFund; transactions: PettyCashTransaction[] } | null> {
-    const fund = await this.store.getFund(id);
+    const fund = assertSameTenant(await this.store.getFund(id), this.tenant?.get().tenantId, 'petty cash fund', id);
     if (!fund) return null;
     return { fund, transactions: await this.store.listTransactions(id) };
   }

@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   BANK_GUARANTEE_EVENT,
   type BankGuarantee,
@@ -12,6 +12,7 @@ import {
   isExpiringSoon,
 } from './domain/bank-guarantee';
 import { BANK_GUARANTEE_STORE, type BankGuaranteeFilter, type BankGuaranteeStore } from './bank-guarantee-store';
+import { assertSameTenant } from './domain/tenant-guard';
 
 type GuaranteeAction = 'release' | 'claim' | 'expire';
 
@@ -32,6 +33,9 @@ export class BankGuaranteeService {
   constructor(
     @Inject(BANK_GUARANTEE_STORE) private readonly store: BankGuaranteeStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Explicit @Inject: a union-typed ctor param emits `Object` in design:paramtypes and
+    // silently injects null. Optional so in-memory tests need no request context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewBankGuarantee): Promise<BankGuarantee> {
@@ -53,7 +57,7 @@ export class BankGuaranteeService {
   }
 
   async changeStatus(id: Id, action: GuaranteeAction): Promise<BankGuarantee> {
-    const g = await this.store.get(id);
+    const g = assertSameTenant(await this.store.get(id), this.tenant?.get().tenantId, 'bank guarantee', id);
     if (!g) throw new Error(`bank guarantee ${id} not found`);
     const fn = ACTIONS[action];
     if (!fn) throw new Error(`unknown action ${action}`);

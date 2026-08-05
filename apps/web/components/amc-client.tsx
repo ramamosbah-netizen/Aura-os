@@ -126,8 +126,8 @@ export default function AmcClient() {
       {/* ── Header ── */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>⚙ Asset Management & Contracts (AMC)</h1>
-          <p style={s.subtitle}>Real-time service tickets, active SLA tracking, and GIS work order dispatching.</p>
+          <h1 style={s.title}>⚙ AMC & Services</h1>
+          <p style={s.subtitle}>Annual Maintenance Contracts — service tickets, SLA tracking, and work-order dispatch.</p>
         </div>
         <button type="button" style={s.btnPrimary} onClick={() => setShowTicketModal(true)}>
           + Raise Support Ticket

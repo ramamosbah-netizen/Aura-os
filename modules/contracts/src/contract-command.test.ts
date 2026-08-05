@@ -39,4 +39,14 @@ describe('Contracts create via CommandBus', () => {
       service.create({ tenantId: 't1', title: '  ' } as unknown as Parameters<typeof service.create>[0]),
     ).rejects.toThrow('contract title is required');
   });
+
+  it('records a before→after value diff on update (audit trail P1-2)', async () => {
+    const { service, events } = buildService();
+    const c = await service.create({ tenantId: 't1', title: 'EPC', createdBy: 'u1' }); // value defaults 0
+    await service.update(c.id, { value: 150000, title: 'EPC Rev A' });
+    const emitted = (events.appendWithClient as any).mock.calls.flatMap((args: unknown[]) => (args[1] as unknown[]) ?? []);
+    const upd = emitted.find((e: any) => e?.payload?.changes);
+    expect(upd.payload.changes.value).toEqual({ from: 0, to: 150000 });
+    expect(upd.payload.changes.title).toEqual({ from: 'EPC', to: 'EPC Rev A' });
+  });
 });

@@ -12,6 +12,15 @@
   --border-strong: #3c3c44;
   --text: #ededf0;
   --muted: #a8a8b2;
+  /* Compatibility aliases (P2-3): ~50 legacy operational screens reference --fg / --surface /
+     --surface-2, which were never defined — so their input text (`color: var(--fg)`) and field
+     backgrounds (`var(--surface)`) resolved to nothing (the invisible-input-text drift). Map them
+     to the canonical tokens; because custom-property substitution is contextual these follow the
+     active theme automatically. Migrating those screens to --text/--panel directly can then remove
+     the aliases without a flash-day. */
+  --fg: var(--text);
+  --surface: var(--panel);
+  --surface-2: var(--panel-2);
   --accent: #f5a623;
   --accent-2: #ff6b35;
   --accent-grad: linear-gradient(135deg, #f5a623 0%, #ff6b35 100%);

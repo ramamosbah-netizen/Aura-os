@@ -47,10 +47,16 @@ No **pre-sales site inspection/survey** intake that starts an opportunity — `s
 
 ---
 
-## 🟠 P1 — UI/UX consistency (two design vocabularies) — ⏳ FIX STARTED
+## 🟠 P1 — UI/UX consistency (two design vocabularies) — ✅ token defects fixed app-wide
 The **foundation is professional**: disciplined token palette (dark-first navy/near-black + one amber accent + semantic good/warn/bad/info), theme-aware, light-mode contrast tuned for WCAG. Not over-coloured.
 
-**✅ FIX (2026-08-03):** Built the **shared UI kit** (`components/ui/kit.tsx`) — `Button` (primary/neutral/danger/ghost), `Field`, `Input`, `Select`, `Card`, `KpiTile`, `Badge`, `Table/Th/Td` — all on the **correct tokens** (`--text`/`--panel`/`--accent`/`--border`/`--good`/`--bad`/`--warn`), no `--fg`/`--surface`, no hardcoded hex. Migrated `daily-report-client` + `inspection-request-client` onto it: verified in the live DOM the primary button now renders `rgb(245,166,35)` = the amber `--accent` (was off-brand blue `#2563eb`), KPI/status colours use semantic tokens, and inputs use `--text`/`--panel` (fixes the invisible-input-text risk). **Remaining: migrate the other ~64 token-drift screens onto the kit.**
+**✅ FIX (2026-08-03):** Built the **shared UI kit** (`components/ui/kit.tsx`) — `Button` (primary/neutral/danger/ghost), `Field`, `Input`, `Select`, `Card`, `KpiTile`, `Badge`, `Table/Th/Td` — all on the **correct tokens** (`--text`/`--panel`/`--accent`/`--border`/`--good`/`--bad`/`--warn`), no `--fg`/`--surface`, no hardcoded hex. Migrated `daily-report-client` + `inspection-request-client` fully onto it (amber `--accent` button, semantic tokens).
+
+**✅ FIX 2 (2026-08-04) — the two real token defects fixed across all ~50 legacy screens:**
+1. **Invisible input text** — `--fg`/`--surface`/`--surface-2` were undefined; defined them as theme-aware aliases to `--text`/`--panel`/`--panel-2` in `globals.css`. Live-verified: `/quality/ncrs` input now `rgb(237,237,240)` on `rgb(19,19,22)` (was invisible), follows light/dark.
+2. **Off-brand hardcoded colours** — swept 258 hex → tokens across 52 files (`#16a34a→--good`, `#dc2626→--bad`, `#d97706→--warn`, `#6b7280→--muted`, `var(--accent,#2563eb)→--accent`). Live-verified on `/quality/snags`: KPI values now `--bad`/`--good` rgb, theme-following.
+
+**Remaining (cosmetic, not a defect):** those screens still use inline `st` style objects + the `--fg`/`--surface` *aliases* rather than composing the kit's `Button`/`Table` on `--text`/`--panel` directly — a vocabulary-unification pass that can later delete the aliases.
 
 **Original findings (execution drifts badly on the junior-facing screens):**
 - **No shared UI kit.** Only 5 primitives exist (create-drawer, empty/error-state, loading, skeleton). **No shared Button, Input, Select, Card, Table, Badge, KpiTile.** → 153 components define their own inline style objects; 111 hardcode hex colors.

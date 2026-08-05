@@ -5,7 +5,7 @@ import { config } from 'dotenv';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import crypto from 'node:crypto';
-import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, evaluateRlsPosture, metrics } from '@aura/core';
+import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, evaluateAuthPosture, evaluateRlsPosture, metrics } from '@aura/core';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { MigrationGateService } from './health/migration-gate.service';
@@ -52,14 +52,20 @@ async function bootstrap(): Promise<void> {
   // Fail-closed (P0-1): production MUST run with a verifier configured. Refuse to boot "open"
   // rather than silently serving every tenant's data unauthenticated. A loud, explicit
   // ALLOW_INSECURE_NO_AUTH=true override remains for deployments fronted by an external gateway.
+  // The decision itself is a pure, tested function (core/src/identity/auth-posture.ts), symmetric
+  // with the RLS posture gate below — both answer "is enforcement actually on, and may we serve
+  // anyway?", and both should be greppable rather than buried in this bootstrap.
   const isProd = process.env.NODE_ENV === 'production';
-  const allowInsecure = process.env.ALLOW_INSECURE_NO_AUTH === 'true';
-  if (isProd && !auth.enabled && !allowInsecure) {
-    new Logger('Bootstrap').error(
-      'FATAL: NODE_ENV=production but auth is OFF (no AUTH_JWKS_URL / AUTH_JWT_SECRET). Refusing to ' +
-        'boot open — configure a verifier, or set ALLOW_INSECURE_NO_AUTH=true to override (NOT recommended).',
-    );
+  const authPosture = evaluateAuthPosture({
+    verifierConfigured: auth.enabled,
+    isProduction: isProd,
+    allowInsecure: process.env.ALLOW_INSECURE_NO_AUTH === 'true',
+  });
+  if (authPosture.level === 'fatal') {
+    new Logger('Bootstrap').error(authPosture.message);
     process.exit(1);
+  } else if (authPosture.level === 'warn') {
+    new Logger('Bootstrap').warn(`⚠️  ${authPosture.message}`);
   }
 
   // Fail-closed (P0-2): row-level security is the DB-level tenant isolation net. It is INERT when the

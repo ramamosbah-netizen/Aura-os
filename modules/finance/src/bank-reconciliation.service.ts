@@ -46,19 +46,40 @@ export class BankReconciliationService {
     return this.txStore.listPaged({ tenantId, bankAccountId, status }, page);
   }
 
+  /**
+   * Auto-reconcile bank lines against recorded payments.
+   *
+   * **A payment can only settle ONE bank line.** It used to be matchable against every transaction
+   * in the run: the candidate list was never reduced as payments were consumed, and payments
+   * already linked to an earlier reconciliation were not excluded either. So a bank statement
+   * showing the same 50,000 debit twice, against a single 50,000 payment, matched BOTH lines to
+   * that one payment and left nothing unreconciled — the account was 50,000 lighter than the books
+   * and the reconciliation reported clean. A duplicate bank debit is the single thing this routine
+   * exists to surface, and it was the thing it hid.
+   *
+   * Amounts are compared to the fils rather than by exact float equality, so a stored 50000.00 and
+   * a 49999.999999 that arrived through a rate conversion still reconcile.
+   */
   async autoMatch(tenantId: Id, bankAccountId: Id): Promise<Array<{ transactionId: Id; paymentId: Id; amount: number }>> {
     const unreconciled = await this.txStore.list({ tenantId, bankAccountId, status: 'unreconciled' });
     const payments = await this.paymentStore.list({ tenantId });
-    
+
     // Filter payments for this specific bankAccountId (some stores may not support filtering, so we do in-memory filter)
     const matchingPayments = payments.filter(p => p.bankAccountId === bankAccountId);
+
+    // Payments already tied to a bank line — by an earlier run of this routine or a manual match.
+    const allForAccount = await this.txStore.list({ tenantId, bankAccountId });
+    const usedPaymentIds = new Set(
+      allForAccount.map((t) => t.reconciledPaymentId).filter((id): id is Id => !!id),
+    );
 
     const matches: Array<{ transactionId: Id; paymentId: Id; amount: number }> = [];
 
     for (const tx of unreconciled) {
       // Find payments that have matching absolute amount (positive/negative sign could differ depending on debit/credit view)
       const matchesForTx = matchingPayments.filter((pm) => {
-        const amountMatch = Math.abs(tx.amount) === Math.abs(pm.amount);
+        if (usedPaymentIds.has(pm.id)) return false; // already settles another line
+        const amountMatch = Math.abs(Math.abs(tx.amount) - Math.abs(pm.amount)) < 0.005;
         if (!amountMatch) return false;
 
         // Check if transaction dates are within 7 days of each other
@@ -72,6 +93,7 @@ export class BankReconciliationService {
       // If exactly one unique match is found, auto-reconcile it
       if (matchesForTx.length === 1) {
         const pm = matchesForTx[0];
+        usedPaymentIds.add(pm.id); // consumed — it cannot settle a second line
         
         tx.status = 'matched';
         tx.reconciledPaymentId = pm.id;

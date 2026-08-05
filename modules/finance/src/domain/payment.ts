@@ -18,6 +18,15 @@ export interface NewPayment {
   amount: number;
   reference?: string | null;
   createdBy?: Id | null;
+  /**
+   * When the money actually left the account (ISO). Defaults to now.
+   *
+   * There was no way to set this, so every payment was stamped with the moment it was ENTERED.
+   * Bank reconciliation matches on a ±7-day window, so a statement reconciled even a fortnight
+   * late could never match anything: the payments all carried today's date. Back-dated entry is
+   * the normal case at month end.
+   */
+  paidAt?: string | null;
 }
 
 /**
@@ -39,7 +48,7 @@ export function makePayment(input: NewPayment): Payment {
     bankAccountId: input.bankAccountId,
     amount: Math.round(amount * 100) / 100,
     reference: input.reference?.trim() || null,
-    paidAt: new Date().toISOString(),
+    paidAt: input.paidAt || new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };
 }

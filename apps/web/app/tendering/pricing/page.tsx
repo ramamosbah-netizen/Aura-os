@@ -100,6 +100,6 @@ const st = {
   refTag: { marginLeft: 8, fontSize: 11, color: 'var(--muted)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
   status: { fontSize: 11.5, textTransform: 'capitalize', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px' } as CSSProperties,
   pricedFull: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
-  pricedPart: { color: 'var(--warn, #d97706)', fontWeight: 600 } as CSSProperties,
+  pricedPart: { color: 'var(--warn)', fontWeight: 600 } as CSSProperties,
   rowBtn: { display: 'inline-block', marginLeft: 6, border: '1px solid var(--border)', borderRadius: 7, padding: '4px 9px', fontSize: 12, color: 'var(--text)', textDecoration: 'none' } as CSSProperties,
 };

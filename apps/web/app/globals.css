@@ -892,7 +892,7 @@ a {
   cursor: pointer;
 }
 .fe-collapsible:hover {
-  color: var(--fg);
+  color: var(--text);
 }
 .fe-chevron {
   display: inline-block;
@@ -941,10 +941,10 @@ a {
   margin-bottom: -1px;
 }
 .fe-tab:hover {
-  color: var(--fg);
+  color: var(--text);
 }
 .fe-tab.active {
-  color: var(--fg);
+  color: var(--text);
   border-bottom-color: var(--accent);
 }
 .fe-accordion {

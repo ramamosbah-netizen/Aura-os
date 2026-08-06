@@ -215,6 +215,61 @@ describe('Finance depth features', () => {
     });
   });
 
+  // ── Regressions found in the wave-2 finance audit ──────────────────────────
+  describe('Payment amount and settlement rules', () => {
+    const build = async () => {
+      const invoiceStore = new InMemoryInvoiceStore();
+      const accountStore = new InMemoryAccountStore();
+      const journalStore = new InMemoryJournalStore();
+      const paymentStore = new InMemoryPaymentStore();
+      const invoiceService = new InvoiceService(
+        invoiceStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit,
+        { getRate: async () => 1 } as any, {} as any, {} as any, mockAccess,
+      );
+      invoiceService.onModuleInit();
+      const accountService = new AccountService(accountStore, mockAccess);
+      const journalService = new JournalService(journalStore, mockEvents, new InMemoryPeriodCloseStore(), mockAccess);
+      const paymentService = new PaymentService(paymentStore, mockEvents, fakeBus(), invoiceService, journalService, accountService);
+      paymentService.onModuleInit();
+      const bank = await accountService.create({ tenantId: 't1', code: '1010', name: 'Bank', type: 'asset' });
+      const invoice = await invoiceService.create({ tenantId: 't1', title: 'Cabling', value: 50_000, status: 'approved' });
+      return { paymentService, invoiceService, invoice, bank };
+    };
+
+    it('refuses a non-positive or non-numeric amount instead of storing zero', () => {
+      // A bad amount used to be coerced to 0 — a zero payment recorded against a real invoice.
+      const bad = { tenantId: 't1', invoiceId: 'i1', bankAccountId: 'b1' };
+      expect(() => makePayment({ ...bad, amount: Number.NaN })).toThrow(/must be a number/);
+      expect(() => makePayment({ ...bad, amount: undefined as unknown as number })).toThrow(/must be a number/);
+      expect(() => makePayment({ ...bad, amount: 0 })).toThrow(/must be positive/);
+      expect(() => makePayment({ ...bad, amount: -5_000 })).toThrow(/must be positive/);
+    });
+
+    it('leaves the invoice OPEN on a part payment', async () => {
+      // Any payment of any amount used to close the invoice — 100 against 50,000 marked it paid.
+      const { paymentService, invoiceService, invoice, bank } = await build();
+      await paymentService.record({ tenantId: 't1', invoiceId: invoice.id, bankAccountId: bank.id, amount: 20_000 });
+      expect((await invoiceService.get(invoice.id))?.status).toBe('approved');
+    });
+
+    it('closes the invoice once the payments cover it', async () => {
+      const { paymentService, invoiceService, invoice, bank } = await build();
+      await paymentService.record({ tenantId: 't1', invoiceId: invoice.id, bankAccountId: bank.id, amount: 20_000 });
+      await paymentService.record({ tenantId: 't1', invoiceId: invoice.id, bankAccountId: bank.id, amount: 30_000 });
+      expect((await invoiceService.get(invoice.id))?.status).toBe('paid');
+    });
+
+    it('refuses to pay a supplier more than the invoice is worth', async () => {
+      // Nothing stopped paying the same invoice twice, and the second payment posted a second
+      // GL entry on top.
+      const { paymentService, invoice, bank } = await build();
+      await paymentService.record({ tenantId: 't1', invoiceId: invoice.id, bankAccountId: bank.id, amount: 50_000 });
+      await expect(
+        paymentService.record({ tenantId: 't1', invoiceId: invoice.id, bankAccountId: bank.id, amount: 1 }),
+      ).rejects.toThrow(/insufficient invoice balance/);
+    });
+  });
+
   describe('3-Way Matching Logic', () => {
     it('reconciles correctly against PO, GRN, and Invoice values', async () => {
       const poStore = new InMemoryPurchaseOrderStore();

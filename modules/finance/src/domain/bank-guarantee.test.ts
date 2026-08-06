@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeBankGuarantee, releaseGuarantee, claimGuarantee, expireGuarantee, daysToExpiry, isExpiringSoon } from './bank-guarantee';
+import { makeBankGuarantee, releaseGuarantee, claimGuarantee, expireGuarantee, daysToExpiry, isExpiringSoon, isExpired } from './bank-guarantee';
 
 const base = {
   tenantId: 't1',
@@ -70,5 +70,41 @@ describe('expiry helpers', () => {
   it('never flags a non-active guarantee', () => {
     const g = releaseGuarantee(makeBankGuarantee(base));
     expect(isExpiringSoon(g, '2026-12-15', 30)).toBe(false);
+  });
+});
+
+// ── Regression: the expiry watch-list must not drop overdue guarantees ───────
+describe('expiry watch-list includes guarantees already past expiry', () => {
+  const g = (expiryDate: string) =>
+    makeBankGuarantee({
+      tenantId: 't1', reference: 'BG-1', type: 'performance', beneficiary: 'Emaar',
+      bankName: 'ENBD', amount: 500_000, issueDate: '2025-01-01', expiryDate,
+    });
+
+  it('lists a live guarantee whose expiry has passed', () => {
+    // 43 days overdue and still active: the bank is charging commission and the facility limit is
+    // still consumed. This used to be excluded while an item due in 10 days was listed.
+    expect(isExpiringSoon(g('2026-01-31'), '2026-03-15')).toBe(true);
+    expect(isExpired(g('2026-01-31'), '2026-03-15')).toBe(true);
+  });
+
+  it('still lists one coming up inside the window', () => {
+    expect(isExpiringSoon(g('2026-03-25'), '2026-03-15')).toBe(true);
+    expect(isExpired(g('2026-03-25'), '2026-03-15')).toBe(false);
+  });
+
+  it('leaves one comfortably in the future off the list', () => {
+    expect(isExpiringSoon(g('2026-12-31'), '2026-03-15')).toBe(false);
+  });
+
+  it('ignores guarantees that are no longer active', () => {
+    const released = releaseGuarantee(g('2026-01-31'));
+    expect(isExpiringSoon(released, '2026-03-15')).toBe(false);
+    expect(isExpired(released, '2026-03-15')).toBe(false);
+  });
+
+  it('treats the expiry day itself as in-window, not past', () => {
+    expect(isExpiringSoon(g('2026-03-15'), '2026-03-15')).toBe(true);
+    expect(isExpired(g('2026-03-15'), '2026-03-15')).toBe(false);
   });
 });

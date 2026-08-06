@@ -91,6 +91,27 @@ export class PaymentCertificateService {
 
     // Sequence + paid-to-date baseline are derived from this contract's existing certificates.
     const existing = await this.store.list({ tenantId: input.tenantId, contractId: input.contractId, limit: 500 });
+
+    // Only ONE certificate may be open at a time — the double-billing guard.
+    //
+    // An IPC certifies work CUMULATIVELY and deducts what previous certificates already paid, but
+    // `priorCertifiedNet` can only count certificates that have actually been CERTIFIED. So if a
+    // second IPC was raised while the first was still draft or submitted, its prior-net was 0 and
+    // it re-certified the same cumulative work from zero. Certify both and the client is billed
+    // twice for the same work — measured: two IPCs against 500,000 of work produced 450,000 each,
+    // 900,000 in total, with an AR invoice auto-raised off each certification.
+    //
+    // Refusing the overlap is also how the job actually runs: IPC n+1 is raised against the
+    // position agreed at IPC n, so the previous one must be decided first. A rejected certificate
+    // does not block, because it never enters the certified baseline.
+    const open = existing.find((c) => c.status === 'draft' || c.status === 'submitted');
+    if (open) {
+      throw new Error(
+        `a payment certificate is already open on this contract (IPC-${String(open.sequence).padStart(3, '0')}, ` +
+          `${open.status}) — certify or reject it before raising the next one`,
+      );
+    }
+
     const sequence = existing.length + 1;
     const previousCertifiedNet = priorCertifiedNet(existing);
 

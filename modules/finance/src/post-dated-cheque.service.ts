@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   POST_DATED_CHEQUE_EVENT,
   type PostDatedCheque,
@@ -13,6 +13,7 @@ import {
   summariseCheques,
 } from './domain/post-dated-cheque';
 import { POST_DATED_CHEQUE_STORE, type PostDatedChequeFilter, type PostDatedChequeStore } from './post-dated-cheque-store';
+import { assertSameTenant } from './domain/tenant-guard';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -27,6 +28,9 @@ export class PostDatedChequeService {
   constructor(
     @Inject(POST_DATED_CHEQUE_STORE) private readonly store: PostDatedChequeStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Explicit @Inject: a union-typed ctor param emits `Object` in design:paramtypes and
+    // silently injects null. Optional so in-memory tests need no request context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewPostDatedCheque): Promise<PostDatedCheque> {
@@ -48,7 +52,7 @@ export class PostDatedChequeService {
   }
 
   async changeStatus(id: Id, action: ChequeAction): Promise<PostDatedCheque> {
-    const c = await this.store.get(id);
+    const c = assertSameTenant(await this.store.get(id), this.tenant?.get().tenantId, 'cheque', id);
     if (!c) throw new Error(`post-dated cheque ${id} not found`);
     const updated = applyChequeAction(c, action); // throws on invalid transition
     await this.store.save(updated);

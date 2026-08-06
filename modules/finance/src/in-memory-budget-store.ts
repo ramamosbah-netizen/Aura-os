@@ -26,8 +26,8 @@ export class InMemoryBudgetStore implements BudgetStore {
     return paginate(await this.list(tenantId), page);
   }
 
-  async setDeleted(id: Id, deleted: boolean): Promise<void> {
+  async setDeleted(tenantId: Id, id: Id, deleted: boolean): Promise<void> {
     const b = this.budgets.get(id);
-    if (b) b.deletedAt = deleted ? new Date().toISOString() : null;
+    if (b && b.tenantId === tenantId) b.deletedAt = deleted ? new Date().toISOString() : null;
   }
 }

@@ -165,4 +165,5 @@ export const CUSTOMER_INVOICE_EVENT = {
   created: 'finance.customer_invoice.created',
   issued: 'finance.customer_invoice.issued',
   receiptRecorded: 'finance.customer_invoice.receipt_recorded',
+  cancelled: 'finance.customer_invoice.cancelled',
 } as const;

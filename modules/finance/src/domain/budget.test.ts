@@ -60,3 +60,56 @@ describe('budget vs actual (GL-folded)', () => {
     expect(bva.totalVariance).toBe(-1000);
   });
 });
+
+// ── Regression: unbudgeted spend ─────────────────────────────────────────────
+// The fold used to iterate the budget's own lines only, so money spent on an account nobody
+// planned for never appeared — a budget-control report blind to exactly the overspend it exists
+// to catch. Here the budget plans rent only, while 50,000 of salaries also hits the ledger.
+describe('budget-vs-actual surfaces spend that was never budgeted', () => {
+  const rentOnly = () =>
+    makeBudget({
+      tenantId, name: 'Q1 rent only', from: '2026-01-01', to: '2026-03-31',
+      lines: [{ accountId: rent.id, accountCode: rent.code, accountName: rent.name, amount: 20_000 }],
+    });
+  const bva = () => buildBudgetVsActual(rentOnly(), accounts, journals);
+
+  it('reports the unbudgeted account as its own row', () => {
+    const row = bva().rows.find((r) => r.code === salaries.code);
+    expect(row).toBeDefined();
+    expect(row!.unbudgeted).toBe(true);
+    expect(row!.budget).toBe(0);
+    expect(row!.actual).toBe(50_000);
+    expect(row!.variancePct).toBeNull(); // no budget to be a percentage of
+  });
+
+  it('counts it in the actual, so the total is no longer flattering', () => {
+    const r = bva();
+    expect(r.totalActual).toBe(66_000);    // 16,000 rent + 50,000 salaries — was 16,000
+    expect(r.totalVariance).toBe(-46_000); // was +4,000 "under budget"
+    expect(r.totalUnbudgeted).toBe(50_000);
+  });
+
+  it('leaves the budgeted row alone', () => {
+    const row = bva().rows.find((r) => r.code === rent.code)!;
+    expect(row.unbudgeted).toBe(false);
+    expect(row.budget).toBe(20_000);
+    expect(row.actual).toBe(16_000); // Q1 only — the April entry stays out
+    expect(row.variance).toBe(4_000);
+  });
+
+  it('does not sweep in balance-sheet movement — a budget plans performance, not position', () => {
+    // Cash moved on every journal above and must not appear as unbudgeted spend.
+    expect(bva().rows.some((r) => r.code === cash.code)).toBe(false);
+  });
+
+  it('reports nothing unbudgeted when every moving account is planned', () => {
+    const full = makeBudget({
+      tenantId, name: 'Q1 full', from: '2026-01-01', to: '2026-03-31',
+      lines: [
+        { accountId: rent.id, accountCode: rent.code, accountName: rent.name, amount: 20_000 },
+        { accountId: salaries.id, accountCode: salaries.code, accountName: salaries.name, amount: 60_000 },
+      ],
+    });
+    expect(buildBudgetVsActual(full, accounts, journals).totalUnbudgeted).toBe(0);
+  });
+});

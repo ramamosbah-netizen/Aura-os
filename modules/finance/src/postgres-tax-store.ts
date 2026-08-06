@@ -77,7 +77,18 @@ interface TaxLineRow {
   id: string; tenant_id: string; invoice_id: string; tax_code_id: string;
   taxable_amount: string | number; tax_rate: string | number;
   tax_amount: string | number; is_inclusive: boolean;
+  tax_point_date: Date | string | null;
   created_at: Date | string;
+}
+
+/** YYYY-MM-DD from a pg `date` (Date at local midnight) without a timezone shift. */
+function dateOnly(v: Date | string | null): string | null {
+  if (!v) return null;
+  if (v instanceof Date) {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+  }
+  return String(v).slice(0, 10);
 }
 
 function rowToTaxLine(r: TaxLineRow): TaxLine {
@@ -86,6 +97,11 @@ function rowToTaxLine(r: TaxLineRow): TaxLine {
     taxCodeId: r.tax_code_id, taxableAmount: Number(r.taxable_amount),
     taxRate: Number(r.tax_rate), taxAmount: Number(r.tax_amount),
     isInclusive: r.is_inclusive,
+    // Pre-0220 rows have no tax point; fall back to the creation date so a filed period is
+    // reproduced exactly as it was filed.
+    taxPointDate:
+      dateOnly(r.tax_point_date) ??
+      (r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)).slice(0, 10),
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
 }
@@ -96,10 +112,10 @@ export class PostgresTaxLineStore implements TaxLineStore {
   async create(l: TaxLine): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_finance_tax_lines
-        (id, tenant_id, invoice_id, tax_code_id, taxable_amount, tax_rate, tax_amount, is_inclusive, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        (id, tenant_id, invoice_id, tax_code_id, taxable_amount, tax_rate, tax_amount, is_inclusive, tax_point_date, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [l.id, l.tenantId, l.invoiceId, l.taxCodeId, l.taxableAmount,
-       l.taxRate, l.taxAmount, l.isInclusive, l.createdAt],
+       l.taxRate, l.taxAmount, l.isInclusive, l.taxPointDate, l.createdAt],
     );
   }
 

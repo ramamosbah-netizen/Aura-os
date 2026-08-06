@@ -1,10 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { type Budget, type BudgetVsActual, type NewBudget, buildBudgetVsActual, makeBudget } from './domain/budget';
 import { BUDGET_STORE, type BudgetStore } from './budget-store';
 import { ACCOUNT_STORE, type AccountStore } from './account-store';
 import { JOURNAL_STORE, type JournalStore } from './journal-store';
+import { assertSameTenant, sameTenantOrNull } from './domain/tenant-guard';
 
 /**
  * Budget service. Owns budgets; computes budget-vs-actual by folding the live GL for the
@@ -19,6 +20,9 @@ export class BudgetService {
     @Inject(ACCOUNT_STORE) private readonly accounts: AccountStore,
     @Inject(JOURNAL_STORE) private readonly journals: JournalStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Explicit @Inject: a union-typed ctor param emits `Object` and silently injects null.
+    // Optional so in-memory tests need no request context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewBudget): Promise<Budget> {
@@ -39,8 +43,9 @@ export class BudgetService {
     return budget;
   }
 
-  get(id: Id): Promise<Budget | null> {
-    return this.store.get(id);
+  async get(id: Id): Promise<Budget | null> {
+    // Tenant-scoped read (G-03): never hand back another tenant's budget.
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(tenantId: Id): Promise<Budget[]> {
@@ -53,17 +58,45 @@ export class BudgetService {
 
   /** Soft-delete (audit-safe); restorable via restore(). */
   async remove(id: Id): Promise<void> {
-    await this.store.setDeleted(id, true);
+    // Assert ownership on the live row first — a foreign or missing budget is "not found",
+    // never a cross-tenant delete. The store call is tenant-scoped too (belt and suspenders).
+    const budget = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'budget', id);
+    await this.store.setDeleted(budget.tenantId, id, true);
+    // Soft-deleting a budget is an auditable act — leave a trace on the spine, as create() does.
+    await this.events.append([
+      makeEvent({
+        type: 'finance.budget.deleted',
+        tenantId: budget.tenantId, companyId: null, actorId: this.tenant?.get().actorId ?? null,
+        aggregateType: 'finance.budget', aggregateId: id,
+        payload: { name: budget.name, from: budget.from, to: budget.to },
+      }),
+    ]);
   }
 
-  /** Undo a soft-delete. */
-  restore(id: Id): Promise<void> {
-    return this.store.setDeleted(id, false);
+  /** Undo a soft-delete. The row is hidden from get() while deleted, so we cannot re-fetch it to
+   *  check ownership; instead the store scopes the update by the caller's tenant — a cross-tenant
+   *  restore touches no rows (fail-closed). */
+  async restore(id: Id): Promise<void> {
+    await this.store.setDeleted(this.tenant?.boundTenantId() ?? '', id, false);
+    // Only announce a restore that actually happened: after a tenant-scoped un-hide, the row is
+    // visible again to its owner; a cross-tenant/missing no-op leaves get() null → no event.
+    const restored = await this.store.get(id);
+    if (!restored) return;
+    await this.events.append([
+      makeEvent({
+        type: 'finance.budget.restored',
+        tenantId: restored.tenantId, companyId: null, actorId: this.tenant?.get().actorId ?? null,
+        aggregateType: 'finance.budget', aggregateId: id,
+        payload: { name: restored.name, from: restored.from, to: restored.to },
+      }),
+    ]);
   }
 
   /** Budget-vs-actual for a budget, folding the GL over its date range. */
   async vsActual(id: Id): Promise<BudgetVsActual | null> {
-    const budget = await this.store.get(id);
+    // Tenant-scoped (G-03): a wrong-tenant id must not expose another tenant's budget OR the GL
+    // actuals folded for it. Treated as absent → null.
+    const budget = sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
     if (!budget) return null;
     const [accounts, journals] = await Promise.all([
       this.accounts.list({ tenantId: budget.tenantId }),

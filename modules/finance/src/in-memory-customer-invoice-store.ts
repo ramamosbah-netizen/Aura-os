@@ -33,4 +33,10 @@ export class InMemoryCustomerInvoiceStore implements CustomerInvoiceStore {
     const inv = this.data.get(id);
     if (inv && inv.tenantId === tenantId) inv.deletedAt = deleted ? new Date().toISOString() : null;
   }
+
+  async existsByNumber(tenantId: Id, invoiceNumber: string): Promise<boolean> {
+    return [...this.data.values()].some(
+      (i) => i.tenantId === tenantId && i.invoiceNumber === invoiceNumber && !i.deletedAt,
+    );
+  }
 }

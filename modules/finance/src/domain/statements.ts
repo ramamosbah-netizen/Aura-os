@@ -289,15 +289,30 @@ export function buildCashFlow(
     if (!inRange(j, from, to)) continue;
     const touchesCash = j.lines.some((l) => cashIds.has(l.accountId));
     if (!touchesCash) continue;
+
+    // Inflow/outflow is the journal's NET effect on total cash, not the sum of every cash leg.
+    //
+    // This statement reports movement in TOTAL cash across all cash accounts, so a transfer
+    // between two of them — bank→bank, bank→petty cash — moves nothing. Summing the legs
+    // individually booked such a transfer as BOTH an inflow and an outflow: moving 10,000 from
+    // the current account to savings reported 10,000 received and 10,000 spent, neither of which
+    // happened. `netChange` stayed correct (the two cancelled), which is exactly why it survived —
+    // the figure everyone checks was right while the gross figures on the face of the statement
+    // were inflated. For a contractor running several bank accounts and a petty-cash float, every
+    // internal top-up was overstating both sides.
+    //
+    // Netting per journal also handles a composite entry correctly (receive 50,000 and pay a 200
+    // bank charge in one posting nets to 49,800 in) — its true effect on cash held.
+    const netCash = j.lines.reduce((sum, l) => (cashIds.has(l.accountId) ? sum + l.debit - l.credit : sum), 0);
+    if (netCash > 0) inflows += netCash;
+    else if (netCash < 0) outflows += -netCash;
+
+    // Attribution: what did the cash go to, or come from. Cash legs are already counted in the
+    // aggregate above and have no counterpart of their own, so only the other side is attributed.
     for (const line of j.lines) {
-      if (cashIds.has(line.accountId)) {
-        inflows += line.debit;
-        outflows += line.credit;
-      } else {
-        // Cash attributed to this counterpart = mirror of its own posting.
-        const v = (counterpart.get(line.accountId) ?? 0) + (line.credit - line.debit);
-        counterpart.set(line.accountId, v);
-      }
+      if (cashIds.has(line.accountId)) continue;
+      const v = (counterpart.get(line.accountId) ?? 0) + (line.credit - line.debit);
+      counterpart.set(line.accountId, v);
     }
   }
 

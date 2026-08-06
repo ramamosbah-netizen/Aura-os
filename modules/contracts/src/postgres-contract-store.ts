@@ -17,6 +17,7 @@ interface Row {
   account_name: string | null;
   status: string;
   value: string | number;
+  original_value: string | number | null;
   commercial_baseline_id: string | null;
   owner_id: string | null;
   created_by: string | null;
@@ -24,7 +25,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, title, reference, tender_id, tender_title, account_id, account_name, status, value, commercial_baseline_id, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, title, reference, tender_id, tender_title, account_id, account_name, status, value, original_value, commercial_baseline_id, owner_id, created_by, created_at';
 
 function rowToContract(r: Row): Contract {
   return {
@@ -39,6 +40,8 @@ function rowToContract(r: Row): Contract {
     accountName: r.account_name,
     status: r.status as Contract['status'],
     value: Number(r.value),
+    // Contracts predating migration 0222 have no award value recorded — the live value is it.
+    originalValue: r.original_value === null ? Number(r.value) : Number(r.original_value),
     commercialBaselineId: r.commercial_baseline_id,
     ownerId: r.owner_id,
     createdBy: r.created_by,
@@ -61,8 +64,8 @@ export class PostgresContractStore implements ContractStore {
 
   private insert(executor: Pool | PoolClient, c: Contract): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_contracts_contracts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [c.id, c.tenantId, c.companyId, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.commercialBaselineId, c.ownerId, c.createdBy, c.createdAt],
+      `INSERT INTO public.aura_contracts_contracts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [c.id, c.tenantId, c.companyId, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.originalValue, c.commercialBaselineId, c.ownerId, c.createdBy, c.createdAt],
     );
   }
 
@@ -77,8 +80,8 @@ export class PostgresContractStore implements ContractStore {
 
   private upd(executor: Pool | PoolClient, c: Contract): Promise<unknown> {
     return executor.query(
-      `UPDATE public.aura_contracts_contracts SET title=$2, reference=$3, tender_id=$4, tender_title=$5, account_id=$6, account_name=$7, status=$8, value=$9, owner_id=$10 WHERE id=$1`,
-      [c.id, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.ownerId],
+      `UPDATE public.aura_contracts_contracts SET title=$2, reference=$3, tender_id=$4, tender_title=$5, account_id=$6, account_name=$7, status=$8, value=$9, owner_id=$10, original_value=$11 WHERE id=$1`,
+      [c.id, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.ownerId, c.originalValue],
     );
   }
 

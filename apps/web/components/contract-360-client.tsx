@@ -20,6 +20,8 @@ interface Contract {
   accountName: string | null;
   status: string;
   value: number;
+  /** The award value before variations — absent on contracts predating the split. */
+  originalValue?: number;
   createdAt: string;
 }
 interface Obligation {
@@ -186,7 +188,16 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
 
       {/* commercial summary */}
       <div style={st.stats}>
-        <Stat label="Contract value" value={`AED ${aed(contract.value)}`} strong />
+        <Stat
+          label="Contract value"
+          value={`AED ${aed(contract.value)}`}
+          strong
+          hint={
+            typeof contract.originalValue === 'number' && contract.originalValue !== contract.value
+              ? `awarded AED ${aed(contract.originalValue)} · variations ${contract.value > contract.originalValue ? '+' : '−'}AED ${aed(Math.abs(contract.value - contract.originalValue))}`
+              : undefined
+          }
+        />
         <Stat label="Certified to date" value={certSummary ? `AED ${aed(certSummary.grossCertifiedToDate)}` : '—'} />
         <Stat label="% complete" value={certSummary ? `${certSummary.percentComplete}%` : '—'} accent />
         <Stat

@@ -89,6 +89,39 @@ describe('ContractService — lifecycle state machine', () => {
     await svc.update(c.id, { title: 'Mall ELV (final)' }); // non-value fields stay editable
   });
 
+  it('rolls approved variations into the value, and a replayed approval changes nothing', async () => {
+    const { svc, store, seed } = harness();
+    const c = await seed('active'); // awarded at 100,000
+    await svc.applyVariationTotal(c.id, 25_000, { reference: 'VO-01', variationId: 'vo-1' });
+    expect((await store.get(c.id))?.value).toBe(125_000);
+
+    // Replay: same approved total, recomputed — not incremented.
+    await svc.applyVariationTotal(c.id, 25_000, { reference: 'VO-01', variationId: 'vo-1' });
+    expect((await store.get(c.id))?.value).toBe(125_000);
+
+    // A second variation, and an omission that takes it back down.
+    await svc.applyVariationTotal(c.id, 40_000, { reference: 'VO-02', variationId: 'vo-2' });
+    expect((await store.get(c.id))?.value).toBe(140_000);
+    await svc.applyVariationTotal(c.id, -10_000, { reference: 'VO-03', variationId: 'vo-3' });
+    expect((await store.get(c.id))?.value).toBe(90_000);
+    expect((await store.get(c.id))?.originalValue).toBe(100_000); // the award never moves
+  });
+
+  it('keeps variations additive on top of a manual value correction', async () => {
+    const { svc, store, seed } = harness();
+    const c = await seed('active');
+    await svc.update(c.id, { value: 120_000 }); // correction: award restated
+    await svc.applyVariationTotal(c.id, 30_000, { reference: 'VO-01', variationId: 'vo-1' });
+    expect((await store.get(c.id))?.value).toBe(150_000); // not 130,000 — the correction is kept
+  });
+
+  it('refuses to vary a cancelled contract', async () => {
+    const { svc, seed } = harness();
+    const c = await seed('draft');
+    await svc.changeStatus(c.id, 'cancelled');
+    await expect(svc.applyVariationTotal(c.id, 10_000, { reference: 'VO-01', variationId: 'vo-1' })).rejects.toThrow(/cannot apply a variation to a cancelled contract/i);
+  });
+
   it('still runs the happy path draft → active → completed, emitting each trigger once', async () => {
     const { svc, emitted, seed } = harness();
     const c = await seed('draft');

@@ -6,6 +6,8 @@ import { CONTRACT_STORE, type ContractFilter, type ContractStore } from './contr
 
 const CREATE_CONTRACT = 'contracts.contract.create';
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 /**
  * Contracts service — the third deal-chain module. Owns `aura_contracts_contracts`, emits
  * `contracts.contract.*` on the spine. A contract is awarded from a WON tender, so it carries
@@ -88,6 +90,11 @@ export class ContractService implements OnModuleInit {
     if (!existing) throw new Error(`contract ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Contract = { ...existing, ...defined };
+    // A manual correction moves the AWARD value with the live one, so approved variations stay
+    // additive on top of it rather than being silently absorbed by the correction.
+    if (updated.value !== existing.value) {
+      updated.originalValue = round2(existing.originalValue + (updated.value - existing.value));
+    }
     // The contract value is a GOVERNED figure, not a free-text field. Two controls hang off it:
     // signing it required `approvalLimit` cover for that amount, and the AR billing cap refuses to
     // invoice past it (billing above the contract needs a variation, not a bigger number). Patching
@@ -190,6 +197,51 @@ export class ContractService implements OnModuleInit {
       await this.events.appendWithClient(handle, [event]);
     });
     this.logger.log(`Contract ${updated.title} → ${status}`);
+    return updated;
+  }
+
+  /**
+   * Roll approved variations into the contract value — the link between a variation approved on
+   * the project and the ceiling the AR cap bills against. Without it an approved variation raised
+   * nothing, and the only way to bill it was to hand-patch the contract value.
+   *
+   * It takes the APPROVED TOTAL, not a delta, and recomputes `originalValue + total`. That makes a
+   * replayed event harmless — the reason `update` refuses an unexplained value change while this
+   * path is allowed to move it: the variation's own approval is the control.
+   */
+  async applyVariationTotal(id: Id, approvedTotal: number, provenance: { reference: string | null; variationId: Id | null }): Promise<Contract> {
+    const existing = await this.store.get(id);
+    if (!existing) throw new Error(`contract ${id} not found`);
+    if (existing.status === 'cancelled') {
+      throw new Error(`cannot apply a variation to a cancelled contract (${existing.reference ?? id})`);
+    }
+    const total = Number(approvedTotal);
+    if (!Number.isFinite(total)) throw new Error('approved variation total must be a number');
+    const value = round2(existing.originalValue + total);
+    if (value === existing.value) return existing; // already reflected — a replay changes nothing
+
+    const updated: Contract = { ...existing, value };
+    const event = makeEvent({
+      type: CONTRACT_EVENT.updated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: this.actor(),
+      aggregateType: 'contracts.contract',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title,
+        value: updated.value,
+        changes: [{ field: 'value', from: existing.value, to: value }],
+        variation: { id: provenance.variationId, reference: provenance.reference, approvedTotal: round2(total) },
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(
+      `Contract ${updated.title} value ${existing.value} → ${value} (approved variations ${round2(total)})`,
+    );
     return updated;
   }
 

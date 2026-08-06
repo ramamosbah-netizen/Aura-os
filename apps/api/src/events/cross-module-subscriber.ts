@@ -24,6 +24,7 @@ import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } f
  *
  *   contracts.ipc.certified         ──► (auto-draft client AR invoice for the net certified)
  *   contracts.retention.released    ──► (auto-draft client AR invoice for the released retention tranche)
+ *   projects.variation.approved     ──► (roll approved variations into the contract value = the AR billing ceiling)
  *   subcontracts.backcharge.recovered ──► (auto-draft a supplier AP debit note — negative invoice — reducing the subcontractor payable)
  *   procurement.po.created  ──► (log committed cost against project)
  *   inventory.grn.created   ──► (auto-transition PO to 'received' & suggest AP invoice)
@@ -754,6 +755,37 @@ export class CrossModuleSubscriber implements OnModuleInit {
         this.logger.log(`⚡ variation approved → budget ${signedAmount >= 0 ? '+' : ''}${signedAmount} on CBS ${cbsNodeId} (VO ${e.aggregateId})`);
       } catch (err) {
         this.logger.error(`Failed to post budget change for approved variation ${e.aggregateId}: ${err}`);
+      }
+    });
+
+    // ── Commercial: variation approved → roll it into the CONTRACT value ──
+    // The other half of an approved variation. The cost engine (above) moves the internal budget;
+    // this moves the client-facing ceiling. The AR cap bills against the contract value and tells
+    // you to "raise a variation before billing above the contract" — so an approved variation has
+    // to actually raise it, otherwise the only way to bill the varied work was to hand-patch the
+    // contract. Recomputed from the approved TOTAL (original + Σ approved), never incremented, so
+    // a redelivered approval cannot inflate the contract twice.
+    this.bus.subscribe('projects.variation.approved', async (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const projectId = p.projectId as string | null;
+      if (!projectId) return;
+      try {
+        const project = await this.projects.get(projectId);
+        const contractId = project?.contractId ?? null;
+        if (!contractId) return; // an internal project with no contract — nothing to bill against
+        const variations = await this.variations.list({ tenantId: e.tenantId, projectId });
+        const approvedTotal = variations
+          .filter((v) => v.status === 'approved')
+          .reduce((sum, v) => sum + (Number(v.signedAmount) || 0), 0);
+        const contract = await this.contracts.applyVariationTotal(contractId, approvedTotal, {
+          reference: (p.title as string) ?? null,
+          variationId: e.aggregateId,
+        });
+        this.logger.log(
+          `⚡ variation approved → contract ${contract.reference ?? contract.id} value now ${contract.value} (approved variations ${approvedTotal})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to roll approved variation ${e.aggregateId} into the contract value: ${err}`);
       }
     });
 

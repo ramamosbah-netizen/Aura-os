@@ -20,8 +20,13 @@ export interface Contract {
   accountId: Id | null;
   accountName: string | null;
   status: ContractStatus;
-  /** Awarded contract value. */
+  /** The live contract value: `originalValue` plus every approved variation. */
   value: number;
+  /**
+   * The value at award, before variations. Kept separate so the variation roll-up is a recompute
+   * (original + Σ approved) rather than an increment — a replayed event cannot inflate the contract.
+   */
+  originalValue: number;
   /** The locked Commercial Baseline (approved-price snapshot) this contract was created from —
    * reference, not join. Present when the contract came from an approved quotation (R3). */
   commercialBaselineId: Id | null;
@@ -59,6 +64,7 @@ export function makeContract(input: NewContract): Contract {
     accountName: input.accountName ?? null,
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    originalValue: Number.isFinite(input.value) ? Number(input.value) : 0,
     commercialBaselineId: input.commercialBaselineId ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),

@@ -128,12 +128,18 @@ export class PaymentService implements OnModuleInit {
       }
     }
 
-    // Post double entry journal: Debit AP, Credit Cash/Bank
+    // Post double entry journal: Debit AP, Credit Cash/Bank — dated on the day the money moved
+    // (payment.paidAt), NOT the moment it was entered. A back-dated payment (the normal month-end
+    // case) otherwise landed its GL entry in the current open period while the payment sub-ledger
+    // showed the real date, so AP sub-ledger and GL diverged by period and never reconciled. Dating
+    // the journal on paidAt also makes the period lock apply to the cash movement: a payment
+    // back-dated into a closed month is now rejected rather than silently posted into the open one.
     await this.journals.post({
       tenantId: payment.tenantId,
       reference: payment.id,
       description: `Payment recorded for Invoice ${invoice.reference || invoice.id}`,
       createdBy: actorId,
+      postedAt: payment.paidAt,
       lines: [
         {
           accountId: apAccount.id,

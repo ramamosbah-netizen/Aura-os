@@ -88,3 +88,47 @@ describe('Payment recording idempotency', () => {
     expect((await payments.list({ tenantId: 't1' })).length).toBe(2);
   });
 });
+
+// ── Regression (wave-3 audit): the settlement journal follows the payment date ───
+describe('Payment GL journal is dated on the payment date, not entry time', () => {
+  const wire = () => {
+    const events = { append: vi.fn().mockResolvedValue(undefined), appendWithClient: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
+    const access = { assert: vi.fn(), assertApprovalAuthority: vi.fn() } as unknown as AccessService;
+    const numbering = { generateNextNumber: vi.fn().mockResolvedValue('INV-2026-0003') } as unknown as NumberingService;
+    const audit = { log: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
+    const bus = new CommandBus(access, new IdempotencyService(null), new LockService(), new NullTxRunner());
+    const invoices = new InvoiceService(
+      new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
+      { getRate: async () => 1 } as any, {} as any, {} as any, access,
+    );
+    invoices.onModuleInit();
+    const accounts = new AccountService(new InMemoryAccountStore(), access);
+    const periods = new InMemoryPeriodCloseStore();
+    const journals = new JournalService(new InMemoryJournalStore(), events, periods, access);
+    const payments = new PaymentService(new InMemoryPaymentStore(), events, bus, invoices, journals, accounts);
+    payments.onModuleInit();
+    return { invoices, accounts, periods, journals, payments };
+  };
+
+  it('posts the settlement journal on paidAt, so the sub-ledger and GL share a period', async () => {
+    const { invoices, accounts, journals, payments } = wire();
+    const invoice = await invoices.create({ tenantId: 't1', title: 'Backdated', value: 900, status: 'approved' });
+    const bank = await accounts.create({ tenantId: 't1', code: '1010', name: 'Main Bank', type: 'asset' });
+
+    await payments.record({ tenantId: 't1', invoiceId: invoice.id, bankAccountId: bank.id, amount: 900, paidAt: '2026-01-20T00:00:00.000Z' }, 'u1');
+
+    const [journal] = await journals.list({ tenantId: 't1' });
+    expect(journal.postedAt).toBe('2026-01-20T00:00:00.000Z');
+  });
+
+  it('rejects a payment back-dated into a closed period instead of silently posting it into the open one', async () => {
+    const { invoices, accounts, periods, payments } = wire();
+    const invoice = await invoices.create({ tenantId: 't1', title: 'Into a closed month', value: 400, status: 'approved' });
+    const bank = await accounts.create({ tenantId: 't1', code: '1010', name: 'Main Bank', type: 'asset' });
+    await periods.save({ id: 'pc1', tenantId: 't1', period: '2026-01', closedAt: '2026-02-01T00:00:00Z', closedBy: null, note: null });
+
+    await expect(
+      payments.record({ tenantId: 't1', invoiceId: invoice.id, bankAccountId: bank.id, amount: 400, paidAt: '2026-01-15T00:00:00.000Z' }, 'u1'),
+    ).rejects.toThrow(/closed/);
+  });
+});

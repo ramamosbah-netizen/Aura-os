@@ -60,9 +60,9 @@ period-cutoff defects a deeper read surfaced.
 | Suite | Result |
 |---|---|
 | `@aura/contracts` | 44 / 44 (+6 earlier phase) |
-| `@aura/finance` | 276 / 276 (+7 earlier + 7 credit-note service tests) |
+| `@aura/finance` | 296 / 296 (+7 VAT/payment, +7 credit-note, +14 allocation, +6 refund) |
 | `@aura/api` unit (incl. error-taxonomy fitness) | 65 / 65 |
-| e2e (full suite) | 181 / 181 (+3 credit-note over AR-GL/AP-GL) |
+| e2e (full suite) | 189 / 189 (+3 credit-note, +4 allocation, +4 refund over AR/AP-GL) |
 | `@aura/api` + `@aura/web` typecheck | clean |
 
 ### GL integration (F-5 / F-6) — what changed structurally
@@ -90,7 +90,7 @@ filing, and AP cancellation reversal (approved→cancelled).
 
 | Module | Business logic | Missing functions | Missing pages | Missing reports | Priority | Complete? |
 |---|---|---|---|---|---|---|
-| **Finance** | ✅ audited, 4 defects fixed (+GL integration F-5/F-6) | ✅ **credit notes** — open: multi-invoice payment allocation (one payment settles one invoice); customer refunds | ✅ credit-note screen — open: receipt-allocation UI | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | logic ✅ · completeness ⚠️ (2 open) |
+| **Finance** | ✅ audited, 4 defects fixed (+GL integration F-5/F-6) | ✅ credit notes · ✅ multi-invoice receipt allocation · ✅ customer refunds | ✅ credit-note, receipt-allocation & refund screens | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | **logic ✅ · completeness ✅ (module closed)** |
 | **Contracts** | ✅ audited, 5 defects fixed | ✅ retention release · ✅ lapsed-bond sweep — open: final account / closeout statement | ✅ clause library | Contract-level retention & bond exposure statement | — | logic ✅ · completeness ⚠️ (2 open) |
 
 ---
@@ -137,9 +137,26 @@ Verified live: drafting CN-DEMO-1 (30,000 net) against a 200,000 invoice and iss
 P&L revenue 200,000 → 170,000 and set the invoice's `creditedTotal` to 31,500, all through the real
 UI's BFF path.
 
+## Completeness build — Finance receipt allocation & customer refunds (2026-08-06)
+
+The remaining two Finance gaps, each a full vertical, verified in the running app.
+
+- **Multi-invoice receipt allocation** (`dd1b2d9`) — one customer receipt clears several open
+  invoices at once (was: one payment settles one invoice). `allocateOldestFirst` /
+  `validateAllocations` split the amount oldest-first or by an explicit set; each slice records a
+  receipt (posting Dr Bank / Cr AR), over-payment returns as `unapplied`. Screen at
+  `/finance/receipt-allocation`. Verified live: a 150,000 receipt cleared AR-AL-1 (105,000) and
+  part-paid AR-AL-2 (45,000).
+- **Customer refunds** (`c9fed21`) — return cash to a customer; paying a refund posts **Dr Accounts
+  Receivable / Cr Bank** (the mirror of a receipt), migration 0224, screen at
+  `/finance/customer-refunds`. Verified live: RF-DEMO-1 (15,000) paid posted Dr AR 15,000 / Cr Bank
+  15,000.
+
+**Finance is now closed** on both halves: business logic (4 defects + GL integration F-5/F-6) and
+completeness (all three AR capabilities built, each with UI and tests).
+
 ## Next
 
-Contracts is closed on the business-logic half with 4 of 6 completeness gaps built. Finance is
-audited (4 defects + GL integration) with **credit notes done**; the two remaining Finance gaps are
-**multi-invoice payment allocation** (one payment currently settles one invoice) and **customer
-refunds**. Plus the two Contracts reports.
+Finance is closed (logic + completeness). Contracts is closed on the business-logic half with 4 of 6
+completeness gaps built; the two remaining are the closeout statement and the retention/bond exposure
+report. After that, the next module on the priority list is **Procurement**.

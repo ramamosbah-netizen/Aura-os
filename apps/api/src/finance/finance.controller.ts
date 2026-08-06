@@ -726,6 +726,25 @@ export class FinanceController {
     );
   }
 
+  // Cash application — declared BEFORE the `:id` routes so the static paths are not shadowed.
+  @Get('customer-invoices/allocation-preview')
+  previewAllocation(@Query('customerName') customerName?: string, @Query('amount') amount?: string) {
+    if (!customerName?.trim()) throw new BadRequestException('customerName is required');
+    if (!(Number(amount) > 0)) throw new BadRequestException('amount must be positive');
+    return this.customerInvoices.previewAllocation(this.tenant.get().tenantId, customerName, Number(amount));
+  }
+
+  @Post('customer-invoices/allocate-receipt')
+  allocateReceipt(@Body() dto: { customerName: string; amount: number; allocations?: Array<{ invoiceId: string; amount: number }> }) {
+    if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
+    if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
+    return this.customerInvoices.allocateReceipt(this.tenant.get().tenantId, {
+      customerName: dto.customerName,
+      amount: Number(dto.amount),
+      allocations: dto.allocations,
+    });
+  }
+
   @Get('customer-invoices/:id')
   async getCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
     const found = await this.customerInvoices.get(id);

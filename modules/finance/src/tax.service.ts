@@ -4,7 +4,7 @@ import {
   type TaxCode, type NewTaxCode, makeTaxCode,
   type TaxLine, type NewTaxLine, makeTaxLine,
   type TaxSummary, calculateTaxSummary,
-  type TaxReturn, calculateTaxReturn, makeTaxReturn,
+  type TaxReturn, calculateTaxReturn, makeTaxReturn, assertTaxReturnTransition, periodsOverlap,
 } from './domain/tax';
 import { TAX_CODE_STORE, TAX_LINE_STORE, TAX_RETURN_STORE, type TaxCodeFilter, type TaxCodeStore, type TaxLineStore, type TaxReturnStore } from './tax-store';
 
@@ -118,6 +118,16 @@ export class TaxService {
 
   /** Generate (and persist as draft) a VAT return for a filing period. */
   async generateReturn(tenantId: Id, periodStart: string, periodEnd: string): Promise<TaxReturn> {
+    // One filed return per period. A draft can be regenerated freely (it supersedes an earlier
+    // draft), but once a period has been filed or paid, generating a second return that overlaps
+    // it would double-declare the same liability to the FTA. Reject that as a conflict (409).
+    const existing = await this.returns.list(tenantId);
+    const clash = existing.find(
+      (r) => (r.status === 'filed' || r.status === 'paid') && periodsOverlap(r.periodStart, r.periodEnd, periodStart, periodEnd),
+    );
+    if (clash) {
+      throw new Error(`a ${clash.status} VAT return already covers ${clash.periodStart}..${clash.periodEnd}`);
+    }
     const summary = await this.previewReturn(tenantId, periodStart, periodEnd);
     const ret = makeTaxReturn({ tenantId, periodStart, periodEnd, totalOutputTax: summary.totalOutputTax, totalInputTax: summary.totalInputTax });
     await this.returns.create(ret);
@@ -125,10 +135,11 @@ export class TaxService {
     return ret;
   }
 
-  /** File a draft return (or mark a filed one paid). */
+  /** File a draft return (or mark a filed one paid). Enforces draft → filed → paid, forward only. */
   async setReturnStatus(id: Id, status: 'filed' | 'paid', filedBy?: string | null): Promise<TaxReturn> {
     const existing = await this.returns.get(id);
     if (!existing) throw new Error(`tax return ${id} not found`);
+    assertTaxReturnTransition(existing.status, status);
     const updated: TaxReturn = {
       ...existing,
       status,

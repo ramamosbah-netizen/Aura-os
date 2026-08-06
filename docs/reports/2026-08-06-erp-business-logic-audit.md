@@ -27,10 +27,17 @@ unmeasured scores).
 | C-3 | Contracts · `contract.service.ts` `update` | `value` was an ungoverned PATCH field | Signing enforces `approvalLimit` cover for the value, and the AR cap refuses to bill past it. Sign a 30k contract inside your limit, then PATCH it to 5m: **both controls bypassed**. A completed contract's value was mutable too | High | `2fda46e` |
 | C-4 | Contracts · `domain/contract-obligation.ts` `setObligationStatus` | Only *set* `completedDate` on met/waived; never cleared it | An obligation walked back from met → open kept its completion date: it sat in the reminder feed (which filters on status) while every register and export showed it completed on a date it was not | Medium | `2fda46e` |
 | C-5 | Contracts · `bond.service.ts` `act` | `expire` mapped to no event type | A performance/advance bond lapsing — the register's most commercially significant change — moved with **no audit trail at all** | Low | `2fda46e` |
+| F-3 | Finance · `tax.service.ts` `setReturnStatus` / `generateReturn` | VAT return status setter applied any target from any state, and generateReturn had no duplicate-period guard | draft→paid marked a return paid that was never filed; re-filing a filed return overwrote its FTA submission timestamp; paid→filed reverted a settled liability; and a period could be filed twice, double-declaring the liability | Medium | `c5f12ac` |
+| F-4 | Finance · `payment.service.ts` `doRecord` | Settlement journal posted with no `postedAt`, so `makeJournal` stamped it at entry time even though payments can be back-dated | A back-dated payment recorded its cash movement in the current open GL period while the payment sub-ledger carried the real date — AP sub-ledger and GL diverged by period and never reconciled; the period lock did not apply to the cash movement | Medium | `d2c744d` |
+| F-5 | Finance · AR invoicing not wired to the GL (`cross-module-subscriber.ts`) | `StatementsService` folds every statement from the journal ledger alone, but AR invoices posted **no** journal — only inventory, AP payment and FX reval touched the GL | **Revenue never reached the P&L and the receivable never reached the balance sheet.** Budget-vs-actual (which folds the GL) and consolidation were blind to sales | High | `db092ec` |
+| F-6 | Finance · AP invoice approval not wired to the GL (`cross-module-subscriber.ts`) | AP payment posted Dr AP / Cr Bank, but nothing credited AP at approval — the payable was never booked | Supplier expense never reached the P&L, and every AP payment posted against a payable that did not exist (a dangling Dr AP). The AP cycle did not articulate | High | `8654a7b` |
 
-Both Finance defects share one root cause: the AR/AP data-model asymmetry (AR carries `amountPaid`;
-AP derives paid from the payment ledger). C-1 and C-2 share another: event-emitting status setters
-written without a state machine, where every re-send re-fires cross-module automation.
+Both original Finance defects share one root cause: the AR/AP data-model asymmetry (AR carries
+`amountPaid`; AP derives paid from the payment ledger). C-1 and C-2 share another: event-emitting
+status setters written without a state machine, where every re-send re-fires cross-module
+automation — the *same* class as F-3's VAT return setter. F-3 and F-4 are the deeper (wave-3)
+Finance pass: the module was already hardened twice, so these are the residual lifecycle- and
+period-cutoff defects a deeper read surfaced.
 
 ## Verified sound (audited, no defect)
 
@@ -52,11 +59,30 @@ written without a state machine, where every re-send re-fires cross-module autom
 
 | Suite | Result |
 |---|---|
-| `@aura/contracts` | 44 / 44 (+6 this phase) |
-| `@aura/finance` | 260 / 260 (+5 the Finance phase) |
+| `@aura/contracts` | 44 / 44 (+6 earlier phase) |
+| `@aura/finance` | 296 / 296 (+7 VAT/payment, +7 credit-note, +14 allocation, +6 refund) |
 | `@aura/api` unit (incl. error-taxonomy fitness) | 65 / 65 |
-| e2e — `sod`, `chains`, `ar-contract-cap`, `quantity-ledger`, `cost-ledger` | 25 / 25 |
-| `@aura/api` typecheck | clean |
+| e2e (full suite) | 189 / 189 (+3 credit-note, +4 allocation, +4 refund over AR/AP-GL) |
+| `@aura/api` + `@aura/web` typecheck | clean |
+
+### GL integration (F-5 / F-6) — what changed structurally
+
+The single biggest accounting gap: the sub-ledgers did not post to the GL, so the GL-derived
+statements were structurally incomplete. Now, following the existing inventory-GL reactor pattern,
+the cross-module subscriber posts base-currency double entries:
+
+| Event | GL entry |
+|---|---|
+| AR invoice **issued** | Dr Accounts Receivable (1200) / Cr Revenue (4010) / Cr VAT Output (2100) |
+| AR **receipt** | Dr Bank (1010) / Cr Accounts Receivable (1200) |
+| AR invoice **cancelled** (if issued) | reverse the issue posting |
+| AP invoice **approved** | Dr Supplier & Subcontract Costs (5020) / Cr Accounts Payable (2010) |
+| AP **payment** (pre-existing) | Dr Accounts Payable (2010) / Cr Bank (1010) |
+
+Revenue now reaches the P&L, receivables/payables reach the balance sheet, the AP cycle articulates
+(approval books the payable the payment clears), and budget-vs-actual + consolidation see real
+figures. **Still open on the GL side (follow-ups):** AR/AP VAT settlement postings on VAT-return
+filing, and AP cancellation reversal (approved→cancelled).
 
 ---
 
@@ -64,7 +90,7 @@ written without a state machine, where every re-send re-fires cross-module autom
 
 | Module | Business logic | Missing functions | Missing pages | Missing reports | Priority | Complete? |
 |---|---|---|---|---|---|---|
-| **Finance** | ✅ audited, 2 defects fixed | Credit notes (only invoice cancel exists); multi-invoice payment allocation (one payment settles one invoice); customer refunds | Credit-note screen; receipt-allocation UI | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | logic ✅ · completeness ⚠️ (3 open) |
+| **Finance** | ✅ audited, 4 defects fixed (+GL integration F-5/F-6) | ✅ credit notes · ✅ multi-invoice receipt allocation · ✅ customer refunds | ✅ credit-note, receipt-allocation & refund screens | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | **logic ✅ · completeness ✅ (module closed)** |
 | **Contracts** | ✅ audited, 5 defects fixed | ✅ retention release · ✅ lapsed-bond sweep — open: final account / closeout statement | ✅ clause library | Contract-level retention & bond exposure statement | — | logic ✅ · completeness ⚠️ (2 open) |
 
 ---
@@ -94,8 +120,43 @@ bond exposure report. Neither is started.
 
 ---
 
+## Completeness build — Finance credit notes (2026-08-06)
+
+The first of the three Finance completeness gaps, built as a full vertical (domain → service →
+store + migration → API → BFF → UI → tests) and verified in the running app.
+
+A credit note is the mirror of a sales invoice — it reduces a customer's receivable after the
+invoice is issued (over-billing, a return, a price adjustment, or crediting an invoice already
+part-paid). Issuing one posts **Dr Revenue (4010) / Dr VAT Output (2100) / Cr Accounts Receivable
+(1200)** and applies the credit to the target invoice, so the GL and the AR sub-ledger (balance +
+aging) stay consistent. Guards: cumulative net credit ≤ invoice net (409), no double-issue,
+per-tenant unique number. `credited_total` on the customer invoice makes `balance = total − paid −
+credited`. Screen at `/finance/credit-notes`; commits `0dfce90` (backend) + `088cd28` (UI).
+
+Verified live: drafting CN-DEMO-1 (30,000 net) against a 200,000 invoice and issuing it dropped the
+P&L revenue 200,000 → 170,000 and set the invoice's `creditedTotal` to 31,500, all through the real
+UI's BFF path.
+
+## Completeness build — Finance receipt allocation & customer refunds (2026-08-06)
+
+The remaining two Finance gaps, each a full vertical, verified in the running app.
+
+- **Multi-invoice receipt allocation** (`dd1b2d9`) — one customer receipt clears several open
+  invoices at once (was: one payment settles one invoice). `allocateOldestFirst` /
+  `validateAllocations` split the amount oldest-first or by an explicit set; each slice records a
+  receipt (posting Dr Bank / Cr AR), over-payment returns as `unapplied`. Screen at
+  `/finance/receipt-allocation`. Verified live: a 150,000 receipt cleared AR-AL-1 (105,000) and
+  part-paid AR-AL-2 (45,000).
+- **Customer refunds** (`c9fed21`) — return cash to a customer; paying a refund posts **Dr Accounts
+  Receivable / Cr Bank** (the mirror of a receipt), migration 0224, screen at
+  `/finance/customer-refunds`. Verified live: RF-DEMO-1 (15,000) paid posted Dr AR 15,000 / Cr Bank
+  15,000.
+
+**Finance is now closed** on both halves: business logic (4 defects + GL integration F-5/F-6) and
+completeness (all three AR capabilities built, each with UI and tests).
+
 ## Next
 
-Contracts is closed on the business-logic half and has 4 of 6 completeness gaps built. Remaining
-work is the two Contracts reports above and the three Finance capabilities (credit notes,
-multi-invoice payment allocation, customer refunds) — none of the Finance three is started.
+Finance is closed (logic + completeness). Contracts is closed on the business-logic half with 4 of 6
+completeness gaps built; the two remaining are the closeout statement and the retention/bond exposure
+report. After that, the next module on the priority list is **Procurement**.

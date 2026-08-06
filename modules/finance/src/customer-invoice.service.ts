@@ -9,8 +9,11 @@ import {
   issueInvoice,
   recordReceipt,
   cancelInvoice,
+  applyCredit,
 } from './domain/customer-invoice';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
+import { type AllocationResult, type OpenInvoiceRef, allocateOldestFirst, validateAllocations } from './domain/receipt-allocation';
+import { balanceOf } from './domain/customer-invoice';
 import { computeFxRevaluation } from './domain/fx-revaluation';
 import { evaluateContractCap } from './domain/contract-cap';
 import { CONTRACT_CAP_PORT, type ContractCapPort } from './contract-cap.port';
@@ -143,7 +146,12 @@ export class CustomerInvoiceService {
         type: CUSTOMER_INVOICE_EVENT.issued,
         tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
+        // Carries net / VAT / currency so the GL reactor can post the revenue entry in base currency.
+        payload: {
+          invoiceNumber: inv.invoiceNumber, total: inv.total,
+          subtotal: inv.subtotal, vatTotal: inv.vatTotal,
+          currency: inv.currency, exchangeRate: inv.exchangeRate,
+        },
       }),
     ]);
     return updated;
@@ -159,7 +167,11 @@ export class CustomerInvoiceService {
         type: CUSTOMER_INVOICE_EVENT.receiptRecorded,
         tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { amount: Number(amount), amountPaid: updated.amountPaid, status: updated.status },
+        // currency/rate let the GL reactor post the cash receipt (Dr Bank / Cr AR) in base currency.
+        payload: {
+          amount: Number(amount), amountPaid: updated.amountPaid, status: updated.status,
+          currency: inv.currency, exchangeRate: inv.exchangeRate,
+        },
       }),
     ]);
     this.logger.log(`Receipt ${amount} on invoice ${inv.invoiceNumber} → paid ${updated.amountPaid}/${inv.total} (${updated.status})`);
@@ -178,11 +190,77 @@ export class CustomerInvoiceService {
         type: CUSTOMER_INVOICE_EVENT.cancelled,
         tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
+        // previousStatus tells the GL reactor whether a revenue entry was ever posted (only 'issued'
+        // invoices post revenue) so it can reverse it. subtotal/VAT/rate size the reversal.
+        payload: {
+          invoiceNumber: inv.invoiceNumber, total: inv.total, previousStatus: inv.status,
+          subtotal: inv.subtotal, vatTotal: inv.vatTotal,
+          currency: inv.currency, exchangeRate: inv.exchangeRate,
+        },
       }),
     ]);
     this.logger.log(`Customer invoice ${inv.invoiceNumber} (${id}) cancelled`);
     return updated;
+  }
+
+  /**
+   * Apply a credit note (gross) to an invoice, reducing what the customer owes. Called by
+   * CreditNoteService when a note is issued; the note's own GL posting reduces AR in the books, and
+   * this keeps the invoice sub-ledger (balance + aging) in step.
+   */
+  async applyCredit(id: Id, amountGross: number): Promise<CustomerInvoice> {
+    const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
+    const updated = applyCredit(inv, amountGross);
+    await this.store.save(updated);
+    this.logger.log(`Credit ${amountGross} applied to invoice ${inv.invoiceNumber} → credited ${updated.creditedTotal}/${inv.total} (${updated.status})`);
+    return updated;
+  }
+
+  /** Open (still-receivable) invoices for a customer, oldest first — the pool a receipt applies to. */
+  private async openInvoicesFor(tenantId: Id, customerName: string): Promise<{ refs: OpenInvoiceRef[]; ids: Set<string> }> {
+    const all = await this.store.list({ tenantId, limit: 1000 });
+    const open = all.filter(
+      (i) => i.customerName === customerName && (i.status === 'issued' || i.status === 'partially_paid') && balanceOf(i) > 0,
+    );
+    return {
+      refs: open.map((i) => ({ id: i.id, invoiceNumber: i.invoiceNumber, issueDate: i.issueDate, balance: balanceOf(i) })),
+      ids: new Set(open.map((i) => i.id)),
+    };
+  }
+
+  /** Preview how a receipt would split across a customer's open invoices (no writes). */
+  async previewAllocation(tenantId: Id, customerName: string, amount: number): Promise<AllocationResult> {
+    const { refs } = await this.openInvoicesFor(tenantId, customerName);
+    return allocateOldestFirst(refs, amount);
+  }
+
+  /**
+   * Apply one customer receipt across several open invoices in a single operation (cash application).
+   * Explicit `allocations` are validated against balances; otherwise the amount is spread oldest-first.
+   * Each slice is recorded as a receipt (advancing invoice status and posting Dr Bank / Cr AR), so a
+   * single lump-sum receipt clears multiple invoices and any over-payment is returned as `unapplied`.
+   */
+  async allocateReceipt(
+    tenantId: Id,
+    input: { customerName: string; amount: number; allocations?: Array<{ invoiceId: string; amount: number }> },
+  ): Promise<AllocationResult> {
+    if (!input.customerName?.trim()) throw new Error('customerName is required');
+    const { refs, ids } = await this.openInvoicesFor(tenantId, input.customerName);
+    if (refs.length === 0) throw new Error(`no open invoices to allocate against for ${input.customerName}`);
+
+    const result = input.allocations && input.allocations.length > 0
+      ? validateAllocations(refs, input.allocations, input.amount)
+      : allocateOldestFirst(refs, input.amount);
+
+    // Validate-then-apply: every target must be one of this customer's open invoices (tenant-safe).
+    for (const a of result.allocations) {
+      if (!ids.has(a.invoiceId)) throw new Error(`invoice ${a.invoiceId} is not open for this customer`);
+    }
+    for (const a of result.allocations) {
+      await this.recordReceipt(a.invoiceId, a.amount);
+    }
+    this.logger.log(`Receipt of ${input.amount} allocated across ${result.allocations.length} invoice(s) for ${input.customerName} (unapplied ${result.unapplied})`);
+    return result;
   }
 
   async get(id: Id): Promise<CustomerInvoice | null> {

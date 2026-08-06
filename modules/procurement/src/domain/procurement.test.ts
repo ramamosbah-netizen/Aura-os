@@ -79,6 +79,24 @@ describe('Procurement Full Cycle', () => {
       expect(pos[0].title).toBe('PO for Office Laptops Request');
       expect(pos[0].value).toBe(6500);
       expect(pos[0].status).toBe('draft');
+
+      // Re-approving an already-approved PR must NOT spawn a second PO (idempotent no-op).
+      const again = await prService.changeStatus(pr.id, 'approved', 'actor-1');
+      expect(again.status).toBe('approved');
+      expect((await poService.list({ tenantId: 't1' })).length).toBe(1);
+    });
+
+    it('will not revive a rejected PR straight to approved', async () => {
+      const prStore = new InMemoryPurchaseRequestStore();
+      const poStore = new InMemoryPurchaseOrderStore();
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore());
+      poService.onModuleInit();
+      const prService = new PurchaseRequestService(prStore, mockEvents, mockAccess, poService, { resolve: async () => null } as any);
+
+      const pr = await prService.create({ tenantId: 't1', title: 'Rejected then revived', value: 6500 });
+      await prService.changeStatus(pr.id, 'rejected', 'actor-1');
+      await expect(prService.changeStatus(pr.id, 'approved', 'actor-1')).rejects.toThrow(/can only move/);
+      expect((await poService.list({ tenantId: 't1' })).length).toBe(0); // no PO spawned
     });
   });
 

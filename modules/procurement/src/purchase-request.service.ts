@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, ApprovalMatrixService } from '@aura/core';
-import { PR_EVENT, type PurchaseRequest, type PurchaseRequestStatus, type NewPurchaseRequest, makePurchaseRequest } from './domain/purchase-request';
+import { PR_EVENT, type PurchaseRequest, type PurchaseRequestStatus, type NewPurchaseRequest, makePurchaseRequest, assertPrTransition } from './domain/purchase-request';
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestFilter, type PurchaseRequestStore } from './purchase-request-store';
 import { PurchaseOrderService } from './purchase-order.service';
 
@@ -59,6 +59,15 @@ export class PurchaseRequestService {
 
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`PR ${id} not found`);
+
+    // Idempotent no-op: re-applying the current status changes nothing and — crucially for the
+    // 'approved' state — does NOT run the auto-PO side effect again, so a re-sent approval cannot
+    // spawn a duplicate purchase order.
+    if (status === existing.status) return existing;
+
+    // State machine: reject an unknown status or an illegal transition. `approved` is terminal
+    // (it created the PO), so an approved PR can never be re-approved into a second one.
+    assertPrTransition(existing.status, status);
 
     // Approval matrix: when a threshold rule matches the PR, only a listed approver may approve it.
     if (status === 'approved') {

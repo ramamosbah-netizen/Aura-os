@@ -2,6 +2,34 @@ import { type Id, type Discipline, newId, toDiscipline } from '@aura/shared';
 
 export type PurchaseRequestStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 
+/**
+ * The purchase-request lifecycle. Approving a PR auto-creates a draft Purchase Order, so `approved`
+ * is terminal: without a guard, re-sending `approved` to an already-approved PR spawned a SECOND PO
+ * (and, once the PO is coded, a second committed cost) — the same event-emitting-setter defect as a
+ * re-certified IPC billing twice. A rejected request can be reworked back to draft/submitted, but
+ * not flipped straight to approved.
+ */
+const PR_TRANSITIONS: Record<PurchaseRequestStatus, PurchaseRequestStatus[]> = {
+  draft: ['submitted', 'approved', 'rejected'],
+  submitted: ['approved', 'rejected', 'draft'],
+  approved: [],
+  rejected: ['draft', 'submitted'],
+};
+
+export function isPurchaseRequestStatus(s: string): s is PurchaseRequestStatus {
+  return Object.prototype.hasOwnProperty.call(PR_TRANSITIONS, s);
+}
+
+/** Guard a PR status change. Throws on an unknown status or an illegal transition (409). */
+export function assertPrTransition(from: PurchaseRequestStatus, to: PurchaseRequestStatus): void {
+  if (!isPurchaseRequestStatus(to)) throw new Error(`unknown purchase request status "${to}"`);
+  const allowed = PR_TRANSITIONS[from] ?? [];
+  if (!allowed.includes(to)) {
+    const where = allowed.length ? allowed.join(', ') : 'nowhere — it is terminal';
+    throw new Error(`a ${from} purchase request can only move to ${where}, not ${to}`);
+  }
+}
+
 export interface PurchaseRequest {
   id: Id;
   tenantId: Id;

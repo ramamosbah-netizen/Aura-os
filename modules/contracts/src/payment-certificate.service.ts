@@ -6,6 +6,7 @@ import {
   type CertificateStatus,
   type CertificateSummary,
   type PaymentCertificate,
+  assertCertificateTransition,
   certificateSummary,
   makePaymentCertificate,
   priorCertifiedNet,
@@ -167,6 +168,10 @@ export class PaymentCertificateService {
   async changeStatus(id: Id, status: CertificateStatus, actorId?: Id): Promise<PaymentCertificate> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`payment certificate ${id} not found`);
+    // State-machine guard: a certified/paid IPC is (near-)terminal. Without this, re-sending
+    // 'certified' re-fired the AR trigger and billed the client twice for the same work, and a
+    // rejected certificate could be revived into the certified baseline. See CERTIFICATE_TRANSITIONS.
+    assertCertificateTransition(existing.status, status, existing.reference ?? id);
     const certifying = status === 'certified';
     // Segregation of duties: the preparer may not certify their own IPC (a different, authorised
     // certifier must). Skipped for system/auto transitions (no actor). Mirrors quotation approval.

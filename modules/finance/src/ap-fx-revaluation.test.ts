@@ -16,6 +16,8 @@ import { InMemoryInvoiceStore } from './in-memory-invoice-store';
 import { InMemoryJournalStore } from './in-memory-journal-store';
 import { InMemoryPeriodCloseStore } from './in-memory-period-close-store';
 import { InMemoryAccountStore } from './in-memory-account-store';
+import { InMemoryPaymentStore } from './in-memory-payment-store';
+import { makePayment } from './domain/payment';
 
 /**
  * AP multi-currency + FX revaluation: a EUR supplier invoice is booked at the rate at
@@ -39,12 +41,13 @@ describe('AP FX revaluation', () => {
 
     const accounts = new AccountService(new InMemoryAccountStore(), access);
     const journals = new JournalService(new InMemoryJournalStore(), events, new InMemoryPeriodCloseStore(), access);
+    const paymentStore = new InMemoryPaymentStore();
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
-      fx, journals, accounts, access,
+      fx, journals, accounts, access, undefined, null, paymentStore,
     );
     invoices.onModuleInit();
-    return { invoices, journals };
+    return { invoices, journals, paymentStore };
   }
 
   it('books baseValue at the creation rate and posts an unrealized LOSS when the rate rises', async () => {
@@ -78,6 +81,17 @@ describe('AP FX revaluation', () => {
     // owe less → Dr AP 200 / Cr FX gain 200
     expect(gain?.credit).toBe(200);
     expect(ap?.debit).toBe(200);
+  });
+
+  it('revalues only the UNPAID balance of a partially-paid foreign invoice', async () => {
+    // A partial payment leaves the invoice 'approved'; only the remaining balance carries FX
+    // exposure. Revaluing the full value overstated the unrealized gain/loss and its GL journal.
+    const { invoices, paymentStore } = build({ create: 4.0, reval: 4.2 });
+    const inv = await invoices.create({ tenantId: 't1', title: 'EUR steel', value: 1000, currency: 'EUR', status: 'approved' });
+    await paymentStore.create(makePayment({ tenantId: 't1', invoiceId: inv.id, bankAccountId: 'b1', amount: 400 }));
+    const reval = await invoices.fxRevaluation('t1');
+    // 600 EUR still exposed × (4.2 − 4.0) = +120, not the 200 the full 1000 would give.
+    expect(reval.totalGainLoss).toBe(120);
   });
 
   it('ignores base-currency (AED) invoices — no journal', async () => {

@@ -6,6 +6,7 @@ import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeI
 import { type ApAgingReport, buildApAging } from './domain/ap-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
 import { INVOICE_STORE, type InvoiceFilter, type InvoiceStore } from './invoice-store';
+import { PAYMENT_STORE, type PaymentStore } from './payment-store';
 import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
 import type { AccountType } from './domain/account';
@@ -46,6 +47,9 @@ export class InvoiceService implements OnModuleInit {
     // module is self-contained; when unbound the match is skipped (mirrors procurement's gate).
     @Optional() @Inject(PO_MATCH_PORT) private readonly poMatch?: PoMatchPort,
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    // Read-only access to the payment ledger for AP aging (remaining balance = value − paid).
+    // The store token, not PaymentService, to avoid a circular dep (payment depends on invoice).
+    @Optional() @Inject(PAYMENT_STORE) private readonly payments: PaymentStore | null = null,
   ) {}
 
   /** The acting user for an audit record: the real request actor (ALS) when known, else null. */
@@ -257,15 +261,31 @@ export class InvoiceService implements OnModuleInit {
     return this.store.listPaged(filter, page);
   }
 
-  /** AP aging — approved-but-unpaid supplier liability bucketed by invoice-date age. */
+  /** AP aging — approved supplier liability (fully or partially unpaid) bucketed by invoice-date
+   *  age. A partially-paid invoice is still `approved`, so it ages at its REMAINING balance
+   *  (value − payments to date), not its full value. */
   async aging(tenantId: string, asOf?: string): Promise<ApAgingReport> {
     const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
-    return buildApAging(all, asOf ?? new Date().toISOString().slice(0, 10));
+    return buildApAging(all, asOf ?? new Date().toISOString().slice(0, 10), await this.paidByInvoice(tenantId));
+  }
+
+  /** Amount paid to date per invoice, summed from the payment ledger (invoice currency). A
+   *  partially-paid AP invoice stays `approved`, so its remaining balance — not its full value —
+   *  is the live exposure for aging and FX revaluation alike. */
+  private async paidByInvoice(tenantId: string): Promise<Map<string, number>> {
+    const paid = new Map<string, number>();
+    if (this.payments) {
+      for (const p of await this.payments.list({ tenantId })) {
+        paid.set(p.invoiceId, (paid.get(p.invoiceId) ?? 0) + p.amount);
+      }
+    }
+    return paid;
   }
 
   /** FX revaluation — unrealized gain/loss on open foreign-currency AP at current rates. */
   async fxRevaluation(tenantId: string, asOf?: string, baseCurrency = 'AED') {
     const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
+    const paid = await this.paidByInvoice(tenantId);
     const rateCache = new Map<string, number>();
     for (const inv of all) {
       const c = (inv.currency ?? baseCurrency).toUpperCase();
@@ -274,8 +294,9 @@ export class InvoiceService implements OnModuleInit {
       }
     }
     return computeFxRevaluation(
-      // AP has no partial payments: outstanding = full value while approved.
-      all.map((i) => ({ invoiceNumber: i.reference ?? i.id, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate ?? 1, total: i.value, amountPaid: 0, status: i.status })),
+      // Only the UNPAID balance carries FX exposure — a partially-paid invoice is still 'approved',
+      // so revaluing its full value overstated the unrealized gain/loss and the GL journal it posts.
+      all.map((i) => ({ invoiceNumber: i.reference ?? i.id, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate ?? 1, total: i.value, amountPaid: paid.get(i.id) ?? 0, status: i.status })),
       (c) => rateCache.get(c) ?? 1,
       asOf ?? new Date().toISOString().slice(0, 10),
       baseCurrency,

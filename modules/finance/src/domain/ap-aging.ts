@@ -3,8 +3,15 @@ import { type AgingBucketKey, type BucketTotals, bucketFor } from './ar-aging';
 
 /**
  * AP aging — the payables mirror of AR aging. Buckets the company's *unpaid* supplier liability
- * (approved invoices not yet paid) by how long they've been outstanding, measured from the
- * invoice date (`createdAt`). Grouped per supplier. Draft / paid / cancelled invoices are excluded.
+ * by how long it has been outstanding, measured from the invoice date (`createdAt`). Grouped per
+ * supplier. Draft / paid / cancelled invoices are excluded.
+ *
+ * **Nets off payments already made.** An AP invoice stays `approved` while it is only PARTIALLY
+ * paid — it flips to `paid` only once fully settled — so "approved" is not the same as "unpaid".
+ * Ageing the full `value` therefore overstated payables by every progress payment made to a
+ * supplier: a 100,000 invoice with 60,000 already paid still read 100,000, inflating the treasury
+ * payables report and inviting a double payment. The caller passes paid-to-date per invoice (summed
+ * from the payment ledger, in the invoice's own currency) and the remaining balance is what ages.
  */
 export interface SupplierAging {
   supplierName: string;
@@ -30,18 +37,25 @@ function daysBetween(fromIso: string, toDate: string): number {
   return Math.round((Date.parse(`${toDate}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86_400_000);
 }
 
-/** Build the AP aging report from supplier invoices as of `asOf` (YYYY-MM-DD). */
-export function buildApAging(invoices: Invoice[], asOf: string): ApAgingReport {
+/**
+ * Build the AP aging report from supplier invoices as of `asOf` (YYYY-MM-DD).
+ *
+ * `paidByInvoice` maps invoice id → amount paid to date (invoice currency); omit it and nothing is
+ * netted (every approved invoice ages at its full value, the pre-fix behaviour).
+ */
+export function buildApAging(invoices: Invoice[], asOf: string, paidByInvoice?: Map<string, number>): ApAgingReport {
   const byName = new Map<string, BucketTotals>();
   const totals = emptyBuckets();
 
   for (const inv of invoices) {
-    if (inv.status !== 'approved') continue; // only approved-but-unpaid is a live payable
-    // Base currency, at the rate captured on the invoice — see the AR-aging note; the same
-    // cross-currency addition understated payables here.
+    if (inv.status !== 'approved') continue; // only approved (fully or partially unpaid) is a live payable
+    // Remaining balance, in base currency at the rate captured on the invoice. Payments already
+    // made are netted off first (a partially-paid invoice is still 'approved'); then the cross-
+    // currency total is converted so a USD and an AED payable are not added raw — see the AR note.
     const rate = Number(inv.exchangeRate) > 0 ? Number(inv.exchangeRate) : 1;
-    const amount = round2(inv.value * rate);
-    if (amount <= 0) continue;
+    const paid = paidByInvoice?.get(inv.id) ?? 0;
+    const amount = round2((inv.value - paid) * rate);
+    if (amount <= 0) continue; // fully settled (or over-paid) → not a live payable
     // ⚠️ Aged from createdAt because an AP invoice carries NO invoice date and NO due date — the
     // record timestamp is the only date available. That makes every supplier bucket a function of
     // when the invoice was entered rather than when it fell due, so a late-entered invoice looks

@@ -120,3 +120,41 @@ describe('PaymentCertificateService — only one certificate open at a time', ()
     expect(retry.netThisCertificate).toBe(450_000); // full amount — nothing was certified before it
   });
 });
+
+// ── The status state machine ─────────────────────────────────────────────────
+describe('PaymentCertificateService — certificate state machine', () => {
+  it('refuses to re-certify an already-certified IPC (the second AR bill)', async () => {
+    // 'certified' is the AR trigger. Re-sending it re-fired the event and raised a SECOND client
+    // invoice for the same work — the double-bill the create guard closes, reachable via status.
+    const { svc, contract } = await harness();
+    const ipc = await raise(svc, contract.id, 500_000);
+    await svc.changeStatus(ipc.id, 'submitted');
+    await svc.changeStatus(ipc.id, 'certified');
+    await expect(svc.changeStatus(ipc.id, 'certified')).rejects.toThrow(/can only move to/i);
+  });
+
+  it('will not revive a rejected certificate into certified', async () => {
+    const { svc, contract } = await harness();
+    const ipc = await raise(svc, contract.id, 500_000);
+    await svc.changeStatus(ipc.id, 'submitted');
+    await svc.changeStatus(ipc.id, 'rejected');
+    await expect(svc.changeStatus(ipc.id, 'certified')).rejects.toThrow(/can only move to/i);
+  });
+
+  it('refuses to regress a certified certificate back to draft, and paid is terminal', async () => {
+    const { svc, contract } = await harness();
+    const ipc = await raise(svc, contract.id, 500_000);
+    await svc.changeStatus(ipc.id, 'certified'); // direct draft→certified is allowed
+    await expect(svc.changeStatus(ipc.id, 'draft')).rejects.toThrow(/can only move to/i);
+    await svc.changeStatus(ipc.id, 'paid');
+    await expect(svc.changeStatus(ipc.id, 'certified')).rejects.toThrow(/can only move to/i);
+  });
+
+  it('still allows the full happy path draft → submitted → certified → paid', async () => {
+    const { svc, contract } = await harness();
+    const ipc = await raise(svc, contract.id, 500_000);
+    await svc.changeStatus(ipc.id, 'submitted');
+    expect((await svc.changeStatus(ipc.id, 'certified')).status).toBe('certified');
+    expect((await svc.changeStatus(ipc.id, 'paid')).status).toBe('paid');
+  });
+});

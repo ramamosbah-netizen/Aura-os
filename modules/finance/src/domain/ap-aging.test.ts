@@ -70,6 +70,36 @@ describe('buildApAging', () => {
   });
 });
 
+describe('buildApAging — nets off payments to date', () => {
+  it('ages a partially-paid invoice at its REMAINING balance, not its full value', () => {
+    // A partial payment leaves the invoice 'approved'; only the unpaid balance is a live payable.
+    // Full-value ageing overstated payables and invited a double payment.
+    const partly = inv({ id: 'ap-1', supplierName: 'BuildCo', value: 100_000, createdAt: '2026-06-30T00:00:00Z' });
+    const r = buildApAging([partly], '2026-07-10', new Map([['ap-1', 60_000]]));
+    expect(r.grandTotal).toBe(40_000); // 100k − 60k, not 100k
+    expect(r.bySupplier[0].total).toBe(40_000);
+  });
+
+  it('excludes an approved invoice that is fully paid (balance nets to zero)', () => {
+    const settled = inv({ id: 'ap-2', value: 50_000 });
+    const r = buildApAging([settled], '2026-07-10', new Map([['ap-2', 50_000]]));
+    expect(r.grandTotal).toBe(0);
+    expect(r.bySupplier).toHaveLength(0);
+  });
+
+  it('nets the payment in the invoice currency, then converts the balance to base', () => {
+    // USD 10,000 invoice at 3.6725, USD 4,000 already paid → USD 6,000 remaining → AED 22,035.
+    const usd = inv({ id: 'ap-3', value: 10_000, currency: 'USD', exchangeRate: 3.6725, baseValue: 36_725 });
+    const r = buildApAging([usd], '2026-07-10', new Map([['ap-3', 4_000]]));
+    expect(r.grandTotal).toBe(22_035);
+  });
+
+  it('still ages the full value when no payment map is supplied (back-compat)', () => {
+    const r = buildApAging([inv({ id: 'ap-4', value: 5_000 })], '2026-07-10');
+    expect(r.grandTotal).toBe(5_000);
+  });
+});
+
 describe('apAgingCsvRows (BI export)', () => {
   it('flattens per-supplier rows and appends a TOTAL row', () => {
     const r = buildApAging(

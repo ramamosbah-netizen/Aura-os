@@ -60,9 +60,9 @@ period-cutoff defects a deeper read surfaced.
 | Suite | Result |
 |---|---|
 | `@aura/contracts` | 44 / 44 (+6 earlier phase) |
-| `@aura/finance` | 269 / 269 (+7 across Finance phases: +5 VAT lifecycle, +2 payment date) |
+| `@aura/finance` | 276 / 276 (+7 earlier + 7 credit-note service tests) |
 | `@aura/api` unit (incl. error-taxonomy fitness) | 65 / 65 |
-| e2e (full suite) | 178 / 178 (+4: AR-GL ×3, AP-GL ×1) |
+| e2e (full suite) | 181 / 181 (+3 credit-note over AR-GL/AP-GL) |
 | `@aura/api` + `@aura/web` typecheck | clean |
 
 ### GL integration (F-5 / F-6) — what changed structurally
@@ -90,7 +90,7 @@ filing, and AP cancellation reversal (approved→cancelled).
 
 | Module | Business logic | Missing functions | Missing pages | Missing reports | Priority | Complete? |
 |---|---|---|---|---|---|---|
-| **Finance** | ✅ audited, 2 defects fixed | Credit notes (only invoice cancel exists); multi-invoice payment allocation (one payment settles one invoice); customer refunds | Credit-note screen; receipt-allocation UI | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | logic ✅ · completeness ⚠️ (3 open) |
+| **Finance** | ✅ audited, 4 defects fixed (+GL integration F-5/F-6) | ✅ **credit notes** — open: multi-invoice payment allocation (one payment settles one invoice); customer refunds | ✅ credit-note screen — open: receipt-allocation UI | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | logic ✅ · completeness ⚠️ (2 open) |
 | **Contracts** | ✅ audited, 5 defects fixed | ✅ retention release · ✅ lapsed-bond sweep — open: final account / closeout statement | ✅ clause library | Contract-level retention & bond exposure statement | — | logic ✅ · completeness ⚠️ (2 open) |
 
 ---
@@ -120,8 +120,26 @@ bond exposure report. Neither is started.
 
 ---
 
+## Completeness build — Finance credit notes (2026-08-06)
+
+The first of the three Finance completeness gaps, built as a full vertical (domain → service →
+store + migration → API → BFF → UI → tests) and verified in the running app.
+
+A credit note is the mirror of a sales invoice — it reduces a customer's receivable after the
+invoice is issued (over-billing, a return, a price adjustment, or crediting an invoice already
+part-paid). Issuing one posts **Dr Revenue (4010) / Dr VAT Output (2100) / Cr Accounts Receivable
+(1200)** and applies the credit to the target invoice, so the GL and the AR sub-ledger (balance +
+aging) stay consistent. Guards: cumulative net credit ≤ invoice net (409), no double-issue,
+per-tenant unique number. `credited_total` on the customer invoice makes `balance = total − paid −
+credited`. Screen at `/finance/credit-notes`; commits `0dfce90` (backend) + `088cd28` (UI).
+
+Verified live: drafting CN-DEMO-1 (30,000 net) against a 200,000 invoice and issuing it dropped the
+P&L revenue 200,000 → 170,000 and set the invoice's `creditedTotal` to 31,500, all through the real
+UI's BFF path.
+
 ## Next
 
-Contracts is closed on the business-logic half and has 4 of 6 completeness gaps built. Remaining
-work is the two Contracts reports above and the three Finance capabilities (credit notes,
-multi-invoice payment allocation, customer refunds) — none of the Finance three is started.
+Contracts is closed on the business-logic half with 4 of 6 completeness gaps built. Finance is
+audited (4 defects + GL integration) with **credit notes done**; the two remaining Finance gaps are
+**multi-invoice payment allocation** (one payment currently settles one invoice) and **customer
+refunds**. Plus the two Contracts reports.

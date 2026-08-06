@@ -398,5 +398,38 @@ describe('Finance depth features', () => {
         invoiceService.changeStatus(invoice.id, 'approved')
       ).rejects.toThrow('3-Way Match validation failed');
     });
+
+    it('is CUMULATIVE — a second invoice cannot re-bill the same received goods', async () => {
+      const poStore = new InMemoryPurchaseOrderStore();
+      const grnStore = new InMemoryGoodsReceiptStore();
+      const invoiceStore = new InMemoryInvoiceStore();
+      const poService = new PurchaseOrderService(poStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit, new InMemorySupplierStore());
+      poService.onModuleInit();
+      const grnService = new GoodsReceiptService(grnStore, mockEvents, fakeBus());
+      grnService.onModuleInit();
+      const invoiceService = new InvoiceService(
+        invoiceStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit,
+        { getRate: async () => 1 } as any, {} as any, {} as any, mockAccess,
+        poMatchFrom(poService, grnService),
+      );
+      invoiceService.onModuleInit();
+
+      // PO 1000, fully received.
+      const po = await poService.create({ tenantId: 't1', title: 'Duct Supply', value: 1000 });
+      await poService.changeStatus(po.id, 'issued');
+      await grnService.create({ tenantId: 't1', title: 'Duct delivery', poId: po.id, poTitle: po.title, value: 1000, status: 'received' });
+
+      // First invoice for the full 1000 — matches and is approved.
+      const invA = await invoiceService.create({ tenantId: 't1', title: 'Invoice A', value: 1000, poId: po.id, poTitle: po.title });
+      expect((await invoiceService.checkThreeWayMatch(invA.id)).matched).toBe(true);
+      await invoiceService.changeStatus(invA.id, 'approved');
+
+      // A SECOND invoice for the same PO would double-bill the same received goods — must fail.
+      const invB = await invoiceService.create({ tenantId: 't1', title: 'Invoice B', value: 1000, poId: po.id, poTitle: po.title });
+      const match = await invoiceService.checkThreeWayMatch(invB.id);
+      expect(match.matched).toBe(false);
+      expect(match.reason).toContain('cumulative invoiced (2000)');
+      await expect(invoiceService.changeStatus(invB.id, 'approved')).rejects.toThrow('3-Way Match validation failed');
+    });
   });
 });

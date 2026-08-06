@@ -140,17 +140,27 @@ export class InvoiceService implements OnModuleInit {
     const snap = await this.poMatch.getSnapshot(invoice.tenantId, invoice.poId);
     if (!snap.poExists) return { matched: false, reason: `PO ${invoice.poId} not found` };
 
-    if (invoice.value > snap.poValue) {
+    // Cumulative match: already-committed invoices against this PO count too. A per-invoice check
+    // let N invoices each ≤ received collectively over-bill — e.g. two 100k invoices against a 100k
+    // PO with 100k received both passed, double-paying the supplier. Sum the approved/paid siblings
+    // (drafts are not yet a claim; cancelled do not count) and test the running total.
+    const siblings = await this.store.list({ tenantId: invoice.tenantId, poId: invoice.poId });
+    const alreadyInvoiced = siblings
+      .filter((i) => i.id !== invoice.id && (i.status === 'approved' || i.status === 'paid'))
+      .reduce((s, i) => s + (i.value || 0), 0);
+    const cumulative = Math.round((alreadyInvoiced + invoice.value) * 100) / 100;
+
+    if (cumulative > snap.poValue + 0.01) {
       return {
         matched: false,
-        reason: `Invoice value (${invoice.value}) exceeds PO value (${snap.poValue})`,
+        reason: `cumulative invoiced (${cumulative}) exceeds PO value (${snap.poValue}) — ${alreadyInvoiced} already approved on this PO`,
       };
     }
 
-    if (invoice.value > snap.receivedValue) {
+    if (cumulative > snap.receivedValue + 0.01) {
       return {
         matched: false,
-        reason: `Invoice value (${invoice.value}) exceeds total received GRN value (${snap.receivedValue})`,
+        reason: `cumulative invoiced (${cumulative}) exceeds total received GRN value (${snap.receivedValue}) — ${alreadyInvoiced} already approved on this PO`,
       };
     }
 

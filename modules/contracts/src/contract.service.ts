@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AccessService, TenantContext } from '@aura/core';
-import { CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, makeContract } from './domain/contract';
+import { CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, assertContractTransition, makeContract } from './domain/contract';
 import { CONTRACT_STORE, type ContractFilter, type ContractStore } from './contract-store';
 
 const CREATE_CONTRACT = 'contracts.contract.create';
@@ -115,6 +115,11 @@ export class ContractService implements OnModuleInit {
   async changeStatus(id: Id, status: ContractStatus, actorId?: Id): Promise<Contract> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`contract ${id} not found`);
+    // Idempotent no-op on the same status: re-emitting `signed` would auto-create a SECOND project,
+    // and re-emitting `completed` would re-fire the completion reactors. A retry or a duplicate
+    // reactor delivery must be harmless, so return without emitting. Genuinely invalid moves throw.
+    if (existing.status === status) return existing;
+    assertContractTransition(existing.status, status, existing.reference ?? id);
     // Segregation of duties: the preparer may not sign (activate) their own contract. Skipped for
     // system/auto transitions (no actor), so the deal-chain reactors are unaffected.
     if (status === 'active' && actorId && existing.createdBy && actorId === existing.createdBy) {

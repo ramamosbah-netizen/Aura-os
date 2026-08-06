@@ -66,6 +66,30 @@ export function makeContract(input: NewContract): Contract {
   };
 }
 
+/**
+ * Valid contract lifecycle transitions. `signed` (status→active) auto-creates the delivery Project
+ * and `completed` drives the completion reactors, so status must not move freely: re-activating an
+ * already-active contract would auto-create a SECOND project, and re-completing would re-fire the
+ * downstream reactors. A same-status "transition" is treated by the service as an idempotent no-op
+ * (no event) — safe for a retry or a duplicate reactor delivery; only a genuinely invalid move
+ * (e.g. completed → active, active → draft) is refused here.
+ */
+export const CONTRACT_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
+  draft: ['active', 'cancelled'],
+  active: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
+/** Throw unless `from → to` is a permitted contract transition (same-state is the caller's no-op). */
+export function assertContractTransition(from: ContractStatus, to: ContractStatus, ref: string): void {
+  if (from === to) return; // handled as an idempotent no-op by the service
+  if (!CONTRACT_TRANSITIONS[from].includes(to)) {
+    const allowed = CONTRACT_TRANSITIONS[from].join(', ') || 'nothing (terminal)';
+    throw new Error(`contract ${ref} is ${from}; it can only move to ${allowed}`);
+  }
+}
+
 /** Contracts events on the spine. */
 export const CONTRACT_EVENT = {
   created: 'contracts.contract.created',

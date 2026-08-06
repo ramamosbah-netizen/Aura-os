@@ -27,10 +27,15 @@ unmeasured scores).
 | C-3 | Contracts · `contract.service.ts` `update` | `value` was an ungoverned PATCH field | Signing enforces `approvalLimit` cover for the value, and the AR cap refuses to bill past it. Sign a 30k contract inside your limit, then PATCH it to 5m: **both controls bypassed**. A completed contract's value was mutable too | High | `2fda46e` |
 | C-4 | Contracts · `domain/contract-obligation.ts` `setObligationStatus` | Only *set* `completedDate` on met/waived; never cleared it | An obligation walked back from met → open kept its completion date: it sat in the reminder feed (which filters on status) while every register and export showed it completed on a date it was not | Medium | `2fda46e` |
 | C-5 | Contracts · `bond.service.ts` `act` | `expire` mapped to no event type | A performance/advance bond lapsing — the register's most commercially significant change — moved with **no audit trail at all** | Low | `2fda46e` |
+| F-3 | Finance · `tax.service.ts` `setReturnStatus` / `generateReturn` | VAT return status setter applied any target from any state, and generateReturn had no duplicate-period guard | draft→paid marked a return paid that was never filed; re-filing a filed return overwrote its FTA submission timestamp; paid→filed reverted a settled liability; and a period could be filed twice, double-declaring the liability | Medium | `c5f12ac` |
+| F-4 | Finance · `payment.service.ts` `doRecord` | Settlement journal posted with no `postedAt`, so `makeJournal` stamped it at entry time even though payments can be back-dated | A back-dated payment recorded its cash movement in the current open GL period while the payment sub-ledger carried the real date — AP sub-ledger and GL diverged by period and never reconciled; the period lock did not apply to the cash movement | Medium | `d2c744d` |
 
-Both Finance defects share one root cause: the AR/AP data-model asymmetry (AR carries `amountPaid`;
-AP derives paid from the payment ledger). C-1 and C-2 share another: event-emitting status setters
-written without a state machine, where every re-send re-fires cross-module automation.
+Both original Finance defects share one root cause: the AR/AP data-model asymmetry (AR carries
+`amountPaid`; AP derives paid from the payment ledger). C-1 and C-2 share another: event-emitting
+status setters written without a state machine, where every re-send re-fires cross-module
+automation — the *same* class as F-3's VAT return setter. F-3 and F-4 are the deeper (wave-3)
+Finance pass: the module was already hardened twice, so these are the residual lifecycle- and
+period-cutoff defects a deeper read surfaced.
 
 ## Verified sound (audited, no defect)
 
@@ -52,11 +57,11 @@ written without a state machine, where every re-send re-fires cross-module autom
 
 | Suite | Result |
 |---|---|
-| `@aura/contracts` | 44 / 44 (+6 this phase) |
-| `@aura/finance` | 260 / 260 (+5 the Finance phase) |
+| `@aura/contracts` | 44 / 44 (+6 earlier phase) |
+| `@aura/finance` | 269 / 269 (+7 across Finance phases: +5 VAT lifecycle, +2 payment date) |
 | `@aura/api` unit (incl. error-taxonomy fitness) | 65 / 65 |
-| e2e — `sod`, `chains`, `ar-contract-cap`, `quantity-ledger`, `cost-ledger` | 25 / 25 |
-| `@aura/api` typecheck | clean |
+| e2e (full suite) | 174 / 174 |
+| `@aura/api` + `@aura/web` typecheck | clean |
 
 ---
 

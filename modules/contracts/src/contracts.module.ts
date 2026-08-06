@@ -29,6 +29,11 @@ import { InMemoryObligationStore } from './in-memory-obligation-store';
 import { PostgresObligationStore } from './postgres-obligation-store';
 import { ObligationService } from './obligation.service';
 
+import { RETENTION_RELEASE_STORE } from './retention-release-store';
+import { InMemoryRetentionReleaseStore } from './in-memory-retention-release-store';
+import { PostgresRetentionReleaseStore } from './postgres-retention-release-store';
+import { RetentionReleaseService } from './retention-release.service';
+
 /** The Contracts business module — same shape as CRM/Tendering (the module template). */
 @Module({
   imports: [CoreModule],
@@ -73,7 +78,21 @@ import { ObligationService } from './obligation.service';
         pool ? new PostgresObligationStore(pool) : new InMemoryObligationStore(),
     },
     ObligationService,
+    {
+      provide: RETENTION_RELEASE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresRetentionReleaseStore(pool) : new InMemoryRetentionReleaseStore(),
+    },
+    RetentionReleaseService,
   ],
-  exports: [ContractService, PaymentCertificateService, ClauseService, ObligationService, BondService],
+  exports: [
+    ContractService,
+    PaymentCertificateService,
+    ClauseService,
+    ObligationService,
+    BondService,
+    RetentionReleaseService,
+  ],
 })
 export class ContractsModule {}

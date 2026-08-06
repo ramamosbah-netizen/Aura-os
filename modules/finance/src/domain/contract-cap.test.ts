@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { evaluateContractCap } from './contract-cap';
 
-const snap = (contractValue: number, netCertifiedToDate: number | null = null) => ({
+const snap = (contractValue: number, netCertifiedToDate: number | null = null, retentionReleased = 0) => ({
   contractExists: true,
   contractValue,
   netCertifiedToDate,
+  retentionReleased,
 });
 
 describe('evaluateContractCap — the AR billing cap (G-08)', () => {
@@ -40,7 +41,7 @@ describe('evaluateContractCap — the AR billing cap (G-08)', () => {
 
   it('skips entirely when the ref names no contract (AMC / ad-hoc invoices)', () => {
     const r = evaluateContractCap({
-      snapshot: { contractExists: false, contractValue: 0, netCertifiedToDate: null },
+      snapshot: { contractExists: false, contractValue: 0, netCertifiedToDate: null, retentionReleased: 0 },
       alreadyInvoiced: 0,
       newInvoiceTotal: 999_999,
     });
@@ -59,6 +60,33 @@ describe('evaluateContractCap — the AR billing cap (G-08)', () => {
 
   it('still refuses a real overrun just above the tolerance', () => {
     const r = evaluateContractCap({ snapshot: snap(1_000_000), alreadyInvoiced: 1_000_000, newInvoiceTotal: 1 });
+    expect(r.withinCap).toBe(false);
+  });
+
+  // Retention was withheld FROM the certified net, so releasing it necessarily bills above that
+  // net. Without the allowance the cap refuses the one invoice a retention release exists to raise.
+  it('lets an approved retention release bill above the certified net', () => {
+    const withoutRelease = evaluateContractCap({
+      snapshot: snap(1_000_000, 450_000),
+      alreadyInvoiced: 450_000,
+      newInvoiceTotal: 25_000,
+    });
+    expect(withoutRelease.withinCap).toBe(false); // ahead of certified work — correct
+
+    const withRelease = evaluateContractCap({
+      snapshot: snap(1_000_000, 450_000, 25_000),
+      alreadyInvoiced: 450_000,
+      newInvoiceTotal: 25_000,
+    });
+    expect(withRelease.withinCap).toBe(true);
+  });
+
+  it('still refuses billing past the released retention', () => {
+    const r = evaluateContractCap({
+      snapshot: snap(1_000_000, 450_000, 25_000),
+      alreadyInvoiced: 450_000,
+      newInvoiceTotal: 40_000,
+    });
     expect(r.withinCap).toBe(false);
   });
 

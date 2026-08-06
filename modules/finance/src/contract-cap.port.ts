@@ -23,6 +23,13 @@ export interface ContractCapSnapshot {
    * is legitimate, so the certified bound simply doesn't apply.
    */
   netCertifiedToDate: number | null;
+  /**
+   * Retention released back to the contractor and approved for billing. Retention was *withheld*
+   * from `netCertifiedToDate` on every certificate, so a retention-release invoice necessarily
+   * bills above the certified figure — without this allowance the certified bound would refuse the
+   * one invoice the release exists to raise. 0 when nothing has been released.
+   */
+  retentionReleased: number;
 }
 
 export interface ContractCapPort {

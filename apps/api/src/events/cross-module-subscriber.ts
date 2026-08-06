@@ -23,6 +23,7 @@ import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } f
  *   └──────────────────────────────┘     └─────────────────────────┘     └──────────────────────────┘     └──────────────────────┘
  *
  *   contracts.ipc.certified         ──► (auto-draft client AR invoice for the net certified)
+ *   contracts.retention.released    ──► (auto-draft client AR invoice for the released retention tranche)
  *   subcontracts.backcharge.recovered ──► (auto-draft a supplier AP debit note — negative invoice — reducing the subcontractor payable)
  *   procurement.po.created  ──► (log committed cost against project)
  *   inventory.grn.created   ──► (auto-transition PO to 'received' & suggest AP invoice)
@@ -434,6 +435,52 @@ export class CrossModuleSubscriber implements OnModuleInit {
         this.logger.log(`⚡ engineering.document.submitted → routed Risk Assessment ${reference} into HSE queue (project ${projectId})`);
       } catch (err) {
         this.logger.error(`Failed to route risk assessment to HSE from engineering.document.submitted: ${err}`);
+      }
+    });
+
+    // ── Contracting money-flow: retention released → auto-draft client AR invoice ──
+    // The other half of the IPC loop. Retention was withheld from every certificate; an APPROVED
+    // release is the signal to bill it back. Same shape as the ipc.certified reactor, including
+    // the deterministic invoice number that makes an outbox retry harmless.
+    this.bus.subscribe('contracts.retention.released', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const account = p.account as { id: string; name: string | null } | null;
+        const amount = Number(p.amount) || 0;
+        if (!account || amount <= 0) return; // nothing billable
+        const reference = (p.reference as string) ?? 'RET';
+        const contractId = (p.contractId as string) ?? e.aggregateId;
+        const invoiceNumber = `AR-${reference}-${contractId.slice(0, 8)}`;
+        const existingAr = await this.customerInvoices.list({ tenantId: e.tenantId });
+        if (existingAr.some((inv) => inv.invoiceNumber === invoiceNumber)) {
+          this.logger.log(`↩ retention.released → AR invoice ${invoiceNumber} already exists, skipping`);
+          return;
+        }
+        const milestone =
+          p.kind === 'practical_completion' ? 'practical completion'
+          : p.kind === 'defects_liability' ? 'end of the defects liability period'
+          : 'contract milestone';
+        const invoice = await this.customerInvoices.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          invoiceNumber,
+          customerName: account.name?.trim() || 'Client',
+          contractRef: contractId,
+          issueDate: new Date().toISOString().slice(0, 10),
+          lines: [
+            {
+              description: `Retention release ${reference} — ${milestone}`,
+              quantity: 1,
+              unitPrice: amount,
+              vatRate: 5,
+            },
+          ],
+        });
+        this.logger.log(
+          `⚡ retention.released → auto-drafted AR invoice "${invoice.invoiceNumber}" for ${invoice.customerName} (${amount})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-draft AR invoice from retention.released: ${err}`);
       }
     });
 

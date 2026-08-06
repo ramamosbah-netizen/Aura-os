@@ -38,13 +38,27 @@ interface CertSummary {
   contractValue: number; certificateCount: number; grossCertifiedToDate: number;
   retentionHeld: number; netCertifiedToDate: number; percentComplete: number;
 }
+interface RetentionRelease {
+  id: string; reference: string; kind: string; amount: number;
+  releaseDate: string | null; status: string; createdAt: string;
+}
+interface RetentionPosition {
+  retentionHeld: number; released: number; pending: number; releasable: number;
+  releases: RetentionRelease[];
+  suggested: { practicalCompletion: number; defectsLiability: number };
+}
 interface ProjectLite { id: string; title: string; status: string; }
 interface QuotationLite { id: string; quoteNumber: string; status: string; convertedContractId?: string | null; }
 
-type Tab = 'obligations' | 'bonds' | 'certificates';
+type Tab = 'obligations' | 'bonds' | 'certificates' | 'retention';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const RETENTION_KIND_LABEL: Record<string, string> = {
+  practical_completion: 'Practical completion',
+  defects_liability: 'End of defects liability period',
+  other: 'Other milestone',
+};
 const BOND_KIND_LABEL: Record<string, string> = {
   performance: 'Performance bond', advance_payment: 'Advance payment guarantee',
   retention: 'Retention bond', warranty: 'Warranty bond', tender_bond: 'Tender bond',
@@ -56,6 +70,7 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
   const [bonds, setBonds] = useState<Bond[]>([]);
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [certSummary, setCertSummary] = useState<CertSummary | null>(null);
+  const [retention, setRetention] = useState<RetentionPosition | null>(null);
   const [project, setProject] = useState<ProjectLite | null>(null);
   const [quotation, setQuotation] = useState<QuotationLite | null>(null);
   const [tab, setTab] = useState<Tab>('obligations');
@@ -71,10 +86,11 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
         return (await r.json()) as T;
       } catch { return fallback; }
     };
-    const [obl, bnd, certPayload, projects, quotes] = await Promise.all([
+    const [obl, bnd, certPayload, ret, projects, quotes] = await Promise.all([
       j<Obligation[]>(`/api/contracts/obligations?contractId=${contract.id}`, []),
       j<Bond[]>(`/api/contracts/bonds?contractId=${contract.id}`, []),
       j<{ certificates: Certificate[]; summary: CertSummary } | null>(`/api/contracts/certificates/summary/${contract.id}`, null),
+      j<RetentionPosition | null>(`/api/contracts/retention/position/${contract.id}`, null),
       j<ProjectLite[]>(`/api/projects/projects?contractId=${contract.id}`, []),
       j<QuotationLite[]>(`/api/crm/quotations`, []),
     ]);
@@ -82,6 +98,7 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
     setBonds(Array.isArray(bnd) ? bnd : []);
     setCerts(certPayload?.certificates ?? []);
     setCertSummary(certPayload?.summary ?? null);
+    setRetention(ret && typeof ret.retentionHeld === 'number' ? ret : null);
     const plist = Array.isArray(projects) ? projects : [];
     setProject(plist[0] ?? null);
     const qlist = Array.isArray(quotes) ? quotes : [];
@@ -172,7 +189,11 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
         <Stat label="Contract value" value={`AED ${aed(contract.value)}`} strong />
         <Stat label="Certified to date" value={certSummary ? `AED ${aed(certSummary.grossCertifiedToDate)}` : '—'} />
         <Stat label="% complete" value={certSummary ? `${certSummary.percentComplete}%` : '—'} accent />
-        <Stat label="Retention held" value={certSummary ? `AED ${aed(certSummary.retentionHeld)}` : '—'} />
+        <Stat
+          label="Retention held"
+          value={certSummary ? `AED ${aed(certSummary.retentionHeld)}` : '—'}
+          hint={retention && retention.released > 0 ? `AED ${aed(retention.released)} released` : undefined}
+        />
         <Stat label="Obligations open" value={`${stats.openObl}${stats.overdueObl > 0 ? ` (${stats.overdueObl} overdue)` : ''}`} bad={stats.overdueObl > 0} />
         <Stat label="Breached" value={String(stats.breached)} bad={stats.breached > 0} />
         <Stat label="Active bonds" value={`${stats.activeBonds} · AED ${aed(stats.bondValue)}`} />
@@ -202,6 +223,7 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
           ['obligations', `Obligations & milestones (${obligations.length})`],
           ['bonds', `Bonds & guarantees (${bonds.length})`],
           ['certificates', `Payment certificates (${certs.length})`],
+          ['retention', `Retention (${retention?.releases.length ?? 0})`],
         ] as Array<[Tab, string]>).map(([id, label]) => (
           <button key={id} style={{ ...st.tab, ...(tab === id ? st.tabOn : {}) }} onClick={() => setTab(id)}>{label}</button>
         ))}
@@ -249,6 +271,27 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
           />
         )}
         {tab === 'certificates' && <a href="/contracts/certificates" style={st.linkBtn}>Open certificates register →</a>}
+        {tab === 'retention' && (retention?.releasable ?? 0) > 0 && (
+          <CreateDrawer
+            entity="Retention release"
+            subtitle="Claim back retention withheld on the certificates — conventionally half at practical completion, the balance at the end of the defects liability period. Approval bills the client."
+            endpoint="/api/contracts/retention"
+            fields={[
+              { name: 'contractId', label: 'Contract id (fixed)', kind: 'text', defaultValue: contract.id, readonly: true },
+              {
+                name: 'kind', label: 'Milestone', kind: 'select', defaultValue: 'practical_completion',
+                options: Object.entries(RETENTION_KIND_LABEL).map(([v, l]) => ({ value: v, label: l })),
+              },
+              {
+                name: 'amount', label: 'Amount (AED)', kind: 'number', required: true,
+                defaultValue: String(retention?.suggested.practicalCompletion ?? 0),
+                hint: `AED ${aed(retention?.releasable ?? 0)} still releasable · suggested at PC AED ${aed(retention?.suggested.practicalCompletion ?? 0)}, at end of DLP AED ${aed(retention?.suggested.defectsLiability ?? 0)}`,
+              },
+              { name: 'releaseDate', label: 'Milestone date', kind: 'date' },
+              { name: 'notes', label: 'Notes', kind: 'textarea', span: 2 },
+            ]}
+          />
+        )}
       </div>
 
       <section className="panel">
@@ -332,6 +375,52 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
           )
         )}
 
+        {tab === 'retention' && (
+          !retention || retention.retentionHeld === 0 ? (
+            <p style={st.muted}>No retention withheld yet — it accrues as payment certificates are certified.</p>
+          ) : (
+            <>
+              <div style={st.stats}>
+                <Stat label="Retention held" value={`AED ${aed(retention.retentionHeld)}`} strong />
+                <Stat label="Released (billed)" value={`AED ${aed(retention.released)}`} accent />
+                <Stat label="Pending approval" value={`AED ${aed(retention.pending)}`} />
+                <Stat label="Still releasable" value={`AED ${aed(retention.releasable)}`} />
+              </div>
+              {retention.releases.length === 0 ? (
+                <p style={st.muted}>
+                  Nothing claimed back yet. Conventionally AED {aed(retention.suggested.practicalCompletion)} is released at
+                  practical completion and the balance at the end of the defects liability period.
+                </p>
+              ) : (
+                <table className="data-table">
+                  <thead><tr>{['Reference', 'Milestone', 'Amount', 'Date', 'Status', 'Actions'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {retention.releases.map((r) => (
+                      <tr key={r.id} style={r.status === 'rejected' ? { opacity: 0.6 } : undefined}>
+                        <td style={{ fontFamily: 'ui-monospace, monospace' }}>{r.reference}</td>
+                        <td>{RETENTION_KIND_LABEL[r.kind] ?? r.kind}</td>
+                        <td style={{ fontWeight: 600 }}>AED {aed(r.amount)}</td>
+                        <td style={{ color: 'var(--muted)' }}>{r.releaseDate ?? fmt(r.createdAt)}</td>
+                        <td><span className={r.status === 'approved' ? 'badge badge-good' : r.status === 'rejected' ? 'badge badge-bad' : 'badge'}>{r.status}</span></td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {r.status === 'draft' && (
+                            <>
+                              <button className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} disabled={busy}
+                                onClick={() => void act(`/api/contracts/retention/${r.id}/status`, { status: 'approved' }, `${r.reference} approved — a client invoice has been drafted for AED ${aed(r.amount)}.`)}>Approve → bill client</button>
+                              <button className="btn btn-ghost" style={{ ...st.smBtn, marginLeft: 6 }} disabled={busy}
+                                onClick={() => void act(`/api/contracts/retention/${r.id}/status`, { status: 'rejected' })}>Reject</button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
+          )
+        )}
+
         {tab === 'certificates' && (
           certs.length === 0 ? <p style={st.muted}>No payment certificates yet — raise IPC 1 from the certificates register.</p> : (
             <table className="data-table">
@@ -356,11 +445,12 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
   );
 }
 
-function Stat({ label, value, strong, accent, bad }: { label: string; value: string; strong?: boolean; accent?: boolean; bad?: boolean }) {
+function Stat({ label, value, strong, accent, bad, hint }: { label: string; value: string; strong?: boolean; accent?: boolean; bad?: boolean; hint?: string }) {
   return (
     <div style={{ minWidth: 130 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: strong ? 16 : 13.5, fontWeight: strong ? 800 : 600, color: bad ? 'var(--bad)' : accent ? 'var(--accent)' : 'var(--text)' }}>{value}</div>
+      {hint && <div style={{ fontSize: 10.5, color: 'var(--good)', marginTop: 1 }}>{hint}</div>}
     </div>
   );
 }

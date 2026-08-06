@@ -29,3 +29,8 @@ export * from './bond-store';
 export * from './in-memory-bond-store';
 export * from './postgres-bond-store';
 export * from './bond.service';
+export * from './domain/retention-release';
+export * from './retention-release-store';
+export * from './in-memory-retention-release-store';
+export * from './postgres-retention-release-store';
+export * from './retention-release.service';

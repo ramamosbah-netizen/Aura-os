@@ -60,7 +60,10 @@ export function evaluateContractCap(input: ContractCapInput): ContractCapResult 
   }
 
   if (snapshot.netCertifiedToDate !== null) {
-    const certified = round2(snapshot.netCertifiedToDate);
+    // Approved retention releases are billable on top of the certified net: retention was withheld
+    // FROM that net, so releasing it necessarily bills above it.
+    const released = Math.max(0, round2(Number(snapshot.retentionReleased) || 0));
+    const certified = round2(snapshot.netCertifiedToDate + released);
     if (cumulative > certified + EPSILON) {
       return {
         withinCap: false,

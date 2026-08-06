@@ -977,6 +977,33 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Operate: AP invoice approval → General Ledger (book the payable) ──────
+    // The AP payment reactor (payment.service) already posts Dr AP / Cr Bank when a supplier is
+    // paid — but nothing credited AP in the first place, so the payable was never booked and the
+    // supplier's expense never reached the P&L. Approval is the point the liability is recognised:
+    //   approve → Dr Supplier & Subcontract Costs (5020) / Cr Accounts Payable (2010)
+    // in base currency, so the later payment clears a payable that actually exists.
+    this.bus.subscribe('finance.invoice.approved', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const base = r2(Number(p.baseValue ?? p.value ?? 0));
+        if (base <= 0) return;
+        const expense = await this.ensureAccount(e.tenantId, '5020', 'Supplier & Subcontract Costs', 'expense');
+        const ap = await this.ensureAccount(e.tenantId, '2010', 'Accounts Payable', 'liability');
+        await this.journals.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null,
+          reference: `AP-${e.aggregateId}`, description: `Supplier invoice approved: ${p.title ?? e.aggregateId}`,
+          lines: [
+            { accountId: expense.id, accountCode: expense.code, accountName: expense.name, debit: base, credit: 0 },
+            { accountId: ap.id, accountCode: ap.code, accountName: ap.name, debit: 0, credit: base },
+          ],
+        });
+        this.logger.log(`⚡ AP approved → booked payable ${base} for invoice ${p.title ?? e.aggregateId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post AP payable GL from invoice.approved: ${err}`);
+      }
+    });
+
     // ── Material cost strand: stock issued to / returned from a project → ACTUAL cost on the CBS line ──
     // No module touches the CBS directly. A coded stock movement (cbsNodeId set) becomes a CostTransaction:
     //   issue  (out) → ACTUAL  +qty, amount = qty × unitCost (the WAC/COGS rate), source 'material_issue'

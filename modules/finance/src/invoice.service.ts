@@ -232,6 +232,9 @@ export class InvoiceService implements OnModuleInit {
         title: updated.title,
         status: updated.status,
         value: updated.value,
+        // baseValue lets the GL reactor book the payable in base currency at the invoice's rate.
+        baseValue: updated.baseValue,
+        currency: updated.currency,
         supplier: updated.supplierName,
         po: updated.poId ? { id: updated.poId, title: updated.poTitle } : null,
         project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,

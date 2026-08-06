@@ -203,6 +203,7 @@ export const NAV: NavGroup[] = [
       { label: 'Overview', href: '/finance/dashboard', glyph: '◎', desc: 'Finance cockpit — revenue, profit, cash position, receivables & payables' },
       { label: 'Invoices', href: '/finance/invoices', glyph: '◰', desc: 'Finance — supplier invoices' },
       { label: 'Customer Invoices', href: '/finance/customer-invoices', glyph: '◳', desc: 'Finance — client tax invoices & receipts (AR)' },
+      { label: 'Credit Notes', href: '/finance/credit-notes', glyph: '◲', desc: 'Finance — AR credit notes: reverse revenue & reduce the receivable' },
       { label: 'AR Aging', href: '/finance/ar-aging', glyph: '▦', desc: 'Finance — receivables aged by overdue bucket' },
       { label: 'AP Aging', href: '/finance/ap-aging', glyph: '▤', desc: 'Finance — payables aged by invoice-date bucket' },
       { label: 'Ledger & COA', href: '/finance/ledger', glyph: '◳', desc: 'Finance — double-entry general ledger' },

@@ -125,6 +125,30 @@ export interface TaxReturn {
   createdAt: string;
 }
 
+/**
+ * A VAT return moves draft → filed → paid, and only ever forward. It is a compliance record of
+ * what was submitted to the FTA and when, so the setter must not accept any target from any state:
+ *
+ *  - draft → paid skips filing, marking a return "paid" that was never submitted;
+ *  - filed → filed re-stamps `filedAt`/`filedBy`, overwriting the real submission timestamp;
+ *  - paid → filed reverts a settled liability.
+ *
+ * None of these is well-formed against the aggregate's current state, so they are rejected as
+ * conflicts (409). Phrased with "only … can" so the error taxonomy maps them correctly.
+ */
+export function assertTaxReturnTransition(from: TaxReturnStatus, to: TaxReturnStatus): void {
+  if (from === 'draft' && to === 'filed') return;
+  if (from === 'filed' && to === 'paid') return;
+  if (to === 'filed') throw new Error(`only a draft VAT return can be filed (this one is ${from})`);
+  if (to === 'paid') throw new Error(`only a filed VAT return can be marked paid (this one is ${from})`);
+  throw new Error(`a VAT return can only move draft → filed → paid (got ${from} → ${to})`);
+}
+
+/** Do two inclusive date ranges [aStart,aEnd] and [bStart,bEnd] overlap on any day? */
+export function periodsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart <= bEnd && aEnd >= bStart;
+}
+
 export interface TaxSummary {
   totalOutputTax: number;
   totalInputTax: number;

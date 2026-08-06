@@ -69,6 +69,60 @@ describe('VAT return (period filing)', () => {
   });
 });
 
+// ── Regressions found in the deeper (wave-3) finance audit ────────────────────
+describe('VAT return lifecycle — draft → filed → paid, forward only', () => {
+  const codes: TaxCode[] = [makeTaxCode({ tenantId: 't1', code: 'VAT-5', description: 'Output 5%', rate: 5, taxType: 'output' })];
+  const outCode = codes[0].id;
+
+  const freshService = async () => {
+    const lineStore = new InMemoryTaxLineStore();
+    const codeStore = new InMemoryTaxCodeStore();
+    const returnStore = new InMemoryTaxReturnStore();
+    for (const c of codes) await codeStore.create(c);
+    await lineStore.create(line({ taxCodeId: outCode, taxAmount: 250, taxPointDate: '2026-02-01', createdAt: '2026-02-01T00:00:00Z' }));
+    return new TaxService(codeStore, lineStore, returnStore);
+  };
+
+  it('rejects draft → paid: a return cannot be paid without being filed first', async () => {
+    const svc = await freshService();
+    const ret = await svc.generateReturn('t1', '2026-01-01', '2026-03-31');
+    await expect(svc.setReturnStatus(ret.id, 'paid')).rejects.toThrow(/only a filed VAT return can be marked paid/);
+  });
+
+  it('rejects re-filing a filed return, preserving the original submission timestamp', async () => {
+    const svc = await freshService();
+    const ret = await svc.generateReturn('t1', '2026-01-01', '2026-03-31');
+    const filed = await svc.setReturnStatus(ret.id, 'filed', 'u-admin');
+    await expect(svc.setReturnStatus(ret.id, 'filed', 'u-other')).rejects.toThrow(/only a draft VAT return can be filed/);
+    // The stored return still carries the first filing's stamp.
+    expect((await svc.getReturn(ret.id))?.filedBy).toBe('u-admin');
+    expect((await svc.getReturn(ret.id))?.filedAt).toBe(filed.filedAt);
+  });
+
+  it('rejects paid → filed: a settled return cannot be reverted', async () => {
+    const svc = await freshService();
+    const ret = await svc.generateReturn('t1', '2026-01-01', '2026-03-31');
+    await svc.setReturnStatus(ret.id, 'filed');
+    await svc.setReturnStatus(ret.id, 'paid');
+    await expect(svc.setReturnStatus(ret.id, 'filed')).rejects.toThrow(/only a draft VAT return can be filed/);
+  });
+
+  it('rejects a second return that overlaps an already-filed period', async () => {
+    const svc = await freshService();
+    const q1 = await svc.generateReturn('t1', '2026-01-01', '2026-03-31');
+    await svc.setReturnStatus(q1.id, 'filed', 'u-admin');
+    // A monthly return inside the filed quarter would double-declare the same output tax.
+    await expect(svc.generateReturn('t1', '2026-02-01', '2026-02-28')).rejects.toThrow(/already covers/);
+  });
+
+  it('still lets a draft be regenerated (no filed return in the way)', async () => {
+    const svc = await freshService();
+    await svc.generateReturn('t1', '2026-01-01', '2026-03-31');
+    // Draft-only overlap is allowed — regenerating supersedes the earlier draft.
+    await expect(svc.generateReturn('t1', '2026-01-01', '2026-03-31')).resolves.toBeTruthy();
+  });
+});
+
 // ── Regressions found in the wave-2 finance audit ─────────────────────────────
 describe('VAT engine — rules that were wrong', () => {
   const rc = makeTaxCode({ tenantId: 't1', code: 'RC', description: 'Reverse charge', rate: 5, taxType: 'reverse_charge' });

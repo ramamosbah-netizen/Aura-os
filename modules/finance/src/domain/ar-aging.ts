@@ -62,9 +62,10 @@ export function buildArAging(invoices: CustomerInvoice[], asOf: string): ArAging
 
   for (const inv of invoices) {
     if (inv.status !== 'issued' && inv.status !== 'partially_paid') continue;
-    // Outstanding in BASE currency, at the rate captured on the invoice.
+    // Outstanding in BASE currency, at the rate captured on the invoice. Credit notes reduce the
+    // receivable alongside receipts, so they net out here too.
     const rate = Number(inv.exchangeRate) > 0 ? Number(inv.exchangeRate) : 1;
-    const outstanding = round2((inv.total - inv.amountPaid) * rate);
+    const outstanding = round2((inv.total - inv.amountPaid - (inv.creditedTotal ?? 0)) * rate);
     if (outstanding <= 0) continue;
     const ageFrom = inv.dueDate ?? inv.issueDate;
     const bucket = bucketFor(daysBetween(ageFrom, asOf));

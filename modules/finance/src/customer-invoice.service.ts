@@ -9,6 +9,7 @@ import {
   issueInvoice,
   recordReceipt,
   cancelInvoice,
+  applyCredit,
 } from './domain/customer-invoice';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
@@ -197,6 +198,19 @@ export class CustomerInvoiceService {
       }),
     ]);
     this.logger.log(`Customer invoice ${inv.invoiceNumber} (${id}) cancelled`);
+    return updated;
+  }
+
+  /**
+   * Apply a credit note (gross) to an invoice, reducing what the customer owes. Called by
+   * CreditNoteService when a note is issued; the note's own GL posting reduces AR in the books, and
+   * this keeps the invoice sub-ledger (balance + aging) in step.
+   */
+  async applyCredit(id: Id, amountGross: number): Promise<CustomerInvoice> {
+    const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
+    const updated = applyCredit(inv, amountGross);
+    await this.store.save(updated);
+    this.logger.log(`Credit ${amountGross} applied to invoice ${inv.invoiceNumber} → credited ${updated.creditedTotal}/${inv.total} (${updated.status})`);
     return updated;
   }
 

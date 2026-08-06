@@ -977,6 +977,34 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Operate: AR credit note issued → General Ledger (reduce revenue + receivable) ──────
+    // A credit note is the mirror of a sales invoice: issuing it reverses revenue and the VAT, and
+    // reduces the receivable — Dr Revenue (4010) / Dr VAT Output (2100) / Cr Accounts Receivable (1200).
+    this.bus.subscribe('finance.credit_note.issued', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const rate = Number(p.exchangeRate) > 0 ? Number(p.exchangeRate) : 1;
+        const net = r2(Number(p.subtotal || 0) * rate);
+        const vat = r2(Number(p.vatTotal || 0) * rate);
+        const gross = r2(net + vat);
+        if (gross <= 0) return;
+        const ar = await this.ensureAccount(e.tenantId, '1200', 'Accounts Receivable', 'asset');
+        const rev = await this.ensureAccount(e.tenantId, '4010', 'Revenue', 'revenue');
+        const lines = [
+          { accountId: rev.id, accountCode: rev.code, accountName: rev.name, debit: net, credit: 0 },
+          { accountId: ar.id, accountCode: ar.code, accountName: ar.name, debit: 0, credit: gross },
+        ];
+        if (vat > 0) {
+          const vatOut = await this.ensureAccount(e.tenantId, '2100', 'VAT Payable (Output)', 'liability');
+          lines.splice(1, 0, { accountId: vatOut.id, accountCode: vatOut.code, accountName: vatOut.name, debit: vat, credit: 0 });
+        }
+        await this.journals.post({ tenantId: e.tenantId, companyId: e.companyId ?? null, reference: `CN-${p.creditNoteNumber}`, description: `Credit note ${p.creditNoteNumber}`, lines });
+        this.logger.log(`⚡ credit note issued → reduced GL revenue ${net} (+VAT ${vat}) via ${p.creditNoteNumber}`);
+      } catch (err) {
+        this.logger.error(`Failed to post credit-note GL from credit_note.issued: ${err}`);
+      }
+    });
+
     // ── Operate: AP invoice approval → General Ledger (book the payable) ──────
     // The AP payment reactor (payment.service) already posts Dr AP / Cr Bank when a supplier is
     // paid — but nothing credited AP in the first place, so the payable was never booked and the

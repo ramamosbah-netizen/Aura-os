@@ -46,6 +46,9 @@ export interface CustomerInvoice {
   /** Total converted to base currency (AED) for consolidated reporting. */
   baseTotal: number;
   amountPaid: number;
+  /** Total credited back to the customer via credit notes (gross, incl VAT). Reduces the receivable
+   *  alongside receipts, so balance = total − amountPaid − creditedTotal. */
+  creditedTotal: number;
   status: CustomerInvoiceStatus;
   /** Soft-delete timestamp; null = live. Deleted rows are hidden from lists but restorable. */
   deletedAt: string | null;
@@ -126,6 +129,7 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
     exchangeRate,
     baseTotal,
     amountPaid: 0,
+    creditedTotal: 0,
     status: 'draft',
     deletedAt: null,
     createdAt: new Date().toISOString(),
@@ -145,20 +149,44 @@ export function recordReceipt(inv: CustomerInvoice, amount: number): CustomerInv
   }
   const a = Number(amount);
   if (!Number.isFinite(a) || a <= 0) throw new Error('receipt amount must be positive');
+  const credited = inv.creditedTotal ?? 0;
   const amountPaid = round2(inv.amountPaid + a);
-  if (amountPaid > inv.total + 0.001) throw new Error(`receipt exceeds invoice balance (paid ${inv.amountPaid}, total ${inv.total})`);
-  const status: CustomerInvoiceStatus = amountPaid >= inv.total - 0.001 ? 'paid' : 'partially_paid';
+  // Cash + credits cannot settle more than the invoice: a credit note already reduced the balance.
+  if (amountPaid + credited > inv.total + 0.001) {
+    throw new Error(`receipt exceeds invoice balance (paid ${inv.amountPaid}, credited ${credited}, total ${inv.total})`);
+  }
+  const status: CustomerInvoiceStatus = amountPaid + credited >= inv.total - 0.001 ? 'paid' : 'partially_paid';
   return { ...inv, amountPaid, status };
+}
+
+/**
+ * Apply a credit note (gross) against the invoice, reducing what the customer owes. A credit settles
+ * the receivable the same way cash does; once cash + credits cover the invoice it is fully settled.
+ */
+export function applyCredit(inv: CustomerInvoice, amountGross: number): CustomerInvoice {
+  if (inv.status === 'cancelled') throw new Error('cannot credit a cancelled invoice');
+  if (inv.status === 'draft') throw new Error('only an issued invoice can be credited');
+  const c = Number(amountGross);
+  if (!Number.isFinite(c) || c <= 0) throw new Error('credit amount must be positive');
+  const creditedTotal = round2((inv.creditedTotal ?? 0) + c);
+  if (inv.amountPaid + creditedTotal > inv.total + 0.001) {
+    // "insufficient …" leads so the error taxonomy classifies it as a 409 state conflict (the
+    // invoice's remaining balance forbids the credit), mirroring the payment over-settlement guard.
+    throw new Error(`insufficient invoice balance — credit of ${c} would take invoice to ${creditedTotal} credited + ${inv.amountPaid} paid, above its total of ${inv.total}`);
+  }
+  const status: CustomerInvoiceStatus = inv.amountPaid + creditedTotal >= inv.total - 0.001 ? 'paid' : inv.status;
+  return { ...inv, creditedTotal, status };
 }
 
 export function cancelInvoice(inv: CustomerInvoice): CustomerInvoice {
   if (inv.status === 'paid') throw new Error('cannot cancel a fully paid invoice');
   if (inv.amountPaid > 0) throw new Error('cannot cancel an invoice with receipts recorded');
+  if ((inv.creditedTotal ?? 0) > 0) throw new Error('cannot cancel an invoice with credit notes against it');
   return { ...inv, status: 'cancelled' };
 }
 
 export function balanceOf(inv: CustomerInvoice): number {
-  return round2(inv.total - inv.amountPaid);
+  return round2(inv.total - inv.amountPaid - (inv.creditedTotal ?? 0));
 }
 
 export const CUSTOMER_INVOICE_EVENT = {

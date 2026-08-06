@@ -143,7 +143,12 @@ export class CustomerInvoiceService {
         type: CUSTOMER_INVOICE_EVENT.issued,
         tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
+        // Carries net / VAT / currency so the GL reactor can post the revenue entry in base currency.
+        payload: {
+          invoiceNumber: inv.invoiceNumber, total: inv.total,
+          subtotal: inv.subtotal, vatTotal: inv.vatTotal,
+          currency: inv.currency, exchangeRate: inv.exchangeRate,
+        },
       }),
     ]);
     return updated;
@@ -159,7 +164,11 @@ export class CustomerInvoiceService {
         type: CUSTOMER_INVOICE_EVENT.receiptRecorded,
         tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { amount: Number(amount), amountPaid: updated.amountPaid, status: updated.status },
+        // currency/rate let the GL reactor post the cash receipt (Dr Bank / Cr AR) in base currency.
+        payload: {
+          amount: Number(amount), amountPaid: updated.amountPaid, status: updated.status,
+          currency: inv.currency, exchangeRate: inv.exchangeRate,
+        },
       }),
     ]);
     this.logger.log(`Receipt ${amount} on invoice ${inv.invoiceNumber} → paid ${updated.amountPaid}/${inv.total} (${updated.status})`);
@@ -178,7 +187,13 @@ export class CustomerInvoiceService {
         type: CUSTOMER_INVOICE_EVENT.cancelled,
         tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
+        // previousStatus tells the GL reactor whether a revenue entry was ever posted (only 'issued'
+        // invoices post revenue) so it can reverse it. subtotal/VAT/rate size the reversal.
+        payload: {
+          invoiceNumber: inv.invoiceNumber, total: inv.total, previousStatus: inv.status,
+          subtotal: inv.subtotal, vatTotal: inv.vatTotal,
+          currency: inv.currency, exchangeRate: inv.exchangeRate,
+        },
       }),
     ]);
     this.logger.log(`Customer invoice ${inv.invoiceNumber} (${id}) cancelled`);

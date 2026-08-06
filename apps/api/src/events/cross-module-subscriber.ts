@@ -894,6 +894,89 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Operate: AR invoicing → General Ledger (make revenue a real GL subledger) ──────
+    // StatementsService folds the P&L / balance sheet purely from the journal ledger, so an AR
+    // invoice that posts no journal is invisible to the accounts: revenue never reaches the P&L and
+    // the receivable never reaches the balance sheet. Inventory is already a GL subledger (above);
+    // this makes sales one too. All amounts are converted to base currency (AED) at the rate captured
+    // on the invoice, mirroring the FX-revaluation and inventory postings.
+    //   issue   → Dr Accounts Receivable (1200) / Cr Revenue (4010) / Cr VAT Output (2100)
+    //   receipt → Dr Bank (1010)                / Cr Accounts Receivable (1200)
+    //   cancel  → reverse the issue posting (only if the invoice had been issued)
+    const r2 = (n: number): number => Math.round(n * 100) / 100;
+    this.bus.subscribe('finance.customer_invoice.issued', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const rate = Number(p.exchangeRate) > 0 ? Number(p.exchangeRate) : 1;
+        const net = r2(Number(p.subtotal || 0) * rate);
+        const vat = r2(Number(p.vatTotal || 0) * rate);
+        const gross = r2(net + vat);
+        if (gross <= 0) return;
+        const ar = await this.ensureAccount(e.tenantId, '1200', 'Accounts Receivable', 'asset');
+        const rev = await this.ensureAccount(e.tenantId, '4010', 'Revenue', 'revenue');
+        const lines = [
+          { accountId: ar.id, accountCode: ar.code, accountName: ar.name, debit: gross, credit: 0 },
+          { accountId: rev.id, accountCode: rev.code, accountName: rev.name, debit: 0, credit: net },
+        ];
+        if (vat > 0) {
+          const vatOut = await this.ensureAccount(e.tenantId, '2100', 'VAT Payable (Output)', 'liability');
+          lines.push({ accountId: vatOut.id, accountCode: vatOut.code, accountName: vatOut.name, debit: 0, credit: vat });
+        }
+        await this.journals.post({ tenantId: e.tenantId, companyId: e.companyId ?? null, reference: `AR-${p.invoiceNumber}`, description: `Sales invoice ${p.invoiceNumber}`, lines });
+        this.logger.log(`⚡ AR issued → posted GL revenue ${net} (+VAT ${vat}) for invoice ${p.invoiceNumber}`);
+      } catch (err) {
+        this.logger.error(`Failed to post AR revenue GL from customer_invoice.issued: ${err}`);
+      }
+    });
+
+    this.bus.subscribe('finance.customer_invoice.receipt_recorded', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const rate = Number(p.exchangeRate) > 0 ? Number(p.exchangeRate) : 1;
+        const base = r2(Number(p.amount || 0) * rate);
+        if (base <= 0) return;
+        const bank = await this.ensureAccount(e.tenantId, '1010', 'Main Bank Account', 'asset');
+        const ar = await this.ensureAccount(e.tenantId, '1200', 'Accounts Receivable', 'asset');
+        await this.journals.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null,
+          reference: `AR-RCPT-${e.aggregateId}`, description: `Customer receipt on invoice ${e.aggregateId}`,
+          lines: [
+            { accountId: bank.id, accountCode: bank.code, accountName: bank.name, debit: base, credit: 0 },
+            { accountId: ar.id, accountCode: ar.code, accountName: ar.name, debit: 0, credit: base },
+          ],
+        });
+        this.logger.log(`⚡ AR receipt → posted GL cash ${base} against AR for invoice ${e.aggregateId}`);
+      } catch (err) {
+        this.logger.error(`Failed to post AR receipt GL from customer_invoice.receipt_recorded: ${err}`);
+      }
+    });
+
+    this.bus.subscribe('finance.customer_invoice.cancelled', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        if (p.previousStatus !== 'issued') return; // only an issued invoice ever posted revenue
+        const rate = Number(p.exchangeRate) > 0 ? Number(p.exchangeRate) : 1;
+        const net = r2(Number(p.subtotal || 0) * rate);
+        const vat = r2(Number(p.vatTotal || 0) * rate);
+        const gross = r2(net + vat);
+        if (gross <= 0) return;
+        const ar = await this.ensureAccount(e.tenantId, '1200', 'Accounts Receivable', 'asset');
+        const rev = await this.ensureAccount(e.tenantId, '4010', 'Revenue', 'revenue');
+        const lines = [
+          { accountId: rev.id, accountCode: rev.code, accountName: rev.name, debit: net, credit: 0 },
+          { accountId: ar.id, accountCode: ar.code, accountName: ar.name, debit: 0, credit: gross },
+        ];
+        if (vat > 0) {
+          const vatOut = await this.ensureAccount(e.tenantId, '2100', 'VAT Payable (Output)', 'liability');
+          lines.splice(1, 0, { accountId: vatOut.id, accountCode: vatOut.code, accountName: vatOut.name, debit: vat, credit: 0 });
+        }
+        await this.journals.post({ tenantId: e.tenantId, companyId: e.companyId ?? null, reference: `AR-VOID-${p.invoiceNumber}`, description: `Reversal of cancelled sales invoice ${p.invoiceNumber}`, lines });
+        this.logger.log(`⚡ AR cancelled → reversed GL revenue ${net} (+VAT ${vat}) for invoice ${p.invoiceNumber}`);
+      } catch (err) {
+        this.logger.error(`Failed to reverse AR revenue GL from customer_invoice.cancelled: ${err}`);
+      }
+    });
+
     // ── Material cost strand: stock issued to / returned from a project → ACTUAL cost on the CBS line ──
     // No module touches the CBS directly. A coded stock movement (cbsNodeId set) becomes a CostTransaction:
     //   issue  (out) → ACTUAL  +qty, amount = qty × unitCost (the WAC/COGS rate), source 'material_issue'

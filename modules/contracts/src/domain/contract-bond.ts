@@ -81,6 +81,14 @@ export function applyBondAction(b: ContractBond, action: BondAction): ContractBo
   return { ...b, status: to[action] };
 }
 
+/**
+ * Active bonds whose expiry date has already passed — still counted as live security by every
+ * report until someone marks them expired. These are what the sweep closes.
+ */
+export function lapsedBonds(bonds: ContractBond[], today = new Date().toISOString().slice(0, 10)): ContractBond[] {
+  return bonds.filter((b) => b.status === 'active' && b.expiryDate !== null && b.expiryDate < today);
+}
+
 /** Active bonds whose expiry falls within the window (or already passed). */
 export function expiringBonds(bonds: ContractBond[], withinDays: number, today = new Date().toISOString().slice(0, 10)): ContractBond[] {
   const limit = new Date(Date.parse(today) + withinDays * 86400000).toISOString().slice(0, 10);

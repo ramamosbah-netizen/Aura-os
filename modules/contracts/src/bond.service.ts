@@ -8,6 +8,7 @@ import {
   type NewContractBond,
   applyBondAction,
   expiringBonds,
+  lapsedBonds,
   makeContractBond,
 } from './domain/contract-bond';
 import { CONTRACT_BOND_STORE, type BondFilter, type BondStore } from './bond-store';
@@ -57,6 +58,22 @@ export class BondService {
   async expiring(tenantId: string, withinDays = 30): Promise<ContractBond[]> {
     const all = await this.store.list({ tenantId, status: 'active' });
     return expiringBonds(all, withinDays);
+  }
+
+  /**
+   * Close every bond whose expiry date has passed — the register's self-correction. Until this ran,
+   * a lapsed performance bond still read `active`, so exposure reports counted security that no
+   * longer existed. There is no in-app scheduler, so this is an explicit operation: the bonds
+   * screen offers it when something has lapsed, and an external scheduler can call the same route.
+   * Idempotent — a second sweep finds nothing.
+   */
+  async expireLapsed(tenantId: string, asOf?: string): Promise<ContractBond[]> {
+    const active = await this.store.list({ tenantId, status: 'active' });
+    const lapsed = lapsedBonds(active, asOf);
+    const out: ContractBond[] = [];
+    for (const bond of lapsed) out.push(await this.act(bond.id, 'expire'));
+    if (out.length > 0) this.logger.log(`Bond sweep: ${out.length} lapsed bond(s) marked expired`);
+    return out;
   }
 
   async act(id: Id, action: BondAction): Promise<ContractBond> {

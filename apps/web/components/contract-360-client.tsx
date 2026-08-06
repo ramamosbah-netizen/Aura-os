@@ -126,6 +126,8 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
       activeBonds: activeBonds.length,
       bondValue: activeBonds.reduce((s, b) => s + b.amount, 0),
       expiringBonds: expiring.length,
+      // Past their expiry date but still recorded as live security — the sweep closes these.
+      lapsedBonds: activeBonds.filter((b) => b.expiryDate && b.expiryDate < today).length,
     };
   }, [obligations, bonds, today, soon]);
 
@@ -138,6 +140,17 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
       if (note) setMsg(note);
       await load();
       router.refresh();
+    } catch { setErr('API unreachable'); } finally { setBusy(false); }
+  };
+
+  const sweepLapsedBonds = async (): Promise<void> => {
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      const res = await fetch('/api/contracts/bonds/expire-lapsed', { method: 'POST' });
+      const d = await res.json().catch(() => []);
+      if (!res.ok) { setErr((d as { message?: string }).message ?? 'Sweep failed'); return; }
+      setMsg(`${Array.isArray(d) ? d.length : 0} lapsed bond(s) marked expired.`);
+      await load();
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   };
 
@@ -260,6 +273,11 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
               { name: 'description', label: 'Description', kind: 'textarea', span: 2 },
             ]}
           />
+        )}
+        {tab === 'bonds' && stats.lapsedBonds > 0 && (
+          <button className="btn" style={{ ...st.actBtn, color: 'var(--bad)', marginRight: 8 }} disabled={busy} onClick={() => void sweepLapsedBonds()}>
+            Mark {stats.lapsedBonds} lapsed bond{stats.lapsedBonds > 1 ? 's' : ''} expired
+          </button>
         )}
         {tab === 'bonds' && (
           <CreateDrawer

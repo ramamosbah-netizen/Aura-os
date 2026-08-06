@@ -59,6 +59,15 @@ export class BondsController {
     return this.bonds.expiring(this.tenant.get().tenantId, Number.isFinite(n) && n > 0 ? n : 30);
   }
 
+  /**
+   * Mark every bond whose expiry has passed as expired — the register's self-correction, offered
+   * on the bonds screen and callable by an external scheduler. Idempotent.
+   */
+  @Post('expire-lapsed')
+  expireLapsed(): Promise<ContractBond[]> {
+    return this.bonds.expireLapsed(this.tenant.get().tenantId);
+  }
+
   @Get(':id')
   async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<ContractBond> {
     const found = await this.bonds.get(id);

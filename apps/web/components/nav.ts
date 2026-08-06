@@ -79,6 +79,7 @@ export const NAV: NavGroup[] = [
       { label: 'Commissioning', href: '/commissioning', glyph: '✓', desc: 'Test & Commissioning register — prove each ELV system works, witnessed sign-off unlocks handover' },
       { label: 'Handover', href: '/handover', glyph: '⇥', desc: 'Project acceptance package — close-out deliverables, client sign-off & warranty start' },
       { label: 'Payment Certificates', href: '/contracts/certificates', glyph: '◰', desc: 'Interim payment certificates (IPC) — progress billing & retention' },
+      { label: 'Clause Library', href: '/contracts/clauses', glyph: '§', desc: 'Reusable contract language — payment terms, retention, LDs, warranty & indemnity, versioned' },
     ],
   },
   {

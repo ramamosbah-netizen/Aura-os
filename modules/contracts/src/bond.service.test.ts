@@ -43,4 +43,20 @@ describe('BondService', () => {
     await seed();
     expect((await svc.expiring('t1', 3650)).map((x) => x.reference)).toEqual(['PB-1']);
   });
+
+  it('sweeps lapsed bonds into expired — idempotently, leaving unexpired ones alone', async () => {
+    const { svc, emitted } = harness();
+    const lapsed = await svc.create({ tenantId: 't1', contractId: 'c1', kind: 'performance', reference: 'PB-OLD', amount: 100_000, expiryDate: '2020-01-01' });
+    const live = await svc.create({ tenantId: 't1', contractId: 'c1', kind: 'warranty', reference: 'WB-NEW', amount: 50_000, expiryDate: '2099-01-01' });
+    const openEnded = await svc.create({ tenantId: 't1', contractId: 'c1', kind: 'retention', reference: 'RB-NONE', amount: 10_000 });
+
+    const swept = await svc.expireLapsed('t1');
+    expect(swept.map((b) => b.reference)).toEqual(['PB-OLD']);
+    expect((await svc.get(lapsed.id))?.status).toBe('expired');
+    expect((await svc.get(live.id))?.status).toBe('active');
+    expect((await svc.get(openEnded.id))?.status).toBe('active'); // no expiry date = nothing to lapse
+    expect(emitted().filter((t) => t === 'contracts.bond.expired')).toHaveLength(1);
+
+    expect(await svc.expireLapsed('t1')).toEqual([]); // second sweep finds nothing
+  });
 });

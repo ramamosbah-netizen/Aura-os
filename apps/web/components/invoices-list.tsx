@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { InvoiceEdit } from './invoice-create';
 
@@ -167,8 +167,8 @@ export default function InvoicesList({
               const matchOk = poMatch && grnMatch;
 
               return (
-                <>
-                  <tr key={inv.id} style={isPaying ? s.rowSelected : s.row}>
+                <Fragment key={inv.id}>
+                  <tr style={isPaying ? s.rowSelected : s.row}>
                     <td style={s.td}>
                       <a
                         href={`/finance/invoices/${inv.id}`}
@@ -359,7 +359,7 @@ export default function InvoicesList({
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

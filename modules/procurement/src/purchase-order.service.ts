@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, TenantContext } from '@aura/core';
-import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
+import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder, assertPoTransition } from './domain/purchase-order';
 import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
 import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
@@ -188,6 +188,14 @@ export class PurchaseOrderService implements OnModuleInit {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`PO ${id} not found`);
 
+    // Idempotent no-op: re-applying the current status (e.g. a redelivered cancel) returns the PO
+    // unchanged and emits nothing, so downstream reactors never see a duplicate event.
+    if (status === existing.status) return existing;
+
+    // State machine: reject an unknown status, a backward move, or reviving a terminal PO
+    // (un-cancelling would leave it live with its committed cost already reversed off the CBS).
+    assertPoTransition(existing.status, status);
+
     // Approval gate: a PO above the auto-approve threshold must be 'approved' before it can issue.
     if (status === 'issued' && existing.status !== 'approved' && !requiredApproval(existing.value).autoApproved) {
       throw new Error(`PO ${existing.reference ?? id} (value ${existing.value}) requires approval before it can be issued`);
@@ -249,6 +257,9 @@ export class PurchaseOrderService implements OnModuleInit {
     eventType: string,
     extra: Record<string, unknown> = {},
   ): Promise<PurchaseOrder> {
+    // The same lifecycle guard the direct changeStatus path uses — so submit/approve cannot move a
+    // PO from an illegal state either (e.g. approving an already-issued or closed order).
+    assertPoTransition(existing.status, status);
     const updated: PurchaseOrder = { ...existing, status };
     const event = makeEvent({
       type: eventType,

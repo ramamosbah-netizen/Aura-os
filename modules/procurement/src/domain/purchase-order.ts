@@ -5,7 +5,41 @@ import { type Id, type Discipline, newId, toDiscipline } from '@aura/shared';
 // id + name snapshot (no cross-module join); the supplier is a name for now (no
 // Suppliers module yet).
 
-export type PurchaseOrderStatus = 'draft' | 'pending_approval' | 'approved' | 'issued' | 'received' | 'closed';
+export type PurchaseOrderStatus = 'draft' | 'pending_approval' | 'approved' | 'issued' | 'received' | 'closed' | 'cancelled';
+
+/**
+ * The purchase-order lifecycle. `changeStatus` used to accept any target from any state (the status
+ * DTO is only `@IsString`), so a PO could be set to an invalid status, moved backwards, or — the
+ * dangerous one — **un-cancelled**: cancelling a PO reverses its committed cost on the CBS, and
+ * moving it back to `issued` left it live again while the cost stayed reversed, so the project's
+ * committed spend silently understated the order. Terminal states (`closed`, `cancelled`) allow no
+ * exit; the machine is the same shape the tests already drive (submit → approve → issue → receive →
+ * close, cancel from anywhere live).
+ */
+const PO_TRANSITIONS: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
+  draft: ['pending_approval', 'approved', 'issued', 'cancelled'],
+  pending_approval: ['approved', 'draft', 'cancelled'],
+  approved: ['issued', 'cancelled'],
+  issued: ['received', 'closed', 'cancelled'],
+  received: ['closed', 'cancelled'],
+  closed: [],
+  cancelled: [],
+};
+
+export function isPurchaseOrderStatus(s: string): s is PurchaseOrderStatus {
+  return Object.prototype.hasOwnProperty.call(PO_TRANSITIONS, s);
+}
+
+/** Guard a PO status change. Throws on an unknown status (400) or an illegal transition (409). */
+export function assertPoTransition(from: PurchaseOrderStatus, to: PurchaseOrderStatus): void {
+  if (!isPurchaseOrderStatus(to)) throw new Error(`unknown purchase order status "${to}"`);
+  const allowed = PO_TRANSITIONS[from] ?? [];
+  if (!allowed.includes(to)) {
+    // "can only move" leads so the error taxonomy classifies an illegal transition as a 409 conflict.
+    const where = allowed.length ? allowed.join(', ') : 'nowhere — it is terminal';
+    throw new Error(`a ${from} purchase order can only move to ${where}, not ${to}`);
+  }
+}
 
 export interface PurchaseOrder {
   id: Id;

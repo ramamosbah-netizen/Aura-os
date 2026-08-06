@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROCUREMENT_EVENT, makePurchaseOrder } from './purchase-order';
+import { PROCUREMENT_EVENT, makePurchaseOrder, assertPoTransition, isPurchaseOrderStatus } from './purchase-order';
 
 describe('procurement purchase-order model', () => {
   it('creates a PO with sane defaults and trimmed fields', () => {
@@ -40,5 +40,39 @@ describe('procurement purchase-order model', () => {
 
   it('exposes the spine event type', () => {
     expect(PROCUREMENT_EVENT.poCreated).toBe('procurement.po.created');
+  });
+});
+
+describe('purchase-order state machine (assertPoTransition)', () => {
+  it('allows the normal lifecycle', () => {
+    expect(() => assertPoTransition('draft', 'pending_approval')).not.toThrow();
+    expect(() => assertPoTransition('pending_approval', 'approved')).not.toThrow();
+    expect(() => assertPoTransition('approved', 'issued')).not.toThrow();
+    expect(() => assertPoTransition('issued', 'received')).not.toThrow();
+    expect(() => assertPoTransition('received', 'closed')).not.toThrow();
+    expect(() => assertPoTransition('draft', 'issued')).not.toThrow(); // auto-approved small PO
+  });
+
+  it('allows cancelling any live PO', () => {
+    for (const from of ['draft', 'pending_approval', 'approved', 'issued', 'received'] as const) {
+      expect(() => assertPoTransition(from, 'cancelled')).not.toThrow();
+    }
+  });
+
+  it('will not un-cancel or revive a terminal PO', () => {
+    expect(() => assertPoTransition('cancelled', 'issued')).toThrow(/can only move/);
+    expect(() => assertPoTransition('cancelled', 'draft')).toThrow(/terminal/);
+    expect(() => assertPoTransition('closed', 'issued')).toThrow(/terminal/);
+  });
+
+  it('rejects backward moves', () => {
+    expect(() => assertPoTransition('received', 'draft')).toThrow(/can only move/);
+    expect(() => assertPoTransition('issued', 'approved')).toThrow(/can only move/);
+  });
+
+  it('rejects an unknown status', () => {
+    expect(() => assertPoTransition('draft', 'foo' as never)).toThrow(/unknown purchase order status/);
+    expect(isPurchaseOrderStatus('foo')).toBe(false);
+    expect(isPurchaseOrderStatus('issued')).toBe(true);
   });
 });

@@ -60,6 +60,35 @@ describe('ContractService — lifecycle state machine', () => {
     await expect(svc.changeStatus(d.id, 'draft')).rejects.toThrow(/can only move to/i);
   });
 
+  it('a value change re-asserts the signing ceiling — you cannot patch past your approval limit', async () => {
+    const store = new InMemoryContractStore();
+    const events = { append: vi.fn().mockResolvedValue(undefined), appendWithClient: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
+    // An approver capped at 50k: authorised for the action, but not for the amount.
+    const capped = {
+      assert: () => {},
+      assertApprovalAuthority: (_u: string, t: { amount: number }) => {
+        if (t.amount > 50_000) throw new Error('Access denied: above your approval limit');
+      },
+    } as unknown as AccessService;
+    const tenant = { get: () => ({ tenantId: 't1', companyId: null, actorId: 'limited-approver' }) } as never;
+    const svc = new ContractService(store, events, tx, commands, capped, tenant);
+    const c = makeContract({ tenantId: 't1', title: 'Small works', value: 30_000, status: 'active' });
+    await store.create(c);
+
+    await expect(svc.update(c.id, { value: 5_000_000 })).rejects.toThrow(/above your approval limit/i);
+    expect((await store.get(c.id))?.value).toBe(30_000); // unchanged — the AR cap is not raised
+    await svc.update(c.id, { value: 45_000 }); // within the ceiling → allowed
+    expect((await store.get(c.id))?.value).toBe(45_000);
+  });
+
+  it('freezes the value of a closed contract', async () => {
+    const { svc, seed } = harness();
+    const c = await seed('active');
+    await svc.changeStatus(c.id, 'completed');
+    await expect(svc.update(c.id, { value: 250_000 })).rejects.toThrow(/cannot change the value of a completed contract/i);
+    await svc.update(c.id, { title: 'Mall ELV (final)' }); // non-value fields stay editable
+  });
+
   it('still runs the happy path draft → active → completed, emitting each trigger once', async () => {
     const { svc, emitted, seed } = harness();
     const c = await seed('draft');

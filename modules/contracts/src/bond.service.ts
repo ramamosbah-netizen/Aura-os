@@ -64,20 +64,20 @@ export class BondService {
     if (!existing) throw new Error(`bond ${id} not found`);
     const updated = applyBondAction(existing, action);
     await this.store.save(updated);
-    const eventType = action === 'release' ? BOND_EVENT.released : action === 'call' ? BOND_EVENT.called : null;
-    if (eventType) {
-      await this.events.append([
-        makeEvent({
-          type: eventType,
-          tenantId: updated.tenantId,
-          companyId: updated.companyId,
-          actorId: null,
-          aggregateType: 'contracts.bond',
-          aggregateId: updated.id,
-          payload: { contractId: updated.contractId, kind: updated.kind, reference: updated.reference, amount: updated.amount },
-        }),
-      ]);
-    }
+    // Every action leaves a trail — an expiry silently changed the register with no event at all,
+    // which is the one state change the commercial team most needs to see after the fact.
+    const eventType = action === 'release' ? BOND_EVENT.released : action === 'call' ? BOND_EVENT.called : BOND_EVENT.expired;
+    await this.events.append([
+      makeEvent({
+        type: eventType,
+        tenantId: updated.tenantId,
+        companyId: updated.companyId,
+        actorId: null,
+        aggregateType: 'contracts.bond',
+        aggregateId: updated.id,
+        payload: { contractId: updated.contractId, kind: updated.kind, reference: updated.reference, amount: updated.amount, expiryDate: updated.expiryDate },
+      }),
+    ]);
     this.logger.log(`Bond ${updated.reference}: ${action} → ${updated.status}`);
     return updated;
   }

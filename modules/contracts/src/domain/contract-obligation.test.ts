@@ -19,6 +19,15 @@ describe('contract-obligation domain', () => {
     expect(setObligationStatus(o, 'in_progress').completedDate).toBeNull();
   });
 
+  it('reopening a met obligation clears the completed date', () => {
+    const met = setObligationStatus(makeContractObligation(base), 'met', '2026-01-20');
+    // Walked back (evidence rejected, deliverable returned): it is open again and was never completed.
+    expect(setObligationStatus(met, 'open').completedDate).toBeNull();
+    expect(setObligationStatus(met, 'breached').completedDate).toBeNull();
+    // …but a waived → met correction keeps a real completion date.
+    expect(setObligationStatus(met, 'waived', '2026-02-02').completedDate).toBe('2026-02-02');
+  });
+
   it('isOverdue: open + past due = true; closed or future = false', () => {
     const o = makeContractObligation(base);
     expect(isOverdue(o, '2026-03-01')).toBe(true);

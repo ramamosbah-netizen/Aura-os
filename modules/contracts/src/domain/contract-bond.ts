@@ -91,4 +91,6 @@ export const BOND_EVENT = {
   added: 'contracts.bond.added',
   released: 'contracts.bond.released',
   called: 'contracts.bond.called',
+  /** Lapsed without release — the commercially significant one, so it must leave a trail too. */
+  expired: 'contracts.bond.expired',
 } as const;

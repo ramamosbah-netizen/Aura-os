@@ -67,12 +67,18 @@ export function makeContractObligation(input: NewContractObligation): ContractOb
   };
 }
 
-/** Transition an obligation; met/waived stamp the completed date. */
+/**
+ * Transition an obligation; met/waived stamp the completed date, and REOPENING clears it again.
+ * Without the clear, an obligation walked back from met → open kept its completion date, so it sat
+ * in the reminder feed (which filters on status) while every register and export still showed it
+ * completed on a date it was not.
+ */
 export function setObligationStatus(o: ContractObligation, status: ObligationStatus, on?: string): ContractObligation {
+  const closed = CLOSED.includes(status);
   return {
     ...o,
     status,
-    completedDate: CLOSED.includes(status) ? (on ?? new Date().toISOString().slice(0, 10)) : o.completedDate,
+    completedDate: closed ? (on ?? new Date().toISOString().slice(0, 10)) : null,
     updatedAt: new Date().toISOString(),
   };
 }

@@ -88,6 +88,28 @@ export class ContractService implements OnModuleInit {
     if (!existing) throw new Error(`contract ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Contract = { ...existing, ...defined };
+    // The contract value is a GOVERNED figure, not a free-text field. Two controls hang off it:
+    // signing it required `approvalLimit` cover for that amount, and the AR billing cap refuses to
+    // invoice past it (billing above the contract needs a variation, not a bigger number). Patching
+    // the value with neither check defeats both — sign a 30k contract inside your limit, then raise
+    // it to 5m. So a value change re-asserts the SAME signing ceiling, and a closed contract's value
+    // is frozen (its period is reported and its cap already spent).
+    if (updated.value !== existing.value) {
+      if (existing.status === 'completed' || existing.status === 'cancelled') {
+        throw new Error(
+          `cannot change the value of a ${existing.status} contract (${existing.reference ?? id}) — raise a variation instead`,
+        );
+      }
+      const actorId = this.actor();
+      // Skipped for system/auto updates (no actor), matching changeStatus.
+      if (actorId) {
+        this.access.assertApprovalAuthority(
+          actorId,
+          { permission: 'contracts.contract.sign', orgPath: [{ level: 'tenant', id: existing.tenantId }], amount: updated.value },
+          `contract ${existing.reference ?? id} value change`,
+        );
+      }
+    }
     // Audit trail (P1-2): record the field-level before→after (esp. the contract value) + the real
     // actor, so the timeline can answer "who changed the contract value from X to Y, and when".
     const changes = diffFields(existing, updated, ['title', 'reference', 'value', 'accountName']);

@@ -495,11 +495,13 @@ const st = {
   linkBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
   stats: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 12 } as CSSProperties,
   chain: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 16px', border: '1px dashed var(--border)', borderRadius: 12, marginBottom: 14, fontSize: 12.5 } as CSSProperties,
-  chainNode: { border: '1px solid var(--border)', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)', textDecoration: 'none' } as CSSProperties,
+  // Longhand, not the `border` shorthand: chainOn/tabOn override borderColor alone, and mixing
+  // the two on a rerender is a React styling warning (and a real source of stuck borders).
+  chainNode: { borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)', textDecoration: 'none' } as CSSProperties,
   chainOn: { color: 'var(--text)', borderColor: 'var(--accent)' } as CSSProperties,
   arrow: { color: 'var(--muted)' } as CSSProperties,
   tabs: { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,
-  tab: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '7px 12px', borderRadius: 9, cursor: 'pointer' } as CSSProperties,
+  tab: { borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '7px 12px', borderRadius: 9, cursor: 'pointer' } as CSSProperties,
   tabOn: { color: 'var(--accent)', borderColor: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
   typeTag: { fontSize: 11.5, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', textTransform: 'capitalize' } as CSSProperties,

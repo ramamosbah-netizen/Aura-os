@@ -201,6 +201,34 @@ export function priorCertifiedNet(certs: PaymentCertificate[]): number {
   );
 }
 
+/**
+ * Valid IPC status transitions. `certified` / `paid` / `rejected` are (near-)terminal:
+ *
+ * `certified` is the AR trigger — re-certifying an already-certified (or paid) certificate would
+ * re-fire `contracts.ipc.certified` and bill the client a SECOND time for the same work, the very
+ * double-billing the one-open-certificate create guard prevents. And a `rejected` certificate must
+ * not be revived into `certified`, because `priorCertifiedNet` folds certified/paid nets into the
+ * next IPC's baseline — reviving one would corrupt every subsequent certificate's net.
+ *
+ * `certified` is reachable directly from `draft` (some flows skip the explicit submit) as well as
+ * from `submitted`; a `submitted` certificate may be returned to `draft` for revision.
+ */
+export const CERTIFICATE_TRANSITIONS: Record<CertificateStatus, CertificateStatus[]> = {
+  draft: ['submitted', 'certified', 'rejected'],
+  submitted: ['certified', 'rejected', 'draft'],
+  certified: ['paid'],
+  paid: [],
+  rejected: [],
+};
+
+/** Throw unless `from → to` is a permitted IPC transition. Phrased "can only" → 409 (state conflict). */
+export function assertCertificateTransition(from: CertificateStatus, to: CertificateStatus, ref: string): void {
+  if (!CERTIFICATE_TRANSITIONS[from].includes(to)) {
+    const allowed = CERTIFICATE_TRANSITIONS[from].join(', ') || 'nothing (terminal)';
+    throw new Error(`certificate ${ref} is ${from}; it can only move to ${allowed}`);
+  }
+}
+
 /** Payment-certificate events on the spine. `certified` is the AR trigger for finance. */
 export const CERTIFICATE_EVENT = {
   created: 'contracts.ipc.created',

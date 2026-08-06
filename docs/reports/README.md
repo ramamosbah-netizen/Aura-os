@@ -1,6 +1,6 @@
 # AURA OS — Report Index
 
-91 reports, newest first within each section. **Index last reviewed: 2026-08-05.**
+92 reports, newest first within each section. **Index last reviewed: 2026-08-06.**
 
 ## Read these first
 
@@ -39,6 +39,7 @@ No 100/100 has ever been measured for any journey. Production-build performance 
 
 | Date | Report | Status |
 |---|---|:--:|
+| 2026-08-06 | [ERP Business-Logic & Completeness Audit](2026-08-06-erp-business-logic-audit.md) | 🟢 *running — per-module defects fixed + completion matrix (Finance, Contracts)* |
 | 2026-08-05 | [Consolidated Gap Register](2026-08-05-consolidated-gap-register.md) | 🟢 *the umbrella list — every open gap, stable IDs* |
 | 2026-08-05 | [Platform State Verification](2026-08-05-platform-state-verification.md) | 🟢 |
 | 2026-08-03 | [Enterprise Readiness Audit](2026-08-03-enterprise-readiness-audit.md) | 🟢 |

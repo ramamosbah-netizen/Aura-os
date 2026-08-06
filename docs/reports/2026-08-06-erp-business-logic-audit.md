@@ -64,22 +64,38 @@ written without a state machine, where every re-send re-fires cross-module autom
 
 | Module | Business logic | Missing functions | Missing pages | Missing reports | Priority | Complete? |
 |---|---|---|---|---|---|---|
-| **Finance** | ✅ audited, 2 defects fixed | Credit notes (only invoice cancel exists); multi-invoice payment allocation (one payment settles one invoice); customer refunds | Credit-note screen; receipt-allocation UI | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | logic ✅ · completeness ⚠️ (3) |
-| **Contracts** | ✅ audited, 5 defects fixed | **Retention release** (retention accrues on every IPC; nothing releases it at PC / end of DLP); final account / closeout statement; bond auto-expiry (expiry is manual, only a watchlist exists) | **Clause library** — service + API + store exist with no UI and no web proxy route (bonds and obligations *are* surfaced in Contract 360) | Contract-level retention & bond exposure statement | High (retention release) | logic ✅ · completeness ⚠️ (4) |
+| **Finance** | ✅ audited, 2 defects fixed | Credit notes (only invoice cancel exists); multi-invoice payment allocation (one payment settles one invoice); customer refunds | Credit-note screen; receipt-allocation UI | — (AR/AP aging, TB, P&L, BS, cash flow, VAT return all present) | Medium | logic ✅ · completeness ⚠️ (3 open) |
+| **Contracts** | ✅ audited, 5 defects fixed | ✅ retention release · ✅ lapsed-bond sweep — open: final account / closeout statement | ✅ clause library | Contract-level retention & bond exposure statement | — | logic ✅ · completeness ⚠️ (2 open) |
 
-### Cross-module integration gap (verified)
+---
 
-**Approved project variation → contract value is not wired.** Variations live in the Projects module
-and roll up into a *derived* "revised contract value" read there. The AR cap adapter
-(`apps/api/src/wiring/contract-cap.adapter.ts`) reads `contract.value` directly, so an approved
-variation does **not** raise the billing ceiling — someone must patch the contract value by hand.
-As of `2fda46e` that hand-patch at least requires approval authority for the new value, but the
-automatic link is missing. This is the seam Finance's own cap doc points at ("billing above the
-contract is a commercial claim… it needs a variation first").
+## Completeness build — Contracts (2026-08-06)
+
+Four of the six Contracts gaps are built, each domain → service → store + migration → API → BFF →
+UI → tests, and verified in the running app (screens exercised against a live API, not just tests).
+
+| Gap | Built | Where |
+|---|---|---|
+| **Retention release** | Retention withheld on every IPC now has a return path: a derived position (held − released − pending = releasable, drafts reserving so two claims cannot spend the same money), conventional tranches (half at practical completion, balance at end of DLP), IPC-grade approval controls (preparer ≠ approver, value ceiling), a terminal state machine, and `contracts.retention.released` → auto-drafted client AR invoice. The AR cap's certified bound now allows released retention — retention was withheld *from* the certified net, so releasing it necessarily bills above it. | `13f50ee`, migration 0221, Retention tab on Contract 360 |
+| **Approved variation → contract value** | The cap said "raise a variation before billing above the contract"; that advice was unfollowable. Migration 0222 splits `original_value` (award) from `value` (live), so the roll-up is a recompute — a redelivered approval cannot inflate the contract twice. Omissions net off. | `eb1dde8`, reactor on `projects.variation.approved` |
+| **Clause library UI** | Service, store and full API existed with no UI and no web proxy at all. Now a real screen: search, category filter, expandable clause text, retire/restore, create — plus its nav entry. | `5d25b93`, `/contracts/clauses` |
+| **Bond auto-expiry** | A lapsed performance bond still read `active`, so exposure reports counted security that no longer existed. `expireLapsed` is idempotent, exposed as `POST /contracts/bonds/expire-lapsed` for an operator or external scheduler, and offered on the bonds tab only when something has actually lapsed. There is no in-app scheduler, so this is deliberately an explicit operation rather than invented cron. | `5d25b93` |
+
+**Verified in the running app** (API on in-memory stores, web dev server, seeded through the real
+HTTP API): the clause library lists and expands real clauses; Contract 360's Retention tab showed
+held 50,000 / releasable 25,000; approving RET-001 moved the position to released 25,000 and drafted
+AR invoice `AR-RET-001-…` for 25,000 (26,250 with VAT) alongside the IPC's own `AR-IPC-001-…` for
+450,000; the bond sweep marked the lapsed PB-2026-0042 expired and active bond exposure fell to 0.
+That pass also surfaced a React styling error on every Contract 360 rerender (`border` shorthand vs
+`borderColor` longhand), fixed in `d3bc7cd`.
+
+**Still open (Contracts):** final account / closeout statement, and a contract-level retention &
+bond exposure report. Neither is started.
 
 ---
 
 ## Next
 
-Contracts is closed on the business-logic half. Next module in the reprioritized order, then the
-same two halves again.
+Contracts is closed on the business-logic half and has 4 of 6 completeness gaps built. Remaining
+work is the two Contracts reports above and the three Finance capabilities (credit notes,
+multi-invoice payment allocation, customer refunds) — none of the Finance three is started.

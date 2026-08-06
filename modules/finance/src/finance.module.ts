@@ -46,6 +46,11 @@ import { InMemoryCreditNoteStore } from './in-memory-credit-note-store';
 import { PostgresCreditNoteStore } from './postgres-credit-note-store';
 import { CreditNoteService } from './credit-note.service';
 
+import { CUSTOMER_REFUND_STORE } from './customer-refund-store';
+import { InMemoryCustomerRefundStore } from './in-memory-customer-refund-store';
+import { PostgresCustomerRefundStore } from './postgres-customer-refund-store';
+import { CustomerRefundService } from './customer-refund.service';
+
 import { BANK_GUARANTEE_STORE } from './bank-guarantee-store';
 import { InMemoryBankGuaranteeStore } from './in-memory-bank-guarantee-store';
 import { PostgresBankGuaranteeStore } from './postgres-bank-guarantee-store';
@@ -154,6 +159,13 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
     },
     CreditNoteService,
     {
+      provide: CUSTOMER_REFUND_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCustomerRefundStore(pool) : new InMemoryCustomerRefundStore(),
+    },
+    CustomerRefundService,
+    {
       provide: BANK_GUARANTEE_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -205,7 +217,7 @@ import { ProfitLossProjection } from './projections/profit-loss.projection';
     },
     ProfitCenterService,
   ],
-  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, CreditNoteService, BankGuaranteeService, PostDatedChequeService, StatementsService, PeriodCloseService, BudgetService, CostCenterService, ProfitCenterService],
+  exports: [InvoiceService, AccountService, JournalService, PaymentService, BankReconciliationService, TaxService, PettyCashService, CustomerInvoiceService, CreditNoteService, CustomerRefundService, BankGuaranteeService, PostDatedChequeService, StatementsService, PeriodCloseService, BudgetService, CostCenterService, ProfitCenterService],
 })
 export class FinanceModule implements OnModuleInit {
   constructor(private readonly projectionEngine: ProjectionEngine) {}

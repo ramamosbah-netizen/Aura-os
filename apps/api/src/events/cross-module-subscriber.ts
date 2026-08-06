@@ -1005,6 +1005,29 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
+    // ── Operate: customer refund paid → General Ledger (Dr AR / Cr Bank) ──────
+    // Paying a refund clears the customer's credit and takes cash out — the mirror of a receipt.
+    this.bus.subscribe('finance.customer_refund.paid', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const amount = r2(Number(p.amount || 0));
+        if (amount <= 0) return;
+        const ar = await this.ensureAccount(e.tenantId, '1200', 'Accounts Receivable', 'asset');
+        const bank = await this.ensureAccount(e.tenantId, '1010', 'Main Bank Account', 'asset');
+        await this.journals.post({
+          tenantId: e.tenantId, companyId: e.companyId ?? null,
+          reference: `REFUND-${p.refundNumber}`, description: `Customer refund ${p.refundNumber} — ${p.customerName ?? ''}`.trim(),
+          lines: [
+            { accountId: ar.id, accountCode: ar.code, accountName: ar.name, debit: amount, credit: 0 },
+            { accountId: bank.id, accountCode: bank.code, accountName: bank.name, debit: 0, credit: amount },
+          ],
+        });
+        this.logger.log(`⚡ customer refund paid → posted GL Dr AR / Cr Bank ${amount} for ${p.refundNumber}`);
+      } catch (err) {
+        this.logger.error(`Failed to post refund GL from customer_refund.paid: ${err}`);
+      }
+    });
+
     // ── Operate: AP invoice approval → General Ledger (book the payable) ──────
     // The AP payment reactor (payment.service) already posts Dr AP / Cr Bank when a supplier is
     // paid — but nothing credited AP in the first place, so the payable was never booked and the

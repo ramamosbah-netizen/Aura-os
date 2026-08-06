@@ -58,6 +58,11 @@ export * from './credit-note-store';
 export * from './in-memory-credit-note-store';
 export * from './postgres-credit-note-store';
 export * from './credit-note.service';
+export * from './domain/customer-refund';
+export * from './customer-refund-store';
+export * from './in-memory-customer-refund-store';
+export * from './postgres-customer-refund-store';
+export * from './customer-refund.service';
 
 export * from './domain/bank-guarantee';
 export * from './bank-guarantee-store';

@@ -40,6 +40,17 @@ describe('inventory goods-receipt model', () => {
     expect(makeGoodsReceipt({ tenantId: 't1', title: 'X', value: Number.NaN }).value).toBe(0);
   });
 
+  it('rejects a negative value', () => {
+    expect(() => makeGoodsReceipt({ tenantId: 't1', title: 'X', value: -50 })).toThrow(/cannot be negative/);
+  });
+
+  it('rejects a negative or non-numeric received quantity, but keeps a positive one', () => {
+    expect(() => makeGoodsReceipt({ tenantId: 't1', title: 'X', receivedQuantity: -3 })).toThrow(/positive number/);
+    expect(() => makeGoodsReceipt({ tenantId: 't1', title: 'X', receivedQuantity: Number.NaN })).toThrow(/positive number/);
+    expect(makeGoodsReceipt({ tenantId: 't1', title: 'X', receivedQuantity: 8 }).receivedQuantity).toBe(8);
+    expect(makeGoodsReceipt({ tenantId: 't1', title: 'X' }).receivedQuantity).toBeNull();
+  });
+
   it('exposes the spine event type', () => {
     expect(INVENTORY_EVENT.grnCreated).toBe('inventory.grn.created');
   });

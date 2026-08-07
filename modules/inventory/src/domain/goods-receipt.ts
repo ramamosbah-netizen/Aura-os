@@ -55,6 +55,19 @@ export interface NewGoodsReceipt {
 }
 
 export function makeGoodsReceipt(input: NewGoodsReceipt): GoodsReceipt {
+  // A missing/garbage value coerces to 0 (an uncosted receipt), but a NEGATIVE received value is
+  // never valid — it would post a negative received figure that inflates nothing but corrupts the
+  // 3-way match's received ceiling.
+  const value = Number.isFinite(input.value) ? Number(input.value) : 0;
+  if (value < 0) throw new Error('goods receipt value cannot be negative');
+  // A received quantity, when coded, feeds the Quantity Ledger's RECEIVED position, so a negative
+  // or non-numeric one would corrupt it (received could exceed ordered, or go negative).
+  let receivedQuantity: number | null = null;
+  if (input.receivedQuantity != null) {
+    const q = Number(input.receivedQuantity);
+    if (!Number.isFinite(q) || q <= 0) throw new Error('received quantity must be a positive number');
+    receivedQuantity = q;
+  }
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -67,9 +80,9 @@ export function makeGoodsReceipt(input: NewGoodsReceipt): GoodsReceipt {
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,
     status: input.status ?? 'received',
-    value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    value,
     boqItemId: input.boqItemId ?? null,
-    receivedQuantity: input.receivedQuantity != null ? Number(input.receivedQuantity) : null,
+    receivedQuantity,
     unit: input.unit?.trim() || null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),

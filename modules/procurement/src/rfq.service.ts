@@ -10,6 +10,8 @@ import {
   makeRfq,
   makeRfqQuote,
   lowestQuote,
+  assertRfqTransition,
+  isRfqOpenForQuotes,
 } from './domain/rfq';
 import { RFQ_STORE, type RfqFilter, type RfqStore } from './rfq-store';
 
@@ -56,6 +58,7 @@ export class RfqService {
   async send(id: Id): Promise<Rfq> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`RFQ ${id} not found`);
+    assertRfqTransition(existing.status, 'sent'); // only a draft RFQ can be floated to vendors
     const updated: Rfq = { ...existing, status: 'sent' };
     await this.store.update(updated);
     await this.events.append([
@@ -76,6 +79,15 @@ export class RfqService {
   async addQuote(input: NewRfqQuote): Promise<RfqQuote> {
     const rfq = await this.store.get(input.rfqId);
     if (!rfq) throw new Error(`RFQ ${input.rfqId} not found`);
+    // A quote is a bid: it can only be received while the RFQ is open. Once awarded/closed the
+    // decision is made, and a late bid after the due date must not be accepted either — otherwise a
+    // vendor could submit (or a buyer could plant) a price after everyone else's was known.
+    if (!isRfqOpenForQuotes(rfq.status)) {
+      throw new Error(`RFQ ${rfq.reference ?? rfq.id} is ${rfq.status} — it can only receive quotes while open`);
+    }
+    if (rfq.dueDate && new Date().toISOString().slice(0, 10) > rfq.dueDate) {
+      throw new Error(`RFQ ${rfq.reference ?? rfq.id} is closed for quotes — its due date ${rfq.dueDate} has passed`);
+    }
     const quote = makeRfqQuote({ ...input, tenantId: rfq.tenantId });
     await this.store.addQuote(quote);
     await this.events.append([
@@ -97,6 +109,7 @@ export class RfqService {
   async award(rfqId: Id, quoteId: Id, actorId?: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[] }> {
     const rfq = await this.store.get(rfqId);
     if (!rfq) throw new Error(`RFQ ${rfqId} not found`);
+    assertRfqTransition(rfq.status, 'awarded'); // cannot re-award, or award a closed RFQ
     const quotes = await this.store.listQuotes(rfqId);
     const winner = quotes.find((q) => q.id === quoteId);
     if (!winner) throw new Error(`quote ${quoteId} not found on RFQ ${rfqId}`);

@@ -8,6 +8,31 @@ import { type Id, newId } from '@aura/shared';
  */
 export type RfqStatus = 'draft' | 'sent' | 'awarded' | 'closed';
 
+/**
+ * RFQ lifecycle. Quotes are collected while the RFQ is open (draft/sent); once it is awarded or
+ * closed the sourcing decision is made, so no further quotes may be added and it cannot be re-sent
+ * or re-awarded (re-awarding re-fires the tendering price-restamp reactor). Terminal: awarded, closed.
+ */
+const RFQ_TRANSITIONS: Record<RfqStatus, RfqStatus[]> = {
+  draft: ['sent', 'awarded', 'closed'],
+  sent: ['awarded', 'closed'],
+  awarded: [],
+  closed: [],
+};
+
+export function assertRfqTransition(from: RfqStatus, to: RfqStatus): void {
+  const allowed = RFQ_TRANSITIONS[from] ?? [];
+  if (!allowed.includes(to)) {
+    const where = allowed.length ? allowed.join(', ') : 'nowhere — it is terminal';
+    throw new Error(`a ${from} RFQ can only move to ${where}, not ${to}`);
+  }
+}
+
+/** Quotes may be received only while the RFQ is still open for bidding. */
+export function isRfqOpenForQuotes(status: RfqStatus): boolean {
+  return status === 'draft' || status === 'sent';
+}
+
 export interface Rfq {
   id: Id;
   tenantId: Id;

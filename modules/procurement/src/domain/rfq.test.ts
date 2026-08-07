@@ -51,4 +51,36 @@ describe('RfqService', () => {
     expect(awarded.quotes.find((q) => q.id === win.id)?.status).toBe('awarded');
     expect(awarded.quotes.filter((q) => q.status === 'rejected')).toHaveLength(1);
   });
+
+  it('will not accept a quote once the RFQ is awarded', async () => {
+    const { service } = build();
+    const rfq = await service.create({ tenantId: 't1', title: 'Cabling' });
+    const win = await service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Acme', amount: 4200 });
+    await service.award(rfq.id, win.id);
+    await expect(service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Latecomer', amount: 3000 }))
+      .rejects.toThrow(/can only receive quotes while open/);
+  });
+
+  it('will not re-award a decided RFQ', async () => {
+    const { service } = build();
+    const rfq = await service.create({ tenantId: 't1', title: 'Cabling' });
+    const win = await service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Acme', amount: 4200 });
+    await service.award(rfq.id, win.id);
+    await expect(service.award(rfq.id, win.id)).rejects.toThrow(/can only move/);
+  });
+
+  it('rejects a late quote after the due date', async () => {
+    const { service } = build();
+    const rfq = await service.create({ tenantId: 't1', title: 'Cabling', dueDate: '2020-01-01' });
+    await expect(service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Acme', amount: 4200 }))
+      .rejects.toThrow(/due date .* has passed/);
+  });
+
+  it('cannot re-send an awarded RFQ', async () => {
+    const { service } = build();
+    const rfq = await service.create({ tenantId: 't1', title: 'Cabling' });
+    const win = await service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Acme', amount: 4200 });
+    await service.award(rfq.id, win.id);
+    await expect(service.send(rfq.id)).rejects.toThrow(/can only move/);
+  });
 });

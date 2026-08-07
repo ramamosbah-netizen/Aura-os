@@ -62,6 +62,10 @@ export interface NewPurchaseRequest {
 }
 
 export function makePurchaseRequest(input: NewPurchaseRequest): PurchaseRequest {
+  // Missing/garbage coerces to 0 (a draft priced later); a NEGATIVE value is never valid and would
+  // slip under the approval matrix and, once approved, seed a negative-value PO.
+  const value = Number.isFinite(input.value) ? Number(input.value) : 0;
+  if (value < 0) throw new Error('purchase request value cannot be negative');
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -72,7 +76,7 @@ export function makePurchaseRequest(input: NewPurchaseRequest): PurchaseRequest 
     projectName: input.projectName ?? null,
     discipline: toDiscipline(input.discipline),
     status: input.status ?? 'draft',
-    value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    value,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

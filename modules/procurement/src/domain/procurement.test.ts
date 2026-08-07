@@ -54,6 +54,11 @@ describe('Procurement Full Cycle', () => {
       expect(pr.status).toBe('draft');
     });
 
+    it('rejects a negative PR value (coerces garbage to 0)', () => {
+      expect(() => makePurchaseRequest({ tenantId: 't1', title: 'X', value: -1 })).toThrow(/cannot be negative/);
+      expect(makePurchaseRequest({ tenantId: 't1', title: 'X', value: Number.NaN }).value).toBe(0);
+    });
+
     it('auto-generates a draft Purchase Order on PR approval', async () => {
       const prStore = new InMemoryPurchaseRequestStore();
       const poStore = new InMemoryPurchaseOrderStore();

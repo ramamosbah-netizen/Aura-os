@@ -38,6 +38,17 @@ describe('procurement purchase-order model', () => {
     expect(makePurchaseOrder({ tenantId: 't1', title: 'X', value: Number.NaN }).value).toBe(0);
   });
 
+  it('rejects a negative value', () => {
+    expect(() => makePurchaseOrder({ tenantId: 't1', title: 'X', value: -100 })).toThrow(/cannot be negative/);
+  });
+
+  it('rejects a negative or non-numeric ordered quantity, but keeps a positive one', () => {
+    expect(() => makePurchaseOrder({ tenantId: 't1', title: 'X', orderedQuantity: -5 })).toThrow(/positive number/);
+    expect(() => makePurchaseOrder({ tenantId: 't1', title: 'X', orderedQuantity: Number.NaN })).toThrow(/positive number/);
+    expect(makePurchaseOrder({ tenantId: 't1', title: 'X', orderedQuantity: 12 }).orderedQuantity).toBe(12);
+    expect(makePurchaseOrder({ tenantId: 't1', title: 'X' }).orderedQuantity).toBeNull();
+  });
+
   it('exposes the spine event type', () => {
     expect(PROCUREMENT_EVENT.poCreated).toBe('procurement.po.created');
   });

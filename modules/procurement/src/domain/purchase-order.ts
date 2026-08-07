@@ -91,6 +91,19 @@ export interface NewPurchaseOrder {
 }
 
 export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
+  // A missing/garbage value coerces to 0 (a draft PO priced later), but a NEGATIVE value is never
+  // valid — it would post a negative committed cost to the CBS and fall under the auto-approve
+  // threshold, escaping the approval matrix.
+  const value = Number.isFinite(input.value) ? Number(input.value) : 0;
+  if (value < 0) throw new Error('purchase order value cannot be negative');
+  // An ordered quantity, when coded, feeds the Quantity Ledger, so a negative or non-numeric one
+  // would corrupt the ordered position — reject it rather than storing NaN.
+  let orderedQuantity: number | null = null;
+  if (input.orderedQuantity != null) {
+    const q = Number(input.orderedQuantity);
+    if (!Number.isFinite(q) || q <= 0) throw new Error('ordered quantity must be a positive number');
+    orderedQuantity = q;
+  }
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -103,11 +116,11 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     projectName: input.projectName ?? null,
     cbsNodeId: input.cbsNodeId ?? null,
     boqItemId: input.boqItemId ?? null,
-    orderedQuantity: input.orderedQuantity != null ? Number(input.orderedQuantity) : null,
+    orderedQuantity,
     unit: input.unit?.trim() || null,
     discipline: toDiscipline(input.discipline),
     status: input.status ?? 'draft',
-    value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    value,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

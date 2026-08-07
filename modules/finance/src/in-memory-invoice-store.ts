@@ -42,4 +42,11 @@ export class InMemoryInvoiceStore implements InvoiceStore {
     const all = await this.list({ ...filter, limit: undefined });
     return makePage(all.slice(page.offset, page.offset + page.limit), all.length, page);
   }
+
+  async existsByReference(tenantId: Id, reference: string): Promise<boolean> {
+    const ref = reference.trim();
+    return [...this.invoices.values()].some(
+      (i) => i.tenantId === tenantId && i.status !== 'cancelled' && (i.reference ?? '').trim() === ref,
+    );
+  }
 }

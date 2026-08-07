@@ -66,6 +66,14 @@ export class InvoiceService implements OnModuleInit {
       },
       handler: async (command, tx) => {
         const invoice = makeInvoice(command.payload);
+        // Duplicate-invoice guard: a caller-supplied reference is the supplier's invoice number.
+        // Re-entering the same one raised a second payable for one bill (double payment). Auto-
+        // generated references (the `!reference` branch below) are unique by construction, so the
+        // check only fires for supplied numbers. Runs in-handler, so an idempotent retry (which
+        // returns the cached result without re-running this) never trips it.
+        if (invoice.reference && (await this.store.existsByReference(invoice.tenantId, invoice.reference))) {
+          throw new Error(`invoice reference ${invoice.reference} already exists`);
+        }
         if (!invoice.reference) {
           invoice.reference = await this.numbering.generateNextNumber(
             invoice.tenantId,

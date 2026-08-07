@@ -23,4 +23,7 @@ export interface InvoiceStore {
   get(id: Id): Promise<Invoice | null>;
   list(filter?: InvoiceFilter): Promise<Invoice[]>;
   listPaged(filter: InvoiceFilter, page: PageParams): Promise<Page<Invoice>>;
+  /** True when a LIVE (non-cancelled) invoice already carries this reference for the tenant. Backs
+   *  the duplicate supplier-invoice guard (a caller-supplied reference is the supplier's number). */
+  existsByReference(tenantId: Id, reference: string): Promise<boolean>;
 }

@@ -139,4 +139,13 @@ export class PostgresInvoiceStore implements InvoiceStore {
     const total = res.rows.length ? Number(res.rows[0].total_count) : 0;
     return makePage(res.rows.map(rowToInvoice), total, page);
   }
+
+  async existsByReference(tenantId: string, reference: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `SELECT 1 FROM public.aura_finance_invoices
+       WHERE tenant_id = $1 AND trim(reference) = trim($2) AND status <> 'cancelled' LIMIT 1`,
+      [tenantId, reference],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
 }

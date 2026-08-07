@@ -432,4 +432,35 @@ describe('Finance depth features', () => {
       await expect(invoiceService.changeStatus(invB.id, 'approved')).rejects.toThrow('3-Way Match validation failed');
     });
   });
+
+  describe('AP invoice duplicate protection', () => {
+    const svc = () => {
+      const s = new InvoiceService(
+        new InMemoryInvoiceStore(), mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit,
+        { getRate: async () => 1 } as any, {} as any, {} as any, mockAccess,
+      );
+      s.onModuleInit();
+      return s;
+    };
+
+    it('rejects a second invoice re-using a supplier reference (double-payment guard)', async () => {
+      const s = svc();
+      await s.create({ tenantId: 't1', title: 'ACME bill', reference: 'SUP-INV-9001', supplierName: 'ACME', value: 1000 });
+      await expect(
+        s.create({ tenantId: 't1', title: 'ACME bill (dup)', reference: 'SUP-INV-9001', supplierName: 'ACME', value: 1000 }),
+      ).rejects.toThrow(/already exists/);
+    });
+
+    it('allows a different supplier reference', async () => {
+      const s = svc();
+      await s.create({ tenantId: 't1', title: 'Bill A', reference: 'SUP-INV-9001', value: 1000 });
+      await expect(s.create({ tenantId: 't1', title: 'Bill B', reference: 'SUP-INV-9002', value: 1000 })).resolves.toBeTruthy();
+    });
+
+    it('lets a different tenant re-use the same reference (guard is per tenant)', async () => {
+      const s = svc();
+      await s.create({ tenantId: 't1', title: 'Bill', reference: 'SUP-INV-9001', value: 1000 });
+      await expect(s.create({ tenantId: 't2', title: 'Bill', reference: 'SUP-INV-9001', value: 1000 })).resolves.toBeTruthy();
+    });
+  });
 });

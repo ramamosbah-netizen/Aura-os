@@ -261,12 +261,12 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         <>
           <input autoFocus value={closing.reason} placeholder={closing.stage === 'won' ? 'Why did we win?' : 'Why did we lose?'}
             onChange={(e) => setClosing({ ...closing, reason: e.target.value })} style={{ ...st.input, width: 220, marginBottom: 0 }} />
-          <button disabled={busy || !closing.reason.trim()} style={st.actionBtn}
+          <button disabled={busy || !closing.reason.trim()} aria-busy={busy} style={st.actionBtn}
             onClick={() => {
               void patch({ stage: closing.stage, [closing.stage === 'won' ? 'winReason' : 'lossReason']: closing.reason.trim() })
                 .then((ok) => { if (ok) setClosing(null); });
             }}>
-            Confirm {closing.stage} ✓
+            {busy ? 'Saving…' : `Confirm ${closing.stage} ✓`}
           </button>
           <button disabled={busy} style={st.ghostBtn} onClick={() => setClosing(null)}>Cancel</button>
         </>

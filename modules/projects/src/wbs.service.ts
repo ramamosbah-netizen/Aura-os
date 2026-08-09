@@ -220,4 +220,25 @@ export class WbsService {
       await this.rollup(parent.parentId);
     }
   }
+
+  /**
+   * Recalculates and rolls up cost variances (Planned Value - Actual Cost) across the entire
+   * project WBS tree, updating parent node EVM metrics from leaf nodes up to root nodes.
+   */
+  async rollupCostVariances(projectId: Id): Promise<{ nodesRolledUp: number; totalCostVariance: number }> {
+    const nodes = await this.store.list({ projectId });
+    const leafNodes = nodes.filter((n) => !nodes.some((other) => other.parentId === n.id));
+
+    let nodesRolledUp = 0;
+    for (const leaf of leafNodes) {
+      if (leaf.parentId) {
+        await this.rollup(leaf.parentId);
+        nodesRolledUp++;
+      }
+    }
+
+    const evm = await this.getEvmMetrics(projectId);
+    this.logger.log(`Cost variance rollup completed for project ${projectId}: EVM CV=${evm.costVariance}, SV=${evm.scheduleVariance}`);
+    return { nodesRolledUp, totalCostVariance: evm.costVariance };
+  }
 }

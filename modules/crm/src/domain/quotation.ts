@@ -208,6 +208,12 @@ export function normaliseExclusions(raw: string[] | undefined): string[] {
   return out;
 }
 
+function defaultValidUntil(issueDate: string): string {
+  const d = new Date(issueDate);
+  d.setDate(d.getDate() + 30);
+  return d.toISOString().slice(0, 10);
+}
+
 export function makeQuotation(input: NewQuotation): Quotation {
   if (!input.quoteNumber?.trim()) throw new Error('quoteNumber is required');
   if (!input.customerName?.trim()) throw new Error('customerName is required');
@@ -237,7 +243,7 @@ export function makeQuotation(input: NewQuotation): Quotation {
     parentQuotationId: input.parentQuotationId ?? null,
     convertedContractId: null,
     issueDate: input.issueDate,
-    validUntil: input.validUntil ?? null,
+    validUntil: input.validUntil ?? defaultValidUntil(input.issueDate),
     lines,
     subtotal,
     vatTotal,

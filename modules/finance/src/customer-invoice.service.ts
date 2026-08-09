@@ -9,6 +9,7 @@ import {
   issueInvoice,
   recordReceipt,
   cancelInvoice,
+  validateContractCeiling,
 } from './domain/customer-invoice';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
@@ -59,7 +60,7 @@ export class CustomerInvoiceService {
     return { revaluation: reval, journalId: journal.id };
   }
 
-  async create(input: NewCustomerInvoice): Promise<CustomerInvoice> {
+  async create(input: NewCustomerInvoice & { contractValue?: number }): Promise<CustomerInvoice> {
     // Multi-currency: for a non-base (≠AED) invoice with no explicit rate, resolve the
     // effective rate to the base currency so baseTotal is computed for consolidated reporting.
     const currency = (input.currency ?? 'AED').toUpperCase();
@@ -68,6 +69,13 @@ export class CustomerInvoiceService {
       input = { ...input, exchangeRate: rate };
     }
     const inv = makeCustomerInvoice(input);
+    if (input.contractValue && input.contractValue > 0) {
+      const existing = await this.store.list({ tenantId: input.tenantId, limit: 1000 });
+      const billedToDate = existing
+        .filter((i) => i.status !== 'cancelled' && ((input.contractRef && i.contractRef === input.contractRef) || (input.projectId && i.projectId === input.projectId)))
+        .reduce((sum, i) => sum + i.total, 0);
+      validateContractCeiling(input.contractValue, billedToDate, inv.total);
+    }
     await this.store.save(inv);
     await this.events.append([
       makeEvent({

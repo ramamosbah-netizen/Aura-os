@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeCustomerInvoice, computeTotals, buildLine, issueInvoice, recordReceipt, cancelInvoice, balanceOf } from './customer-invoice';
+import { makeCustomerInvoice, computeTotals, buildLine, issueInvoice, recordReceipt, cancelInvoice, balanceOf, validateContractCeiling } from './customer-invoice';
 
 const T = 'tenant-1';
 const baseLines = [
@@ -74,5 +74,16 @@ describe('lifecycle', () => {
 
   it('can cancel a draft', () => {
     expect(cancelInvoice(makeCustomerInvoice(base)).status).toBe('cancelled');
+  });
+});
+
+describe('validateContractCeiling', () => {
+  it('passes when cumulative invoices are within contract value', () => {
+    expect(() => validateContractCeiling(1_000_000, 700_000, 200_000)).not.toThrow();
+  });
+
+  it('rejects when cumulative invoices exceed total contract value', () => {
+    // 700k existing + 400k new = 1.1M > 1M contract -> must fail!
+    expect(() => validateContractCeiling(1_000_000, 700_000, 400_000)).toThrow('exceeds total contract value');
   });
 });

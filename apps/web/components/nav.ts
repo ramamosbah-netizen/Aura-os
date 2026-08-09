@@ -42,6 +42,13 @@ export const NAV: NavGroup[] = [
       { label: 'My Workspace', href: '/workspace', glyph: '◉', desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page' },
       { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
       { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },
+      // Reachability fix (audit wave 1). These three pages existed and were built, but had NO
+      // href anywhere in the web app — no nav entry, no link, nothing. `/ai` is the worst of the
+      // three: it is the end-user AI workspace that five separate reports describe as shipped,
+      // and no user could open it. A page nobody can navigate to is not a shipped feature.
+      { label: 'AI Workspace', href: '/ai', glyph: '✦', desc: 'Ask the agents, run assistants & review what they proposed' },
+      { label: 'Notifications', href: '/notifications', glyph: '◔', desc: 'Everything the system has told you, newest first' },
+      { label: 'Saved Views', href: '/views', glyph: '▤', desc: 'Your saved filters & lists across every module' },
     ],
   },
   {
@@ -73,6 +80,7 @@ export const NAV: NavGroup[] = [
       { label: 'Handover', href: '/handover', glyph: '⇥', desc: 'Project acceptance package — close-out deliverables, client sign-off & warranty start' },
       { label: 'Project Closeout', href: '/projects/closeout', glyph: '🏁', desc: 'Unified project closeout wizard — commissioning, punch-list, deliverables, sign-off & warranty DLP' },
       { label: 'Payment Certificates', href: '/contracts/certificates', glyph: '◰', desc: 'Interim payment certificates (IPC) — progress billing & retention' },
+      { label: 'Clause Library', href: '/contracts/clauses', glyph: '§', desc: 'Reusable contract language — payment terms, retention, LDs, warranty & indemnity, versioned' },
     ],
   },
   {

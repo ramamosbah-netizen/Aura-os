@@ -1,5 +1,15 @@
 # AURA OS — Enterprise Platform Master Report
 
+> ## 📅 Currency note — reviewed 2026-08-05
+>
+> **This report describes the tree as of early-to-mid July 2026.** The edition header says 2026-07-03; the inline update notes below run to **2026-07-11** and stop. Roughly a month of work has landed since — CRM completion + freeze, Tender OS T1–T5, the L5 experience-architecture redesign, the enterprise AI platform, and the P0/P1/P2 hardening wave.
+>
+> **The volumes remain accurate as reference** — architecture, kernel, API, data dictionary, workflow/rule/formula catalogs describe structures that have grown, not changed shape. **Do not read the status and gap columns as current**, with one exception worth stating: the two security P0 rows were re-verified against the running app on 2026-08-05, and **both stand as written**. Production refuses to boot without an auth verifier (measured: exit 1), and the RLS bundle is complete — its one open item is a deployment posture, not code (the runtime still connects as the DB owner, so policies are inert). See [Vol 7 §11](vol-07-security.md) and [Vol 23](vol-23-gap-analysis.md), which also carry a retraction of a wrong intermediate correction.
+>
+> **For current state read:** [2026-08-03 Enterprise Readiness Audit](../reports/2026-08-03-enterprise-readiness-audit.md) (the live gap register, last measured **54/100**) · [2026-08-05 Platform State Verification](../reports/2026-08-05-platform-state-verification.md) · [the reports index](../reports/README.md).
+>
+> **The module scores below are informed estimates, not measured functional audits** — they were labelled as such when written and that has not changed.
+
 **Edition:** 1.0 · **Date:** 2026-07-03 · **Source of truth:** the codebase at commit `fd51267`
 (branch `feat/enterprise-form-engine`), verified by direct source inspection, green builds, and
 green test runs. Nothing in this report is aspirational unless explicitly marked **[Planned]**

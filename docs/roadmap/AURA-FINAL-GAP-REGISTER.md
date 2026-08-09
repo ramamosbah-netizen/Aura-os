@@ -1,5 +1,15 @@
 # AURA OS — Final Gap Register
 
+> ## 📍 Status note — reviewed 2026-08-05
+>
+> **This register is superseded as a work queue.** The live gap register is now the P0/P1/P2 section of the [2026-08-03 Enterprise Readiness Audit](../reports/2026-08-03-enterprise-readiness-audit.md), re-verified 2026-08-05.
+>
+> Of the two P0 rows below:
+> - **G-P0-1 (RLS)** — mechanism **shipped** (slice R1): least-privilege `aura_app` role, tenant GUC binding, `FORCE RLS` on 182/182 tenant tables, CI `rls-fitness` gate, isolation test, and a boot gate that refuses production under a `BYPASSRLS` role. Its acceptance criteria are met **in CI**. ⚠️ But the running instance connects as the `postgres` owner, so **RLS is inert at runtime** — the row is closed as *engineering*, open as *deployment posture*.
+> - **G-P0-2 (migration drift)** — **shipped**: the boot deploy-gate blocks business routes when migrations are pending, CI runs the full chain from zero, and dev now auto-migrates on first run. ⚠️ A related gap remains, logged as **P2-8** in the readiness audit: the gate only asks *"is anything pending?"*, so it does not notice **applied-but-absent** migrations. The live dev DB has 224 applied rows against 219 files on disk.
+>
+> **The P0 this register does not contain** is the one that now matters most: **authentication is off by default and an unauthenticated request returns live data** (readiness audit P0-1, re-verified 2026-08-05 — 200 with 34 records, no token). It was not visible on 2026-07-14 because the auth mechanism had landed a week earlier and was recorded as done; what was missed is that it is *opt-in*.
+
 **Date:** 2026-07-14 · Verified against live tree (`main` @ `6e099e1`).
 
 **Priority:** P0 correctness/security/tenancy/financial/data-integrity blocker · P1 required to complete a real

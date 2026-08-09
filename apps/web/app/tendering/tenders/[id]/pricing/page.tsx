@@ -51,6 +51,6 @@ const st = {
   h1: { fontSize: 24, margin: '0 0 10px', color: 'var(--accent)' } as CSSProperties,
   navRow: { marginBottom: 10, display: 'flex', alignItems: 'center', gap: 14 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 500 } as CSSProperties,
-  internal: { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, color: 'var(--warn, #d97706)', border: '1px solid currentColor', borderRadius: 999, padding: '2px 10px' } as CSSProperties,
+  internal: { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, color: 'var(--warn)', border: '1px solid currentColor', borderRadius: 999, padding: '2px 10px' } as CSSProperties,
   sub: { color: 'var(--muted)', fontSize: 13, margin: '0 0 18px', lineHeight: 1.5 } as CSSProperties,
 };

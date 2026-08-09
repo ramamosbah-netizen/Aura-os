@@ -106,11 +106,26 @@ export function daysToExpiry(g: BankGuarantee, asOf: string): number {
   return Math.round(ms / 86_400_000);
 }
 
-/** Active guarantees within `withinDays` of expiry (inclusive), not yet past it. */
+/**
+ * Active guarantees within `withinDays` of expiry — **including ones already past it**.
+ *
+ * The window used to require `d >= 0`, so a guarantee whose expiry date had passed while it was
+ * still marked active fell off the watch-list entirely: due in 10 days → listed; 43 days overdue →
+ * silently gone. That is backwards. A live guarantee past its expiry is the most urgent item on
+ * the list — the bank is still charging commission on it, it is still consuming the facility
+ * limit, and it needs releasing or renewing today.
+ *
+ * The post-dated-cheque watch-list in this same module already got this right ("includes
+ * already-overdue pending cheques so nothing is missed"); the two now behave the same way.
+ */
 export function isExpiringSoon(g: BankGuarantee, asOf: string, withinDays = 30): boolean {
   if (g.status !== 'active') return false;
-  const d = daysToExpiry(g, asOf);
-  return d >= 0 && d <= withinDays;
+  return daysToExpiry(g, asOf) <= withinDays;
+}
+
+/** Active guarantees whose expiry has already passed — overdue for release or renewal. */
+export function isExpired(g: BankGuarantee, asOf: string): boolean {
+  return g.status === 'active' && daysToExpiry(g, asOf) < 0;
 }
 
 export const BANK_GUARANTEE_EVENT = {

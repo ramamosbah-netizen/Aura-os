@@ -161,25 +161,9 @@ export function balanceOf(inv: CustomerInvoice): number {
   return round2(inv.total - inv.amountPaid);
 }
 
-/**
- * Validate that cumulative customer invoices for a contract do not exceed the total contract value.
- * Throws an error if (existingBilledToDate + newInvoiceTotal) > contractValue.
- */
-export function validateContractCeiling(contractValue: number, existingBilledToDate: number, newInvoiceTotal: number): void {
-  const cVal = Number(contractValue);
-  const existing = Number(existingBilledToDate) || 0;
-  const newTotal = Number(newInvoiceTotal) || 0;
-  if (Number.isFinite(cVal) && cVal > 0) {
-    if (round2(existing + newTotal) > round2(cVal) + 0.01) {
-      throw new Error(
-        `Cumulative customer invoices exceeds total contract value (${cVal}): existing ${existing} + new ${newTotal} = ${existing + newTotal}`
-      );
-    }
-  }
-}
-
 export const CUSTOMER_INVOICE_EVENT = {
   created: 'finance.customer_invoice.created',
   issued: 'finance.customer_invoice.issued',
   receiptRecorded: 'finance.customer_invoice.receipt_recorded',
+  cancelled: 'finance.customer_invoice.cancelled',
 } as const;

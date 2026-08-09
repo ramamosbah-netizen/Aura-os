@@ -37,8 +37,16 @@ export function buildApAging(invoices: Invoice[], asOf: string): ApAgingReport {
 
   for (const inv of invoices) {
     if (inv.status !== 'approved') continue; // only approved-but-unpaid is a live payable
-    const amount = round2(inv.value);
+    // Base currency, at the rate captured on the invoice — see the AR-aging note; the same
+    // cross-currency addition understated payables here.
+    const rate = Number(inv.exchangeRate) > 0 ? Number(inv.exchangeRate) : 1;
+    const amount = round2(inv.value * rate);
     if (amount <= 0) continue;
+    // ⚠️ Aged from createdAt because an AP invoice carries NO invoice date and NO due date — the
+    // record timestamp is the only date available. That makes every supplier bucket a function of
+    // when the invoice was entered rather than when it fell due, so a late-entered invoice looks
+    // younger than it is. Fixing it properly needs invoiceDate/dueDate on the AP invoice (schema +
+    // create flow), which is a larger change than this file. Recorded in the wave-2 finance audit.
     const bucket: AgingBucketKey = bucketFor(daysBetween(inv.createdAt, asOf));
     const name = inv.supplierName?.trim() || '(unnamed supplier)';
 

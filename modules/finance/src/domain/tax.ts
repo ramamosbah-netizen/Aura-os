@@ -54,6 +54,13 @@ export interface TaxLine {
   taxRate: number;
   taxAmount: number;
   isInclusive: boolean;
+  /**
+   * The TAX POINT — the date of supply, which is the date a VAT return is filed against.
+   * Distinct from `createdAt` (when the row was written): book a March invoice on 2 April and the
+   * two disagree, which used to push the VAT into the wrong return. Defaults to the creation date
+   * so existing behaviour is unchanged when a caller does not supply one.
+   */
+  taxPointDate: string;
   createdAt: string;
 }
 
@@ -64,15 +71,25 @@ export interface NewTaxLine {
   taxableAmount: number;
   taxRate: number;
   isInclusive?: boolean;
+  /** Date of supply (YYYY-MM-DD). Defaults to today — pass the invoice date for backdated entries. */
+  taxPointDate?: string | null;
 }
 
 export function makeTaxLine(input: NewTaxLine): TaxLine {
+  if (!Number.isFinite(input.taxableAmount) || !Number.isFinite(input.taxRate)) {
+    throw new Error('tax line requires a numeric amount and rate');
+  }
+  if (input.taxRate < 0) throw new Error(`tax rate cannot be negative (got ${input.taxRate})`);
+
   let taxAmount: number;
+  let netTaxable: number;
   if (input.isInclusive) {
-    // Tax-inclusive: extract tax from the total
-    taxAmount = Number((input.taxableAmount - (input.taxableAmount / (1 + input.taxRate / 100))).toFixed(2));
+    // Tax-inclusive: the amount passed in is GROSS, so extract the tax and keep the NET.
+    netTaxable = Number((input.taxableAmount / (1 + input.taxRate / 100)).toFixed(2));
+    taxAmount = Number((input.taxableAmount - netTaxable).toFixed(2));
   } else {
-    // Tax-exclusive: compute tax on top
+    // Tax-exclusive: the amount passed in is already net; tax goes on top.
+    netTaxable = input.taxableAmount;
     taxAmount = Number((input.taxableAmount * (input.taxRate / 100)).toFixed(2));
   }
 
@@ -81,10 +98,15 @@ export function makeTaxLine(input: NewTaxLine): TaxLine {
     tenantId: input.tenantId,
     invoiceId: input.invoiceId,
     taxCodeId: input.taxCodeId,
-    taxableAmount: input.taxableAmount,
+    // Always the NET taxable amount, whichever way it was entered. Previously an inclusive line
+    // stored the GROSS here, so `byTaxCode[].taxableAmount` silently mixed gross and net figures —
+    // and the "taxable amount" box of a VAT return must be net of tax. A 105,000 inclusive line
+    // reported 105,000 taxable against 5,000 of VAT, which does not reconcile at 5%.
+    taxableAmount: netTaxable,
     taxRate: input.taxRate,
     taxAmount,
     isInclusive: input.isInclusive ?? false,
+    taxPointDate: (input.taxPointDate || new Date().toISOString()).slice(0, 10),
     createdAt: new Date().toISOString(),
   };
 }
@@ -127,7 +149,20 @@ export function calculateTaxSummary(lines: TaxLine[], codes: TaxCode[]): TaxSumm
     byCode[key].taxAmount += l.taxAmount;
     byCode[key].count += 1;
 
-    if (code?.taxType === 'input' || code?.taxType === 'reverse_charge') {
+    // Reverse charge is declared on BOTH sides, not just recovered.
+    //
+    // Under the UAE VAT law (and GCC/EU reverse charge generally) the RECIPIENT self-accounts for
+    // tax on an imported supply: it declares the output VAT it would have been charged AND recovers
+    // the same amount as input VAT. Both boxes on the return carry the amount; the net effect is
+    // zero when the tax is fully recoverable.
+    //
+    // Treating it as input ONLY left output understated and therefore **net VAT payable understated
+    // by the whole reverse-charge amount** — under-declaring to the FTA, which is a penalty matter,
+    // not a presentation one. Unlike the other defects found in this module, the NET was wrong too.
+    if (code?.taxType === 'reverse_charge') {
+      totalOutput += l.taxAmount;
+      totalInput += l.taxAmount;
+    } else if (code?.taxType === 'input') {
       totalInput += l.taxAmount;
     } else {
       totalOutput += l.taxAmount;
@@ -145,8 +180,10 @@ export function calculateTaxSummary(lines: TaxLine[], codes: TaxCode[]): TaxSumm
 
 /** A VAT return restricted to a filing period — tax lines whose date falls in [start, end]. */
 export function calculateTaxReturn(lines: TaxLine[], codes: TaxCode[], periodStart: string, periodEnd: string): TaxSummary {
+  // Filter on the TAX POINT (date of supply), not when the row happened to be written. Falls back
+  // to createdAt for rows predating the tax_point_date column, so a filed period never re-states.
   const inPeriod = lines.filter((l) => {
-    const d = (l.createdAt ?? '').slice(0, 10);
+    const d = (l.taxPointDate || l.createdAt || '').slice(0, 10);
     return d >= periodStart && d <= periodEnd;
   });
   return calculateTaxSummary(inPeriod, codes);

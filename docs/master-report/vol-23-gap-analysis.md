@@ -35,6 +35,20 @@ store + MCP · webhooks/SDK-gen/CSV · CI with unit+e2e+smoke · 132 test files 
 |--:|---|---|---|---|
 | 1 | RLS enforcement bundle (least-priv role, tenant GUC, FORCE RLS, isolation test) | Vol 7 §3 | M | cross-tenant data exposure — existential |
 | 2 | Auth ON + refresh/revocation + lockout — **DONE 2026-07-07**: `AUTH_REQUIRED=true` fail-closed 401 (main.ts, public allowlist) · brute-force `LoginThrottle` (429 after N, `AUTH_LOCKOUT_*`) · JWT `jti` + `TokenRevocationStore` denylist checked on verify · `POST /auth/refresh` (sliding session) + `POST /auth/logout` (revoke). ~19 new tests. *Turning auth on also makes the #7 permission guard enforce.* | Vol 7 §1 | ✅ | open API in any misconfig |
+
+> ### ✅ Row 2 re-verified 2026-08-05 — and a retraction
+>
+> **This row is correct.** Production cannot boot without a verifier. `apps/api/src/main.ts:52-63` refuses outright:
+>
+> ```
+> if (isProd && !auth.enabled && !allowInsecure) { logger.error('FATAL: …'); process.exit(1); }
+> ```
+>
+> **Measured:** `NODE_ENV=production` with no `AUTH_JWKS_URL`/`AUTH_JWT_SECRET` → FATAL log, **exit code 1**, never listens. An explicit `ALLOW_INSECURE_NO_AUTH=true` is the only way past it, for deployments fronted by an external gateway.
+>
+> **Retraction.** An earlier revision of this file (2026-08-05) downgraded this row to ◑ and claimed production without a verifier "runs wide open, silently." **That was wrong.** It was reached by reading `main.ts:101` — `enforce = AUTH_REQUIRED==='true' || (isProd && auth.enabled)` — in isolation and never reading the fail-closed gate 40 lines above it. `:101` governs *anonymous-request rejection once the app is running*; it is never reached in production without a verifier, because the app has already exited.
+>
+> The claim is withdrawn in full. What remains true, and is a different and much smaller thing: **the local dev instance runs with auth off** (`/auth/status` → `{"enabled":false}`, unauthenticated reads return data) — which is the documented staged pass-through for development, not a production hole.
 | 3 | Secrets vault + rotation — **DONE 2026-07-09**: `readSecret()` vault seam (`<NAME>_FILE` convention for Docker/K8s/vault-CSI mounts, env fallback, unreadable explicit mount fails at boot) wired at every secret read (`DATABASE_URL`, `AUTH_JWT_SECRET`, `ANTHROPIC_API_KEY`, `PII_ENCRYPTION_KEY`) · staged PII key rotation (`PII_ENCRYPTION_KEY_PREVIOUS` decrypt fallback, +1 test) · gitleaks CI job · `docs/runbooks/secrets-rotation.md` (inventory, windows, revocation drill; history greps clean) | Vol 7 §10 | ✅ | ~~credential compromise~~ (residual: rotate dev keys per runbook) |
 | 4 | Docker + deploy target + migration gate in CI — **DONE 2026-07-09**: multi-stage `apps/api/Dockerfile` (same image = migration job) + `apps/web/Dockerfile` (Next standalone) + `docker-compose.yml` (pgvector PG → migration gate → api → web) · CI `deploy-readiness` (full 136-chain from zero + idempotence rerun + built API boots) · CI `docker-images` (build per PR, GHCR publish on main). Production `next build` verified. First cloud target (Azure, Vol 19 §4) is the remaining deploy step — tracked in Vol 19 §11, not a register row | Vol 19 §2–3 | ✅ | ~~cannot ship~~ |
 | 5 | Backups/DR + restore drill — **DONE 2026-07-09**: `docs/runbooks/backup-dr.md` (RPO ≤5 min PITR / RTO ≤4 h, portable `pg_dump -Fc` secondary, DMS bucket versioning, failure scenarios, quarterly-drill policy + log) · **drill automated in CI**: seed via live API → freeze → dump → restore into fresh DB → `verify-restore.mjs` fails on any per-table count drift or empty source | Vol 19 §8–9 | ✅ | ~~unrecoverable data loss~~ |

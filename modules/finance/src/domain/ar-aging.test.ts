@@ -110,3 +110,31 @@ describe('arAgingCsvRows (BI export)', () => {
     expect(csv.split('\n')).toHaveLength(4);
   });
 });
+
+// ── Regression: cross-currency exposure ──────────────────────────────────────
+describe('AR aging reports in the base currency', () => {
+  const usdInvoice = (over: Partial<CustomerInvoice> = {}): CustomerInvoice =>
+    inv({ total: 10_000, amountPaid: 0, dueDate: '2026-01-31', status: 'issued', currency: 'USD', exchangeRate: 3.6725, ...over });
+
+  it('converts a foreign-currency invoice at the rate captured on it', () => {
+    const rep = buildArAging([usdInvoice()], '2026-03-15');
+    // 10,000 USD × 3.6725 = 36,725 AED. Adding the raw 10,000 understated exposure by 73%.
+    expect(rep.grandTotal).toBe(36_725);
+  });
+
+  it('adds foreign and base currency invoices on the same scale', () => {
+    const aed = inv({ total: 100_000, amountPaid: 0, dueDate: '2026-01-31', status: 'issued' });
+    const rep = buildArAging([usdInvoice(), aed], '2026-03-15');
+    expect(rep.grandTotal).toBe(136_725); // was 110,000
+  });
+
+  it('converts the outstanding balance, not the invoice total', () => {
+    const rep = buildArAging([usdInvoice({ total: 10_000, amountPaid: 4_000, status: 'partially_paid' })], '2026-03-15');
+    expect(rep.grandTotal).toBe(22_035); // 6,000 USD × 3.6725
+  });
+
+  it('treats a missing or zero rate as base currency rather than zeroing the debt', () => {
+    const rep = buildArAging([usdInvoice({ exchangeRate: 0 })], '2026-03-15');
+    expect(rep.grandTotal).toBe(10_000);
+  });
+});

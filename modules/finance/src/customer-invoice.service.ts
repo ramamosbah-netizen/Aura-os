@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, type PageParams, type Currency, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore, ExchangeRateService } from '@aura/core';
+import { EVENT_STORE, type EventStore, ExchangeRateService, TenantContext } from '@aura/core';
 import {
   CUSTOMER_INVOICE_EVENT,
   type CustomerInvoice,
@@ -9,11 +9,13 @@ import {
   issueInvoice,
   recordReceipt,
   cancelInvoice,
-  validateContractCeiling,
 } from './domain/customer-invoice';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
+import { evaluateContractCap } from './domain/contract-cap';
+import { CONTRACT_CAP_PORT, type ContractCapPort } from './contract-cap.port';
 import { CUSTOMER_INVOICE_STORE, type CustomerInvoiceFilter, type CustomerInvoiceStore } from './customer-invoice-store';
+import { assertSameTenant, sameTenantOrNull } from './domain/tenant-guard';
 import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
 import type { AccountType } from './domain/account';
@@ -32,7 +34,44 @@ export class CustomerInvoiceService {
     private readonly fx: ExchangeRateService,
     private readonly journals: JournalService,
     private readonly accounts: AccountService,
+    // Cross-context contract data for the AR billing cap — bound by the app layer (ADR-0004).
+    // Optional so the module stays self-contained; unbound → the cap is skipped, mirroring the
+    // AP 3-way match's PO_MATCH_PORT.
+    @Optional() @Inject(CONTRACT_CAP_PORT) private readonly contractCap?: ContractCapPort,
+    // Explicit @Inject: a union-typed ctor param emits `Object` and silently injects null.
+    // Optional so in-memory tests need no request context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
+
+  /**
+   * The AR billing cap (G-08): total billed against a contract may exceed neither the approved
+   * contract value nor the net certified to date. The AP side has had a 3-way match from the
+   * start; this is its receivable mirror. IPC-driven invoices pass by construction (the
+   * certificate that generated them is what raises the certified figure); the bound exists for
+   * invoices raised by hand.
+   */
+  private async assertWithinContractCap(input: NewCustomerInvoice, newInvoiceNet: number): Promise<void> {
+    const contractId = input.contractRef?.trim();
+    if (!contractId || !this.contractCap) return; // no contract, or no data source bound → skip
+
+    const snapshot = await this.contractCap.getSnapshot(input.tenantId, contractId);
+    if (!snapshot.contractExists) return;
+
+    // Cumulative: per-invoice checks are defeated by splitting one over-cap invoice into two.
+    // Compared NET of VAT throughout — contract values and certified figures are VAT-exclusive,
+    // so summing VAT-inclusive totals would refuse a correct final invoice by exactly the tax.
+    const existing = await this.store.list({ tenantId: input.tenantId, limit: 500 });
+    const alreadyInvoiced = existing
+      .filter((i) => i.contractRef === contractId && i.status !== 'cancelled' && !i.deletedAt)
+      .reduce((sum, i) => sum + i.subtotal, 0);
+
+    const verdict = evaluateContractCap({ snapshot, alreadyInvoiced, newInvoiceTotal: newInvoiceNet });
+    if (!verdict.withinCap) {
+      // "cannot"/"exceeds" phrasing maps to 409 via the error taxonomy — a state conflict, not
+      // a malformed request.
+      throw new Error(`cannot raise invoice: ${verdict.reason}`);
+    }
+  }
 
   private async ensureAccount(tenantId: string, code: string, name: string, type: AccountType) {
     const existing = await this.accounts.getByCode(tenantId, code);
@@ -60,7 +99,7 @@ export class CustomerInvoiceService {
     return { revaluation: reval, journalId: journal.id };
   }
 
-  async create(input: NewCustomerInvoice & { contractValue?: number }): Promise<CustomerInvoice> {
+  async create(input: NewCustomerInvoice): Promise<CustomerInvoice> {
     // Multi-currency: for a non-base (≠AED) invoice with no explicit rate, resolve the
     // effective rate to the base currency so baseTotal is computed for consolidated reporting.
     const currency = (input.currency ?? 'AED').toUpperCase();
@@ -69,13 +108,15 @@ export class CustomerInvoiceService {
       input = { ...input, exchangeRate: rate };
     }
     const inv = makeCustomerInvoice(input);
-    if (input.contractValue && input.contractValue > 0) {
-      const existing = await this.store.list({ tenantId: input.tenantId, limit: 1000 });
-      const billedToDate = existing
-        .filter((i) => i.status !== 'cancelled' && ((input.contractRef && i.contractRef === input.contractRef) || (input.projectId && i.projectId === input.projectId)))
-        .reduce((sum, i) => sum + i.total, 0);
-      validateContractCeiling(input.contractValue, billedToDate, inv.total);
+    // Invoice numbers are the legal identifier on an AR document and the key the customer, the FTA
+    // VAT return and the audit trail all cite. They are user-supplied here (unlike AP references,
+    // which the numbering service generates), so nothing stopped two different invoices sharing a
+    // number. Reject a duplicate live number within the tenant — "already exists" → 409. A number
+    // freed by a soft-deleted/cancelled invoice may be reused (existsByNumber ignores deleted).
+    if (await this.store.existsByNumber(inv.tenantId, inv.invoiceNumber)) {
+      throw new Error(`customer invoice number ${inv.invoiceNumber} already exists`);
     }
+    await this.assertWithinContractCap(input, inv.subtotal);
     await this.store.save(inv);
     await this.events.append([
       makeEvent({
@@ -93,8 +134,8 @@ export class CustomerInvoiceService {
   }
 
   async issue(id: Id): Promise<CustomerInvoice> {
-    const inv = await this.store.get(id);
-    if (!inv) throw new Error(`customer invoice ${id} not found`);
+    // Tenant boundary (G-03): assert ownership before issuing — see tenant-guard.ts.
+    const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
     const updated = issueInvoice(inv);
     await this.store.save(updated);
     await this.events.append([
@@ -109,8 +150,8 @@ export class CustomerInvoiceService {
   }
 
   async recordReceipt(id: Id, amount: number): Promise<CustomerInvoice> {
-    const inv = await this.store.get(id);
-    if (!inv) throw new Error(`customer invoice ${id} not found`);
+    // Tenant boundary (G-03): a receipt must not post against another tenant's invoice.
+    const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
     const updated = recordReceipt(inv, amount);
     await this.store.save(updated);
     await this.events.append([
@@ -126,15 +167,27 @@ export class CustomerInvoiceService {
   }
 
   async cancel(id: Id): Promise<CustomerInvoice> {
-    const inv = await this.store.get(id);
-    if (!inv) throw new Error(`customer invoice ${id} not found`);
+    // Tenant boundary (G-03): cancelling is a mutation — assert ownership first.
+    const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
     const updated = cancelInvoice(inv);
     await this.store.save(updated);
+    // Voiding a receivable is an auditable financial act — it must leave a trace on the spine, as
+    // create/issue/receipt already do. Without this, a cancelled invoice vanished silently.
+    await this.events.append([
+      makeEvent({
+        type: CUSTOMER_INVOICE_EVENT.cancelled,
+        tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
+        aggregateType: 'finance.customer_invoice', aggregateId: id,
+        payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
+      }),
+    ]);
+    this.logger.log(`Customer invoice ${inv.invoiceNumber} (${id}) cancelled`);
     return updated;
   }
 
-  get(id: Id): Promise<CustomerInvoice | null> {
-    return this.store.get(id);
+  async get(id: Id): Promise<CustomerInvoice | null> {
+    // Getter keeps its null contract but will not return another tenant's invoice.
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: CustomerInvoiceFilter): Promise<CustomerInvoice[]> {

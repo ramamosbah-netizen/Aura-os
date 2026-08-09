@@ -1,10 +1,16 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { AccessService } from '@aura/core';
+import { ELV_ROLE_MATRIX } from './elv-roles';
 
 /**
  * Seeds a demo identity so auth is exercisable end-to-end: an admin role carrying the
  * deal-chain create permissions, granted to `u-admin` at the dev tenant. A token for
  * u-admin can create across the chain; a token for any ungranted user is denied (403).
+ *
+ * Also registers the **standard ELV role matrix** (`elv-roles.ts`) so a fresh tenant starts
+ * with the roles a contractor actually staffs, instead of an empty registry (register G-04).
+ * Roles are *registered*, not granted — assigning people is an admin decision, made at
+ * `/admin/access`. Registration is an idempotent upsert, so re-boots don't duplicate.
  */
 @Injectable()
 export class AuthSeeder implements OnModuleInit {
@@ -13,6 +19,15 @@ export class AuthSeeder implements OnModuleInit {
   constructor(private readonly access: AccessService) {}
 
   onModuleInit(): void {
+    // The standard ELV role set. Separated from the dev grants below: these are the roles a
+    // real deployment starts from, the grants below are demo identities.
+    for (const role of ELV_ROLE_MATRIX) {
+      this.access.registerRole({ id: role.id, name: role.name, permissions: role.permissions });
+    }
+    this.logger.log(
+      `Seeded ${ELV_ROLE_MATRIX.length} standard ELV roles: ${ELV_ROLE_MATRIX.map((r) => r.id).join(' · ')}.`,
+    );
+
     this.access.registerRole({
       // Dev super-admin: full wildcard so u-admin can exercise every module's handlers once
       // auth is turned on (the per-module @Permissions guard is now enforced platform-wide).

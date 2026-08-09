@@ -10,8 +10,9 @@ import { type Id, newId } from '@aura/shared';
  *   issued   — our cheque handed to a supplier (a payable); must be funded by maturity.
  *
  * Lifecycle: pending → deposited → cleared | bounced; a bounced cheque can be re-presented
- * (→ deposited, bounce count++) or written off (→ cancelled); a pending cheque can be
- * cancelled (stop payment). The maturity watch-list surfaces pending cheques coming due.
+ * (→ deposited) or written off (→ cancelled); a pending cheque can be cancelled (stop payment).
+ * `bounceCount` counts BOUNCES — incremented when the bank returns it, not when it is
+ * re-presented. The maturity watch-list surfaces pending cheques coming due.
  */
 export type ChequeDirection = 'received' | 'issued';
 
@@ -102,16 +103,24 @@ export function clearCheque(c: PostDatedCheque): PostDatedCheque {
   return { ...c, status: 'cleared' };
 }
 
-/** Returned unpaid by the bank. */
+/**
+ * Returned unpaid by the bank — and THIS is what increments the bounce count.
+ *
+ * The counter used to be incremented on re-presentation instead, which counted the wrong event: a
+ * cheque that bounced once and was then written off reported ZERO bounces, and a cheque that
+ * bounced twice reported one. In the UAE a returned cheque is a legal and credit matter, and the
+ * per-customer bounce history is what a credit decision is made on — under-reporting it is not a
+ * cosmetic error.
+ */
 export function bounceCheque(c: PostDatedCheque): PostDatedCheque {
   if (c.status !== 'deposited') throw new Error(`only a deposited cheque can bounce (status ${c.status})`);
-  return { ...c, status: 'bounced' };
+  return { ...c, status: 'bounced', bounceCount: c.bounceCount + 1 };
 }
 
-/** Re-present a bounced cheque — back to deposited, counting the bounce. */
+/** Re-present a bounced cheque — back to the bank. The bounce was already counted when it bounced. */
 export function representCheque(c: PostDatedCheque): PostDatedCheque {
   if (c.status !== 'bounced') throw new Error(`only a bounced cheque can be re-presented (status ${c.status})`);
-  return { ...c, status: 'deposited', bounceCount: c.bounceCount + 1 };
+  return { ...c, status: 'deposited' };
 }
 
 /** Stop/void a cheque that is still pending or has bounced (written off). */
@@ -154,30 +163,62 @@ export function isMaturingSoon(c: PostDatedCheque, asOf: string, withinDays = 7)
 }
 
 export interface ChequeSummary {
-  receivablePending: number; // open received cheques (money coming in)
-  payablePending: number; // open issued cheques (money going out)
+  /** Open RECEIVED cheques in the base currency (money coming in). */
+  receivablePending: number;
+  /** Open ISSUED cheques in the base currency (money going out). */
+  payablePending: number;
   maturingSoon: number; // pending cheques due within the watch window
   bounced: number; // currently bounced (unresolved)
+  /** Per-currency breakdown of the same open cheques, so nothing is hidden by the base-currency totals. */
+  byCurrency: Record<string, { receivablePending: number; payablePending: number }>;
 }
 
-export function summariseCheques(list: PostDatedCheque[], asOf: string, withinDays = 7): ChequeSummary {
+/**
+ * Summarise a cheque book as of a date.
+ *
+ * The headline totals are **single-currency**. They used to add every open cheque together
+ * regardless of denomination, so an AED 100,000 cheque and a USD 10,000 cheque produced "110,000"
+ * — a number in no currency at all, shown on a cash-position card. A pure function has no exchange
+ * rates, so rather than invent a conversion it now totals the base currency and exposes every
+ * other currency in `byCurrency` for the caller to convert or display separately.
+ */
+export function summariseCheques(
+  list: PostDatedCheque[],
+  asOf: string,
+  withinDays = 7,
+  baseCurrency = 'AED',
+): ChequeSummary {
+  const base = baseCurrency.trim().toUpperCase();
   let receivablePending = 0;
   let payablePending = 0;
   let maturingSoon = 0;
   let bounced = 0;
+  const byCurrency: ChequeSummary['byCurrency'] = {};
   for (const c of list) {
     if (isOpen(c)) {
-      if (c.direction === 'received') receivablePending += c.amount;
-      else payablePending += c.amount;
+      const ccy = (c.currency || base).trim().toUpperCase();
+      byCurrency[ccy] ??= { receivablePending: 0, payablePending: 0 };
+      if (c.direction === 'received') {
+        byCurrency[ccy].receivablePending += c.amount;
+        if (ccy === base) receivablePending += c.amount;
+      } else {
+        byCurrency[ccy].payablePending += c.amount;
+        if (ccy === base) payablePending += c.amount;
+      }
     }
     if (isMaturingSoon(c, asOf, withinDays)) maturingSoon += 1;
     if (c.status === 'bounced') bounced += 1;
+  }
+  for (const ccy of Object.keys(byCurrency)) {
+    byCurrency[ccy].receivablePending = Number(byCurrency[ccy].receivablePending.toFixed(2));
+    byCurrency[ccy].payablePending = Number(byCurrency[ccy].payablePending.toFixed(2));
   }
   return {
     receivablePending: Number(receivablePending.toFixed(2)),
     payablePending: Number(payablePending.toFixed(2)),
     maturingSoon,
     bounced,
+    byCurrency,
   };
 }
 

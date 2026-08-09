@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
+import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, TenantContext } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
 import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
@@ -37,7 +37,15 @@ export class PurchaseOrderService implements OnModuleInit {
     private readonly audit: AuditService,
     @Inject(SUPPLIER_STORE) private readonly suppliers: SupplierStore,
     @Optional() @Inject(QUALITY_GATE) private readonly qualityGate?: QualityGate,
+    // Explicit @Inject: a union-typed ctor param emits `Object` in design:paramtypes, which
+    // silently injects null (see auth.service). Optional so in-memory tests need no context.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
+
+  /** The real acting user from the request context (ALS), falling back to the record's creator. */
+  private actor(fallback: Id | null): Id | null {
+    return this.tenant?.get().actorId ?? fallback;
+  }
 
   onModuleInit(): void {
     this.commands.register<NewPurchaseOrder, PurchaseOrder>({
@@ -143,60 +151,36 @@ export class PurchaseOrderService implements OnModuleInit {
   }
 
   /** Update descriptive fields on a PO (title, reference, supplier snapshot).
-   *  Value is NOT editable — committed project cost was posted as a delta at creation.
-   *  Each changed field is logged individually to `aura_audit_log` for procurement audit compliance. */
-  async update(
-    id: Id,
-    patch: Partial<Pick<PurchaseOrder, 'title' | 'reference' | 'supplierId' | 'supplierName'>>,
-    actorId?: string | null,
-  ): Promise<PurchaseOrder> {
+   *  Value is NOT editable — committed project cost was posted as a delta at creation. */
+  async update(id: Id, patch: Partial<Pick<PurchaseOrder, 'title' | 'reference' | 'supplierId' | 'supplierName'>>): Promise<PurchaseOrder> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`PO ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: PurchaseOrder = { ...existing, ...defined };
-
-    // ── Per-field diff audit (procurement compliance) ──
-    // Each modified field emits its own audit entry: actor, PO ID, field, before, after.
-    const auditableFields = ['title', 'reference', 'supplierId', 'supplierName'] as const;
-    const diffs: Array<{ field: string; before: unknown; after: unknown }> = [];
-    for (const field of auditableFields) {
-      const before = existing[field];
-      const after = updated[field];
-      if (before !== after) {
-        diffs.push({ field, before: before ?? null, after: after ?? null });
-      }
-    }
-
+    // Audit trail (P1-2 / gap register G-12): capture the field-level before→after so the timeline
+    // can answer "who re-pointed this PO at a different supplier, and from whom" — previously the
+    // event carried only the new state, and no actor at all.
+    //
+    // Note the PO has no line items: it is a header with a `value`, and value is deliberately NOT
+    // editable here (committed project cost was posted as a delta at creation, so re-pricing a PO
+    // in place would silently desync the cost ledger). The auditable surface is therefore the
+    // supplier snapshot and the descriptive fields — a supplier swap being the one with real
+    // commercial consequence.
+    const changes = diffFields(existing, updated, ['title', 'reference', 'supplierId', 'supplierName']);
     const event = makeEvent({
       type: PROCUREMENT_EVENT.poUpdated,
       tenantId: updated.tenantId,
       companyId: updated.companyId,
-      actorId: actorId ?? null,
+      actorId: this.actor(updated.createdBy ?? null),
       aggregateType: 'procurement.po',
       aggregateId: updated.id,
-      payload: { title: updated.title, value: updated.value, diffs },
+      payload: { title: updated.title, value: updated.value, changes },
     });
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
-
-    // Emit per-field audit entries into aura_audit_log (one row per changed field)
-    for (const diff of diffs) {
-      await this.audit.log(
-        updated.tenantId,
-        updated.companyId,
-        actorId ?? null,
-        'procurement',
-        'purchase-order',
-        updated.id,
-        'update',
-        { field: diff.field, before: diff.before, after: diff.after },
-        { reference: updated.reference, poTitle: updated.title },
-      );
-    }
-
-    this.logger.log(`PO updated: ${updated.title} (${updated.id}) — ${diffs.length} field(s) changed`);
+    this.logger.log(`PO updated: ${updated.title} (${updated.id})`);
     return updated;
   }
 

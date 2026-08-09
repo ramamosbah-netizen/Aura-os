@@ -114,4 +114,78 @@ describe('financial statements (GL-derived)', () => {
     expect(cf.netChange).toBe(22000);
     expect(cf.closingCash).toBe(122000);
   });
+
+  // ── Cash flow: transfers between our OWN cash accounts ────────────────────
+  // Regression. These used to be counted as both an inflow AND an outflow, because every cash
+  // leg was summed individually. `netChange` cancelled out and stayed correct, which is exactly
+  // why it went unnoticed — the number everyone checks was right while the gross figures on the
+  // face of the statement were inflated by the size of every internal transfer.
+  describe('internal cash transfers do not create inflow or outflow', () => {
+    const savings = acc('1020', 'Bank — Savings', 'asset');
+    const petty = acc('1030', 'Petty Cash Float', 'asset');
+    const withTransfers = [
+      ...journals,
+      // Move 10,000 from the current account to savings — nothing enters or leaves the business.
+      makeJournal({
+        tenantId,
+        description: 'Transfer to savings',
+        postedAt: '2026-03-10T09:00:00.000Z',
+        lines: [
+          { accountId: savings.id, accountCode: savings.code, accountName: savings.name, debit: 10_000, credit: 0 },
+          { accountId: cash.id, accountCode: cash.code, accountName: cash.name, debit: 0, credit: 10_000 },
+        ],
+      }),
+      // Top up the petty-cash float by 500 — likewise internal.
+      makeJournal({
+        tenantId,
+        description: 'Petty cash top-up',
+        postedAt: '2026-03-12T09:00:00.000Z',
+        lines: [
+          { accountId: petty.id, accountCode: petty.code, accountName: petty.name, debit: 500, credit: 0 },
+          { accountId: cash.id, accountCode: cash.code, accountName: cash.name, debit: 0, credit: 500 },
+        ],
+      }),
+    ];
+    const allAccounts = [...accounts, savings, petty];
+
+    it('reports the same inflows and outflows as without the transfers', () => {
+      const before = buildCashFlow(accounts, journals, '2026-01-01', '2026-03-31');
+      const after = buildCashFlow(allAccounts, withTransfers, '2026-01-01', '2026-03-31');
+      expect(after.inflows).toBe(before.inflows);
+      expect(after.outflows).toBe(before.outflows);
+    });
+
+    it('leaves total cash unchanged by an internal move', () => {
+      const cf = buildCashFlow(allAccounts, withTransfers, '2026-01-01', '2026-03-31');
+      expect(cf.netChange).toBe(122_000);
+      expect(cf.closingCash).toBe(122_000);
+    });
+
+    it('attributes nothing to a counterpart, because a transfer has no counterpart', () => {
+      const cf = buildCashFlow(allAccounts, withTransfers, '2026-01-01', '2026-03-31');
+      const codes = cf.byCounterpart.map((l) => l.code);
+      expect(codes).not.toContain('1020');
+      expect(codes).not.toContain('1030');
+      expect(cf.byCounterpart.reduce((s, l) => s + l.amount, 0)).toBe(122_000);
+    });
+
+    it('still nets a composite entry to its true effect on cash', () => {
+      // Receive 50,000 and pay a 200 bank charge in one posting → 49,800 actually arrives.
+      const composite = makeJournal({
+        tenantId,
+        description: 'Receipt net of bank charge',
+        postedAt: '2026-04-02T09:00:00.000Z',
+        lines: [
+          { accountId: cash.id, accountCode: cash.code, accountName: cash.name, debit: 50_000, credit: 0 },
+          { accountId: cash.id, accountCode: cash.code, accountName: cash.name, debit: 0, credit: 200 },
+          { accountId: ar.id, accountCode: ar.code, accountName: ar.name, debit: 0, credit: 50_000 },
+          { accountId: rent.id, accountCode: rent.code, accountName: rent.name, debit: 200, credit: 0 },
+        ],
+      });
+      const cf = buildCashFlow(allAccounts, [composite], '2026-04-01', '2026-04-30');
+      expect(cf.inflows).toBe(49_800);
+      expect(cf.outflows).toBe(0);
+      expect(cf.netChange).toBe(49_800);
+    });
+  });
 });

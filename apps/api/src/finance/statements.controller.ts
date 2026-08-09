@@ -24,22 +24,22 @@ export class StatementsController {
 
   @Get('trial-balance')
   trialBalance(@Query('asOf') asOf?: string): Promise<TrialBalance> {
-    return this.statements.trialBalance(this.tenant.get().tenantId, asOf || null);
+    return this.statements.trialBalance(this.tenant.get().tenantId, asOf || null, this.tenant.get().companyId);
   }
 
   @Get('income-statement')
   incomeStatement(@Query('from') from?: string, @Query('to') to?: string): Promise<IncomeStatement> {
-    return this.statements.incomeStatement(this.tenant.get().tenantId, from || null, to || null);
+    return this.statements.incomeStatement(this.tenant.get().tenantId, from || null, to || null, this.tenant.get().companyId);
   }
 
   @Get('balance-sheet')
   balanceSheet(@Query('asOf') asOf?: string): Promise<BalanceSheet> {
-    return this.statements.balanceSheet(this.tenant.get().tenantId, asOf || null);
+    return this.statements.balanceSheet(this.tenant.get().tenantId, asOf || null, this.tenant.get().companyId);
   }
 
   @Get('cash-flow')
   cashFlow(@Query('from') from?: string, @Query('to') to?: string): Promise<CashFlow> {
-    return this.statements.cashFlow(this.tenant.get().tenantId, from || null, to || null);
+    return this.statements.cashFlow(this.tenant.get().tenantId, from || null, to || null, this.tenant.get().companyId);
   }
 
   @Get('consolidated')

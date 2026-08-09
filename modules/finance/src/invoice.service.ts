@@ -10,6 +10,7 @@ import { JournalService } from './journal.service';
 import { AccountService } from './account.service';
 import type { AccountType } from './domain/account';
 import { PO_MATCH_PORT, type PoMatchPort } from './po-match.port';
+import { assertSameTenant, sameTenantOrNull } from './domain/tenant-guard';
 
 /** AP invoices are "open" (revaluable) when approved-but-unpaid. */
 const AP_OPEN = ['approved'];
@@ -124,7 +125,9 @@ export class InvoiceService implements OnModuleInit {
   }
 
   async checkThreeWayMatch(id: Id): Promise<{ matched: boolean; reason?: string }> {
-    const invoice = await this.store.get(id);
+    // Tenant-scoped read: a wrong-tenant id is indistinguishable from a missing one, so the
+    // match reports "not found" rather than validating against another tenant's invoice.
+    const invoice = sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
     if (!invoice) return { matched: false, reason: 'Invoice not found' };
     if (!invoice.poId) return { matched: true }; // non-PO invoice passes match
     if (!this.poMatch) return { matched: true }; // no data source bound → skip (mirrors gate pattern)
@@ -154,8 +157,9 @@ export class InvoiceService implements OnModuleInit {
   /** Update descriptive fields on an invoice (title, reference, supplier snapshot).
    *  Value is NOT editable — actual project cost was posted as a delta at creation. */
   async update(id: Id, patch: Partial<Pick<Invoice, 'title' | 'reference' | 'supplierName'>>): Promise<Invoice> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Invoice ${id} not found`);
+    // Tenant boundary (G-03): the store fetches by id alone and RLS is inert at runtime, so the
+    // service asserts ownership before writing. Wrong tenant → "not found", never a cross-tenant edit.
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'invoice', id);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Invoice = { ...existing, ...defined };
     // Audit trail (P1-2): field-level before→after + the real actor, for the record History.
@@ -178,8 +182,9 @@ export class InvoiceService implements OnModuleInit {
   }
 
   async changeStatus(id: Id, status: InvoiceStatus, actorId?: Id): Promise<Invoice> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Invoice ${id} not found`);
+    // Tenant boundary (G-03) before any state change — approve/pay a foreign invoice is refused
+    // with the same "not found" a missing id gets. See update() above.
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'invoice', id);
 
     if (status === 'approved') {
       // Segregation of duties: the preparer may not approve their own invoice. Skipped for
@@ -240,8 +245,9 @@ export class InvoiceService implements OnModuleInit {
     return updated;
   }
 
-  get(id: Id): Promise<Invoice | null> {
-    return this.store.get(id);
+  async get(id: Id): Promise<Invoice | null> {
+    // Getter keeps its null contract but will not return another tenant's invoice.
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: InvoiceFilter): Promise<Invoice[]> {

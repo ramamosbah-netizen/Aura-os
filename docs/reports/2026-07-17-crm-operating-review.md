@@ -1,9 +1,9 @@
 # CRM Operating Review — module 1 (AURA Operating Review Program)
 
-**Date:** 2026-07-17 · **Re-reviewed:** 2026-07-19 (all fixes merged and verified) · **Updated:** 2026-08-09 (verified against current `main`) · **Method:** static read of `apps/web/app/crm/**`, the CRM sidebar (`apps/web/components/nav.ts`), and the CRM clients. · **This module is the TEMPLATE** — CRM must be fully closed (all 3 layers + resulting PRs merged + Journey Audit re-run and improved) before any other module starts.
+**Date:** 2026-07-17 · **Re-reviewed:** 2026-07-19 (all fixes merged and verified) · **Method:** static read of `apps/web/app/crm/**`, the CRM sidebar (`nav.ts`), and the CRM clients. · **This module is the TEMPLATE** — CRM must be fully closed (all 3 layers + resulting PRs merged + Journey Audit re-run and improved) before any other module starts.
 
 The **AURA Operating Review Program** runs **three layers** per module (Doctrine is one layer, not the whole thing):
-- **L1 Journey Audit** — does the business journey complete inside AURA? (scored /100; CRM: Direct Sale **87 last measured** — close-out rerun 2026-07-20, Tender 65. See Close-out status for the remaining gate.)
+- **L1 Journey Audit** — does the business journey complete inside AURA? (scored /100; CRM: Direct Sale **85 last measured**, Tender 65. The post-merge re-audit is still outstanding — see Close-out status.)
 - **L2 Architecture (Doctrine) Audit** — does the page obey the Constitution? (one purpose · progressive disclosure · Queue-vs-Workspace · Entity-vs-Work page).
 - **L3 Operating-Experience Audit** (leads now) — per page, the 7 questions: why open it? what do I accomplish? easily? unneeded info? missing info? duplicated step? **dead end?**
 
@@ -18,12 +18,8 @@ The **AURA Operating Review Program** runs **three layers** per module (Doctrine
 Plus the 3 page types (Entity 360 · Operational · Queue) and: **Queues are Saved Views, never sidebar items.**
 
 ## Sidebar inventory vs the locked IA — ✅ COMPLIANT
-
-> **⚠️ Post-report update (2026-08-09 verification).** The Experience Architecture R1 (commit `707ac4e`, PR #178+) reorganized the flat sidebar into **workspace groups**. The CRM surfaces are no longer one group — they are split across **Home** and **Sales**. The inventory below reflects the current `nav.ts`.
-
-Current **Home** group (front-door): **My Work · My Day · My Workspace · Inbox · Search**.
-Current **Sales** workspace: **Overview · Accounts · Contacts · Pipeline & Opportunities · Campaigns · Quotations · Commercial · Market Intelligence · Activities** (9 items).
-The old flat "CRM sidebar" (6 items) is now 9 Sales items + My Day in Home. **Campaigns** (marketing funnel) and **Market Intelligence** (pricing reference catalogue) are post-report additions; **Overview** is the workspace cockpit; **Commercial** was created by PR-CRM-2. No queue masquerading as a sidebar page. Entity pages (Account/Contact/Lead/Opportunity/Quotation 360) are not split. Good.
+Current CRM sidebar group: **My Day · Accounts · Contacts · Sales Pipeline · Quotations · Activities**.
+That is exactly the locked IA (My Day entry + 5 work pages). No queue masquerading as a sidebar page. Entity pages (Account/Contact/Lead/Opportunity/Quotation 360) are not split. Good.
 
 ## Duplication / violation register
 
@@ -37,7 +33,7 @@ The old flat "CRM sidebar" (6 items) is now 9 Sales items + My Day in Home. **Ca
 ## What's already right (compliance highlights)
 - **Principle 3 honoured:** every 360 (Account/Contact/Lead/Opportunity/Quotation) embeds the unified `<Timeline>` — a record's activities stay inside its entity page.
 - **No queues in the sidebar** — at-risk/overdue/expiring surface from My Day, pipeline Overview, and the Advisor, not as nav items.
-- **Deal-chain split** — Tender/Contract/Project correctly live in the **Delivery** workspace (formerly "Deal-chain" nav group), not inside Sales/CRM.
+- **Deal-chain split** — Tender/Contract/Project correctly live in the Deal-chain nav group, not inside CRM.
 - The recent 360 consolidation (deal-room panels → tabs, #142) removed a real long-scroll violation.
 
 ## Compliance scorecard (CRM)
@@ -61,13 +57,13 @@ Reviewed in the natural user path. Each surface → the 7 questions → one stat
 | 2c | **Pipeline · Board** | Move deals across stages (drag-drop) | Visual stage management. | ✅ Keep |
 | 2d | **Pipeline · List** | Find/scan/filter deals | Distinct from Board (search vs manage). | ✅ Keep |
 | 2e | **Pipeline · Analytics** | Performance/sources/executive | Analyze intent. | ✅ Keep |
-| 2f | **Pipeline · Activities** *(now: Overview → OpportunityActivitiesCard)* | *(was: global read-only dump = Dead End)* | **Reshaped** — the full Activities tab was dropped. An `OpportunityActivitiesCard` now renders inside the Overview tab, deep-linking to the Activities Work Center with `relatedType=opportunity`. The pipeline workspace's tabs are now **Radar · Overview · Board · List · Analytics** (5 tabs, no Activities tab). | ✅ **Reshaped (PR-CRM-1, verified 2026-08-09)** |
+| 2f | **Pipeline · Activities** | *(none as built — global read-only dump)* | **Dead End**; the real "Opportunity Activities" intent is unserved. | ✅ **Keep (Reshaped under PR-CRM-1)** |
 | 3 | **Lead 360** | Qualify & convert a lead | Overview/Qualification/Convert = distinct steps. | ✅ Keep |
 | 4 | **Account 360** | The customer hub | Portfolio + inline contacts + timeline; its "Commercial portfolio" block foreshadows the Commercial workspace. | ✅ Keep |
 | 5 | **Contact 360** | The person | Stakeholder role + timeline. | ✅ Keep |
 | 6 | **Opportunity 360** | Work the deal | 9 tabs after #142 consolidation — heavy on progressive disclosure (Journey / Win Plan / Deal Depth are "Advanced"). "Activity" tab = record timeline (Principle 3, correct). | ✅ Keep · 🔄 watch (tab density) |
-| 7 | **Commercial Workspace** | "Where's everything commercial?" | **Now exists** at `/crm/commercial` (PR-CRM-2 / PR #149). Workspace of linked views: Quotations, Contracts, Pricing Sheets; plus a Decision Readiness panel. Records stay owned by origin domains. | ✅ **Created (PR-CRM-2, verified 2026-08-09)** |
-| 8 | **Activities Work Center** | "Close out my touchpoints" | Correct execution home. **Now has** the `relatedType` URL search param (`searchParams.relatedType`) and renders a scoped saved-view heading (e.g. "Opportunity Activities") when deep-linked from the pipeline. Supports `opportunity`, `account`, `contact`, `lead`, `quotation` scopes. | ✅ **Reshaped (PR-CRM-1, verified 2026-08-09)** |
+| 7 | **Commercial Workspace** | "Where's everything commercial?" | **Does not exist.** Only a Quotations page today. | ✅ **Keep (Created under PR-CRM-2)** |
+| 8 | **Activities Work Center** | "Close out my touchpoints" | Correct execution home, BUT no related-type filter and no URL-param saved views → can't serve the pipeline's "Opportunity Activities" deep-link. | ✅ **Keep (Reshaped under PR-CRM-1)** |
 
 ## Execution plan — what actually shipped
 From the L3 pass:
@@ -83,15 +79,10 @@ From the **L1 Journey re-run** (which scored 82 → 85 and surfaced further gaps
 
 **Watch items (not yet actioned):** converge the 3 attention *render* surfaces (My Day / Advisor / Alerts); reassess Opportunity 360 tab density (9 tabs vs progressive disclosure).
 
-## Close-out status — CLOSE-OUT RERUN DONE, FORMAL CLOSURE BLOCKED BY GAP A
+## Close-out status — gate PASSED 2026-07-20 (updated 2026-08-05)
+- **Merged to `main`:** #146–**#154** — all 9 CRM PRs. *(Verified 2026-07-19: `0182_crm_lead_account_id.sql` is present on `origin/main`.)*
+- **✅ The outstanding gate is closed:** the L1 Journey re-audit ran on merged `main` (`f829007`) on 2026-07-20 — [2026-07-20-journey-direct-sale-closeout.md](2026-07-20-journey-direct-sale-closeout.md). **Measured 87/100**, End-to-End Completion **PASS** (Signal → issued AR invoice in one sitting). Automation and Governance both 10/10.
+- **Score history (all measured):** 82 → 85 → **87**. No 100/100 has been measured and none should be claimed.
+- **Residual condition from that run:** the close-out report recommends calling CRM closed only once the **seeder is idempotent and the duplicated MAF accounts are merged** (gap A — three identical accounts, reached through an Admin Center button). That data-hygiene item is still open as of 2026-08-05; it also shows up as **P2-2 (test/junk data)** in the current [enterprise readiness audit](2026-08-03-enterprise-readiness-audit.md).
 
-> **⚠️ Updated 2026-08-09 from verified data.** The close-out re-audit has now been run.
-
-Honest state as of 2026-08-09:
-- **Merged to `main`:** #146–**#154** — all 9 CRM PRs. *(Verified: `0182_crm_lead_account_id.sql` is present on `origin/main`.)*
-- **Close-out L1 Journey re-audit: DONE** on 2026-07-20 (`2026-07-20-journey-direct-sale-closeout.md`), commit `f829007` (PRs #155–#164 also merged by that point). **Score: 87/100.** E2E gate: ✅ PASS (Signal → issued AR invoice, one sitting).
-- **Journey score trend:** 82 (2026-07-17) → 85 (re-run, same day) → **87** (close-out, 2026-07-20).
-- **Remaining blocker for formal closure:** Gap A from the close-out — **duplicate accounts in the seeder** (🔴 data integrity). The seeder creates blind `POST`s with no existence check; 17 of 30 seed rows represent 6 real companies. Closure should be called only once the seeder is idempotent and the duplicates are merged.
-- **Other close-out gaps (not blockers):** 4.4s action silence with no busy indicator (gap D), "Send to customer" sends nothing (gap E), auto-drafted quotation has no `validUntil` (gap F), certify→AR link lands on list not invoice (gap I).
-
-**Definition of closed (unchanged):** all 3 layers reviewed · resulting PRs merged · **L1 Journey Audit re-run on merged `main` and the score confirmed** · no 🔴 blockers outstanding. CRM has passed the journey gate (87/100, E2E ✅) but the duplicate-account blocker keeps it formally open.
+**Definition of closed (unchanged):** all 3 layers reviewed · resulting PRs merged · **L1 Journey Audit re-run on merged `main` and the score confirmed** ✅. Tendering follows as the same three-layer template.

@@ -25,6 +25,10 @@ export class ProfitCenterService {
 
   async create(input: NewProfitCenter): Promise<ProfitCenter> {
     const pc = makeProfitCenter(input);
+    // Codes are the human key finance reports against — unique per tenant. "already exists" → 409.
+    if ((await this.store.list(pc.tenantId)).some((c) => c.code === pc.code)) {
+      throw new Error(`profit centre code ${pc.code} already exists`);
+    }
     await this.store.save(pc);
     await this.events.append([
       makeEvent({

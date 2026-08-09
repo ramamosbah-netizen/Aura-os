@@ -11,6 +11,7 @@ import {
   isMaturingSoon,
   summariseCheques,
   type PostDatedCheque,
+  type NewPostDatedCheque,
 } from './post-dated-cheque';
 
 const base = {
@@ -120,5 +121,59 @@ describe('Post-Dated Cheque', () => {
       // recv & issued are pending maturing 2026-07-01 (3 days out) → in window; dep/bounced not pending
       expect(sum.maturingSoon).toBe(2);
     });
+  });
+});
+
+// ── Regressions found in the wave-2 finance audit ─────────────────────────────
+describe('PDC — rules that were wrong', () => {
+  const pdc = (over: Partial<NewPostDatedCheque> = {}) =>
+    makePostDatedCheque({
+      tenantId: 't', chequeNumber: '000123', direction: 'received', partyName: 'Emaar',
+      bankName: 'ENBD', amount: 50_000, issueDate: '2026-01-01', maturityDate: '2026-03-01', ...over,
+    });
+
+  it('counts a bounce when the bank returns it, not when it is re-presented', () => {
+    // The counter used to increment on re-presentation, so a cheque that bounced once and was
+    // written off reported ZERO bounces. In the UAE that history drives credit decisions.
+    const bounced = bounceCheque(depositCheque(pdc()));
+    expect(bounced.bounceCount).toBe(1);
+    expect(cancelCheque(bounced).bounceCount).toBe(1); // written off, the bounce still counted
+  });
+
+  it('counts each bounce of a re-presented cheque', () => {
+    let c = bounceCheque(depositCheque(pdc()));
+    c = representCheque(c);
+    expect(c.bounceCount).toBe(1); // re-presenting is not itself a bounce
+    c = bounceCheque(c);
+    expect(c.bounceCount).toBe(2);
+  });
+
+  it('a cheque that clears first time never counts a bounce', () => {
+    expect(clearCheque(depositCheque(pdc())).bounceCount).toBe(0);
+  });
+
+  it('does not add different currencies into one headline number', () => {
+    // AED 100,000 + USD 10,000 used to be reported as "110,000" — a figure in no currency.
+    const list = [pdc({ amount: 100_000, currency: 'AED' }), pdc({ chequeNumber: '2', amount: 10_000, currency: 'USD' })];
+    const s = summariseCheques(list, '2026-01-15');
+    expect(s.receivablePending).toBe(100_000); // base currency only
+    expect(s.byCurrency.AED.receivablePending).toBe(100_000);
+    expect(s.byCurrency.USD.receivablePending).toBe(10_000);
+  });
+
+  it('honours a different base currency', () => {
+    const list = [pdc({ amount: 100_000, currency: 'AED' }), pdc({ chequeNumber: '2', amount: 10_000, currency: 'USD' })];
+    expect(summariseCheques(list, '2026-01-15', 7, 'USD').receivablePending).toBe(10_000);
+  });
+
+  it('keeps issued and received apart per currency', () => {
+    const list = [
+      pdc({ amount: 30_000, direction: 'received' }),
+      pdc({ chequeNumber: '3', amount: 12_000, direction: 'issued' }),
+    ];
+    const s = summariseCheques(list, '2026-01-15');
+    expect(s.receivablePending).toBe(30_000);
+    expect(s.payablePending).toBe(12_000);
+    expect(s.byCurrency.AED).toEqual({ receivablePending: 30_000, payablePending: 12_000 });
   });
 });

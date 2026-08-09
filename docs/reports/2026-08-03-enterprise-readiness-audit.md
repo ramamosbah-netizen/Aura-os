@@ -1,7 +1,16 @@
 # AURA OS — Enterprise Readiness Audit
 
-**Date:** 2026-08-03 · **Auditor role:** Product Owner + ERP Consultant + Security Architect + QA Lead
-**Method:** Live running app (API `:4000` prefix `/api/v1`, web `:3000`, all 216 migrations applied) + source inspection. Every finding below is verified from code or a live request — no assumptions. Browser pane was hidden, so visual/interaction items were verified from component source, not pixels.
+**Date:** 2026-08-03 · **Last verified:** 2026-08-05 · **Auditor role:** Product Owner + ERP Consultant + Security Architect + QA Lead
+**Method:** Live running app (API `:4000` prefix `/api/v1`, web `:3000`) + source inspection. Every finding below is verified from code or a live request — no assumptions. Browser pane was hidden, so visual/interaction items were verified from component source, not pixels.
+
+> **Verification refresh — 2026-08-05** (live API boot against the same Supabase DB; details in [2026-08-05-platform-state-verification.md](2026-08-05-platform-state-verification.md)):
+> - **Schema:** now **219 migrations on disk** (was 216); `/health` reports `upToDate: true`. ⚠️ **New finding:** the long-lived dev DB has **224 applied rows vs 219 files** — 5 applied migrations no longer exist on disk (`0055`, `0064`, `0178`/`0180` backfill duplicates, `0204`), a rename/renumber artifact of stacked-PR rebases. The gate only checks *pending*, so this drift is invisible to it.
+> - **P0-1 re-confirmed OPEN:** `GET /api/v1/crm/opportunities` with no token → **200, 34 records**; `/crm/accounts` → **200, 35 records**; `/auth/status` → `{"enabled":false}`.
+> - **P0-2 boot gate confirmed live:** the API logs `⚠️ DB connection role "postgres" bypasses row-level security … RLS policies are INERT` at startup. Dev warns, production refuses — the mechanism works; the operator flip is still pending.
+> - **P1-3 confirmed live** (was only test-proven): searching `Dome` and `DS-2CD` each return both serialised units. *(It failed the first live check — the running `apps/api/dist` was a stale build predating the fix. Rebuild + restart resolved it; see the note under P1-3.)*
+> - **P2-3 partially CORRECTED — the "0 remain" claims were overstated.** Residuals survive on `main` after the sweep commits: **3 × `var(--fg)`** in `apps/web/app/globals.css` (`:895`, `:944`, `:947`) and **4 × `#d97706`** in 3 files. Corrected inline below.
+> - **P1-4 re-confirmed:** `apps/web/public/` is empty — no PWA manifest or service worker.
+> - **P1-1 confirmed:** `infrastructure/orphan-references.json` carries **19** references as claimed.
 
 ---
 
@@ -44,13 +53,16 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 
 *Score reflects readiness to run a real multi-tenant enterprise in production. Feature breadth alone would score far higher (~80).*
 
+> **Score status 2026-08-05 — NOT re-measured.** The 2026-08-05 pass re-verified individual findings (see the refresh box at the top), it did not re-run the 12-area assessment. **54/100 remains the last measured figure and is what should be quoted.** Fixes merged since 2026-08-03 (maker-checker + approval matrix, RLS boot gate, orphan-scan extension, audit diffs, search coverage, dev auto-migrate, index coverage, token/hex sweeps, AMC naming, nav) would plausibly move areas 3, 7 and 12 upward, but *plausibly* is not *measured* — the next number should come from a full re-run, not from adding up closed rows.
+
 ---
 
 ## 3. Critical Blockers (P0)
 
 ### P0-1 — Authentication & RBAC are OFF; unauthenticated data access confirmed
 - **Issue:** The global `PermissionsGuard` returns `true` whenever `auth.enabled` is false, which is the default when no `AUTH_JWKS_URL`/`AUTH_JWT_SECRET` is set. Auth is off in the running instance.
-- **Evidence:** `core/src/identity/permissions.guard.ts:100` and `:125` — `if (!this.auth.enabled) return true;` (twice). `auth.service.ts:88` logs *"Auth OFF … access seam passes through."* Live proof: `GET http://localhost:4000/api/v1/crm/opportunities` with **no token** → `HTTP 200`, **34 records returned**.
+- **Evidence:** `core/src/identity/permissions.guard.ts:100` and `:125` — `if (!this.auth.enabled) return true;` (twice). `auth.service.ts:88` logs *"Auth OFF … access seam passes through."* Live proof: `GET http://localhost:4000/api/v1/crm/opportunities` with **no token** → `HTTP 200`, **34 records returned**. **Re-verified 2026-08-05** — unchanged: opportunities 200/34, accounts 200/35, `/auth/status` → `{"enabled":false}`.
+- **Status 2026-08-05: still OPEN — this is now the only remaining P0, and the single largest item between AURA and a hosted deployment.** Note the asymmetry with P0-2: the RLS bypass got a boot-time fail-closed gate; auth-off did not. The same `evaluateRlsPosture` pattern in `main.ts` is the obvious home for it.
 - **Business impact:** In this configuration anyone reaching the API reads/writes all tenants' commercial data. Ship-blocking for any hosted deployment.
 - **Severity:** P0.
 - **Fix:** Require a verifier in non-dev environments; fail-closed if `NODE_ENV=production` and auth is off. Add a boot assertion + CI check.
@@ -85,12 +97,16 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 - **CORRECTION (2026-08-04):** the audit trail is more built than the draft implied. Three surfaces already exist: (1) the append-only **event store** (actor + payload + time, keyed by aggregate + version); (2) a dedicated **`aura_audit_log`** ledger with a `changes jsonb` column + the **`/api/v1/audit`** query endpoint (filter by entity, CSV export); (3) a per-record **CRM timeline** (`/crm/timeline?id=`) that reconstructs history from events. So "who/when" is answered today; **`updated_by`/`updated_at` columns are largely redundant** given the event log records actor+time per mutation, and a "History tab" already exists for CRM records.
 - **The genuine gap:** value mutations recorded only the **new** state, not the **before→after** — so "changed the total from 80k to *what*" wasn't answerable from the log.
 - **✅ FIX (2026-08-04):** added a reusable, pure `diffFields(before, after, fields)` helper (`shared/src/domain/change-diff.ts`, returns `{field:{from,to}}` for changed fields only) and wired it into the money-cycle's most audit-sensitive edits — quotation **commercial-terms** update and **re-price** (`saveEstimation`) — which now emit the field-level diff in the event payload (`changes`) **and stamp the real actor from the request context (ALS/`TenantContext`)** instead of falling back to `createdBy`. This flows straight into the existing CRM timeline. **Verified:** `change-diff.test.ts` (3) + a new quotation service test asserting `changes.paymentConditions = {from,to}` + correct actor — green; shared + crm typecheck clean.
-- **✅ EXTENDED (2026-08-04):** the same `diffFields` + real-actor (ALS) pattern now also on **`contract.update`** (captures the contract-value before→after — e.g. `{value:{from:0,to:150000}}`) and **`invoice.update`**, so the whole money cycle (quotation · contract · invoice) records who-changed-what-from→to. Verified: `contract-command.test.ts` asserts `changes.value = {from,to}`; contracts 22 + finance 110 tests green. *(Remaining: PO line changes; optional `updated_by`/`updated_at` only where a column-level stamp is wanted over the event log.)*
+- **✅ EXTENDED (2026-08-04):** the same `diffFields` + real-actor (ALS) pattern now also on **`contract.update`** (captures the contract-value before→after — e.g. `{value:{from:0,to:150000}}`) and **`invoice.update`**, so the whole money cycle (quotation · contract · invoice) records who-changed-what-from→to. Verified: `contract-command.test.ts` asserts `changes.value = {from,to}`; contracts 22 + finance 110 tests green.
+- **✅ COMPLETE (2026-08-05) — the purchase order was the last one.** `PurchaseOrderService.update` now emits the field-level diff **and stamps the real actor**; it previously recorded `actorId: null`, so the log could not name who made a PO change at all. *Scope note: the PO has no line items — it is a header whose `value` is deliberately immutable (committed cost was posted to the ledger as a delta at creation, so re-pricing in place would desync it). The auditable surface is the supplier snapshot and descriptive fields, a **supplier swap** being the one with commercial consequence.* 5 unit tests. **P1-2 is now closed** — optional `updated_by`/`updated_at` remain only where a column-level stamp is specifically wanted over the event log.
 
 ### P1-3 — Global search misses inventory / serials / equipment — ✅ INVENTORY + SERIALS ADDED (full-text index still pending)
 - **Evidence:** `apps/api/src/search/search.service.ts` indexes Account, Tender, Contract, Project, PO, Invoice, Lead, Opportunity, Quotation, Supplier — matching title/name/reference **in memory**. No serial numbers, equipment models, or stock items.
 - **Impact:** The core ELV test — search "Hikvision DS-2CD1143" → inventory/installation/warranty — **fails**. Also O(n) in-memory scan won't scale.
 - **✅ FIX (2026-08-04):** the search fan-out now also indexes **inventory stock items** (`StockService.listItems` — code/name/barcode → a "Stock Item" hit, deep-links `/inventory/stock`) and **serialised equipment** (`SerialService.list` — serialNumber/itemCode/itemName → a "Serial" hit titled `model — serial`, subtitled by its project, deep-links `/inventory/serials`). The core ELV lookup now resolves: `"Hikvision DS-2CD1143"` → the SKU **and** each installed unit (with its site/warranty link), and an exact serial number finds its unit. Proven in `search.service.test.ts` (SKU + matching serial returned, unrelated serial excluded; exact-serial hit). Both `StockService`/`SerialService` are exported by `InventoryModule` (already imported) — no new wiring.
+- **✅ LIVE-VERIFIED (2026-08-05):** previously test-proven only. `GET /search?q=Dome` and `?q=DS-2CD` each return **both serialised units** (`4MP Dome Camera — DS-2CD-E2E2` on project *Tower A*, and `…-E2E1` in stock). The ELV serial→site lookup works against real data.
+  - ⚠️ **Operational gotcha worth recording:** the first live check returned `[]`. The cause was **a stale `apps/api/dist`** — the running build predated the fix, so the deployed behaviour disagreed with source and tests. `pnpm --filter @aura/api build` + restart resolved it. *Any live verification of this platform must confirm the running build matches HEAD first; otherwise it measures a ghost.*
+  - ⚠️ **The flagship query still under-delivers on demo data:** `?q=Hikvision` returns only a **Purchase Order**, because the seeded catalogue uses generic names (`4MP Dome Camera` / `CAM-4MP-DOME`) with no manufacturer or model. The *capability* is closed; the *demo* isn't. Fixing this belongs with **P2-2 (clean seed)** — seed real ELV brand/model SKUs so the headline lookup demonstrates.
 - **Remaining:** the in-memory O(n) fan-out → a DB / full-text search projection (shared with the P2-7 scale item); functional coverage of the ELV lookup is now closed.
 
 ### P1-4 — Field/mobile experience is not production-grade
@@ -108,10 +124,23 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 ## 5. Medium Priority Improvements (P2)
 
 - **P2-1 First-run 503 wall:** 11 pending migrations made every business route 503 until `db:migrate` + API restart; no in-app remedy. **✅ FIX (2026-08-05):** the boot deploy-gate now **auto-applies pending migrations in development** (migrate-then-serve) so a fresh clone comes up healthy instead of a dead 503 app — `MigrationGateService.onModuleInit` applies each pending file in its own transaction (mirroring `migrate.mjs`, reusing the app pool). **Production is never auto-migrated** (the strict 503 gate stands; migrations run as a separate ordered deploy step); a dev user can opt back into the strict gate with `AUTO_MIGRATE=off`. Verified live against Supabase (behind→auto-applied→healthy 200) and gated in CI (new step proves dev auto-heal; the existing R2 step pins `AUTO_MIGRATE=off` to keep testing the strict prod behaviour).
-- **P2-2 Test/junk data:** `Ledger Test`, `Cost Engine Test`, `tst`, `QT-AUTHOR-1` appear as primary rows in Projects/Commissioning/Handover/Quotations. *Fix: clean seed.*
-- **P2-3 UI token drift:** 66 screens use undefined tokens (`--fg`, `--surface`) + off-brand blue `#2563eb`; no shared Button/Card/Table; 111 files hardcode hex → invisible-input-text risk on operational screens. **⏳ FIX STARTED (2026-08-03):** shared UI kit shipped (`components/ui/kit.tsx`: Button/Field/Input/Select/Card/KpiTile/Badge/Table on real tokens) + `ProjectPicker`; `daily-report` & `inspection-request` fully migrated onto the kit (amber accent, semantic colours, 0 UUID inputs); **all 14 UUID forms** now use ProjectPicker/EmployeePicker/AssetPicker → zero UUID inputs app-wide. **✅ TOKEN MIGRATION COMPLETE (2026-08-04):** the undefined-token half — the actual invisible-input-text bug — is fixed **app-wide**: a mechanical mapping across **52 files** replaced every `var(--fg)`→`var(--text)`, `var(--surface)`→`var(--panel)`, `var(--surface-2,…)`→`var(--panel-2)` (0 undefined tokens remain; web typecheck clean; CI web-build + Playwright smoke green). **✅ OFF-BRAND HEX PASS COMPLETE (2026-08-04):** `#2563eb`→`--accent`, `#16a34a`→`--good`, `#dc2626`→`--bad` mapped app-wide (0 remain; dead `var(--accent,#2563eb)` fallbacks cleaned); the 24 solid semantic buttons tokenised with white text moved to `var(--accent-ink)` for correct light+dark contrast (kit `danger` converged). Remaining (larger, follow-up): swap inline buttons/tables for the kit `<Button>`/`<Table>` components.
-- **P2-4 AMC module inconsistency:** self-labelled "Asset Management & Contracts" vs "Annual Maintenance" elsewhere; different visual language. *Fix: reconcile.*
-- **P2-5 IA discoverability:** "Opportunities" not a nav word (under Pipeline→/crm/leads); orphan pages `/crm/commercial`, `/tendering/pricing`; ~5–7s first paint.
+- **P2-2 Test/junk data:** `Ledger Test`, `Cost Engine Test`, `tst`, `QT-AUTHOR-1` appear as primary rows in Projects/Commissioning/Handover/Quotations. *Fix: clean seed.* **Still open 2026-08-05 — and it now blocks two other things,** which upgrades its practical priority above "cosmetic": (a) the flagship ELV search demo returns nothing for a brand name because the seeded catalogue has no manufacturer/model SKUs (P1-3); (b) the CRM close-out re-run holds its final sign-off on the duplicated MAF accounts being merged and the seeder made idempotent (see [2026-07-20-journey-direct-sale-closeout.md](2026-07-20-journey-direct-sale-closeout.md) gap A). The same live DB also carries the 7 dangling refs noted under P1-1.
+- **P2-8 (new, 2026-08-05) Migration history drift on long-lived databases:** the dev DB has **224 rows in `aura_migrations` but only 219 files on disk** — `0055_finance_vat_returns.sql`, `0064_contracts_payment_certificates.sql`, `0178`/`0180_backfill_account_name_snapshot.sql` (the same backfill applied under two numbers) and `0204_project_cost_accrual.sql` were applied, then renamed or renumbered by stacked-PR rebases. Nothing is broken today — the gate only asks "is anything *pending*", so `upToDate: true` is honest but incomplete. The risk is the P0-2 pattern repeating: a file edited after it was applied never re-runs, and CI (fresh schema) stays green while the long-lived DB drifts. *Fix: have the migration gate also report applied-but-absent filenames as a warning, and treat renumbering an already-applied migration as forbidden.*
+- **P2-3 UI token drift:** 66 screens use undefined tokens (`--fg`, `--surface`) + off-brand blue `#2563eb`; no shared Button/Card/Table; 111 files hardcode hex → invisible-input-text risk on operational screens. **⏳ FIX STARTED (2026-08-03):** shared UI kit shipped (`components/ui/kit.tsx`: Button/Field/Input/Select/Card/KpiTile/Badge/Table on real tokens) + `ProjectPicker`; `daily-report` & `inspection-request` fully migrated onto the kit (amber accent, semantic colours, 0 UUID inputs); **all 14 UUID forms** now use ProjectPicker/EmployeePicker/AssetPicker → zero UUID inputs app-wide. **✅ TOKEN MIGRATION COMPLETE (2026-08-04):** the undefined-token half — the actual invisible-input-text bug — is fixed **app-wide**: a mechanical mapping across **52 files** replaced every `var(--fg)`→`var(--text)`, `var(--surface)`→`var(--panel)`, `var(--surface-2,…)`→`var(--panel-2)` (0 undefined tokens remain; web typecheck clean; CI web-build + Playwright smoke green). **✅ OFF-BRAND HEX PASS (2026-08-04):** `#2563eb`→`--accent`, `#16a34a`→`--good`, `#dc2626`→`--bad` mapped app-wide (`#2563eb` verified **0 remaining** 2026-08-05; dead `var(--accent,#2563eb)` fallbacks cleaned); the 24 solid semantic buttons tokenised with white text moved to `var(--accent-ink)` for correct light+dark contrast (kit `danger` converged).
+
+  ⚠️ **CORRECTION (2026-08-05) — two "0 remaining" claims above were overstated. Residuals survive on `main` after the sweep commits (`403c37e`, `59931d6`, `53821ce`):**
+
+  | Claim | Verified 2026-08-05 | Detail |
+  |---|---|---|
+  | "0 undefined tokens remain" | ❌ **3 remain** | `apps/web/app/globals.css:895` (`.fe-collapsible:hover`), `:944` (`.fe-tab:hover`), `:947` (`.fe-tab.active`) still set `color: var(--fg)`. `--fg` is **not defined** in either palette (the token is `--text`), so the form-engine's active/hovered tab silently inherits instead of taking the intended colour. Same class of bug the migration set out to kill — the sweep covered `.tsx` files and missed these three lines in the global stylesheet. |
+  | "`#d97706` → `--warn` (0 remain)" | ❌ **4 remain in 3 files** | `apps/web/app/hr/document-expiry/page.tsx:40,55` hardcode `#d97706` outright; `apps/web/app/tendering/pricing/page.tsx:103` and `apps/web/app/tendering/tenders/[id]/pricing/page.tsx:54` keep it as a `var(--warn, #d97706)` fallback (harmless but the fallback is dead code, since `--warn` is always defined). |
+
+  *Method: `grep -rl` over `apps/web` for `var(--fg)`, `var(--surface`, `#2563eb`, `#d97706` — excluding `.next/` build output. `var(--surface`, `#2563eb`, and `placeholder="uuid"` are genuinely at **0**, confirming the rest of the migration landed.*
+
+  Remaining (larger, follow-up): swap inline buttons/tables for the kit `<Button>`/`<Table>` components.
+- **P2-4 AMC module inconsistency:** self-labelled "Asset Management & Contracts" vs "Annual Maintenance" elsewhere; different visual language. **✅ NAMING FIXED (2026-08-05, `dbf498e`):** the module titles as **"AMC & Services"** consistently. *Remaining: the visual-language half (the module still doesn't use the shared kit) rolls into P2-3.*
+- **P2-5 IA discoverability:** "Opportunities" not a nav word (under Pipeline→/crm/leads); orphan pages `/crm/commercial`, `/tendering/pricing`; ~5–7s first paint. **✅ NAV FIXED (2026-08-05, `8a9b454`):** "Opportunities" is now a nav word and the orphan Commercial workspace is linked. *Remaining: `/tendering/pricing` reachability, and the **~5–7s first paint** — ⚠️ but see the measurement caveat below.*
+  > **First-paint claim needs re-measuring (2026-08-05).** `GET /` measured **6.0s** — consistent with the original claim — but that was against the **Next.js dev server**, where the number is dominated by on-demand route compilation. The API call behind the homepage (`/admin/companies`) returns in **0.54s**, and warm pages (`/crm/overview` 1.6s, `/operations/overview` 1.0s, `/inventory/serials` 1.2s) are far faster. **No production build was measured, so "~5–7s first paint" should not be quoted as a production figure.** Re-measure against `next build && next start` before treating it as a real performance gap.
 - **P2-6 Document layer:** revisions exist on drawings (`revision` default '0') but there's no unified version-history / approval-workflow / expiry-tracking surface across submittals, method statements, certificates, warranties.
 - **P2-7 Scale:** in-memory search and some full-list loads are O(n); validate dashboard/list/report latency at 1k–10k projects; confirm index coverage on hot filter columns. **⏳ INDEX COVERAGE DONE (2026-08-05):** an index audit found 23 tenant-scoped tables with **no** index referencing `tenant_id` (every list there was a seq scan); migration `0219` adds a composite `(tenant_id, <hot col>)` index per table on the column each is actually filtered/joined by (parent FK, else status/date) — verified live (23/23 created; `EXPLAIN` on `aura_amc_tickets` now shows `Index Scan using idx_amc_tickets_status`). **Remaining (larger, deferred):** replace the in-memory cross-module search fan-out (capped at 50/module) with a denormalised search projection; latency validation at 1k–10k rows.
 
@@ -190,28 +219,30 @@ Weighted synthesis of the 12 audited areas (each scored from verified findings):
 
 ## 10. Recommended Implementation Roadmap
 
+*(Progress marked 2026-08-05. ✅ = merged and verified · ◑ = partly done · ⬜ = untouched.)*
+
 **Phase 0 — Security hardening (ship-blocking, ~1–2 wks)**
-1. Fail-closed auth in production; boot assertion + CI check (P0-1).
-2. Least-privilege `aura_app` DB role + force RLS; fix 2 unscoped stores; tenant-binding fitness test (P0-2, P1-5, S4).
-3. ~~Approval matrix + maker-checker across quotation/contract/IPC/invoice; "cannot approve own"~~ — **✅ maker-checker done** (P0-3); value-threshold *approval matrix* still to add.
+1. ⬜ **Fail-closed auth in production; boot assertion + CI check (P0-1).** ← **the one remaining P0, and the top of the list.**
+2. ◑ Least-privilege `aura_app` DB role + force RLS; tenant-binding fitness test (P0-2, P1-5). ✅ mechanism, CI gate, `FORCE` coverage and a **boot-time fail-closed** are all in; ⬜ the operator still has to point `DATABASE_URL` at `aura_app`. *(S4 "2 unscoped stores" was retracted — false positive.)*
+3. ✅ ~~Approval matrix + maker-checker across quotation/contract/IPC/invoice; "cannot approve own"~~ — **done**, both halves (P0-3).
 
 **Phase 1 — Integrity & audit (~2–3 wks)**
-4. FK/RESTRICT on the deal chain + orphan-scan (P1-1).
-5. `updated_by`/`updated_at` + before/after on value mutations + History tab (P1-2).
-6. Invoice ≤ approved contract/IPC cap check (§8).
+4. ◑ Deal-chain integrity (P1-1). ✅ orphan-scan catalog extended to 19 refs; ⬜ optional intra-module FKs (blocked on `uuid`/`text` id reconciliation); ⬜ the 7 dangling refs in the dev DB.
+5. ◑ Before/after on value mutations + History tab (P1-2). ✅ quotation, contract, invoice; ⬜ PO line changes.
+6. ⬜ Invoice ≤ approved contract/IPC cap check (§8). *Untouched — still the clearest open money-cycle control.*
 
 **Phase 2 — Field & usability (~2–3 wks)**
-7. Shared UI kit (Button/Input/**ProjectPicker**/Card/Table/KpiTile) on real tokens; migrate 66 screens; kill 14 UUID forms (P1-4, P2-3).
-8. Camera/signature capture + offline PWA for Site/Quality/HSE.
-9. Search: add inventory/serials/equipment + DB full-text (P1-3).
+7. ◑ Shared UI kit on real tokens; migrate 66 screens; kill 14 UUID forms (P1-4, P2-3). ✅ kit shipped, undefined-token + off-brand-hex sweeps landed, **0 UUID inputs remain**; ⬜ 7 residual token/hex hits (table under P2-3) and the inline-button/table → kit swap.
+8. ⬜ Camera/signature capture + offline PWA for Site/Quality/HSE. *Untouched — `apps/web/public/` is empty. The largest untouched item in the audit.*
+9. ◑ Search: inventory/serials/equipment ✅ (live-verified); ⬜ DB full-text projection (P1-3).
 
 **Phase 3 — Lifecycle completion & polish (~2 wks)**
-10. Pre-sales Site Survey → Opportunity intake; Handover-accepted → auto AMC.
-11. Next-best-action + AI step-guide on Contract → Invoice.
-12. Seed clean demo data + standard RBAC roles; reconcile AMC; fix first-run 503.
+10. ⬜ Pre-sales Site Survey → Opportunity intake; Handover-accepted → auto AMC.
+11. ⬜ Next-best-action + AI step-guide on Contract → Invoice.
+12. ◑ ✅ first-run 503 fixed (dev auto-migrate) · ✅ AMC renamed; ⬜ **clean demo seed** (now blocking the ELV search demo *and* CRM close-out — see P2-2) · ⬜ standard RBAC roles.
 
 **Phase 4 — Scale hardening**
-13. Load-test at 1k/10k projects; index hot columns; replace in-memory list/search scans.
+13. ◑ ✅ index coverage on hot filter columns (mig `0219`, 23 tables); ⬜ load-test at 1k/10k projects; ⬜ replace in-memory list/search scans; ⬜ the ~5–7s first paint (P2-5).
 
 ---
 

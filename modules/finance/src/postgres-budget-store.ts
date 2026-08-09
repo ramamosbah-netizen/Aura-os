@@ -74,10 +74,10 @@ export class PostgresBudgetStore implements BudgetStore {
     return makePage(res.rows.map(toBudget), total, page);
   }
 
-  async setDeleted(id: Id, deleted: boolean): Promise<void> {
+  async setDeleted(tenantId: Id, id: Id, deleted: boolean): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_finance_budgets SET deleted_at = ${deleted ? 'now()' : 'NULL'} WHERE id = $1`,
-      [id],
+      `UPDATE public.aura_finance_budgets SET deleted_at = ${deleted ? 'now()' : 'NULL'} WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId],
     );
   }
 }

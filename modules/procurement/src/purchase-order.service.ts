@@ -143,26 +143,60 @@ export class PurchaseOrderService implements OnModuleInit {
   }
 
   /** Update descriptive fields on a PO (title, reference, supplier snapshot).
-   *  Value is NOT editable — committed project cost was posted as a delta at creation. */
-  async update(id: Id, patch: Partial<Pick<PurchaseOrder, 'title' | 'reference' | 'supplierId' | 'supplierName'>>): Promise<PurchaseOrder> {
+   *  Value is NOT editable — committed project cost was posted as a delta at creation.
+   *  Each changed field is logged individually to `aura_audit_log` for procurement audit compliance. */
+  async update(
+    id: Id,
+    patch: Partial<Pick<PurchaseOrder, 'title' | 'reference' | 'supplierId' | 'supplierName'>>,
+    actorId?: string | null,
+  ): Promise<PurchaseOrder> {
     const existing = await this.store.get(id);
     if (!existing) throw new Error(`PO ${id} not found`);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: PurchaseOrder = { ...existing, ...defined };
+
+    // ── Per-field diff audit (procurement compliance) ──
+    // Each modified field emits its own audit entry: actor, PO ID, field, before, after.
+    const auditableFields = ['title', 'reference', 'supplierId', 'supplierName'] as const;
+    const diffs: Array<{ field: string; before: unknown; after: unknown }> = [];
+    for (const field of auditableFields) {
+      const before = existing[field];
+      const after = updated[field];
+      if (before !== after) {
+        diffs.push({ field, before: before ?? null, after: after ?? null });
+      }
+    }
+
     const event = makeEvent({
       type: PROCUREMENT_EVENT.poUpdated,
       tenantId: updated.tenantId,
       companyId: updated.companyId,
-      actorId: null,
+      actorId: actorId ?? null,
       aggregateType: 'procurement.po',
       aggregateId: updated.id,
-      payload: { title: updated.title, value: updated.value },
+      payload: { title: updated.title, value: updated.value, diffs },
     });
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
-    this.logger.log(`PO updated: ${updated.title} (${updated.id})`);
+
+    // Emit per-field audit entries into aura_audit_log (one row per changed field)
+    for (const diff of diffs) {
+      await this.audit.log(
+        updated.tenantId,
+        updated.companyId,
+        actorId ?? null,
+        'procurement',
+        'purchase-order',
+        updated.id,
+        'update',
+        { field: diff.field, before: diff.before, after: diff.after },
+        { reference: updated.reference, poTitle: updated.title },
+      );
+    }
+
+    this.logger.log(`PO updated: ${updated.title} (${updated.id}) — ${diffs.length} field(s) changed`);
     return updated;
   }
 

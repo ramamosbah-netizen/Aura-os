@@ -24,3 +24,7 @@ coverage/
 /apps/web/playwright-report/
 /apps/web/test-results/
 .claude/
+
+# Operational recovery artifacts from scripts/merge-duplicate-accounts.mjs — specific to one
+# database, never source. Keep them where they were generated.
+apps/api/scripts/undo-account-merge-*.json

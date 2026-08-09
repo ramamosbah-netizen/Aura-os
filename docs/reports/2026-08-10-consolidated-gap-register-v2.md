@@ -114,7 +114,7 @@ Two halves of one gate: can the field actually be worked, and is this an *ELV* E
 | ~~G-08~~ | **CLOSED, confirmed.** `modules/finance/src/domain/contract-cap.ts` present and bound. The batch's duplicate was removed in the merge | — | ✅ |
 | ~~G-09~~ | CLOSED in v1 | — | 📄 |
 | **G-10** | 7 dangling references in the dev DB. Not re-tested | P2 | 📄 |
-| **G-11** | **OPEN and WORSE. Measured live today:** 7 duplicated account names — **Majid Al Futtaim now ×4** (was ×3 on 2026-08-05), Aldar ×3, Dubai Municipality ×3, DP World ×3, Emaar Properties ×3, plus 2 doubled. The seeder is idempotent and `scripts/merge-duplicate-accounts.mjs` exists, but **the cleanup has still never been run.** CRM close-out stays blocked | **P1** | ✅ |
+| ~~**G-11**~~ | **CLOSED 2026-08-10 — cleanup executed.** Was 7 duplicated names (Majid Al Futtaim had reached ×4). `merge-duplicate-accounts.mjs --apply` re-pointed **50 rows across 12 referencing tables** and retired **13 accounts**, in one transaction, with an undo map naming every moved row. Losers are **renamed** `Name [merged→<id>]`, not deleted, so the merge is reversible. **After: 0 active duplicate names**, 13 retired and still queryable, and the orphan scan holds at **7** — the pre-existing G-10 figure, so the merge created none. CRM close-out is unblocked | — | ✅ |
 | ~~G-12~~ | **CLOSED, confirmed.** `diffFields` in `purchase-order.service.ts` with real actor stamping | — | ✅ |
 | **G-13** | Cross-module orphans by design (ADR-0001), orphan scan CI-enforced. Count not re-tested | P3 | 📄 |
 

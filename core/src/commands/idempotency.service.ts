@@ -11,14 +11,14 @@ export interface IdempotencyRecord {
 /** Outcome of an `acquireLease` attempt. */
 export interface LeaseResult {
   status: 'acquired' | 'cached';
-  cachedResponse?: { status: number; body: Record<string, unknown> };
+  cachedResponse?: { status: number; body: unknown };
 }
 
 interface LeaseRow {
   requestHash: string;
   status: 'processing' | 'completed' | 'failed';
   responseStatus: number;
-  responseBody: Record<string, unknown>;
+  responseBody: unknown;
   expiresAt: number;
 }
 
@@ -208,7 +208,7 @@ export class IdempotencyService {
     tenantId: string,
     operationId: string,
     responseStatus: number,
-    responseBody: Record<string, unknown>,
+    responseBody: unknown,
     resourceType = '',
     resourceId: string | null = null,
   ): Promise<void> {

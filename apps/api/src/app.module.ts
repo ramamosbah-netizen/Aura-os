@@ -139,8 +139,8 @@ import {
   InMemoryWorkspaceConfigStore,
   PostgresWorkspaceConfigStore,
 } from './workspace/workspace-config-store';
-import { PG_POOL, PermissionsGuard } from '@aura/core';
-import { APP_GUARD } from '@nestjs/core';
+import { PG_POOL, PermissionsGuard, IdempotencyInterceptor } from '@aura/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import type { Pool } from 'pg';
 import { CommsController } from './comms/comms.controller';
 import { CommsService } from './comms/comms.service';
@@ -156,6 +156,10 @@ import { CommsService } from './comms/comms.service';
     // Global permission guard — enforces @Permissions(...) on any handler. No-op until auth
     // is turned on (staged pass-through); undeclared handlers always pass.
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    // Global idempotency. Mutations carrying `Idempotency-Key` run at most once per tenant
+    // and replay their first response; everything else passes straight through. This is
+    // what makes the offline queue safe to flush after a reconnect.
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     {
       // Postgres-backed when a pool is configured; in-memory otherwise (dev/CI).
       provide: WORKSPACE_CONFIG_STORE,

@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
+import NextBestActionBanner from './ui/next-best-action-banner';
+import SaveViewButton from './save-view-button';
+import SignatureCanvas from './ui/signature-canvas';
 
 interface Project { id: string; title: string }
 
@@ -120,6 +124,33 @@ export default function HandoverClient({
         <div style={st.kpiCard}><span style={st.kpiNum}>{kpi.total}</span><span style={st.kpiLabel}>Packages</span></div>
         <div style={st.kpiCard}><span style={{ ...st.kpiNum, color: 'var(--good)' }}>{kpi.accepted}</span><span style={st.kpiLabel}>Accepted</span></div>
         <div style={st.kpiCard}><span style={{ ...st.kpiNum, color: 'var(--info)' }}>{kpi.submitted}</span><span style={st.kpiLabel}>Awaiting client</span></div>
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
+          <SaveViewButton />
+          <ExportButton
+            filename="handover-packages"
+            title="Handover Packages Register"
+            rows={packages as unknown as Array<Record<string, unknown>>}
+            columns={[
+              { key: 'code', label: 'Code' },
+              { key: 'title', label: 'Title' },
+              { key: 'projectName', label: 'Project' },
+              { key: 'clientRepresentative', label: 'Client Rep' },
+              { key: 'status', label: 'Status' },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <NextBestActionBanner
+          status={kpi.submitted > 0 ? 'Awaiting Client Sign-Off' : kpi.accepted > 0 ? 'Warranty DLP Clock Active' : 'Close-Out Compilation'}
+          recommendedAction={kpi.submitted > 0 ? 'Obtain Client Representative Signature' : 'Compile Deliverables & Submit Handover Package'}
+          explanation={
+            kpi.submitted > 0
+              ? 'Complete client walk-down, attach O&M/as-builts, and capture client representative digital acceptance.'
+              : 'Compile O&M manuals, as-built drawings, and commissioning certificates for client review.'
+          }
+        />
       </div>
 
       <form onSubmit={handleCreate} style={st.formCard}>
@@ -199,14 +230,24 @@ export default function HandoverClient({
                         </button>
                       )}
                       {p.status === 'submitted' && (
-                        <div style={st.actionRow}>
-                          <input placeholder="Client representative" value={clientRep[p.id] ?? ''} onChange={(e) => setClientRep({ ...clientRep, [p.id]: e.target.value })} style={st.smInput} />
-                          <input type="number" min={0} placeholder="Warranty months (12)" value={warrantyMonths[p.id] ?? ''} onChange={(e) => setWarrantyMonths({ ...warrantyMonths, [p.id]: e.target.value })} style={{ ...st.smInput, maxWidth: 150 }} />
-                          <button onClick={() => accept(p)} style={st.btnSmGood}>Accept ✓</button>
-                          <button onClick={() => reject(p)} style={st.btnSmDanger}>Reject</button>
-                        </div>
+                        <>
+                          <div style={st.actionRow}>
+                            <input placeholder="Client representative" value={clientRep[p.id] ?? ''} onChange={(e) => setClientRep({ ...clientRep, [p.id]: e.target.value })} style={st.smInput} />
+                            <input type="number" min={0} placeholder="Warranty months (12)" value={warrantyMonths[p.id] ?? ''} onChange={(e) => setWarrantyMonths({ ...warrantyMonths, [p.id]: e.target.value })} style={{ ...st.smInput, maxWidth: 150 }} />
+                            <button onClick={() => accept(p)} style={st.btnSmGood}>Accept ✓</button>
+                            <button onClick={() => reject(p)} style={st.btnSmDanger}>Reject</button>
+                          </div>
+                          <div style={{ marginTop: 8 }}>
+                            <SignatureCanvas label="Client Representative Acceptance Signature" onChange={() => {}} height={110} />
+                          </div>
+                        </>
                       )}
                       {p.remarks && <p style={st.remarks}>Remarks: {p.remarks}</p>}
+                      <div style={{ marginTop: 8 }}>
+                        <a href={`/handover/${p.id}/print`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
+                          🖨 Print Handover Certificate (PDF) →
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>

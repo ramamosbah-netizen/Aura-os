@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import NextBestActionBanner from './ui/next-best-action-banner';
 
 interface Contract {
   id: string;
@@ -151,6 +152,18 @@ export default function CertificatesClient({ contracts, initialCertificates, arI
 
   return (
     <div>
+      <div style={{ marginBottom: 16 }}>
+        <NextBestActionBanner
+          status={certificates.some((c) => c.status === 'submitted') ? 'Pending Certification' : certificates.some((c) => c.status === 'certified') ? 'Certified IPC Ready' : 'IPC Valuation'}
+          recommendedAction={certificates.some((c) => c.status === 'submitted') ? 'Certify Pending IPC Claim' : 'Raise & Certify Progress Claim'}
+          explanation={
+            certificates.some((c) => c.status === 'submitted')
+              ? 'Certifying an IPC automatically drafts the corresponding AR Tax Invoice in Finance.'
+              : 'Record cumulative work done and materials on site to generate the interim payment certificate.'
+          }
+        />
+      </div>
+
       <div style={s.card}>
         <div style={s.row}>
           <label style={s.field}>
@@ -205,7 +218,7 @@ export default function CertificatesClient({ contracts, initialCertificates, arI
                 <td style={s.tdAdd}>{money(c.netThisCertificate)}</td>
                 <td style={s.td}>
                   <span style={s.tag(c.status)}>{c.status}</span>
-                  {arFor(c) && <a href="/finance/customer-invoices" style={{ display: 'block', marginTop: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }} title="AR invoice auto-drafted from this certified IPC">🧾 {arFor(c)!.invoiceNumber} →</a>}
+                  {arFor(c) && <a href={`/finance/customer-invoices?id=${arFor(c)!.id}`} style={{ display: 'block', marginTop: 4, fontSize: 11.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }} title="AR invoice auto-drafted from this certified IPC">🧾 {arFor(c)!.invoiceNumber} →</a>}
                 </td>
                 <td style={s.tdR}>
                   {c.status === 'draft' && <ActionBtn cert={c} to="submitted" label="Submit" busyLabel="Submitting…" style={s.smallBtn} />}
@@ -216,6 +229,7 @@ export default function CertificatesClient({ contracts, initialCertificates, arI
                     </>
                   )}
                   {c.status === 'certified' && <ActionBtn cert={c} to="paid" label="Mark paid" busyLabel="Marking paid…" style={s.approveBtn} />}
+                  <a className="btn btn-ghost" style={s.smallBtn} href={`/contracts/certificates/${c.id}/print`} target="_blank" rel="noopener noreferrer" title="Print IPC (PDF)">🖨</a>
                 </td>
               </tr>
             ))

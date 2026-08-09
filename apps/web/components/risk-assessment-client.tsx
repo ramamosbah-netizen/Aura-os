@@ -5,6 +5,9 @@ import ProjectPicker from './ui/project-picker';
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
+import FileAttachmentZone, { type AttachmentItem } from './ui/file-attachment-zone';
+import SaveViewButton from './save-view-button';
+import SignatureCanvas from './ui/signature-canvas';
 
 interface RiskLine {
   hazard: string;
@@ -38,6 +41,8 @@ export default function RiskAssessmentClient({ initial }: { initial: RiskAssessm
   const [rows, setRows] = useState(initial);
   const [f, setF] = useState({ projectId: '', reference: '', activity: '', assessor: '', reviewDate: '' });
   const [hazards, setHazards] = useState<RiskLine[]>([emptyHazard()]);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [signature, setSignature] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -86,6 +91,21 @@ export default function RiskAssessmentClient({ initial }: { initial: RiskAssessm
         <Kpi label="Draft" value={kpi.draft} bad={kpi.draft > 0} />
         <Kpi label="High/critical residual" value={kpi.highResidual} bad={kpi.highResidual > 0} />
         <Kpi label="Approved" value={kpi.approved} good />
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
+          <SaveViewButton />
+          <ExportButton
+            filename="risk-assessments"
+            title="Risk Assessment / JSA Register"
+            rows={rows as unknown as Array<Record<string, unknown>>}
+            columns={[
+              { key: 'reference', label: 'Ref' },
+              { key: 'activity', label: 'Activity' },
+              { key: 'residualBand', label: 'Residual Risk' },
+              { key: 'assessor', label: 'Assessor' },
+              { key: 'status', label: 'Status' },
+            ]}
+          />
+        </div>
       </div>
 
       <h2 style={st.h2}>New risk assessment (JSA)</h2>
@@ -112,7 +132,12 @@ export default function RiskAssessmentClient({ initial }: { initial: RiskAssessm
           ))}
         </tbody>
       </table>
-      <div style={{ marginTop: 10 }}>
+      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <FileAttachmentZone label="Site Hazard Photos" attachments={attachments} onChange={setAttachments} />
+        <SignatureCanvas label="Safety Officer Sign-off" value={signature} onChange={setSignature} />
+      </div>
+
+      <div style={{ marginTop: 14 }}>
         <button style={st.smGray} onClick={() => setHazards((h) => [...h, emptyHazard()])}>+ Add hazard</button>
         <button style={{ ...st.btn, marginLeft: 12 }} onClick={create} disabled={busy}>{busy ? 'Saving…' : 'Create assessment'}</button>
         {error && <span style={st.err}>{error}</span>}

@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
+import NextBestActionBanner from './ui/next-best-action-banner';
+import SaveViewButton from './save-view-button';
+import SignatureCanvas from './ui/signature-canvas';
 
 interface Project {
   id: string;
@@ -138,6 +142,34 @@ export default function CommissioningClient({
         <div style={st.kpiCard}><span style={{ ...st.kpiNum, color: 'var(--good)' }}>{kpi.commissioned}</span><span style={st.kpiLabel}>Commissioned</span></div>
         <div style={st.kpiCard}><span style={{ ...st.kpiNum, color: 'var(--accent)' }}>{kpi.inProgress}</span><span style={st.kpiLabel}>In progress</span></div>
         <div style={st.kpiCard}><span style={{ ...st.kpiNum, color: 'var(--bad)' }}>{kpi.failed}</span><span style={st.kpiLabel}>Failed</span></div>
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
+          <SaveViewButton />
+          <ExportButton
+            filename="commissioning-register"
+            title="Commissioning Register"
+            rows={records as unknown as Array<Record<string, unknown>>}
+            columns={[
+              { key: 'code', label: 'Code' },
+              { key: 'title', label: 'System Title' },
+              { key: 'system', label: 'System Type' },
+              { key: 'pointsPassed', label: 'Passed' },
+              { key: 'pointsTotal', label: 'Total Points' },
+              { key: 'status', label: 'Status' },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <NextBestActionBanner
+          status={kpi.failed > 0 ? 'Failed Test Points' : kpi.inProgress > 0 ? 'Systems In Testing' : 'All Systems Commissioned'}
+          recommendedAction={kpi.failed > 0 ? 'Rectify & Re-Test Failed Points' : kpi.inProgress > 0 ? 'Execute Witnessed Test & Commissioning' : 'Proceed to Project Handover'}
+          explanation={
+            kpi.inProgress > 0
+              ? 'Complete test-point matrix and record consultant/client witnessed sign-off to unlock handover.'
+              : 'All ELV systems commissioned. Compile O&M manuals and as-builts for formal client acceptance.'
+          }
+        />
       </div>
 
       {/* register form */}
@@ -232,6 +264,9 @@ export default function CommissioningClient({
                         <input placeholder="Commissioned by" value={commBy[r.id] ?? ''} onChange={(e) => setCommBy({ ...commBy, [r.id]: e.target.value })} style={st.smInput} />
                         <input placeholder="Witnessed by (consultant/client)" value={witBy[r.id] ?? ''} onChange={(e) => setWitBy({ ...witBy, [r.id]: e.target.value })} style={st.smInput} />
                         <button onClick={() => handleCommission(r)} style={st.btnSmGood} title="Requires all test points passed">Commission ✓</button>
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <SignatureCanvas label="Witnessed Sign-Off Pad (Consultant / Client)" onChange={() => {}} height={100} />
                       </div>
                       {r.remarks && <p style={st.remarks}>Remarks: {r.remarks}</p>}
                     </div>

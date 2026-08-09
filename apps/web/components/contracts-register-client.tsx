@@ -3,6 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ContractCreate from './contract-create';
+import NextBestActionBanner from './ui/next-best-action-banner';
 
 // Contracts register — every awarded contract with its lifecycle, its chain
 // (tender ← contract → project) and the commercial watchpoints (bonds expiring,
@@ -97,6 +98,18 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
         <Kpi label="Draft (unsigned)" value={money(kpi.draftValue)} />
         <Kpi label="Completed value" value={money(kpi.completedValue)} accent />
         <Kpi label="Bonds expiring ≤30d" value={String(kpi.expiring)} bad={kpi.expiring > 0} />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <NextBestActionBanner
+          status={kpi.draftValue > 0 ? 'Unsigned Drafts Present' : kpi.expiring > 0 ? 'Bond Expiry Warning' : 'Active Engagement'}
+          recommendedAction={kpi.draftValue > 0 ? 'Execute & Sign Draft Contracts' : 'Monitor Contract Execution & Issue IPCs'}
+          explanation={
+            kpi.draftValue > 0
+              ? 'Draft contracts must be signed to trigger automatic Project & CBS creation.'
+              : 'Track contract deliverables, maintain performance bonds, and process progress certificates.'
+          }
+        />
       </div>
 
       <div style={st.toolbar}>

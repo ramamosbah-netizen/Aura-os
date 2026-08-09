@@ -41,6 +41,65 @@ export class AccessService implements OnModuleInit {
   /** Load persisted roles/grants into memory (PG mode). Idempotent; runs once on boot. */
   async onModuleInit(): Promise<void> {
     await this.hydrate();
+    this.seedStandardRoles();
+  }
+
+  /** Seed default enterprise roles across all 19 ELV business modules if not registered. */
+  seedStandardRoles(): void {
+    const DEFAULT_ROLES: Role[] = [
+      { id: 'r-admin', name: 'System Administrator', permissions: ['*'] },
+      {
+        id: 'r-sales',
+        name: 'Sales Representative',
+        permissions: ['crm.lead.*', 'crm.opportunity.*', 'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update', 'crm.activity.*'],
+      },
+      {
+        id: 'r-sales-manager',
+        name: 'Sales Manager',
+        permissions: ['crm.*', 'tendering.*', 'contracts.contract.read'],
+      },
+      {
+        id: 'r-pm',
+        name: 'Project Manager',
+        permissions: ['projects.*', 'contracts.ipc.create', 'contracts.contract.read', 'site.read', 'quality.read', 'doccontrol.read'],
+      },
+      {
+        id: 'r-site-engineer',
+        name: 'Site Engineer',
+        permissions: ['site.*', 'quality.inspection-request.create', 'quality.read', 'hse.read', 'engineering.read'],
+      },
+      {
+        id: 'r-qa-qc',
+        name: 'QA/QC Inspector',
+        permissions: ['quality.*', 'commissioning.*', 'site.read', 'engineering.read'],
+      },
+      {
+        id: 'r-hse',
+        name: 'HSE Officer',
+        permissions: ['hse.*', 'site.read'],
+      },
+      {
+        id: 'r-procurement',
+        name: 'Procurement Specialist',
+        permissions: ['procurement.*', 'inventory.read', 'suppliers.*'],
+      },
+      {
+        id: 'r-store',
+        name: 'Store Keeper',
+        permissions: ['inventory.*', 'procurement.po.read'],
+      },
+      {
+        id: 'r-finance',
+        name: 'Finance Controller',
+        permissions: ['finance.*', 'contracts.ipc.certify', 'procurement.po.read', 'hr.expense-claims.approve'],
+      },
+    ];
+
+    for (const r of DEFAULT_ROLES) {
+      if (!this.roles.has(r.id)) {
+        this.registerRole(r);
+      }
+    }
   }
 
   async hydrate(): Promise<void> {

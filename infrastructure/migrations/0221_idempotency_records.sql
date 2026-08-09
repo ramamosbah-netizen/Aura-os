@@ -37,3 +37,10 @@ ALTER TABLE public.aura_idempotency_records FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_policy ON public.aura_idempotency_records;
 CREATE POLICY tenant_isolation_policy ON public.aura_idempotency_records
   FOR ALL USING (tenant_id = public.current_tenant_id());
+
+-- @DOWN
+DROP POLICY IF EXISTS tenant_isolation_policy ON public.aura_idempotency_records;
+DROP INDEX IF EXISTS idx_idempotency_expires;
+DROP INDEX IF EXISTS idx_idempotency_status;
+DROP INDEX IF EXISTS idx_idempotency_tenant_op;
+DROP TABLE IF EXISTS public.aura_idempotency_records;

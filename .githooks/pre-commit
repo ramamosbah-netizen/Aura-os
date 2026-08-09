@@ -1,0 +1,55 @@
+#!/bin/sh
+# AURA OS pre-commit gate (gap register N-05).
+#
+# These checks already existed and already worked — migration-policy-check.mjs would have caught
+# both 0078 and 0220 collisions. Nothing ran them until CI, and CI only runs on push, so two
+# duplicate migration numbers reached commits on a branch that had not been pushed yet. The gap
+# was never the checker; it was that the checker ran too late.
+#
+# Fast checks only. Anything that needs a database, a build or the network belongs in CI.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Skip deliberately:       git commit --no-verify
+
+set -e
+
+changed=$(git diff --cached --name-only --diff-filter=ACMR)
+
+fail=0
+run() {
+  printf '  %-34s' "$1"
+  if out=$(eval "$2" 2>&1); then
+    printf 'ok\n'
+  else
+    printf 'FAILED\n'
+    printf '%s\n' "$out" | sed 's/^/    /'
+    fail=1
+  fi
+}
+
+echo "pre-commit:"
+
+# Migration numbering, gap-freedom and @DOWN coverage. Only worth running when a migration is in
+# the commit, but it is fast enough that a broad match is fine.
+if printf '%s\n' "$changed" | grep -q '^infrastructure/migrations/'; then
+  run "migration policy" "node scripts/migration-policy-check.mjs"
+fi
+
+# ADR registry integrity — same class of collision, one directory over.
+if printf '%s\n' "$changed" | grep -q '^docs/adr/'; then
+  run "ADR registry" "node scripts/adr-check.mjs"
+fi
+
+# A committed secret cannot be un-published. Shape check on the staged diff only; placeholders
+# are recognised, because a guard that fires on documentation gets bypassed out of habit.
+if [ -n "$changed" ]; then
+  run "no credentials in diff" "node scripts/scan-staged-secrets.mjs"
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "pre-commit failed. Fix the above, or bypass deliberately with: git commit --no-verify"
+  exit 1
+fi
+
+exit 0

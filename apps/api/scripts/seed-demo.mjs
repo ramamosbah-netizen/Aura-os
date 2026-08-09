@@ -33,60 +33,20 @@ async function api(method, path, body, tok = token) {
   return res.status === 204 ? null : res.json();
 }
 
-const post = (p, b) => api('POST', p, b);
-const patch = (p, b, tok) => api('PATCH', p, b, tok);
+  const get = (p) => api('GET', p);
 
-async function loginAs(username) {
-  const res = await fetch(`${BASE}/api/v1/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password: PASS }),
-  });
-  if (!res.ok) throw new Error(`login failed (${res.status}). Is AUTH_JWT_SECRET set on the API?`);
-  return (await res.json()).token;
-}
-
-async function login() {
-  token = await loginAs(USER);
-  approverToken = await loginAs(APPROVER);
-}
-
-// ── Demo dataset ────────────────────────────────────────────────────────────
-const ACCOUNTS = [
-  { name: 'Emaar Properties', industry: 'Real Estate Development', website: 'emaar.com' },
-  { name: 'Aldar Properties', industry: 'Real Estate Development', website: 'aldar.com' },
-  { name: 'DP World', industry: 'Ports & Logistics', website: 'dpworld.com' },
-  { name: 'Dubai Municipality', industry: 'Government', website: 'dm.gov.ae' },
-  { name: 'Majid Al Futtaim', industry: 'Retail & Leisure', website: 'maf.ae' },
-];
-
-const LEADS = [
-  { name: 'Ahmed Al Mansouri', companyName: 'Emaar Properties', email: 'ahmed@emaar.com', phone: '+971 50 123 4567', source: 'referral' },
-  { name: 'Sara Khan', companyName: 'Aldar Properties', email: 'sara.khan@aldar.com', phone: '+971 55 987 6543', source: 'website' },
-  { name: 'Mohammed Rashid', companyName: 'DP World', email: 'm.rashid@dpworld.com', phone: '+971 52 445 1122', source: 'event' },
-  { name: 'Fatima Hassan', companyName: 'Majid Al Futtaim', email: 'fatima.h@maf.ae', phone: '+971 56 778 9900', source: 'cold_call' },
-];
-
-// (title, account index, value, stage)
-const OPPS = [
-  ['Downtown Tower MEP Fit-Out', 0, 2_500_000, 'won'],
-  ['Yas Island Retail Cooling Plant', 1, 4_200_000, 'won'],
-  ['Jebel Ali Warehouse Electrical', 2, 1_800_000, 'proposal'],
-  ['City Centre Mall HVAC Upgrade', 4, 3_100_000, 'negotiation'],
-  ['Marina Residences Plumbing', 0, 950_000, 'qualification'],
-];
-
-async function main() {
-  console.log(`Seeding demo data → ${BASE}`);
-  await login();
-  console.log('✓ authenticated');
-
-  // Accounts
+  // Accounts — idempotent: query existing accounts first to avoid duplicate rows
+  const existingAccounts = await get('/crm/accounts').catch(() => []);
   const accounts = [];
   for (const a of ACCOUNTS) {
-    accounts.push(await post('/crm/accounts', { ...a, status: 'active_customer' }));
+    const found = Array.isArray(existingAccounts) ? existingAccounts.find((x) => x.name.trim().toLowerCase() === a.name.trim().toLowerCase()) : null;
+    if (found) {
+      accounts.push(found);
+    } else {
+      accounts.push(await post('/crm/accounts', { ...a, status: 'active_customer' }));
+    }
   }
-  console.log(`✓ ${accounts.length} accounts`);
+  console.log(`✓ ${accounts.length} accounts (idempotent seed)`);
 
   // A named contact per account. G5's proposal gate needs someone to propose TO — and an account
   // with no people was never realistic demo data in the first place.

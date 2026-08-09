@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
+import AuraDataTable from './ui/aura-data-table';
 
 // Tender pricing sheet — the company's INTERNAL Cost & Resource Breakdown
 // (mirrors the estimator's spreadsheet: material supply, technician/engineer/PM
@@ -288,59 +289,129 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
         </div>
       )}
 
-      {/* the sheet */}
-      <div style={st.tableWrap}>
-        <table style={st.table}>
-          <thead>
-            <tr>
-              {['Code', 'Activity / scope item', 'Unit', 'Qty', 'Cost / unit', 'Sell / unit', 'Line total', 'Margin', ''].map((h, i) => (
-                <th key={i} style={{ ...st.th, textAlign: i <= 1 ? 'left' : 'right' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 && (
-              <tr><td colSpan={9} style={{ ...st.td, textAlign: 'center', color: 'var(--muted)', padding: 24 }}>
-                No BOQ items yet — add the scope on the tender page first.
-              </td></tr>
-            )}
-            {items.map((item) => {
+      {/* <AuraDataTable /> for 500+ BOQ items with sticky header & density switcher */}
+      <AuraDataTable<BOQItem>
+        stickyHeader
+        defaultDensity="comfortable"
+        searchable
+        searchPlaceholder="Search BOQ code or description..."
+        searchFields={['itemCode', 'description']}
+        data={items}
+        keyExtractor={(item) => item.id}
+        emptyTitle="No BOQ items in this tender"
+        emptyDescription="Add scope items on the tender detail page to begin cost & resource pricing."
+        isRowExpanded={(item) => open === item.id}
+        renderExpandedRow={(item) => (
+          draft && (
+            <SheetEditor
+              item={item}
+              draft={draft}
+              setDraft={setDraft}
+              preview={preview(item, draft)}
+              busy={busy}
+              locked={locked}
+              onSave={() => void saveLine(item)}
+            />
+          )
+        )}
+        columns={[
+          {
+            key: 'itemCode',
+            label: 'Code',
+            width: 100,
+            sortable: true,
+            priority: 'muted',
+            render: (item) => <code style={{ fontSize: 12, fontFamily: 'ui-monospace, monospace' }}>{item.itemCode}</code>,
+          },
+          {
+            key: 'description',
+            label: 'Scope Item / Description',
+            sortable: true,
+            priority: 'primary',
+            render: (item) => <span style={{ fontWeight: 600 }}>{item.description}</span>,
+          },
+          {
+            key: 'unit',
+            label: 'Unit',
+            align: 'right',
+            width: 70,
+            priority: 'muted',
+          },
+          {
+            key: 'quantity',
+            label: 'Qty',
+            align: 'right',
+            width: 80,
+            sortable: true,
+            priority: 'primary',
+            render: (item) => <span style={{ fontWeight: 700 }}>{item.quantity}</span>,
+          },
+          {
+            key: 'costUnit',
+            label: 'Cost / Unit',
+            align: 'right',
+            width: 110,
+            render: (item) => {
+              const b = buildUps[item.id];
+              return b ? `AED ${aed(b.directCost)}` : '—';
+            },
+          },
+          {
+            key: 'sellUnit',
+            label: 'Sell / Unit',
+            align: 'right',
+            width: 120,
+            priority: 'primary',
+            render: (item) => {
+              const b = buildUps[item.id];
+              return <span style={{ fontWeight: 700, color: 'var(--accent)' }}>AED {b ? aed(b.sellingRate) : aed(item.rate)}</span>;
+            },
+          },
+          {
+            key: 'lineTotal',
+            label: 'Line Total',
+            align: 'right',
+            width: 130,
+            priority: 'primary',
+            render: (item) => {
+              const b = buildUps[item.id];
+              return <span style={{ fontWeight: 800 }}>AED {aed((b ? b.sellingRate : item.rate) * item.quantity)}</span>;
+            },
+          },
+          {
+            key: 'margin',
+            label: 'Margin',
+            align: 'right',
+            width: 90,
+            render: (item) => {
               const b = buildUps[item.id];
               const margin = b && b.sellingRate > 0 ? ((b.sellingRate - b.directCost) / b.sellingRate) * 100 : null;
+              if (margin === null) return <span style={st.unpriced}>unpriced</span>;
+              return <span style={st.priced}>{margin.toFixed(1)}%</span>;
+            },
+          },
+          {
+            key: 'actions',
+            label: '',
+            align: 'right',
+            width: 130,
+            render: (item) => {
               const isOpen = open === item.id;
+              const b = buildUps[item.id];
               return (
-                <FragmentRow key={item.id}>
-                  <tr style={isOpen ? { background: 'var(--panel-2)' } : undefined}>
-                    <td style={st.td}>{item.itemCode}</td>
-                    <td style={{ ...st.td, textAlign: 'left', maxWidth: 340 }}>{item.description}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>{item.unit}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>{item.quantity}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>{b ? aed(b.directCost) : '—'}</td>
-                    <td style={{ ...st.td, textAlign: 'right', fontWeight: 600 }}>{b ? aed(b.sellingRate) : aed(item.rate)}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>{aed((b ? b.sellingRate : item.rate) * item.quantity)}</td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>
-                      {margin === null ? <span style={st.unpriced}>unpriced</span> : <span style={st.priced}>{margin.toFixed(1)}%</span>}
-                    </td>
-                    <td style={{ ...st.td, textAlign: 'right' }}>
-                      <button style={st.btnGhost} disabled={busy} onClick={() => (isOpen ? (setOpen(null), setDraft(null)) : startEdit(item))}>
-                        {isOpen ? 'Close' : locked ? 'View breakdown' : b ? 'Edit breakdown' : 'Price this line'}
-                      </button>
-                    </td>
-                  </tr>
-                  {isOpen && draft && (
-                    <tr>
-                      <td colSpan={9} style={{ ...st.td, background: 'var(--panel-2)', padding: '14px 18px' }}>
-                        <SheetEditor item={item} draft={draft} setDraft={setDraft} preview={preview(item, draft)} busy={busy}
-                          locked={locked} onSave={() => void saveLine(item)} />
-                      </td>
-                    </tr>
-                  )}
-                </FragmentRow>
+                <button
+                  type="button"
+                  style={st.btnGhost}
+                  disabled={busy}
+                  onClick={() => (isOpen ? (setOpen(null), setDraft(null)) : startEdit(item))}
+                >
+                  {isOpen ? 'Close' : locked ? 'View breakdown' : b ? 'Edit breakdown' : 'Price this line'}
+                </button>
               );
-            })}
-          </tbody>
-        </table>
-      </div>
+            },
+          },
+        ]}
+      />
 
       {/* quotation bridge */}
       <div style={st.bridge}>

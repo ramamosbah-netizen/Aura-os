@@ -29,7 +29,8 @@ const envOrFile = (name) => {
   return process.env[name]?.trim() || null;
 };
 
-const url = envOrFile('DATABASE_URL');
+// Scans every tenant's rows — must not be filtered by RLS, so it uses the owner URL (G-03).
+const url = envOrFile('MIGRATION_DATABASE_URL') ?? envOrFile('DATABASE_URL');
 if (!url) {
   console.error('✗ DATABASE_URL is not set — cannot scan.');
   process.exit(1);

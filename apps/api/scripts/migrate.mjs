@@ -22,11 +22,19 @@ const envOrFile = (name) => {
   return process.env[name]?.trim() || null;
 };
 
-const connectionString = envOrFile('DATABASE_URL');
+// Schema work needs the owning role; the app runs as least-privilege `aura_app`, which is
+// NOBYPASSRLS and cannot CREATE. Once DATABASE_URL points at aura_app (G-03), migrations must
+// use their own connection — hence MIGRATION_DATABASE_URL, falling back to DATABASE_URL for
+// setups that have not split the roles yet. See docs/runbooks/rls-tenant-isolation.md.
+const connectionString = envOrFile('MIGRATION_DATABASE_URL') ?? envOrFile('DATABASE_URL');
 if (!connectionString) {
-  console.error('✗ DATABASE_URL is not set (env, _FILE, or apps/api/.env.local) — cannot run migrations.');
+  console.error(
+    '✗ Neither MIGRATION_DATABASE_URL nor DATABASE_URL is set (env, _FILE, or apps/api/.env.local) — cannot run migrations.',
+  );
   process.exit(1);
 }
+const owner = /^postgresql?:\/\/([^:]+)/.exec(connectionString)?.[1] ?? 'unknown';
+console.log(`→ migrating as "${decodeURIComponent(owner)}"`);
 const sslOff =
   /(@|\/\/)(localhost|127\.0\.0\.1)/.test(connectionString) || /[?&]sslmode=disable/.test(connectionString);
 const client = new pg.Client({ connectionString, ssl: sslOff ? false : { rejectUnauthorized: false } });

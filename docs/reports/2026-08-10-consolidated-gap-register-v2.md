@@ -40,9 +40,31 @@ Both resolved in `main`'s favour; the dead duplicate rule and its tests removed.
 
 Everything else waits behind these.
 
-### 🔴 P0 · G-03 — RLS live enforcement, with a dev escape hatch
+### ✅ P0 · G-03 — RLS live enforcement — **CLOSED on dev 2026-08-10**
 
-**Measured today, and it is unambiguous:**
+> **Was:** `current_user = postgres`, `rolbypassrls = true` — every policy on 182 tables bypassed.
+> **Now:** `current_user = aura_app`, `rolbypassrls = false`, and the boot gate agrees:
+> `✓ RLS posture: DB role "aura_app" is non-BYPASSRLS — FORCE RLS tenant policies are active.`
+>
+> **The two acceptance tests you set, run live against Supabase** (`rls-isolation-test.mjs`, 15/15):
+> `✓ tenant A sees exactly its own row` · `✓ tenant A cannot SELECT tenant B's row`
+> — plus UPDATE/DELETE/INSERT-attribution denial, fail-closed on missing context, no leak across a
+> context switch, and the global-template path still visible to both tenants.
+>
+> **Connection split, exactly as specified — the API never holds the owner secret:**
+> `DATABASE_URL` → `aura_app` (runtime) · `MIGRATION_DATABASE_URL` → owner (schema, seeding,
+> cross-tenant maintenance). Escape hatch `ALLOW_RLS_BYPASS=true` retained and still fatal in
+> production.
+>
+> **Runtime proven under the restricted role:** reads 200, `POST /crm/accounts` 201, outbox relay
+> 0 permission errors, `pnpm db:migrate` applies as owner, `rls-fitness` 183/183 enabled + forced
+> + policied.
+>
+> **Still open on this row:** staging and production have not been flipped — only dev. Closing
+> there is the same four steps in
+> [the runbook](../runbooks/rls-tenant-isolation.md#the-two-connection-split-g-03-activated-on-dev-2026-08-10).
+
+**The original finding, for the record:**
 
 ```sql
 select current_user, (select rolbypassrls from pg_roles where rolname = current_user);
@@ -79,7 +101,7 @@ Two halves of one gate: can the field actually be worked, and is this an *ELV* E
 |---|---|:--:|:--:|
 | **G-01** | **OPEN.** Auth off by default in dev; unauthenticated reads return live data. Staged pass-through, not a production hole (G-02) | P2 | 📄 |
 | ~~G-02~~ | RETRACTED in v1 — production refuses to boot without a verifier | — | 📄 |
-| **G-03** | **OPEN — P0.** `current_user = postgres`, `rolbypassrls = true`. See the gate above | **P0** | ✅ |
+| ◑ **G-03** | **CLOSED on dev 2026-08-10** — `aura_app`, `rolbypassrls = false`, 15/15 isolation assertions live. **Staging/production not yet flipped.** See the gate above | **P0** → P1 | ✅ |
 | ~~G-04~~ | **CLOSED, confirmed.** `apps/api/src/auth/elv-roles.ts` present, 11 roles | — | ✅ |
 | ~~G-05~~ | **CLOSED, confirmed.** Read-only `client` role in the same file | — | ✅ |
 | ~~G-06~~ | CLOSED in v1 | — | 📄 |

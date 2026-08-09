@@ -45,12 +45,17 @@ const REFERENCING_TABLES_SQL = `
     AND c.table_name <> 'aura_crm_accounts'
   ORDER BY c.table_name`;
 
+// Merges rows across every referencing table and reassigns foreign keys — cross-tenant
+// surgery that must not be filtered by RLS, so it runs as the owning role rather than the
+// app's aura_app (G-03). MIGRATION_DATABASE_URL wins; DATABASE_URL is the un-split fallback.
 function readDatabaseUrl() {
+  if (process.env.MIGRATION_DATABASE_URL) return process.env.MIGRATION_DATABASE_URL;
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const envFile = path.join(HERE, '..', '.env.local');
-  if (!fs.existsSync(envFile)) throw new Error('No DATABASE_URL and no apps/api/.env.local');
-  const m = fs.readFileSync(envFile, 'utf8').match(/DATABASE_URL=(.*)/);
-  if (!m) throw new Error('DATABASE_URL not found in apps/api/.env.local');
+  if (!fs.existsSync(envFile)) throw new Error('No MIGRATION_DATABASE_URL/DATABASE_URL and no apps/api/.env.local');
+  const body = fs.readFileSync(envFile, 'utf8');
+  const m = body.match(/^MIGRATION_DATABASE_URL=(.*)$/m) ?? body.match(/^DATABASE_URL=(.*)$/m);
+  if (!m) throw new Error('No database URL found in apps/api/.env.local');
   return m[1].trim();
 }
 

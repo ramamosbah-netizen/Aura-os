@@ -1,5 +1,5 @@
 -- ============================================================
--- AURA OS — migration 0220: Database-backed idempotency records
+-- AURA OS — migration 0221: Database-backed idempotency records
 -- ------------------------------------------------------------
 -- Guarantees atomic, exactly-once execution for API mutations across
 -- multi-instance scaling and intermittent field reconnects.
@@ -29,8 +29,11 @@ CREATE INDEX IF NOT EXISTS idx_idempotency_tenant_op ON public.aura_idempotency_
 CREATE INDEX IF NOT EXISTS idx_idempotency_status ON public.aura_idempotency_records(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_idempotency_expires ON public.aura_idempotency_records(expires_at);
 
--- Tenant isolation policy.
+-- Tenant isolation policy. ENABLE applies it to every non-owner role; FORCE extends it to the
+-- owner as well, which is what 0163 requires of every tenant-scoped table and what
+-- scripts/rls-fitness.mjs asserts in CI.
 ALTER TABLE public.aura_idempotency_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.aura_idempotency_records FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_policy ON public.aura_idempotency_records;
 CREATE POLICY tenant_isolation_policy ON public.aura_idempotency_records
   FOR ALL USING (tenant_id = public.current_tenant_id());

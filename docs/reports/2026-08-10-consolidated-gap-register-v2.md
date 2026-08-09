@@ -82,9 +82,40 @@ select current_user, (select rolbypassrls from pg_roles where rolname = current_
 
 Until step 1, **every multi-tenant guarantee in this platform is unenforced at runtime.**
 
-### 🟠 P1 · G-07 — HTTP edge security
+### ◑ P1 · G-07 — HTTP edge security — **headers, CSP, CORS, body cap and rate limiting DONE; SCIM still open**
 
-**Measured today — absent, not partial:** `helmet` 0 occurrences in `apps/api/package.json`; helmet / CSP / throttle 0 in `apps/api/src/main.ts`; SCIM 0 files across `apps/api/src` and `core/src`. A `RateLimiter` exists at `core/src/reliability/rate-limiter.ts` but is **not bound at the HTTP edge**. An internet-facing deploy has no header hardening and no brute-force protection above the application-level login throttle.
+**Was:** `helmet` 0, CSP 0, throttle 0, SCIM 0; `RateLimiter` present at
+`core/src/reliability/rate-limiter.ts` but bound to nothing, which is why the register recorded
+rate limiting as absent despite the class existing.
+
+**Now, measured against the booted API:**
+
+```
+Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+X-Content-Type-Options: nosniff      Referrer-Policy: no-referrer
+X-Frame-Options: SAMEORIGIN          Origin-Agent-Cluster: ?1
+X-RateLimit-Limit: 5                 X-RateLimit-Window: 60
+```
+
+Swagger UI gets its own, looser policy (`script-src 'self' 'unsafe-inline'`) because it is real
+HTML — a JSON API otherwise needs no resources at all, hence `default-src 'none'` everywhere else.
+
+**Rate limiting is live, and it is the existing `RateLimiter` bound rather than a new dependency.**
+With the cap set to 5: `200 200 200 200 200 429 429`, `Retry-After: 60`, and `/health` exempt
+across 20 consecutive calls. Per-IP, so one noisy caller cannot block everyone; `trust proxy` is
+set, without which every request shares one bucket behind a load balancer and the limiter throttles
+everybody at once.
+
+Also: CORS moved off bare `enableCors()` (which reflects **every** origin) to an allowlist that
+locks down and warns loudly if production has none, and an explicit 2MB body cap in place of the
+framework default.
+
+Decisions live in `core/src/http/edge-security.ts` as pure functions — 29 tests — for the reason
+this row existed: a security gate inline in a 300-line bootstrap is one nobody reads, and this one
+was mis-reported as "partial" for weeks while being wholly absent.
+
+**Still open on this row: SCIM — 0 files.** User provisioning/de-provisioning against an IdP is an
+identity programme, not an edge control, and is not covered by any of the above.
 
 ### 🟠 P1 · Field E2E + G-20 ELV compliance
 
@@ -105,7 +136,7 @@ Two halves of one gate: can the field actually be worked, and is this an *ELV* E
 | ~~G-04~~ | **CLOSED, confirmed.** `apps/api/src/auth/elv-roles.ts` present, 11 roles | — | ✅ |
 | ~~G-05~~ | **CLOSED, confirmed.** Read-only `client` role in the same file | — | ✅ |
 | ~~G-06~~ | CLOSED in v1 | — | 📄 |
-| **G-07** | **OPEN — P1.** helmet 0 · CSP 0 · throttler 0 · SCIM 0. See the gate above | **P1** | ✅ |
+| ◑ **G-07** | **MOSTLY CLOSED 2026-08-10.** helmet + per-path CSP + CORS allowlist + 2MB body cap + per-IP rate limiting, all verified live (`200×5 → 429`, `Retry-After: 60`, `/health` exempt). **SCIM still 0 files** — an identity programme, not an edge control | ~~P1~~ → P2 (SCIM) | ✅ |
 
 ## 2 · Data integrity & audit
 

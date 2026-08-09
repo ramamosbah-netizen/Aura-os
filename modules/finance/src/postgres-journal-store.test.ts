@@ -34,6 +34,16 @@ describe('PostgresJournalStore Double-Entry Trigger Integration', () => {
 
     if (dbUrl) {
       pool = new Pool({ connectionString: dbUrl });
+      // Bind the tenant GUC on checkout, the same way the runtime pool does. Under the enforced
+      // aura_app role (G-03) an unbound connection is denied by the RLS policy — which is the
+      // point of the role. This test used to pass only because the runtime connected as the
+      // bypassing owner; binding makes it exercise the isolation the application runs under.
+      //
+      // Not the `options=-c ...` startup parameter: connection poolers reject it (Supabase's
+      // does), and this test runs against whatever DATABASE_URL points at.
+      pool.on('connect', (client) => {
+        void client.query(`SELECT set_config('app.current_tenant_id', '${tenantId}', false)`);
+      });
       store = new PostgresJournalStore(pool);
 
       // Seed required accounts

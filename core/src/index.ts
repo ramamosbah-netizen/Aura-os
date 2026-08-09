@@ -102,3 +102,5 @@ export * from './http/uuid.pipe';
 
 
 
+export * from './http/edge-security';
+export * from './http/rate-limit.guard';

@@ -1,0 +1,204 @@
+# AURA OS — Consolidated Gap Register **v2** — Current Tree Verification
+
+**Date:** 2026-08-10 · **Supersedes:** [Baseline v1 — 2026-08-05](2026-08-05-consolidated-gap-register.md) (frozen)
+**Tree verified:** `claude/audit-diff-contract-invoice` **after merging `main`** (merge `0eddb22`), level with `main`, `pnpm typecheck` 47/47 · `pnpm test` 47/47 · `pnpm build` 25/25.
+
+This re-tests all 50 v1 IDs against the tree and adds the gaps that emerged from the Admin, Offline and Idempotency work. v1 remains the provenance record — where each ID was defined, and where the 2026-08-05 fix wave and the two retractions are written down.
+
+---
+
+## Read this first — the merge that had to happen before any of it counted
+
+The branch carrying the Admin / Offline / Idempotency work was **45 commits behind `main`**, and `main` already held the 2026-08-05 fix wave. Verifying against it unmerged would have reported **G-04, G-05, G-08, G-11, G-24 as re-opened** when they are closed — the exact "stale closed row" failure v1's own change log warns about.
+
+Merging surfaced something worse. Three conflicts, **two of them duplicate implementations of work `main` already had**:
+
+| Conflict | `main` | The batch |
+|---|---|---|
+| `customer-invoice.service.ts` | `evaluateContractCap` + `CONTRACT_CAP_PORT`, ADR-0004 port/adapter, VAT-exclusive, 10 domain + 5 HTTP e2e | inline `validateContractCeiling` comparing **gross** — the exact trap v1 records as caught-before-merge on G-08 |
+| `purchase-order.service.ts` | G-12 diff via shared `diffFields` + real actor stamping | local diff over a hardcoded field list |
+
+Both resolved in `main`'s favour; the dead duplicate rule and its tests removed. This is the **third** instance of the same defect in one batch — the first was a second `IdempotencyService` shadowing the wired one. See **N-05**.
+
+---
+
+## How to read this
+
+| Mark | Means |
+|:--:|---|
+| ✅ | **Re-verified by me on 2026-08-10** against the merged tree — grep over the working tree, live SQL against the running DB, or an HTTP probe against the booted API |
+| 📄 | **Carried from v1 on its author's authority — NOT re-tested in this pass.** Treat as v1's claim, not mine |
+| 🆕 | First recorded 2026-08-10 |
+
+**Severity:** **P0** ship-blocking · **P1** required for a complete lifecycle · **P2** production hardening · **P3** strategic.
+
+**Not claimed anywhere here:** any readiness or journey score, production-build performance, or functional-completeness percentage. None were measured today.
+
+---
+
+## The three gates, in order
+
+Everything else waits behind these.
+
+### 🔴 P0 · G-03 — RLS live enforcement, with a dev escape hatch
+
+**Measured today, and it is unambiguous:**
+
+```sql
+select current_user, (select rolbypassrls from pg_roles where rolname = current_user);
+-- current_user = postgres    rolbypassrls = true
+```
+
+`DATABASE_URL` in `apps/api/.env.local` points at `postgres.jzhvmempkpgitmfunoyr`. Every policy on all 182 tables is bypassed at runtime. The mechanism is complete and CI-proven; **only the connection role is wrong.**
+
+**Agreed shape — enforce, but keep development able to write.** The escape hatch already exists: `apps/api/src/main.ts:76` honours a loud `ALLOW_RLS_BYPASS=true` override, and `evaluateRlsPosture` refuses to boot production under a bypassing role. So this is configuration plus a seam check, not construction:
+
+1. Point the app's `DATABASE_URL` at the least-privilege `aura_app` role.
+2. Keep a separate owner-role URL for migrations, seeding and schema work — `ALLOW_RLS_BYPASS=true`, loudly logged, never in production.
+3. Verify the split: app connection returns `rolbypassrls = false`; the migration path still applies `infrastructure/migrations` end to end.
+4. Re-probe tenant isolation before calling it closed.
+
+Until step 1, **every multi-tenant guarantee in this platform is unenforced at runtime.**
+
+### 🟠 P1 · G-07 — HTTP edge security
+
+**Measured today — absent, not partial:** `helmet` 0 occurrences in `apps/api/package.json`; helmet / CSP / throttle 0 in `apps/api/src/main.ts`; SCIM 0 files across `apps/api/src` and `core/src`. A `RateLimiter` exists at `core/src/reliability/rate-limiter.ts` but is **not bound at the HTTP edge**. An internet-facing deploy has no header hardening and no brute-force protection above the application-level login throttle.
+
+### 🟠 P1 · Field E2E + G-20 ELV compliance
+
+Two halves of one gate: can the field actually be worked, and is this an *ELV* ERP.
+
+- **Field E2E** — the offline engine now exists (**G-25, G-26 closed below**), but the end-to-end run has never been done: create offline → kill network → reconnect → sync → kill the browser mid-sync → reopen → confirm the queue resumes and nothing double-commits. See **N-01**.
+- **G-20 ELV compliance** — **measured today: 0 files** matching SIRA/DCD across `modules` and `apps/web/app`. Unchanged from v1. Market-entry blocker for UAE ELV security systems.
+
+---
+
+## 1 · Security & access control
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| **G-01** | **OPEN.** Auth off by default in dev; unauthenticated reads return live data. Staged pass-through, not a production hole (G-02) | P2 | 📄 |
+| ~~G-02~~ | RETRACTED in v1 — production refuses to boot without a verifier | — | 📄 |
+| **G-03** | **OPEN — P0.** `current_user = postgres`, `rolbypassrls = true`. See the gate above | **P0** | ✅ |
+| ~~G-04~~ | **CLOSED, confirmed.** `apps/api/src/auth/elv-roles.ts` present, 11 roles | — | ✅ |
+| ~~G-05~~ | **CLOSED, confirmed.** Read-only `client` role in the same file | — | ✅ |
+| ~~G-06~~ | CLOSED in v1 | — | 📄 |
+| **G-07** | **OPEN — P1.** helmet 0 · CSP 0 · throttler 0 · SCIM 0. See the gate above | **P1** | ✅ |
+
+## 2 · Data integrity & audit
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| ~~G-08~~ | **CLOSED, confirmed.** `modules/finance/src/domain/contract-cap.ts` present and bound. The batch's duplicate was removed in the merge | — | ✅ |
+| ~~G-09~~ | CLOSED in v1 | — | 📄 |
+| **G-10** | 7 dangling references in the dev DB. Not re-tested | P2 | 📄 |
+| **G-11** | **OPEN and WORSE. Measured live today:** 7 duplicated account names — **Majid Al Futtaim now ×4** (was ×3 on 2026-08-05), Aldar ×3, Dubai Municipality ×3, DP World ×3, Emaar Properties ×3, plus 2 doubled. The seeder is idempotent and `scripts/merge-duplicate-accounts.mjs` exists, but **the cleanup has still never been run.** CRM close-out stays blocked | **P1** | ✅ |
+| ~~G-12~~ | **CLOSED, confirmed.** `diffFields` in `purchase-order.service.ts` with real actor stamping | — | ✅ |
+| **G-13** | Cross-module orphans by design (ADR-0001), orphan scan CI-enforced. Count not re-tested | P3 | 📄 |
+
+## 3 · Delivery-to-service spine
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| **G-14** | Field-service loop has no field end — dispatch exists, technician mobile does not. Partially eased by the new capture primitives, but no technician surface | **P1** | 📄 |
+| **G-15** | AMC field execution loop missing | **P1** | 📄 |
+| **G-16** | Handover O&M / as-built bundle not generated from the DMS | P2 | 📄 |
+| ~~G-17~~ | **CLOSED 2026-08-10.** `modules/site/src/domain/survey.ts` present; `site.survey.completed` subscribed in `cross-module-subscriber.ts`, raising an Opportunity with `source='site-survey'` and the survey id. ⚠️ See **N-02** — the AMC half of the same reactor hooks the wrong event | — | ✅ |
+| **G-18** | No progress-tracking UI for execution | P2 | 📄 |
+| **G-19** | EVM surfaced but shallow; no per-project controls cockpit | P2 | 📄 |
+
+## 4 · ELV vertical fit
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| **G-20** | **OPEN — P1 gate.** SIRA/DCD: **0 files** | **P1** | ✅ |
+| **G-21** | **OPEN.** Device schedules / as-built device registers: **0 files** | **P1** | ✅ |
+| **G-22** | **OPEN.** KNX: **0 files**. BMS remains a discipline label only | P2 | ✅ |
+| **G-23** | **OPEN.** Cable schedule / port mapping: **0 files** | P2 | ✅ |
+| ~~G-24~~ | CLOSED in v1 (10-SKU ELV catalogue). My live count query hit the wrong table, so **not re-confirmed today** — carried | — | 📄 |
+
+## 5 · Field & mobile
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| ~~G-25~~ | **CLOSED 2026-08-10.** `apps/web/public/sw.js` + `manifest.json` + `lib/offline-store.ts` (IndexedDB queue) + `lib/offline-sync.ts` (backoff/jitter, error classification). Daily reports and labour returns run through it; topbar shows Synced / Pending / Offline / Failed. **Not yet E2E-proven — see N-01** | — | ✅ |
+| ~~G-26~~ | **CLOSED 2026-08-10.** Signature capture in **8 components** (was 0). File inputs in 4. ⚠️ **Camera capture is still 1 file** — `capture=` is very nearly as absent as v1 found it | — | ✅ |
+| **G-27** | **OPEN.** No technician/site mobile surface. The primitives now exist; the surface does not | **P1** | 📄 |
+
+## 6 · UI / UX
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| ~~G-28~~ / ~~G-29~~ | CLOSED in v1 | — | 📄 |
+| **G-30** | Inline buttons/tables not migrated to the shared kit. `AuraDataTable` now exists and BOQ uses it — one register of many | P2 | 📄 |
+| ◑ **G-31** | **PART-CLOSED.** Next-best-action now on **6 components** (was 4 CRM 360s): + contracts register, payment certificates, commissioning, handover, customer invoices. Operational forms still have none | P2 | ✅ |
+| ◑ **G-32** | **PART-CLOSED.** Busy/`aria-busy` + "Saving…" on the Opportunity 360 money-cycle actions. Not swept app-wide | P2 | ✅ |
+| **G-33** | Full-page refresh on every mutation | P2 | 📄 |
+| **G-34** | **OPEN.** No unified approvals inbox. `/inbox` exists but is not an approvals queue | P2 | ✅ |
+| **G-35** | **OPEN.** `/tendering/pricing` still orphaned — **0 references in `nav.ts`**, despite now being the flagship AuraDataTable screen | P3 | ✅ |
+
+## 7 · Performance & scale
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| **G-36** | Global search in-memory O(n) fan-out | P2 | 📄 |
+| **G-37** | No latency validation at 1k–10k rows | P2 | 📄 |
+| ~~G-38~~ | Retired claim — do not quote the "5–7s first paint" figure | — | 📄 |
+| **G-39** | No caching, APM or load test | P2 | 📄 |
+
+## 8 · Commercial & platform modules
+
+| ID | Status 2026-08-10 | Sev | Ev |
+|---|---|:--:|:--:|
+| ◑ **G-40** | **PART-CLOSED.** Clause library landed on `main` — `modules/contracts/src/clause.service.ts`, `clause-store.ts`, `clause-library-client.tsx`. Variation approval still does not auto-adjust contract value | **P1** | ✅ |
+| **G-41** | No Analytics OS / report builder | P2 | 📄 |
+| **G-42** | No governed master-data management | P2 | 📄 |
+| **G-43** / **G-44** | No subcontractor / customer / vendor portals | P3 | 📄 |
+| **G-45** | Two pricing engines still not unified | P2 | 📄 |
+| **G-46** | No unified document layer | P2 | 📄 |
+| **G-47** | Warehouse depth thin; estimator UI thin | P2 | 📄 |
+| **G-48** | AI platform in LOCAL fallback — 29 `ANTHROPIC_API_KEY` references in code, key not set in the running env | P2 | 📄 |
+| ~~G-49~~ / ~~G-50~~ | RETRACTED / CLOSED in v1 | — | 📄 |
+
+---
+
+## New rows — from the Admin / Offline / Idempotency work
+
+| ID | Gap | Sev | Ev |
+|---|---|:--:|:--:|
+| **N-01** | **The offline engine has no meaningful test and no E2E run.** `apps/web/lib/offline-sync.test.ts` is **one assertion over `generateUUID`**. Queue ordering, retry backoff, the failed-after-5-attempts terminal state, and 409 handling are untested; the crash-recovery scenario (browser killed mid-sync → reopened → queue resumes, nothing double-commits) has never been run. This is the Field-E2E half of gate 3 | **P1** | ✅ 🆕 |
+| **N-02** | **AMC drafts off the wrong event.** `cross-module-subscriber.ts` triggers `amc.createFromHandover` on `projects.project.completed`. Project completion is not handover signed — the warranty clock starts at signature, so the AMC can be drafted before the client has accepted anything. Should hook a handover-signed event | **P1** | ✅ 🆕 |
+| **N-03** | **Duplicate-implementation defect class.** Three in one batch: a second `IdempotencyService`, a second AR billing cap, a second PO field diff — each shadowing working code already on `main`. Root cause is building against a stale tree; the control is to rebase before starting, not to review harder | **P1** | ✅ 🆕 |
+| **N-04** | **Admin Control Center has no E2E or browser verification.** Typecheck, tests, lint and build are green, and none of them exercise the legacy-route redirects, deep-links, tenant isolation, RBAC 403s, or the typed-confirmation restore guard. All were reported verified on the strength of unit tests | **P1** | ✅ 🆕 |
+| **N-05** | **Migration numbering has no pre-commit guard.** `0078_idempotency_records.sql` collided with `0078_amc_ppm_schedules.sql`; `migrate.mjs` throws on duplicate prefixes, so the whole run aborted. The runtime guard caught it, but only after the fact — nothing prevents authoring the collision | P2 | ✅ 🆕 |
+| **N-06** | **`docs/reports/README.md` — the reports index — does not exist** on this branch or in `HEAD`, though the estate convention treats it as authoritative and it is the documented home of the only quotable measured numbers | P2 | ✅ 🆕 |
+| **N-07** | **`apps/web` had no test task at all** until 2026-08-10 (`@aura/web#test -> <NONEXISTENT>`), and its tsconfig excluded `**/*.test.ts(x)`. Fixed, but every web-side test written before now was inert. Worth assuming the same of any other package before quoting its coverage | P2 | ✅ 🆕 |
+
+### Closed remediation — **not** open gaps
+
+**Idempotency is proven, not pending.** Per your instruction, recorded here as remediation:
+
+- Duplicate migration renumbered `0078` → `0220`; the duplicate-prefix guard passes over 220 migrations.
+- One `IdempotencyService`, Postgres-backed on `aura_idempotency_records`, single-upsert lease claim, hash-guarded reclaim, `ConflictException` (the dead copy's `Error('409: …')` classified as **500**).
+- `IdempotencyInterceptor` bound as `APP_INTERCEPTOR`; mutations only, no header → pass-through.
+
+**Verified live against the booted API, Postgres-backed:**
+
+```
+POST /api/v1/crm/accounts  key=K payload=A  -> 201, id cfef52ea…
+POST same key, same payload                 -> 201, X-Idempotent-Replay: true, same id
+POST same key, payload B                    -> 409 CONFLICT
+```
+
+Three POSTs → **1 row**. Lease persisted as `status=completed, response_status=201`, confirming the Postgres path, not the in-process fallback. Commits `f1b1ff7`, `94853b9`, `199f12e`.
+
+---
+
+## Provenance
+
+**Re-verified live 2026-08-10** (✅): G-03, G-04, G-05, G-07, G-08, G-11, G-12, G-17, G-20, G-21, G-22, G-23, G-25, G-26, G-31, G-32, G-34, G-35, G-40, and all seven N-rows.
+Method: grep over the merged working tree; SQL against the running Supabase DB (`current_user`/`rolbypassrls`, account-name duplicate counts, `aura_idempotency_records`); HTTP probes against the API booted from the production build on port 4137; `pnpm typecheck` / `test` / `build`.
+
+**Carried from v1, not re-tested** (📄): G-01, G-02, G-06, G-09, G-10, G-13, G-14, G-15, G-16, G-18, G-19, G-24, G-27, G-28, G-29, G-30, G-33, G-36, G-37, G-38, G-39, G-41–G-48, G-49, G-50.
+
+**Not measured, not claimed:** journey scores, readiness scores, production-build performance, module-completeness percentages.

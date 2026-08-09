@@ -8,6 +8,7 @@ import Breadcrumbs from './breadcrumbs';
 import CommandPalette from './command-palette';
 import TabBar from './tab-bar';
 import ThemeToggle from './theme-toggle';
+import OfflineSyncIndicator from './ui/offline-sync-indicator';
 import type { SessionUser } from '@/lib/session';
 // Form-engine plugins (field types, validators, formulas, toolbar actions)
 // register once for the whole app - before any metadata form renders.
@@ -89,6 +90,23 @@ export default function AppShell({
   );
   const [sidebarHidden, setSidebarHidden] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('aura:sidebar-collapsed');
+      if (stored === 'true') setSidebarHidden(true);
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarHidden((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('aura:sidebar-collapsed', String(next));
+      }
+      return next;
+    });
+  };
+
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [activeCompany, setActiveCompany] = useState('AURA Group HQ');
@@ -113,6 +131,28 @@ export default function AppShell({
       .catch(() => undefined);
   }, []);
 
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  useEffect(() => {
+    fetch('/api/notifications', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: Array<{ read?: boolean }> | null) => {
+        if (Array.isArray(d)) {
+          const unread = d.filter((n) => !n.read).length;
+          setUnreadCount(unread);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    }
+  }, []);
+
+  const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -121,7 +161,7 @@ export default function AppShell({
       }
       if (e.key.toLowerCase() === 'b' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setSidebarHidden((h) => !h);
+        toggleSidebar();
       }
     }
     window.addEventListener('keydown', onKey);
@@ -238,7 +278,7 @@ export default function AppShell({
           <button
             type="button"
             style={s.hamburger}
-            onClick={() => setSidebarHidden((h) => !h)}
+            onClick={toggleSidebar}
             aria-label={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
             title="Toggle sidebar (Ctrl+B)"
           >
@@ -252,6 +292,95 @@ export default function AppShell({
           <div className="app-topbar-crumbs" style={s.crumbSlot}>
             <Breadcrumbs />
           </div>
+
+          {/* ── Quick Create Action ── */}
+          <div style={{ position: 'relative', marginRight: 10 }}>
+            <button
+              type="button"
+              style={{
+                background: 'var(--accent)',
+                border: 'none',
+                borderRadius: 8,
+                color: '#fff',
+                padding: '6px 12px',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+              onClick={() => setCreateDropdownOpen((o) => !o)}
+            >
+              <span>+ Create</span>
+              <span style={{ fontSize: 10 }}>{createDropdownOpen ? '▴' : '▾'}</span>
+            </button>
+            {createDropdownOpen && (
+              <div style={{ ...s.companyDropdown, width: 190, right: 0 }}>
+                <Link href="/crm/leads" onClick={() => setCreateDropdownOpen(false)} style={s.companyOption}>
+                  + New Lead
+                </Link>
+                <Link href="/crm/quotations" onClick={() => setCreateDropdownOpen(false)} style={s.companyOption}>
+                  + New Quotation
+                </Link>
+                <Link href="/procurement/purchase-orders" onClick={() => setCreateDropdownOpen(false)} style={s.companyOption}>
+                  + New PO
+                </Link>
+                <Link href="/site/daily-reports" onClick={() => setCreateDropdownOpen(false)} style={s.companyOption}>
+                  + New Daily Report
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* ── Pulsing Notification Bell ── */}
+          <Link
+            href="/inbox"
+            style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              background: 'var(--panel)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              textDecoration: 'none',
+              marginRight: 10,
+              fontSize: 14,
+            }}
+            title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : 'Inbox & Notifications'}
+          >
+            <span>🔔</span>
+            {unreadCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -4,
+                  minWidth: 16,
+                  height: 16,
+                  borderRadius: 999,
+                  background: 'var(--bad)',
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                  boxShadow: '0 0 6px var(--bad)',
+                }}
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </Link>
+
+          {/* ── Offline Sync Status ── */}
+          <OfflineSyncIndicator />
 
           {/* ── Company Context Switcher ── */}
           <div style={s.companySwitcher}>

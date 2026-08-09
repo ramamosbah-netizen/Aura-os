@@ -2,8 +2,13 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
+import FileAttachmentZone, { type AttachmentItem } from './ui/file-attachment-zone';
 import { Badge, Button, Field, Input, KpiTile, Table, Td, Th } from './ui/kit';
 import ProjectPicker from './ui/project-picker';
+import SaveViewButton from './save-view-button';
+import SignatureCanvas from './ui/signature-canvas';
+import { fetchWithOfflineFallback, generateUUID } from '@/lib/offline-sync';
 
 export interface DailyReport {
   id: string;
@@ -37,6 +42,8 @@ export default function DailyReportClient({ reports, labour }: { reports: DailyR
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [dr, setDr] = useState({ projectId: '', date: today(), workDescription: '', manpowerCount: '', equipmentCount: '' });
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [signature, setSignature] = useState<string | null>(null);
   const [lr, setLr] = useState({ projectId: '', date: today(), trade: '', headcount: '', hours: '', subcontractorName: '' });
 
   const kpi = useMemo(() => ({
@@ -53,13 +60,29 @@ export default function DailyReportClient({ reports, labour }: { reports: DailyR
     if (!dr.projectId.trim() || !dr.date.trim() || !dr.workDescription.trim()) return setError('Project, date and work description are required');
     setBusy(true);
     try {
-      const res = await fetch('/api/site/daily-reports', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ projectId: dr.projectId, date: dr.date, workDescription: dr.workDescription, manpowerCount: Number(dr.manpowerCount) || 0, equipmentCount: Number(dr.equipmentCount) || 0 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || 'Failed');
-      setRows((p) => [data, ...p]);
+      const payload = { projectId: dr.projectId, date: dr.date, workDescription: dr.workDescription, manpowerCount: Number(dr.manpowerCount) || 0, equipmentCount: Number(dr.equipmentCount) || 0 };
+      const result = await fetchWithOfflineFallback<DailyReport>('/api/site/daily-reports', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }, { entityType: 'daily_report', priority: 'high' });
+      if (!result.ok && !result.offline) throw new Error(result.error || 'Failed');
+      if (result.offline && result.pendingSync) {
+        // Insert an optimistic placeholder row — the sync engine will replay it
+        const offlineRow: DailyReport = {
+          id: result.data?.id || `offline-${generateUUID()}`,
+          projectId: dr.projectId,
+          projectName: null,
+          date: dr.date,
+          workDescription: dr.workDescription,
+          manpowerCount: Number(dr.manpowerCount) || 0,
+          equipmentCount: Number(dr.equipmentCount) || 0,
+          status: 'draft',
+          createdAt: new Date().toISOString(),
+        };
+        setRows((p) => [offlineRow, ...p]);
+      } else if (result.data) {
+        setRows((p) => [result.data!, ...p]);
+      }
       setDr({ projectId: dr.projectId, date: today(), workDescription: '', manpowerCount: '', equipmentCount: '' });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -79,13 +102,28 @@ export default function DailyReportClient({ reports, labour }: { reports: DailyR
     if (!lr.projectId.trim() || !lr.trade.trim() || !lr.date.trim()) return setError('Project, trade and date are required');
     setBusy(true);
     try {
-      const res = await fetch('/api/site/labour', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ projectId: lr.projectId, date: lr.date, trade: lr.trade, headcount: Number(lr.headcount) || 0, hours: Number(lr.hours) || 0, subcontractorName: lr.subcontractorName || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || 'Failed');
-      setLab((p) => [data, ...p]);
+      const payload = { projectId: lr.projectId, date: lr.date, trade: lr.trade, headcount: Number(lr.headcount) || 0, hours: Number(lr.hours) || 0, subcontractorName: lr.subcontractorName || undefined };
+      const result = await fetchWithOfflineFallback<LabourAllocation>('/api/site/labour', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }, { entityType: 'labour_return', priority: 'normal' });
+      if (!result.ok && !result.offline) throw new Error(result.error || 'Failed');
+      if (result.offline && result.pendingSync) {
+        const offlineRow: LabourAllocation = {
+          id: result.data?.id || `offline-${generateUUID()}`,
+          projectId: lr.projectId,
+          date: lr.date,
+          trade: lr.trade,
+          headcount: Number(lr.headcount) || 0,
+          hours: Number(lr.hours) || 0,
+          manHours: (Number(lr.headcount) || 0) * (Number(lr.hours) || 0),
+          subcontractorName: lr.subcontractorName || null,
+          notes: null,
+        };
+        setLab((p) => [offlineRow, ...p]);
+      } else if (result.data) {
+        setLab((p) => [result.data!, ...p]);
+      }
       setLr({ projectId: lr.projectId, date: today(), trade: '', headcount: '', hours: '', subcontractorName: '' });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -96,17 +134,42 @@ export default function DailyReportClient({ reports, labour }: { reports: DailyR
         <KpiTile label="Draft reports" value={kpi.draft} tone={kpi.draft > 0 ? 'warn' : undefined} />
         <KpiTile label="Submitted" value={kpi.submitted} tone="good" />
         <KpiTile label="Man-hours logged" value={kpi.manHours} />
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
+          <SaveViewButton />
+          <ExportButton
+            filename="daily-reports"
+            title="Daily Site Reports"
+            rows={rows as unknown as Array<Record<string, unknown>>}
+            columns={[
+              { key: 'date', label: 'Date' },
+              { key: 'workDescription', label: 'Description' },
+              { key: 'manpowerCount', label: 'Manpower' },
+              { key: 'equipmentCount', label: 'Equipment' },
+              { key: 'status', label: 'Status' },
+            ]}
+          />
+        </div>
       </div>
 
       <h2 style={st.h2}>New daily report</h2>
-      <div style={st.form}>
-        <Field label="Project"><ProjectPicker value={dr.projectId} onChange={(id) => setD('projectId', id)} /></Field>
-        <Field label="Date"><Input type="date" value={dr.date} onChange={(e) => setD('date', e.target.value)} /></Field>
-        <Field label="Work done today" style={{ minWidth: 280 }}><Input value={dr.workDescription} onChange={(e) => setD('workDescription', e.target.value)} placeholder="Containment 2nd fix, L3 east" /></Field>
-        <Field label="Manpower"><Input style={{ minWidth: 90 }} inputMode="numeric" value={dr.manpowerCount} onChange={(e) => setD('manpowerCount', e.target.value)} placeholder="0" /></Field>
-        <Field label="Plant/equip"><Input style={{ minWidth: 90 }} inputMode="numeric" value={dr.equipmentCount} onChange={(e) => setD('equipmentCount', e.target.value)} placeholder="0" /></Field>
-        <Button onClick={createReport} disabled={busy}>Add report</Button>
-        {error && <span style={st.err}>{error}</span>}
+      <div style={st.formCard}>
+        <div style={st.form}>
+          <Field label="Project"><ProjectPicker value={dr.projectId} onChange={(id) => setD('projectId', id)} /></Field>
+          <Field label="Date"><Input type="date" value={dr.date} onChange={(e) => setD('date', e.target.value)} /></Field>
+          <Field label="Work done today" style={{ minWidth: 280 }}><Input value={dr.workDescription} onChange={(e) => setD('workDescription', e.target.value)} placeholder="Containment 2nd fix, L3 east" /></Field>
+          <Field label="Manpower"><Input style={{ minWidth: 90 }} inputMode="numeric" value={dr.manpowerCount} onChange={(e) => setD('manpowerCount', e.target.value)} placeholder="0" /></Field>
+          <Field label="Plant/equip"><Input style={{ minWidth: 90 }} inputMode="numeric" value={dr.equipmentCount} onChange={(e) => setD('equipmentCount', e.target.value)} placeholder="0" /></Field>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
+          <FileAttachmentZone label="Site Progress Photos" attachments={attachments} onChange={setAttachments} />
+          <SignatureCanvas label="Supervisor Sign-off" value={signature} onChange={setSignature} />
+        </div>
+
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button onClick={createReport} disabled={busy}>Add report</Button>
+          {error && <span style={st.err}>{error}</span>}
+        </div>
       </div>
 
       <h2 style={st.h2}>Site diary</h2>
@@ -122,8 +185,11 @@ export default function DailyReportClient({ reports, labour }: { reports: DailyR
                 <Td>{r.workDescription}</Td>
                 <Td align="right">{r.manpowerCount}</Td>
                 <Td align="right">{r.equipmentCount}</Td>
-                <Td><Badge tone={r.status === 'submitted' ? 'good' : 'warn'}>{r.status}</Badge></Td>
-                <Td>{r.status === 'draft' && <Button size="sm" tone="neutral" onClick={() => submit(r.id)}>Submit</Button>}</Td>
+                <Td><Badge tone={r.status === 'submitted' ? 'good' : r.id.startsWith('offline-') || r.id.startsWith('client-') ? 'info' : 'warn'}>{r.id.startsWith('offline-') || r.id.startsWith('client-') ? '📡 Queued' : r.status}</Badge></Td>
+                <Td>
+                  {r.status === 'draft' && <Button size="sm" tone="neutral" onClick={() => submit(r.id)}>Submit</Button>}
+                  <a href={`/site/daily-reports/${r.id}/print`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }} title="Print Daily Report (PDF)">🖨</a>
+                </Td>
               </tr>
             ))}
           </tbody>
@@ -165,7 +231,8 @@ export default function DailyReportClient({ reports, labour }: { reports: DailyR
 
 const st = {
   kpis: { display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' as const } as CSSProperties,
-  form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
-  err: { color: 'var(--bad)', marginLeft: 12, fontSize: 13, alignSelf: 'center' } as CSSProperties,
+  formCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 18px', marginBottom: 18 } as CSSProperties,
+  form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end' } as CSSProperties,
+  err: { color: 'var(--bad)', fontSize: 13, alignSelf: 'center' } as CSSProperties,
   h2: { fontSize: 20, margin: '22px 0 10px', color: 'var(--text)' } as CSSProperties,
 };

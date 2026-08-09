@@ -214,8 +214,8 @@ export default function QuotationsClient({ initialQuotations, embedded }: { init
                           {OPEN_STATUSES.includes(q.status) && (
                             <button type="button" className="btn btn-ghost" style={st.smBtn} onClick={() => act(q.id, 'cancel')}>Cancel</button>
                           )}
-                          <a className="btn btn-ghost" style={st.smBtn} href={`/crm/quotations/${q.id}/pricing`} title="Internal pricing sheet">⊞</a>
-                          <a className="btn btn-ghost" style={st.smBtn} href={`/crm/quotations/${q.id}/print`} title="Export PDF">🖨</a>
+                          <a className="btn btn-ghost" style={st.smBtn} href={`/crm/quotations/${q.id}/pricing`} title="Internal pricing sheet" target="_blank" rel="noopener noreferrer">⊞</a>
+                          <a className="btn btn-ghost" style={st.smBtn} href={`/crm/quotations/${q.id}/print`} title="Export PDF" target="_blank" rel="noopener noreferrer">🖨</a>
                         </div>
                       </td>
                     </tr>

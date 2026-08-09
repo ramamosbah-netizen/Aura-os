@@ -163,7 +163,7 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
           {(contract.status === 'draft' || contract.status === 'active') && (
             <button className="btn btn-ghost" style={st.actBtn} disabled={busy} onClick={() => setContractStatus('cancelled')}>Cancel</button>
           )}
-          <a href={`/contracts/contracts/${contract.id}/print`} style={st.linkBtn}>🖨 Print</a>
+          <a href={`/contracts/contracts/${contract.id}/print`} style={st.linkBtn} target="_blank" rel="noopener noreferrer">🖨 Print</a>
         </div>
       </div>
 

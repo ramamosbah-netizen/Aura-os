@@ -29,12 +29,16 @@ export class InMemoryDocumentRequirementStore implements DocumentRequirementStor
       .map((r) => ({ ...r, evidence: [...r.evidence] }));
   }
 
-  async get(id: Id): Promise<DocumentRequirement | null> {
+  async get(id: Id, tenantId: Id): Promise<DocumentRequirement | null> {
     const r = this.rows.get(id);
-    return r ? { ...r, evidence: [...r.evidence] } : null;
+    // Another tenant's row reads as missing, never as forbidden — the caller must not be able to
+    // tell the difference between "does not exist" and "not yours".
+    return r && r.tenantId === tenantId ? { ...r, evidence: [...r.evidence] } : null;
   }
 
-  async remove(id: Id): Promise<boolean> {
+  async remove(id: Id, tenantId: Id): Promise<boolean> {
+    const r = this.rows.get(id);
+    if (!r || r.tenantId !== tenantId) return false;
     return this.rows.delete(id);
   }
 }

@@ -160,10 +160,9 @@ export class DocumentRequirementsController {
   }
 
   private async require(id: string): Promise<DocumentRequirement> {
-    const found = await this.store.get(id);
-    // Tenant is re-checked here, not just at the store: an id from another tenant must read as
-    // missing rather than as forbidden.
-    if (!found || found.tenantId !== this.tenant.get().tenantId) {
+    // The store is tenant-scoped now (N-08), so this is one check rather than two.
+    const found = await this.store.get(id, this.tenant.get().tenantId);
+    if (!found) {
       throw new NotFoundException(`requirement ${id} not found`);
     }
     return found;

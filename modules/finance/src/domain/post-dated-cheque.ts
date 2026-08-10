@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { daysUntil, type Id, isOnExpiryWatchlist, newId } from '@aura/shared';
 
 /**
  * Post-Dated Cheque (PDC) — a cheque written today but dated for a future maturity date,
@@ -144,8 +144,7 @@ export function applyChequeAction(c: PostDatedCheque, action: ChequeAction): Pos
 
 /** Whole days from `asOf` (YYYY-MM-DD) to maturity; negative once overdue. */
 export function daysToMaturity(c: PostDatedCheque, asOf: string): number {
-  const ms = Date.parse(`${c.maturityDate}T00:00:00Z`) - Date.parse(`${asOf}T00:00:00Z`);
-  return Math.round(ms / 86_400_000);
+  return daysUntil(c.maturityDate, asOf);
 }
 
 /** A cheque is "live" (still an open obligation) while pending or deposited. */

@@ -1,3 +1,4 @@
+import { type ExpiryStatus, classifyExpiry, daysUntil, isDateOnly } from '@aura/shared';
 import type { Employee } from './employee';
 
 /**
@@ -7,7 +8,9 @@ import type { Employee } from './employee';
  * PRO/HR can renew in time. Mirrors the bank-guarantee expiry watch-list.
  */
 export type DocumentType = 'visa' | 'work_permit';
-export type ExpiryStatus = 'expired' | 'expiring' | 'valid';
+// ExpiryStatus now comes from @aura/shared — this module had its own copy of the arithmetic and
+// the verdict, as did bank guarantees, post-dated cheques and contract bonds.
+export type { ExpiryStatus };
 
 export interface ExpiringDocument {
   employeeId: string;
@@ -26,16 +29,8 @@ export interface DocumentExpiryReport {
   expiringCount: number;
 }
 
-/** Whole days from `asOf` to `expiry` (both YYYY-MM-DD); negative once past expiry. */
-export function daysUntil(expiry: string, asOf: string): number {
-  return Math.round((Date.parse(`${expiry}T00:00:00Z`) - Date.parse(`${asOf}T00:00:00Z`)) / 86_400_000);
-}
-
-function classify(days: number, withinDays: number): ExpiryStatus {
-  if (days < 0) return 'expired';
-  if (days <= withinDays) return 'expiring';
-  return 'valid';
-}
+/** @deprecated re-exported from @aura/shared; kept so existing importers keep working. */
+export { daysUntil };
 
 /**
  * Build the watch-list as of `asOf` (YYYY-MM-DD), including only documents that are expired or
@@ -54,7 +49,7 @@ export function buildDocumentExpiryReport(employees: Employee[], asOf: string, w
     for (const [documentType, expiryDate] of checks) {
       if (!expiryDate || !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)) continue;
       const daysToExpiry = daysUntil(expiryDate, asOf);
-      const status = classify(daysToExpiry, withinDays);
+      const status = classifyExpiry(daysToExpiry, withinDays);
       if (status === 'valid') continue;
       items.push({ employeeId: e.id, employeeName: name, documentType, expiryDate, daysToExpiry, status });
     }

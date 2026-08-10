@@ -51,3 +51,4 @@ export * from './command-center';
 export * from './workspace';
 export * from './comms';
 export * from './identity/tenant-guard';
+export * from './domain/expiry';

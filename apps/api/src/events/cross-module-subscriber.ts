@@ -231,13 +231,6 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }
     });
 
-    // ── Handover → AMC Draft: Project completed → auto-draft post-warranty AMC ServiceContract ──
-        this.logger.log(`⚡ project.completed → auto-drafted AMC contract "${amcContract.contractNumber}" (${amcContract.id}) for ${amcContract.clientName}`);
-      } catch (err) {
-        this.logger.error(`Failed to auto-draft AMC contract from project.completed: ${err}`);
-      }
-    });
-
     // ── Account growth loop (S9): Project completed → growth Signal on the Radar ──
     // Closes the acquisition loop back onto the installed base. A delivered project is the warmest
     // growth pipeline there is — an opening for follow-on scope, cross-sell, or a service attach.

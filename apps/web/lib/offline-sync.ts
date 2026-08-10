@@ -167,6 +167,9 @@ export async function fetchWithOfflineFallback<T = Record<string, unknown>>(
 
 let isSyncing = false;
 
+/** Reset per page load: a new session cannot own a sync that was in flight before it existed. */
+let hasFlushedThisSession = false;
+
 export async function flushOfflineQueue(): Promise<{ synced: number; failed: number }> {
   if (isSyncing) return { synced: 0, failed: 0 };
   if (typeof navigator !== 'undefined' && !navigator.onLine) return { synced: 0, failed: 0 };
@@ -176,7 +179,26 @@ export async function flushOfflineQueue(): Promise<{ synced: number; failed: num
   let failed = 0;
 
   try {
-    const queue = await getOfflineQueue();
+    let queue = await getOfflineQueue();
+
+    // Crash recovery. An item is marked `syncing` immediately before its request goes out; if the
+    // browser dies in that window nothing ever moves it back, and it is stranded forever — the
+    // report is on the device, visibly queued, and will never be sent again.
+    //
+    // `isSyncing` is module state, so a freshly loaded page has no sync of its own in flight.
+    // Any `syncing` item seen on this session's FIRST flush therefore belongs to a session that
+    // is gone, and is safe to reclaim. Replaying it cannot double-commit: the request carries the
+    // same Idempotency-Key, and the server's lease returns the original response instead of
+    // executing again.
+    if (!hasFlushedThisSession) {
+      hasFlushedThisSession = true;
+      const stranded = queue.filter((i) => i.status === 'syncing');
+      for (const item of stranded) {
+        await updateOfflineItemStatus(item.id, 'pending');
+      }
+      if (stranded.length > 0) queue = await getOfflineQueue();
+    }
+
     const pendingItems = queue.filter((i) => i.status === 'pending' && i.retryCount < 5);
 
     for (const item of pendingItems) {

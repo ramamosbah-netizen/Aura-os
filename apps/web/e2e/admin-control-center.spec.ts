@@ -23,7 +23,7 @@ test.describe('Admin Control Center shell', () => {
     }
   });
 
-  test.fixme('a deep link selects the tab and sub-tab it names (DoD rule 3 — NOT true today)', async ({ page }) => {
+  test('a deep link selects the tab and sub-tab it names', async ({ page }) => {
     // /admin?tab=users&sub=roles renders the shell but never surfaces the Roles & Grants
     // sub-tab. The shell reads the params once on mount (getInitialTab) and the sub-tab is
     // reset to the tab's first entry, so the `sub` half of a deep link is discarded.
@@ -35,7 +35,7 @@ test.describe('Admin Control Center shell', () => {
     await expect(page.getByText(/Roles|Grants/i).first()).toBeVisible();
   });
 
-  test.fixme('choosing a tab writes it back to the URL, so the view is linkable (NOT true today)', async ({ page }) => {
+  test('choosing a tab writes it back to the URL, so the view is linkable', async ({ page }) => {
     // Clicking Operations leaves the address bar at /admin. navigateTo updates React state but
     // never pushes to the router, so no admin view past the default is linkable or bookmarkable
     // — and the browser Back button does not step between tabs.
@@ -61,17 +61,25 @@ test.describe('Admin Control Center shell', () => {
 // sub-tab never became clickable within 60s. So its typed-confirmation guard is UNVERIFIED from
 // the browser, which is itself an N-04 result: the panel is not reachable by a scripted user.
 // Static reading separately shows the guard has no backend (see the last fixme).
-test.describe.fixme('Destructive-operation guard (panel not reachable from a browser)', () => {
+test.describe('Destructive-operation guard', () => {
   // Reached by clicking, not by URL: deep-linking to a sub-tab is one of the gaps this suite
   // records, so a test that navigated by URL would skip itself for the wrong reason.
   test.beforeEach(async ({ page }) => {
     await page.goto('/admin', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /Operations/i }).first().click();
-    await page.getByRole('button', { name: /Backup & Restore/i }).first().click();
+    // Wait for hydration before driving tabs — the shell server-renders, so the buttons exist in
+    // the DOM well before they respond to clicks.
+    const ops = page.getByRole('button', { name: /Operations/i }).first();
+    await ops.waitFor({ state: 'visible', timeout: 45_000 });
+    await ops.click();
+    const backup = page.getByRole('button', { name: /Backup & Restore/i }).first();
+    await backup.waitFor({ state: 'visible', timeout: 30_000 });
+    await backup.click();
+    await page.getByRole('button', { name: /Restore Database$/i }).first()
+      .waitFor({ state: 'visible', timeout: 30_000 });
   });
 
   test('restore refuses to proceed without the exact typed confirmation', async ({ page }) => {
-    await page.getByRole('button', { name: /Restore Database Snapshot/i }).first().click();
+    await page.getByRole('button', { name: /Restore Database$/i }).first().click();
 
     const dialogs: string[] = [];
     page.on('dialog', async (d) => {
@@ -81,11 +89,11 @@ test.describe.fixme('Destructive-operation guard (panel not reachable from a bro
 
     // Justification present, confirmation wrong — must be rejected on the confirmation, not waved
     // through because the reason box was filled.
-    await page.getByRole('textbox').first().fill('E2E guard check');
-    const typed = page.getByRole('textbox').nth(1);
-    if (await typed.isVisible().catch(() => false)) await typed.fill('restore production');
+    await page.getByPlaceholder(/Scheduled pre-maintenance/i).fill('E2E guard check');
+    // Lower case: the guard must be exact, not case-insensitive.
+    await page.getByPlaceholder('RESTORE PRODUCTION').fill('restore production');
 
-    await page.getByRole('button', { name: /^Confirm|Execute|Proceed/i }).first().click();
+    await page.getByRole('button', { name: /RESTORE DATABASE/ }).last().click();
     await page.waitForTimeout(300);
 
     expect(dialogs.join(' '), 'a wrong confirmation string must be refused').toMatch(
@@ -94,7 +102,7 @@ test.describe.fixme('Destructive-operation guard (panel not reachable from a bro
   });
 
   test('restore refuses to proceed with no justification for the audit trail', async ({ page }) => {
-    await page.getByRole('button', { name: /Restore Database Snapshot/i }).first().click();
+    await page.getByRole('button', { name: /Restore Database$/i }).first().click();
 
     const dialogs: string[] = [];
     page.on('dialog', async (d) => {
@@ -102,7 +110,7 @@ test.describe.fixme('Destructive-operation guard (panel not reachable from a bro
       await d.dismiss();
     });
 
-    await page.getByRole('button', { name: /^Confirm|Execute|Proceed/i }).first().click();
+    await page.getByRole('button', { name: /RESTORE DATABASE/ }).last().click();
     await page.waitForTimeout(300);
 
     expect(dialogs.join(' ')).toMatch(/justification is required/i);
@@ -137,10 +145,10 @@ test.fixme(
     });
 
     await page.goto('/admin?tab=operations&sub=backup', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /Restore Database Snapshot/i }).first().click();
-    await page.getByRole('textbox').first().fill('E2E backend check');
-    await page.getByRole('textbox').nth(1).fill('RESTORE PRODUCTION');
-    await page.getByRole('button', { name: /^Confirm|Execute|Proceed/i }).first().click();
+    await page.getByRole('button', { name: /Restore Database$/i }).first().click();
+    await page.getByPlaceholder(/Scheduled pre-maintenance/i).fill('E2E backend check');
+    await page.getByPlaceholder('RESTORE PRODUCTION').fill('RESTORE PRODUCTION');
+    await page.getByRole('button', { name: /RESTORE DATABASE/ }).last().click();
     await page.waitForTimeout(500);
 
     expect(calls.some((c) => /restore/i.test(c)), 'restore must call the backend').toBe(true);

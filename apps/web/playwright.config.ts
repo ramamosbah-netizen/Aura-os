@@ -4,7 +4,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.WEB_PORT ?? 3100);
-const BASE_URL = `http://127.0.0.1:${PORT}`;
+// localhost, NOT 127.0.0.1: Next dev blocks cross-origin dev resources from a bare IP, which
+// kills the HMR socket and with it the client bundle. The page still server-renders, so the DOM
+// looks right while nothing hydrates — no effects, no fetches, every picker stuck on its loading
+// text. Two "gaps" in the admin suite were traced to this before the cause was found.
+const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './e2e',

@@ -23,6 +23,10 @@ export const ELV_SYSTEMS = [
   'fire_alarm',
   'public_address',
   'structured_cabling',
+  // Active network kit (switches, racks, patch panels) is its own system, distinct from the
+  // passive cabling it runs over. The commissioning module had it and this list did not, which is
+  // how the two taxonomies drifted apart.
+  'network',
   'bms',
   'audio_visual',
   'intercom',
@@ -42,6 +46,7 @@ export const ELV_SYSTEM_LABELS: Record<ElvSystem, string> = {
   fire_alarm: 'Fire Alarm',
   public_address: 'Public Address / Voice Alarm',
   structured_cabling: 'Structured Cabling',
+  network: 'Network & Active Equipment',
   bms: 'BMS',
   audio_visual: 'Audio Visual',
   intercom: 'Intercom',
@@ -114,8 +119,44 @@ const isElvSystem = (v: unknown): v is ElvSystem => typeof v === 'string' && (EL
 /** Clean an incoming systems list: known values only, de-duplicated, order preserved. */
 export function normalizeElvSystems(input: unknown): ElvSystem[] | null {
   if (!Array.isArray(input)) return null;
-  const out = [...new Set(input.filter(isElvSystem))];
+  const out = [...new Set(input.map(toElvSystemOrNull).filter((s): s is ElvSystem => s !== null))];
   return out.length > 0 ? out : null;
+}
+
+/**
+ * Spellings that mean a system on this list but are written differently elsewhere.
+ *
+ * The Commissioning module carried its own ElvSystem union for months and the two drifted: it
+ * spells the voice-alarm system `pa_va`. Rows already in `aura_commissioning_records` carry that
+ * value, so the canonical list has to understand it rather than silently demote those rows to
+ * `other` — which is what a plain membership test would have done the moment the taxonomies were
+ * merged.
+ */
+export const ELV_SYSTEM_ALIASES: Readonly<Record<string, ElvSystem>> = {
+  pa_va: 'public_address',
+  pa: 'public_address',
+  voice_alarm: 'public_address',
+  acs: 'access_control',
+  access: 'access_control',
+  sc: 'structured_cabling',
+  lan: 'network',
+};
+
+/**
+ * Resolve one value to a canonical system, honouring aliases. Returns null for anything genuinely
+ * unrecognised, so callers choose between `other` and rejection rather than having it chosen for
+ * them.
+ */
+export function toElvSystemOrNull(value: unknown): ElvSystem | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim().toLowerCase();
+  if (isElvSystem(v)) return v;
+  return ELV_SYSTEM_ALIASES[v] ?? null;
+}
+
+/** Resolve to a canonical system, falling back to `other` — the store-side reader's choice. */
+export function toElvSystem(value: unknown): ElvSystem {
+  return toElvSystemOrNull(value) ?? 'other';
 }
 
 /** True when the context says enough to route and size the inquiry. */

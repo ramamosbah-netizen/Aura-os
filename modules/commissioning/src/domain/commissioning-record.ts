@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, ELV_SYSTEMS, type ElvSystem, toElvSystem } from '@aura/shared';
 
 // Commissioning domain — framework-free. A CommissioningRecord tracks the Test &
 // Commissioning (T&C) of one ELV system (or sub-system) on a project: the step that
@@ -7,25 +7,15 @@ import { type Id, newId } from '@aura/shared';
 // test-point tally. Distinct from a Quality inspection (QA of workmanship): commissioning
 // proves the *system* performs to specification.
 
-export type ElvSystem =
-  | 'cctv'
-  | 'access_control'
-  | 'fire_alarm'
-  | 'pa_va'
-  | 'bms'
-  | 'network'
-  | 'intercom'
-  | 'structured_cabling'
-  | 'audio_visual'
-  | 'other';
+// ElvSystem now comes from @aura/shared. This module carried its own union for months and the two
+// drifted — it had `network`, which shared lacked, and spells voice alarm `pa_va`. Both are
+// reconciled in shared (the value is added; the spelling is an alias), and re-exported here so
+// every existing importer keeps working.
+export { ELV_SYSTEMS, type ElvSystem };
 
 /** pending → in_progress → tested → commissioned. `failed` is a terminal-until-retested state. */
 export type CommissioningStatus = 'pending' | 'in_progress' | 'tested' | 'commissioned' | 'failed';
 
-export const ELV_SYSTEMS: ElvSystem[] = [
-  'cctv', 'access_control', 'fire_alarm', 'pa_va', 'bms', 'network',
-  'intercom', 'structured_cabling', 'audio_visual', 'other',
-];
 
 export interface CommissioningRecord {
   id: Id;
@@ -65,9 +55,9 @@ export interface NewCommissioningRecord {
   createdBy?: Id | null;
 }
 
-function toSystem(v: unknown): ElvSystem {
-  return (ELV_SYSTEMS as string[]).includes(v as string) ? (v as ElvSystem) : 'other';
-}
+// Alias-aware: rows written as `pa_va` before the taxonomies merged must not silently become
+// `other`.
+const toSystem = toElvSystem;
 
 export function makeCommissioningRecord(input: NewCommissioningRecord): CommissioningRecord {
   const now = new Date().toISOString();

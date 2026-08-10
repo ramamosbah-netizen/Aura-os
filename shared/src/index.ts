@@ -50,3 +50,4 @@ export * from './forms';
 export * from './command-center';
 export * from './workspace';
 export * from './comms';
+export * from './identity/tenant-guard';

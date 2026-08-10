@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
+import { type Id, assertSameTenant, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, TenantContext } from '@aura/core';
 import { CRM_EVENT, type Account, type NewAccount, makeAccount } from './domain/account';
 import { CRM_ACCOUNT_STORE, type AccountFilter, type AccountStore } from './account-store';
 
@@ -26,6 +26,9 @@ export class AccountService implements OnModuleInit {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest silently injects null, which would make the guards below inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   /** Register the create-account command on the kernel pipeline (once, at module init). */
@@ -75,8 +78,10 @@ export class AccountService implements OnModuleInit {
 
   /** Update mutable fields on an account (name, status, industry, website). */
   async update(id: Id, patch: Partial<Pick<Account, 'name' | 'status' | 'partyType' | 'industry' | 'website' | 'phone' | 'email' | 'billingAddress' | 'source' | 'paymentTerms' | 'ownerId'>>): Promise<Account> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`account ${id} not found`);
+    // Fetch-before-mutate must be tenant-checked too (N-08). Refusing the read while allowing the
+    // write would leave the more damaging half of the hole open. "not found" rather than
+    // "forbidden": a caller from another tenant must not learn the record exists.
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'account', id);
     if (patch.name !== undefined && !patch.name.trim()) throw new Error('account name is required');
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Account = { ...existing, ...defined };
@@ -97,15 +102,30 @@ export class AccountService implements OnModuleInit {
     return updated;
   }
 
-  get(id: Id): Promise<Account | null> {
-    return this.store.get(id);
+  /**
+   * Tenant-scoped reads (gap register N-08). `AccountStore.get(id)` takes no tenant and its
+   * Postgres query is `WHERE id = $1`; RLS is the net underneath, but it is one layer and it is
+   * absent on every no-DB path. The bound tenant is applied here so the application refuses on
+   * its own rather than delegating the whole boundary to the database.
+   */
+  async get(id: Id): Promise<Account | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: AccountFilter): Promise<Account[]> {
-    return this.store.list(filter);
+    return this.store.list(this.scoped(filter));
   }
 
   listPaged(filter: AccountFilter, page: import('@aura/shared').PageParams) {
-    return this.store.listPaged(filter, page);
+    return this.store.listPaged(this.scoped(filter), page);
+  }
+
+  /**
+   * Force the caller's tenant onto a list filter. A caller-supplied tenantId is ignored rather
+   * than merged — asking for another tenant's rows is not a filter, it is the attack.
+   */
+  private scoped(filter?: AccountFilter): AccountFilter {
+    const bound = this.tenant?.boundTenantId();
+    return bound ? { ...filter, tenantId: bound } : { ...filter };
   }
 }

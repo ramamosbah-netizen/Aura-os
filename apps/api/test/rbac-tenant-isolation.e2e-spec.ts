@@ -163,19 +163,19 @@ describe('RBAC + tenant isolation (HTTP)', () => {
       expect(names).toContain('Alpha Holdings');
     });
 
-    it.skip('tenant B cannot see tenant A rows in a list', async () => {
+    it('tenant B cannot see tenant A rows in a list', async () => {
       const res = await http.get('/api/v1/crm/accounts').set(as(BOB, TENANT_B)).expect(200);
       const names = (res.body as Array<{ name: string }>).map((a) => a.name);
       expect(names).not.toContain('Alpha Holdings');
     });
 
-    it.skip('tenant B cannot fetch tenant A row by its id, even knowing the id', async () => {
+    it('tenant B cannot fetch tenant A row by its id, even knowing the id', async () => {
       // Guessing or leaking an id must not be enough — the direct read has to be scoped too.
       const res = await http.get(`/api/v1/crm/accounts/${alphaAccountId}`).set(as(BOB, TENANT_B));
       expect([403, 404]).toContain(res.status);
     });
 
-    it.skip("tenant B cannot mutate tenant A's row", async () => {
+    it("tenant B cannot mutate tenant A's row", async () => {
       const res = await http
         .patch(`/api/v1/crm/accounts/${alphaAccountId}`)
         .set(as(BOB, TENANT_B))

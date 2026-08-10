@@ -53,6 +53,9 @@ importers:
       '@aura/doccontrol':
         specifier: workspace:*
         version: link:../../modules/doccontrol
+      '@aura/elv':
+        specifier: workspace:*
+        version: link:../../modules/elv
       '@aura/engineering':
         specifier: workspace:*
         version: link:../../modules/engineering

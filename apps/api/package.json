@@ -24,6 +24,7 @@
     "@aura/core": "workspace:*",
     "@aura/crm": "workspace:*",
     "@aura/doccontrol": "workspace:*",
+    "@aura/elv": "workspace:*",
     "@aura/engineering": "workspace:*",
     "@aura/finance": "workspace:*",
     "@aura/fleet": "workspace:*",

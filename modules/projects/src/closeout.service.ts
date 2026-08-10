@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   CLOSEOUT_EVENT,
   type ProjectCloseout,
@@ -23,6 +23,9 @@ export class CloseoutService {
     @Inject(CLOSEOUT_STORE) private readonly store: CloseoutStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async start(input: NewProjectCloseout): Promise<ProjectCloseout> {
@@ -82,8 +85,9 @@ export class CloseoutService {
     return updated;
   }
 
-  get(id: Id): Promise<ProjectCloseout | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<ProjectCloseout | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: CloseoutFilter): Promise<ProjectCloseout[]> {

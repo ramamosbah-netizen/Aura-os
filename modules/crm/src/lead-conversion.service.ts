@@ -1,11 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  type AccessTarget, type Id, type OrgLevel, makeEvent,
-  CRM_EVENT, type Lead, type Opportunity, type OpportunityStage, makeOpportunity,
-  resolveIdentity, type IdentityResolution, type MatchConfidence, type IdentityMatch,
-  elvSystemLabel,
-} from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, CRM_EVENT, elvSystemLabel, type Id, type IdentityMatch, type IdentityResolution, type Lead, makeEvent, makeOpportunity, type MatchConfidence, type Opportunity, type OpportunityStage, type OrgLevel, resolveIdentity } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_LEAD_STORE, type LeadStore } from './lead-store';
 import { CRM_ACCOUNT_STORE, type AccountStore } from './account-store';
 import { CRM_CONTACT_STORE, type ContactStore } from './contact-store';
@@ -79,12 +74,14 @@ export class LeadConversionService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   /** Dry run: what would convert link or create? Drives the "possible duplicate" UI. */
   async preview(leadId: Id): Promise<ConvertPreview> {
-    const lead = await this.leads.get(leadId);
-    if (!lead) throw new Error(`Lead ${leadId} not found`);
+    const lead = assertSameTenant(await this.leads.get(leadId), this.tenant?.boundTenantId(), 'Lead', leadId);
     const [accounts, contacts] = await Promise.all([
       this.accounts.list({ tenantId: lead.tenantId, limit: 5000 }),
       this.contacts.list({ tenantId: lead.tenantId, limit: 5000 }),
@@ -105,8 +102,7 @@ export class LeadConversionService {
   }
 
   async convert(leadId: Id, input: ConvertLeadInput = {}): Promise<ConvertLeadResult> {
-    const lead = await this.leads.get(leadId);
-    if (!lead) throw new Error(`Lead ${leadId} not found`);
+    const lead = assertSameTenant(await this.leads.get(leadId), this.tenant?.boundTenantId(), 'Lead', leadId);
 
     if (input.actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: lead.tenantId }];

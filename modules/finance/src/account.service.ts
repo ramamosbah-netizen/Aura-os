@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel } from '@aura/shared';
-import { AccessService } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, type Id, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, TenantContext } from '@aura/core';
 import { type Account, type NewAccount, makeAccount } from './domain/account';
 import { ACCOUNT_STORE, type AccountFilter, type AccountStore } from './account-store';
 
@@ -11,6 +11,9 @@ export class AccountService {
   constructor(
     @Inject(ACCOUNT_STORE) private readonly store: AccountStore,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewAccount, actorId?: Id): Promise<Account> {
@@ -31,8 +34,9 @@ export class AccountService {
     return account;
   }
 
-  get(id: Id): Promise<Account | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Account | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   getByCode(tenantId: Id, code: string): Promise<Account | null> {

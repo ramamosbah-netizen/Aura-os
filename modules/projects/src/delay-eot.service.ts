@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   type DelayEvent, type NewDelayEvent, makeDelayEvent, type DelayStatus,
   type EotClaim, type NewEotClaim, makeEotClaim, type EotStatus,
@@ -16,6 +16,9 @@ export class DelayEotService {
     @Inject(DELAY_STORE) private readonly delays: DelayStore,
     @Inject(EOT_STORE) private readonly eotClaims: EotStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   // ── DELAY EVENTS ─────────────────────────────────────────────────────
@@ -41,8 +44,7 @@ export class DelayEotService {
   }
 
   async updateDelayStatus(id: Id, status: DelayStatus): Promise<DelayEvent> {
-    const existing = await this.delays.get(id);
-    if (!existing) throw new Error(`Delay event ${id} not found`);
+    const existing = assertSameTenant(await this.delays.get(id), this.tenant?.boundTenantId(), 'Delay event', id);
     const updated: DelayEvent = { ...existing, status };
     await this.delays.update(updated);
     this.logger.log(`Delay event ${id} status → ${status}`);
@@ -53,8 +55,9 @@ export class DelayEotService {
     return this.delays.list(filter);
   }
 
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
   async getDelay(id: Id): Promise<DelayEvent | null> {
-    return this.delays.get(id);
+    return sameTenantOrNull(await this.delays.get(id), this.tenant?.boundTenantId());
   }
 
   // ── EOT CLAIMS ───────────────────────────────────────────────────────
@@ -80,8 +83,7 @@ export class DelayEotService {
   }
 
   async submitEotClaim(id: Id): Promise<EotClaim> {
-    const existing = await this.eotClaims.get(id);
-    if (!existing) throw new Error(`EOT Claim ${id} not found`);
+    const existing = assertSameTenant(await this.eotClaims.get(id), this.tenant?.boundTenantId(), 'EOT Claim', id);
     if (existing.status !== 'draft') throw new Error(`EOT Claim ${id} is not in draft status`);
 
     const updated: EotClaim = {
@@ -100,8 +102,7 @@ export class DelayEotService {
     decidedBy: string;
     revisedCompletionDate?: string | null;
   }): Promise<EotClaim> {
-    const existing = await this.eotClaims.get(id);
-    if (!existing) throw new Error(`EOT Claim ${id} not found`);
+    const existing = assertSameTenant(await this.eotClaims.get(id), this.tenant?.boundTenantId(), 'EOT Claim', id);
 
     const updated: EotClaim = {
       ...existing,
@@ -133,8 +134,9 @@ export class DelayEotService {
     return this.eotClaims.list(filter);
   }
 
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
   async getEotClaim(id: Id): Promise<EotClaim | null> {
-    return this.eotClaims.get(id);
+    return sameTenantOrNull(await this.eotClaims.get(id), this.tenant?.boundTenantId());
   }
 
   // ── ANALYSIS ─────────────────────────────────────────────────────────

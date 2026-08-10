@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type Id, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   CLARIFICATION_EVENT,
   type NewTenderClarification,
@@ -27,6 +27,9 @@ export class ClarificationService {
     // urgency reads the extended reality. Explicit @Inject token — the union-typed @Optional
     // param would silently inject null (the platform's known gotcha).
     @Optional() @Inject(TenderService) private readonly tenders: TenderService | null = null,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async record(input: NewTenderClarification): Promise<TenderClarification> {
@@ -85,8 +88,9 @@ export class ClarificationService {
     return updated;
   }
 
-  get(id: Id): Promise<TenderClarification | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<TenderClarification | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: ClarificationFilter): Promise<TenderClarification[]> {

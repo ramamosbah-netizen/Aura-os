@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   RFQ_EVENT,
   type Rfq,
@@ -26,6 +26,9 @@ export class RfqService {
     @Inject(RFQ_STORE) private readonly store: RfqStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewRfq): Promise<Rfq> {
@@ -54,8 +57,7 @@ export class RfqService {
   }
 
   async send(id: Id): Promise<Rfq> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`RFQ ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'RFQ', id);
     const updated: Rfq = { ...existing, status: 'sent' };
     await this.store.update(updated);
     await this.events.append([
@@ -95,8 +97,7 @@ export class RfqService {
 
   /** Award the RFQ to a quote: the winner is marked awarded, the rest rejected, the RFQ closed-out. */
   async award(rfqId: Id, quoteId: Id, actorId?: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[] }> {
-    const rfq = await this.store.get(rfqId);
-    if (!rfq) throw new Error(`RFQ ${rfqId} not found`);
+    const rfq = assertSameTenant(await this.store.get(rfqId), this.tenant?.boundTenantId(), 'RFQ', rfqId);
     const quotes = await this.store.listQuotes(rfqId);
     const winner = quotes.find((q) => q.id === quoteId);
     if (!winner) throw new Error(`quote ${quoteId} not found on RFQ ${rfqId}`);
@@ -125,8 +126,9 @@ export class RfqService {
     return { rfq: updated, quotes: await this.store.listQuotes(rfqId) };
   }
 
-  get(id: Id): Promise<Rfq | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Rfq | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   async getWithQuotes(id: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[]; recommended: RfqQuote | null } | null> {

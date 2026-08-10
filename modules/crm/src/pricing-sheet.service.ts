@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type EstimationLineInput, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   type NewPricingSheet, type PricingSheet, type SheetComparison,
   makePricingSheet, withSheetLines, freezeSheet, reviseSheet, compareSheets,
@@ -30,6 +30,9 @@ export class PricingSheetService {
     @Inject(CRM_PRICING_SHEET_STORE) private readonly store: PricingSheetStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly quotations: QuotationService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewPricingSheet): Promise<PricingSheet> {
@@ -46,8 +49,9 @@ export class PricingSheetService {
     return sheet;
   }
 
-  get(id: Id): Promise<PricingSheet | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<PricingSheet | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter: PricingSheetFilter): Promise<PricingSheet[]> {
@@ -56,8 +60,7 @@ export class PricingSheetService {
 
   /** Save the draft's lines (the workspace's Save). The domain refuses on a frozen sheet. */
   async saveLines(id: Id, lines: EstimationLineInput[]): Promise<PricingSheet> {
-    const sheet = await this.store.get(id);
-    if (!sheet) throw new Error(`pricing sheet ${id} not found`);
+    const sheet = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'pricing sheet', id);
     const updated = withSheetLines(sheet, Array.isArray(lines) ? lines : []);
     await this.store.save(updated);
     return updated;
@@ -65,8 +68,7 @@ export class PricingSheetService {
 
   /** Freeze — the commercial commitment. From here the build-up is immutable. */
   async freeze(id: Id, actorId: Id | null): Promise<PricingSheet> {
-    const sheet = await this.store.get(id);
-    if (!sheet) throw new Error(`pricing sheet ${id} not found`);
+    const sheet = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'pricing sheet', id);
     const frozen = freezeSheet(sheet, actorId);
     await this.store.save(frozen);
     await this.events.append([
@@ -83,8 +85,7 @@ export class PricingSheetService {
 
   /** A new draft version from a frozen sheet — re-pricing starts from the last committed truth. */
   async revise(id: Id, actorId: Id | null): Promise<PricingSheet> {
-    const sheet = await this.store.get(id);
-    if (!sheet) throw new Error(`pricing sheet ${id} not found`);
+    const sheet = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'pricing sheet', id);
     const next = reviseSheet(sheet, actorId);
     await this.store.save(next);
     return next;
@@ -95,8 +96,7 @@ export class PricingSheetService {
    * default): the money moved (cost / sell / margin points) and WHERE, line by line.
    */
   async compare(id: Id, withId?: Id): Promise<SheetComparison> {
-    const to = await this.store.get(id);
-    if (!to) throw new Error(`pricing sheet ${id} not found`);
+    const to = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'pricing sheet', id);
     const refId = withId ?? to.parentSheetId;
     if (!refId) throw new Error(`pricing sheet ${to.name} v${to.version} has no earlier version to compare against`);
     const from = await this.store.get(refId);
@@ -116,8 +116,7 @@ export class PricingSheetService {
     frozenSheets: { count: number; avgMarginPercent: number | null };
     thisSheetMarginPercent: number;
   }> {
-    const sheet = await this.store.get(id);
-    if (!sheet) throw new Error(`pricing sheet ${id} not found`);
+    const sheet = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'pricing sheet', id);
 
     let account: { id: Id; name: string } | null = null;
     let quotesToAccount = { total: 0, accepted: 0, rejected: 0, decidedWinRatePercent: null as number | null };
@@ -159,8 +158,7 @@ export class PricingSheetService {
    * generate: a quote is the face of a committed price, not a preview of a moving draft.
    */
   async generateQuotation(id: Id): Promise<{ sheet: PricingSheet; quotationId: Id }> {
-    const sheet = await this.store.get(id);
-    if (!sheet) throw new Error(`pricing sheet ${id} not found`);
+    const sheet = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'pricing sheet', id);
     if (sheet.status !== 'frozen') {
       throw new Error(`only a frozen pricing sheet can generate a quotation — freeze the baseline first`);
     }

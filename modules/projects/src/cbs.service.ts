@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { type CbsNode, type NewCbsNode, makeCbsNode, calculateCbsSummary, type CbsSummary } from './domain/cbs';
 import { CBS_STORE, type CbsNodeFilter, type CbsStore } from './cbs-store';
 
@@ -11,6 +11,9 @@ export class CbsService {
   constructor(
     @Inject(CBS_STORE) private readonly store: CbsStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewCbsNode): Promise<CbsNode> {
@@ -37,8 +40,7 @@ export class CbsService {
   }
 
   async update(id: Id, patch: Partial<Pick<CbsNode, 'title' | 'category' | 'budgetAmount' | 'committedAmount' | 'actualAmount' | 'forecastAmount' | 'notes'>>): Promise<CbsNode> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`CBS Node ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
 
     const budget = patch.budgetAmount ?? existing.budgetAmount;
     const forecast = patch.forecastAmount ?? existing.forecastAmount;
@@ -61,8 +63,7 @@ export class CbsService {
   /** Adjust the approved budget baseline (BAC) of a cost line — e.g. an approved variation
    *  (addition +, omission −). Variance (budget − forecast) is recomputed. */
   async recordBudget(id: Id, amount: number): Promise<CbsNode> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`CBS Node ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
 
     const budget = Number((existing.budgetAmount + amount).toFixed(2));
     const updated: CbsNode = {
@@ -78,8 +79,7 @@ export class CbsService {
   }
 
   async recordCommittedCost(id: Id, amount: number): Promise<CbsNode> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`CBS Node ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
 
     const updated: CbsNode = {
       ...existing,
@@ -93,8 +93,7 @@ export class CbsService {
   }
 
   async recordActualCost(id: Id, amount: number): Promise<CbsNode> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`CBS Node ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
 
     const actual = Number((existing.actualAmount + amount).toFixed(2));
     const updated: CbsNode = {
@@ -111,8 +110,9 @@ export class CbsService {
     return updated;
   }
 
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
   async get(id: Id): Promise<CbsNode | null> {
-    return this.store.get(id);
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   async list(filter?: CbsNodeFilter): Promise<CbsNode[]> {

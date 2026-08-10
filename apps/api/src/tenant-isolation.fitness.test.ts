@@ -14,10 +14,9 @@ import { join, resolve } from 'node:path';
  * Proven, not theoretical: before the accounts path was scoped, an HTTP test showed tenant B
  * listing, reading and mutating tenant A's account (apps/api/test/rbac-tenant-isolation.e2e-spec.ts).
  *
- * Sweeping ~58 services at once would be a large, poorly-reviewable change, so this is a RATCHET
- * instead. It counts the services that fetch by id without a tenant check and pins the number.
- * Adding an unguarded one fails; fixing one fails too, and the fix is to lower the number — which
- * is the point. The list only shrinks.
+ * Started life as a ratchet over 38 unswept services. The sweep finished on 2026-08-10, so the
+ * number is now zero and this is a plain regression gate: any new service that reads by id must
+ * check the tenant before returning the row.
  */
 
 const REPO = resolve(__dirname, '../../..');
@@ -25,8 +24,13 @@ const MODULES = join(REPO, 'modules');
 
 /** Fetches a record by id — the shape that needs a tenant check before it is returned. */
 const FETCHES_BY_ID = /\bthis\.\w+\.get\(\s*(?:id|\w+Id)\b/;
-/** Either guard from @aura/shared, however it was imported. */
-const HAS_GUARD = /\b(assertSameTenant|sameTenantOrNull)\b/;
+/**
+ * A read counts as guarded either by the shared helper, or by an explicit comparison against a
+ * tenant the caller supplied. Several services predate the helper and write the same check
+ * longhand — `if (!x || x.tenantId !== tenantId) throw` — which is equally safe and should not
+ * be reported as debt.
+ */
+const HAS_GUARD = /\b(assertSameTenant|sameTenantOrNull)\b|\.tenantId\s*!==\s*\w+/;
 
 function serviceFiles(): string[] {
   if (!existsSync(MODULES)) return [];
@@ -60,10 +64,11 @@ function unguarded(): string[] {
 }
 
 /**
- * Measured 2026-08-10, after CRM accounts was scoped. Lower this as services are swept; never
- * raise it. A new service that reads by id must apply the guard, not extend the debt.
+ * Zero as of the 2026-08-10 sweep: every service that reads by id now checks the tenant, either
+ * through the shared helper or longhand. Never raise this. A new service that reads by id must
+ * apply the guard rather than reopen the debt — at zero, the ratchet is a regression gate.
  */
-const RATCHET = 38;
+const RATCHET = 0;
 
 describe('tenant-isolation fitness (N-08 ratchet)', () => {
   it(`has no more than ${RATCHET} services fetching by id without a tenant check`, () => {
@@ -76,13 +81,12 @@ describe('tenant-isolation fitness (N-08 ratchet)', () => {
     ).toBeLessThanOrEqual(RATCHET);
   });
 
-  it('fails loudly when the ratchet is stale, so a sweep lowers the number', () => {
+  it('reports every unguarded service by name, so the list is actionable not just a number', () => {
     const offenders = unguarded();
     expect(
-      offenders.length,
-      `${RATCHET - offenders.length} service(s) were swept since the ratchet was last set. ` +
-        `Lower RATCHET to ${offenders.length} in this file to lock the gain in.`,
-    ).toBe(RATCHET);
+      offenders,
+      'these services read by id without checking the tenant:\n' + offenders.join('\n'),
+    ).toEqual([]);
   });
 
   it('keeps the already-swept paths guarded', () => {

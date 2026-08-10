@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
+import { assertSameTenant, diffFields, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AccessService, TenantContext } from '@aura/core';
 import { CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, makeContract } from './domain/contract';
 import { CONTRACT_STORE, type ContractFilter, type ContractStore } from './contract-store';
@@ -84,8 +84,7 @@ export class ContractService implements OnModuleInit {
 
   /** Update mutable fields on a contract (title, reference, value, account snapshot). */
   async update(id: Id, patch: Partial<Pick<Contract, 'title' | 'reference' | 'value' | 'accountId' | 'accountName'>>): Promise<Contract> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`contract ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'contract', id);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Contract = { ...existing, ...defined };
     // Audit trail (P1-2): record the field-level before→after (esp. the contract value) + the real
@@ -113,8 +112,7 @@ export class ContractService implements OnModuleInit {
    * that trigger cross-module automation (e.g. auto-create a Project).
    */
   async changeStatus(id: Id, status: ContractStatus, actorId?: Id): Promise<Contract> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`contract ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'contract', id);
     // Segregation of duties: the preparer may not sign (activate) their own contract. Skipped for
     // system/auto transitions (no actor), so the deal-chain reactors are unaffected.
     if (status === 'active' && actorId && existing.createdBy && actorId === existing.createdBy) {
@@ -166,8 +164,9 @@ export class ContractService implements OnModuleInit {
     return updated;
   }
 
-  get(id: Id): Promise<Contract | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Contract | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: ContractFilter): Promise<Contract[]> {

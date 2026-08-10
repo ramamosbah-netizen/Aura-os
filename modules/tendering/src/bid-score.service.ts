@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { BID_SCORE_EVENT, type BidScore, type NewBidScore, makeBidScore } from './domain/bid-score';
 import { BID_SCORE_STORE, type BidScoreFilter, type BidScoreStore } from './bid-score-store';
 
@@ -16,6 +16,9 @@ export class BidScoreService {
   constructor(
     @Inject(BID_SCORE_STORE) private readonly store: BidScoreStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewBidScore): Promise<BidScore> {
@@ -36,8 +39,9 @@ export class BidScoreService {
     return score;
   }
 
-  get(id: Id): Promise<BidScore | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<BidScore | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: BidScoreFilter): Promise<BidScore[]> {

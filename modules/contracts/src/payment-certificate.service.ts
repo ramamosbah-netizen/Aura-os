@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import {
   CERTIFICATE_EVENT,
   type CertificateStatus,
@@ -51,6 +51,9 @@ export class PaymentCertificateService {
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly contracts: ContractService,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   /** Add a valuation line to a draft IPC — a BOQ item's certified quantity × rate. On certification
@@ -165,8 +168,7 @@ export class PaymentCertificateService {
    * (`contracts.ipc.certified`) carrying the net + account snapshot so finance can bill the client.
    */
   async changeStatus(id: Id, status: CertificateStatus, actorId?: Id): Promise<PaymentCertificate> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`payment certificate ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'payment certificate', id);
     const certifying = status === 'certified';
     // Segregation of duties: the preparer may not certify their own IPC (a different, authorised
     // certifier must). Skipped for system/auto transitions (no actor). Mirrors quotation approval.
@@ -232,8 +234,9 @@ export class PaymentCertificateService {
     return updated;
   }
 
-  get(id: Id): Promise<PaymentCertificate | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<PaymentCertificate | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: CertificateFilter): Promise<PaymentCertificate[]> {

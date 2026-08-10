@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AiService } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, AiService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_EVENT, type Opportunity, type OpportunityStage, type NewOpportunity, makeOpportunity, mergeWinPlan, winPlanCoverage, type WinPlan, type WinPlanCoverage } from '@aura/shared';
 import {
   type PursuitDecision, type PursuitDimensions, scorePursuit, CRM_JOURNEY_EVENT,
@@ -18,6 +18,9 @@ export class OpportunityService {
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
     private readonly ai: AiService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewOpportunity & { actorId?: Id | null }): Promise<Opportunity> {
@@ -60,8 +63,7 @@ export class OpportunityService {
    * with the need and the play recorded reads complete; a strategic one expects the full plan.
    */
   async updateWinPlan(id: Id, patch: Partial<Record<keyof WinPlan, string | null>>): Promise<{ opportunity: Opportunity; coverage: WinPlanCoverage }> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Opportunity ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
     const updated: Opportunity = { ...existing, winPlan: mergeWinPlan(existing.winPlan, patch), updatedAt: new Date().toISOString() };
     await this.store.update(updated);
     this.logger.log(`Win plan updated: ${updated.title} (${updated.id})`);
@@ -79,8 +81,7 @@ export class OpportunityService {
      */
     evidence: StageEvidence = {},
   ): Promise<Opportunity> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Opportunity ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
@@ -160,8 +161,7 @@ export class OpportunityService {
     id: Id,
     input: { decision: PursuitDecision; dimensions?: PursuitDimensions | null; rationale?: string | null; actorId?: Id | null },
   ): Promise<Opportunity> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Opportunity ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
 
     if (input.actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
@@ -200,8 +200,7 @@ export class OpportunityService {
   }
 
   async forecastWinProbability(id: Id): Promise<{ winProbability: number; reason: string }> {
-    const opp = await this.store.get(id);
-    if (!opp) throw new Error(`Opportunity ${id} not found`);
+    const opp = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
 
     // Let's create an AI prompt requesting a realistic forecast based on metrics
     const prompt = `You are the AURA OS CRM AI Intelligence agent.
@@ -253,8 +252,9 @@ Provide your response strictly in the following JSON format:
     };
   }
 
-  get(id: Id): Promise<Opportunity | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Opportunity | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: OpportunityFilter): Promise<Opportunity[]> {

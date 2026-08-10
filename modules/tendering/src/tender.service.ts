@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner } from '@aura/core';
+import { assertSameTenant, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
+import { AuditService, CommandBus, EVENT_STORE, type EventStore, NumberingService, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
 import { checkTenderTransition, tenderGateMessage, type TenderGateEvidence } from './domain/tender-gate';
 import { makeTenderSubmission, type NewTenderSubmission, type TenderSubmission } from './domain/submission';
@@ -43,6 +43,9 @@ export class TenderService implements OnModuleInit {
     // T3 — deleting a BOQ item takes its build-up along; the build-up's bid-time source links go
     // with it. Optional (and LAST) so directly-constructed test services need not supply it.
     @Optional() @Inject(ESTIMATE_SOURCE_STORE) private readonly estimateSources: EstimateSourceStore | null = null,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   onModuleInit(): void {
@@ -127,8 +130,7 @@ export class TenderService implements OnModuleInit {
 
   /** Update mutable fields on a tender (title, value, etc). */
   async update(id: Id, patch: Partial<Pick<Tender, 'title' | 'reference' | 'value' | 'accountId' | 'accountName' | 'ownerId' | 'submissionDeadline' | 'source'>>): Promise<Tender> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`tender ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Tender = { ...existing, ...defined };
     const event = makeEvent({
@@ -156,8 +158,7 @@ export class TenderService implements OnModuleInit {
    * `tendering.tender.updated` BOQ-recalc reactor.
    */
   async linkOpportunity(tenderId: Id, opportunityId: Id): Promise<Tender> {
-    const existing = await this.store.get(tenderId);
-    if (!existing) throw new Error(`tender ${tenderId} not found`);
+    const existing = assertSameTenant(await this.store.get(tenderId), this.tenant?.boundTenantId(), 'tender', tenderId);
     const updated: Tender = { ...existing, sourceOpportunityId: opportunityId, source: existing.source ?? 'opportunity' };
     await this.store.update(updated);
     this.logger.log(`Tender ${updated.title} (${updated.id}) back-linked to opportunity ${opportunityId}`);
@@ -192,8 +193,7 @@ export class TenderService implements OnModuleInit {
     // by construction; a status-only caller just gets a record with no channel details.
     if (status === 'submitted') return (await this.submit(id)).tender;
 
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`tender ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
 
     const evidence = await this.tenderEvidence(existing.tenantId, id);
     const check = checkTenderTransition(existing, status, evidence);
@@ -249,8 +249,7 @@ export class TenderService implements OnModuleInit {
     id: Id,
     details: Omit<NewTenderSubmission, 'tenantId' | 'companyId' | 'tenderId' | 'tenderTitle' | 'submittedValue'> = {},
   ): Promise<{ tender: Tender; submission: TenderSubmission }> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`tender ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
 
     const evidence = await this.tenderEvidence(existing.tenantId, id);
     const check = checkTenderTransition(existing, 'submitted', evidence);
@@ -308,8 +307,9 @@ export class TenderService implements OnModuleInit {
     return this.submissions.list({ tenantId, tenderId });
   }
 
-  get(id: Id): Promise<Tender | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Tender | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: TenderFilter): Promise<Tender[]> {

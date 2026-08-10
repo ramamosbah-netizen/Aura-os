@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore, NumberingService } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, NumberingService, TenantContext } from '@aura/core';
 import {
   FRAMEWORK_EVENT,
   type FrameworkAgreement,
@@ -41,6 +41,9 @@ export class FrameworkAgreementService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly numbering: NumberingService,
     private readonly purchaseOrders: PurchaseOrderService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewFrameworkAgreement): Promise<FrameworkAgreement> {
@@ -84,8 +87,7 @@ export class FrameworkAgreementService {
    * the drawdown + event.
    */
   async callOff(id: Id, input: CallOffInput): Promise<{ agreement: FrameworkAgreement; purchaseOrder: PurchaseOrder }> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`framework agreement ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'framework agreement', id);
 
     const drawn = recordCallOff(existing, input.value); // validates before any side effect
 
@@ -121,8 +123,9 @@ export class FrameworkAgreementService {
     return { agreement: drawn, purchaseOrder };
   }
 
-  get(id: Id): Promise<FrameworkAgreement | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<FrameworkAgreement | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: FrameworkAgreementFilter): Promise<FrameworkAgreement[]> {
@@ -138,8 +141,7 @@ export class FrameworkAgreementService {
     fn: (fa: FrameworkAgreement) => FrameworkAgreement,
     eventType: string,
   ): Promise<FrameworkAgreement> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`framework agreement ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'framework agreement', id);
     const updated = fn(existing);
     await this.store.save(updated);
     await this.events.append([

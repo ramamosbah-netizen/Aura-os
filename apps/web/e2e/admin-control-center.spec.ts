@@ -119,20 +119,27 @@ test.describe('Destructive-operation guard', () => {
 
 // ── Gaps this suite found. Kept as failing-by-design records, not deleted. ──────────────────────
 
-test.fixme(
-  'legacy /admin/users redirects into the shell (DoD rule 3 — NOT true today)',
-  async ({ page }) => {
-    // The walkthrough recorded "Legacy routes redirect/preserve query params & deep-links ✅".
-    // They do not. There is no middleware, no next.config redirect, and app/admin/users/page.tsx
-    // renders its own standalone screen. /admin is a 24th admin surface beside the 23, not a
-    // consolidation of them — two views of the same settings that can drift apart.
-    await page.goto('/admin/users', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\?tab=users/);
-  },
-);
+// ── Legacy redirects: investigated and deliberately NOT implemented. ───────────────────────────
+//
+// The walkthrough recorded "Legacy routes redirect/preserve query params & deep-links ✅". They do
+// not redirect — but adding redirects would be the wrong fix, and the earlier version of this file
+// was wrong to frame it as pending work.
+//
+// Measured: ZERO of the 23 Control Center panels fetch any data, and 18 of them render a paragraph
+// plus a link INTO the legacy screen. The Users panel is a description and
+// `Open Full User Manager → /admin/users`. Redirecting /admin/users back to /admin?tab=users would
+// therefore loop, and would remove the only working user management in the product.
+//
+// /admin is a directory over the 23 screens, not a consolidation of them. What it needs is the
+// panels built for real — not redirects laid over an empty shell. Pinned by
+// e2e/admin-consolidation.spec.ts, which will fail the day someone does build them.
 
+// Still open, and still the right assertion — but the UI no longer *claims* it. The panel now says
+// plainly that nothing executed and nothing was audited (see e2e/admin-consolidation.spec.ts).
+// Building a real database restore on a guess is not something to do speculatively, so this stays
+// as the specification for whoever wires it.
 test.fixme(
-  'restore reaches the backend and writes an audit event (DoD rules 10 & 13 — NOT true today)',
+  'restore reaches the backend and writes an audit event (DoD rules 10 & 13 — still NOT built)',
   async ({ page }) => {
     // backup-restore-panel.tsx makes zero API calls: handleConfirm sets a success string that
     // *says* "Audit event logged: { actor, action, reason, timestamp }". No request is sent, no

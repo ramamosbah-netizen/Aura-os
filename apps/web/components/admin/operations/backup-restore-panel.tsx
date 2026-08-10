@@ -4,11 +4,19 @@ import React, { useState } from 'react';
 import type { CSSProperties } from 'react';
 
 /**
- * Guarded Backup & Restore panel — high-risk operations with typed confirmation,
- * mandatory justification, and backend-enforced audit logging.
+ * Backup & Restore panel — the confirmation guards are real; the operations behind them are NOT
+ * built yet (gap register N-04).
  *
- * Restore requires typing "RESTORE PRODUCTION" to confirm.
- * Backup requires a justification reason logged to aura_audit_log.
+ * This panel previously reported `✅ Database Restore executed successfully. Audit event logged:
+ * {…}` while making zero API calls. Nothing was backed up, nothing was restored, and nothing
+ * reached aura_audit_log — there is no server-side endpoint for either operation anywhere under
+ * apps/api or core. A UI that claims an audit entry it did not write is worse than one that does
+ * nothing, because it tells an operator the record exists.
+ *
+ * The typed-confirmation and justification guards are kept and exercised by
+ * apps/web/e2e/admin-control-center.spec.ts — they are the part that works, and they are what the
+ * real operation will need when it is built. Until then the panel says plainly that it cannot
+ * execute.
  */
 export default function BackupRestorePanel() {
   const [modalOpen, setModalOpen] = useState<'backup' | 'restore' | null>(null);
@@ -28,11 +36,17 @@ export default function BackupRestorePanel() {
       return;
     }
     const opName = modalOpen === 'backup' ? 'Database Backup' : 'Database Restore';
-    setOperationResult(`✅ ${opName} executed successfully. Audit event logged: { actor, action: "${opName}", reason: "${justification.trim()}", timestamp: "${new Date().toISOString()}" }`);
+    // Deliberately does NOT claim success. There is no endpoint behind either operation, so the
+    // only honest outcome is to say the guard passed and the operation did not run.
+    setOperationResult(
+      `⚠️ ${opName} is not available. Your confirmation was accepted, but this operation has no ` +
+        `backend yet — nothing was executed and no audit entry was written. Run backups and ` +
+        `restores through the database runbook until this is wired.`,
+    );
     setModalOpen(null);
     setJustification('');
     setTypedConfirmation('');
-    setTimeout(() => setOperationResult(null), 6000);
+    setTimeout(() => setOperationResult(null), 10000);
   };
 
   return (
@@ -40,9 +54,13 @@ export default function BackupRestorePanel() {
       <div style={st.header}>
         <h3 style={st.title}>💾 Database Backup & Restore</h3>
         <p style={st.desc}>
-          Perform database backup snapshots and guarded state restores. All operations are
-          protected by mandatory justification, typed confirmation for destructive actions,
-          and backend-enforced audit logging.
+          Backup snapshots and guarded state restores, protected by mandatory justification and
+          typed confirmation for destructive actions.
+        </p>
+        <p style={st.notWired}>
+          ⚠️ <strong>Not wired yet.</strong> The confirmation guards below are live, but neither
+          operation has a backend — nothing executes and nothing is written to the audit trail.
+          Use the database runbook for real backups and restores.
         </p>
       </div>
 
@@ -53,13 +71,9 @@ export default function BackupRestorePanel() {
         <div style={st.card}>
           <h4 style={st.cardTitle}>💾 Create Backup Snapshot</h4>
           <p style={st.cardDesc}>
-            Create an immediate database snapshot. Requires justification logged to the
-            immutable audit trail.
+            Create an immediate database snapshot. Requires a justification, which will be logged
+            to the audit trail once this operation is implemented.
           </p>
-          <div style={st.ruleRow}>
-            <span>Last Backup:</span>
-            <span>2 hours ago</span>
-          </div>
           <button type="button" style={st.btnPrimary} onClick={() => setModalOpen('backup')}>
             💾 Backup Database Now
           </button>
@@ -73,8 +87,7 @@ export default function BackupRestorePanel() {
           </div>
           <p style={st.cardDesc}>
             <strong>DESTRUCTIVE OPERATION.</strong> Restoring a snapshot will overwrite all current
-            production data. Requires typed confirmation, mandatory justification, and backend
-            re-authentication.
+            production data. Requires typed confirmation and a mandatory justification.
           </p>
           <button type="button" style={st.btnDanger} onClick={() => setModalOpen('restore')}>
             ⚠️ Restore Database
@@ -159,7 +172,9 @@ const st = {
   btnPrimary: { background: 'var(--accent)', color: 'var(--accent-ink)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', marginTop: 4 } as CSSProperties,
   btnSecondary: { background: 'var(--panel-2)', color: 'var(--text)', border: '1px solid var(--border)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   btnDanger: { background: 'var(--bad-soft)', color: 'var(--bad)', border: '1px solid var(--bad)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 } as CSSProperties,
-  successBanner: { background: 'var(--good-soft)', border: '1px solid var(--good)', color: 'var(--good)', borderRadius: 10, padding: '10px 14px', fontSize: 12, fontWeight: 600 } as CSSProperties,
+  // Warning, not success: this banner now reports that the guard passed and the operation did not run.
+  successBanner: { background: 'var(--warn-soft)', border: '1px solid var(--warn)', color: 'var(--warn)', borderRadius: 10, padding: '10px 14px', fontSize: 12, fontWeight: 600, lineHeight: 1.5 } as CSSProperties,
+  notWired: { background: 'var(--warn-soft)', border: '1px solid var(--warn)', color: 'var(--warn)', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, marginTop: 10, lineHeight: 1.55 } as CSSProperties,
   warningBanner: { background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 8 } as CSSProperties,
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 } as CSSProperties,
   modalBox: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 22, maxWidth: 500, width: '92%', boxShadow: 'var(--shadow-lg)' } as CSSProperties,

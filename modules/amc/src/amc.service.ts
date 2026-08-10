@@ -86,45 +86,6 @@ export class AmcService {
   // Creates a DRAFT service contract. Pricing, SLA, and terms are NOT copied
   // from the original contract — the PM adds those explicitly via review.
 
-  async createFromHandover(params: {
-    tenantId: string;
-    companyId?: string;
-    projectId: string;
-    projectTitle: string;
-    clientName: string;
-    siteAddress?: string;
-    scope?: string;
-    warrantyEndDate: Date;
-  }): Promise<ServiceContract> {
-    const amcStartDate = new Date(params.warrantyEndDate);
-    amcStartDate.setDate(amcStartDate.getDate() + 1); // AMC starts day after warranty expires
-    const amcEndDate = new Date(amcStartDate);
-    amcEndDate.setFullYear(amcEndDate.getFullYear() + 1); // Default 1-year AMC term
-
-    const contractNumber = `AMC-${params.projectId.slice(0, 8)}`;
-
-    // Idempotency: check if an AMC was already created from this project
-    const existing = await this.store.listContracts(params.tenantId);
-    const alreadyExists = existing.find((c) => c.contractNumber === contractNumber);
-    if (alreadyExists) {
-      this.logger.log(`[AMC] Draft already exists for project ${params.projectId}, reusing ${contractNumber}`);
-      return alreadyExists;
-    }
-
-    return this.createContract({
-      tenantId: params.tenantId,
-      companyId: params.companyId,
-      contractNumber,
-      clientName: params.clientName,
-      serviceScope: params.scope || `Post-warranty AMC for ${params.projectTitle}${params.siteAddress ? ` — ${params.siteAddress}` : ''}`,
-      startDate: amcStartDate,
-      endDate: amcEndDate,
-      value: 0, // PM fills in pricing during review — no auto-copy from original contract
-      slaResponseHours: 4,
-      slaResolutionHours: 24,
-    });
-  }
-
   // ── Work Orders ──────────────────────────────────────────────
 
   async createWorkOrder(params: {

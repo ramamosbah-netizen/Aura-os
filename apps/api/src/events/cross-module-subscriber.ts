@@ -31,7 +31,6 @@ import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } f
  *   inventory.stock.movement_recorded ──► (perpetual-inventory GL: receipt Dr Inventory/Cr GRNI; issue Dr COGS/Cr Inventory)
  *   amc.workorder.completed ──► (auto-draft a client AR invoice for the billable service visit)
  *   finance.invoice.paid    ──► (log actual cost against project)
- *   projects.project.completed ──► (auto-draft post-warranty AMC ServiceContract)
  */
 @Injectable()
 export class CrossModuleSubscriber implements OnModuleInit {
@@ -233,21 +232,6 @@ export class CrossModuleSubscriber implements OnModuleInit {
     });
 
     // ── Handover → AMC Draft: Project completed → auto-draft post-warranty AMC ServiceContract ──
-    this.bus.subscribe('projects.project.completed', async (e: DomainEvent) => {
-      try {
-        const project = await this.projects.get(e.aggregateId);
-        if (!project) return;
-        const warrantyEndDate = new Date();
-        warrantyEndDate.setFullYear(warrantyEndDate.getFullYear() + 1); // 1-year warranty baseline
-
-        const amcContract = await this.amc.createFromHandover({
-          tenantId: e.tenantId,
-          companyId: e.companyId ?? undefined,
-          projectId: project.id,
-          projectTitle: project.title,
-          clientName: project.accountName || 'Client',
-          warrantyEndDate,
-        });
         this.logger.log(`⚡ project.completed → auto-drafted AMC contract "${amcContract.contractNumber}" (${amcContract.id}) for ${amcContract.clientName}`);
       } catch (err) {
         this.logger.error(`Failed to auto-draft AMC contract from project.completed: ${err}`);

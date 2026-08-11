@@ -18,11 +18,29 @@ interface Row {
   project_name: string | null;
   owner_id: string | null;
   created_by: string | null;
+  previous_revision: string | null;
+  reason_for_revision: string | null;
+  file_url: string | null;
+  submitted_by: string | null;
+  submitted_at: Date | string | null;
+  reviewed_by: string | null;
+  reviewed_at: Date | string | null;
+  decided_by: string | null;
+  decided_at: Date | string | null;
+  transmittal_ref: string | null;
+  transmitted_at: Date | string | null;
+  closed_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
 
-const COLS = 'id, tenant_id, company_id, code, title, revision, status, discipline, project_id, project_name, owner_id, created_by, created_at, updated_at';
+const COLS =
+  'id, tenant_id, company_id, code, title, revision, status, discipline, project_id, project_name, owner_id, created_by, ' +
+  'previous_revision, reason_for_revision, file_url, submitted_by, submitted_at, reviewed_by, reviewed_at, decided_by, decided_at, ' +
+  'transmittal_ref, transmitted_at, closed_at, created_at, updated_at';
+
+const ts = (v: Date | string | null): string | null =>
+  v === null ? null : v instanceof Date ? v.toISOString() : String(v);
 
 function rowToDrawing(r: Row): Drawing {
   return {
@@ -38,8 +56,20 @@ function rowToDrawing(r: Row): Drawing {
     projectName: r.project_name,
     ownerId: r.owner_id,
     createdBy: r.created_by,
-    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
-    updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : String(r.updated_at),
+    previousRevision: r.previous_revision,
+    reasonForRevision: r.reason_for_revision,
+    fileUrl: r.file_url,
+    submittedBy: r.submitted_by,
+    submittedAt: ts(r.submitted_at),
+    reviewedBy: r.reviewed_by,
+    reviewedAt: ts(r.reviewed_at),
+    decidedBy: r.decided_by,
+    decidedAt: ts(r.decided_at),
+    transmittalRef: r.transmittal_ref,
+    transmittedAt: ts(r.transmitted_at),
+    closedAt: ts(r.closed_at),
+    createdAt: ts(r.created_at) as string,
+    updatedAt: ts(r.updated_at) as string,
   };
 }
 
@@ -57,8 +87,14 @@ export class PostgresDrawingStore implements DrawingStore {
 
   private insert(executor: Pool | PoolClient, d: Drawing): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_engineering_drawings (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [d.id, d.tenantId, d.companyId, d.code, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName, d.ownerId, d.createdBy, d.createdAt, d.updatedAt],
+      `INSERT INTO public.aura_engineering_drawings (${COLS})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
+      [
+        d.id, d.tenantId, d.companyId, d.code, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName,
+        d.ownerId, d.createdBy, d.previousRevision, d.reasonForRevision, d.fileUrl, d.submittedBy, d.submittedAt,
+        d.reviewedBy, d.reviewedAt, d.decidedBy, d.decidedAt, d.transmittalRef, d.transmittedAt, d.closedAt,
+        d.createdAt, d.updatedAt,
+      ],
     );
   }
 
@@ -74,23 +110,27 @@ export class PostgresDrawingStore implements DrawingStore {
   private modify(executor: Pool | PoolClient, d: Drawing): Promise<unknown> {
     return executor.query(
       `UPDATE public.aura_engineering_drawings
-       SET title=$2, revision=$3, status=$4, discipline=$5, project_id=$6, project_name=$7, owner_id=$8, updated_at=now()
+       SET title=$2, revision=$3, status=$4, discipline=$5, project_id=$6, project_name=$7, owner_id=$8,
+           previous_revision=$9, reason_for_revision=$10, file_url=$11, submitted_by=$12, submitted_at=$13,
+           reviewed_by=$14, reviewed_at=$15, decided_by=$16, decided_at=$17, transmittal_ref=$18,
+           transmitted_at=$19, closed_at=$20, updated_at=now()
        WHERE id=$1`,
-      [d.id, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName, d.ownerId],
+      [
+        d.id, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName, d.ownerId,
+        d.previousRevision, d.reasonForRevision, d.fileUrl, d.submittedBy, d.submittedAt, d.reviewedBy,
+        d.reviewedAt, d.decidedBy, d.decidedAt, d.transmittalRef, d.transmittedAt, d.closedAt,
+      ],
     );
   }
 
   async get(id: Id): Promise<Drawing | null> {
-    const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_drawings WHERE id = $1`,
-      [id],
-    );
+    const res = await this.pool.query<Row>(`SELECT ${COLS} FROM public.aura_engineering_drawings WHERE id = $1`, [id]);
     return res.rows.length ? rowToDrawing(res.rows[0]) : null;
   }
 
   async getByCode(tenantId: Id, projectId: Id, code: string, revision: string): Promise<Drawing | null> {
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_drawings 
+      `SELECT ${COLS} FROM public.aura_engineering_drawings
        WHERE tenant_id = $1 AND project_id = $2 AND code = $3 AND revision = $4`,
       [tenantId, projectId, code, revision],
     );
@@ -99,18 +139,28 @@ export class PostgresDrawingStore implements DrawingStore {
 
   async getLatestByCode(tenantId: Id, projectId: Id, code: string): Promise<Drawing | null> {
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_drawings 
-       WHERE tenant_id = $1 AND project_id = $2 AND code = $3 
+      `SELECT ${COLS} FROM public.aura_engineering_drawings
+       WHERE tenant_id = $1 AND project_id = $2 AND code = $3
        ORDER BY created_at DESC LIMIT 1`,
       [tenantId, projectId, code],
     );
     return res.rows.length ? rowToDrawing(res.rows[0]) : null;
   }
 
+  async listRevisions(tenantId: Id, projectId: Id, code: string): Promise<Drawing[]> {
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_engineering_drawings
+       WHERE tenant_id = $1 AND project_id = $2 AND code = $3
+       ORDER BY created_at DESC`,
+      [tenantId, projectId, code],
+    );
+    return res.rows.map(rowToDrawing);
+  }
+
   async list(filter: DrawingFilter = {}): Promise<Drawing[]> {
     const where: string[] = [];
     const params: unknown[] = [];
-    
+
     if (filter.tenantId) {
       params.push(filter.tenantId);
       where.push(`tenant_id = $${params.length}`);
@@ -126,7 +176,7 @@ export class PostgresDrawingStore implements DrawingStore {
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     params.push(filter.limit ?? 100);
-    
+
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_engineering_drawings ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
@@ -138,14 +188,19 @@ export class PostgresDrawingStore implements DrawingStore {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (col: string, val?: string): void => {
-      if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
+      if (val) {
+        params.push(val);
+        where.push(`${col} = $${params.length}`);
+      }
     };
     add('tenant_id', filter.tenantId);
     add('project_id', filter.projectId);
     add('status', filter.status);
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const countRes = await this.pool.query<{ count: string }>(
-      `SELECT COUNT(*)::int AS count FROM public.aura_engineering_drawings ${whereSql}`, params);
+      `SELECT COUNT(*)::int AS count FROM public.aura_engineering_drawings ${whereSql}`,
+      params,
+    );
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<Row>(

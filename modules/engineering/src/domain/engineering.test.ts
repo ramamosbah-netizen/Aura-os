@@ -7,6 +7,8 @@ import { toDiscipline } from './discipline';
 import { makeDesignChange, decideDesignChange, triggersVariation } from './design-change';
 import { makeEngineeringDocument, transitionDocument, ownerModuleOf, isDocType, getDocumentDefinition } from './engineering-document';
 import { InMemoryDrawingStore } from '../in-memory-drawing-store';
+import { InMemoryDrawingSubmissionStore } from '../in-memory-drawing-submission-store';
+import { InMemoryDrawingReviewStore } from '../in-memory-drawing-review-store';
 import { InMemoryRfiStore } from '../in-memory-rfi-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryTechnicalQueryStore } from '../in-memory-technical-query-store';
@@ -157,6 +159,8 @@ describe('Engineering Module Bounded Context', () => {
       
       const service = new EngineeringService(
         drawingStore,
+        new InMemoryDrawingSubmissionStore(),
+        new InMemoryDrawingReviewStore(),
         rfiStore,
         submittalStore,
         new InMemoryTechnicalQueryStore(),
@@ -176,17 +180,23 @@ describe('Engineering Module Bounded Context', () => {
       });
 
       expect(d.status).toBe('draft');
-      
+
+      // Walk the controlled lifecycle: submit → under review → approve.
+      await service.submitDrawing('t1', null, d.id, { recipient: 'Consultant' });
+      await service.startReviewDrawing('t1', null, d.id);
+      const approved = await service.reviewDrawing('t1', null, d.id, { outcome: 'approved' });
+      expect(approved.status).toBe('approved');
+
+      // Revising an approved drawing creates the NEXT revision (draft) and supersedes the source.
       const revised = await service.reviseDrawing('t1', null, d.id, {
-        revision: '1',
+        reason: 'Issued for construction',
         title: 'Structural Foundation Details (Issued for Construction)',
       });
-
       expect(revised.revision).toBe('1');
-      expect(revised.title).toContain('Issued for Construction');
-
-      const approved = await service.approveDrawing('t1', null, d.id);
-      expect(approved.status).toBe('approved');
+      expect(revised.status).toBe('draft');
+      expect(revised.previousRevision).toBe('0');
+      const supersededSource = await service.getDrawing(d.id);
+      expect(supersededSource?.status).toBe('superseded');
     });
   });
 
@@ -198,6 +208,8 @@ describe('Engineering Module Bounded Context', () => {
 
       const service = new EngineeringService(
         drawingStore,
+        new InMemoryDrawingSubmissionStore(),
+        new InMemoryDrawingReviewStore(),
         rfiStore,
         submittalStore,
         new InMemoryTechnicalQueryStore(),
@@ -234,6 +246,8 @@ describe('Engineering Module Bounded Context', () => {
 
       const service = new EngineeringService(
         drawingStore,
+        new InMemoryDrawingSubmissionStore(),
+        new InMemoryDrawingReviewStore(),
         rfiStore,
         submittalStore,
         new InMemoryTechnicalQueryStore(),
@@ -267,6 +281,8 @@ describe('Engineering Module Bounded Context', () => {
       const drawingStore = new InMemoryDrawingStore();
       const service = new EngineeringService(
         drawingStore,
+        new InMemoryDrawingSubmissionStore(),
+        new InMemoryDrawingReviewStore(),
         new InMemoryRfiStore(),
         new InMemorySubmittalStore(),
         new InMemoryTechnicalQueryStore(),
@@ -322,6 +338,8 @@ describe('Engineering Module Bounded Context', () => {
 
       const service = new EngineeringService(
         drawingStore,
+        new InMemoryDrawingSubmissionStore(),
+        new InMemoryDrawingReviewStore(),
         rfiStore,
         submittalStore,
         tqStore,

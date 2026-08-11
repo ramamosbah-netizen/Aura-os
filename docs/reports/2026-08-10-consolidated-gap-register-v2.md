@@ -86,7 +86,7 @@ select current_user, (select rolbypassrls from pg_roles where rolname = current_
 -- current_user = postgres    rolbypassrls = true
 ```
 
-`DATABASE_URL` in `apps/api/.env.local` points at `postgres.jzhvmempkpgitmfunoyr`. Every policy on all 182 tables is bypassed at runtime. The mechanism is complete and CI-proven; **only the connection role is wrong.**
+`DATABASE_URL` in `apps/api/.env.local` pointed at the database **owner** role rather than the least-privilege one. Under an owner connection every policy on all 182 tables is bypassed at runtime. The mechanism is complete and CI-proven; **only the connection role was wrong.**
 
 **Agreed shape — enforce, but keep development able to write.** The escape hatch already exists: `apps/api/src/main.ts:76` honours a loud `ALLOW_RLS_BYPASS=true` override, and `evaluateRlsPosture` refuses to boot production under a bypassing role. So this is configuration plus a seam check, not construction:
 

@@ -15,8 +15,9 @@ related: [0011, 0012, 0002, 0004]
 **Status:** Accepted · **Date:** 2026-08-10
 
 Fixes the model for authority compliance (gap register **G-20**) so that SIRA and DCD are *data on
-a shared core*, not two modules. Grounded in [the G-20 discovery](../reports/2026-08-10-g20-compliance-discovery.md),
-which surveyed what already exists before any of this was designed.
+a shared core*, not two modules. Grounded in the G-20 discovery pass, which surveyed what already exists before any of this was
+designed. That document is held outside this repository: it inventories the platform's security
+posture, and this repository is public.
 
 ## Context
 

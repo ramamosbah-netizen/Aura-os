@@ -373,7 +373,28 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter @aura/web exec playwright install --with-deps chromium
 
+      # Until now this job ran the web server alone, so every spec that wrote through the BFF
+      # could only ever pass by not being written. That is the N-04 failure mode — "verified" by
+      # checks that cannot exercise the journey. No DATABASE_URL, so the API boots on its
+      # in-memory stores: enough to prove a real request/response round trip, nothing to clean up.
+      - name: Build and boot the API
+        run: |
+          pnpm --filter @aura/api... build
+          cd apps/api
+          PORT=4000 nohup node dist/main.js > api.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4000/api/v1/health >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/api/v1/health >/dev/null \
+            || { echo "::error::API did not become healthy"; cat api.log; exit 1; }
+
       - name: Smoke
         run: pnpm --filter @aura/web e2e
         env:
           CI: 'true'
+          AURA_API_URL: http://localhost:4000
+
+      - name: API log on failure
+        if: failure()
+        run: cat apps/api/api.log || true

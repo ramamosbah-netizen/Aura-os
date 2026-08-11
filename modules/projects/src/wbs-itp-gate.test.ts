@@ -3,6 +3,7 @@ import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 import {
   QualityService,
   InMemoryNcrStore,
+  InMemoryNcrVerificationStore,
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
   InMemoryItpStore,
@@ -32,6 +33,7 @@ const access = new AccessService();
 function buildQuality(): QualityService {
   return new QualityService(
     new InMemoryNcrStore(),
+    new InMemoryNcrVerificationStore(),
     new InMemoryInspectionRequestStore(),
     new InMemorySnagStore(),
     new InMemoryItpStore(),

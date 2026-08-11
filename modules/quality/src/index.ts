@@ -1,4 +1,5 @@
 export * from './domain/ncr';
+export * from './domain/ncr-verification';
 export * from './domain/inspection-request';
 export * from './domain/snag';
 export * from './domain/itp';

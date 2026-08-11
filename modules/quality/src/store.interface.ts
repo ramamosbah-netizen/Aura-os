@@ -1,6 +1,7 @@
 import type { TxHandle } from '@aura/core';
 import type { Page, PageParams } from '@aura/shared';
 import type { Ncr } from './domain/ncr';
+import type { NcrVerification } from './domain/ncr-verification';
 import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
@@ -21,6 +22,11 @@ export interface NcrStore {
   findByProject(projectId: string, tenantId: string): Promise<Ncr[]>;
   findAll(tenantId: string): Promise<Ncr[]>;
   listPaged(tenantId: string, page: PageParams): Promise<Page<Ncr>>;
+}
+
+export interface NcrVerificationStore {
+  save(v: NcrVerification, tx?: TxHandle): Promise<void>;
+  listByNcr(ncrId: string, tenantId: string): Promise<NcrVerification[]>;
 }
 
 export interface InspectionRequestStore {

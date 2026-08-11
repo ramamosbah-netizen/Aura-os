@@ -1,5 +1,31 @@
 import { randomUUID } from 'node:crypto';
 
+export type InspectionStatus = 'requested' | 'in_progress' | 'approved' | 'rejected';
+
+/**
+ * IR lifecycle: requested → (in_progress) → approved | rejected. A resolved IR is terminal — it
+ * cannot be re-resolved, and a rejected inspection cannot silently flip to approved. `approved`
+ * accrues the measured quantity on the Quantity Ledger; `rejected` is the trigger for an NCR.
+ */
+export const INSPECTION_TRANSITIONS: Record<InspectionStatus, InspectionStatus[]> = {
+  requested: ['in_progress', 'approved', 'rejected'],
+  in_progress: ['approved', 'rejected'],
+  approved: [],
+  rejected: [],
+};
+
+export class InspectionTransitionError extends Error {
+  constructor(from: InspectionStatus, to: InspectionStatus) {
+    // "can only" → 409 CONFLICT via the API error taxonomy.
+    super(`an inspection in '${from}' can only advance to an allowed next state (attempted → '${to}')`);
+    this.name = 'InspectionTransitionError';
+  }
+}
+
+export function assertInspectionTransition(from: InspectionStatus, to: InspectionStatus): void {
+  if (!(INSPECTION_TRANSITIONS[from]?.includes(to) ?? false)) throw new InspectionTransitionError(from, to);
+}
+
 export interface InspectionRequest {
   id: string;
   tenantId: string;
@@ -10,7 +36,7 @@ export interface InspectionRequest {
   discipline: 'civil' | 'mechanical' | 'electrical' | 'plumbing';
   locationDetail: string;
   inspectionDate: string; // YYYY-MM-DD
-  status: 'requested' | 'approved' | 'rejected';
+  status: InspectionStatus;
   inspectedBy: string | null;
   comments: string | null;
   /** The BOQ (measured) item this inspection covers — where the APPROVED quantity accrues on the

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeAuditSchedule } from './audit-schedule';
 import {
   InMemoryNcrStore,
+  InMemoryNcrVerificationStore,
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
   InMemoryItpStore,
@@ -46,6 +47,7 @@ describe('Quality ISO Audits and Checklists', () => {
     const ncrStore = new InMemoryNcrStore();
     const service = new QualityService(
       ncrStore,
+      new InMemoryNcrVerificationStore(),
       new InMemoryInspectionRequestStore(),
       new InMemorySnagStore(),
       new InMemoryItpStore(),

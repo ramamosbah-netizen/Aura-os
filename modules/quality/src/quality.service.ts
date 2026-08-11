@@ -2,8 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
-import { type Ncr, makeNcr } from './domain/ncr';
-import { type InspectionRequest, makeInspectionRequest } from './domain/inspection-request';
+import { type Ncr, makeNcr, planNcrAction, markNcrCorrected, verifyNcr } from './domain/ncr';
+import { makeNcrVerification } from './domain/ncr-verification';
+import { type InspectionRequest, makeInspectionRequest, assertInspectionTransition } from './domain/inspection-request';
 import { type Snag, makeSnag } from './domain/snag';
 import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp, allPointsResolved } from './domain/itp';
 import {
@@ -20,6 +21,7 @@ import { type Calibration, type NewCalibration, makeCalibration, calibrationStat
 import { type AuditSchedule, type ChecklistItem, type NewAuditSchedule, makeAuditSchedule, QUALITY_AUDIT_EVENT } from './domain/audit-schedule';
 
 export const NCR_STORE = Symbol('NCR_STORE');
+export const NCR_VERIFICATION_STORE = Symbol('NCR_VERIFICATION_STORE');
 export const INSPECTION_REQUEST_STORE = Symbol('INSPECTION_REQUEST_STORE');
 export const SNAG_STORE = Symbol('SNAG_STORE');
 export const ITP_STORE = Symbol('ITP_STORE');
@@ -29,6 +31,7 @@ export const AUDIT_SCHEDULE_STORE = Symbol('AUDIT_SCHEDULE_STORE');
 
 import {
   type NcrStore,
+  type NcrVerificationStore,
   type InspectionRequestStore,
   type SnagStore,
   type ItpStore,
@@ -40,6 +43,10 @@ import {
 
 export const QUALITY_EVENT = {
   ncrRaised: 'quality.ncr.raised',
+  ncrActionPlanned: 'quality.ncr.action_planned',
+  ncrCorrected: 'quality.ncr.corrected',
+  ncrClosed: 'quality.ncr.closed',
+  ncrReopened: 'quality.ncr.reopened',
   irApproved: 'quality.ir.approved',
   snagClosed: 'quality.snag.closed',
   itpCreated: 'quality.itp.created',
@@ -56,6 +63,7 @@ export class QualityService {
 
   constructor(
     @Inject(NCR_STORE) private readonly ncrStore: NcrStore,
+    @Inject(NCR_VERIFICATION_STORE) private readonly ncrVerificationStore: NcrVerificationStore,
     @Inject(INSPECTION_REQUEST_STORE) private readonly irStore: InspectionRequestStore,
     @Inject(SNAG_STORE) private readonly snagStore: SnagStore,
     @Inject(ITP_STORE) private readonly itpStore: ItpStore,
@@ -77,10 +85,11 @@ export class QualityService {
     ncrNumber: string;
     description: string;
     rootCause?: string;
-    proposedCorrection?: string;
     severity: Ncr['severity'];
     raisedBy?: string;
     assignedTo?: string;
+    sourceIrId?: string;
+    sourceIrNumber?: string;
   }): Promise<Ncr> {
     if (input.raisedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
@@ -96,7 +105,7 @@ export class QualityService {
       actorId: input.raisedBy || null,
       aggregateType: 'quality.ncr',
       aggregateId: ncr.id,
-      payload: { severity: ncr.severity, ncrNumber: ncr.ncrNumber, projectId: ncr.projectId },
+      payload: { severity: ncr.severity, ncrNumber: ncr.ncrNumber, projectId: ncr.projectId, sourceIrId: ncr.sourceIrId },
     });
 
     await this.tx.run(async (handle) => {
@@ -108,27 +117,125 @@ export class QualityService {
     return ncr;
   }
 
-  async updateNcrStatus(tenantId: Id, actorId: Id | null, id: Id, status: Ncr['status'], rootCause?: string, proposedCorrection?: string): Promise<Ncr> {
+  private async loadNcr(tenantId: Id, id: Id): Promise<Ncr> {
     const ncr = await this.ncrStore.findById(id, tenantId);
     if (!ncr) throw new Error(`NCR with ID ${id} not found`);
+    return ncr;
+  }
 
-    if (actorId) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
-      if (ncr.companyId) orgPath.push({ level: 'company', id: ncr.companyId });
-      this.access.assert(actorId, { permission: 'quality.ncr.close', orgPath });
-    }
+  private assertNcrPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string): void {
+    if (!actorId) return;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (companyId) orgPath.push({ level: 'company', id: companyId });
+    this.access.assert(actorId, { permission, orgPath });
+  }
 
-    ncr.status = status;
-    if (rootCause) ncr.rootCause = rootCause;
-    if (proposedCorrection) ncr.proposedCorrection = proposedCorrection;
-    ncr.updatedAt = new Date().toISOString();
-
+  private async saveNcrWithEvent(ncr: Ncr, actorId: Id | null, type: string): Promise<Ncr> {
+    const event = makeEvent({
+      type,
+      tenantId: ncr.tenantId,
+      companyId: ncr.companyId,
+      actorId,
+      aggregateType: 'quality.ncr',
+      aggregateId: ncr.id,
+      payload: { ncrNumber: ncr.ncrNumber, status: ncr.status, projectId: ncr.projectId },
+    });
     await this.tx.run(async (handle) => {
       await this.ncrStore.save(ncr, handle);
+      await this.events.appendWithClient(handle, [event]);
     });
-
-    this.logger.log(`NCR ${ncr.ncrNumber} status changed to ${status}`);
+    this.logger.log(`NCR ${ncr.ncrNumber} → ${ncr.status}`);
     return ncr;
+  }
+
+  /** raised → action_planned. Records root cause + corrective action + owner. */
+  async planNcrAction(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    input: { rootCause: string; correctiveAction: string; assignedTo?: string | null },
+  ): Promise<Ncr> {
+    const ncr = await this.loadNcr(tenantId, id);
+    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.plan');
+    return this.saveNcrWithEvent(planNcrAction(ncr, input), actorId, QUALITY_EVENT.ncrActionPlanned);
+  }
+
+  /** action_planned → corrected. The owner marks the corrective action implemented. */
+  async markNcrCorrected(tenantId: Id, actorId: Id | null, id: Id): Promise<Ncr> {
+    const ncr = await this.loadNcr(tenantId, id);
+    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.correct');
+    return this.saveNcrWithEvent(markNcrCorrected(ncr, actorId), actorId, QUALITY_EVENT.ncrCorrected);
+  }
+
+  /**
+   * QA close-out on a corrected NCR: accepted → closed (immutable), rejected → action_planned
+   * (re-correct). Records an immutable NcrVerification (rejection requires a note).
+   */
+  async verifyNcr(tenantId: Id, actorId: Id | null, id: Id, input: { accepted: boolean; note?: string }): Promise<Ncr> {
+    const ncr = await this.loadNcr(tenantId, id);
+    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.close');
+
+    const verification = makeNcrVerification({
+      tenantId: ncr.tenantId,
+      companyId: ncr.companyId,
+      ncrId: ncr.id,
+      ncrNumber: ncr.ncrNumber,
+      projectId: ncr.projectId,
+      verifiedBy: actorId,
+      outcome: input.accepted ? 'accepted' : 'rejected',
+      note: input.note,
+    });
+    const updated = verifyNcr(ncr, input.accepted, actorId); // enforces from `corrected` only
+    const type = input.accepted ? QUALITY_EVENT.ncrClosed : QUALITY_EVENT.ncrReopened;
+    const event = makeEvent({
+      type,
+      tenantId: ncr.tenantId,
+      companyId: ncr.companyId,
+      actorId,
+      aggregateType: 'quality.ncr',
+      aggregateId: ncr.id,
+      payload: { ncrNumber: ncr.ncrNumber, status: updated.status, outcome: verification.outcome, projectId: ncr.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.ncrStore.save(updated, handle);
+      await this.ncrVerificationStore.save(verification, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`NCR ${ncr.ncrNumber} verify ${verification.outcome} → ${updated.status}`);
+    return updated;
+  }
+
+  listNcrVerifications(tenantId: Id, ncrId: Id) {
+    return this.ncrVerificationStore.listByNcr(ncrId, tenantId);
+  }
+
+  getNcr(tenantId: Id, id: Id): Promise<Ncr | null> {
+    return this.ncrStore.findById(id, tenantId);
+  }
+
+  /** Raise an NCR from a rejected Inspection Request — carries the IR provenance. */
+  async raiseNcrFromInspection(
+    tenantId: Id,
+    actorId: Id | null,
+    irId: Id,
+    input: { ncrNumber: string; description: string; severity: Ncr['severity']; assignedTo?: string },
+  ): Promise<Ncr> {
+    const ir = await this.irStore.findById(irId, tenantId);
+    if (!ir) throw new Error(`Inspection Request with ID ${irId} not found`);
+    if (ir.status !== 'rejected') throw new Error('an NCR can only be raised from a rejected inspection');
+    return this.raiseNcr({
+      tenantId,
+      companyId: ir.companyId ?? undefined,
+      projectId: ir.projectId,
+      projectName: ir.projectName ?? undefined,
+      ncrNumber: input.ncrNumber,
+      description: input.description,
+      severity: input.severity,
+      assignedTo: input.assignedTo,
+      sourceIrId: ir.id,
+      sourceIrNumber: ir.irNumber,
+      raisedBy: actorId ?? undefined,
+    });
   }
 
   listNcrs(tenantId: Id): Promise<Ncr[]> {
@@ -171,6 +278,26 @@ export class QualityService {
     return ir;
   }
 
+  /** requested → in_progress. Optional "inspection started" step before a pass/fail decision. */
+  async startInspection(tenantId: Id, actorId: Id | null, id: Id): Promise<InspectionRequest> {
+    const ir = await this.irStore.findById(id, tenantId);
+    if (!ir) throw new Error(`Inspection Request with ID ${id} not found`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (ir.companyId) orgPath.push({ level: 'company', id: ir.companyId });
+      this.access.assert(actorId, { permission: 'quality.ir.approve', orgPath });
+    }
+    assertInspectionTransition(ir.status, 'in_progress');
+    ir.status = 'in_progress';
+    ir.inspectedBy = actorId;
+    ir.updatedAt = new Date().toISOString();
+    await this.tx.run(async (handle) => {
+      await this.irStore.save(ir, handle);
+    });
+    this.logger.log(`Inspection ${ir.irNumber} started`);
+    return ir;
+  }
+
   async resolveInspection(tenantId: Id, actorId: Id | null, id: Id, status: 'approved' | 'rejected', comments?: string): Promise<InspectionRequest> {
     const ir = await this.irStore.findById(id, tenantId);
     if (!ir) throw new Error(`Inspection Request with ID ${id} not found`);
@@ -181,6 +308,7 @@ export class QualityService {
       this.access.assert(actorId, { permission: 'quality.ir.approve', orgPath });
     }
 
+    assertInspectionTransition(ir.status, status); // fail-closed: a resolved IR cannot be re-resolved
     ir.status = status;
     ir.inspectedBy = actorId;
     if (comments) ir.comments = comments;

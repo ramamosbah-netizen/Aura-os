@@ -1,0 +1,21 @@
+# AURA OS — secret-scanning config for the `secret scan (gitleaks)` CI gate.
+#
+# Keeps the full upstream ruleset and adds one allowlist. The rule of thumb for anything
+# added here: the exemption must be impossible to satisfy by accident with a real secret.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+Deliberately-forged JWTs in tests. The RBAC/tenant-isolation e2e suite asserts that a token
+signed with the wrong secret is refused, which requires a JWT-shaped string in the source —
+gitleaks' `jwt` rule cannot tell that apart from a real one.
+
+Scoped to the literal signature `not-a-real-signature` rather than to a path, so the exemption
+travels with the marker and not with the file: a genuine token pasted into the same test still
+fails the gate, because a real token cannot carry that signature. Any future test fixture must
+use the same marker to be exempt.
+"""
+regexTarget = "line"
+regexes = ['''\.not-a-real-signature''']

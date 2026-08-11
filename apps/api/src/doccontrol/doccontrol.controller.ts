@@ -4,6 +4,8 @@ import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Transmittal,
+  type TransmittalAcknowledgement,
+  type DocumentRevision,
   type Correspondence,
   type Submittal,
   type ReviewCode,
@@ -35,6 +37,23 @@ class CreateCorrespondenceDto {
   @IsOptional() @IsString() recipient?: string;
 }
 
+class AckTransmittalDto {
+  @IsOptional() @IsString() note?: string;
+}
+
+class ApproveDocumentDto {
+  @IsOptional() @IsString() comments?: string;
+}
+
+class RejectDocumentDto {
+  @IsString() reason!: string;
+}
+
+class ReviseDocumentDto {
+  @IsString() reason!: string;
+  @IsOptional() @IsString() revision?: string;
+}
+
 @Controller('doccontrol')
 export class DocControlController {
   constructor(
@@ -64,10 +83,28 @@ export class DocControlController {
     });
   }
 
-  @Put('transmittals/:id/acknowledge')
-  acknowledgeTransmittal(@Param('id') id: string): Promise<Transmittal> {
+  @Post('transmittals/:id/send')
+  sendTransmittal(@Param('id') id: string): Promise<Transmittal> {
     const ctx = this.tenant.get();
-    return this.docControlService.acknowledgeTransmittal(ctx.tenantId, ctx.actorId, id);
+    return this.docControlService.sendTransmittal(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Post('transmittals/:id/receive')
+  receiveTransmittal(@Param('id') id: string): Promise<Transmittal> {
+    const ctx = this.tenant.get();
+    return this.docControlService.receiveTransmittal(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Put('transmittals/:id/acknowledge')
+  acknowledgeTransmittal(@Param('id') id: string, @Body() dto?: AckTransmittalDto): Promise<Transmittal> {
+    const ctx = this.tenant.get();
+    return this.docControlService.acknowledgeTransmittal(ctx.tenantId, ctx.actorId, id, dto?.note);
+  }
+
+  @Get('transmittals/:id/acknowledgements')
+  listTransmittalAcknowledgements(@Param('id') id: string): Promise<TransmittalAcknowledgement[]> {
+    const ctx = this.tenant.get();
+    return this.docControlService.listTransmittalAcknowledgements(ctx.tenantId, id);
   }
 
   @Get('transmittals')
@@ -241,5 +278,56 @@ export class DocControlController {
   registerEntryHistory(@Param('id') id: string) {
     // "register entry not found" is classified to 404 by the global error taxonomy.
     return this.docControlService.registerEntryHistory(this.tenant.get().tenantId, id);
+  }
+
+  /** Immutable revision history (the approval journey) for a document. */
+  @Get('register/:id/revisions')
+  listDocumentRevisions(@Param('id') id: string): Promise<DocumentRevision[]> {
+    return this.docControlService.listDocumentRevisions(this.tenant.get().tenantId, id);
+  }
+
+  // ── Governed document-approval lifecycle (POST verbs on a revision, never PATCH status) ──
+
+  @Get('revisions/:revId')
+  getRevision(@Param('revId') revId: string): Promise<DocumentRevision | null> {
+    return this.docControlService.getDocumentRevision(this.tenant.get().tenantId, revId);
+  }
+
+  @Post('revisions/:revId/submit')
+  submitDocument(@Param('revId') revId: string): Promise<DocumentRevision> {
+    const ctx = this.tenant.get();
+    return this.docControlService.submitDocument(ctx.tenantId, ctx.actorId, revId);
+  }
+
+  @Post('revisions/:revId/start-review')
+  startReviewDocument(@Param('revId') revId: string): Promise<DocumentRevision> {
+    const ctx = this.tenant.get();
+    return this.docControlService.startReviewDocument(ctx.tenantId, ctx.actorId, revId);
+  }
+
+  @Post('revisions/:revId/approve')
+  approveDocument(@Param('revId') revId: string, @Body() dto?: ApproveDocumentDto): Promise<DocumentRevision> {
+    const ctx = this.tenant.get();
+    return this.docControlService.approveDocument(ctx.tenantId, ctx.actorId, revId, dto?.comments);
+  }
+
+  @Post('revisions/:revId/reject')
+  rejectDocument(@Param('revId') revId: string, @Body() dto: RejectDocumentDto): Promise<DocumentRevision> {
+    if (!dto?.reason?.trim()) throw new BadRequestException('a rejection reason is required');
+    const ctx = this.tenant.get();
+    return this.docControlService.rejectDocument(ctx.tenantId, ctx.actorId, revId, dto.reason);
+  }
+
+  @Post('revisions/:revId/issue')
+  issueDocument(@Param('revId') revId: string): Promise<DocumentRevision> {
+    const ctx = this.tenant.get();
+    return this.docControlService.issueDocument(ctx.tenantId, ctx.actorId, revId);
+  }
+
+  @Post('revisions/:revId/revise')
+  reviseDocument(@Param('revId') revId: string, @Body() dto: ReviseDocumentDto): Promise<DocumentRevision> {
+    if (!dto?.reason?.trim()) throw new BadRequestException('reason for the new revision is required');
+    const ctx = this.tenant.get();
+    return this.docControlService.createRevision(ctx.tenantId, ctx.actorId, revId, dto.reason, dto.revision);
   }
 }

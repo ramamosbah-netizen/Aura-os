@@ -4,6 +4,7 @@ import { CoreModule, PG_POOL } from '@aura/core';
 
 import {
   NCR_STORE,
+  NCR_VERIFICATION_STORE,
   INSPECTION_REQUEST_STORE,
   SNAG_STORE,
   ITP_STORE,
@@ -15,6 +16,7 @@ import {
 
 import {
   InMemoryNcrStore,
+  InMemoryNcrVerificationStore,
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
   InMemoryItpStore,
@@ -25,6 +27,7 @@ import {
 
 import {
   PostgresNcrStore,
+  PostgresNcrVerificationStore,
   PostgresInspectionRequestStore,
   PostgresSnagStore,
   PostgresItpStore,
@@ -41,6 +44,12 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresNcrStore(pool) : new InMemoryNcrStore(),
+    },
+    {
+      provide: NCR_VERIFICATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresNcrVerificationStore(pool) : new InMemoryNcrVerificationStore(),
     },
     {
       provide: INSPECTION_REQUEST_STORE,

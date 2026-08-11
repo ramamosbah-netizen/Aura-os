@@ -1,4 +1,5 @@
 import type { Ncr } from './domain/ncr';
+import type { NcrVerification } from './domain/ncr-verification';
 import type { InspectionRequest } from './domain/inspection-request';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
@@ -6,7 +7,22 @@ import type { MaterialApproval } from './domain/material-approval';
 import type { Calibration } from './domain/calibration';
 import type { AuditSchedule } from './domain/audit-schedule';
 import { type Page, type PageParams, paginate } from '@aura/shared';
-import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { NcrStore, NcrVerificationStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+
+export class InMemoryNcrVerificationStore implements NcrVerificationStore {
+  private readonly items = new Map<string, NcrVerification>();
+
+  async save(v: NcrVerification): Promise<void> {
+    this.items.set(v.id, { ...v });
+  }
+
+  async listByNcr(ncrId: string, tenantId: string): Promise<NcrVerification[]> {
+    return [...this.items.values()]
+      .filter((v) => v.ncrId === ncrId && v.tenantId === tenantId)
+      .map((v) => ({ ...v }))
+      .sort((a, b) => (a.verifiedAt < b.verifiedAt ? 1 : -1));
+  }
+}
 
 export class InMemoryCalibrationStore implements CalibrationStore {
   private readonly items = new Map<string, Calibration>();

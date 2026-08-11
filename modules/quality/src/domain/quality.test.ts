@@ -4,6 +4,7 @@ import { makeInspectionRequest } from './inspection-request';
 import { makeSnag } from './snag';
 import {
   InMemoryNcrStore,
+  InMemoryNcrVerificationStore,
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
   InMemoryItpStore,
@@ -45,7 +46,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, new InMemoryNcrVerificationStore(), irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
 
       const ncr = await service.raiseNcr({
         tenantId: 't1',
@@ -57,9 +58,16 @@ describe('Quality Module Bounded Context', () => {
 
       expect(ncr.status).toBe('raised');
 
-      const corrected = await service.updateNcrStatus('t1', null, ncr.id, 'corrected', 'Poor spacing template', 'Repositioned under supervision');
+      // Governed corrective-action loop: plan → correct.
+      const planned = await service.planNcrAction('t1', null, ncr.id, {
+        rootCause: 'Poor spacing template',
+        correctiveAction: 'Reposition under supervision',
+      });
+      expect(planned.status).toBe('action_planned');
+      expect(planned.rootCause).toBe('Poor spacing template');
+
+      const corrected = await service.markNcrCorrected('t1', null, ncr.id);
       expect(corrected.status).toBe('corrected');
-      expect(corrected.rootCause).toBe('Poor spacing template');
     });
   });
 
@@ -69,7 +77,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, new InMemoryNcrVerificationStore(), irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
 
       const ir = await service.requestInspection({
         tenantId: 't1',
@@ -94,7 +102,7 @@ describe('Quality Module Bounded Context', () => {
       const irStore = new InMemoryInspectionRequestStore();
       const snagStore = new InMemorySnagStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, new InMemoryNcrVerificationStore(), irStore, snagStore, new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(), new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
 
       const snag = await service.logSnag({
         tenantId: 't1',
@@ -122,7 +130,7 @@ describe('Quality Module Bounded Context', () => {
       const marStore = new InMemoryMaterialApprovalStore();
       const calStore = new InMemoryCalibrationStore();
 
-      const service = new QualityService(ncrStore, irStore, snagStore, itpStore, marStore, calStore, new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
+      const service = new QualityService(ncrStore, new InMemoryNcrVerificationStore(), irStore, snagStore, itpStore, marStore, calStore, new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess);
 
       await service.createMaterialApproval({
         tenantId: 't1',
@@ -160,7 +168,7 @@ describe('Quality Module Bounded Context', () => {
   describe('Transactional-list pagination (NCR / IR / snag / ITP)', () => {
     it('pages each list with totals and tenant isolation', async () => {
       const service = new QualityService(
-        new InMemoryNcrStore(), new InMemoryInspectionRequestStore(), new InMemorySnagStore(),
+        new InMemoryNcrStore(), new InMemoryNcrVerificationStore(), new InMemoryInspectionRequestStore(), new InMemorySnagStore(),
         new InMemoryItpStore(), new InMemoryMaterialApprovalStore(), new InMemoryCalibrationStore(),
         new InMemoryAuditScheduleStore(), mockEvents, mockTx, mockAccess,
       );

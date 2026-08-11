@@ -18,12 +18,12 @@ export interface Ncr {
   rootCause: string | null;
   proposedCorrection: string | null;
   severity: 'minor' | 'major';
-  status: 'raised' | 'corrected' | 'closed';
+  status: 'raised' | 'action_planned' | 'corrected' | 'closed';
   assignedTo: string | null;
   createdAt: string;
 }
 
-const statusColor: Record<string, string> = { raised: 'var(--bad)', corrected: 'var(--warn)', closed: 'var(--good)' };
+const statusColor: Record<string, string> = { raised: 'var(--bad)', action_planned: 'var(--warn)', corrected: 'var(--warn)', closed: 'var(--good)' };
 const sevColor: Record<string, string> = { minor: 'var(--muted)', major: 'var(--bad)' };
 
 export default function NcrClient({ initial }: { initial: Ncr[] }) {
@@ -60,18 +60,6 @@ export default function NcrClient({ initial }: { initial: Ncr[] }) {
       setRows((p) => [data, ...p]);
       setF({ projectId: f.projectId, ncrNumber: '', description: '', severity: 'minor', assignedTo: '', rootCause: '', proposedCorrection: '' });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  };
-
-  const setStatus = async (id: string, status: 'corrected' | 'closed') => {
-    setError('');
-    try {
-      const res = await fetch(`/api/quality/ncrs/${id}/status`, {
-        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || 'Failed');
-      setRows((p) => p.map((r) => (r.id === id ? data : r)));
-    } catch (e) { setError((e as Error).message); }
   };
 
   return (
@@ -131,10 +119,9 @@ export default function NcrClient({ initial }: { initial: Ncr[] }) {
                 <td style={st.td}>{r.description}</td>
                 <td style={{ ...st.td, color: sevColor[r.severity], fontWeight: 600 }}>{r.severity}</td>
                 <td style={st.td}>{r.assignedTo || '—'}</td>
-                <td style={{ ...st.td, color: statusColor[r.status], fontWeight: 600 }}>{r.status}</td>
+                <td style={{ ...st.td, color: statusColor[r.status] ?? 'var(--muted)', fontWeight: 600 }}>{r.status}</td>
                 <td style={st.td}>
-                  {r.status === 'raised' && <button style={st.sm} onClick={() => setStatus(r.id, 'corrected')}>Mark corrected</button>}
-                  {r.status === 'corrected' && <button style={st.smGreen} onClick={() => setStatus(r.id, 'closed')}>Close</button>}
+                  <a href={`/quality/ncrs/${r.id}`} style={st.sm}>Manage workflow →</a>
                 </td>
               </tr>
             ))}

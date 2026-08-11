@@ -2,6 +2,7 @@
 // This barrel keeps existing `from './postgres-quality-store'` imports working.
 export { PostgresCalibrationStore } from './postgres-calibration-store';
 export { PostgresNcrStore } from './postgres-ncr-store';
+export { PostgresNcrVerificationStore } from './postgres-ncr-verification-store';
 export { PostgresInspectionRequestStore } from './postgres-ir-store';
 export { PostgresSnagStore } from './postgres-snag-store';
 export { PostgresItpStore } from './postgres-itp-store';

@@ -1,9 +1,10 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Ncr,
+  type NcrVerification,
   type InspectionRequest,
   type Snag,
   type Itp,
@@ -23,15 +24,28 @@ class RaiseNcrDto {
   @IsString() ncrNumber!: string;
   @IsString() description!: string;
   @IsOptional() @IsString() rootCause?: string;
-  @IsOptional() @IsString() proposedCorrection?: string;
   @IsString() severity!: Ncr['severity'];
+  @IsOptional() @IsString() assignedTo?: string;
+  @IsOptional() @IsString() sourceIrId?: string;
+  @IsOptional() @IsString() sourceIrNumber?: string;
+}
+
+class PlanNcrDto {
+  @IsString() rootCause!: string;
+  @IsString() correctiveAction!: string;
   @IsOptional() @IsString() assignedTo?: string;
 }
 
-class UpdateNcrStatusDto {
-  @IsString() status!: Ncr['status'];
-  @IsOptional() @IsString() rootCause?: string;
-  @IsOptional() @IsString() proposedCorrection?: string;
+class VerifyNcrDto {
+  @IsBoolean() accepted!: boolean;
+  @IsOptional() @IsString() note?: string;
+}
+
+class RaiseNcrFromInspectionDto {
+  @IsString() ncrNumber!: string;
+  @IsString() description!: string;
+  @IsString() severity!: Ncr['severity'];
+  @IsOptional() @IsString() assignedTo?: string;
 }
 
 class RequestInspectionDto {
@@ -90,34 +104,45 @@ export class QualityController {
       ncrNumber: dto.ncrNumber,
       description: dto.description,
       rootCause: dto.rootCause,
-      proposedCorrection: dto.proposedCorrection,
       severity: dto.severity,
       assignedTo: dto.assignedTo,
+      sourceIrId: dto.sourceIrId,
+      sourceIrNumber: dto.sourceIrNumber,
       raisedBy: ctx.actorId || undefined,
     });
   }
 
-  @Put('ncrs/:id/status')
-  updateNcrStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateNcrStatusDto,
-  ): Promise<Ncr> {
-    if (!dto?.status?.trim()) throw new BadRequestException('status is required');
+  // ── NCR workflow commands (state machine; POST verbs, never PATCH status) ────
 
-    const validStatuses = ['raised', 'corrected', 'closed'];
-    if (!validStatuses.includes(dto.status)) {
-      throw new BadRequestException(`status must be one of: ${validStatuses.join(', ')}`);
-    }
-
+  @Post('ncrs/:id/plan')
+  planNcrAction(@Param('id') id: string, @Body() dto: PlanNcrDto): Promise<Ncr> {
+    if (!dto?.rootCause?.trim()) throw new BadRequestException('rootCause is required');
+    if (!dto?.correctiveAction?.trim()) throw new BadRequestException('correctiveAction is required');
     const ctx = this.tenant.get();
-    return this.qualityService.updateNcrStatus(
-      ctx.tenantId,
-      ctx.actorId,
-      id,
-      dto.status,
-      dto.rootCause,
-      dto.proposedCorrection,
-    );
+    return this.qualityService.planNcrAction(ctx.tenantId, ctx.actorId, id, {
+      rootCause: dto.rootCause,
+      correctiveAction: dto.correctiveAction,
+      assignedTo: dto.assignedTo,
+    });
+  }
+
+  @Post('ncrs/:id/correct')
+  markNcrCorrected(@Param('id') id: string): Promise<Ncr> {
+    const ctx = this.tenant.get();
+    return this.qualityService.markNcrCorrected(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Post('ncrs/:id/verify')
+  verifyNcr(@Param('id') id: string, @Body() dto: VerifyNcrDto): Promise<Ncr> {
+    if (typeof dto?.accepted !== 'boolean') throw new BadRequestException('accepted (boolean) is required');
+    const ctx = this.tenant.get();
+    return this.qualityService.verifyNcr(ctx.tenantId, ctx.actorId, id, { accepted: dto.accepted, note: dto.note });
+  }
+
+  @Get('ncrs/:id/verifications')
+  listNcrVerifications(@Param('id') id: string): Promise<NcrVerification[]> {
+    const ctx = this.tenant.get();
+    return this.qualityService.listNcrVerifications(ctx.tenantId, id);
   }
 
   @Get('ncrs')
@@ -129,6 +154,14 @@ export class QualityController {
   @Get('ncrs/paged')
   pagedNcrs(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.qualityService.listNcrsPaged(this.tenant.get().tenantId, parsePageParams(limit, offset));
+  }
+
+  @Get('ncrs/:id')
+  async getNcr(@Param('id') id: string): Promise<Ncr> {
+    const ctx = this.tenant.get();
+    const found = await this.qualityService.getNcr(ctx.tenantId, id);
+    if (!found) throw new NotFoundException(`NCR ${id} not found`);
+    return found;
   }
 
   // ── Inspection Requests (IR) ────────────────────────────────────────────────
@@ -160,6 +193,26 @@ export class QualityController {
       boqItemId: dto.boqItemId ?? null,
       approvedQuantity: dto.approvedQuantity ?? null,
       unit: dto.unit ?? null,
+    });
+  }
+
+  @Post('irs/:id/start-inspection')
+  startInspection(@Param('id') id: string): Promise<InspectionRequest> {
+    const ctx = this.tenant.get();
+    return this.qualityService.startInspection(ctx.tenantId, ctx.actorId, id);
+  }
+
+  /** Raise an NCR from a rejected (failed) inspection — carries the IR provenance onto the NCR. */
+  @Post('irs/:id/raise-ncr')
+  raiseNcrFromInspection(@Param('id') id: string, @Body() dto: RaiseNcrFromInspectionDto): Promise<Ncr> {
+    if (!dto?.ncrNumber?.trim()) throw new BadRequestException('ncrNumber is required');
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    const ctx = this.tenant.get();
+    return this.qualityService.raiseNcrFromInspection(ctx.tenantId, ctx.actorId, id, {
+      ncrNumber: dto.ncrNumber,
+      description: dto.description,
+      severity: dto.severity,
+      assignedTo: dto.assignedTo,
     });
   }
 

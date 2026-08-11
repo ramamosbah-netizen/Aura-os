@@ -2,8 +2,25 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 
-import { type Drawing, type NewDrawing, makeDrawing, ENGINEERING_EVENT } from './domain/drawing';
+import {
+  type Drawing,
+  type NewDrawing,
+  makeDrawing,
+  ENGINEERING_EVENT,
+  submitDrawing as applySubmit,
+  startReviewDrawing as applyStartReview,
+  decideDrawing as applyDecide,
+  transmitDrawing as applyTransmit,
+  closeDrawing as applyClose,
+  reviseDrawing as applyRevise,
+} from './domain/drawing';
 import { DRAWING_STORE, type DrawingFilter, type DrawingStore } from './drawing-store';
+
+import { type DrawingSubmission, makeDrawingSubmission } from './domain/drawing-submission';
+import { DRAWING_SUBMISSION_STORE, type DrawingSubmissionStore } from './drawing-submission-store';
+
+import { type DrawingReview, type ReviewOutcome, makeDrawingReview, outcomeToDecision } from './domain/drawing-review';
+import { DRAWING_REVIEW_STORE, type DrawingReviewStore } from './drawing-review-store';
 
 import { type Rfi, type NewRfi, makeRfi } from './domain/rfi';
 import { RFI_STORE, type RfiFilter, type RfiStore } from './rfi-store';
@@ -29,6 +46,8 @@ export class EngineeringService {
 
   constructor(
     @Inject(DRAWING_STORE) private readonly drawingStore: DrawingStore,
+    @Inject(DRAWING_SUBMISSION_STORE) private readonly submissionStore: DrawingSubmissionStore,
+    @Inject(DRAWING_REVIEW_STORE) private readonly reviewStore: DrawingReviewStore,
     @Inject(RFI_STORE) private readonly rfiStore: RfiStore,
     @Inject(SUBMITTAL_STORE) private readonly submittalStore: SubmittalStore,
     @Inject(TECHNICAL_QUERY_STORE) private readonly tqStore: TechnicalQueryStore,
@@ -73,57 +92,246 @@ export class EngineeringService {
     return drawing;
   }
 
-  async reviseDrawing(tenantId: Id, actorId: Id | null, id: Id, input: { revision: string; title?: string }): Promise<Drawing> {
-    const drawing = assertSameTenant(await this.drawingStore.get(id), this.tenant?.boundTenantId(), 'Drawing with ID', id);
+  /** Fail-closed access check for a drawing workflow command (no-op when actor/auth is off). */
+  private assertDrawingPerm(actorId: Id | null, tenantId: Id, companyId: Id | null, permission: string): void {
+    if (!actorId) return;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (companyId) orgPath.push({ level: 'company', id: companyId });
+    this.access.assert(actorId, { permission, orgPath });
+  }
 
-    if (actorId) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
-      if (drawing.companyId) orgPath.push({ level: 'company', id: drawing.companyId });
-      this.access.assert(actorId, { permission: 'engineering.drawing.update', orgPath });
-    }
+  /** Tenant-scoped load (N-08): never operate on another tenant's drawing. */
+  private async loadDrawing(id: Id): Promise<Drawing> {
+    return assertSameTenant(await this.drawingStore.get(id), this.tenant?.boundTenantId(), 'Drawing with ID', id);
+  }
 
-    const oldRev = drawing.revision;
-    drawing.revision = input.revision;
-    if (input.title) drawing.title = input.title;
-    drawing.updatedAt = new Date().toISOString();
+  /** draft → submitted. Records an immutable Submission transaction. */
+  async submitDrawing(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    input: { recipient?: string; purpose?: string; dueDate?: string; comments?: string } = {},
+  ): Promise<Drawing> {
+    const drawing = await this.loadDrawing(id);
+    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.submit');
 
+    const updated = applySubmit(drawing, actorId); // enforces draft → submitted
+    const submission = makeDrawingSubmission({
+      tenantId,
+      companyId: drawing.companyId,
+      drawingId: drawing.id,
+      drawingCode: drawing.code,
+      revision: drawing.revision,
+      projectId: drawing.projectId,
+      submittedBy: actorId,
+      recipient: input.recipient,
+      purpose: input.purpose,
+      dueDate: input.dueDate,
+      comments: input.comments,
+    });
     const event = makeEvent({
-      type: ENGINEERING_EVENT.drawingRevised,
+      type: ENGINEERING_EVENT.drawingSubmitted,
       tenantId,
       companyId: drawing.companyId,
       actorId,
       aggregateType: 'engineering.drawing',
       aggregateId: drawing.id,
-      payload: { code: drawing.code, title: drawing.title, oldRevision: oldRev, newRevision: drawing.revision },
+      payload: { code: drawing.code, revision: drawing.revision, recipient: submission.recipient, purpose: submission.purpose, projectId: drawing.projectId },
     });
-
     await this.tx.run(async (handle) => {
-      await this.drawingStore.updateWithClient(handle, drawing);
+      await this.drawingStore.updateWithClient(handle, updated);
+      await this.submissionStore.createWithClient(handle, submission);
       await this.events.appendWithClient(handle, [event]);
     });
-
-    this.logger.log(`Drawing revised: ${drawing.code} - Rev ${drawing.revision} (${drawing.id})`);
-    return drawing;
+    this.logger.log(`Drawing submitted: ${drawing.code} Rev ${drawing.revision} (${drawing.id})`);
+    return updated;
   }
 
-  async approveDrawing(tenantId: Id, actorId: Id | null, id: Id): Promise<Drawing> {
-    const drawing = assertSameTenant(await this.drawingStore.get(id), this.tenant?.boundTenantId(), 'Drawing with ID', id);
+  /** submitted → under_review. The reviewer picks up the submission. */
+  async startReviewDrawing(tenantId: Id, actorId: Id | null, id: Id): Promise<Drawing> {
+    const drawing = await this.loadDrawing(id);
+    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.review');
 
-    if (actorId) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
-      if (drawing.companyId) orgPath.push({ level: 'company', id: drawing.companyId });
-      this.access.assert(actorId, { permission: 'engineering.drawing.approve', orgPath });
-    }
-
-    drawing.status = 'approved';
-    drawing.updatedAt = new Date().toISOString();
-
-    await this.tx.run(async (handle) => {
-      await this.drawingStore.updateWithClient(handle, drawing);
+    const updated = applyStartReview(drawing, actorId); // enforces submitted → under_review
+    const event = makeEvent({
+      type: ENGINEERING_EVENT.drawingReviewStarted,
+      tenantId,
+      companyId: drawing.companyId,
+      actorId,
+      aggregateType: 'engineering.drawing',
+      aggregateId: drawing.id,
+      payload: { code: drawing.code, revision: drawing.revision, projectId: drawing.projectId },
     });
+    await this.tx.run(async (handle) => {
+      await this.drawingStore.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Drawing under review: ${drawing.code} Rev ${drawing.revision} (${drawing.id})`);
+    return updated;
+  }
 
-    this.logger.log(`Drawing approved: ${drawing.code} (${drawing.id})`);
-    return drawing;
+  /**
+   * under_review → approved | rejected | revision_required. Records the reviewer's decision as an
+   * immutable Review (rejections/returns must carry a comment — enforced in makeDrawingReview).
+   */
+  async reviewDrawing(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    input: { outcome: ReviewOutcome; comments?: string },
+  ): Promise<Drawing> {
+    const drawing = await this.loadDrawing(id);
+    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.review');
+
+    const decision = outcomeToDecision(input.outcome);
+    const review = makeDrawingReview({
+      tenantId,
+      companyId: drawing.companyId,
+      drawingId: drawing.id,
+      drawingCode: drawing.code,
+      revision: drawing.revision,
+      projectId: drawing.projectId,
+      reviewedBy: actorId,
+      outcome: input.outcome,
+      comments: input.comments,
+    });
+    const updated = applyDecide(drawing, decision, actorId); // enforces from under_review only
+    const type =
+      decision === 'approved'
+        ? ENGINEERING_EVENT.drawingApproved
+        : decision === 'rejected'
+          ? ENGINEERING_EVENT.drawingRejected
+          : ENGINEERING_EVENT.drawingRevisionRequired;
+    const event = makeEvent({
+      type,
+      tenantId,
+      companyId: drawing.companyId,
+      actorId,
+      aggregateType: 'engineering.drawing',
+      aggregateId: drawing.id,
+      payload: { code: drawing.code, revision: drawing.revision, outcome: input.outcome, status: updated.status, projectId: drawing.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.drawingStore.updateWithClient(handle, updated);
+      await this.reviewStore.createWithClient(handle, review);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Drawing ${drawing.code} Rev ${drawing.revision} reviewed → ${updated.status} (${drawing.id})`);
+    return updated;
+  }
+
+  /**
+   * Raise the next revision of a rejected / returned / issued drawing. Creates a NEW draft revision
+   * row (immutable lineage) and marks the source `superseded` — the source is never overwritten.
+   */
+  async reviseDrawing(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    input: { reason: string; revision?: string; title?: string; fileUrl?: string | null },
+  ): Promise<Drawing> {
+    const source = await this.loadDrawing(id);
+    this.assertDrawingPerm(actorId, tenantId, source.companyId, 'engineering.drawing.revise');
+
+    const { revised, superseded } = applyRevise(source, { ...input, actorId });
+    const event = makeEvent({
+      type: ENGINEERING_EVENT.drawingRevised,
+      tenantId,
+      companyId: source.companyId,
+      actorId,
+      aggregateType: 'engineering.drawing',
+      aggregateId: revised.id,
+      payload: { code: revised.code, oldRevision: source.revision, newRevision: revised.revision, reason: revised.reasonForRevision, projectId: revised.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.drawingStore.updateWithClient(handle, superseded);
+      await this.drawingStore.createWithClient(handle, revised);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Drawing revised: ${source.code} Rev ${source.revision} → ${revised.revision} (${revised.id})`);
+    return revised;
+  }
+
+  /**
+   * approved → transmitted. Emits `engineering.drawing.transmitted` carrying the drawing/revision so
+   * the host reactor creates the doccontrol Transmittal (conveyance) — module boundaries preserved.
+   */
+  async transmitDrawing(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    input: { recipient?: string; purpose?: string; transmittalRef?: string } = {},
+  ): Promise<Drawing> {
+    const drawing = await this.loadDrawing(id);
+    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.transmit');
+
+    const updated = applyTransmit(drawing, input.transmittalRef ?? null); // enforces approved → transmitted
+    const event = makeEvent({
+      type: ENGINEERING_EVENT.drawingTransmitted,
+      tenantId,
+      companyId: drawing.companyId,
+      actorId,
+      aggregateType: 'engineering.drawing',
+      aggregateId: drawing.id,
+      payload: {
+        code: drawing.code,
+        title: drawing.title,
+        revision: drawing.revision,
+        projectId: drawing.projectId,
+        projectName: drawing.projectName,
+        recipient: input.recipient ?? null,
+        purpose: input.purpose ?? 'For Construction',
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.drawingStore.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Drawing transmitted: ${drawing.code} Rev ${drawing.revision} (${drawing.id})`);
+    return updated;
+  }
+
+  /** transmitted → closed. The revision is immutable thereafter. */
+  async closeDrawing(tenantId: Id, actorId: Id | null, id: Id): Promise<Drawing> {
+    const drawing = await this.loadDrawing(id);
+    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.close');
+
+    const updated = applyClose(drawing); // enforces transmitted → closed
+    const event = makeEvent({
+      type: ENGINEERING_EVENT.drawingClosed,
+      tenantId,
+      companyId: drawing.companyId,
+      actorId,
+      aggregateType: 'engineering.drawing',
+      aggregateId: drawing.id,
+      payload: { code: drawing.code, revision: drawing.revision, projectId: drawing.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.drawingStore.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Drawing closed: ${drawing.code} Rev ${drawing.revision} (${drawing.id})`);
+    return updated;
+  }
+
+  /** Link a doccontrol transmittal reference back onto a transmitted drawing (set by the reactor). */
+  async linkTransmittal(tenantId: Id, id: Id, transmittalRef: string): Promise<void> {
+    const drawing = await this.drawingStore.get(id);
+    if (!drawing || drawing.tenantId !== tenantId) return;
+    await this.drawingStore.update({ ...drawing, transmittalRef, updatedAt: new Date().toISOString() });
+  }
+
+  /** Full revision lineage for a logical drawing (all revisions of one code). */
+  listDrawingRevisions(tenantId: Id, projectId: Id, code: string): Promise<Drawing[]> {
+    return this.drawingStore.listRevisions(tenantId, projectId, code);
+  }
+
+  listDrawingSubmissions(tenantId: Id, drawingId: Id): Promise<DrawingSubmission[]> {
+    return this.submissionStore.listByDrawing(tenantId, drawingId);
+  }
+
+  listDrawingReviews(tenantId: Id, drawingId: Id): Promise<DrawingReview[]> {
+    return this.reviewStore.listByDrawing(tenantId, drawingId);
   }
 
   /** Tenant-scoped read (N-08): never hand back another tenant's record. */

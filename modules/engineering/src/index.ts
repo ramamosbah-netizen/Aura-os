@@ -1,11 +1,21 @@
 export * from './domain/discipline';
 export * from './domain/drawing';
+export * from './domain/drawing-submission';
+export * from './domain/drawing-review';
 export * from './domain/rfi';
 export * from './domain/submittal';
 
 export * from './drawing-store';
 export * from './in-memory-drawing-store';
 export * from './postgres-drawing-store';
+
+export * from './drawing-submission-store';
+export * from './in-memory-drawing-submission-store';
+export * from './postgres-drawing-submission-store';
+
+export * from './drawing-review-store';
+export * from './in-memory-drawing-review-store';
+export * from './postgres-drawing-review-store';
 
 export * from './rfi-store';
 export * from './in-memory-rfi-store';

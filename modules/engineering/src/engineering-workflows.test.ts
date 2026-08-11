@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 import { EngineeringService } from './engineering.service';
 import { InMemoryDrawingStore } from './in-memory-drawing-store';
+import { InMemoryDrawingSubmissionStore } from './in-memory-drawing-submission-store';
+import { InMemoryDrawingReviewStore } from './in-memory-drawing-review-store';
 import { InMemoryRfiStore } from './in-memory-rfi-store';
 import { InMemorySubmittalStore } from './in-memory-submittal-store';
 import { InMemoryTechnicalQueryStore } from './in-memory-technical-query-store';
@@ -22,6 +24,8 @@ const mockTx: TxRunner = { run: (fn) => fn(null) };
 function buildService(): EngineeringService {
   return new EngineeringService(
     new InMemoryDrawingStore(),
+    new InMemoryDrawingSubmissionStore(),
+    new InMemoryDrawingReviewStore(),
     new InMemoryRfiStore(),
     new InMemorySubmittalStore(),
     new InMemoryTechnicalQueryStore(),

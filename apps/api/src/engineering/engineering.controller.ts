@@ -4,6 +4,9 @@ import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Drawing,
+  type DrawingSubmission,
+  type DrawingReview,
+  type ReviewOutcome,
   type Rfi,
   type Submittal,
   type DrawingStatus,
@@ -38,9 +41,29 @@ class CreateDrawingDto {
   @IsOptional() @IsString() discipline?: Discipline;
 }
 
+class SubmitDrawingDto {
+  @IsOptional() @IsString() recipient?: string;
+  @IsOptional() @IsString() purpose?: string;
+  @IsOptional() @IsString() dueDate?: string;
+  @IsOptional() @IsString() comments?: string;
+}
+
+class ReviewDrawingDto {
+  @IsString() outcome!: ReviewOutcome;
+  @IsOptional() @IsString() comments?: string;
+}
+
 class ReviseDrawingDto {
-  @IsString() revision!: string;
+  @IsString() reason!: string;
+  @IsOptional() @IsString() revision?: string;
   @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() fileUrl?: string;
+}
+
+class TransmitDrawingDto {
+  @IsOptional() @IsString() recipient?: string;
+  @IsOptional() @IsString() purpose?: string;
+  @IsOptional() @IsString() transmittalRef?: string;
 }
 
 // RFIs DTOs
@@ -137,20 +160,84 @@ export class EngineeringController {
     });
   }
 
-  @Put('drawings/:id/revision')
-  reviseDrawing(@Param('id') id: string, @Body() dto: ReviseDrawingDto): Promise<Drawing> {
-    if (!dto?.revision?.trim()) throw new BadRequestException('revision is required');
+  // ── Drawing workflow commands (state machine; POST verbs, never PATCH status) ──
+
+  @Post('drawings/:id/submit')
+  submitDrawing(@Param('id') id: string, @Body() dto: SubmitDrawingDto): Promise<Drawing> {
     const ctx = this.tenant.get();
-    return this.engineeringService.reviseDrawing(ctx.tenantId, ctx.actorId, id, {
-      revision: dto.revision,
-      title: dto.title,
+    return this.engineeringService.submitDrawing(ctx.tenantId, ctx.actorId, id, {
+      recipient: dto?.recipient,
+      purpose: dto?.purpose,
+      dueDate: dto?.dueDate,
+      comments: dto?.comments,
     });
   }
 
-  @Put('drawings/:id/approve')
-  approveDrawing(@Param('id') id: string): Promise<Drawing> {
+  @Post('drawings/:id/start-review')
+  startReviewDrawing(@Param('id') id: string): Promise<Drawing> {
     const ctx = this.tenant.get();
-    return this.engineeringService.approveDrawing(ctx.tenantId, ctx.actorId, id);
+    return this.engineeringService.startReviewDrawing(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Post('drawings/:id/review')
+  reviewDrawing(@Param('id') id: string, @Body() dto: ReviewDrawingDto): Promise<Drawing> {
+    if (!dto?.outcome) throw new BadRequestException('outcome is required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.reviewDrawing(ctx.tenantId, ctx.actorId, id, {
+      outcome: dto.outcome,
+      comments: dto.comments,
+    });
+  }
+
+  @Post('drawings/:id/revise')
+  reviseDrawing(@Param('id') id: string, @Body() dto: ReviseDrawingDto): Promise<Drawing> {
+    if (!dto?.reason?.trim()) throw new BadRequestException('reason for revision is required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.reviseDrawing(ctx.tenantId, ctx.actorId, id, {
+      reason: dto.reason,
+      revision: dto.revision,
+      title: dto.title,
+      fileUrl: dto.fileUrl,
+    });
+  }
+
+  @Post('drawings/:id/transmit')
+  transmitDrawing(@Param('id') id: string, @Body() dto: TransmitDrawingDto): Promise<Drawing> {
+    const ctx = this.tenant.get();
+    return this.engineeringService.transmitDrawing(ctx.tenantId, ctx.actorId, id, {
+      recipient: dto?.recipient,
+      purpose: dto?.purpose,
+      transmittalRef: dto?.transmittalRef,
+    });
+  }
+
+  @Post('drawings/:id/close')
+  closeDrawing(@Param('id') id: string): Promise<Drawing> {
+    const ctx = this.tenant.get();
+    return this.engineeringService.closeDrawing(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Get('drawings/:id/submissions')
+  listDrawingSubmissions(@Param('id') id: string): Promise<DrawingSubmission[]> {
+    const ctx = this.tenant.get();
+    return this.engineeringService.listDrawingSubmissions(ctx.tenantId, id);
+  }
+
+  @Get('drawings/:id/reviews')
+  listDrawingReviews(@Param('id') id: string): Promise<DrawingReview[]> {
+    const ctx = this.tenant.get();
+    return this.engineeringService.listDrawingReviews(ctx.tenantId, id);
+  }
+
+  // Declared before `drawings/:id` so `revisions` is not captured as an :id.
+  @Get('drawings/revisions')
+  listDrawingRevisions(
+    @Query('projectId') projectId: string,
+    @Query('code') code: string,
+  ): Promise<Drawing[]> {
+    if (!projectId || !code) throw new BadRequestException('projectId and code are required');
+    const ctx = this.tenant.get();
+    return this.engineeringService.listDrawingRevisions(ctx.tenantId, projectId, code);
   }
 
   @Get('drawings')

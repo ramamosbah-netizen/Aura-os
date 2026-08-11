@@ -17,6 +17,8 @@ export interface DrawingStore {
   get(id: Id): Promise<Drawing | null>;
   getByCode(tenantId: Id, projectId: Id, code: string, revision: string): Promise<Drawing | null>;
   getLatestByCode(tenantId: Id, projectId: Id, code: string): Promise<Drawing | null>;
+  /** Full revision lineage for a logical drawing (all revisions of one code), newest first. */
+  listRevisions(tenantId: Id, projectId: Id, code: string): Promise<Drawing[]>;
   list(filter?: DrawingFilter): Promise<Drawing[]>;
   listPaged(filter: DrawingFilter, page: PageParams): Promise<Page<Drawing>>;
 }

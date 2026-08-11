@@ -6,6 +6,14 @@ import { DRAWING_STORE } from './drawing-store';
 import { InMemoryDrawingStore } from './in-memory-drawing-store';
 import { PostgresDrawingStore } from './postgres-drawing-store';
 
+import { DRAWING_SUBMISSION_STORE } from './drawing-submission-store';
+import { InMemoryDrawingSubmissionStore } from './in-memory-drawing-submission-store';
+import { PostgresDrawingSubmissionStore } from './postgres-drawing-submission-store';
+
+import { DRAWING_REVIEW_STORE } from './drawing-review-store';
+import { InMemoryDrawingReviewStore } from './in-memory-drawing-review-store';
+import { PostgresDrawingReviewStore } from './postgres-drawing-review-store';
+
 import { RFI_STORE } from './rfi-store';
 import { InMemoryRfiStore } from './in-memory-rfi-store';
 import { PostgresRfiStore } from './postgres-rfi-store';
@@ -40,6 +48,18 @@ import { EngineeringService } from './engineering.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresDrawingStore(pool) : new InMemoryDrawingStore(),
+    },
+    {
+      provide: DRAWING_SUBMISSION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDrawingSubmissionStore(pool) : new InMemoryDrawingSubmissionStore(),
+    },
+    {
+      provide: DRAWING_REVIEW_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDrawingReviewStore(pool) : new InMemoryDrawingReviewStore(),
     },
     {
       provide: RFI_STORE,

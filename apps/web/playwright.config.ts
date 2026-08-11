@@ -15,6 +15,12 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
+  // One worker, everywhere. `fullyParallel: false` only orders tests *within* a file — separate
+  // files still ran concurrently, and against a single `next dev` that means two workers racing
+  // the same on-demand compiler. Locally that produced four failures the identical CI run did not
+  // have, because Playwright already defaults to one worker under CI. Same number in both places
+  // is worth more than the minute it saves.
+  workers: 1,
   reporter: [['list']],
   use: {
     baseURL: BASE_URL,

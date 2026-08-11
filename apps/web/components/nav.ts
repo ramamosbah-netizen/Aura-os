@@ -77,6 +77,7 @@ export const NAV: NavGroup[] = [
       { label: 'Variations', href: '/projects/variations', glyph: '◷', desc: 'Change orders & revised contract value' },
       { label: 'Schedule (Gantt)', href: '/projects/schedule', glyph: '▤', desc: 'Projects — Gantt: planned vs baseline vs actual %' },
       { label: 'Commissioning', href: '/commissioning', glyph: '✓', desc: 'Test & Commissioning register — prove each ELV system works, witnessed sign-off unlocks handover' },
+      { label: 'Compliance', href: '/compliance', glyph: '🛡', desc: 'Authority approvals — SIRA, DCD: submissions, inspections, decisions, certificates and renewals' },
       { label: 'Handover', href: '/handover', glyph: '⇥', desc: 'Project acceptance package — close-out deliverables, client sign-off & warranty start' },
       { label: 'Project Closeout', href: '/projects/closeout', glyph: '🏁', desc: 'Unified project closeout wizard — commissioning, punch-list, deliverables, sign-off & warranty DLP' },
       { label: 'Payment Certificates', href: '/contracts/certificates', glyph: '◰', desc: 'Interim payment certificates (IPC) — progress billing & retention' },

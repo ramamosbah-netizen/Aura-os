@@ -20,6 +20,7 @@
     "@aura/amc": "workspace:*",
     "@aura/assets": "workspace:*",
     "@aura/commissioning": "workspace:*",
+    "@aura/compliance": "workspace:*",
     "@aura/contracts": "workspace:*",
     "@aura/core": "workspace:*",
     "@aura/crm": "workspace:*",

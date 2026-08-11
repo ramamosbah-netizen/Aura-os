@@ -41,6 +41,9 @@ importers:
       '@aura/commissioning':
         specifier: workspace:*
         version: link:../../modules/commissioning
+      '@aura/compliance':
+        specifier: workspace:*
+        version: link:../../modules/compliance
       '@aura/contracts':
         specifier: workspace:*
         version: link:../../modules/contracts

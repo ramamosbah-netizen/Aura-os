@@ -136,6 +136,14 @@ describe('ComplianceCase — lifecycle', () => {
     expect(() => setCaseStatus(c, 'submitted')).toThrow(/nothing can follow withdrawn/);
   });
 
+  it('lets an authority decide straight off a submission, with no under_review step', () => {
+    // under_review is a state we OBSERVE if told, not one we drive. Requiring it would force the
+    // API to fake a transition nobody witnessed.
+    const c = setCaseStatus(projectCase(), 'submitted');
+    expect(setCaseStatus(c, 'approved').status).toBe('approved');
+    expect(setCaseStatus(c, 'rejected').status).toBe('rejected');
+  });
+
   it('makes inspection optional — under_review can approve directly', () => {
     let c = setCaseStatus(projectCase(), 'submitted');
     c = setCaseStatus(c, 'under_review');

@@ -153,7 +153,11 @@ export function makeComplianceCase(input: NewComplianceCase): ComplianceCase {
  */
 const NEXT: Record<ComplianceCaseStatus, ComplianceCaseStatus[]> = {
   draft: ['submitted', 'withdrawn'],
-  submitted: ['under_review', 'rejected', 'withdrawn'],
+  // `submitted → approved` directly, without passing through `under_review`. An authority can
+  // decide straight off a submission, and we frequently do not know a case is under review — that
+  // state is something we observe if told, not a step we drive. Requiring it would have forced the
+  // API to fake a transition nobody witnessed.
+  submitted: ['under_review', 'inspection', 'approved', 'rejected', 'withdrawn'],
   under_review: ['inspection', 'approved', 'rejected'],
   inspection: ['approved', 'rejected', 'under_review'],
   approved: ['certified', 'rejected'],

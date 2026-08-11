@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { CoreModule, PG_POOL } from '@aura/core';
 
-import { TRANSMITTAL_STORE, TRANSMITTAL_ITEM_STORE, CORRESPONDENCE_STORE, SUBMITTAL_STORE, DRAWING_REGISTER_STORE } from './store.interface';
+import { TRANSMITTAL_STORE, TRANSMITTAL_ITEM_STORE, TRANSMITTAL_ACK_STORE, DOCUMENT_REVISION_STORE, CORRESPONDENCE_STORE, SUBMITTAL_STORE, DRAWING_REGISTER_STORE } from './store.interface';
 import { InMemoryTransmittalStore } from './in-memory-transmittal-store';
 import { PostgresTransmittalStore } from './postgres-transmittal-store';
+import { InMemoryDocumentRevisionStore, InMemoryTransmittalAcknowledgementStore } from './in-memory-document-revision-store';
+import { PostgresDocumentRevisionStore, PostgresTransmittalAcknowledgementStore } from './postgres-document-revision-store';
 import { InMemoryTransmittalItemStore } from './in-memory-transmittal-item-store';
 import { PostgresTransmittalItemStore } from './postgres-transmittal-item-store';
 
@@ -51,6 +53,18 @@ import { DocControlService } from './doccontrol.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresDrawingRegisterStore(pool) : new InMemoryDrawingRegisterStore(),
+    },
+    {
+      provide: DOCUMENT_REVISION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDocumentRevisionStore(pool) : new InMemoryDocumentRevisionStore(),
+    },
+    {
+      provide: TRANSMITTAL_ACK_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTransmittalAcknowledgementStore(pool) : new InMemoryTransmittalAcknowledgementStore(),
     },
     DocControlService,
   ],

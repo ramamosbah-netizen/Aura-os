@@ -12,8 +12,8 @@ export class PostgresTransmittalStore implements TransmittalStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_doccontrol_transmittals (
-        id, tenant_id, company_id, code, title, project_id, project_name, sender, recipient, status, owner_id, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        id, tenant_id, company_id, code, title, project_id, project_name, sender, recipient, status, owner_id, created_by, created_at, updated_at, sent_at, received_at, acknowledged_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       on conflict (id) do update set
         company_id = excluded.company_id,
         code = excluded.code,
@@ -24,7 +24,10 @@ export class PostgresTransmittalStore implements TransmittalStore {
         recipient = excluded.recipient,
         status = excluded.status,
         owner_id = excluded.owner_id,
-        updated_at = excluded.updated_at`,
+        updated_at = excluded.updated_at,
+        sent_at = excluded.sent_at,
+        received_at = excluded.received_at,
+        acknowledged_at = excluded.acknowledged_at`,
       [
         transmittal.id,
         transmittal.tenantId,
@@ -40,6 +43,9 @@ export class PostgresTransmittalStore implements TransmittalStore {
         transmittal.createdBy,
         transmittal.createdAt,
         transmittal.updatedAt,
+        transmittal.sentAt,
+        transmittal.receivedAt,
+        transmittal.acknowledgedAt,
       ],
     );
   }
@@ -86,6 +92,9 @@ export class PostgresTransmittalStore implements TransmittalStore {
       sender: row.sender,
       recipient: row.recipient,
       status: row.status,
+      sentAt: row.sent_at ? new Date(row.sent_at).toISOString() : null,
+      receivedAt: row.received_at ? new Date(row.received_at).toISOString() : null,
+      acknowledgedAt: row.acknowledged_at ? new Date(row.acknowledged_at).toISOString() : null,
       ownerId: row.owner_id,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),

@@ -1,6 +1,8 @@
 import type { TxHandle } from '@aura/core';
 import type { Page, PageParams } from '@aura/shared';
 import type { Transmittal } from './domain/transmittal';
+import type { TransmittalAcknowledgement } from './domain/transmittal-acknowledgement';
+import type { DocumentRevision } from './domain/document-revision';
 import type { Correspondence } from './domain/correspondence';
 import type { Submittal } from './domain/submittal';
 import type { DrawingRegisterEntry } from './domain/drawing-register';
@@ -44,6 +46,18 @@ export interface SubmittalStore {
   listPaged(filter: DocListFilter, page: PageParams): Promise<Page<Submittal>>;
 }
 
+export interface DocumentRevisionStore {
+  save(rev: DocumentRevision, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<DocumentRevision | null>;
+  /** All revisions of a register entry, newest first (the immutable revision history). */
+  listByRegisterEntry(registerEntryId: string, tenantId: string): Promise<DocumentRevision[]>;
+}
+
+export interface TransmittalAcknowledgementStore {
+  save(ack: TransmittalAcknowledgement, tx?: TxHandle): Promise<void>;
+  listByTransmittal(transmittalId: string, tenantId: string): Promise<TransmittalAcknowledgement[]>;
+}
+
 export interface TransmittalItemStore {
   save(item: TransmittalItem, tx?: TxHandle): Promise<void>;
   findByTransmittal(transmittalId: string, tenantId: string): Promise<TransmittalItem[]>;
@@ -52,6 +66,8 @@ export interface TransmittalItemStore {
 
 export const TRANSMITTAL_STORE = Symbol('TRANSMITTAL_STORE');
 export const TRANSMITTAL_ITEM_STORE = Symbol('TRANSMITTAL_ITEM_STORE');
+export const TRANSMITTAL_ACK_STORE = Symbol('TRANSMITTAL_ACK_STORE');
+export const DOCUMENT_REVISION_STORE = Symbol('DOCUMENT_REVISION_STORE');
 export const CORRESPONDENCE_STORE = Symbol('CORRESPONDENCE_STORE');
 export const SUBMITTAL_STORE = Symbol('SUBMITTAL_STORE');
 export const DRAWING_REGISTER_STORE = Symbol('DRAWING_REGISTER_STORE');

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeTransmittalItem } from './transmittal-item';
 import { DocControlService } from '../doccontrol.service';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
+import { InMemoryDocumentRevisionStore, InMemoryTransmittalAcknowledgementStore } from '../in-memory-document-revision-store';
 import { InMemoryTransmittalItemStore } from '../in-memory-transmittal-item-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
@@ -15,7 +16,7 @@ const mockTx: TxRunner = { run: (fn) => fn(null) };
 function makeService(): DocControlService {
   return new DocControlService(
     new InMemoryTransmittalStore(),
-    new InMemoryTransmittalItemStore(),
+    new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
     new InMemoryCorrespondenceStore(),
     new InMemorySubmittalStore(),
     new InMemoryDrawingRegisterStore(),

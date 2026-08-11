@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
+import { InMemoryDocumentRevisionStore, InMemoryTransmittalAcknowledgementStore } from '../in-memory-document-revision-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryDrawingRegisterStore } from '../in-memory-drawing-register-store';
@@ -18,7 +19,7 @@ describe('Drawing register (service workflow)', () => {
   beforeEach(() => {
     svc = new DocControlService(
       new InMemoryTransmittalStore(),
-      new InMemoryTransmittalItemStore(),
+      new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
       new InMemoryCorrespondenceStore(),
       new InMemorySubmittalStore(),
       new InMemoryDrawingRegisterStore(),

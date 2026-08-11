@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
+import { InMemoryDocumentRevisionStore, InMemoryTransmittalAcknowledgementStore } from '../in-memory-document-revision-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryDrawingRegisterStore } from '../in-memory-drawing-register-store';
@@ -23,7 +24,7 @@ function build(): { svc: DocControlService; emitted: Array<{ type: string; paylo
   } as unknown as EventStore;
   const svc = new DocControlService(
     new InMemoryTransmittalStore(),
-    new InMemoryTransmittalItemStore(),
+    new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
     new InMemoryCorrespondenceStore(),
     new InMemorySubmittalStore(),
     new InMemoryDrawingRegisterStore(),
@@ -96,6 +97,7 @@ describe('Transmittal items — register linkage guards', () => {
     const t = await svc.createTransmittal({
       tenantId: 't1', projectId: 'p1', code: 'TRA-057', title: 'Access control package',
     });
+    await svc.sendTransmittal('t1', null, t.id); // draft → sent before it can be acknowledged
     const ack = await svc.acknowledgeTransmittal('t1', null, t.id);
     expect(ack.status).toBe('acknowledged');
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeTransmittal } from './transmittal';
 import { makeCorrespondence } from './correspondence';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
+import { InMemoryDocumentRevisionStore, InMemoryTransmittalAcknowledgementStore } from '../in-memory-document-revision-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryDrawingRegisterStore } from '../in-memory-drawing-register-store';
@@ -41,7 +42,7 @@ describe('Document Control Module Bounded Context', () => {
       
       const service = new DocControlService(
         transmittalStore,
-        new InMemoryTransmittalItemStore(),
+        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
         correspondenceStore,
         new InMemorySubmittalStore(),
         new InMemoryDrawingRegisterStore(),
@@ -58,7 +59,9 @@ describe('Document Control Module Bounded Context', () => {
       });
 
       expect(t.status).toBe('draft');
-      
+
+      // Governed conveyance lifecycle: draft → sent → acknowledged.
+      await service.sendTransmittal('t1', null, t.id);
       const acknowledged = await service.acknowledgeTransmittal('t1', null, t.id);
       expect(acknowledged.status).toBe('acknowledged');
     });
@@ -66,7 +69,7 @@ describe('Document Control Module Bounded Context', () => {
     it('paginates transmittals and filters by project', async () => {
       const service = new DocControlService(
         new InMemoryTransmittalStore(),
-        new InMemoryTransmittalItemStore(),
+        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
         new InMemoryCorrespondenceStore(),
         new InMemorySubmittalStore(),
         new InMemoryDrawingRegisterStore(),
@@ -98,7 +101,7 @@ describe('Document Control Module Bounded Context', () => {
 
       const service = new DocControlService(
         transmittalStore,
-        new InMemoryTransmittalItemStore(),
+        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
         correspondenceStore,
         new InMemorySubmittalStore(),
         new InMemoryDrawingRegisterStore(),

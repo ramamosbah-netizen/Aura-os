@@ -14,9 +14,10 @@
 // A browser that dies after the request reached the server but before the response arrived is
 // exactly the case the client cannot distinguish from failure — it retries, and only the
 // server-side lease keeping the same Idempotency-Key from executing twice makes that safe.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, request as apiRequest, test, type Page } from '@playwright/test';
 
 const REPORTS_URL = '/site/daily-reports';
+const API_BASE = process.env.AURA_API_URL ?? 'http://localhost:4000';
 /** Marks rows this spec creates so assertions can count only their own. */
 const TAG = `e2e-offline-${Date.now()}`;
 
@@ -54,11 +55,17 @@ async function serverCount(page: Page, tag: string): Promise<number> {
   }, tag);
 }
 
-/** Fill the new-report form. Returns false when the page could not be driven. */
-async function fillReport(page: Page, description: string): Promise<boolean> {
+/**
+ * Fill the new-report form.
+ *
+ * This used to return false when it could not drive the page, and each caller turned that into
+ * `test.skip`. In CI — which ran the web server with no API behind it — that meant every test in
+ * this file skipped itself and reported green. A test that cannot run is a gap, not a pass, so
+ * every unmet precondition below now throws.
+ */
+async function fillReport(page: Page, description: string): Promise<void> {
   const work = page.getByPlaceholder('Containment 2nd fix, L3 east');
-  if (!(await work.isVisible().catch(() => false))) return false;
-  
+  await work.waitFor({ state: 'visible', timeout: 45_000 });
 
   // Project is required and its picker fetches after hydration, so wait for real options rather
   // than reading the server-rendered "Loading projects…" placeholder and giving up.
@@ -74,16 +81,41 @@ async function fillReport(page: Page, description: string): Promise<boolean> {
     const values = await picker.locator('option').evaluateAll((os) =>
       os.map((o) => (o as HTMLOptionElement).value).filter(Boolean),
     );
-    if (values.length === 0) return false;
+    expect(values, 'the project picker must offer a project to file against').not.toHaveLength(0);
     await picker.selectOption(values[0]);
   }
 
   await work.fill(description);
   await page.getByPlaceholder('0').first().fill('4');
-  return true;
 }
 
 test.describe('offline field journey', () => {
+  // A report has to be filed against a project, and CI boots the API on empty in-memory stores,
+  // so the picker has no options unless this spec supplies one. Idempotent — an instance that
+  // already has projects is left alone.
+  test.beforeAll(async () => {
+    const ctx = await apiRequest.newContext({ baseURL: API_BASE });
+    try {
+      const existing = await ctx.get('/api/v1/projects/projects');
+      const rows = existing.ok() ? ((await existing.json()) as unknown[]) : [];
+      if (Array.isArray(rows) && rows.length > 0) return;
+
+      const created = await ctx.post('/api/v1/projects/projects', {
+        data: { title: `E2E Offline Fixture ${Date.now()}`, status: 'active' },
+      });
+      // Fail here, loudly, rather than let every test below time out on an empty <select> and
+      // leave someone guessing which of the API, the page or the engine was at fault.
+      if (!created.ok()) {
+        throw new Error(
+          `could not create the project fixture (${created.status()} from ${API_BASE}). ` +
+            'The offline journey needs at least one project to file a report against.',
+        );
+      }
+    } finally {
+      await ctx.dispose();
+    }
+  });
+
   test.beforeEach(async ({ page }) => {
     await page.goto(REPORTS_URL, { waitUntil: 'domcontentloaded' });
     // The page is a client component behind a suspense boundary and takes several seconds to
@@ -97,7 +129,7 @@ test.describe('offline field journey', () => {
 
   test('a report created with no network is queued locally rather than lost', async ({ page, context }) => {
     const desc = `${TAG} queued-while-offline`;
-    if (!(await fillReport(page, desc))) test.skip(true, 'daily-report form not drivable');
+    await fillReport(page, desc);
 
     await context.setOffline(true);
     await page.getByRole('button', { name: /Add report/i }).click();
@@ -113,7 +145,7 @@ test.describe('offline field journey', () => {
 
   test('reconnecting drains the queue and the server ends up with exactly one', async ({ page, context }) => {
     const desc = `${TAG} drains-once`;
-    if (!(await fillReport(page, desc))) test.skip(true, 'daily-report form not drivable');
+    await fillReport(page, desc);
 
     await context.setOffline(true);
     await page.getByRole('button', { name: /Add report/i }).click();
@@ -135,7 +167,7 @@ test.describe('offline field journey', () => {
 
   test('a browser killed mid-sync resumes on reopen and still lands exactly one', async ({ page, context }) => {
     const desc = `${TAG} crash-recovery`;
-    if (!(await fillReport(page, desc))) test.skip(true, 'daily-report form not drivable');
+    await fillReport(page, desc);
 
     await context.setOffline(true);
     await page.getByRole('button', { name: /Add report/i }).click();

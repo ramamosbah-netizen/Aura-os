@@ -266,20 +266,6 @@ export default function EngineeringClient({
     }
   };
 
-  const handleApproveDrawing = async (id: string) => {
-    setError(null);
-    try {
-      const res = await fetch(`/api/engineering/drawings/${id}/approve`, {
-        method: 'PUT',
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setDrawings(drawings.map((d) => (d.id === id ? updated : d)));
-    } catch (err: any) {
-      setError(err.message || 'Failed to approve drawing');
-    }
-  };
-
   const handleCreateRfi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rfiCode.trim() || !rfiTitle.trim() || !rfiQuestion.trim()) return;
@@ -779,14 +765,9 @@ export default function EngineeringClient({
                         </span>
                       </td>
                       <td style={st.td}>
-                        {d.status !== 'approved' && (
-                          <button
-                            onClick={() => handleApproveDrawing(d.id)}
-                            style={st.btnApprove}
-                          >
-                            Approve
-                          </button>
-                        )}
+                        <a href={`/engineering/drawings/${d.id}`} style={st.btnApprove}>
+                          Manage workflow →
+                        </a>
                       </td>
                     </tr>
                   ))}

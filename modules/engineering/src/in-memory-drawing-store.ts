@@ -51,6 +51,13 @@ export class InMemoryDrawingStore implements DrawingStore {
     return latest;
   }
 
+  async listRevisions(tenantId: Id, projectId: Id, code: string): Promise<Drawing[]> {
+    return [...this.items.values()]
+      .filter((d) => d.tenantId === tenantId && d.projectId === projectId && d.code === code)
+      .map((d) => ({ ...d }))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
   async list(filter: DrawingFilter = {}): Promise<Drawing[]> {
     let list = [...this.items.values()];
     if (filter.tenantId) list = list.filter((i) => i.tenantId === filter.tenantId);

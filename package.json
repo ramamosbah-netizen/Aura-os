@@ -21,7 +21,9 @@
     "adr:check": "node scripts/adr-check.mjs",
     "adr:migrate": "node scripts/adr-migrate.mjs",
     "adr:list": "node scripts/adr-list.mjs",
-    "adr:graph": "node scripts/adr-graph.mjs"
+    "adr:graph": "node scripts/adr-graph.mjs",
+    "migrations:check": "node scripts/migration-policy-check.mjs",
+    "hooks:install": "git config core.hooksPath .githooks && echo \"pre-commit hook enabled (.githooks)\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

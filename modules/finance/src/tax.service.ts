@@ -1,4 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { TenantContext } from '@aura/core';
+import { assertSameTenant, sameTenantOrNull } from '@aura/shared';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { Id } from '@aura/shared';
 import {
   type TaxCode, type NewTaxCode, makeTaxCode,
@@ -16,6 +18,9 @@ export class TaxService {
     @Inject(TAX_CODE_STORE) private readonly codes: TaxCodeStore,
     @Inject(TAX_LINE_STORE) private readonly lines: TaxLineStore,
     @Inject(TAX_RETURN_STORE) private readonly returns: TaxReturnStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   // ── TAX CODES ────────────────────────────────────────────────────────
@@ -30,16 +35,16 @@ export class TaxService {
   }
 
   async updateTaxCode(id: Id, patch: Partial<Pick<TaxCode, 'description' | 'rate' | 'taxType' | 'isActive' | 'effectiveFrom' | 'effectiveTo'>>): Promise<TaxCode> {
-    const existing = await this.codes.get(id);
-    if (!existing) throw new Error(`Tax code ${id} not found`);
+    const existing = assertSameTenant(await this.codes.get(id), this.tenant?.boundTenantId(), 'Tax code', id);
     const updated: TaxCode = { ...existing, ...patch };
     await this.codes.update(updated);
     this.logger.log(`Tax code updated: ${updated.code}`);
     return updated;
   }
 
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
   async getTaxCode(id: Id): Promise<TaxCode | null> {
-    return this.codes.get(id);
+    return sameTenantOrNull(await this.codes.get(id), this.tenant?.boundTenantId());
   }
 
   async listTaxCodes(filter?: TaxCodeFilter): Promise<TaxCode[]> {
@@ -127,8 +132,7 @@ export class TaxService {
 
   /** File a draft return (or mark a filed one paid). */
   async setReturnStatus(id: Id, status: 'filed' | 'paid', filedBy?: string | null): Promise<TaxReturn> {
-    const existing = await this.returns.get(id);
-    if (!existing) throw new Error(`tax return ${id} not found`);
+    const existing = assertSameTenant(await this.returns.get(id), this.tenant?.boundTenantId(), 'tax return', id);
     const updated: TaxReturn = {
       ...existing,
       status,
@@ -140,8 +144,9 @@ export class TaxService {
     return updated;
   }
 
-  getReturn(id: Id): Promise<TaxReturn | null> {
-    return this.returns.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getReturn(id: Id): Promise<TaxReturn | null> {
+    return sameTenantOrNull(await this.returns.get(id), this.tenant?.boundTenantId());
   }
 
   listReturns(tenantId: Id): Promise<TaxReturn[]> {

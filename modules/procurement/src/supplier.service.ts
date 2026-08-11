@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   SUPPLIER_EVENT,
   type Supplier,
@@ -24,6 +24,9 @@ export class SupplierService {
   constructor(
     @Inject(SUPPLIER_STORE) private readonly store: SupplierStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewSupplier): Promise<Supplier> {
@@ -47,8 +50,7 @@ export class SupplierService {
   }
 
   async changeStatus(id: Id, action: SupplierAction): Promise<Supplier> {
-    const supplier = await this.store.get(id);
-    if (!supplier) throw new Error(`supplier ${id} not found`);
+    const supplier = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'supplier', id);
     const updated = action === 'approve' ? approveSupplier(supplier) : suspendSupplier(supplier);
     await this.store.update(updated);
     await this.events.append([
@@ -62,8 +64,9 @@ export class SupplierService {
     return updated;
   }
 
-  get(id: Id): Promise<Supplier | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Supplier | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: SupplierFilter): Promise<Supplier[]> {

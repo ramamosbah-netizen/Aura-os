@@ -19,8 +19,14 @@ const envOrFile = (name) => {
   if (file) return readFileSync(file, 'utf8').trim() || null;
   return process.env[name]?.trim() || null;
 };
-const DATABASE_URL = envOrFile('DATABASE_URL');
-if (!DATABASE_URL) { console.error('✗ DATABASE_URL not set — cannot run RLS isolation test.'); process.exit(1); }
+// The admin connection creates and drops the probe role and tables, so it needs the owning
+// role — once DATABASE_URL points at aura_app (G-03) it cannot do either. The probe role the
+// test actually measures is derived from this URL and is always NOBYPASSRLS.
+const DATABASE_URL = envOrFile('MIGRATION_DATABASE_URL') ?? envOrFile('DATABASE_URL');
+if (!DATABASE_URL) {
+  console.error('✗ Neither MIGRATION_DATABASE_URL nor DATABASE_URL is set — cannot run RLS isolation test.');
+  process.exit(1);
+}
 const sslOff = /(@|\/\/)(localhost|127\.0\.0\.1)/.test(DATABASE_URL) || /[?&]sslmode=disable/.test(DATABASE_URL);
 const ssl = sslOff ? false : { rejectUnauthorized: false };
 
@@ -42,8 +48,13 @@ async function main() {
   await admin.connect();
 
   // Probe role connection string: same target, restricted user.
+  // Poolers that multiplex projects (Supabase: "<role>.<project-ref>") carry the routing key in
+  // the username, so swapping in a bare role name loses it and the pooler answers ENOIDENTIFIER.
+  // Keep whatever followed the first dot.
   const u = new URL(DATABASE_URL);
-  u.username = ROLE; u.password = PASS;
+  const routingSuffix = decodeURIComponent(u.username).split('.').slice(1).join('.');
+  u.username = routingSuffix ? `${ROLE}.${routingSuffix}` : ROLE;
+  u.password = PASS;
   let probe;
 
   try {

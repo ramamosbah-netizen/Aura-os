@@ -35,7 +35,7 @@ describe('DocumentRequirementStore (in-memory)', () => {
       await store.upsert(req());
       const [row] = await store.list({ tenantId: 't1' });
       expect(row.id).toBe(first.id);
-      expect(await store.get(first.id)).not.toBeNull();
+      expect(await store.get(first.id, 't1')).not.toBeNull();
     });
 
     it('updates status and evidence in place rather than adding a row', async () => {
@@ -100,8 +100,28 @@ describe('DocumentRequirementStore (in-memory)', () => {
   it('removes a requirement and reports whether it existed', async () => {
     const r = req();
     await store.upsert(r);
-    expect(await store.remove(r.id)).toBe(true);
-    expect(await store.remove(r.id)).toBe(false);
+    expect(await store.remove(r.id, 't1')).toBe(true);
+    expect(await store.remove(r.id, 't1')).toBe(false);
     expect(await store.list({ tenantId: 't1' })).toEqual([]);
+  });
+  describe('tenant scoping (N-08)', () => {
+    it("reads another tenant's row as missing, not as forbidden", async () => {
+      const store = new InMemoryDocumentRequirementStore();
+      const mine = req({ tenantId: 't1' });
+      await store.upsert(mine);
+
+      expect(await store.get(mine.id, 't1')).not.toBeNull();
+      expect(await store.get(mine.id, 't2')).toBeNull();
+    });
+
+    it("refuses to delete another tenant's row", async () => {
+      // An unscoped DELETE by id is the worse half of what this contract used to permit.
+      const store = new InMemoryDocumentRequirementStore();
+      const mine = req({ tenantId: 't1' });
+      await store.upsert(mine);
+
+      expect(await store.remove(mine.id, 't2')).toBe(false);
+      expect(await store.get(mine.id, 't1')).not.toBeNull();
+    });
   });
 });

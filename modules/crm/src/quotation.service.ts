@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type Id, type EstimationLineInput, estimateLine, makeEvent, diffFields } from '@aura/shared';
+import { assertSameTenant, diffFields, estimateLine, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
 import { EVENT_STORE, type EventStore, AccessService, TenantContext } from '@aura/core';
 import {
   QUOTATION_EVENT,
@@ -74,8 +74,7 @@ export class QuotationService {
     id: Id,
     input: { terms?: string | null; exclusions?: string[]; paymentConditions?: string | null; deliveryTerms?: string | null },
   ): Promise<Quotation> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
     if (isPricingLocked(q)) {
       throw new Error(`only a draft or in-review quotation can have its commercial terms edited — raise a revision to change them after that`);
     }
@@ -102,8 +101,7 @@ export class QuotationService {
   }
 
   async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null): Promise<Quotation> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
     // Segregation of duties (P0-3): whoever prepared a quotation cannot approve it — approval is a
     // maker-checker control. Engages only when the actor is known (auth on); with auth off actorId
     // is null and the check is skipped, consistent with the rest of the access seam. "access denied"
@@ -170,8 +168,7 @@ export class QuotationService {
 
   /** Supersede + copy: the old record becomes 'revised', a new draft carries revision+1. */
   async revise(id: Id): Promise<Quotation> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
     const { superseded, next } = reviseQuotation(q);
     await this.store.save(superseded);
     await this.store.save(next);
@@ -189,13 +186,13 @@ export class QuotationService {
 
   /** Record the contract created from an accepted quotation (deal-chain link). */
   async linkContract(id: Id, contractId: Id): Promise<void> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
     await this.store.save({ ...q, convertedContractId: contractId });
   }
 
-  get(id: Id): Promise<Quotation | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Quotation | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   /**
@@ -249,8 +246,7 @@ export class QuotationService {
    * real cost. Only a legacy quote with no estimation falls back to the old `pricing` build-up.
    */
   async getPricing(id: Id): Promise<QuotationPricingView> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
     const sheet = q.estimation && q.estimation.length > 0
       ? computeEstimationPricing(q.lines, q.estimation)
       : computeQuotationPricing(q.lines, q.pricing);
@@ -313,8 +309,7 @@ export class QuotationService {
    * The build-up is the source; the lines are the output. Refused (409) once approved, same lock.
    */
   async saveEstimation(id: Id, items: EstimationLineInput[]): Promise<Quotation> {
-    const q = await this.store.get(id);
-    if (!q) throw new Error(`quotation ${id} not found`);
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
     if (isPricingLocked(q)) {
       throw new Error(
         `pricing sheet is locked: only a draft or in-review quotation can be re-priced — ` +

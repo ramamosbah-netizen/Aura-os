@@ -61,6 +61,7 @@ import { ProjectionEngine } from './projections/projection.engine';
 import { OlapExportService } from './projections/olap-export.service';
 import { CircuitBreaker } from './reliability/circuit-breaker';
 import { RateLimiter } from './reliability/rate-limiter';
+import { EdgeRateLimitGuard } from './http/rate-limit.guard';
 import { NotificationService } from './notifications/notification.service';
 import { SAVED_VIEW_STORE, InMemorySavedViewStore, PostgresSavedViewStore } from './views/saved-view-store';
 import { SavedViewService } from './views/saved-view.service';
@@ -117,6 +118,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     OlapExportService,
     { provide: CircuitBreaker, useFactory: () => new CircuitBreaker() },
     RateLimiter,
+    EdgeRateLimitGuard,
     {
       provide: NOTIFICATION_STORE,
       inject: [PG_POOL],
@@ -259,6 +261,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     OlapExportService,
     CircuitBreaker,
     RateLimiter,
+    EdgeRateLimitGuard,
     NotificationService,
     SavedViewService,
     FeatureFlagService,

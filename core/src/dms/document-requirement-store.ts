@@ -20,6 +20,11 @@ export interface RequirementFilter {
 export interface DocumentRequirementStore {
   upsert(requirement: DocumentRequirement): Promise<void>;
   list(filter: RequirementFilter): Promise<DocumentRequirement[]>;
-  get(id: Id): Promise<DocumentRequirement | null>;
-  remove(id: Id): Promise<boolean>;
+  /**
+   * Both reads take the tenant explicitly (N-08). RLS is the net underneath, but this store is
+   * kernel infrastructure that every module builds on — a contract permitting an unscoped read by
+   * id invites the next caller to forget, and `remove` unscoped is an unscoped DELETE.
+   */
+  get(id: Id, tenantId: Id): Promise<DocumentRequirement | null>;
+  remove(id: Id, tenantId: Id): Promise<boolean>;
 }

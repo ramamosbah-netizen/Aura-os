@@ -59,6 +59,7 @@ export class InvoiceService implements OnModuleInit {
       permission: 'finance.invoice.create',
       validate: (input) => {
         if (!input.title || !input.title.trim()) throw new Error('invoice title is required');
+        if (typeof input.value === 'number' && input.value < 0) throw new Error('invoice value cannot be negative');
       },
       handler: async (command, tx) => {
         const invoice = makeInvoice(command.payload);

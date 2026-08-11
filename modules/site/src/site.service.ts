@@ -28,6 +28,7 @@ import {
 } from './store.interface';
 import { type PlantUsage, makePlantUsage } from './domain/plant-usage';
 import { type InstallationRecord, makeInstallationRecord } from './domain/installation';
+import { type SiteSurvey, type NewSiteSurvey, makeSiteSurvey, SITE_SURVEY_EVENT } from './domain/survey';
 
 export const SITE_EVENT = {
   dailyReportSubmitted: 'site.daily_report.submitted',
@@ -38,6 +39,7 @@ export const SITE_EVENT = {
   labourLogged: 'site.labour.logged',
   plantLogged: 'site.plant.logged',
   installationRecorded: 'site.installation.recorded',
+  surveyCompleted: SITE_SURVEY_EVENT.completed,
 };
 
 @Injectable()
@@ -484,5 +486,34 @@ export class SiteService {
 
   listInstallations(tenantId: Id): Promise<InstallationRecord[]> {
     return this.installationStore.findAll(tenantId);
+  }
+
+  // ── Site Surveys (Field survey intake → auto Opportunity creation) ─────────
+
+  async createSurvey(input: NewSiteSurvey): Promise<SiteSurvey> {
+    const survey = makeSiteSurvey(input);
+    const event = makeEvent({
+      type: SITE_EVENT.surveyCompleted,
+      tenantId: survey.tenantId,
+      companyId: survey.companyId,
+      actorId: survey.createdBy,
+      aggregateType: 'site.survey',
+      aggregateId: survey.id,
+      payload: {
+        reference: survey.reference,
+        clientEntityId: survey.clientEntityId,
+        operationId: survey.operationId,
+        accountId: survey.accountId,
+        accountName: survey.accountName,
+        siteAddress: survey.siteAddress,
+        scopeNotes: survey.scopeNotes,
+        estimatedValue: survey.estimatedValue,
+        surveyDate: survey.surveyDate,
+      },
+    });
+
+    await this.events.append([event]);
+    this.logger.log(`Site Survey completed: ${survey.reference} (${survey.id}) for ${survey.accountName || survey.siteAddress}`);
+    return survey;
   }
 }

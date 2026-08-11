@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, type OnModuleInit, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROJECT_EVENT, type Project, type NewProject, makeProject } from './domain/project';
 import { PROJECT_STORE, type ProjectFilter, type ProjectStore } from './project-store';
 
@@ -23,6 +23,9 @@ export class ProjectService implements OnModuleInit {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly commands: CommandBus,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   onModuleInit(): void {
@@ -80,8 +83,7 @@ export class ProjectService implements OnModuleInit {
    * chain), cancel from planned/active. Emits the specific spine events.
    */
   async changeStatus(id: Id, status: Project['status']): Promise<Project> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`project ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'project', id);
     const allowed: Record<string, string[]> = {
       active: ['planned'],
       completed: ['active'],
@@ -111,8 +113,7 @@ export class ProjectService implements OnModuleInit {
   }
 
   async update(id: Id, patch: Partial<Pick<Project, 'title' | 'reference' | 'status' | 'value'>>): Promise<Project> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`project ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'project', id);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Project = { ...existing, ...defined };
     const event = makeEvent({
@@ -132,8 +133,9 @@ export class ProjectService implements OnModuleInit {
     return updated;
   }
 
-  get(id: Id): Promise<Project | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Project | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: ProjectFilter): Promise<Project[]> {

@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { type CSSProperties, Suspense } from 'react';
 import { getJson } from '@/lib/api';
 import CustomerInvoicesClient from '../../../components/customer-invoices-client';
 
@@ -30,7 +30,13 @@ export default async function CustomerInvoicesPage() {
         draft → issued → partially&nbsp;paid → paid. Totals show issued vs. outstanding receivable.
       </p>
       <section style={{ marginTop: 10 }}>
-        {invoices === null ? <p style={st.muted}>API offline.</p> : <CustomerInvoicesClient initialInvoices={invoices} />}
+        {invoices === null ? (
+          <p style={st.muted}>API offline.</p>
+        ) : (
+          <Suspense fallback={<p style={st.muted}>Loading invoices…</p>}>
+            <CustomerInvoicesClient initialInvoices={invoices} />
+          </Suspense>
+        )}
       </section>
     </div>
   );

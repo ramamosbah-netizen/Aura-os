@@ -95,7 +95,7 @@ Do this at deploy time, against a **direct** (non-pooler) admin/owner connection
 3. **Pre-flight verify** (still on the owner connection):
    `node apps/api/scripts/rls-fitness.mjs` → every in-scope table protected;
    `node apps/api/scripts/rls-isolation-test.mjs` → all assertions pass.
-4. **Flip the runtime** `DATABASE_URL` to the `aura_app` DSN and restart the API. Migrations/ops scripts keep the **owner** DSN.
+4. **Flip the runtime** `DATABASE_URL` to the `aura_app` DSN and restart the API. Migrations/ops scripts keep the **owner** DSN, now in its own variable — see the split below.
 5. **Post-flip smoke** (as `aura_app`): create one record (e.g. `POST /api/v1/crm/accounts`), read it back, then confirm fail-closed at the DB:
    ```sql
    SELECT set_config('app.current_tenant_id','',false);
@@ -105,6 +105,23 @@ Do this at deploy time, against a **direct** (non-pooler) admin/owner connection
    (CI runs exactly this — see CI guards.)
 
 Until step 4 the app runs as today (BYPASSRLS) with **no behavioural change** — the flip is the activation, and it is a single env var.
+
+### The two-connection split (G-03, activated on dev 2026-08-10)
+
+The app and the schema need different privilege, so they get different variables. **The API process only ever reads `DATABASE_URL`** and is never given the owner secret.
+
+| Variable | Role | Used by |
+|---|---|---|
+| `DATABASE_URL` | `aura_app` — `NOSUPERUSER NOBYPASSRLS`, so policies apply | the API runtime, and `rls-isolation-test`'s probe derivation |
+| `MIGRATION_DATABASE_URL` | the owning role — may create, and bypasses RLS | `migrate.mjs`, `rls-fitness.mjs`, `orphan-scan.mjs`, `archive-events.mjs`, `merge-duplicate-accounts.mjs`, `rls-isolation-test.mjs` (admin half) |
+
+Every one of those scripts resolves `MIGRATION_DATABASE_URL ?? DATABASE_URL`, so a deployment that has not split the roles yet keeps working unchanged.
+
+They are cross-tenant or schema-level by nature: `orphan-scan` and `archive-events` must see every tenant's rows, `rls-fitness` reads `pg_catalog` to assert the posture that `aura_app` is precisely the subject of, and `merge-duplicate-accounts` reassigns foreign keys across tenants.
+
+**`ALLOW_RLS_BYPASS=true` remains the escape hatch** for a deployment that intentionally runs the app under a bypassing role. `evaluateRlsPosture` refuses to boot production that way; outside production it logs a loud warning. Development therefore keeps full write access to the database — via `MIGRATION_DATABASE_URL` for schema and data work — without weakening the runtime.
+
+**Pooler note.** Poolers that multiplex projects (Supabase: `<role>.<project-ref>`) carry the routing key in the username. Swapping in a bare role name loses it and the pooler answers `ENOIDENTIFIER`; `rls-isolation-test.mjs` preserves everything after the first dot when it derives the probe DSN.
 
 ## Rollback (fast, safe)
 

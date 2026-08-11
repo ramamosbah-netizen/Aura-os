@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { makeStockTransfer, TRANSFER_EVENT, type StockTransfer, type NewStockTransfer } from './domain/stock-transfer';
 import { TRANSFER_STORE, type TransferFilter, type TransferStore } from './transfer-store';
 import { StockService } from './stock.service';
@@ -13,6 +13,9 @@ export class TransferService {
     @Inject(TRANSFER_STORE) private readonly store: TransferStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly stock: StockService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async execute(input: NewStockTransfer): Promise<StockTransfer> {
@@ -42,8 +45,9 @@ export class TransferService {
     return transfer;
   }
 
-  get(id: Id): Promise<StockTransfer | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<StockTransfer | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: TransferFilter): Promise<StockTransfer[]> {

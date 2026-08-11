@@ -35,7 +35,8 @@ const envOrFile = (name) => {
   if (file) return readFileSync(file, 'utf8').trim() || null;
   return process.env[name]?.trim() || null;
 };
-const url = envOrFile('DATABASE_URL');
+// Cross-tenant maintenance — runs as the owning role, not the app's aura_app (G-03).
+const url = envOrFile('MIGRATION_DATABASE_URL') ?? envOrFile('DATABASE_URL');
 if (!url) {
   console.error('✗ DATABASE_URL is not set — cannot archive.');
   process.exit(1);

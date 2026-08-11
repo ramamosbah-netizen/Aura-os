@@ -1,4 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { TenantContext } from '@aura/core';
+import { sameTenantOrNull } from '@aura/shared';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { Id } from '@aura/shared';
 import { type MarketItem, type NewMarketItem, makeMarketItem } from './domain/market-item';
 import { MARKET_ITEM_STORE, type MarketItemFilter, type MarketItemStore } from './market-item-store';
@@ -34,7 +36,12 @@ const LEAD_TIME_BY_CATEGORY: Record<string, number> = {
 export class MarketItemService {
   private readonly logger = new Logger(MarketItemService.name);
 
-  constructor(@Inject(MARKET_ITEM_STORE) private readonly store: MarketItemStore) {}
+  constructor(
+    @Inject(MARKET_ITEM_STORE) private readonly store: MarketItemStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guard inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+  ) {}
 
   create(input: NewMarketItem): Promise<MarketItem> {
     const item = makeMarketItem(input);
@@ -45,8 +52,9 @@ export class MarketItemService {
     return this.store.list(filter);
   }
 
-  get(id: Id): Promise<MarketItem | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<MarketItem | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   remove(id: Id): Promise<boolean> {

@@ -35,6 +35,7 @@ async function api(method, path, body, tok = token) {
 
 const post = (p, b) => api('POST', p, b);
 const patch = (p, b, tok) => api('PATCH', p, b, tok);
+const get = (p) => api('GET', p);
 
 async function loginAs(username) {
   const res = await fetch(`${BASE}/api/v1/auth/login`, {
@@ -81,12 +82,18 @@ async function main() {
   await login();
   console.log('✓ authenticated');
 
-  // Accounts
+  // Accounts — idempotent: query existing accounts first to avoid duplicate rows
+  const existingAccounts = await get('/crm/accounts').catch(() => []);
   const accounts = [];
   for (const a of ACCOUNTS) {
-    accounts.push(await post('/crm/accounts', { ...a, status: 'active_customer' }));
+    const found = Array.isArray(existingAccounts) ? existingAccounts.find((x) => x.name.trim().toLowerCase() === a.name.trim().toLowerCase()) : null;
+    if (found) {
+      accounts.push(found);
+    } else {
+      accounts.push(await post('/crm/accounts', { ...a, status: 'active_customer' }));
+    }
   }
-  console.log(`✓ ${accounts.length} accounts`);
+  console.log(`✓ ${accounts.length} accounts (idempotent seed)`);
 
   // A named contact per account. G5's proposal gate needs someone to propose TO — and an account
   // with no people was never realistic demo data in the first place.

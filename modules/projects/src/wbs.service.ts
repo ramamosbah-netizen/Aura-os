@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { type WbsNode, type WbsNodeStatus, makeWbsNode, calculateEvm, type EvmMetrics } from './domain/wbs';
 import { WBS_STORE, type WbsNodeFilter, type WbsStore } from './wbs-store';
 import { QuantityLedgerService } from './quantity-ledger.service';
@@ -21,6 +21,9 @@ export class WbsService {
     private readonly access: AccessService,
     private readonly quantityLedger: QuantityLedgerService,
     @Optional() @Inject(ITP_GATE) private readonly itpGate?: ItpGate,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: {
@@ -68,8 +71,7 @@ export class WbsService {
     status?: WbsNodeStatus,
     actorId?: Id,
   ): Promise<WbsNode> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`WBS Node ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'WBS Node', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
@@ -126,8 +128,7 @@ export class WbsService {
   }
 
   async recordActualSpend(id: Id, amount: number): Promise<WbsNode> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`WBS Node ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'WBS Node', id);
 
     const updatedNode: WbsNode = {
       ...existing,
@@ -144,8 +145,9 @@ export class WbsService {
     return updatedNode;
   }
 
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
   async get(id: Id): Promise<WbsNode | null> {
-    return this.store.get(id);
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   async list(filter?: WbsNodeFilter): Promise<WbsNode[]> {
@@ -219,5 +221,26 @@ export class WbsService {
     if (parent.parentId) {
       await this.rollup(parent.parentId);
     }
+  }
+
+  /**
+   * Recalculates and rolls up cost variances (Planned Value - Actual Cost) across the entire
+   * project WBS tree, updating parent node EVM metrics from leaf nodes up to root nodes.
+   */
+  async rollupCostVariances(projectId: Id): Promise<{ nodesRolledUp: number; totalCostVariance: number }> {
+    const nodes = await this.store.list({ projectId });
+    const leafNodes = nodes.filter((n) => !nodes.some((other) => other.parentId === n.id));
+
+    let nodesRolledUp = 0;
+    for (const leaf of leafNodes) {
+      if (leaf.parentId) {
+        await this.rollup(leaf.parentId);
+        nodesRolledUp++;
+      }
+    }
+
+    const evm = await this.getEvmMetrics(projectId);
+    this.logger.log(`Cost variance rollup completed for project ${projectId}: EVM CV=${evm.costVariance}, SV=${evm.scheduleVariance}`);
+    return { nodesRolledUp, totalCostVariance: evm.costVariance };
   }
 }

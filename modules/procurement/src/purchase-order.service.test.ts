@@ -22,7 +22,12 @@ async function harness(actorId: string | null = null) {
     }),
   } as unknown as EventStore;
   const tenant = actorId
-    ? ({ get: () => ({ tenantId: 't1', companyId: null, actorId, correlationId: 'test' }) } as unknown as TenantContext)
+    ? ({
+        get: () => ({ tenantId: 't1', companyId: null, actorId, correlationId: 'test' }),
+        // The service also asks for the BOUND tenant when scoping reads (N-08); boundTenantId
+        // deliberately has no dev-default fallback, so the stub must answer it too.
+        boundTenantId: () => 't1',
+      } as unknown as TenantContext)
     : null;
   const store = new InMemoryPurchaseOrderStore();
   const po = makePurchaseOrder({

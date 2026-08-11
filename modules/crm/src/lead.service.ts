@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import {
   CRM_EVENT, type Lead, type NewLead, makeLead,
   LEAD_QUALIFICATION_EVENT, assessLeadQualification, normalizeLeadQualification,
@@ -17,6 +17,9 @@ export class LeadService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewLead & { actorId?: Id | null }): Promise<Lead> {
@@ -61,8 +64,7 @@ export class LeadService {
     >,
     actorId?: Id | null,
   ): Promise<Lead> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Lead ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Lead', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
@@ -98,8 +100,7 @@ export class LeadService {
 
   /** Assign a lead to an owner — stamps the SLA clock (assignedAt) and emits crm.lead.assigned. */
   async assign(id: Id, assignedTo: Id, actorId?: Id | null): Promise<Lead> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Lead ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Lead', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
@@ -138,8 +139,7 @@ export class LeadService {
    * Idempotent: accepting an already-accepted lead keeps the original timestamp.
    */
   async accept(id: Id): Promise<Lead> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Lead ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Lead', id);
     if (!existing.assignedTo) throw new Error('cannot accept an unassigned lead'); // "cannot" → 400 in the taxonomy
     if (existing.acceptedAt) return existing;
     const updated: Lead = { ...existing, acceptedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -164,8 +164,7 @@ export class LeadService {
     input: { dimensions?: unknown; notes?: string | null },
     actorId?: Id | null,
   ): Promise<{ lead: Lead; assessment: LeadQualificationAssessment }> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Lead ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Lead', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
@@ -219,8 +218,9 @@ export class LeadService {
     return { lead: updated, assessment };
   }
 
-  get(id: Id): Promise<Lead | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Lead | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: LeadFilter): Promise<Lead[]> {

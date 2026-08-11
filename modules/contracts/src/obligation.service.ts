@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   OBLIGATION_EVENT,
   type ContractObligation,
@@ -20,6 +20,9 @@ export class ObligationService {
   constructor(
     @Inject(OBLIGATION_STORE) private readonly store: ObligationStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewContractObligation): Promise<ContractObligation> {
@@ -38,8 +41,7 @@ export class ObligationService {
   }
 
   async changeStatus(id: Id, status: ObligationStatus, on?: string): Promise<ContractObligation> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`obligation ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'obligation', id);
     const updated = setObligationStatus(existing, status, on);
     await this.store.save(updated);
     await this.events.append([
@@ -53,8 +55,9 @@ export class ObligationService {
     return updated;
   }
 
-  get(id: Id): Promise<ContractObligation | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<ContractObligation | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: ObligationFilter): Promise<ContractObligation[]> {

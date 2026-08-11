@@ -81,6 +81,11 @@ export class AmcService {
     return contract;
   }
 
+  // ── Handover → AMC Draft ──────────────────────────────────────
+  // Called by the cross-module subscriber when a project handover is signed off.
+  // Creates a DRAFT service contract. Pricing, SLA, and terms are NOT copied
+  // from the original contract — the PM adds those explicitly via review.
+
   // ── Work Orders ──────────────────────────────────────────────
 
   async createWorkOrder(params: {

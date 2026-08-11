@@ -4,8 +4,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from 'dotenv';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import crypto from 'node:crypto';
-import { AuthService, OtlpMetricsPusher, PG_POOL, TenantContext, evaluateAuthPosture, evaluateRlsPosture, metrics } from '@aura/core';
+import helmet from 'helmet';
+import { AuthService, BODY_LIMIT, EdgeRateLimitGuard, OtlpMetricsPusher, PG_POOL, TenantContext, cspFor, evaluateAuthPosture, evaluateRlsPosture, metrics, resolveCors } from '@aura/core';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { MigrationGateService } from './health/migration-gate.service';
@@ -18,10 +20,51 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 config({ path: join(__dirname, '..', '.env.local') });
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // All routes are versioned under /api/v1 (Constitution Law #6 — consistent version prefix).
   app.setGlobalPrefix('api/v1');
-  app.enableCors();
+
+  // ── HTTP edge security (G-07) ────────────────────────────────────────────────────────────
+  // Everything below runs before a handler exists, which is the point: the permission guard and
+  // the login throttle protect what a caller may *do*, and cannot answer volume, a hostile origin,
+  // or an oversized body. Decisions live in core/src/http/edge-security.ts so they are testable
+  // and greppable rather than buried here — this gate was reported "partial" for weeks while
+  // being wholly absent.
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // Trust the proxy so req.ip is the real client, not the load balancer. Without this every
+  // request shares one bucket and the rate limiter is worse than useless — it throttles everyone
+  // at once the moment the deployment sits behind anything.
+  if (process.env.TRUST_PROXY !== 'false') app.set('trust proxy', 1);
+
+  app.use(
+    helmet({
+      // Set per-request below: a JSON route gets `default-src 'none'`, Swagger UI needs more.
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      hsts: isProd ? { maxAge: 31_536_000, includeSubDomains: true, preload: true } : false,
+    }),
+  );
+  app.use((req: IncomingMessage & { originalUrl?: string }, res: ServerResponse, next: () => void) => {
+    res.setHeader('Content-Security-Policy', cspFor(req.originalUrl ?? req.url));
+    next();
+  });
+  app.useBodyParser('json', { limit: BODY_LIMIT });
+  app.useBodyParser('urlencoded', { limit: BODY_LIMIT, extended: true });
+
+  const cors = resolveCors({ allowedOrigins: process.env.CORS_ALLOWED_ORIGINS, isProduction: isProd });
+  if (cors.warning) new Logger('Bootstrap').warn(`⚠️  ${cors.warning}`);
+  app.enableCors({ origin: cors.origin, credentials: cors.credentials });
+
+  const rateLimit = app.get(EdgeRateLimitGuard);
+  app.useGlobalGuards(rateLimit);
+  const rl = rateLimit.describe();
+  new Logger('Bootstrap').log(
+    `✓ Edge security: helmet + CSP · rate limit ${rl.limit}/${rl.windowMs / 1000}s per IP · body ≤ ${BODY_LIMIT} · CORS ${
+      cors.origin === true ? 'any origin (dev)' : `${(cors.origin as string[]).length} allowed origin(s)`
+    }`,
+  );
+
   app.enableShutdownHooks(); // so OutboxRelay.onModuleDestroy clears its timer
   app.useGlobalFilters(new AllExceptionsFilter(), new AccessDeniedFilter());
   // Global input validation. Safe for existing interface DTOs (no class metadata → skipped);
@@ -55,7 +98,6 @@ async function bootstrap(): Promise<void> {
   // The decision itself is a pure, tested function (core/src/identity/auth-posture.ts), symmetric
   // with the RLS posture gate below — both answer "is enforcement actually on, and may we serve
   // anyway?", and both should be greppable rather than buried in this bootstrap.
-  const isProd = process.env.NODE_ENV === 'production';
   const authPosture = evaluateAuthPosture({
     verifierConfigured: auth.enabled,
     isProduction: isProd,

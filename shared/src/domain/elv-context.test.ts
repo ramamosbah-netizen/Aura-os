@@ -5,6 +5,8 @@ import {
   normalizeElvSystems,
   ELV_SYSTEMS,
   ELV_SYSTEM_LABELS,
+  toElvSystem,
+  toElvSystemOrNull,
 } from './elv-context';
 
 describe('normalizeElvSystems', () => {
@@ -59,5 +61,35 @@ describe('contextCompleteness', () => {
 
   it('does not count an unknown project stage or a zero value as known', () => {
     expect(contextCompleteness({ projectStage: 'unknown', estimatedValue: 0 })).toBe(0);
+  });
+});
+
+describe('taxonomy merge — aliases (ELV core)', () => {
+  it('understands the spelling Commissioning used, instead of demoting those rows to other', () => {
+    // aura_commissioning_records holds `pa_va` written before the two taxonomies were merged.
+    // A plain membership test would have silently reclassified every one of them.
+    expect(toElvSystem('pa_va')).toBe('public_address');
+    expect(toElvSystem('acs')).toBe('access_control');
+    expect(toElvSystem('lan')).toBe('network');
+  });
+
+  it('carries network, which Commissioning had and the canonical list did not', () => {
+    expect(ELV_SYSTEMS).toContain('network');
+    expect(toElvSystem('network')).toBe('network');
+    expect(ELV_SYSTEM_LABELS.network).toBeTruthy();
+  });
+
+  it('is case- and whitespace-insensitive, because these arrive from imports and forms', () => {
+    expect(toElvSystem('  CCTV  ')).toBe('cctv');
+    expect(toElvSystem('PA_VA')).toBe('public_address');
+  });
+
+  it('separates "unrecognised" from "other" so a caller can choose which it wants', () => {
+    expect(toElvSystemOrNull('nonsense')).toBeNull();
+    expect(toElvSystem('nonsense')).toBe('other');
+  });
+
+  it('keeps aliases resolving through the list normaliser too', () => {
+    expect(normalizeElvSystems(['pa_va', 'cctv', 'junk'])).toEqual(['public_address', 'cctv']);
   });
 });

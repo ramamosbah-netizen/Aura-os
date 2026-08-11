@@ -2,8 +2,12 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
+import FileAttachmentZone, { type AttachmentItem } from './ui/file-attachment-zone';
 import { Badge, Button, Field, Input, KpiTile, Select, Table, Td, Th } from './ui/kit';
 import ProjectPicker from './ui/project-picker';
+import SaveViewButton from './save-view-button';
+import SignatureCanvas from './ui/signature-canvas';
 
 export interface InspectionRequest {
   id: string;
@@ -24,6 +28,8 @@ const DISCIPLINES = ['civil', 'mechanical', 'electrical', 'plumbing'];
 export default function InspectionRequestClient({ initial }: { initial: InspectionRequest[] }) {
   const [rows, setRows] = useState(initial);
   const [f, setF] = useState({ projectId: '', irNumber: '', discipline: 'electrical', locationDetail: '', inspectionDate: '' });
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [signature, setSignature] = useState<string | null>(null);
   const [comments, setComments] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -73,17 +79,42 @@ export default function InspectionRequestClient({ initial }: { initial: Inspecti
         <KpiTile label="Awaiting inspection" value={kpi.pending} tone={kpi.pending > 0 ? 'warn' : undefined} />
         <KpiTile label="Approved" value={kpi.approved} tone="good" />
         <KpiTile label="Rejected" value={kpi.rejected} tone={kpi.rejected > 0 ? 'bad' : undefined} />
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
+          <SaveViewButton />
+          <ExportButton
+            filename="inspection-requests"
+            title="Inspection Requests Register"
+            rows={rows as unknown as Array<Record<string, unknown>>}
+            columns={[
+              { key: 'irNumber', label: 'IR #' },
+              { key: 'discipline', label: 'Discipline' },
+              { key: 'locationDetail', label: 'Location' },
+              { key: 'inspectionDate', label: 'Date' },
+              { key: 'status', label: 'Status' },
+            ]}
+          />
+        </div>
       </div>
 
       <h2 style={st.h2}>Request inspection</h2>
-      <div style={st.form}>
-        <Field label="Project"><ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></Field>
-        <Field label="IR number"><Input value={f.irNumber} onChange={(e) => set('irNumber', e.target.value)} placeholder="IR-001" /></Field>
-        <Field label="Discipline"><Select value={f.discipline} onChange={(e) => set('discipline', e.target.value)}>{DISCIPLINES.map((d) => <option key={d} value={d}>{d}</option>)}</Select></Field>
-        <Field label="Location" style={{ minWidth: 220 }}><Input value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="L3 riser, grid C4" /></Field>
-        <Field label="Date"><Input type="date" value={f.inspectionDate} onChange={(e) => set('inspectionDate', e.target.value)} /></Field>
-        <Button onClick={request} disabled={busy}>{busy ? 'Requesting…' : 'Request'}</Button>
-        {error && <span style={st.err}>{error}</span>}
+      <div style={st.formCard}>
+        <div style={st.form}>
+          <Field label="Project"><ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></Field>
+          <Field label="IR number"><Input value={f.irNumber} onChange={(e) => set('irNumber', e.target.value)} placeholder="IR-001" /></Field>
+          <Field label="Discipline"><Select value={f.discipline} onChange={(e) => set('discipline', e.target.value)}>{DISCIPLINES.map((d) => <option key={d} value={d}>{d}</option>)}</Select></Field>
+          <Field label="Location" style={{ minWidth: 220 }}><Input value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="L3 riser, grid C4" /></Field>
+          <Field label="Date"><Input type="date" value={f.inspectionDate} onChange={(e) => set('inspectionDate', e.target.value)} /></Field>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
+          <FileAttachmentZone label="Inspection Photo Evidence" attachments={attachments} onChange={setAttachments} />
+          <SignatureCanvas label="Inspector / Witness Signature" value={signature} onChange={setSignature} />
+        </div>
+
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button onClick={request} disabled={busy}>{busy ? 'Requesting…' : 'Request'}</Button>
+          {error && <span style={st.err}>{error}</span>}
+        </div>
       </div>
 
       <h2 style={st.h2}>Register</h2>
@@ -123,8 +154,9 @@ export default function InspectionRequestClient({ initial }: { initial: Inspecti
 
 const st = {
   kpis: { display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' as const } as CSSProperties,
-  form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
-  err: { color: 'var(--bad)', marginLeft: 12, fontSize: 13, alignSelf: 'center' } as CSSProperties,
+  formCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 18px', marginBottom: 18 } as CSSProperties,
+  form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end' } as CSSProperties,
+  err: { color: 'var(--bad)', fontSize: 13, alignSelf: 'center' } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px', color: 'var(--text)' } as CSSProperties,
   cmt: { fontSize: 12, color: 'var(--muted)', fontWeight: 400, marginTop: 2 } as CSSProperties,
 };

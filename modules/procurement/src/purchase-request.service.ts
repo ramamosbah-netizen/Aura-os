@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, ApprovalMatrixService } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, ApprovalMatrixService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { PR_EVENT, type PurchaseRequest, type PurchaseRequestStatus, type NewPurchaseRequest, makePurchaseRequest } from './domain/purchase-request';
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestFilter, type PurchaseRequestStore } from './purchase-request-store';
 import { PurchaseOrderService } from './purchase-order.service';
@@ -15,6 +15,9 @@ export class PurchaseRequestService {
     private readonly access: AccessService,
     private readonly purchaseOrders: PurchaseOrderService,
     private readonly approvalMatrix: ApprovalMatrixService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewPurchaseRequest): Promise<PurchaseRequest> {
@@ -57,8 +60,7 @@ export class PurchaseRequestService {
       }
     }
 
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`PR ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PR', id);
 
     // Approval matrix: when a threshold rule matches the PR, only a listed approver may approve it.
     if (status === 'approved') {
@@ -119,8 +121,9 @@ export class PurchaseRequestService {
     return updated;
   }
 
-  get(id: Id): Promise<PurchaseRequest | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<PurchaseRequest | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: PurchaseRequestFilter): Promise<PurchaseRequest[]> {

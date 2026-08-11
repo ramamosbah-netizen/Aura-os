@@ -49,6 +49,24 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       'no-undef': 'off',
       'preserve-caught-error': 'off',
+      // Same `_`-prefix convention the TS block uses — deliberately-ignored destructured
+      // entries (`for (const [_k, v] of map)`) are intent, not dead code.
+      // tseslint's recommended set is not file-scoped, so its rule is the one that fires here.
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
+    // The service worker runs in the ServiceWorkerGlobalScope, not Node and not the window:
+    // `self`, `caches`, `clients` and the Fetch/Cache APIs are its globals, and without this
+    // block core no-undef flags all 13 of them.
+    files: ['**/public/sw.js', '**/public/*.worker.js'],
+    languageOptions: {
+      globals: { ...globals.serviceworker, ...globals.browser },
+      sourceType: 'script',
     },
   },
 );

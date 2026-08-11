@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { daysUntil, type Id, isOnExpiryWatchlist, newId } from '@aura/shared';
 
 /**
  * Bank Guarantee / bond — an instrument a bank issues on the company's behalf to a beneficiary
@@ -102,8 +102,7 @@ export function expireGuarantee(g: BankGuarantee): BankGuarantee {
 
 /** Whole days from `asOf` (YYYY-MM-DD) to expiry; negative once past expiry. */
 export function daysToExpiry(g: BankGuarantee, asOf: string): number {
-  const ms = Date.parse(`${g.expiryDate}T00:00:00Z`) - Date.parse(`${asOf}T00:00:00Z`);
-  return Math.round(ms / 86_400_000);
+  return daysUntil(g.expiryDate, asOf);
 }
 
 /**
@@ -120,7 +119,7 @@ export function daysToExpiry(g: BankGuarantee, asOf: string): number {
  */
 export function isExpiringSoon(g: BankGuarantee, asOf: string, withinDays = 30): boolean {
   if (g.status !== 'active') return false;
-  return daysToExpiry(g, asOf) <= withinDays;
+  return isOnExpiryWatchlist(daysToExpiry(g, asOf), withinDays);
 }
 
 /** Active guarantees whose expiry has already passed — overdue for release or renewal. */

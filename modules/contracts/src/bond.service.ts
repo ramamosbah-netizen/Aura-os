@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   BOND_EVENT,
   type BondAction,
@@ -25,6 +25,9 @@ export class BondService {
   constructor(
     @Inject(CONTRACT_BOND_STORE) private readonly store: BondStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewContractBond): Promise<ContractBond> {
@@ -45,8 +48,9 @@ export class BondService {
     return bond;
   }
 
-  get(id: Id): Promise<ContractBond | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<ContractBond | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: BondFilter): Promise<ContractBond[]> {
@@ -60,8 +64,7 @@ export class BondService {
   }
 
   async act(id: Id, action: BondAction): Promise<ContractBond> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`bond ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'bond', id);
     const updated = applyBondAction(existing, action);
     await this.store.save(updated);
     const eventType = action === 'release' ? BOND_EVENT.released : action === 'call' ? BOND_EVENT.called : null;

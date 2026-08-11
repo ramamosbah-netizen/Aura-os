@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
+import { assertSameTenant, diffFields, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, TenantContext } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
 import { requiredApproval } from './domain/approval-matrix';
@@ -126,8 +126,7 @@ export class PurchaseOrderService implements OnModuleInit {
 
   /** Submit a PO for approval. Auto-approves below the matrix threshold; otherwise → pending_approval. */
   async submitForApproval(id: Id): Promise<PurchaseOrder> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`PO ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
     const req = requiredApproval(existing.value);
     return this.transition(existing, req.autoApproved ? 'approved' : 'pending_approval', PROCUREMENT_EVENT.poUpdated, {
       requiredLevel: req.level, requiredLabel: req.label, autoApproved: req.autoApproved,
@@ -139,8 +138,7 @@ export class PurchaseOrderService implements OnModuleInit {
    * (the matrix); under-level approval is rejected.
    */
   async approve(id: Id, approverLevel: number): Promise<PurchaseOrder> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`PO ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
     const req = requiredApproval(existing.value);
     if (Number(approverLevel) < req.level) {
       throw new Error(`approval level ${approverLevel} is below the required level ${req.level} (${req.label}) for value ${existing.value}`);
@@ -153,8 +151,7 @@ export class PurchaseOrderService implements OnModuleInit {
   /** Update descriptive fields on a PO (title, reference, supplier snapshot).
    *  Value is NOT editable — committed project cost was posted as a delta at creation. */
   async update(id: Id, patch: Partial<Pick<PurchaseOrder, 'title' | 'reference' | 'supplierId' | 'supplierName'>>): Promise<PurchaseOrder> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`PO ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: PurchaseOrder = { ...existing, ...defined };
     // Audit trail (P1-2 / gap register G-12): capture the field-level before→after so the timeline
@@ -185,8 +182,7 @@ export class PurchaseOrderService implements OnModuleInit {
   }
 
   async changeStatus(id: Id, status: PurchaseOrderStatus): Promise<PurchaseOrder> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`PO ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
 
     // Approval gate: a PO above the auto-approve threshold must be 'approved' before it can issue.
     if (status === 'issued' && existing.status !== 'approved' && !requiredApproval(existing.value).autoApproved) {
@@ -271,8 +267,9 @@ export class PurchaseOrderService implements OnModuleInit {
     return updated;
   }
 
-  get(id: Id): Promise<PurchaseOrder | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<PurchaseOrder | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: PurchaseOrderFilter): Promise<PurchaseOrder[]> {

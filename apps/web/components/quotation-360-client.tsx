@@ -136,8 +136,8 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
       {q.status === 'accepted' && !q.convertedContractId && (
         <ActionButton kind="primary" disabled={busy} onClick={() => void toContract()}>→ Contract</ActionButton>
       )}
-      <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/print`}>⭳ Export PDF</ActionButton>
-      <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/pricing`}>⊞ Pricing sheet</ActionButton>
+      <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/print`} target="_blank" rel="noopener noreferrer">⭳ Export PDF</ActionButton>
+      <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/pricing`} target="_blank" rel="noopener noreferrer">⊞ Pricing sheet</ActionButton>
       {isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => act('cancel')}>Cancel</ActionButton>}
     </>
   );

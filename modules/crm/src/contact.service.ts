@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type PageParams, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { CRM_CONTACT_EVENT, type Contact, type NewContact, makeContact } from './domain/contact';
 import { CRM_CONTACT_STORE, type ContactFilter, type ContactStore } from './contact-store';
 
@@ -15,6 +15,9 @@ export class ContactService {
   constructor(
     @Inject(CRM_CONTACT_STORE) private readonly store: ContactStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewContact): Promise<Contact> {
@@ -35,8 +38,9 @@ export class ContactService {
     return contact;
   }
 
-  get(id: Id): Promise<Contact | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Contact | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   /**
@@ -48,8 +52,7 @@ export class ContactService {
     id: Id,
     patch: Partial<Pick<Contact, 'name' | 'jobTitle' | 'email' | 'phone' | 'isPrimary' | 'status' | 'ownerId' | 'accountId' | 'accountName' | 'stakeholderRole' | 'relationshipStrength' | 'reportsToId' | 'reportsToName'>>,
   ): Promise<Contact> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`contact ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'contact', id);
     if (patch.name !== undefined && !patch.name.trim()) throw new Error('contact name is required');
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Contact = { ...existing, ...defined };

@@ -61,10 +61,10 @@ export function RecordHeader({
 
 // ── Action buttons (shared look) ────────────────────────────────────────────────
 export function ActionButton({
-  children, onClick, kind = 'ghost', disabled, href,
-}: { children: ReactNode; onClick?: () => void; kind?: 'primary' | 'ghost'; disabled?: boolean; href?: string }) {
+  children, onClick, kind = 'ghost', disabled, href, target, rel,
+}: { children: ReactNode; onClick?: () => void; kind?: 'primary' | 'ghost'; disabled?: boolean; href?: string; target?: string; rel?: string }) {
   const style = kind === 'primary' ? rs.primaryBtn : rs.ghostBtn;
-  if (href) return <a href={href} style={{ ...style, textDecoration: 'none' }}>{children}</a>;
+  if (href) return <a href={href} target={target} rel={rel} style={{ ...style, textDecoration: 'none' }}>{children}</a>;
   return <button type="button" onClick={onClick} disabled={disabled} style={style}>{children}</button>;
 }
 

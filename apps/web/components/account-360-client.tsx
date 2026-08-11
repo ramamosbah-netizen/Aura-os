@@ -343,8 +343,8 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             <details style={{ position: 'relative' }}>
               <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>Export ▾</summary>
               <div style={st.menu}>
-                <a href={`/api/crm/accounts/${a.id}/dossier/xlsx`} style={st.menuItem}>⤓ Customer dossier (Excel)</a>
-                <a href={`/crm/accounts/${a.id}/print`} style={st.menuItem}>🖨 Customer dossier (PDF)</a>
+                <a href={`/api/crm/accounts/${a.id}/dossier/xlsx`} style={st.menuItem} target="_blank" rel="noopener noreferrer">⤓ Customer dossier (Excel)</a>
+                <a href={`/crm/accounts/${a.id}/print`} style={st.menuItem} target="_blank" rel="noopener noreferrer">🖨 Customer dossier (PDF)</a>
               </div>
             </details>
             <details style={{ position: 'relative' }}>

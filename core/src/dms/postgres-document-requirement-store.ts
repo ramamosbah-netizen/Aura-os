@@ -79,16 +79,19 @@ export class PostgresDocumentRequirementStore implements DocumentRequirementStor
     return res.rows.map(rowTo);
   }
 
-  async get(id: Id): Promise<DocumentRequirement | null> {
+  async get(id: Id, tenantId: Id): Promise<DocumentRequirement | null> {
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_document_requirements WHERE id = $1`,
-      [id],
+      `SELECT ${COLS} FROM public.aura_document_requirements WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId],
     );
     return res.rows[0] ? rowTo(res.rows[0]) : null;
   }
 
-  async remove(id: Id): Promise<boolean> {
-    const res = await this.pool.query('DELETE FROM public.aura_document_requirements WHERE id = $1', [id]);
+  async remove(id: Id, tenantId: Id): Promise<boolean> {
+    const res = await this.pool.query(
+      'DELETE FROM public.aura_document_requirements WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId],
+    );
     return (res.rowCount ?? 0) > 0;
   }
 }

@@ -21,15 +21,90 @@ export interface IngestedChunk {
   embedding: number[];
 }
 
+export interface IngestionJob {
+  jobId: string;
+  tenantId: string;
+  documentTitle: string;
+  documentType: IngestionDocumentInput['documentType'];
+  status: 'queued' | 'extracting' | 'chunking' | 'embedding' | 'completed' | 'failed';
+  totalChunks: number;
+  processedChunks: number;
+  error?: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
 @Injectable()
 export class DocumentIngestionService {
   private readonly logger = new Logger('DocumentIngestionService');
   private readonly localVectorStore = new Map<string, IngestedChunk[]>();
+  private readonly ingestionJobs = new Map<string, IngestionJob>();
 
   constructor(
     private readonly aiService: AiService,
     @Optional() @Inject(PG_POOL) private readonly pool?: Pool,
   ) {}
+
+  /**
+   * Enqueue a document for background vector RAG ingestion. Returns immediately with jobId.
+   */
+  async enqueueAsyncIngestion(input: IngestionDocumentInput): Promise<IngestionJob> {
+    const jobId = `job-rag-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const job: IngestionJob = {
+      jobId,
+      tenantId: input.tenantId,
+      documentTitle: input.documentTitle,
+      documentType: input.documentType,
+      status: 'queued',
+      totalChunks: 0,
+      processedChunks: 0,
+      createdAt: new Date(),
+    };
+
+    this.ingestionJobs.set(jobId, job);
+    this.logger.log(`[DocumentIngestion] Enqueued async RAG job ${jobId} for "${input.documentTitle}"`);
+
+    // Fire background processing asynchronously
+    setTimeout(() => {
+      this.processIngestionJob(jobId, input).catch((err) => {
+        this.logger.error(`[DocumentIngestion] Background RAG job ${jobId} failed: ${err}`);
+      });
+    }, 10);
+
+    return job;
+  }
+
+  /**
+   * Query current status of a background ingestion job.
+   */
+  getIngestionJobStatus(jobId: string): IngestionJob | null {
+    return this.ingestionJobs.get(jobId) || null;
+  }
+
+  private async processIngestionJob(jobId: string, input: IngestionDocumentInput): Promise<void> {
+    const job = this.ingestionJobs.get(jobId);
+    if (!job) return;
+
+    try {
+      job.status = 'extracting';
+      const chunksText = this.chunkText(input.rawTextContent, 300, 50);
+
+      job.status = 'chunking';
+      job.totalChunks = chunksText.length;
+
+      job.status = 'embedding';
+      const result = await this.ingestDocument(input);
+
+      job.processedChunks = result.totalChunks;
+      job.status = 'completed';
+      job.completedAt = new Date();
+      this.logger.log(`[DocumentIngestion] Background RAG job ${jobId} completed successfully (${result.totalChunks} chunks).`);
+    } catch (err: any) {
+      job.status = 'failed';
+      job.error = err.message || String(err);
+      this.logger.error(`[DocumentIngestion] Background RAG job ${jobId} failed: ${job.error}`);
+    }
+  }
 
   /**
    * Parse, chunk, embed, and index a document into the RAG vector store.

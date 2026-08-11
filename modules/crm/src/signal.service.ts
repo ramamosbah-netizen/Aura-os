@@ -1,11 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  type AccessTarget, type Id, type OrgLevel, makeEvent,
-  type Signal, type NewSignal, type SignalStatus, type Lead, type LeadSource,
-  makeSignal, advanceSignal, promoteSignal, dismissSignal, makeLead, resolveIdentity,
-  CRM_SIGNAL_EVENT, CRM_EVENT,
-} from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, advanceSignal, assertSameTenant, CRM_EVENT, CRM_SIGNAL_EVENT, dismissSignal, type Id, type Lead, type LeadSource, makeEvent, makeLead, makeSignal, type NewSignal, type OrgLevel, promoteSignal, resolveIdentity, sameTenantOrNull, type Signal, type SignalStatus } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_SIGNAL_STORE, type SignalFilter, type SignalStore } from './signal-store';
 import { CRM_LEAD_STORE, type LeadStore } from './lead-store';
 import { CRM_ACCOUNT_STORE, type AccountStore } from './account-store';
@@ -38,6 +33,9 @@ export class SignalService {
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
     @Inject(CRM_ACCOUNT_STORE) private readonly accounts: AccountStore,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   private assert(actorId: Id | null | undefined, tenantId: Id, companyId: Id | null): void {
@@ -75,8 +73,7 @@ export class SignalService {
   }
 
   async advance(id: Id, to: 'REVIEWING' | 'RESEARCHING', actorId?: Id | null): Promise<Signal> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Signal ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Signal', id);
     this.assert(actorId, existing.tenantId, existing.companyId);
     const next = advanceSignal(existing, to);
     await this.store.update(next);
@@ -87,8 +84,7 @@ export class SignalService {
    * lead.source) and the forward link (signal.promotedLeadId). Idempotent: a promoted signal
    * returns its existing lead and creates nothing. */
   async promote(id: Id, actorId?: Id | null): Promise<PromoteSignalResult> {
-    const signal = await this.store.get(id);
-    if (!signal) throw new Error(`Signal ${id} not found`);
+    const signal = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Signal', id);
     this.assert(actorId, signal.tenantId, signal.companyId);
 
     if (signal.status === 'PROMOTED' && signal.promotedLeadId) {
@@ -144,8 +140,7 @@ export class SignalService {
   }
 
   async dismiss(id: Id, reason: string, asDuplicate = false, actorId?: Id | null): Promise<Signal> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`Signal ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Signal', id);
     this.assert(actorId, existing.tenantId, existing.companyId);
     const next = dismissSignal(existing, reason, asDuplicate);
 
@@ -160,8 +155,9 @@ export class SignalService {
     return next;
   }
 
-  get(id: Id): Promise<Signal | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Signal | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
   list(filter?: SignalFilter): Promise<Signal[]> {
     return this.store.list(filter);

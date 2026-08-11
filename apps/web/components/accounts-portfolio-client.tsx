@@ -194,8 +194,8 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <a href="/api/crm/accounts/export/xlsx" style={st.exportBtn}>⤓ Excel</a>
-          <a href="/crm/accounts/print" style={st.exportBtn}>🖨 PDF</a>
+          <a href="/api/crm/accounts/export/xlsx" style={st.exportBtn} target="_blank" rel="noopener noreferrer">⤓ Excel</a>
+          <a href="/crm/accounts/print" style={st.exportBtn} target="_blank" rel="noopener noreferrer">🖨 PDF</a>
         </div>
       </div>
 

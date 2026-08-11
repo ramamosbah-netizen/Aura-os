@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, type OnModuleInit, Optional } from '@nestjs/common';
+import { type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
+import { CommandBus, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { INVENTORY_EVENT, type GoodsReceipt, type NewGoodsReceipt, makeGoodsReceipt } from './domain/goods-receipt';
 import { GOODS_RECEIPT_STORE, type GoodsReceiptFilter, type GoodsReceiptStore } from './goods-receipt-store';
 
@@ -22,6 +22,9 @@ export class GoodsReceiptService implements OnModuleInit {
     @Inject(GOODS_RECEIPT_STORE) private readonly store: GoodsReceiptStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly commands: CommandBus,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   onModuleInit(): void {
@@ -73,8 +76,9 @@ export class GoodsReceiptService implements OnModuleInit {
     });
   }
 
-  get(id: Id): Promise<GoodsReceipt | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<GoodsReceipt | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: GoodsReceiptFilter): Promise<GoodsReceipt[]> {

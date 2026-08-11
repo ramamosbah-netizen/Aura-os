@@ -110,6 +110,8 @@ import { DataLifecycleController } from './admin/data-lifecycle.controller';
 import { UsersAdminController } from './admin/users-admin.controller';
 import { ServiceAccountsAdminController } from './admin/service-accounts-admin.controller';
 import { FormOverridesReadController, FormsAdminController } from './admin/forms-admin.controller';
+import { ElvDevicesController } from './elv/elv-devices.controller';
+import { ComplianceController } from './compliance/compliance.controller';
 import { PoisonSubscriber } from './events/poison-subscriber';
 import { WorkflowSeeder } from './workflow/workflow.seeder';
 import { AuthSeeder } from './auth/auth.seeder';
@@ -117,6 +119,8 @@ import { BuilderController } from './builder/builder.controller';
 import { AuditController } from './audit/audit.controller';
 import { AmcModule } from '@aura/amc';
 import { CommissioningModule } from '@aura/commissioning';
+import { ElvModule } from '@aura/elv';
+import { ComplianceModule } from '@aura/compliance';
 import { CommissioningController } from './commissioning/commissioning.controller';
 import { HandoverController } from './commissioning/handover.controller';
 import { SerialsController } from './inventory/serials.controller';
@@ -139,8 +143,8 @@ import {
   InMemoryWorkspaceConfigStore,
   PostgresWorkspaceConfigStore,
 } from './workspace/workspace-config-store';
-import { PG_POOL, PermissionsGuard } from '@aura/core';
-import { APP_GUARD } from '@nestjs/core';
+import { PG_POOL, PermissionsGuard, IdempotencyInterceptor } from '@aura/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import type { Pool } from 'pg';
 import { CommsController } from './comms/comms.controller';
 import { CommsService } from './comms/comms.service';
@@ -150,12 +154,16 @@ import { CommsService } from './comms/comms.service';
  * an events demo. Business modules (modules/*) register here as they land.
  */
 @Module({
-  imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, MarketIntelligenceModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule, CommissioningModule],
-  controllers: [HealthController, EventsController, DocumentsController, DocumentRequirementsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmSignalsController, LeadCommandController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, MyDayController, SourceFunnelController, ExecutiveCrmController, CrmAutomationController, DealBriefController, CrmActivitiesController, Opportunity360Controller, OpportunityDepthController, PreAwardController, PipelineCommandController, ForecastController, CampaignsController, NegotiationController, MarketIntelligenceController, ProductKnowledgeController, EstimationController, PricingSheetsController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, ThreeWayMatchController, SpendAnalyticsController, FrameworkAgreementsController, InventoryController, SerialsController, LocationsController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, CommissioningController, HandoverController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
+  imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, MarketIntelligenceModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule, CommissioningModule, ElvModule, ComplianceModule],
+  controllers: [HealthController, EventsController, DocumentsController, DocumentRequirementsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmSignalsController, LeadCommandController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, MyDayController, SourceFunnelController, ExecutiveCrmController, CrmAutomationController, DealBriefController, CrmActivitiesController, Opportunity360Controller, OpportunityDepthController, PreAwardController, PipelineCommandController, ForecastController, CampaignsController, NegotiationController, MarketIntelligenceController, ProductKnowledgeController, EstimationController, PricingSheetsController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, IntelligenceController, ProcurementController, ThreeWayMatchController, SpendAnalyticsController, FrameworkAgreementsController, InventoryController, SerialsController, LocationsController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, CommissioningController, ElvDevicesController, ComplianceController, HandoverController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
   providers: [MigrationGateService, SampleEventSubscriber, CrossModuleSubscriber, HandoverAmcSubscriber, CommissioningHandoverSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService, AccountDocumentAccessProvider,
     // Global permission guard — enforces @Permissions(...) on any handler. No-op until auth
     // is turned on (staged pass-through); undeclared handlers always pass.
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    // Global idempotency. Mutations carrying `Idempotency-Key` run at most once per tenant
+    // and replay their first response; everything else passes straight through. This is
+    // what makes the offline queue safe to flush after a reconnect.
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     {
       // Postgres-backed when a pool is configured; in-memory otherwise (dev/CI).
       provide: WORKSPACE_CONFIG_STORE,

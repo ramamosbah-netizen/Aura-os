@@ -1,4 +1,19 @@
-# AURA OS — Consolidated Gap Register
+# AURA OS — Consolidated Gap Register — **BASELINE v1 (FROZEN)**
+
+> ## ❄️ Frozen 2026-08-10 — historical baseline, not current status
+>
+> This document is **Baseline v1, as at 2026-08-05**. It is preserved exactly as it stood
+> and is **no longer maintained**. Do not read any row here as the state of the platform
+> today, and do not quote its counts.
+>
+> **Current status lives in
+> [Consolidated Gap Register v2 — Current Tree Verification](2026-08-10-consolidated-gap-register-v2.md)**,
+> which re-tests all 50 IDs against the tree and adds the gaps that emerged from the Admin,
+> Offline and Idempotency work.
+>
+> v1 keeps its value as the provenance record: it is where each ID was defined, and where
+> the 2026-08-05 fix wave and the two retractions are documented. v2 cites it rather than
+> repeating it.
 
 **Date:** 2026-08-05 · **Scope:** every open gap in the platform, in one place.
 **Assembled from:** the whole documentation estate (182 files) plus live verification against the running app on 2026-08-05.

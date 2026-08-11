@@ -17,7 +17,9 @@ const envOrFile = (name) => {
   if (file) return readFileSync(file, 'utf8').trim() || null;
   return process.env[name]?.trim() || null;
 };
-const connectionString = envOrFile('DATABASE_URL');
+// Reads pg_catalog to assert every table's RLS posture — needs the owner, since aura_app
+// is precisely the role the policies apply to (G-03).
+const connectionString = envOrFile('MIGRATION_DATABASE_URL') ?? envOrFile('DATABASE_URL');
 if (!connectionString) {
   console.error('✗ DATABASE_URL not set — cannot run RLS fitness check.');
   process.exit(1);

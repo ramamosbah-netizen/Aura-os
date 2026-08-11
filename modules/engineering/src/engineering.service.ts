@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Drawing, type NewDrawing, makeDrawing, ENGINEERING_EVENT } from './domain/drawing';
 import { DRAWING_STORE, type DrawingFilter, type DrawingStore } from './drawing-store';
@@ -38,6 +38,9 @@ export class EngineeringService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   // ── Shop Drawings ──────────────────────────────────────────────────────────
@@ -71,8 +74,7 @@ export class EngineeringService {
   }
 
   async reviseDrawing(tenantId: Id, actorId: Id | null, id: Id, input: { revision: string; title?: string }): Promise<Drawing> {
-    const drawing = await this.drawingStore.get(id);
-    if (!drawing) throw new Error(`Drawing with ID ${id} not found`);
+    const drawing = assertSameTenant(await this.drawingStore.get(id), this.tenant?.boundTenantId(), 'Drawing with ID', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
@@ -105,8 +107,7 @@ export class EngineeringService {
   }
 
   async approveDrawing(tenantId: Id, actorId: Id | null, id: Id): Promise<Drawing> {
-    const drawing = await this.drawingStore.get(id);
-    if (!drawing) throw new Error(`Drawing with ID ${id} not found`);
+    const drawing = assertSameTenant(await this.drawingStore.get(id), this.tenant?.boundTenantId(), 'Drawing with ID', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
@@ -125,8 +126,9 @@ export class EngineeringService {
     return drawing;
   }
 
-  getDrawing(id: Id): Promise<Drawing | null> {
-    return this.drawingStore.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getDrawing(id: Id): Promise<Drawing | null> {
+    return sameTenantOrNull(await this.drawingStore.get(id), this.tenant?.boundTenantId());
   }
 
   listDrawings(filter?: DrawingFilter): Promise<Drawing[]> {
@@ -167,8 +169,7 @@ export class EngineeringService {
   }
 
   async answerRfi(tenantId: Id, actorId: Id | null, id: Id, answer: string): Promise<Rfi> {
-    const rfi = await this.rfiStore.get(id);
-    if (!rfi) throw new Error(`RFI with ID ${id} not found`);
+    const rfi = assertSameTenant(await this.rfiStore.get(id), this.tenant?.boundTenantId(), 'RFI with ID', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
@@ -199,8 +200,9 @@ export class EngineeringService {
     return rfi;
   }
 
-  getRfi(id: Id): Promise<Rfi | null> {
-    return this.rfiStore.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getRfi(id: Id): Promise<Rfi | null> {
+    return sameTenantOrNull(await this.rfiStore.get(id), this.tenant?.boundTenantId());
   }
 
   listRfis(filter?: RfiFilter): Promise<Rfi[]> {
@@ -241,8 +243,7 @@ export class EngineeringService {
   }
 
   async updateSubmittalStatus(tenantId: Id, actorId: Id | null, id: Id, status: Submittal['status']): Promise<Submittal> {
-    const submittal = await this.submittalStore.get(id);
-    if (!submittal) throw new Error(`Submittal with ID ${id} not found`);
+    const submittal = assertSameTenant(await this.submittalStore.get(id), this.tenant?.boundTenantId(), 'Submittal with ID', id);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
@@ -322,8 +323,9 @@ export class EngineeringService {
     return submittal;
   }
 
-  getSubmittal(id: Id): Promise<Submittal | null> {
-    return this.submittalStore.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getSubmittal(id: Id): Promise<Submittal | null> {
+    return sameTenantOrNull(await this.submittalStore.get(id), this.tenant?.boundTenantId());
   }
 
   listSubmittals(filter?: SubmittalFilter): Promise<Submittal[]> {
@@ -358,8 +360,7 @@ export class EngineeringService {
   }
 
   async respondTechnicalQuery(tenantId: Id, actorId: Id | null, id: Id, response: string): Promise<TechnicalQuery> {
-    const tq = await this.tqStore.get(id);
-    if (!tq) throw new Error(`technical query ${id} not found`);
+    const tq = assertSameTenant(await this.tqStore.get(id), this.tenant?.boundTenantId(), 'technical query', id);
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (tq.companyId) orgPath.push({ level: 'company', id: tq.companyId });
@@ -380,8 +381,9 @@ export class EngineeringService {
     return updated;
   }
 
-  getTechnicalQuery(id: Id): Promise<TechnicalQuery | null> {
-    return this.tqStore.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getTechnicalQuery(id: Id): Promise<TechnicalQuery | null> {
+    return sameTenantOrNull(await this.tqStore.get(id), this.tenant?.boundTenantId());
   }
 
   listTechnicalQueries(filter?: TqFilter): Promise<TechnicalQuery[]> {
@@ -421,8 +423,7 @@ export class EngineeringService {
    * turns that into a draft Variation in Projects (never a direct cross-module call).
    */
   async decideDesignChange(tenantId: Id, actorId: Id | null, id: Id, status: DesignChangeStatus): Promise<DesignChange> {
-    const dc = await this.designChangeStore.get(id);
-    if (!dc) throw new Error(`design change ${id} not found`);
+    const dc = assertSameTenant(await this.designChangeStore.get(id), this.tenant?.boundTenantId(), 'design change', id);
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (dc.companyId) orgPath.push({ level: 'company', id: dc.companyId });
@@ -453,8 +454,9 @@ export class EngineeringService {
     return updated;
   }
 
-  getDesignChange(id: Id): Promise<DesignChange | null> {
-    return this.designChangeStore.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getDesignChange(id: Id): Promise<DesignChange | null> {
+    return sameTenantOrNull(await this.designChangeStore.get(id), this.tenant?.boundTenantId());
   }
 
   listDesignChanges(filter?: DesignChangeFilter): Promise<DesignChange[]> {
@@ -494,8 +496,7 @@ export class EngineeringService {
    * so a future HSE reactor can route it into HSE's review queue (ADR-0011 event composition).
    */
   async transitionDocument(tenantId: Id, actorId: Id | null, id: Id, status: DocumentStatus): Promise<EngineeringDocument> {
-    const doc = await this.docStore.get(id);
-    if (!doc) throw new Error(`engineering document ${id} not found`);
+    const doc = assertSameTenant(await this.docStore.get(id), this.tenant?.boundTenantId(), 'engineering document', id);
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (doc.companyId) orgPath.push({ level: 'company', id: doc.companyId });
@@ -523,8 +524,9 @@ export class EngineeringService {
     return updated;
   }
 
-  getDocument(id: Id): Promise<EngineeringDocument | null> {
-    return this.docStore.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getDocument(id: Id): Promise<EngineeringDocument | null> {
+    return sameTenantOrNull(await this.docStore.get(id), this.tenant?.boundTenantId());
   }
 
   listDocuments(filter?: EngineeringDocumentFilter): Promise<EngineeringDocument[]> {
@@ -579,8 +581,9 @@ export class EngineeringService {
     return updated;
   }
 
-  getBimModel(id: Id): Promise<BimModel | null> {
-    return this.bimStore.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async getBimModel(id: Id): Promise<BimModel | null> {
+    return sameTenantOrNull(await this.bimStore.get(id), this.tenant?.boundTenantId());
   }
 
   listBimModels(filter?: BimModelFilter): Promise<BimModel[]> {

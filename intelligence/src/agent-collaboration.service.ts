@@ -22,11 +22,63 @@ export interface CollaborationSession {
   startedAt: Date;
 }
 
+export interface SwarmSignal {
+  topic: 'ai.signal.detected' | 'ai.tender.feasibility_requested' | 'ai.quotation.pricing_suggested' | 'ai.cashflow.anomaly_detected';
+  correlationId: string;
+  sourceAgent: string;
+  targetAgent?: string;
+  payload: Record<string, any>;
+  timestamp: Date;
+}
+
+type SwarmHandler = (signal: SwarmSignal) => void | Promise<void>;
+
 @Injectable()
 export class AgentCollaborationService {
   private readonly logger = new Logger('AgentCollaborationService');
   private readonly messages: AgentMessage[] = [];
   private readonly sessions = new Map<string, CollaborationSession>();
+  private readonly swarmListeners = new Map<string, Set<SwarmHandler>>();
+
+  /**
+   * Subscribe an agent handler to a Swarm topic.
+   */
+  subscribeSwarm(topic: SwarmSignal['topic'], handler: SwarmHandler): () => void {
+    if (!this.swarmListeners.has(topic)) {
+      this.swarmListeners.set(topic, new Set());
+    }
+    this.swarmListeners.get(topic)!.add(handler);
+    return () => {
+      this.swarmListeners.get(topic)?.delete(handler);
+    };
+  }
+
+  /**
+   * Publish a Swarm Signal onto the inter-agent bus.
+   */
+  async publishSwarmSignal(signal: Omit<SwarmSignal, 'timestamp'>): Promise<SwarmSignal> {
+    const fullSignal: SwarmSignal = {
+      ...signal,
+      timestamp: new Date(),
+    };
+
+    this.logger.log(
+      `[SwarmBus] 🐝 ${fullSignal.sourceAgent} published topic "${fullSignal.topic}" (Correlation: ${fullSignal.correlationId})`,
+    );
+
+    const handlers = this.swarmListeners.get(fullSignal.topic);
+    if (handlers && handlers.size > 0) {
+      for (const handler of handlers) {
+        try {
+          await handler(fullSignal);
+        } catch (err) {
+          this.logger.error(`[SwarmBus] Error executing swarm handler for ${fullSignal.topic}: ${err}`);
+        }
+      }
+    }
+
+    return fullSignal;
+  }
 
   /**
    * Dispatch a structured inter-agent collaboration message over the bus.

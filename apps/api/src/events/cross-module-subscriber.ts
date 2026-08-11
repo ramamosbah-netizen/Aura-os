@@ -7,6 +7,7 @@ import { TenderService, EstimateSourcingService } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
+import { AmcService } from '@aura/amc';
 import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } from '@aura/shared';
 
 /**
@@ -58,6 +59,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly financeAccounts: FinanceAccountService,
     private readonly journals: JournalService,
     private readonly hse: HseService,
+    private readonly amc: AmcService,
   ) {}
 
   /** Resolve a GL account by well-known code, creating it on first use (mirrors payment.service). */
@@ -168,6 +170,49 @@ export class CrossModuleSubscriber implements OnModuleInit {
         );
       } catch (err) {
         this.logger.error(`Failed to auto-create opportunity from tender.created: ${err}`);
+      }
+    });
+
+    // ── Field intake: Site survey completed → auto-create linked Opportunity ──
+    this.bus.subscribe('site.survey.completed', async (e: DomainEvent) => {
+      try {
+        const p = e.payload as Record<string, unknown>;
+        const surveyId = e.aggregateId;
+        const reference = (p.reference as string) || `SURV-${surveyId.slice(0, 8)}`;
+        const siteAddress = (p.siteAddress as string) || 'Site';
+        const accountId = (p.accountId as string | null) ?? null;
+        const accountName = (p.accountName as string | null) ?? null;
+        const estimatedValue = Number(p.estimatedValue) || 0;
+        const scopeNotes = (p.scopeNotes as string) || '';
+
+        // Idempotency: prevent duplicate opportunity creation on outbox retry
+        const existingOpps = await this.opportunities.list({ tenantId: e.tenantId });
+        const alreadyCreated = existingOpps.find(
+          (o) => o.nextAction?.includes(`[Survey ID: ${surveyId}]`) || o.title.includes(reference),
+        );
+        if (alreadyCreated) {
+          this.logger.log(`↩ site.survey.completed → Opportunity already exists for survey ${surveyId}, skipping`);
+          return;
+        }
+
+        const opp = await this.opportunities.create({
+          tenantId: e.tenantId,
+          companyId: e.companyId,
+          title: `Opportunity from Survey ${reference}: ${siteAddress}`,
+          accountId,
+          accountName,
+          value: estimatedValue,
+          source: 'site-survey',
+          executionType: 'tender',
+          nextAction: `Follow up on Site Survey ${reference} [Survey ID: ${surveyId}]`,
+          actorId: null,
+        });
+
+        this.logger.log(
+          `⚡ site.survey.completed → auto-created Opportunity "${opp.title}" (${opp.id}) from survey ${reference} (${surveyId})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to auto-create opportunity from site.survey.completed: ${err}`);
       }
     });
 

@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { FINANCE_EVENT } from './domain/invoice';
 import { type Journal, type NewJournal, makeJournal } from './domain/journal';
 import { periodOf } from './domain/period-close';
@@ -16,6 +16,9 @@ export class JournalService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(PERIOD_CLOSE_STORE) private readonly periodCloses: PeriodCloseStore,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async post(input: NewJournal, actorId?: Id): Promise<Journal> {
@@ -59,8 +62,9 @@ export class JournalService {
     return journal;
   }
 
-  get(id: Id): Promise<Journal | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<Journal | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: JournalFilter): Promise<Journal[]> {

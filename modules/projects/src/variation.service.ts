@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   VARIATION_EVENT,
   type VariationOrder,
@@ -27,6 +27,9 @@ export class VariationService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly projects: ProjectService,
     private readonly access: AccessService,
+    // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
+    // design:paramtypes and Nest injects null silently, which would make the guards inert.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewVariationOrder): Promise<VariationOrder> {
@@ -54,8 +57,7 @@ export class VariationService {
   }
 
   async changeStatus(id: Id, status: VariationStatus, actorId?: Id): Promise<VariationOrder> {
-    const existing = await this.store.get(id);
-    if (!existing) throw new Error(`variation ${id} not found`);
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'variation', id);
     const decided = status === 'approved' || status === 'rejected';
     const updated: VariationOrder = {
       ...existing,
@@ -87,8 +89,9 @@ export class VariationService {
     return updated;
   }
 
-  get(id: Id): Promise<VariationOrder | null> {
-    return this.store.get(id);
+  /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  async get(id: Id): Promise<VariationOrder | null> {
+    return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
   list(filter?: VariationFilter): Promise<VariationOrder[]> {

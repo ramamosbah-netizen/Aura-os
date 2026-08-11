@@ -71,6 +71,26 @@ export default function GanttClient({ schedules, projects = [] }: { schedules: P
     } catch (e: any) { setError(e.message || 'Failed to set baseline'); } finally { setBusy(null); }
   }
 
+  async function handleRemoveTask(sch: ProjectSchedule, taskIndex: number) {
+    setBusy(sch.projectId); setError(null);
+    try {
+      const newTasks = sch.tasks.filter((_, idx) => idx !== taskIndex);
+      await saveSchedule(sch.projectId, sch.projectName, newTasks);
+    } catch (e: any) {
+      setError(e.message || 'Failed to remove task');
+    }
+  }
+
+  async function handleUpdateTaskPercent(sch: ProjectSchedule, taskIndex: number, newPct: number) {
+    setBusy(sch.projectId); setError(null);
+    try {
+      const newTasks = sch.tasks.map((t, idx) => (idx === taskIndex ? { ...t, percentComplete: newPct } : t));
+      await saveSchedule(sch.projectId, sch.projectName, newTasks);
+    } catch (e: any) {
+      setError(e.message || 'Failed to update task percentage');
+    }
+  }
+
   async function handleAddTask(sch: ProjectSchedule) {
     const t = toTask(addTask[sch.projectId] ?? emptyTask());
     if (!t) { setError('Task needs a name and planned start/end dates.'); return; }
@@ -132,8 +152,8 @@ export default function GanttClient({ schedules, projects = [] }: { schedules: P
               </button>
             </div>
             <div style={s.rows}>
-              {sch.tasks.map((t) => (
-                <div key={t.name} style={s.row}>
+              {sch.tasks.map((t, idx) => (
+                <div key={`${t.name}-${idx}`} style={s.row}>
                   <div style={s.label} title={t.name}>{t.name}</div>
                   <div style={s.track}>
                     {t.baselineStart && t.baselineEnd && (
@@ -144,6 +164,23 @@ export default function GanttClient({ schedules, projects = [] }: { schedules: P
                       <span style={s.barlbl}>{t.percentComplete}%</span>
                     </div>
                   </div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={t.percentComplete}
+                    onChange={(e) => handleUpdateTaskPercent(sch, idx, Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                    style={{ ...s.input, width: 50, padding: '2px 4px', fontSize: 11 }}
+                    title="Quick update %"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTask(sch, idx)}
+                    style={{ background: 'none', border: 'none', color: 'var(--bad)', cursor: 'pointer', fontSize: 13, padding: '2px 4px' }}
+                    title="Remove task"
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
               {sch.tasks.length === 0 && <p style={s.meta}>No tasks yet — add one below.</p>}

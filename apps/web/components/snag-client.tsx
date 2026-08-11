@@ -4,6 +4,10 @@ import ProjectPicker from './ui/project-picker';
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import ExportButton from './export-button';
+import FileAttachmentZone, { type AttachmentItem } from './ui/file-attachment-zone';
+import SaveViewButton from './save-view-button';
+import SignatureCanvas from './ui/signature-canvas';
 
 export interface Snag {
   id: string;
@@ -25,6 +29,8 @@ const sevColor: Record<string, string> = { low: 'var(--muted)', medium: 'var(--w
 export default function SnagClient({ initial }: { initial: Snag[] }) {
   const [rows, setRows] = useState(initial);
   const [f, setF] = useState({ projectId: '', description: '', locationDetail: '', severity: 'medium', assignedTo: '' });
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [signature, setSignature] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -68,17 +74,42 @@ export default function SnagClient({ initial }: { initial: Snag[] }) {
         <Kpi label="Open" value={kpi.open} bad={kpi.open > 0} />
         <Kpi label="High (open)" value={kpi.high} bad={kpi.high > 0} />
         <Kpi label="Closed" value={kpi.closed} good />
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
+          <SaveViewButton />
+          <ExportButton
+            filename="snag-list"
+            title="Snag / Punch List"
+            rows={rows as unknown as Array<Record<string, unknown>>}
+            columns={[
+              { key: 'description', label: 'Description' },
+              { key: 'locationDetail', label: 'Location' },
+              { key: 'severity', label: 'Severity' },
+              { key: 'assignedTo', label: 'Assigned' },
+              { key: 'status', label: 'Status' },
+            ]}
+          />
+        </div>
       </div>
 
       <h2 style={st.h2}>Log snag</h2>
-      <div style={st.form}>
-        <label style={st.label}>Project<ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></label>
-        <label style={{ ...st.label, minWidth: 240 }}>Description<input style={st.input} value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Scratched faceplate" /></label>
-        <label style={{ ...st.label, minWidth: 200 }}>Location<input style={st.input} value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="Room 204, door" /></label>
-        <label style={st.label}>Severity<select style={st.input} value={f.severity} onChange={(e) => set('severity', e.target.value)}>{SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
-        <label style={st.label}>Assigned to<input style={st.input} value={f.assignedTo} onChange={(e) => set('assignedTo', e.target.value)} placeholder="optional" /></label>
-        <button style={st.btn} onClick={log} disabled={busy}>{busy ? 'Logging…' : 'Log snag'}</button>
-        {error && <span style={st.err}>{error}</span>}
+      <div style={st.formCard}>
+        <div style={st.form}>
+          <label style={st.label}>Project<ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></label>
+          <label style={{ ...st.label, minWidth: 240 }}>Description<input style={st.input} value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Scratched faceplate" /></label>
+          <label style={{ ...st.label, minWidth: 200 }}>Location<input style={st.input} value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="Room 204, door" /></label>
+          <label style={st.label}>Severity<select style={st.input} value={f.severity} onChange={(e) => set('severity', e.target.value)}>{SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+          <label style={st.label}>Assigned to<input style={st.input} value={f.assignedTo} onChange={(e) => set('assignedTo', e.target.value)} placeholder="optional" /></label>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
+          <FileAttachmentZone label="Snag Photo Evidence" attachments={attachments} onChange={setAttachments} />
+          <SignatureCanvas label="Inspector Sign-off" value={signature} onChange={setSignature} />
+        </div>
+
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button style={st.btn} onClick={log} disabled={busy}>{busy ? 'Logging…' : 'Log snag'}</button>
+          {error && <span style={st.err}>{error}</span>}
+        </div>
       </div>
 
       <h2 style={st.h2}>Punch list</h2>
@@ -122,7 +153,8 @@ const st = {
   kpi: { border: '1px solid var(--border)', borderRadius: 10, padding: '12px 18px', minWidth: 120, background: 'var(--panel)' } as CSSProperties,
   kpiLabel: { fontSize: 12, color: 'var(--muted)', marginBottom: 4 } as CSSProperties,
   kpiValue: { fontSize: 24, fontWeight: 700, letterSpacing: -0.5 } as CSSProperties,
-  form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
+  formCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 18px', marginBottom: 18 } as CSSProperties,
+  form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end' } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--panel)', color: 'var(--text)' } as CSSProperties,
   btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,

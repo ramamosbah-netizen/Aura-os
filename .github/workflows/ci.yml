@@ -381,7 +381,11 @@ jobs:
         run: |
           pnpm --filter @aura/api... build
           cd apps/api
-          PORT=4000 nohup node dist/main.js > api.log 2>&1 &
+          # The edge rate limit (G-07) keys on client IP, and every BFF call reaches the API from
+          # the Next server's single address, so the whole suite shares one bucket and trips the
+          # 300/min default partway through. A browser suite's burst is not a traffic profile;
+          # raised here rather than weakened in the product.
+          RATE_LIMIT_MAX=100000 PORT=4000 nohup node dist/main.js > api.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:4000/api/v1/health >/dev/null && break
             sleep 1

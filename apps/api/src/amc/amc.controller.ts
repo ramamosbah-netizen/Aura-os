@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Logger } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Logger, NotFoundException } from '@nestjs/common';
 import { AmcService, SupportTicket, type PpmFrequency } from '@aura/amc';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -195,6 +195,26 @@ export class AmcController {
   @Post('work-orders/:id/assign')
   async assignWorkOrder(@Param('id') id: string, @Body('technicianId') technicianId: string) {
     return this.service.assignWorkOrder(id, technicianId);
+  }
+
+  /** assigned → in_progress. The class carried `startWork()` from the start; nothing ever called it. */
+  @Post('work-orders/:id/start')
+  async startWorkOrder(@Param('id') id: string) {
+    return this.service.startWorkOrder(id);
+  }
+
+  @Post('work-orders/:id/cancel')
+  async cancelWorkOrder(@Param('id') id: string) {
+    return this.service.cancelWorkOrder(id);
+  }
+
+  /** Work Order 360 — the visit with the contract that governs its SLA. */
+  @Get('work-orders/:id/detail')
+  async workOrderDetail(@Param('id') id: string) {
+    const order = await this.service.findWorkOrder(id);
+    if (!order) throw new NotFoundException(`work order ${id} not found`);
+    const contract = order.contractId ? await this.service.findContract(order.contractId) : null;
+    return { order, contract };
   }
 
   @Post('work-orders/:id/complete')

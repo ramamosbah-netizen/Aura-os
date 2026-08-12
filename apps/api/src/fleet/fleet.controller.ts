@@ -247,6 +247,16 @@ export class FleetController {
     return await this.fleetService.disputeFine(this.tenant.get().tenantId, id);
   }
 
+  /**
+   * Close a dispute. `upheld: true` = the authority waived the fine (cancelled, terminal);
+   * `false` = liability stands and the fine returns to pending so recovery can resume.
+   */
+  @Put('fines/:id/resolve-dispute')
+  async resolveFineDispute(@Param('id') id: string, @Body() dto: { upheld?: boolean }): Promise<TrafficFine> {
+    if (typeof dto?.upheld !== 'boolean') throw new BadRequestException('upheld (boolean) is required');
+    return await this.fleetService.resolveFineDispute(this.tenant.get().tenantId, id, dto.upheld);
+  }
+
   @Put('fines/:id/pay')
   async payFine(@Param('id') id: string, @Body() dto: { paidDate?: string }): Promise<TrafficFine> {
     return await this.fleetService.payFine(this.tenant.get().tenantId, id, dto?.paidDate);

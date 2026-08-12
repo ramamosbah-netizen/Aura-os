@@ -25,6 +25,8 @@ export interface AssetMaintenanceStore {
   save(entity: AssetMaintenance, client?: TxHandle | null): Promise<void>;
   findById(tenantId: string, id: string): Promise<AssetMaintenance | null>;
   findByTenant(tenantId: string): Promise<AssetMaintenance[]>;
+  /** Maintenance raised against one asset — powers the disposal gate. */
+  findByAsset(tenantId: string, assetId: string): Promise<AssetMaintenance[]>;
 }
 
 export interface AssetInspectionStore {

@@ -25,7 +25,7 @@ interface TrafficFine {
   paidDate: string | null;
 }
 
-const statusColor: Record<string, string> = { pending: 'var(--warn)', assigned: 'var(--accent)', disputed: '#7c3aed', paid: 'var(--good)' };
+const statusColor: Record<string, string> = { pending: 'var(--warn)', assigned: 'var(--accent)', disputed: '#7c3aed', paid: 'var(--good)', cancelled: 'var(--muted)' };
 
 export default function FinesClient({ initialFines, vehicles }: { initialFines: TrafficFine[]; vehicles: Vehicle[] }) {
   const [fines, setFines] = useState(initialFines);
@@ -45,8 +45,15 @@ export default function FinesClient({ initialFines, vehicles }: { initialFines: 
   };
 
   const totals = useMemo(() => {
-    const outstanding = fines.filter((f) => f.status !== 'paid' && f.status !== 'disputed').reduce((s, f) => s + f.amount, 0);
-    const points = fines.filter((f) => f.status !== 'disputed').reduce((s, f) => s + f.blackPoints, 0);
+    // A cancelled fine (dispute upheld by the authority) is settled, not outstanding — it must not
+    // sit in the exposure figure or carry black points, same as a paid one.
+    const settled = (s: string): boolean => s === 'paid' || s === 'cancelled';
+    const outstanding = fines
+      .filter((f) => !settled(f.status) && f.status !== 'disputed')
+      .reduce((s, f) => s + f.amount, 0);
+    const points = fines
+      .filter((f) => f.status !== 'disputed' && f.status !== 'cancelled')
+      .reduce((s, f) => s + f.blackPoints, 0);
     return { outstanding, points };
   }, [fines]);
 
@@ -73,7 +80,7 @@ export default function FinesClient({ initialFines, vehicles }: { initialFines: 
     }
   };
 
-  const act = async (id: string, action: 'assign' | 'dispute' | 'pay', body?: object) => {
+  const act = async (id: string, action: 'assign' | 'dispute' | 'resolve-dispute' | 'pay', body?: object) => {
     setError('');
     try {
       const res = await fetch(`/api/fleet/fines/${id}/${action}`, {
@@ -147,9 +154,12 @@ export default function FinesClient({ initialFines, vehicles }: { initialFines: 
                 <td style={st.td}>{f.blackPoints}</td>
                 <td style={{ ...st.td, color: statusColor[f.status] || '#000', fontWeight: 600 }}>{f.status}</td>
                 <td style={st.td}>
-                  {f.status === 'pending' && <button style={st.sm} onClick={() => assign(f.id)}>Assign</button>}
-                  {f.status === 'pending' && <button style={st.smGray} onClick={() => act(f.id, 'dispute')}>Dispute</button>}
-                  {(f.status === 'pending' || f.status === 'assigned') && <button style={st.smGreen} onClick={() => act(f.id, 'pay')}>Pay</button>}
+                  {f.status === 'pending' && <button style={st.sm} data-testid={`fine-assign-${f.id}`} onClick={() => assign(f.id)}>Assign</button>}
+                  {(f.status === 'pending' || f.status === 'assigned') && <button style={st.smGray} data-testid={`fine-dispute-${f.id}`} onClick={() => act(f.id, 'dispute')}>Dispute</button>}
+                  {/* A disputed fine used to be a dead end — these are the two ways out. */}
+                  {f.status === 'disputed' && <button style={st.smGreen} data-testid={`fine-dispute-upheld-${f.id}`} onClick={() => act(f.id, 'resolve-dispute', { upheld: true })}>Dispute won (cancel)</button>}
+                  {f.status === 'disputed' && <button style={st.smGray} data-testid={`fine-dispute-rejected-${f.id}`} onClick={() => act(f.id, 'resolve-dispute', { upheld: false })}>Dispute lost (reopen)</button>}
+                  {(f.status === 'pending' || f.status === 'assigned') && <button style={st.smGreen} data-testid={`fine-pay-${f.id}`} onClick={() => act(f.id, 'pay')}>Pay</button>}
                 </td>
               </tr>
             ))}

@@ -3,7 +3,7 @@ import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import QRCode from 'qrcode';
-import { type Asset, makeAsset } from './domain/asset';
+import { type Asset, makeAsset, assertAssetTransition } from './domain/asset';
 import { type AssetTag, makeAssetTag } from './domain/asset-tag';
 import { type DepreciationSchedule, type DepreciationMethod, computeDepreciation } from './domain/depreciation';
 import { type AssetMaintenance, makeAssetMaintenance } from './domain/asset-maintenance';
@@ -117,6 +117,33 @@ export class AssetsService {
     return this.assetStore.findByTenant(tenantId);
   }
 
+  /**
+   * The Asset 360: the register row with the maintenance booked against it and the disposal that
+   * retired it. `openMaintenance` is the same figure the disposal gate reads, surfaced so the UI
+   * can explain a refusal before the user triggers one.
+   */
+  async getAssetDetail(
+    tenantId: string,
+    id: string,
+  ): Promise<{
+    asset: Asset;
+    maintenance: AssetMaintenance[];
+    openMaintenance: number;
+    disposal: AssetDisposal | null;
+  } | null> {
+    const asset = await this.assetStore.findById(tenantId, id);
+    if (!asset) return null;
+    const maintenance = await this.maintenanceStore.findByAsset(tenantId, id);
+    const disposal =
+      (await this.disposalStore.findByTenant(tenantId)).find((d) => d.assetId === id) ?? null;
+    return {
+      asset,
+      maintenance,
+      openMaintenance: maintenance.filter((m) => m.status !== 'completed').length,
+      disposal,
+    };
+  }
+
   listAssetsPaged(filter: AssetFilter, page: PageParams): Promise<Page<Asset>> {
     return this.assetStore.listPaged(filter, page);
   }
@@ -154,6 +181,20 @@ export class AssetsService {
     const asset = await this.assetStore.findById(input.tenantId, input.assetId);
     if (!asset) throw new Error(`asset ${input.assetId} not found`);
     if (asset.status === 'disposed') throw new Error(`asset ${input.assetId} is already disposed`);
+    assertAssetTransition(asset.status, 'disposed');
+
+    // Disposal gate: an asset still under maintenance cannot leave the register. Work booked
+    // against something no longer owned posts cost to a settled asset, and the disposal's
+    // gain/loss is computed from a book value that maintenance is still moving.
+    const openMaintenance = (await this.maintenanceStore.findByAsset(input.tenantId, input.assetId)).filter(
+      (m) => m.status !== 'completed',
+    );
+    if (openMaintenance.length > 0) {
+      throw new Error(
+        `an asset can only be disposed once its maintenance is complete (${openMaintenance.length} still open)`,
+      );
+    }
+
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId ?? asset.companyId) orgPath.push({ level: 'company', id: (input.companyId ?? asset.companyId) as Id });
@@ -194,6 +235,11 @@ export class AssetsService {
   ): Promise<DepreciationSchedule> {
     const asset = await this.assetStore.findById(tenantId, id);
     if (!asset) throw new Error(`asset ${id} not found`);
+    // A disposed asset's book value was settled by its disposal record; continuing to depreciate
+    // it would drift the register away from the gain/loss already posted to the ledger.
+    if (asset.status === 'disposed') {
+      throw new Error(`depreciation can only be computed for an asset that is not disposed (${asset.name})`);
+    }
     return computeDepreciation({
       cost: asset.purchaseCost,
       salvageValue: params.salvageValue,
@@ -223,6 +269,14 @@ export class AssetsService {
       this.access.assert(actorId, { permission: 'assets.maintenance.create', orgPath });
     }
 
+    // Scheduling work moves the asset into `maintenance`. Without this the register said "active"
+    // for a machine on a workbench, and the disposal gate below had nothing to read.
+    const asset = await this.assetStore.findById(input.tenantId, input.assetId);
+    if (!asset) throw new Error(`asset ${input.assetId} not found`);
+    if (asset.status === 'disposed') {
+      throw new Error(`maintenance can only be scheduled on an asset that is not disposed (${asset.name})`);
+    }
+
     const record = makeAssetMaintenance({ ...input, status: 'scheduled' });
     const event = makeEvent({
       type: ASSETS_EVENT.maintenanceScheduled,
@@ -236,6 +290,9 @@ export class AssetsService {
 
     await this.tx.run(async (handle) => {
       await this.maintenanceStore.save(record, handle);
+      if (asset.status !== 'maintenance') {
+        await this.assetStore.save({ ...asset, status: 'maintenance', updatedAt: new Date().toISOString() }, handle);
+      }
       await this.events.appendWithClient(handle, [event]);
     });
 
@@ -272,8 +329,18 @@ export class AssetsService {
       payload: { assetId: record.assetId, cost: actualCost },
     });
 
+    // Once nothing is outstanding the asset returns to service. Checked across all its records,
+    // not just this one — an asset can have several jobs open at once.
+    const stillOpen = (await this.maintenanceStore.findByAsset(tenantId, record.assetId)).filter(
+      (m) => m.id !== record.id && m.status !== 'completed',
+    );
+    const asset = await this.assetStore.findById(tenantId, record.assetId);
+
     await this.tx.run(async (handle) => {
       await this.maintenanceStore.save(record, handle);
+      if (asset && stillOpen.length === 0 && asset.status === 'maintenance') {
+        await this.assetStore.save({ ...asset, status: 'active', updatedAt: new Date().toISOString() }, handle);
+      }
       await this.events.appendWithClient(handle, [event]);
     });
 

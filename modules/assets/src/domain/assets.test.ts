@@ -120,9 +120,20 @@ describe('Assets Bounded Context', () => {
 
       const service = new AssetsService(assetStore, maintenanceStore, inspectionStore, new InMemoryAssetDisposalStore(), mockEvents, mockTx, mockAccess);
 
+      // Maintenance is scheduled against a real asset — the service now refuses a phantom id,
+      // which is what keeps the disposal gate from being bypassed by referencing nothing.
+      const asset = await service.createAsset(null, {
+        tenantId: 't1',
+        name: 'Excavator',
+        serialNumber: 'EX-1',
+        category: 'Plant',
+        purchaseDate: '2026-01-01',
+        purchaseCost: 250000,
+      });
+
       const m = await service.scheduleMaintenance(null, {
         tenantId: 't1',
-        assetId: 'asset-1',
+        assetId: asset.id,
         date: '2026-07-15',
         description: 'Hydraulic oil and filter replacement',
         cost: 1500,
@@ -130,10 +141,14 @@ describe('Assets Bounded Context', () => {
 
       expect(m.status).toBe('scheduled');
       expect(m.cost).toBe(1500);
+      // Scheduling work takes the asset out of service.
+      expect((await service.getAsset('t1', asset.id))?.status).toBe('maintenance');
 
       const completed = await service.completeMaintenance('t1', null, m.id, 1650);
       expect(completed.status).toBe('completed');
       expect(completed.cost).toBe(1650);
+      // …and completing the last open job returns it.
+      expect((await service.getAsset('t1', asset.id))?.status).toBe('active');
     });
   });
 

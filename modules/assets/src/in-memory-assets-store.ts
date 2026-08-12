@@ -88,6 +88,12 @@ export class InMemoryAssetMaintenanceStore implements AssetMaintenanceStore {
       .filter((item) => item.tenantId === tenantId)
       .map((item) => ({ ...item }));
   }
+
+  async findByAsset(tenantId: string, assetId: string): Promise<AssetMaintenance[]> {
+    return Array.from(this.items.values())
+      .filter((item) => item.tenantId === tenantId && item.assetId === assetId)
+      .map((item) => ({ ...item }));
+  }
 }
 
 export class InMemoryAssetInspectionStore implements AssetInspectionStore {

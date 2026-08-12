@@ -2,7 +2,7 @@
 
 ## Stack & integration — `VERIFIED_IMPLEMENTED`
 
-- **Next.js App Router**, React Server Components, 151 `page.tsx` across ~35 top-level route groups (`apps/web/app`).
+- **Next.js App Router**, React Server Components, **164** `page.tsx` (Rev 1: 151) across ~35 top-level route groups (`apps/web/app`).
 - **Real API integration** (not mock): `apps/web/lib/api.ts` — `getJson` fetches `${AURA_API_URL}/api/v1/...` with the httpOnly session cookie forwarded as `Authorization: Bearer` (`authHeader()`), `cache: 'no-store'`. Session decoded for display only; the API verifies.
 - **Optimistic auth gate** in `apps/web/proxy.ts` (Next proxy) bounces anonymous users to `/login` when `WEB_AUTH_REQUIRED=true` (real authz is at the API).
 - **Mock/hardcoded data:** grep found only **2** `.tsx` files with mock/TODO markers — the UI is genuinely backed by the API, not stubbed.
@@ -21,11 +21,11 @@
 
 | Finding | Status | Evidence |
 |---|---|---|
-| **Silent error-swallowing** — `getJson` returns `null` on *any* non-OK or thrown response | `PARTIALLY_IMPLEMENTED` (UX risk) | `apps/web/lib/api.ts` `getJson` catch → `return null` |
-| Back-half modules under-surfaced (engineering/doccontrol = 1 page each) | `PARTIALLY_IMPLEMENTED` | `02` page counts |
-| Near-zero UI E2E coverage (1 Playwright spec) | `MISSING` | `apps/web/e2e` (`14`) |
-| Accessibility / keyboard-nav not verified | `NOT VERIFIED` | no automated a11y checks found |
-| Responsive/dark-mode parity not verified | `NOT VERIFIED` | not exercised in this audit |
+| **Silent error-swallowing** — `getJson` returns `null` on *any* non-OK or thrown response | `PARTIALLY_IMPLEMENTED` (UX risk) — **unchanged at Rev 2** | `apps/web/lib/api.ts` `getJson` catch → `return null` |
+| ~~Back-half modules under-surfaced (engineering/doccontrol = 1 page each)~~ | **RESOLVED (Rev 2)** for engineering (3 pages), doccontrol (4), site (6), quality (8), commissioning (2) — each with a register + 360 + transitions. **Still open** for hse/fleet/assets/amc (3 pages each, CRUD) | `02` page counts |
+| ~~Near-zero UI E2E coverage (1 Playwright spec)~~ | **PARTIALLY RESOLVED (Rev 2)** — 10 specs, CI boots a real API. **Spine journeys still uncovered** (P0 G-03) | `apps/web/e2e` (`14`) |
+| Accessibility / keyboard-nav not verified | `NOT VERIFIED` (unchanged) | no automated a11y checks found |
+| Responsive/dark-mode parity not verified | `NOT VERIFIED` (unchanged) | not exercised in this audit |
 
 ### The error-swallowing issue (elaborated)
 
@@ -33,7 +33,8 @@
 
 ## Findings
 
-- The frontend is **real and reasonably broad**, but its **depth is uneven** and its **error semantics are lossy**.
+- The frontend is **real and reasonably broad**; at Rev 2 its **depth is markedly less uneven**, but its **error semantics remain lossy**.
 - No evidence of fake actions or manually-entered UUIDs in the sampled surface (the 2-file mock hit is negligible), which is a positive signal versus the prompt's common failure modes.
+- **Rev 2:** the delivery-half modules gained registers, 360 pages and in-page state transitions, and those journeys are now asserted by browser E2E (`14`). The `getJson` masking issue (G-05) is untouched and is now the single largest UX defect, since more of the product's critical paths route through it.
 
-**Frontend/UX maturity score: 64/100** — real integration and good IA, held back by error-state masking, back-half thinness, and unverified a11y/responsive/E2E.
+**Frontend/UX maturity score: 64 → 68/100 (Rev 2 re-estimate)** — real integration, good IA, and a genuinely deeper delivery half; still held back by error-state masking, the four remaining CRUD modules, and unverified a11y/responsive plus the missing spine E2E.

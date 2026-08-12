@@ -5,8 +5,8 @@
 | Tier | Rev 1 | **Rev 2** | Location |
 |---|--:|--:|---|
 | Source test files (all tiers) | 249 | **262** | `find … -name '*.test.ts'` excl. dist/node_modules |
-| **API E2E (Supertest)** | **33** | **41** | `apps/api/test/*.e2e-spec.ts` |
-| **Browser E2E (Playwright)** | **1** | **11** | `apps/web/e2e/*.spec.ts` (Rev 2.1: +`spine-journey`) |
+| **API E2E (Supertest)** | **33** | **42** | `apps/api/test/*.e2e-spec.ts` (Rev 2.2 +`hse-permit-workflow`) |
+| **Browser E2E (Playwright)** | **1** | **12** | `apps/web/e2e/*.spec.ts` (Rev 2.1 +`spine-journey`; Rev 2.2 +`permit-workflow`) |
 | Architecture fitness tests | 2 | 2 | `architecture.fitness.test.ts`, `error-taxonomy.fitness.test.ts` |
 
 Runner: **Vitest** (unit + API e2e via `vitest.config.e2e.ts`) + **Playwright** (web). Coverage runs in CI (`pnpm test:coverage`) — a coverage *percentage* was not computed in this audit (`NOT VERIFIED`, unchanged at Rev 2).
@@ -34,7 +34,9 @@ Rev 1's single smoke spec was, structurally, the only one that *could* pass: the
 | Clean `1a14a036` | **27 passed · 1 failed · 1 skipped** |
 | With `dee209bc` | **34 passed · 0 failed · 1 skipped** |
 
-The +7 is 6 new spine tests plus `offline-sync:168` — a **pre-existing** failure (it fails on clean HEAD) that the drawer-remount fix in the same commit also cures, 32.8s timeout → 6.4s pass.
+The +7 is 6 new spine tests plus `offline-sync:168`, which passed in that run.
+
+> **Correction (Rev 2.2).** The Rev 2.1 note claimed the drawer-remount fix *cured* `offline-sync:168`. Repeated runs disproved that: the spec is **flaky**, not fixed — it fails on clean HEAD, passed once after the fix, and has failed again since. Worse, **when it fails it can poison the following spec**: its offline queue survives into the next test's context and swallows that test's writes (reproduced deterministically by running `offline-sync` immediately before `permit-workflow`). Treat it as an open test-isolation defect, not a resolved one.
 
 ## Strengths (`VERIFIED_IMPLEMENTED`)
 
@@ -48,7 +50,7 @@ The +7 is 6 new spine tests plus `offline-sync:168` — a **pre-existing** failu
 | Gap | Rev 2 status | Impact |
 |---|---|---|
 | ~~No browser E2E over the spine journey~~ **DELIVERED (Rev 2.1)** | `VERIFIED_IMPLEMENTED` — G-03 gate still open on its `login →` leg only | `spine-journey.spec.ts` creates + reads all six spine records through the real UI. Suite 27→34 passing. The spine net now exists; what is missing is an **authenticated** run (blocked on grant seeding, see `18`) |
-| **API E2E back-half coverage** | `PARTIALLY_IMPLEMENTED` (improved) | +8 specs: engineering, quality, doccontrol, site, commissioning, compliance, ELV devices, RBAC tenant isolation. **hse, fleet, assets, amc, inventory still lack E2E** |
+| **API E2E back-half coverage** | `PARTIALLY_IMPLEMENTED` (improved) | +9 specs: engineering, quality, doccontrol, site, commissioning, compliance, ELV devices, RBAC tenant isolation, **HSE (Rev 2.2)**. **fleet, assets, amc, inventory still lack E2E** |
 | Coverage % unproven here | `NOT VERIFIED` (unchanged) | CI computes it but no threshold gate observed |
 | No load/performance tests | `MISSING` (unchanged) | Scale behavior unmeasured (`16`) |
 | No security/DAST tests | `MISSING` (improved slightly) | `rbac-tenant-isolation.e2e-spec.ts` added; still no systematic authz-bypass/IDOR suite beyond it and `sod.e2e` |
@@ -70,6 +72,8 @@ The +7 is 6 new spine tests plus `offline-sync:168` — a **pre-existing** failu
 | ▲ Commissioning → punch gate → handover | ✅ (`commissioning-handover-workflow`) | ✅ (`commissioning-workflow`) | **Fully covered (Rev 2)** |
 | Segregation of duties | ✅ (`sod.e2e`) | ❌ | API-covered |
 | ▲ RBAC tenant isolation | ✅ (`rbac-tenant-isolation`) | ❌ | API-covered (Rev 2) |
+| ▲▲ Permit to work → approve → close | ✅ (`hse-permit-workflow`) | ✅ (`permit-workflow`) | **Fully covered (Rev 2.2)** — incl. all three approval refusals |
+| ▲▲ Incident → investigate → CAPA gate → close | ✅ (`hse-permit-workflow`) | ❌ | API-covered (Rev 2.2) |
 
 **The inversion is resolved (Rev 2.1).** At Rev 1 the spine was the well-tested half and the delivery half untested; at Rev 2 that had inverted, with browser proof only on the delivery half. Both halves now carry browser-level journey proof. The remaining asymmetry is depth, not existence: the spine specs prove create+read, the delivery-half specs prove full state-machine transitions.
 

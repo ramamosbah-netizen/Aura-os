@@ -1,8 +1,8 @@
 # AURA OS — Master Reverse-Engineering & Production-Readiness Audit
 
-> **Verdict (Rev 2.1):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **3 P0 blockers** and **7 P1 items** resolved before enterprise production deployment.
+> **Verdict (Rev 2.2):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **3 P0 blockers** and **7 P1 items** resolved before enterprise production deployment.
 >
-> The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is now largely closed by five merged workflow verticals. **Rev 2.1** records the first remediation done *in response to* this audit — the spine browser E2E suite (G-03), which is green but leaves the gate's `login →` leg blocked on a separate decision.
+> The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is largely closed by five merged workflow verticals; **Rev 2.2** closes its residue by governing HSE. **Rev 2.1** records the first remediation done *in response to* this audit — the spine browser E2E suite (G-03), which is green but leaves the gate's `login →` leg blocked on a separate decision.
 
 This audit is **evidence-driven**. Every material claim is anchored to a file path, migration, endpoint, or test in the repository as it exists at the commit below. Documentation and developer claims were treated as the *lowest* tier of evidence and verified against executable source. Where something could not be verified from the repository (e.g. the live posture of the staging/production database), it is explicitly marked **NOT VERIFIED**.
 
@@ -22,6 +22,26 @@ This audit is **evidence-driven**. Every material claim is anchored to a file pa
 
 ## Revision history
 
+### Rev 2.2 — 2026-08-12 (G-08 residue: the HSE permit-to-work engine)
+
+HSE was the last delivery-half module still at CRUD, and the one where CRUD is a safety matter rather than a reporting one. Migration `0229` makes it governed.
+
+**Permit to work** is now an authorisation, not a status field. Three gates stand in front of approval, all enforced in the service and all asserted as **409 refusals** in the E2E suite:
+
+| Gate | Refusal |
+|---|---|
+| Approved risk assessment | A permit citing none — or citing a `draft` one — cannot be approved |
+| Segregation of duties | The requester cannot approve their own permit |
+| Validity window | A permit outside its own window cannot be issued |
+
+**Incident investigation** gains `reported → investigating → closed` with a mandatory root cause, and closure is **refused while corrective actions raised against that incident are still open** — the same shape of control as the commissioning punch list. Incidents (unlike permits) can be reopened: new evidence must not force a second, disconnected record.
+
+The **Permit 360** shows the gates *before* the user clicks approve and names the failing one. The disabled button is a convenience; the service is the control.
+
+**Verified:** HSE module tests 18 → 34 · API E2E 41 → 42 · browser E2E 11 → 12 · full browser suite **35 passed / 1 failed** on a fresh API, the single failure being the pre-existing flaky `offline-sync:168` (see the correction in `14`). typecheck clean · lint 0 errors.
+
+**G-08 drops P2 → P3.** Every safety- and delivery-critical module is now governed; what remains (fleet, assets, amc) are asset registers.
+
 ### Rev 2.1 — 2026-08-12 (G-03 remediation: the spine browser suite)
 
 First revision to record work done **in response to** the audit rather than merely discovered by it.
@@ -35,7 +55,9 @@ First revision to record work done **in response to** the audit rather than mere
 | Clean `1a14a036` | 27 passed · 1 failed · 1 skipped |
 | With `dee209bc` | **34 passed · 0 failed · 1 skipped** |
 
-A product bug surfaced while making it pass: `FormDrawer` keyed its remount on *"the overrides fetch resolved"* rather than *"the schema changed"*, so every drawer in the app remounted once for nothing — and a user who opened one before that request landed had it **silently closed and their typed input discarded**. Fixed in the same commit; it also cures `offline-sync:168`, a pre-existing failure.
+A product bug surfaced while making it pass: `FormDrawer` keyed its remount on *"the overrides fetch resolved"* rather than *"the schema changed"*, so every drawer in the app remounted once for nothing — and a user who opened one before that request landed had it **silently closed and their typed input discarded**. Fixed in the same commit.
+
+*(Rev 2.1 also claimed this fix cured `offline-sync:168`. It did not — see the correction in `14`. That spec is flaky and remains an open test-isolation defect.)*
 
 **G-03 remains P0.** Its acceptance reads *"login → create+read"*; the create+read half is done and green, the **login** half is blocked — `AUTH_JWT_SECRET` engages `PermissionsGuard` across the whole surface, and on an in-memory boot no user holds a grant, so every route would 403. That needs a dev-grant seeding decision, which belongs with G-02. Per Rev 2's own rule — *a gate is binary* — the P0 and the ~68 headline stand.
 
@@ -71,13 +93,13 @@ Re-measured at Rev 2 commit `1a14a036`. The Rev 1 column is retained so every de
 | HTTP endpoint decorators | 854 | *not re-measured* | `grep -rhoE '@(Get\|Post\|Put\|Patch\|Delete)\('` |
 | Web pages (`page.tsx`) | 151 | **164** | `find apps/web/app -name page.tsx` |
 | DB tables (CREATE TABLE) | 198 distinct | **218 distinct** | `grep 'CREATE TABLE' infrastructure/migrations` |
-| SQL migrations | 220 (gap-free →`0220`) | **228** (gap-free →`0228`) | `ls infrastructure/migrations` |
+| SQL migrations | 220 (gap-free →`0220`) | **229** (gap-free →`0229`) | `ls infrastructure/migrations` |
 | DB indexes | 331 | **358** | `grep 'CREATE (UNIQUE )?INDEX'` |
 | Explicit FK / REFERENCES | 54 | **62** | `grep 'REFERENCES\|FOREIGN KEY'` |
 | RLS policy statements | ~~128~~ *(see note)* | **148** `CREATE POLICY` · 40 `ROW LEVEL SECURITY` lines in 15 files | `grep -c 'CREATE POLICY'` |
 | Test files (source) | 249 | **262** | `find … -name '*.test.ts'` excl. dist/node_modules |
-| API E2E specs (Supertest) | 33 | **41** | `find apps/api/test -name '*.e2e-spec.ts'` |
-| Web E2E specs (Playwright) | 1 | **11** ᴿ²·¹ | `find apps/web/e2e -name '*.spec.ts'` |
+| API E2E specs (Supertest) | 33 | **42** ᴿ²·² | `find apps/api/test -name '*.e2e-spec.ts'` |
+| Web E2E specs (Playwright) | 1 | **12** ᴿ²·² | `find apps/web/e2e -name '*.spec.ts'` |
 | Cross-module reactors | 28 | **29** | `grep -c "subscribe('…'" cross-module-subscriber.ts` |
 | Persistence stores | 284 (110 PG / 93 in-memory) | *not re-measured* | every in-memory store has a Postgres counterpart |
 | ADRs | 19 | *not re-measured* | `find *adr* -name '*.md'` |

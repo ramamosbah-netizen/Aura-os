@@ -58,8 +58,11 @@ describe('HSE Module Bounded Context', () => {
 
       expect(inc.status).toBe('reported');
 
-      const closed = await service.closeIncident('t1', null, inc.id);
+      // An incident walks its investigation lifecycle; it cannot jump straight to closed.
+      await service.investigateIncident('t1', null, inc.id);
+      const closed = await service.closeIncident('t1', null, inc.id, 'Unguarded sharp edge on cable tray');
       expect(closed.status).toBe('closed');
+      expect(closed.rootCause).toBe('Unguarded sharp edge on cable tray');
     });
   });
 
@@ -71,17 +74,30 @@ describe('HSE Module Bounded Context', () => {
 
       const service = new HseService(incidentStore, ptwStore, capaStore, new InMemoryToolboxTalkStore(), new InMemoryRiskAssessmentStore(), new InMemorySafetyTrainingStore(), mockEvents, mockTx, mockAccess);
 
+      // A permit may only be approved against an APPROVED risk assessment.
+      const ra = await service.createRiskAssessment({
+        tenantId: 't1',
+        projectId: 'p1',
+        reference: 'RA-001',
+        activity: 'Hot work on riser',
+        hazards: [{ hazard: 'Fire', likelihood: 3, severity: 4, controls: 'Fire watch', residualLikelihood: 1, residualSeverity: 3 }],
+      });
+      await service.approveRiskAssessment('t1', ra.id);
+
       const permit = await service.requestPermit({
         tenantId: 't1',
         projectId: 'p1',
         permitType: 'hot_work',
-        validFrom: new Date().toISOString(),
+        validFrom: new Date(Date.now() - 3600_000).toISOString(),
         validTo: new Date(Date.now() + 86400000).toISOString(),
         description: 'Welding on main line riser',
+        riskAssessmentId: ra.id,
+        createdBy: 'requester-1',
       });
 
       expect(permit.status).toBe('requested');
 
+      // Segregation of duties: approved by someone other than the requester.
       const approved = await service.approvePermit('t1', 'actor-1', permit.id);
       expect(approved.status).toBe('approved');
       expect(approved.approvedBy).toBe('actor-1');

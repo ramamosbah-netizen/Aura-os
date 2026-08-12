@@ -79,13 +79,22 @@ interface SafetyTrainingRecord {
   updatedAt: string;
 }
 
+interface RiskAssessmentLite {
+  id: string;
+  reference: string;
+  activity: string;
+  status: string;
+}
+
 export default async function HseControlPage() {
-  const [incidents, permits, capas, trainingRecords, projects] = await Promise.all([
+  const [incidents, permits, capas, trainingRecords, projects, riskAssessments] = await Promise.all([
     getJson<HseIncident[]>('/api/hse/incidents'),
     getJson<PermitToWork[]>('/api/hse/ptws'),
     getJson<CapaAction[]>('/api/hse/capas'),
     getJson<SafetyTrainingRecord[]>('/api/hse/training'),
     getJson<Project[]>('/api/projects/projects'),
+    // Only APPROVED assessments can authorise a permit, so only those are offerable.
+    getJson<RiskAssessmentLite[]>('/api/hse/risk-assessments'),
   ]);
 
   return (
@@ -101,6 +110,7 @@ export default async function HseControlPage() {
         initialCapas={capas ?? []}
         initialTrainingRecords={trainingRecords ?? []}
         projects={projects ?? []}
+        riskAssessments={(riskAssessments ?? []).filter((r) => r.status === 'approved')}
       />
     </div>
   );

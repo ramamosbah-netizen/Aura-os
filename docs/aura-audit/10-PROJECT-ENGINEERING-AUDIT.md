@@ -47,16 +47,28 @@ WBS, schedule + baseline planning, variations, delay/EOT (extension-of-time) cla
 - **IR→NCR provenance** is now recorded, so an inspection failure traces to its non-conformance. Reactor `quality.ir.approved` still gates progress (reactor 20).
 - **Residual gap:** evidence/photo traceability on the NCR itself is still **not verified** end-to-end.
 
-## HSE — CRUD-level (`PARTIALLY_IMPLEMENTED`) — unchanged
+## HSE — `VERIFIED_IMPLEMENTED` (Rev 2.2)
 
-- 1 store, 1 controller, 3 pages, 4 tests. Incidents/observations/permits as CRUD; no verified risk-assessment or permit-to-work workflow engine.
-- **Rev 2: this is now the weakest link in the delivery half.** The four modules around it were governed in PRs #205–#209; HSE was not, and for an ELV/construction operator permit-to-work is safety-critical. It carries the residue of G-08 (`18`).
+> **Rev 2.2.** Rev 1's "no verified risk-assessment or permit-to-work workflow engine" is **now closed** by migration `0229`. Rev 2 called HSE the weakest link in the delivery half; that is no longer true.
+
+- 1 store, 1 controller, **5 pages**, **5 test files (34 tests)**, plus an API E2E and a browser E2E spec.
+- **Permit to work** is now a governed authorisation, not a status field (`modules/hse/src/domain/permit-to-work.ts:30`): `draft → requested → approved → closed`, with `rejected` returning to draft and `closed`/`expired` terminal. Three gates stand in front of approval, all enforced in `HseService.approvePermit` and all verified by the E2E suite as **409 refusals**:
+  1. **Risk assessment** — the permit must cite one, and it must be `approved`. Authorising work whose hazards were never signed off is the failure the control exists to prevent.
+  2. **Segregation of duties** — the requester may not approve their own permit.
+  3. **Validity window** — a permit outside its own window cannot be issued.
+- **Incident investigation** is a real lifecycle (`hse-incident.ts:26`): `reported → investigating → closed`, root cause mandatory, and **closure is refused while corrective actions raised against the incident are still open** — the same shape of gate as the commissioning punch list. Unlike a permit, an incident *can* be reopened: new evidence about a past accident must not force a second, disconnected record.
+- **Permit 360** (`/hse/permits/[id]`) shows the three gates **before** the user clicks approve, naming the failing one. The disabled button is a convenience; the service is the control.
+- **Residual:** the risk-assessment lifecycle itself is still thin (`draft → approved → expired`, no rejection path), and observations/inspections remain CRUD.
+
+## Remaining CRUD-level modules (`PARTIALLY_IMPLEMENTED`)
+
+- **fleet, assets, amc** — 1 store / 1 controller / 3 pages each. These are asset registers rather than safety or delivery controls, which is why G-08 drops to P3 rather than closing outright (`18`).
 
 ## Findings
 
 - **Projects remains the strongest of the "deliver" half** — real EVM and cost/quantity ledgers.
 - **Rev 2 reverses Rev 1's central finding for four of five modules.** Engineering, doc-control, site and QA/QC are no longer "data-rich but workflow/UI-thin": each has an enforced state machine, child-record depth, a completable in-app journey, and browser E2E driving that journey. A paperless engineering/site operation is now supportable in the UI for these stages.
-- **HSE is the exception** and did not move.
-- Rev 1's priority ("surface the existing data models with real workflow UIs", `22` P1.7) is **substantially delivered**; the remaining instance is HSE.
+- **Rev 2.2: HSE, the one exception, has now moved too.** Every delivery-half stage from engineering through commissioning — including the safety controls that authorise work — is governed, surfaced and E2E-covered.
+- Rev 1's priority ("surface the existing data models with real workflow UIs", `22` P1.7) is **delivered**.
 
-**Scores (Rev 2 re-estimates from merged source, not a live benchmark):** Projects 70 (unchanged) · Engineering 52→**68** · Doc-control 52→**66** · Site 58→**68** · QA/QC 58→**68** · HSE 50 (unchanged).
+**Scores (re-estimates from merged source, not a live benchmark):** Projects 70 (unchanged) · Engineering 52→**68** · Doc-control 52→**66** · Site 58→**68** · QA/QC 58→**68** · **HSE 50→68 (Rev 2.2)**.

@@ -28,7 +28,7 @@ Each item: objective · modules · files/components · dependencies · risk · c
 - **Risk:** High (unchanged — the spine is the commercially critical path).
 - **Complexity:** ~~M~~ **S–M** — harness and pattern exist; this is spec-writing.
 - **Acceptance:** CI runs login → create+read for account, opportunity, quotation, contract, project, invoice; fails the build on breakage.
-- **Rev 2 status:** 10 browser specs now exist and 5 cover the delivery half end to end — **none covers the spine**, so the gate is unmet. Recommend lifting the `test.skip`-on-502/404 guard for the spine suite so an unreachable API fails rather than skips.
+- **Rev 2.1 status (commit `dee209bc`):** `spine-journey.spec.ts` **delivers the create+read half** for all six spine records through the real UI, and does fail rather than skip on an unreachable API under CI (the guard recommendation above is implemented). **Outstanding:** the `login →` leg — blocked because enabling `AUTH_JWT_SECRET` engages `PermissionsGuard` globally while no user holds a grant on an in-memory boot. Needs a dev-grant seeding decision; tracked with **G-02**.
 
 ## P1 — Enterprise Hardening
 

@@ -1,8 +1,8 @@
 # AURA OS — Master Reverse-Engineering & Production-Readiness Audit
 
-> **Verdict (Rev 2):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **3 P0 blockers** and **7 P1 items** resolved before enterprise production deployment.
+> **Verdict (Rev 2.1):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **3 P0 blockers** and **7 P1 items** resolved before enterprise production deployment.
 >
-> The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is now largely closed by five merged workflow verticals.
+> The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is now largely closed by five merged workflow verticals. **Rev 2.1** records the first remediation done *in response to* this audit — the spine browser E2E suite (G-03), which is green but leaves the gate's `login →` leg blocked on a separate decision.
 
 This audit is **evidence-driven**. Every material claim is anchored to a file path, migration, endpoint, or test in the repository as it exists at the commit below. Documentation and developer claims were treated as the *lowest* tier of evidence and verified against executable source. Where something could not be verified from the repository (e.g. the live posture of the staging/production database), it is explicitly marked **NOT VERIFIED**.
 
@@ -22,6 +22,23 @@ This audit is **evidence-driven**. Every material claim is anchored to a file pa
 
 ## Revision history
 
+### Rev 2.1 — 2026-08-12 (G-03 remediation: the spine browser suite)
+
+First revision to record work done **in response to** the audit rather than merely discovered by it.
+
+`spine-journey.spec.ts` (commit `dee209bc`) covers the acquisition-to-cash spine — account, opportunity, quotation, contract, project, invoice — each **created through the real UI and read back through the real UI**. Root cause of its long absence: the spine pages carried **0 `data-testid` attributes** while every delivery-half page had them, so the specs that existed were the specs that were cheap to write.
+
+**Measured, both ways, against a fresh in-memory API:**
+
+| Run | Result |
+|---|---|
+| Clean `1a14a036` | 27 passed · 1 failed · 1 skipped |
+| With `dee209bc` | **34 passed · 0 failed · 1 skipped** |
+
+A product bug surfaced while making it pass: `FormDrawer` keyed its remount on *"the overrides fetch resolved"* rather than *"the schema changed"*, so every drawer in the app remounted once for nothing — and a user who opened one before that request landed had it **silently closed and their typed input discarded**. Fixed in the same commit; it also cures `offline-sync:168`, a pre-existing failure.
+
+**G-03 remains P0.** Its acceptance reads *"login → create+read"*; the create+read half is done and green, the **login** half is blocked — `AUTH_JWT_SECRET` engages `PermissionsGuard` across the whole surface, and on an in-memory boot no user holds a grant, so every route would 403. That needs a dev-grant seeding decision, which belongs with G-02. Per Rev 2's own rule — *a gate is binary* — the P0 and the ~68 headline stand.
+
 ### Rev 2 — 2026-08-12 (delivery-half workflow refresh)
 
 Five governed workflow verticals merged to `main` **after** Rev 1 was written (Rev 1 doc commit `246b8dd9`, 2026-08-10; all five feature commits land 08-11/08-12). Rev 1 flagged exactly these as the back-half depth gap, so its claims are stale and are corrected here.
@@ -38,7 +55,7 @@ Five governed workflow verticals merged to `main` **after** Rev 1 was written (R
 
 - **Counts** in this file, `02`, `06`, `14`, `23` are **re-measured** at `1a14a036` using Rev 1's own stated commands. The method was validated by reproducing Rev 1's numbers exactly at Rev 1's commit (tables 198, indexes 331, FKs 54, controllers 99, pages 151, migrations 220).
 - **Module depth scores** in `02`, `10`, `11` are **re-estimates from merged source**, on the same design-review basis as Rev 1 — *not* a live benchmark run.
-- **The overall ~68/100 readiness score is unchanged.** Per this audit's scoring rule, it is gated by the three P0 blockers, all of which remain open. The weighted component arithmetic does rise (73.4 → 75.4, see `20`), but effective readiness does not move until the P0 gate clears.
+- **The overall ~68/100 readiness score is unchanged.** Per this audit's scoring rule, it is gated by the three P0 blockers, all of which remain open. The weighted component arithmetic does rise (73.4 → 75.7, see `20`), but effective readiness does not move until the P0 gate clears.
 - **P0 G-03 (browser E2E) is NOT closed**, despite browser specs rising 1 → 10. The Rev 1 ship-gate is the *spine* journey (lead→quote→contract→project→invoice→payment); a grep across `apps/web/e2e` for those entities returns **no matches**. The new specs cover the five delivery-half workflows, not the spine.
 - **One Rev 1 metric is corrected as a mismeasurement**, not a change: see the RLS row in the table below.
 - **G-07 (rate limiting + CORS) was found closed incidentally** while verifying the workflow claims. It was **not** delivered by these five PRs — it landed via commit `2377a5a1` on a parallel branch dated the same day as Rev 1, so Rev 1 was accurate at its own commit and went stale on merge. Docs `05`, `07`, `17`, `19`, `20`, `22` are updated accordingly. *Implication: this register can drift from any merge, not only from the work under review — a periodic re-verification sweep is worth more than a per-PR update.*
@@ -60,7 +77,7 @@ Re-measured at Rev 2 commit `1a14a036`. The Rev 1 column is retained so every de
 | RLS policy statements | ~~128~~ *(see note)* | **148** `CREATE POLICY` · 40 `ROW LEVEL SECURITY` lines in 15 files | `grep -c 'CREATE POLICY'` |
 | Test files (source) | 249 | **262** | `find … -name '*.test.ts'` excl. dist/node_modules |
 | API E2E specs (Supertest) | 33 | **41** | `find apps/api/test -name '*.e2e-spec.ts'` |
-| Web E2E specs (Playwright) | 1 | **10** | `find apps/web/e2e -name '*.spec.ts'` |
+| Web E2E specs (Playwright) | 1 | **11** ᴿ²·¹ | `find apps/web/e2e -name '*.spec.ts'` |
 | Cross-module reactors | 28 | **29** | `grep -c "subscribe('…'" cross-module-subscriber.ts` |
 | Persistence stores | 284 (110 PG / 93 in-memory) | *not re-measured* | every in-memory store has a Postgres counterpart |
 | ADRs | 19 | *not re-measured* | `find *adr* -name '*.md'` |
@@ -81,14 +98,14 @@ Rev 2 scores are **re-estimates from merged source on the same design-review bas
 | Multi-tenancy | 83 | 83 | App-guard + RLS + tenant-scoped pool; **not verified on prod DB** |
 | ERP functionality | 66 | **72** | Five delivery-half verticals moved from CRUD to governed lifecycle |
 | Workflow integrity | 72 | **75** | 29 cross-module reactors + 5 new in-module state machines with enforced gates |
-| Testing | 62 | **68** | 262 unit/module + 41 API E2E + 10 browser E2E; spine browser journeys still absent |
+| Testing | 62 | **72** ᴿ²·¹ | 262 unit/module + 41 API E2E + 11 browser E2E (**34 passing, executed**); spine now covered, authenticated run still missing |
 | DevOps | 80 | 80 | Mature CI + migration gate + restore drill + Docker |
 | Observability | 70 | 70 | Metrics, correlation IDs, OTLP, health, migration gate |
 | Performance/Scale | 52 | 52 | In-memory search fan-out; no caching layer; unbenchmarked |
 | UX | 62 | **66** | Delivery-half journeys now completable in-app; degraded-state masking remains |
 | Data integrity | 74 | **76** | 62 explicit FKs (+8); new child records keyed to parents |
 | Documentation | 80 | 80 | Extensive ADRs, reports, master-report |
-| **Overall** | **~68** | **~68** | **Unchanged — gated by 3 open P0s.** Weighted arithmetic rises 73.4 → 75.4; see `20` |
+| **Overall** | **~68** | **~68** | **Unchanged — gated by 3 open P0s.** Weighted arithmetic rises 73.4 → 75.7; see `20` |
 
 ## Gap & risk headline
 

@@ -6,6 +6,18 @@ import type { SiteInstruction } from './domain/site-instruction';
 import type { LabourAllocation } from './domain/labour-allocation';
 import type { PlantUsage } from './domain/plant-usage';
 import type { InstallationRecord } from './domain/installation';
+import type { SiteLabourEntry, SitePlantEntry, SiteProgressEntry, SiteDelayEntry, SiteEvidence } from './domain/daily-report-lines';
+
+/** A report line-item store: save + list all lines for one daily report (tenant-scoped). */
+export interface ReportLineStore<T> {
+  save(line: T, tx?: TxHandle): Promise<void>;
+  listByReport(dailyReportId: string, tenantId: string): Promise<T[]>;
+}
+export type SiteLabourEntryStore = ReportLineStore<SiteLabourEntry>;
+export type SitePlantEntryStore = ReportLineStore<SitePlantEntry>;
+export type SiteProgressEntryStore = ReportLineStore<SiteProgressEntry>;
+export type SiteDelayEntryStore = ReportLineStore<SiteDelayEntry>;
+export type SiteEvidenceStore = ReportLineStore<SiteEvidence>;
 
 export interface LabourAllocationStore {
   save(allocation: LabourAllocation, tx?: TxHandle): Promise<void>;

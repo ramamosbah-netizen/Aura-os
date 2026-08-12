@@ -1,4 +1,7 @@
 export * from './domain/daily-report';
+export * from './domain/daily-report-lines';
+export * from './in-memory-report-lines-store';
+export * from './postgres-report-lines-store';
 export * from './domain/delay-log';
 export * from './domain/material-consumption';
 export * from './domain/site-instruction';

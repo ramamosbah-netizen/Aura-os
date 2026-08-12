@@ -11,6 +11,7 @@ import {
   InMemoryPlantUsageStore,
   InMemoryInstallationStore,
 } from '../in-memory-site-store';
+import { InMemoryReportLineStore } from '../in-memory-report-lines-store';
 import { SiteService } from '../site.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -56,7 +57,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
-        new InMemoryInstallationStore(),
+        new InMemoryInstallationStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -88,7 +89,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
-        new InMemoryInstallationStore(),
+        new InMemoryInstallationStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -137,7 +138,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
-        new InMemoryInstallationStore(),
+        new InMemoryInstallationStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(),
         mockEvents,
         mockTx,
         mockAccess,
@@ -175,7 +176,7 @@ describe('Construction / Site Control Module Bounded Context', () => {
         new InMemorySiteInstructionStore(),
         new InMemoryLabourAllocationStore(),
         new InMemoryPlantUsageStore(),
-        new InMemoryInstallationStore(),
+        new InMemoryInstallationStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(),
         mockEvents,
         mockTx,
         mockAccess,

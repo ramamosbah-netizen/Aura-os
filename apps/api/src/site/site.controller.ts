@@ -4,6 +4,14 @@ import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type DailyReport,
+  type SiteLabourEntry,
+  type SitePlantEntry,
+  type SiteProgressEntry,
+  type SiteDelayEntry,
+  type SiteEvidence,
+  type PlantStatus,
+  type DelayCategory,
+  type EvidenceCategory,
   type DelayLog,
   type MaterialConsumption,
   type SiteInstruction,
@@ -17,10 +25,58 @@ import {
 class CreateDailyReportDto {
   @IsString() projectId!: string;
   @IsOptional() @IsString() projectName?: string;
+  @IsOptional() @IsString() reportNumber?: string;
   @IsString() date!: string;
   @IsString() workDescription!: string;
+  @IsOptional() @IsString() siteConditions?: string;
+  @IsOptional() @IsString() safetyNotes?: string;
   @IsOptional() @IsNumber() manpowerCount?: number;
   @IsOptional() @IsNumber() equipmentCount?: number;
+}
+
+class RejectReportDto {
+  @IsString() reason!: string;
+}
+class LabourLineDto {
+  @IsString() trade!: string;
+  @IsOptional() @IsString() contractor?: string;
+  @IsNumber() headcount!: number;
+  @IsNumber() hours!: number;
+  @IsOptional() @IsString() notes?: string;
+}
+class PlantLineDto {
+  @IsString() equipmentType!: string;
+  @IsOptional() @IsString() equipmentId?: string;
+  @IsOptional() @IsNumber() quantity?: number;
+  @IsOptional() @IsNumber() operatingHours?: number;
+  @IsOptional() @IsString() status?: PlantStatus;
+  @IsOptional() @IsString() notes?: string;
+}
+class ProgressLineDto {
+  @IsOptional() @IsString() activityId?: string;
+  @IsOptional() @IsString() boqItemId?: string;
+  @IsString() description!: string;
+  @IsOptional() @IsNumber() plannedQty?: number;
+  @IsNumber() installedQty!: number;
+  @IsOptional() @IsString() unit?: string;
+  @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsString() notes?: string;
+}
+class DelayLineDto {
+  @IsString() category!: DelayCategory;
+  @IsString() description!: string;
+  @IsOptional() @IsNumber() durationHours?: number;
+  @IsOptional() @IsString() responsibleParty?: string;
+  @IsOptional() @IsString() impact?: string;
+  @IsOptional() @IsString() mitigation?: string;
+}
+class EvidenceDto {
+  @IsString() fileId!: string;
+  @IsOptional() @IsString() capturedAt?: string;
+  @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() category?: EvidenceCategory;
+  @IsOptional() @IsString() hash?: string;
 }
 
 class CreateDelayLogDto {
@@ -64,7 +120,10 @@ export class SiteController {
       projectId: dto.projectId,
       projectName: dto.projectName,
       date: dto.date,
+      reportNumber: dto.reportNumber,
       workDescription: dto.workDescription,
+      siteConditions: dto.siteConditions,
+      safetyNotes: dto.safetyNotes,
       manpowerCount: dto.manpowerCount,
       equipmentCount: dto.equipmentCount,
       createdBy: ctx.actorId || undefined,
@@ -75,6 +134,64 @@ export class SiteController {
   submitDailyReport(@Param('id') id: string): Promise<DailyReport> {
     const ctx = this.tenant.get();
     return this.siteService.submitDailyReport(ctx.tenantId, ctx.actorId, id);
+  }
+
+  // ── Daily-report workflow commands (state machine; POST verbs, never PATCH status) ──
+
+  @Post('daily-reports/:id/start-review')
+  startReviewReport(@Param('id') id: string): Promise<DailyReport> {
+    const ctx = this.tenant.get();
+    return this.siteService.startReviewReport(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Post('daily-reports/:id/approve')
+  approveReport(@Param('id') id: string): Promise<DailyReport> {
+    const ctx = this.tenant.get();
+    return this.siteService.approveDailyReport(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Post('daily-reports/:id/reject')
+  rejectReport(@Param('id') id: string, @Body() dto: RejectReportDto): Promise<DailyReport> {
+    if (!dto?.reason?.trim()) throw new BadRequestException('a rejection reason is required');
+    const ctx = this.tenant.get();
+    return this.siteService.rejectDailyReport(ctx.tenantId, ctx.actorId, id, dto.reason);
+  }
+
+  // ── Report line-items (draft-only) ──────────────────────────────────────────
+
+  @Post('daily-reports/:id/labour')
+  addLabour(@Param('id') id: string, @Body() dto: LabourLineDto): Promise<SiteLabourEntry> {
+    if (!dto?.trade?.trim()) throw new BadRequestException('trade is required');
+    const ctx = this.tenant.get();
+    return this.siteService.addReportLabour(ctx.tenantId, ctx.actorId, id, dto);
+  }
+
+  @Post('daily-reports/:id/plant')
+  addPlant(@Param('id') id: string, @Body() dto: PlantLineDto): Promise<SitePlantEntry> {
+    if (!dto?.equipmentType?.trim()) throw new BadRequestException('equipmentType is required');
+    const ctx = this.tenant.get();
+    return this.siteService.addReportPlant(ctx.tenantId, ctx.actorId, id, dto);
+  }
+
+  @Post('daily-reports/:id/progress')
+  addProgress(@Param('id') id: string, @Body() dto: ProgressLineDto): Promise<SiteProgressEntry> {
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    const ctx = this.tenant.get();
+    return this.siteService.addReportProgress(ctx.tenantId, ctx.actorId, id, dto);
+  }
+
+  @Post('daily-reports/:id/delays')
+  addDelay(@Param('id') id: string, @Body() dto: DelayLineDto): Promise<SiteDelayEntry> {
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    const ctx = this.tenant.get();
+    return this.siteService.addReportDelay(ctx.tenantId, ctx.actorId, id, dto);
+  }
+
+  @Post('daily-reports/:id/evidence')
+  addEvidence(@Param('id') id: string, @Body() dto: EvidenceDto): Promise<SiteEvidence> {
+    if (!dto?.fileId?.trim()) throw new BadRequestException('fileId is required');
+    const ctx = this.tenant.get();
+    return this.siteService.addReportEvidence(ctx.tenantId, ctx.actorId, id, dto);
   }
 
   @Get('daily-reports/paged')
@@ -94,6 +211,15 @@ export class SiteController {
   listDailyReports(): Promise<DailyReport[]> {
     const ctx = this.tenant.get();
     return this.siteService.listDailyReports(ctx.tenantId);
+  }
+
+  /** The Site Daily Report 360: the report with all its line-items. */
+  @Get('daily-reports/:id')
+  async getDailyReport(@Param('id') id: string) {
+    const ctx = this.tenant.get();
+    const detail = await this.siteService.getDailyReportDetail(ctx.tenantId, id);
+    if (!detail) throw new Error(`daily report ${id} not found`); // taxonomy → 404
+    return detail;
   }
 
   // ── Delay Logs ─────────────────────────────────────────────────────────────

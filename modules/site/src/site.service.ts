@@ -2,7 +2,24 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent, type Page, type PageParams, paginate } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
-import { type DailyReport, makeDailyReport } from './domain/daily-report';
+import {
+  type DailyReport,
+  makeDailyReport,
+  submitReport,
+  startReviewReport,
+  approveReport,
+  rejectReport,
+  reopenReport,
+  assertReportEditable,
+  SITE_REPORT_EVENT,
+} from './domain/daily-report';
+import {
+  type SiteLabourEntry, type NewSiteLabourEntry, makeSiteLabourEntry,
+  type SitePlantEntry, type NewSitePlantEntry, makeSitePlantEntry,
+  type SiteProgressEntry, type NewSiteProgressEntry, makeSiteProgressEntry,
+  type SiteDelayEntry, type NewSiteDelayEntry, makeSiteDelayEntry,
+  type SiteEvidence, type NewSiteEvidence, makeSiteEvidence,
+} from './domain/daily-report-lines';
 import { type DelayLog, makeDelayLog } from './domain/delay-log';
 import { type MaterialConsumption, makeMaterialConsumption } from './domain/material-consumption';
 import { type SiteInstruction, makeSiteInstruction, acknowledgeInstruction, closeInstruction } from './domain/site-instruction';
@@ -15,6 +32,11 @@ export const SITE_INSTRUCTION_STORE = Symbol('SITE_INSTRUCTION_STORE');
 export const LABOUR_ALLOCATION_STORE = Symbol('LABOUR_ALLOCATION_STORE');
 export const PLANT_USAGE_STORE = Symbol('PLANT_USAGE_STORE');
 export const INSTALLATION_STORE = Symbol('INSTALLATION_STORE');
+export const SITE_REPORT_LABOUR_STORE = Symbol('SITE_REPORT_LABOUR_STORE');
+export const SITE_REPORT_PLANT_STORE = Symbol('SITE_REPORT_PLANT_STORE');
+export const SITE_REPORT_PROGRESS_STORE = Symbol('SITE_REPORT_PROGRESS_STORE');
+export const SITE_REPORT_DELAY_STORE = Symbol('SITE_REPORT_DELAY_STORE');
+export const SITE_REPORT_EVIDENCE_STORE = Symbol('SITE_REPORT_EVIDENCE_STORE');
 
 import {
   type DailyReportStore,
@@ -25,6 +47,11 @@ import {
   type PlantUsageStore,
   type InstallationStore,
   type DailyReportFilter,
+  type SiteLabourEntryStore,
+  type SitePlantEntryStore,
+  type SiteProgressEntryStore,
+  type SiteDelayEntryStore,
+  type SiteEvidenceStore,
 } from './store.interface';
 import { type PlantUsage, makePlantUsage } from './domain/plant-usage';
 import { type InstallationRecord, makeInstallationRecord } from './domain/installation';
@@ -54,6 +81,11 @@ export class SiteService {
     @Inject(LABOUR_ALLOCATION_STORE) private readonly labourStore: LabourAllocationStore,
     @Inject(PLANT_USAGE_STORE) private readonly plantStore: PlantUsageStore,
     @Inject(INSTALLATION_STORE) private readonly installationStore: InstallationStore,
+    @Inject(SITE_REPORT_LABOUR_STORE) private readonly reportLabourStore: SiteLabourEntryStore,
+    @Inject(SITE_REPORT_PLANT_STORE) private readonly reportPlantStore: SitePlantEntryStore,
+    @Inject(SITE_REPORT_PROGRESS_STORE) private readonly reportProgressStore: SiteProgressEntryStore,
+    @Inject(SITE_REPORT_DELAY_STORE) private readonly reportDelayStore: SiteDelayEntryStore,
+    @Inject(SITE_REPORT_EVIDENCE_STORE) private readonly reportEvidenceStore: SiteEvidenceStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
@@ -66,58 +98,153 @@ export class SiteService {
     companyId?: string;
     projectId: string;
     projectName?: string;
+    reportNumber?: string;
     date: string;
     workDescription: string;
+    siteConditions?: string;
+    safetyNotes?: string;
     manpowerCount?: number;
     equipmentCount?: number;
     createdBy?: string;
   }): Promise<DailyReport> {
-    if (input.createdBy) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'site.daily_report.create', orgPath });
-    }
-
+    this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create');
     const report = makeDailyReport(input);
-
-    await this.tx.run(async (handle) => {
-      await this.dailyReportStore.save(report, handle);
-    });
-
-    this.logger.log(`Daily Report drafted: ${report.date} for project ${report.projectId}`);
-    return report;
-  }
-
-  async submitDailyReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
-    const report = await this.dailyReportStore.findById(id, tenantId);
-    if (!report) throw new Error(`Daily report with ID ${id} not found`);
-
-    if (actorId) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
-      if (report.companyId) orgPath.push({ level: 'company', id: report.companyId });
-      this.access.assert(actorId, { permission: 'site.daily_report.submit', orgPath });
-    }
-
-    report.status = 'submitted';
-    report.updatedAt = new Date().toISOString();
-
     const event = makeEvent({
-      type: SITE_EVENT.dailyReportSubmitted,
-      tenantId: report.tenantId,
-      companyId: report.companyId,
-      actorId,
-      aggregateType: 'site.daily_report',
-      aggregateId: report.id,
-      payload: { date: report.date, projectId: report.projectId, manpowerCount: report.manpowerCount },
+      type: SITE_REPORT_EVENT.created,
+      tenantId: report.tenantId, companyId: report.companyId, actorId: report.createdBy,
+      aggregateType: 'site.daily_report', aggregateId: report.id,
+      payload: { reportNumber: report.reportNumber, date: report.date, projectId: report.projectId },
     });
-
     await this.tx.run(async (handle) => {
       await this.dailyReportStore.save(report, handle);
       await this.events.appendWithClient(handle, [event]);
     });
-
-    this.logger.log(`Daily Report submitted: ${report.date} (${report.id})`);
+    this.logger.log(`Daily Report drafted: ${report.reportNumber} for project ${report.projectId}`);
     return report;
+  }
+
+  // ── Governed daily-report lifecycle ──────────────────────────────────────────
+
+  private assertReportPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string): void {
+    if (!actorId) return;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (companyId) orgPath.push({ level: 'company', id: companyId });
+    this.access.assert(actorId, { permission, orgPath });
+  }
+
+  private async loadReport(tenantId: Id, id: Id): Promise<DailyReport> {
+    const report = await this.dailyReportStore.findById(id, tenantId);
+    if (!report) throw new Error(`Daily report with ID ${id} not found`);
+    return report;
+  }
+
+  private async saveReportWithEvent(report: DailyReport, actorId: Id | null, type: string): Promise<DailyReport> {
+    const event = makeEvent({
+      type, tenantId: report.tenantId, companyId: report.companyId, actorId,
+      aggregateType: 'site.daily_report', aggregateId: report.id,
+      payload: { reportNumber: report.reportNumber, date: report.date, status: report.status, projectId: report.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.dailyReportStore.save(report, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Daily Report ${report.reportNumber} → ${report.status}`);
+    return report;
+  }
+
+  /** draft → submitted (kept name for the existing BFF/UI; now enforced). */
+  async submitDailyReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
+    const report = await this.loadReport(tenantId, id);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.submit');
+    return this.saveReportWithEvent(submitReport(report, actorId), actorId, SITE_REPORT_EVENT.submitted);
+  }
+
+  /** submitted → under_review. */
+  async startReviewReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
+    const report = await this.loadReport(tenantId, id);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.review');
+    return this.saveReportWithEvent(startReviewReport(report, actorId), actorId, SITE_REPORT_EVENT.reviewStarted);
+  }
+
+  /** under_review → approved (immutable thereafter). */
+  async approveDailyReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
+    const report = await this.loadReport(tenantId, id);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve');
+    return this.saveReportWithEvent(approveReport(report, actorId), actorId, SITE_REPORT_EVENT.approved);
+  }
+
+  /** under_review → rejected (reason mandatory) then auto-reopened to draft for correction. */
+  async rejectDailyReport(tenantId: Id, actorId: Id | null, id: Id, reason: string): Promise<DailyReport> {
+    const report = await this.loadReport(tenantId, id);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve');
+    const rejected = rejectReport(report, actorId, reason);
+    // record the rejection, then reopen to draft so the site team can correct and resubmit.
+    await this.saveReportWithEvent(rejected, actorId, SITE_REPORT_EVENT.rejected);
+    const reopened = reopenReport(rejected);
+    await this.tx.run(async (handle) => { await this.dailyReportStore.save(reopened, handle); });
+    return reopened;
+  }
+
+  // ── Report line-items (attachable only while the report is a draft) ────────────
+
+  private async addLine<T>(tenantId: Id, reportId: Id, permission: string, make: (report: DailyReport) => T, save: (line: T, tx: import('@aura/core').TxHandle | null) => Promise<void>, actorId: Id | null): Promise<T> {
+    const report = await this.loadReport(tenantId, reportId);
+    this.assertReportPerm(actorId, tenantId, report.companyId, permission);
+    assertReportEditable(report); // 409 unless the report is still a draft
+    const line = make(report);
+    await this.tx.run(async (handle) => { await save(line, handle); });
+    return line;
+  }
+
+  addReportLabour(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteLabourEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteLabourEntry> {
+    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+      (r) => makeSiteLabourEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
+      (l, h) => this.reportLabourStore.save(l, h), actorId);
+  }
+
+  addReportPlant(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSitePlantEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SitePlantEntry> {
+    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+      (r) => makeSitePlantEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
+      (l, h) => this.reportPlantStore.save(l, h), actorId);
+  }
+
+  addReportProgress(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteProgressEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteProgressEntry> {
+    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+      (r) => makeSiteProgressEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
+      (l, h) => this.reportProgressStore.save(l, h), actorId);
+  }
+
+  addReportDelay(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteDelayEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteDelayEntry> {
+    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+      (r) => makeSiteDelayEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
+      (l, h) => this.reportDelayStore.save(l, h), actorId);
+  }
+
+  addReportEvidence(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteEvidence, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteEvidence> {
+    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+      (r) => makeSiteEvidence({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
+      (l, h) => this.reportEvidenceStore.save(l, h), actorId);
+  }
+
+  /** The full report with all its line-items — the Site Daily Report 360. */
+  async getDailyReportDetail(tenantId: Id, id: Id): Promise<{
+    report: DailyReport; labour: SiteLabourEntry[]; plant: SitePlantEntry[];
+    progress: SiteProgressEntry[]; delays: SiteDelayEntry[]; evidence: SiteEvidence[];
+  } | null> {
+    const report = await this.dailyReportStore.findById(id, tenantId);
+    if (!report) return null;
+    const [labour, plant, progress, delays, evidence] = await Promise.all([
+      this.reportLabourStore.listByReport(id, tenantId),
+      this.reportPlantStore.listByReport(id, tenantId),
+      this.reportProgressStore.listByReport(id, tenantId),
+      this.reportDelayStore.listByReport(id, tenantId),
+      this.reportEvidenceStore.listByReport(id, tenantId),
+    ]);
+    return { report, labour, plant, progress, delays, evidence };
+  }
+
+  getDailyReport(tenantId: Id, id: Id): Promise<DailyReport | null> {
+    return this.dailyReportStore.findById(id, tenantId);
   }
 
   listDailyReports(tenantId: Id): Promise<DailyReport[]> {

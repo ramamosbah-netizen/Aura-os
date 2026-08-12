@@ -189,28 +189,28 @@ export class PostgresDailyReportStore implements DailyReportStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_site_daily_reports (
-        id, tenant_id, company_id, project_id, project_name, date, work_description, manpower_count, equipment_count, status, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        id, tenant_id, company_id, project_id, project_name, date, work_description, manpower_count, equipment_count, status, created_by, created_at, updated_at,
+        report_number, site_conditions, safety_notes, prepared_by, submitted_by, submitted_at, reviewed_by, reviewed_at, approved_by, approved_at, rejection_reason
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
       on conflict (tenant_id, project_id, date) do update set
         work_description = excluded.work_description,
         manpower_count = excluded.manpower_count,
         equipment_count = excluded.equipment_count,
         status = excluded.status,
-        updated_at = excluded.updated_at`,
+        updated_at = excluded.updated_at,
+        report_number = excluded.report_number,
+        site_conditions = excluded.site_conditions,
+        safety_notes = excluded.safety_notes,
+        submitted_by = excluded.submitted_by, submitted_at = excluded.submitted_at,
+        reviewed_by = excluded.reviewed_by, reviewed_at = excluded.reviewed_at,
+        approved_by = excluded.approved_by, approved_at = excluded.approved_at,
+        rejection_reason = excluded.rejection_reason`,
       [
-        report.id,
-        report.tenantId,
-        report.companyId,
-        report.projectId,
-        report.projectName,
-        report.date,
-        report.workDescription,
-        report.manpowerCount,
-        report.equipmentCount,
-        report.status,
-        report.createdBy,
-        report.createdAt,
-        report.updatedAt,
+        report.id, report.tenantId, report.companyId, report.projectId, report.projectName, report.date,
+        report.workDescription, report.manpowerCount, report.equipmentCount, report.status, report.createdBy,
+        report.createdAt, report.updatedAt,
+        report.reportNumber, report.siteConditions, report.safetyNotes, report.preparedBy, report.submittedBy,
+        report.submittedAt, report.reviewedBy, report.reviewedAt, report.approvedBy, report.approvedAt, report.rejectionReason,
       ],
     );
   }
@@ -248,10 +248,21 @@ export class PostgresDailyReportStore implements DailyReportStore {
       projectId: row.project_id,
       projectName: row.project_name,
       date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
+      reportNumber: row.report_number ?? `DR-${row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date)}`,
       workDescription: row.work_description,
+      siteConditions: row.site_conditions ?? null,
+      safetyNotes: row.safety_notes ?? null,
       manpowerCount: Number(row.manpower_count),
       equipmentCount: Number(row.equipment_count),
       status: row.status,
+      preparedBy: row.prepared_by ?? null,
+      submittedBy: row.submitted_by ?? null,
+      submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
+      reviewedBy: row.reviewed_by ?? null,
+      reviewedAt: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
+      approvedBy: row.approved_by ?? null,
+      approvedAt: row.approved_at ? new Date(row.approved_at).toISOString() : null,
+      rejectionReason: row.rejection_reason ?? null,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),

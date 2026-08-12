@@ -8,6 +8,7 @@ import {
   InMemoryPlantUsageStore,
   InMemoryInstallationStore,
 } from '../in-memory-site-store';
+import { InMemoryReportLineStore } from '../in-memory-report-lines-store';
 import { SiteService } from '../site.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -26,7 +27,7 @@ describe('Labour by trade (service workflow)', () => {
       new InMemorySiteInstructionStore(),
       new InMemoryLabourAllocationStore(),
       new InMemoryPlantUsageStore(),
-      new InMemoryInstallationStore(),
+      new InMemoryInstallationStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(),
       mockEvents,
       mockTx,
       new AccessService(),

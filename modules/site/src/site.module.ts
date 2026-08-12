@@ -10,8 +10,15 @@ import {
   LABOUR_ALLOCATION_STORE,
   PLANT_USAGE_STORE,
   INSTALLATION_STORE,
+  SITE_REPORT_LABOUR_STORE,
+  SITE_REPORT_PLANT_STORE,
+  SITE_REPORT_PROGRESS_STORE,
+  SITE_REPORT_DELAY_STORE,
+  SITE_REPORT_EVIDENCE_STORE,
   SiteService,
 } from './site.service';
+import { InMemoryReportLineStore } from './in-memory-report-lines-store';
+import { makePostgresLabourStore, makePostgresPlantStore, makePostgresProgressStore, makePostgresDelayStore, makePostgresEvidenceStore } from './postgres-report-lines-store';
 
 import {
   InMemoryDailyReportStore,
@@ -77,6 +84,31 @@ import {
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresInstallationStore(pool) : new InMemoryInstallationStore(),
+    },
+    {
+      provide: SITE_REPORT_LABOUR_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? makePostgresLabourStore(pool) : new InMemoryReportLineStore()),
+    },
+    {
+      provide: SITE_REPORT_PLANT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? makePostgresPlantStore(pool) : new InMemoryReportLineStore()),
+    },
+    {
+      provide: SITE_REPORT_PROGRESS_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? makePostgresProgressStore(pool) : new InMemoryReportLineStore()),
+    },
+    {
+      provide: SITE_REPORT_DELAY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? makePostgresDelayStore(pool) : new InMemoryReportLineStore()),
+    },
+    {
+      provide: SITE_REPORT_EVIDENCE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? makePostgresEvidenceStore(pool) : new InMemoryReportLineStore()),
     },
     SiteService,
   ],

@@ -8,6 +8,7 @@ import {
   InMemoryPlantUsageStore,
   InMemoryInstallationStore,
 } from '../in-memory-site-store';
+import { InMemoryReportLineStore } from '../in-memory-report-lines-store';
 import { SiteService } from '../site.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
@@ -32,7 +33,7 @@ function build(): { svc: SiteService; emitted: Array<{ type: string; payload: Re
     new InMemorySiteInstructionStore(),
     new InMemoryLabourAllocationStore(),
     new InMemoryPlantUsageStore(),
-    new InMemoryInstallationStore(),
+    new InMemoryInstallationStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(),
     events,
     mockTx,
     new AccessService(),
@@ -48,12 +49,13 @@ describe('Daily report submit transition', () => {
       workDescription: 'Second fix electrical, L2 west wing', manpowerCount: 12,
     });
     expect(report.status).toBe('draft');
-    expect(emitted).toHaveLength(0); // drafting is not an announced business fact
+    // Creating a report is now an audited fact (G-34): it emits a `created` event.
+    expect(emitted.find((e) => e.type === 'site.daily_report.created')).toBeTruthy();
 
     const submitted = await svc.submitDailyReport('t1', null, report.id);
     expect(submitted.status).toBe('submitted');
     const evt = emitted.find((e) => e.type === 'site.daily_report.submitted');
-    expect(evt?.payload).toMatchObject({ date: '2026-07-09', projectId: 'p1', manpowerCount: 12 });
+    expect(evt?.payload).toMatchObject({ date: '2026-07-09', projectId: 'p1', status: 'submitted' });
   });
 
   it('is tenant-isolated on submit', async () => {

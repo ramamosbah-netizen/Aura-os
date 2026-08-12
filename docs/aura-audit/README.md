@@ -1,8 +1,8 @@
 # AURA OS — Master Reverse-Engineering & Production-Readiness Audit
 
-> **Verdict (Rev 2.2):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **3 P0 blockers** and **7 P1 items** resolved before enterprise production deployment.
+> **Verdict (Rev 2.3):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **3 P0 blockers** and **7 P1 items** resolved before enterprise production deployment.
 >
-> The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is largely closed by five merged workflow verticals; **Rev 2.2** closes its residue by governing HSE. **Rev 2.1** records the first remediation done *in response to* this audit — the spine browser E2E suite (G-03), which is green but leaves the gate's `login →` leg blocked on a separate decision.
+> The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is largely closed by five merged workflow verticals; **Rev 2.2** governs HSE and **Rev 2.3 closes G-08 outright** (amc, assets, fleet). **Rev 2.1** records the first remediation done *in response to* this audit — the spine browser E2E suite (G-03), which is green but leaves the gate's `login →` leg blocked on a separate decision.
 
 This audit is **evidence-driven**. Every material claim is anchored to a file path, migration, endpoint, or test in the repository as it exists at the commit below. Documentation and developer claims were treated as the *lowest* tier of evidence and verified against executable source. Where something could not be verified from the repository (e.g. the live posture of the staging/production database), it is explicitly marked **NOT VERIFIED**.
 
@@ -21,6 +21,22 @@ This audit is **evidence-driven**. Every material claim is anchored to a file pa
 | Auditor | Principal Architect / CTO / Security / QA composite review |
 
 ## Revision history
+
+### Rev 2.3 — 2026-08-12 (G-08 CLOSED: amc, assets, fleet)
+
+The last three modules named in G-08. None is a safety control, so each was judged on whether it kept a **financial or recovery record honest** — and none of them did.
+
+| Module | The refusal that was missing |
+|---|---|
+| **amc** (mig `0230`) | A work order could be raised against an **expired or terminated contract** — and the AMC→AR reactor would invoice against it. The **PPM sweep** created visits directly, bypassing the check entirely; a schedule left running on a dead contract minted billable visits forever |
+| **assets** (mig `0231`) | An asset could be **disposed mid-repair**, posting cost to a settled asset and computing gain/loss from a book value maintenance was still moving. Depreciation also continued after disposal |
+| **fleet** | `disputed` was a **dead end** — a contested fine could never be recovered or written off, while still counting toward outstanding exposure |
+
+AMC also now stamps the **SLA outcome** at completion from the contract that governed the visit — snapshotted, not recomputed, because contract terms change and a recomputed figure quietly re-judges history. Ad-hoc orders read "not measured", never "missed". And `startWork()` had been on the class since the beginning with **nothing ever calling it**; `in_progress` was unreachable.
+
+**Verified:** amc 19→33 · assets 20→30 · fleet 28→35 module tests · API E2E 42→43 (every gate asserted as a 409) · browser E2E 12→13 · **full browser suite 39 passed / 0 failed** on a fresh API · api unit 76 · typecheck clean · lint 0 errors.
+
+**G-08 is closed.** Every module it named now enforces its lifecycle. Tests that encoded the *ungoverned* behaviour were corrected rather than relaxed — one scheduled maintenance against an asset id that did not exist, which is exactly the hole that would let the disposal gate be bypassed.
 
 ### Rev 2.2 — 2026-08-12 (G-08 residue: the HSE permit-to-work engine)
 
@@ -77,7 +93,7 @@ Five governed workflow verticals merged to `main` **after** Rev 1 was written (R
 
 - **Counts** in this file, `02`, `06`, `14`, `23` are **re-measured** at `1a14a036` using Rev 1's own stated commands. The method was validated by reproducing Rev 1's numbers exactly at Rev 1's commit (tables 198, indexes 331, FKs 54, controllers 99, pages 151, migrations 220).
 - **Module depth scores** in `02`, `10`, `11` are **re-estimates from merged source**, on the same design-review basis as Rev 1 — *not* a live benchmark run.
-- **The overall ~68/100 readiness score is unchanged.** Per this audit's scoring rule, it is gated by the three P0 blockers, all of which remain open. The weighted component arithmetic does rise (73.4 → 75.7, see `20`), but effective readiness does not move until the P0 gate clears.
+- **The overall ~68/100 readiness score is unchanged.** Per this audit's scoring rule, it is gated by the three P0 blockers, all of which remain open. The weighted component arithmetic does rise (73.4 → 76.1, see `20`), but effective readiness does not move until the P0 gate clears.
 - **P0 G-03 (browser E2E) is NOT closed**, despite browser specs rising 1 → 10. The Rev 1 ship-gate is the *spine* journey (lead→quote→contract→project→invoice→payment); a grep across `apps/web/e2e` for those entities returns **no matches**. The new specs cover the five delivery-half workflows, not the spine.
 - **One Rev 1 metric is corrected as a mismeasurement**, not a change: see the RLS row in the table below.
 - **G-07 (rate limiting + CORS) was found closed incidentally** while verifying the workflow claims. It was **not** delivered by these five PRs — it landed via commit `2377a5a1` on a parallel branch dated the same day as Rev 1, so Rev 1 was accurate at its own commit and went stale on merge. Docs `05`, `07`, `17`, `19`, `20`, `22` are updated accordingly. *Implication: this register can drift from any merge, not only from the work under review — a periodic re-verification sweep is worth more than a per-PR update.*
@@ -93,13 +109,13 @@ Re-measured at Rev 2 commit `1a14a036`. The Rev 1 column is retained so every de
 | HTTP endpoint decorators | 854 | *not re-measured* | `grep -rhoE '@(Get\|Post\|Put\|Patch\|Delete)\('` |
 | Web pages (`page.tsx`) | 151 | **164** | `find apps/web/app -name page.tsx` |
 | DB tables (CREATE TABLE) | 198 distinct | **218 distinct** | `grep 'CREATE TABLE' infrastructure/migrations` |
-| SQL migrations | 220 (gap-free →`0220`) | **229** (gap-free →`0229`) | `ls infrastructure/migrations` |
+| SQL migrations | 220 (gap-free →`0220`) | **231** (gap-free →`0231`) | `ls infrastructure/migrations` |
 | DB indexes | 331 | **358** | `grep 'CREATE (UNIQUE )?INDEX'` |
 | Explicit FK / REFERENCES | 54 | **62** | `grep 'REFERENCES\|FOREIGN KEY'` |
 | RLS policy statements | ~~128~~ *(see note)* | **148** `CREATE POLICY` · 40 `ROW LEVEL SECURITY` lines in 15 files | `grep -c 'CREATE POLICY'` |
 | Test files (source) | 249 | **262** | `find … -name '*.test.ts'` excl. dist/node_modules |
-| API E2E specs (Supertest) | 33 | **42** ᴿ²·² | `find apps/api/test -name '*.e2e-spec.ts'` |
-| Web E2E specs (Playwright) | 1 | **12** ᴿ²·² | `find apps/web/e2e -name '*.spec.ts'` |
+| API E2E specs (Supertest) | 33 | **43** | `find apps/api/test -name '*.e2e-spec.ts'` |
+| Web E2E specs (Playwright) | 1 | **13** | `find apps/web/e2e -name '*.spec.ts'` |
 | Cross-module reactors | 28 | **29** | `grep -c "subscribe('…'" cross-module-subscriber.ts` |
 | Persistence stores | 284 (110 PG / 93 in-memory) | *not re-measured* | every in-memory store has a Postgres counterpart |
 | ADRs | 19 | *not re-measured* | `find *adr* -name '*.md'` |
@@ -118,7 +134,7 @@ Rev 2 scores are **re-estimates from merged source on the same design-review bas
 | Database | 84 | 84 | 218 tables, gap-free migrations, 358 indexes, comprehensive RLS |
 | Security | 71 | **74** | Fail-closed design **+ edge hardening now real** (rate-limit guard, CORS allowlist, CSP, body cap); still config-gated on auth |
 | Multi-tenancy | 83 | 83 | App-guard + RLS + tenant-scoped pool; **not verified on prod DB** |
-| ERP functionality | 66 | **72** | Five delivery-half verticals moved from CRUD to governed lifecycle |
+| ERP functionality | 66 | **76** | **Every** business module owning a lifecycle now enforces it (G-08 closed) |
 | Workflow integrity | 72 | **75** | 29 cross-module reactors + 5 new in-module state machines with enforced gates |
 | Testing | 62 | **72** ᴿ²·¹ | 262 unit/module + 41 API E2E + 11 browser E2E (**34 passing, executed**); spine now covered, authenticated run still missing |
 | DevOps | 80 | 80 | Mature CI + migration gate + restore drill + Docker |
@@ -127,11 +143,12 @@ Rev 2 scores are **re-estimates from merged source on the same design-review bas
 | UX | 62 | **66** | Delivery-half journeys now completable in-app; degraded-state masking remains |
 | Data integrity | 74 | **76** | 62 explicit FKs (+8); new child records keyed to parents |
 | Documentation | 80 | 80 | Extensive ADRs, reports, master-report |
-| **Overall** | **~68** | **~68** | **Unchanged — gated by 3 open P0s.** Weighted arithmetic rises 73.4 → 75.7; see `20` |
+| **Overall** | **~68** | **~68** | **Unchanged — gated by 3 open P0s.** Weighted arithmetic rises 73.4 → 76.1; see `20` |
 
 ## Gap & risk headline
 
 - **P0 blockers: 3 (all still open)** — (1) RLS enforcement posture on staging/prod **NOT VERIFIED** (dev-only per code + prior state); (2) authorization is **inert until a JWT verifier is configured** — production must set it (fail-closed gate exists but is an ops precondition); (3) **no browser E2E over the spine journey**. Rev 2 nuance: browser specs rose 1 → 10 and now cover the five delivery-half workflows end-to-end in CI against a real API, but the Rev 1 ship-gate — lead→quote→contract→project→invoice→payment — remains **uncovered** (verified by grep over `apps/web/e2e`).
+- **Closed outright: G-07** (edge hardening) and **G-08** (delivery-half journeys, closed at Rev 2.3).
 - **P1 items: 7** (Rev 1: 9 by count, "~11" in the Rev 1 headline) — search fan-out scaling (G-04), silent frontend error-swallowing (G-05), thin FK-level referential integrity (G-06), no caching / unenforced pagination (G-09), float money (G-10), no outbox operator UI (G-11), inventory lot/valuation depth (G-12).
   - **G-08 (delivery-half UI journeys) largely closed** → downgraded to **P2**, scoped to the four modules still at CRUD level (hse, fleet, assets, amc).
   - **G-07 (rate limiting + CORS allowlist) CLOSED** — edge hardening is on `main` (commit `2377a5a1`). Note this was **not** delivered by the five workflow PRs; it landed on a parallel branch and Rev 1 simply went stale on merge. See the note in `18`.

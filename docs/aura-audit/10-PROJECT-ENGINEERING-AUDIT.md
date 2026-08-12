@@ -60,9 +60,16 @@ WBS, schedule + baseline planning, variations, delay/EOT (extension-of-time) cla
 - **Permit 360** (`/hse/permits/[id]`) shows the three gates **before** the user clicks approve, naming the failing one. The disabled button is a convenience; the service is the control.
 - **Residual:** the risk-assessment lifecycle itself is still thin (`draft → approved → expired`, no rejection path), and observations/inspections remain CRUD.
 
-## Remaining CRUD-level modules (`PARTIALLY_IMPLEMENTED`)
+## Fleet — `VERIFIED_IMPLEMENTED` (Rev 2.3)
 
-- **fleet, assets, amc** — 1 store / 1 controller / 3 pages each. These are asset registers rather than safety or delivery controls, which is why G-08 drops to P3 rather than closing outright (`18`).
+> **Rev 2.3.** The last module under G-08. Fleet was the *least* bad of the three: `assignFine`/`disputeFine`/`payFine` already carried ad-hoc guards. What it lacked was a way **out** of `disputed`.
+
+- **The dead end.** Nothing could leave `disputed`: a contested fine could never be recovered if the dispute was rejected, nor written off if it succeeded. The register slowly filled with fines nobody could action, while still counting toward outstanding exposure.
+- `FINE_TRANSITIONS` (`modules/fleet/src/domain/traffic-fine.ts:25`) now defines both exits — `disputed → pending` (liability stands; the driver assignment is cleared, since the dispute was about who owed it) and `disputed → cancelled` (authority waived it; terminal).
+- **Cancelled fines leave the outstanding-exposure figure and stop carrying black points**, which they did not before.
+- The pre-existing guards were rephrased **"can only"** so a state conflict classifies **409** under the error taxonomy rather than 400 — they were previously reported as validation failures.
+- Covered by `asset-amc-fleet-workflow.e2e-spec.ts` and driven through the UI in `amc-asset-fleet.spec.ts`.
+- **Residual:** vehicle status (`active|maintenance|retired`) is still a plain field — a vehicle in maintenance can still be dispatched. Salik charge allocation is likewise ungoverned. Neither blocks a journey, so both are tracked here rather than under G-08.
 
 ## Findings
 
@@ -71,4 +78,4 @@ WBS, schedule + baseline planning, variations, delay/EOT (extension-of-time) cla
 - **Rev 2.2: HSE, the one exception, has now moved too.** Every delivery-half stage from engineering through commissioning — including the safety controls that authorise work — is governed, surfaced and E2E-covered.
 - Rev 1's priority ("surface the existing data models with real workflow UIs", `22` P1.7) is **delivered**.
 
-**Scores (re-estimates from merged source, not a live benchmark):** Projects 70 (unchanged) · Engineering 52→**68** · Doc-control 52→**66** · Site 58→**68** · QA/QC 58→**68** · **HSE 50→68 (Rev 2.2)**.
+**Scores (re-estimates from merged source, not a live benchmark):** Projects 70 (unchanged) · Engineering 52→**68** · Doc-control 52→**66** · Site 58→**68** · QA/QC 58→**68** · **HSE 50→68 (Rev 2.2)** · **Fleet 50→62 (Rev 2.3)**.

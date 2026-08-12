@@ -21,10 +21,10 @@
 | ▲ **doccontrol** | 1 | 6 | 1 | 6 | 4 | **Governed revision lifecycle + transmittal issue/acknowledge** | **66** |
 | **subcontracts** | 1 | 1 | 1 | 4 | 5 | Narrow but wired (backcharge reactor) | 58 |
 | ▲ **site** | 1 | 2 | 1 | 6 | 6 | **Governed daily-report aggregate + 5 typed line-items + approval** | **68** |
-| **hse** | 1 | 1 | 1 | 4 | 3 | CRUD-level | 50 |
-| **fleet** | 1 | 1 | 1 | 4 | 3 | CRUD-level | 50 |
-| **assets** | 1 | 1 | 1 | 4 | 3 | CRUD + disposal reactor | 54 |
-| **amc** | 1 | 2 | 1 | 3 | 3 | Work-order lifecycle, wired to finance | 56 |
+| ▲ **hse** | 1 | 1 | 1 | 5 | 5 | **Governed permit-to-work (3 approval gates) + incident investigation** | **68** |
+| ▲ **fleet** | 1 | 1 | 1 | 5 | 3 | **Governed traffic-fine recovery incl. dispute resolution** | **62** |
+| ▲ **assets** | 1 | 1 | 1 | 5 | 5 | **Governed lifecycle + disposal gate on open maintenance** | **66** |
+| ▲ **amc** | 1 | 2 | 1 | 4 | 5 | **Governed work order + contract gate + stamped SLA outcome** | **68** |
 | ▲ **commissioning** | 2 | 1 | 2 | 3 | 2 | **Test sheet + punch list + retest gate on the handover spine** | **62** |
 | **market-intelligence** | 2 | 1 | 1 | 2 | 0 | Backend-only | 44 |
 | **intelligence** | 1 | 0 | 0 | 0 | 1 | Aggregation/AI surface, no store | 40 |
@@ -63,6 +63,6 @@ Full A–M treatment for the deepest verticals is in the domain docs (`09` finan
 ## Key inventory findings
 
 - **`VERIFIED_IMPLEMENTED`** — 20 modules are real domain packages wired into the host, each with Postgres persistence.
-- **`PARTIALLY_IMPLEMENTED`** — hse, fleet, assets, amc, market-intelligence, intelligence: data/store depth exceeds UI/orchestration depth. *(Rev 2: engineering, doccontrol, quality and site have left this list.)*
+- **`PARTIALLY_IMPLEMENTED`** — market-intelligence, intelligence: backend/aggregation surfaces with no completable journey. *(Rev 2: engineering, doccontrol, quality and site left this list; Rev 2.2 hse; Rev 2.3 fleet, assets and amc — every business module that owns a lifecycle now enforces it.)*
 - **Depth asymmetry was the Rev 1 headline gap — it is now substantially narrowed.** The "sell" half (CRM→tender→contract→finance) remains enterprise-shaped; the "deliver" half (engineering→doccontrol→site→QA→commissioning→handover) is **no longer CRUD-shaped**: each stage now has an enforced state machine, child-record depth, and a completable in-app journey backed by browser E2E.
-- **Rev 2 residual asymmetry:** the remaining CRUD-level modules are **hse, fleet, assets, amc** (plus the two intelligence surfaces). Of these, **HSE is the most material** for an ELV/construction operator — incidents, observations and permits are still CRUD with no permit-to-work or risk-assessment workflow engine (`10`). This is the sharpest remaining instance of the original gap and is where G-08's residue now sits (`18`).
+- **Rev 2.3: the asymmetry is gone.** Every module that owns a business lifecycle now enforces it with a state machine, a gate that refuses the unsafe or incoherent transition, and a completable in-app journey backed by browser E2E. What remains under-surfaced is **market-intelligence** (backend-only, 0 pages) and **intelligence** (an aggregation surface with no store) — neither owns a lifecycle, so neither belongs to G-08, which is now **closed** (`18`).

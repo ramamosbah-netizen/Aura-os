@@ -5,8 +5,8 @@
 | Tier | Rev 1 | **Rev 2** | Location |
 |---|--:|--:|---|
 | Source test files (all tiers) | 249 | **262** | `find … -name '*.test.ts'` excl. dist/node_modules |
-| **API E2E (Supertest)** | **33** | **42** | `apps/api/test/*.e2e-spec.ts` (Rev 2.2 +`hse-permit-workflow`) |
-| **Browser E2E (Playwright)** | **1** | **12** | `apps/web/e2e/*.spec.ts` (Rev 2.1 +`spine-journey`; Rev 2.2 +`permit-workflow`) |
+| **API E2E (Supertest)** | **33** | **43** | `apps/api/test/*.e2e-spec.ts` (Rev 2.2 +`hse-permit-workflow`; Rev 2.3 +`asset-amc-fleet-workflow`) |
+| **Browser E2E (Playwright)** | **1** | **13** | `apps/web/e2e/*.spec.ts` (Rev 2.1 +`spine-journey`; Rev 2.2 +`permit-workflow`; Rev 2.3 +`amc-asset-fleet`) |
 | Architecture fitness tests | 2 | 2 | `architecture.fitness.test.ts`, `error-taxonomy.fitness.test.ts` |
 
 Runner: **Vitest** (unit + API e2e via `vitest.config.e2e.ts`) + **Playwright** (web). Coverage runs in CI (`pnpm test:coverage`) — a coverage *percentage* was not computed in this audit (`NOT VERIFIED`, unchanged at Rev 2).
@@ -50,7 +50,7 @@ The +7 is 6 new spine tests plus `offline-sync:168`, which passed in that run.
 | Gap | Rev 2 status | Impact |
 |---|---|---|
 | ~~No browser E2E over the spine journey~~ **DELIVERED (Rev 2.1)** | `VERIFIED_IMPLEMENTED` — G-03 gate still open on its `login →` leg only | `spine-journey.spec.ts` creates + reads all six spine records through the real UI. Suite 27→34 passing. The spine net now exists; what is missing is an **authenticated** run (blocked on grant seeding, see `18`) |
-| **API E2E back-half coverage** | `PARTIALLY_IMPLEMENTED` (improved) | +9 specs: engineering, quality, doccontrol, site, commissioning, compliance, ELV devices, RBAC tenant isolation, **HSE (Rev 2.2)**. **fleet, assets, amc, inventory still lack E2E** |
+| ~~API E2E back-half coverage~~ **COMPLETE (Rev 2.3)** | `VERIFIED_IMPLEMENTED` | +10 specs: engineering, quality, doccontrol, site, commissioning, compliance, ELV devices, RBAC tenant isolation, HSE, **amc/assets/fleet**. **Only inventory still lacks E2E** |
 | Coverage % unproven here | `NOT VERIFIED` (unchanged) | CI computes it but no threshold gate observed |
 | No load/performance tests | `MISSING` (unchanged) | Scale behavior unmeasured (`16`) |
 | No security/DAST tests | `MISSING` (improved slightly) | `rbac-tenant-isolation.e2e-spec.ts` added; still no systematic authz-bypass/IDOR suite beyond it and `sod.e2e` |
@@ -74,13 +74,16 @@ The +7 is 6 new spine tests plus `offline-sync:168`, which passed in that run.
 | ▲ RBAC tenant isolation | ✅ (`rbac-tenant-isolation`) | ❌ | API-covered (Rev 2) |
 | ▲▲ Permit to work → approve → close | ✅ (`hse-permit-workflow`) | ✅ (`permit-workflow`) | **Fully covered (Rev 2.2)** — incl. all three approval refusals |
 | ▲▲ Incident → investigate → CAPA gate → close | ✅ (`hse-permit-workflow`) | ❌ | API-covered (Rev 2.2) |
+| ▲▲▲ Work order → assign → complete (SLA stamped) | ✅ (`asset-amc-fleet-workflow`) | ✅ (`amc-asset-fleet`) | **Fully covered (Rev 2.3)** |
+| ▲▲▲ Asset → maintenance → disposal gate | ✅ (`asset-amc-fleet-workflow`) | ✅ (`amc-asset-fleet`) | **Fully covered (Rev 2.3)** |
+| ▲▲▲ Traffic fine → dispute → resolve | ✅ (`asset-amc-fleet-workflow`) | ✅ (`amc-asset-fleet`) | **Fully covered (Rev 2.3)** |
 
 **The inversion is resolved (Rev 2.1).** At Rev 1 the spine was the well-tested half and the delivery half untested; at Rev 2 that had inverted, with browser proof only on the delivery half. Both halves now carry browser-level journey proof. The remaining asymmetry is depth, not existence: the spine specs prove create+read, the delivery-half specs prove full state-machine transitions.
 
 ## Recommendations
 
 1. ~~**P0:** add a browser smoke suite for the **spine** journeys.~~ **DELIVERED (Rev 2.1)** for create+read — `spine-journey.spec.ts`. **Remaining:** the `login →` leg, which needs a dev-grant seeding decision (see `18` G-03), not more spec-writing.
-2. **P1:** extend API E2E to the four remaining CRUD modules (hse/fleet/assets/amc) and inventory.
+2. ~~**P1:** extend API E2E to the four remaining CRUD modules (hse/fleet/assets/amc) and inventory.~~ **Done for all four (Rev 2.2–2.3); only inventory remains.**
 3. **P1:** set a coverage floor gate in CI; add authz-bypass/IDOR tests beyond `rbac-tenant-isolation` and `sod`.
 4. **P2:** add load tests targeting the search fan-out and list endpoints (`16`).
 5. **P2 (Rev 2):** reconsider the `test.skip`-on-502/404 guard in the workflow specs — it makes an unreachable API look like a pass at the spec level.

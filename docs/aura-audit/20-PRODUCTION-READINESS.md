@@ -12,7 +12,7 @@ Each dimension scored 0–100 from **repository evidence only**. Weights reflect
 | Database | 9 | 84 | 7.56 | 84 | 7.56 | `04` |
 | Security | 12 | 71 | 8.52 | **74** | **8.88** | `07` |
 | Multi-tenancy | 10 | 83 | 8.30 | 83 | 8.30 | `08` |
-| ERP functionality | 8 | 66 | 5.28 | **72** | **5.76** | `09`–`12` |
+| ERP functionality | 8 | 66 | 5.28 | **76** | **6.08** | `09`–`12` |
 | Workflow integrity | 7 | 72 | 5.04 | **75** | **5.25** | `03` |
 | Testing | 8 | 62 | 4.96 | **72** ᴿ²·¹ | **5.76** | `14` |
 | DevOps | 5 | 80 | 4.00 | 80 | 4.00 | `15` |
@@ -21,9 +21,9 @@ Each dimension scored 0–100 from **repository evidence only**. Weights reflect
 | UX | 3 | 62 | 1.86 | **66** | **1.98** | `06` |
 | Data integrity | 3 | 74 | 2.22 | **76** | **2.28** | `04` |
 | Documentation | 1 | 80 | 0.80 | 80 | 0.80 | ADRs/reports |
-| **Total** | **100** | — | **73.4** | — | **75.7** | |
+| **Total** | **100** | — | **73.4** | — | **76.1** | |
 
-**Reported overall: ~68/100 — unchanged at Rev 2/2.1.** The weighted arithmetic yields **73.4 at Rev 1 and 75.7 at Rev 2.1**, adjusted **down to ~68** by a **production-gate penalty**: the three P0 blockers (unverified prod RLS, config-gated auth, no spine UI E2E) are *go/no-go* conditions whose failure would invalidate the higher architecture/tenancy scores in practice. Until they are closed, effective readiness is below the component average.
+**Reported overall: ~68/100 — unchanged at Rev 2/2.1.** The weighted arithmetic yields **73.4 at Rev 1 and 76.1 at Rev 2.3**, adjusted **down to ~68** by a **production-gate penalty**: the three P0 blockers (unverified prod RLS, config-gated auth, no spine UI E2E) are *go/no-go* conditions whose failure would invalidate the higher architecture/tenancy scores in practice. Until they are closed, effective readiness is below the component average.
 
 > **Why the headline did not move.** All three P0s remain open. G-01/G-02 are untouched runtime/ops state. G-03 came closest: Rev 2.1 delivered the spine suite and it passes, but its acceptance reads *"login → create+read"*, and the authenticated leg is blocked on a grant-seeding decision (`18` G-03). **A gate is binary — and that rule is applied to this audit's own work too:** shipping most of a gate does not release the penalty.
 >
@@ -43,7 +43,7 @@ Each dimension scored 0–100 from **repository evidence only**. Weights reflect
 | Prod has auth verifier + `AUTH_REQUIRED=true` | **NOT VERIFIED** (unchanged) | **P0 (G-02)** |
 | ▲ Browser smoke E2E **on spine journeys** | **DELIVERED (Rev 2.1)** — `spine-journey.spec.ts`, all six records created + read through the UI. **Gate still open on the `login →` leg only** (blocked on grant seeding, coupled to G-02) | **P0 (G-03)** |
 | ▲ Browser E2E on delivery-half workflows | **DONE** (Rev 2 — 5 specs, CI runs them against a live API) | ✅ |
-| ▲ Delivery-half completable in-app journeys | **DONE** (Rev 2 — PRs #205–#209) | ✅ |
+| ▲ Delivery-half completable in-app journeys | **DONE** (Rev 2 — PRs #205–#209; extended to HSE at Rev 2.2 and amc/assets/fleet at Rev 2.3 — **G-08 closed**) | ✅ |
 | ▲ Rate limiting + CORS allowlist | **DONE** (Rev 2) — `EdgeRateLimitGuard` is a global guard (`main.ts:59-60`); `resolveCors` enforces a `CORS_ALLOWED_ORIGINS` allowlist (`main.ts:55-57`). *Per-env value still ops state* | ✅ (G-07 closed) |
 | Error-state semantics fixed | **OPEN** (unchanged) | P1 (G-05) |
 | Backup/restore rehearsed | **DONE** (CI restore drill) | ✅ |

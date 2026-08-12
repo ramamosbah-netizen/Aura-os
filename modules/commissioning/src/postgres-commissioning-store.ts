@@ -3,6 +3,8 @@ import type { Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { CommissioningStore } from './store.interface';
 import type { CommissioningRecord, CommissioningStatus, ElvSystem } from './domain/commissioning-record';
+import type { CommissioningTestItem } from './domain/commissioning-test-item';
+import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
 // Postgres adapter for Commissioning. The domain is a plain interface (no class rehydration),
@@ -186,6 +188,68 @@ export class PostgresCommissioningStore implements CommissioningStore {
         );
     return res.rows.map(toHandover);
   }
+
+  // ── Test-sheet items ─────────────────────────────────────────────────────────
+
+  async saveTestItem(i: CommissioningTestItem): Promise<void> {
+    await this.pool.query(
+      `insert into public.aura_commissioning_test_items
+        (id, tenant_id, company_id, commissioning_id, project_id, point_no, description, expected, actual, result, remarks, tested_by, tested_at, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       on conflict (id) do update set actual = excluded.actual, result = excluded.result, remarks = excluded.remarks, tested_by = excluded.tested_by, tested_at = excluded.tested_at`,
+      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.pointNo, i.description, i.expected, i.actual, i.result, i.remarks, i.testedBy, i.testedAt, i.createdAt],
+    );
+  }
+  async findTestItem(id: string, tenantId: string): Promise<CommissioningTestItem | null> {
+    const res = await this.pool.query(`select * from public.aura_commissioning_test_items where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rowCount === 0 ? null : toTestItem(res.rows[0]);
+  }
+  async listTestItems(commissioningId: string, tenantId: string): Promise<CommissioningTestItem[]> {
+    const res = await this.pool.query(`select * from public.aura_commissioning_test_items where commissioning_id = $1 and tenant_id = $2 order by created_at asc`, [commissioningId, tenantId]);
+    return res.rows.map(toTestItem);
+  }
+
+  // ── Punch list ───────────────────────────────────────────────────────────────
+
+  async savePunchItem(i: PunchItem): Promise<void> {
+    await this.pool.query(
+      `insert into public.aura_commissioning_punch_items
+        (id, tenant_id, company_id, commissioning_id, project_id, description, severity, location, status, raised_by, resolution, closed_by, closed_at, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       on conflict (id) do update set status = excluded.status, resolution = excluded.resolution, closed_by = excluded.closed_by, closed_at = excluded.closed_at, updated_at = excluded.updated_at`,
+      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.description, i.severity, i.location, i.status, i.raisedBy, i.resolution, i.closedBy, i.closedAt, i.createdAt, i.updatedAt],
+    );
+  }
+  async findPunchItem(id: string, tenantId: string): Promise<PunchItem | null> {
+    const res = await this.pool.query(`select * from public.aura_commissioning_punch_items where id = $1 and tenant_id = $2`, [id, tenantId]);
+    return res.rowCount === 0 ? null : toPunch(res.rows[0]);
+  }
+  async listPunchItems(commissioningId: string, tenantId: string): Promise<PunchItem[]> {
+    const res = await this.pool.query(`select * from public.aura_commissioning_punch_items where commissioning_id = $1 and tenant_id = $2 order by created_at asc`, [commissioningId, tenantId]);
+    return res.rows.map(toPunch);
+  }
+}
+
+const tsIso = (v: unknown): string | null => (v == null ? null : typeof v === 'string' ? v : new Date(v as string).toISOString());
+
+function toTestItem(r: Record<string, unknown>): CommissioningTestItem {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    commissioningId: r.commissioning_id as string, projectId: r.project_id as string,
+    pointNo: r.point_no as string, description: r.description as string, expected: (r.expected as string) ?? null,
+    actual: (r.actual as string) ?? null, result: r.result as CommissioningTestItem['result'], remarks: (r.remarks as string) ?? null,
+    testedBy: (r.tested_by as string) ?? null, testedAt: tsIso(r.tested_at), createdAt: tsIso(r.created_at) as string,
+  };
+}
+
+function toPunch(r: Record<string, unknown>): PunchItem {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    commissioningId: r.commissioning_id as string, projectId: r.project_id as string,
+    description: r.description as string, severity: r.severity as PunchItem['severity'], location: (r.location as string) ?? null,
+    status: r.status as PunchItem['status'], raisedBy: (r.raised_by as string) ?? null, resolution: (r.resolution as string) ?? null,
+    closedBy: (r.closed_by as string) ?? null, closedAt: tsIso(r.closed_at), createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
+  };
 }
 
 interface HandoverRow {

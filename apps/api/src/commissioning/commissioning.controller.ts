@@ -4,6 +4,9 @@ import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type CommissioningRecord,
+  type CommissioningTestItem,
+  type PunchItem,
+  type PunchSeverity,
   type ElvSystem,
   CommissioningService,
 } from '@aura/commissioning';
@@ -32,6 +35,25 @@ class CommissionDto {
 
 class FailDto {
   @IsString() reason!: string;
+}
+
+class TestItemDto {
+  @IsString() pointNo!: string;
+  @IsString() description!: string;
+  @IsOptional() @IsString() expected?: string;
+}
+class TestResultDto {
+  @IsString() result!: 'pass' | 'fail';
+  @IsOptional() @IsString() actual?: string;
+  @IsOptional() @IsString() remarks?: string;
+}
+class PunchDto {
+  @IsString() description!: string;
+  @IsOptional() @IsString() severity?: PunchSeverity;
+  @IsOptional() @IsString() location?: string;
+}
+class ClosePunchDto {
+  @IsString() resolution!: string;
 }
 
 /**
@@ -114,5 +136,55 @@ export class CommissioningController {
   fail(@Param('id') id: string, @Body() dto: FailDto): Promise<CommissioningRecord> {
     if (!dto?.reason?.trim()) throw new BadRequestException('reason is required');
     return this.service.fail(id, this.tenant.get().tenantId, dto.reason);
+  }
+
+  /** The commissioning 360: the record with its test sheet + punch list. */
+  @Get(':id/detail')
+  async detail(@Param('id') id: string) {
+    const found = await this.service.getDetail(id, this.tenant.get().tenantId);
+    if (!found) throw new NotFoundException(`commissioning record ${id} not found`);
+    return found;
+  }
+
+  // ── Test sheet ───────────────────────────────────────────────────────────────
+
+  @Get(':id/test-items')
+  listTestItems(@Param('id') id: string): Promise<CommissioningTestItem[]> {
+    return this.service.listTestItems(id, this.tenant.get().tenantId);
+  }
+
+  @Post(':id/test-items')
+  addTestItem(@Param('id') id: string, @Body() dto: TestItemDto): Promise<CommissioningTestItem> {
+    if (!dto?.pointNo?.trim()) throw new BadRequestException('pointNo is required');
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    return this.service.addTestItem(id, this.tenant.get().tenantId, { pointNo: dto.pointNo, description: dto.description, expected: dto.expected ?? null });
+  }
+
+  @Put(':id/test-items/:itemId/result')
+  recordResult(@Param('id') id: string, @Param('itemId') itemId: string, @Body() dto: TestResultDto): Promise<CommissioningTestItem> {
+    if (dto?.result !== 'pass' && dto?.result !== 'fail') throw new BadRequestException('result must be pass or fail');
+    const ctx = this.tenant.get();
+    return this.service.recordTestResult(id, itemId, ctx.tenantId, { result: dto.result, actual: dto.actual ?? null, remarks: dto.remarks ?? null, testedBy: ctx.actorId });
+  }
+
+  // ── Punch list ───────────────────────────────────────────────────────────────
+
+  @Get(':id/punch')
+  listPunch(@Param('id') id: string): Promise<PunchItem[]> {
+    return this.service.listPunchItems(id, this.tenant.get().tenantId);
+  }
+
+  @Post(':id/punch')
+  addPunch(@Param('id') id: string, @Body() dto: PunchDto): Promise<PunchItem> {
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    const ctx = this.tenant.get();
+    return this.service.addPunchItem(id, ctx.tenantId, { description: dto.description, severity: dto.severity, location: dto.location ?? null, raisedBy: ctx.actorId });
+  }
+
+  @Put(':id/punch/:punchId/close')
+  closePunch(@Param('id') id: string, @Param('punchId') punchId: string, @Body() dto: ClosePunchDto): Promise<PunchItem> {
+    if (!dto?.resolution?.trim()) throw new BadRequestException('resolution is required');
+    const ctx = this.tenant.get();
+    return this.service.closePunchItem(id, punchId, ctx.tenantId, { resolution: dto.resolution, closedBy: ctx.actorId });
   }
 }

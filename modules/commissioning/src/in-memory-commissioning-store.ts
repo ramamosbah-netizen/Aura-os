@@ -2,12 +2,42 @@ import type { Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { CommissioningStore } from './store.interface';
 import type { CommissioningRecord } from './domain/commissioning-record';
+import type { CommissioningTestItem } from './domain/commissioning-test-item';
+import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
 /** Dev/test adapter — in-memory, non-persistent. Mirrors the Postgres adapter's ordering. */
 export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly records = new Map<string, CommissioningRecord>();
+  private readonly testItems = new Map<string, CommissioningTestItem>();
+  private readonly punchItems = new Map<string, PunchItem>();
   private readonly handovers = new Map<string, HandoverPackage>();
+
+  async saveTestItem(item: CommissioningTestItem): Promise<void> {
+    this.testItems.set(item.id, { ...item });
+  }
+  async findTestItem(id: string, tenantId: string): Promise<CommissioningTestItem | null> {
+    const i = this.testItems.get(id);
+    return i && i.tenantId === tenantId ? { ...i } : null;
+  }
+  async listTestItems(commissioningId: string, tenantId: string): Promise<CommissioningTestItem[]> {
+    return [...this.testItems.values()]
+      .filter((i) => i.commissioningId === commissioningId && i.tenantId === tenantId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async savePunchItem(item: PunchItem): Promise<void> {
+    this.punchItems.set(item.id, { ...item });
+  }
+  async findPunchItem(id: string, tenantId: string): Promise<PunchItem | null> {
+    const i = this.punchItems.get(id);
+    return i && i.tenantId === tenantId ? { ...i } : null;
+  }
+  async listPunchItems(commissioningId: string, tenantId: string): Promise<PunchItem[]> {
+    return [...this.punchItems.values()]
+      .filter((i) => i.commissioningId === commissioningId && i.tenantId === tenantId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
 
   async save(record: CommissioningRecord): Promise<void> {
     this.records.set(record.id, { ...record });

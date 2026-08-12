@@ -127,7 +127,7 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
           <p style={st.muted}>{contracts.length === 0 ? 'No contracts yet — win a tender or convert an accepted quotation.' : 'Nothing matches the filter.'}</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: 1000 }}>
+            <table className="data-table" style={{ minWidth: 1000 }} data-testid="contracts-register">
               <thead><tr>
                 {['Contract', 'Client', 'Value', 'Status', 'Chain', 'Bonds', 'Awarded', 'Actions'].map((h) => <th key={h}>{h}</th>)}
               </tr></thead>

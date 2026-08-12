@@ -137,7 +137,7 @@ export default function InvoicesList({
       {err && <div style={s.errorBar}>{err}</div>}
 
       <div style={s.panel}>
-        <table style={s.table}>
+        <table style={s.table} data-testid="invoices-list">
           <thead>
             <tr>
               <th style={s.th}>Invoice</th>

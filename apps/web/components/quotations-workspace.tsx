@@ -114,7 +114,7 @@ function Overview({ m }: { m: OverviewShape }) {
             ? <p style={st.muted}>Nothing in internal review.</p>
             : m.pendingApproval.map((q) => <QuoteRow key={q.id} q={q} right={`AED ${aed(q.total)}`} />)}
         </section>
-        <section className="panel" style={st.panel}>
+        <section className="panel" style={st.panel} data-testid="quotations-recent">
           <h3 style={st.h3}>Recent quotations</h3>
           {m.recent.length === 0
             ? <EmptyState compact title="No quotations yet" description="Quotations you create appear here across their full lifecycle." />

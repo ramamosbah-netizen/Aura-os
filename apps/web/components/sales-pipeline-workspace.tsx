@@ -68,7 +68,7 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
           const badge = t.id === 'radar' ? openSignals : t.id === 'overview' ? attention : 0;
           const active = tab === t.id;
           return (
-            <button key={t.id} type="button" role="tab" aria-selected={active} title={t.hint}
+            <button key={t.id} type="button" role="tab" aria-selected={active} title={t.hint} data-testid={`pipeline-tab-${t.id}`}
               style={{ ...st.tab, ...(active ? st.tabOn : {}) }} onClick={() => setTab(t.id)}>
               <span style={{ fontSize: 14 }}>{t.icon}</span>
               {t.label}

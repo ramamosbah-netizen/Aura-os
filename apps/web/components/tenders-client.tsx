@@ -33,7 +33,7 @@ const ACTIVE_STATUSES = ['draft', 'qualifying', 'estimating', 'priced'];
 const SOURCE_LABELS: Record<string, string> = { invitation: 'Invitation', public: 'Public', private: 'Private', opportunity: 'Opportunity' };
 
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 
 export default function TendersClient({ tenders, accounts, sheets, quotations, contracts }: {
   tenders: Tender[];

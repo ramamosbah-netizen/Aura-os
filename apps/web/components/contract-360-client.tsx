@@ -44,7 +44,7 @@ interface QuotationLite { id: string; quoteNumber: string; status: string; conve
 type Tab = 'obligations' | 'bonds' | 'certificates';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 const BOND_KIND_LABEL: Record<string, string> = {
   performance: 'Performance bond', advance_payment: 'Advance payment guarantee',
   retention: 'Retention bond', warranty: 'Warranty bond', tender_bond: 'Tender bond',

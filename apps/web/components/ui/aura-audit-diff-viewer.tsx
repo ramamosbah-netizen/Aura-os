@@ -45,7 +45,7 @@ export default function AuraAuditDiffViewer({
             <div style={st.meta}>
               <span>Entity: <strong>{entityType} ({entityId})</strong></span> ·{' '}
               <span>Actor: <strong>{actorName}</strong></span>
-              {timestamp && <span> · <strong>{new Date(timestamp).toLocaleString()}</strong></span>}
+              {timestamp && <span> · <strong>{new Date(timestamp).toLocaleString('en-AE')}</strong></span>}
             </div>
           </div>
           <button type="button" style={st.closeBtn} onClick={onClose}>✕</button>

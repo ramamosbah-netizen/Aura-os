@@ -47,7 +47,7 @@ const RELATED_HREF: Record<string, (id: string) => string> = {
   quotation: () => '/crm/quotations',
 };
 
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 
 const RELATED_TYPE_LABEL: Record<string, string> = {
   opportunity: '◎ Opportunities', account: '◆ Accounts', contact: '☎ Contacts', lead: '⌥ Leads', quotation: '✎ Quotations',

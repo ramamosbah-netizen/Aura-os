@@ -163,7 +163,7 @@ export default function ClauseLibraryClient({ initialClauses }: { initialClauses
                       <td colSpan={7} style={st.bodyCell}>
                         <pre style={st.body}>{c.body}</pre>
                         <div style={st.metaLine}>
-                          Revision {c.revision} · updated {new Date(c.updatedAt).toLocaleDateString()}
+                          Revision {c.revision} · updated {new Date(c.updatedAt).toLocaleDateString('en-AE')}
                         </div>
                       </td>
                     </tr>

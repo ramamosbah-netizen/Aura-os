@@ -31,7 +31,7 @@ interface CertSummary { grossCertifiedToDate: number; retentionHeld: number; per
 type Tab = 'variations' | 'eot' | 'closeout';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 
 export default function Project360Client({ project }: { project: Project }) {
   const router = useRouter();

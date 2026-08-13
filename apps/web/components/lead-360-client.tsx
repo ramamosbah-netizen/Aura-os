@@ -46,7 +46,7 @@ const scoreTone = (n: number): Tone => (n >= 70 ? 'good' : n >= 40 ? 'warn' : 'b
 const scoreColor = (n: number): string => (n >= 70 ? 'var(--good)' : n >= 40 ? 'var(--warn, var(--warn))' : 'var(--bad)');
 const statusTone = (s: string): Tone => (s === 'converted' ? 'good' : s === 'disqualified' ? 'bad' : s === 'qualified' ? 'accent' : 'neutral');
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
-const d = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString() : '—');
+const d = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString('en-AE') : '—');
 const daysSince = (iso: string): number => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
 export default function Lead360Client({ lead, qualification, accounts }: {

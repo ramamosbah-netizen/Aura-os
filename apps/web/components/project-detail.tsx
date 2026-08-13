@@ -33,7 +33,7 @@ function money(n: number): string {
 
 function fmtDate(iso: string): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString('en-AE');
 }
 
 export default function ProjectDetail({

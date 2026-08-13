@@ -38,7 +38,7 @@ function money(n: number): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'short' });
+  return new Date(iso).toLocaleDateString('en-AE', { dateStyle: 'short' });
 }
 
 export default function SubcontractsList({

@@ -13,7 +13,7 @@ interface PeriodClose {
 }
 
 function fmt(iso: string) {
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString('en-AE');
 }
 
 export default function PeriodCloseClient({ initialCloses }: { initialCloses: PeriodClose[] }) {

@@ -245,7 +245,7 @@ export default function CommissioningClient({
 
                   {done ? (
                     <p style={st.signoff}>
-                      ✓ Commissioned {r.commissionedAt ? new Date(r.commissionedAt).toLocaleDateString() : ''} — by <strong>{r.commissionedBy}</strong>, witnessed by <strong>{r.witnessedBy}</strong>
+                      ✓ Commissioned {r.commissionedAt ? new Date(r.commissionedAt).toLocaleDateString('en-AE') : ''} — by <strong>{r.commissionedBy}</strong>, witnessed by <strong>{r.witnessedBy}</strong>
                     </p>
                   ) : (
                     <div style={st.actions}>

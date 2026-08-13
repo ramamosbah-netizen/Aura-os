@@ -364,8 +364,8 @@ export default function HseControlClient({
                     <tr key={p.id}>
                       <td style={st.tdCode}>{p.permitType}</td>
                       <td style={st.tdMuted}>{p.projectName || '—'}</td>
-                      <td style={st.tdMuted}>{new Date(p.validFrom).toLocaleString()}</td>
-                      <td style={st.tdMuted}>{new Date(p.validTo).toLocaleString()}</td>
+                      <td style={st.tdMuted}>{new Date(p.validFrom).toLocaleString('en-AE')}</td>
+                      <td style={st.tdMuted}>{new Date(p.validTo).toLocaleString('en-AE')}</td>
                       <td style={st.td}>{p.description}</td>
                       <td style={st.td}>
                         <span style={p.status === 'approved' ? st.tagApproved : p.status === 'closed' ? st.tagMuted : st.tagPending}>

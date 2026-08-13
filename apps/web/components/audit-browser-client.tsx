@@ -125,7 +125,7 @@ export default function AuditBrowserClient() {
               <tr><td colSpan={6} style={s.loading}>No audit entries found.</td></tr>
             ) : entries.map((e) => (
               <tr key={e.id} style={s.row}>
-                <td style={s.td}>{new Date(e.created_at).toLocaleString()}</td>
+                <td style={s.td}>{new Date(e.created_at).toLocaleString('en-AE')}</td>
                 <td style={s.td}><span style={s.badge}>{e.module}</span></td>
                 <td style={s.td}><span style={s.entityTag}>{e.entity_type}:{e.entity_id}</span></td>
                 <td style={s.td}><span style={{ ...s.actionBadge, color: actionColor(e.action) }}>{e.action}</span></td>

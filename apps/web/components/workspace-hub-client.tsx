@@ -486,7 +486,7 @@ function MailPane({ me, users, mailbox, onChanged }: {
             <div style={st.mailMeta}>
               <span style={{ ...st.avatar(26), background: avatarColor(open.from) }}>{displayName(open.from)[0]}</span>
               <span><strong>{displayName(open.from)}</strong> → {open.to.map(displayName).join(', ')}</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{new Date(open.sentAt).toLocaleString()}</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{new Date(open.sentAt).toLocaleString('en-AE')}</span>
             </div>
             <div style={st.mailBody}>{open.body || <em style={{ color: 'var(--muted)' }}>(no body)</em>}</div>
           </div>
@@ -557,7 +557,7 @@ function NotificationsPane({ items, onChanged }: { items: HubNotification[]; onC
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: n.read ? 500 : 700, fontSize: 14 }}>{n.title}</div>
               {n.body ? <div style={st.inboxDetail}>{n.body}</div> : null}
-              <div style={{ ...st.channelTime, marginTop: 4 }}>{new Date(n.createdAt).toLocaleString()}</div>
+              <div style={{ ...st.channelTime, marginTop: 4 }}>{new Date(n.createdAt).toLocaleString('en-AE')}</div>
             </div>
             {!n.read ? (
               <button type="button" style={st.ghostBtn} disabled={busy} onClick={() => void markRead(n.id)}>Mark read</button>

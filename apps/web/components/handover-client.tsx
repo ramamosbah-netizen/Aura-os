@@ -214,7 +214,7 @@ export default function HandoverClient({
 
                   {accepted ? (
                     <p style={st.signoff}>
-                      ✓ Accepted {p.acceptedAt ? new Date(p.acceptedAt).toLocaleDateString() : ''} by <strong>{p.clientRepresentative}</strong>
+                      ✓ Accepted {p.acceptedAt ? new Date(p.acceptedAt).toLocaleDateString('en-AE') : ''} by <strong>{p.clientRepresentative}</strong>
                       {p.warrantyStartDate ? ` — warranty: ${p.warrantyMonths ?? 12} months from ${p.warrantyStartDate}` : ''}
                     </p>
                   ) : (

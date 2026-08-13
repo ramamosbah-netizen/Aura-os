@@ -543,7 +543,7 @@ export default function FleetControlClient({
                         <td style={st.tdCode}>{v.lastLongitude}</td>
                         <td style={st.tdBold}>{v.lastSpeed} km/h</td>
                         <td style={st.tdCode}>{v.lastOdometer?.toLocaleString()} km</td>
-                        <td style={st.tdMuted}>{v.lastTelemetryAt ? new Date(v.lastTelemetryAt).toLocaleString() : '—'}</td>
+                        <td style={st.tdMuted}>{v.lastTelemetryAt ? new Date(v.lastTelemetryAt).toLocaleString('en-AE') : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

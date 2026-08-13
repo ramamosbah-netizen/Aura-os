@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 
 interface Notification { id: string; title: string; body: string; category: string; read: boolean; createdAt: string }
 
-function fmt(iso: string) { return new Date(iso).toLocaleString(); }
+function fmt(iso: string) { return new Date(iso).toLocaleString('en-AE'); }
 
 export default function NotificationsClient({ initial }: { initial: Notification[] }) {
   const router = useRouter();

@@ -35,7 +35,7 @@ function money(n: number): string {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  return new Date(iso).toLocaleString('en-AE', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 export default function LedgerView({

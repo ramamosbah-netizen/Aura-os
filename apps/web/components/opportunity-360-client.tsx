@@ -52,7 +52,7 @@ interface Payload {
 }
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
-const d = (iso: string): string => new Date(iso).toLocaleDateString();
+const d = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 
 const STAGE_OPTIONS = ['qualification', 'proposal', 'negotiation', 'won', 'lost'];
 // The execution fork — how this opportunity is delivered once discovery is done.

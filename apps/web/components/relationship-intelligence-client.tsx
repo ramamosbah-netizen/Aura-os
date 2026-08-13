@@ -40,7 +40,7 @@ export const SEV = {
   low: { label: 'Low', color: 'var(--muted)' },
 } as const;
 
-const fmt = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString() : '—');
+const fmt = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString('en-AE') : '—');
 
 export default function RelationshipIntelligenceClient({ data }: { data: AlertsPayload | null }) {
   const [kind, setKind] = useState('');

@@ -50,7 +50,7 @@ interface Payload {
 type Tab = 'overview' | 'deals' | 'activity';
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
-const d = (iso: string): string => new Date(iso).toLocaleDateString();
+const d = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 function ago(iso: string | null): string {
   if (!iso) return 'never';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);

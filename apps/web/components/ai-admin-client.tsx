@@ -596,7 +596,7 @@ export default function AiAdminClient({ initialStatus }: { initialStatus: AiStat
               ) : (
                 messages.map((m) => (
                   <div key={m.id} style={st.traceRow}>
-                    <span style={st.code}>{new Date(m.timestamp).toLocaleTimeString()}</span>
+                    <span style={st.code}>{new Date(m.timestamp).toLocaleTimeString('en-AE')}</span>
                     <span style={{ fontWeight: 700, fontSize: 12.5 }}>{m.fromAgent} ➔ {m.toAgent}</span>
                     <span style={{ flex: 1, fontSize: 12.5 }}>Task: <b>{m.task}</b></span>
                     <Pill tone="good">Confidence: {m.confidenceScorePercent}%</Pill>

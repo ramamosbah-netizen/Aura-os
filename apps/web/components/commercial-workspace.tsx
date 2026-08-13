@@ -46,7 +46,7 @@ const TAB_DEFS: Array<{ id: Tab; label: string; icon: string; hint: string }> = 
 
 const OPEN_STATUSES = ['draft', 'internal_review', 'approved', 'sent', 'under_negotiation'];
 const aed = (n: number): string => 'AED ' + (n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 const cap = (s: string): string => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
 export default function CommercialWorkspace({ quotations, contracts, sheets, evidence = [], requirements = [], apiDown }: {

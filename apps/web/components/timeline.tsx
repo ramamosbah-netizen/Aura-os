@@ -17,7 +17,7 @@ interface TimelineEntry {
 }
 
 const TONE: Record<string, string> = { good: 'var(--good)', bad: 'var(--bad)', accent: 'var(--accent)', muted: 'var(--muted)' };
-const fmt = (iso: string): string => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const fmt = (iso: string): string => new Date(iso).toLocaleString('en-AE', { dateStyle: 'medium', timeStyle: 'short' });
 
 export default function Timeline({ recordId, limit = 50 }: { recordId: string; limit?: number }) {
   const [entries, setEntries] = useState<TimelineEntry[] | null>(null);

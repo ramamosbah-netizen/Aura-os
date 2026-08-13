@@ -154,7 +154,7 @@ export default function UserAiWorkspace({ userRole = 'you' }: UserAiWorkspacePro
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                   {p.valueAmount != null && <span style={{ fontSize: 12.5, fontWeight: 600 }}>{aed(p.valueAmount)}</span>}
                   {p.targetModule && <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>→ {p.targetModule}</span>}
-                  <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{new Date(p.createdAt).toLocaleDateString()}</span>
+                  <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{new Date(p.createdAt).toLocaleDateString('en-AE')}</span>
                   {p.status === 'pending' && (
                     <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
                       <button type="button" disabled={busyId === p.id} onClick={() => void decide(p.id, 'execute')} style={st.btnApprove}>

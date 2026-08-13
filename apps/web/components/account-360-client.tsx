@@ -77,7 +77,7 @@ interface Payload {
 type Tab = 'overview' | 'contacts' | 'opportunities' | 'tenders' | 'quotations' | 'contracts' | 'projects' | 'financials' | 'activity';
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 2 }).format(n);
-const d = (iso: string): string => new Date(iso).toLocaleDateString();
+const d = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 const monthYear = (iso: string): string => new Date(iso).toLocaleDateString('en', { month: 'short', year: 'numeric' });
 
 const STAGE_LABEL: Record<string, string> = {

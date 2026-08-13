@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { opportunityAttention } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // CRM · Sales Pipeline — the full sales cycle, with Lead and Opportunity kept
 // as SEPARATE concepts that share one board:
@@ -38,7 +39,7 @@ const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, {
 // browser, so React discards the whole subtree on hydration and re-renders it — which reads as
 // an intermittently missing element to anything driving the page. Overlaps the wider sweep in
 // PR #213; reconcile there.
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 export type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list';
 

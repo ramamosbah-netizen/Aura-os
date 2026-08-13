@@ -5,6 +5,7 @@ import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 import { PoEdit } from './po-create';
 import AuraAuditDiffViewer from './ui/aura-audit-diff-viewer';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface PurchaseOrder {
   id: string;
@@ -21,7 +22,7 @@ function money(n: number): string {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
 export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) {

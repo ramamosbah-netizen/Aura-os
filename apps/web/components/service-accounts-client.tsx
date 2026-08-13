@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { ErrorBanner, Pill } from './admin-ui';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Service accounts / API keys (Vol 15 §2.5) — the /admin/security section. Creation
 // shows the key exactly once (only its hash is stored server-side); the account acts
@@ -125,7 +126,7 @@ export default function ServiceAccountsClient() {
                 <td style={st.td}><code style={st.code}>sa:{a.id}</code></td>
                 <td style={st.td}>{a.name}</td>
                 <td style={st.td}>{a.active ? <Pill tone="good">active</Pill> : <Pill tone="bad">revoked</Pill>}</td>
-                <td style={st.td}>{a.lastUsedAt ? new Date(a.lastUsedAt).toLocaleString() : <span style={{ color: 'var(--muted)' }}>never</span>}</td>
+                <td style={st.td}>{a.lastUsedAt ? new Date(a.lastUsedAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : <span style={{ color: 'var(--muted)' }}>never</span>}</td>
                 <td style={{ ...st.td, textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {a.active ? (
                     <button className="btn" style={{ ...st.smallBtn, color: 'var(--bad)' }} disabled={busy} onClick={() => void setActive(a, false)}>

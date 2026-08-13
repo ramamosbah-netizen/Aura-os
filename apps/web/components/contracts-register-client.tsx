@@ -4,6 +4,7 @@ import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ContractCreate from './contract-create';
 import NextBestActionBanner from './ui/next-best-action-banner';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Contracts register — every awarded contract with its lifecycle, its chain
 // (tender ← contract → project) and the commercial watchpoints (bonds expiring,
@@ -29,7 +30,7 @@ const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, {
 // browser, so React discards the whole subtree on hydration and re-renders it — which reads as
 // an intermittently missing element to anything driving the page. Overlaps the wider sweep in
 // PR #213; reconcile there.
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 export default function ContractsRegisterClient({ contracts, bonds, projects, wonTenders }: {
   contracts: Contract[];

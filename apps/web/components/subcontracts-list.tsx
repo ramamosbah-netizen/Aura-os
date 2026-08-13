@@ -2,6 +2,7 @@
 
 import { type CSSProperties, Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Subcontract {
   id: string;
@@ -38,7 +39,7 @@ function money(n: number): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'short' });
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, dateStyle: 'short' });
 }
 
 export default function SubcontractsList({

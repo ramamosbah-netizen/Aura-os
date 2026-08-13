@@ -14,6 +14,7 @@ import {
   type Tone, type KpiItem, type MetaItem, type TabDef, type Insight,
   type HealthState, type NextBestAction, type WorkflowGateView,
 } from './crm/record-shell';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -52,7 +53,7 @@ interface Payload {
 }
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
-const d = (iso: string): string => new Date(iso).toLocaleDateString();
+const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 const STAGE_OPTIONS = ['qualification', 'proposal', 'negotiation', 'won', 'lost'];
 // The execution fork — how this opportunity is delivered once discovery is done.

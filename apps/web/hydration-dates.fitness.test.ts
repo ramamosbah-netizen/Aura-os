@@ -36,10 +36,21 @@ const PINNED = /\.toLocale(?:Date|Time)?String\(\s*(?:DISPLAY_LOCALE|'[^']+'|"[^
 /**
  * `new Date()` with no argument is "now". The server and the browser read their clocks at
  * different instants, so these mismatch for a reason pinning cannot fix — they need a
- * client-only render or a server-supplied timestamp. Held to a ratcheting budget rather than
- * zero, so the existing ones stay visible as debt without blocking unrelated work.
+ * client-only render or a server-supplied timestamp. The three that existed are now rendered
+ * through <GeneratedAt />, which emits nothing on the server and fills in after mount.
  */
 const NOW = /new Date\(\s*\)/;
+/**
+ * Not every `new Date()` is rendered. Two shapes are genuinely safe and cannot be told apart
+ * from a hazard by pattern alone: one inside a `useEffect` (client-only by construction), and one
+ * inside an event handler that never runs during render — the jsPDF export in
+ * visual-template-builder builds a string for a downloaded file, not for the DOM.
+ *
+ * Rather than widen the pattern until those stop matching — which would also stop it catching
+ * real ones — each exemption is written at the call site and has to say why. An exemption is
+ * visible in review; a loosened regex is not.
+ */
+const EXEMPT = /hydration-safe:/;
 /**
  * Known limitation, stated rather than hidden: `.toLocaleString()` is only a date formatter when
  * its receiver is a Date — on a number it is money formatting and perfectly safe (en-AE/GB/US
@@ -50,10 +61,10 @@ const NOW = /new Date\(\s*\)/;
 const DATE_ON_LINE = /new Date\(/;
 
 /**
- * Budget for the "now" case, which pinning cannot fix. Lower it as those sites are converted;
- * it must never rise. Raising it means a new page load now logs a hydration error.
+ * Zero, and it must stay there. This started at 4 and came down as the sites were converted;
+ * raising it means a page load now logs a hydration error and re-renders itself.
  */
-const NOW_BUDGET = 4;
+const NOW_BUDGET = 0;
 
 function walk(dir: string, out: string[] = []): string[] {
   let entries: string[];
@@ -80,10 +91,13 @@ function scan() {
       const src = readFileSync(file, 'utf8');
       if (!isClientComponent(src)) continue;
 
-      src.split('\n').forEach((line, i) => {
+      const lines = src.split('\n');
+      lines.forEach((line, i) => {
         if (!CALL.test(line)) return;
         // Money formatting: a .toLocaleString() with no Date anywhere on the line.
         if (!DATE_ON_LINE.test(line) && !/\.toLocale(?:Date|Time)String\(/.test(line)) return;
+        // The reason may sit on the call itself or on the line above it.
+        if (EXEMPT.test(line) || EXEMPT.test(lines[i - 1] ?? '')) return;
 
         const where = `${relative(WEB, file).replace(/\\/g, '/')}:${i + 1}`;
         if (NOW.test(line)) now.push(where);

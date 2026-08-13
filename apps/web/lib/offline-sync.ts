@@ -2,6 +2,7 @@ import {
   type OfflineQueueItem,
   enqueueOfflineItem,
   getOfflineQueue,
+  reclaimStrandedItem,
   removeOfflineItem,
   updateOfflineItemStatus,
 } from './offline-store';
@@ -170,6 +171,27 @@ let isSyncing = false;
 /** Reset per page load: a new session cannot own a sync that was in flight before it existed. */
 let hasFlushedThisSession = false;
 
+/** Pending wake-up for items the last pass skipped on backoff. At most one is ever outstanding. */
+let backoffWake: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Wake the queue when the soonest backoff expires.
+ *
+ * `computeBackoffDelay` decides when an item may be retried, but nothing used to act on that
+ * decision: a pass that skipped an item simply returned, leaving the next attempt to the 60s
+ * periodic sweep. So every deferred retry actually waited up to a minute regardless of the delay
+ * that was computed — a 4s backoff and a 32s one behaved identically. This closes the gap between
+ * the two.
+ */
+function scheduleBackoffWake(delayMs: number): void {
+  if (typeof window === 'undefined') return;
+  if (backoffWake) clearTimeout(backoffWake);
+  backoffWake = setTimeout(() => {
+    backoffWake = null;
+    if (typeof navigator === 'undefined' || navigator.onLine) void flushOfflineQueue();
+  }, Math.max(250, delayMs));
+}
+
 export async function flushOfflineQueue(): Promise<{ synced: number; failed: number }> {
   if (isSyncing) return { synced: 0, failed: 0 };
   if (typeof navigator !== 'undefined' && !navigator.onLine) return { synced: 0, failed: 0 };
@@ -194,19 +216,25 @@ export async function flushOfflineQueue(): Promise<{ synced: number; failed: num
       hasFlushedThisSession = true;
       const stranded = queue.filter((i) => i.status === 'syncing');
       for (const item of stranded) {
-        await updateOfflineItemStatus(item.id, 'pending');
+        await reclaimStrandedItem(item.id);
       }
       if (stranded.length > 0) queue = await getOfflineQueue();
     }
 
     const pendingItems = queue.filter((i) => i.status === 'pending' && i.retryCount < 5);
 
+    /** Shortest wait among the items this pass declines to send, so we can come back for them. */
+    let soonestRetryIn = Number.POSITIVE_INFINITY;
+
     for (const item of pendingItems) {
       // Exponential backoff check
       if (item.lastAttemptAt) {
         const elapsed = Date.now() - new Date(item.lastAttemptAt).getTime();
         const requiredDelay = computeBackoffDelay(item.retryCount);
-        if (elapsed < requiredDelay) continue;
+        if (elapsed < requiredDelay) {
+          soonestRetryIn = Math.min(soonestRetryIn, requiredDelay - elapsed);
+          continue;
+        }
       }
 
       await updateOfflineItemStatus(item.id, 'syncing');
@@ -253,6 +281,8 @@ export async function flushOfflineQueue(): Promise<{ synced: number; failed: num
 
       notifyListeners();
     }
+
+    if (Number.isFinite(soonestRetryIn)) scheduleBackoffWake(soonestRetryIn);
   } finally {
     isSyncing = false;
     notifyListeners();

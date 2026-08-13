@@ -147,6 +147,54 @@ export async function updateOfflineItemStatus(
   }
 }
 
+/**
+ * Return an item stranded in `syncing` by a dead session to the pending queue.
+ *
+ * Deliberately not `updateOfflineItemStatus(id, 'pending')`. That stamps `lastAttemptAt = now`,
+ * and the flush loop reads that stamp as "we just tried this", so it holds the item behind the
+ * backoff its retryCount has earned — a report that survived a crash then sits on the device for
+ * seconds to a minute before anyone tries again. A crash is not the server pushing back, so there
+ * is nothing to back off from: clearing the stamp makes the item eligible on the very next pass,
+ * which is the entire point of reclaiming it.
+ *
+ * `retryCount` is preserved. The interrupted attempt was a real attempt — it may even have
+ * committed — so it still spends the five-attempt budget and a genuine crash loop still
+ * terminates rather than replaying forever.
+ */
+export async function reclaimStrandedItem(id: string): Promise<void> {
+  try {
+    const db = await openDb();
+    const item = await new Promise<OfflineQueueItem | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    if (!item) return;
+
+    item.status = 'pending';
+    item.lastAttemptAt = null;
+    item.updatedAt = new Date().toISOString();
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(item);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const items: OfflineQueueItem[] = JSON.parse(window.localStorage.getItem('aura_offline_fallback_queue') || '[]');
+      const target = items.find((i) => i.id === id);
+      if (target) {
+        target.status = 'pending';
+        target.lastAttemptAt = null;
+        window.localStorage.setItem('aura_offline_fallback_queue', JSON.stringify(items));
+      }
+    }
+  }
+}
+
 export async function removeOfflineItem(id: string): Promise<void> {
   try {
     const db = await openDb();

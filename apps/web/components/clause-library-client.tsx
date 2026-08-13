@@ -2,6 +2,7 @@
 
 import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import CreateDrawer from './ui/create-drawer';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Clause library — the reusable contract language behind every contract. The store, service and
 // API have existed since the module was built; this is the screen that finally makes them usable.
@@ -163,7 +164,7 @@ export default function ClauseLibraryClient({ initialClauses }: { initialClauses
                       <td colSpan={7} style={st.bodyCell}>
                         <pre style={st.body}>{c.body}</pre>
                         <div style={st.metaLine}>
-                          Revision {c.revision} · updated {new Date(c.updatedAt).toLocaleDateString('en-AE')}
+                          Revision {c.revision} · updated {new Date(c.updatedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}
                         </div>
                       </td>
                     </tr>

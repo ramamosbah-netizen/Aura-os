@@ -3,6 +3,7 @@
 import { type CSSProperties, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface PeriodClose {
   id: string;
@@ -13,7 +14,7 @@ interface PeriodClose {
 }
 
 function fmt(iso: string) {
-  return new Date(iso).toLocaleDateString('en-AE');
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
 export default function PeriodCloseClient({ initialCloses }: { initialCloses: PeriodClose[] }) {

@@ -3,6 +3,7 @@
 import { Fragment, type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { InvoiceEdit } from './invoice-create';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Invoice {
   id: string;
@@ -46,7 +47,7 @@ function fmt(iso: string): string {
 // browser, so React discards the whole subtree on hydration and re-renders it — which reads as
 // an intermittently missing element to anything driving the page. Overlaps the wider sweep in
 // PR #213; reconcile there.
-  return new Date(iso).toLocaleDateString('en-AE');
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
 export default function InvoicesList({

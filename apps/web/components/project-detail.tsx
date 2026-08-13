@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface WbsNode {
   id: string;
@@ -33,7 +34,7 @@ function money(n: number): string {
 
 function fmtDate(iso: string): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-AE');
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
 export default function ProjectDetail({

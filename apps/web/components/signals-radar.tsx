@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Signals Radar — the acquisition triage board, redesigned as a visual command surface.
 // Every signal is a CARD that answers at a glance: what is it (scope), where did it come
@@ -293,7 +294,7 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
                         {SYSTEM_SOURCES.has(s.source)
                           ? `Emitted automatically by the ${label(s.source)} reactor`
                           : `Captured from ${label(s.source)}`}
-                        {' '}on {new Date(s.detectedAt).toLocaleDateString('en-AE')} · owner {s.ownerId ?? 'unassigned'}
+                        {' '}on {new Date(s.detectedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })} · owner {s.ownerId ?? 'unassigned'}
                       </p>
                     </DetailSection>
                     <DetailSection title="Scoring">

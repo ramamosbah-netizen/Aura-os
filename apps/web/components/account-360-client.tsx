@@ -16,6 +16,7 @@ import {
 import Timeline from './timeline';
 import RelationshipGraphPanel from './relationship-graph-panel';
 import InstalledBasePanel from './installed-base-panel';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Account 360 — the customer COMMAND CENTER. The Account is the persistent
 // commercial party every deal revolves around (the hub, not the first step).
@@ -77,8 +78,8 @@ interface Payload {
 type Tab = 'overview' | 'contacts' | 'opportunities' | 'tenders' | 'quotations' | 'contracts' | 'projects' | 'financials' | 'activity';
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 2 }).format(n);
-const d = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
-const monthYear = (iso: string): string => new Date(iso).toLocaleDateString('en', { month: 'short', year: 'numeric' });
+const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
+const monthYear = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, month: 'short', year: 'numeric' });
 
 const STAGE_LABEL: Record<string, string> = {
   prospect: 'Prospect',

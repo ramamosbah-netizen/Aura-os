@@ -3,6 +3,7 @@
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface PurchaseRequest {
   id: string;
@@ -25,7 +26,7 @@ function money(n: number): string {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-AE');
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
 export default function PrList({

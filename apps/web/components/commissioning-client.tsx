@@ -7,6 +7,7 @@ import ExportButton from './export-button';
 import NextBestActionBanner from './ui/next-best-action-banner';
 import SaveViewButton from './save-view-button';
 import SignatureCanvas from './ui/signature-canvas';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Project {
   id: string;
@@ -245,7 +246,7 @@ export default function CommissioningClient({
 
                   {done ? (
                     <p style={st.signoff}>
-                      ✓ Commissioned {r.commissionedAt ? new Date(r.commissionedAt).toLocaleDateString('en-AE') : ''} — by <strong>{r.commissionedBy}</strong>, witnessed by <strong>{r.witnessedBy}</strong>
+                      ✓ Commissioned {r.commissionedAt ? new Date(r.commissionedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : ''} — by <strong>{r.commissionedBy}</strong>, witnessed by <strong>{r.witnessedBy}</strong>
                     </p>
                   ) : (
                     <div style={st.actions}>

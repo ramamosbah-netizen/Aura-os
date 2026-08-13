@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
 import RelationshipAlerts from './relationship-alerts';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // CRM · Activities — every interaction and to-do on the deal chain (call, email,
 // meeting, note, task), agenda-grouped by urgency: Overdue → Today → This week →
@@ -47,7 +48,7 @@ const RELATED_HREF: Record<string, (id: string) => string> = {
   quotation: () => '/crm/quotations',
 };
 
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 const RELATED_TYPE_LABEL: Record<string, string> = {
   opportunity: '◎ Opportunities', account: '◆ Accounts', contact: '☎ Contacts', lead: '⌥ Leads', quotation: '✎ Quotations',

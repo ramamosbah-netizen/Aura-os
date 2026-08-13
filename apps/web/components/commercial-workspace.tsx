@@ -7,6 +7,7 @@ import NegotiationTab from './negotiation-tab';
 import DocumentsTab from './documents-tab';
 import type { EvidenceDoc, StoredRequirement } from './decision-readiness';
 import { CommercialFinancials, CommercialRisks, commercialRisks } from './commercial-financials';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // CRM · Commercial workspace — one place for the commercial DECISION. Tabs are LINKED
 // VIEWS onto records owned by their domains: Quotations (CRM), Pricing (Tendering),
@@ -46,7 +47,7 @@ const TAB_DEFS: Array<{ id: Tab; label: string; icon: string; hint: string }> = 
 
 const OPEN_STATUSES = ['draft', 'internal_review', 'approved', 'sent', 'under_negotiation'];
 const aed = (n: number): string => 'AED ' + (n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 const cap = (s: string): string => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
 export default function CommercialWorkspace({ quotations, contracts, sheets, evidence = [], requirements = [], apiDown }: {

@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Account {
   id: string;
@@ -35,7 +36,7 @@ function money(n: number): string {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString('en-AE', { dateStyle: 'short', timeStyle: 'short' });
+  return new Date(iso).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, dateStyle: 'short', timeStyle: 'short' });
 }
 
 export default function LedgerView({

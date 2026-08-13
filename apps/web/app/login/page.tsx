@@ -60,6 +60,7 @@ export default function LoginPage() {
           </label>
           <input
             id="login-user"
+            data-testid="login-username"
             style={s.input}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -73,6 +74,7 @@ export default function LoginPage() {
           </label>
           <input
             id="login-pass"
+            data-testid="login-password"
             style={s.input}
             type="password"
             value={password}
@@ -81,10 +83,10 @@ export default function LoginPage() {
             autoComplete="current-password"
           />
 
-          <button type="submit" style={s.btn} disabled={busy}>
+          <button type="submit" data-testid="login-submit" style={s.btn} disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
-          {err ? <p style={s.err}>{err}</p> : null}
+          {err ? <p style={s.err} data-testid="login-error">{err}</p> : null}
 
           <p style={s.hint}>Need access? Contact your workspace administrator.</p>
         </form>

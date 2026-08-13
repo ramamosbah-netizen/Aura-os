@@ -42,7 +42,11 @@ function money(n: number): string {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString();
+// Locale pinned: a bare toLocaleDateString() renders en-AE on the Node server and en-US in the
+// browser, so React discards the whole subtree on hydration and re-renders it — which reads as
+// an intermittently missing element to anything driving the page. Overlaps the wider sweep in
+// PR #213; reconcile there.
+  return new Date(iso).toLocaleDateString('en-AE');
 }
 
 export default function InvoicesList({

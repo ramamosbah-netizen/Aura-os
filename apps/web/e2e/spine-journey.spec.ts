@@ -62,6 +62,47 @@ async function createViaDrawer(
   await expect(drawer).toBeHidden();
 }
 
+/**
+ * The `login →` half of G-03's acceptance criterion.
+ *
+ * Every other test in this file inherits a session from global setup. This one throws that away and
+ * signs in from scratch through the real form, so the journey a user actually performs is proven
+ * rather than assumed. When auth is off it asserts the weaker thing that is true then — the login
+ * route renders and the spine is reachable — instead of pretending to have tested a sign-in.
+ */
+test.describe('login', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('sign in through the real form, then reach the spine', async ({ page, baseURL }) => {
+    const status = await page.request.get(`${baseURL}/api/auth/status`).catch(() => null);
+    const authEnabled = status?.ok() ? (((await status.json()) as { enabled?: boolean }).enabled ?? false) : false;
+
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('login-username')).toBeVisible();
+
+    if (!authEnabled) {
+      // No verifier configured: there is no credential to present, and the API runs as the dev
+      // actor. Say so rather than reporting a sign-in that never happened.
+      test.info().annotations.push({
+        type: 'note',
+        description: 'API has no JWT verifier configured — sign-in not exercised, spine reachability asserted instead.',
+      });
+      await page.goto('/crm/accounts', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('accounts-portfolio').or(page.getByTestId('create-account'))).toBeVisible();
+      return;
+    }
+
+    await page.getByTestId('login-username').fill(process.env.E2E_USERNAME ?? 'u-admin');
+    await page.getByTestId('login-password').fill(process.env.E2E_PASSWORD ?? process.env.AUTH_DEV_PASSWORD ?? 'e2e-password');
+    await page.getByTestId('login-submit').click();
+
+    // Signed in: off /login, and the spine is reachable with the session just established.
+    await expect(page).not.toHaveURL(/\/login/);
+    await page.goto('/crm/accounts', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('create-account')).toBeVisible();
+  });
+});
+
 test('account: create → read in the portfolio', async ({ page }) => {
   await page.goto('/crm/accounts', { waitUntil: 'domcontentloaded' });
   await createViaDrawer(page, 'account', { name: ACCOUNT });

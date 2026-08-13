@@ -34,7 +34,11 @@ const GAP_LABEL: Record<string, string> = {
 const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as const;
 
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+// Locale pinned: a bare toLocaleDateString() renders en-AE on the Node server and en-US in the
+// browser, so React discards the whole subtree on hydration and re-renders it — which reads as
+// an intermittently missing element to anything driving the page. Overlaps the wider sweep in
+// PR #213; reconcile there.
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 
 export type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list';
 

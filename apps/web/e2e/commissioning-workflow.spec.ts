@@ -4,20 +4,24 @@
 // (witnessed sign-off). Skips if the API is not running behind the web shell.
 import { expect, test } from '@playwright/test';
 
+import { apiAuthHeaders } from './api-auth';
+
 const API = (process.env.AURA_API_URL ?? 'http://localhost:4000') + '/api/v1/commissioning/records';
+// Seeds go straight to the API rather than through the BFF, so they need their own token.
+const H = () => apiAuthHeaders();
 const code = `CX-E2E-${Date.now().toString().slice(-6)}`;
 
 test('commissioning 360: punch gate blocks sign-off until closed (UI)', async ({ page }) => {
   // Seed via the backend: a CCTV record, two passing test points, and one open punch item.
-  const created = await page.request.post(API, { data: { projectId: 'e2e-proj', code, title: 'CCTV T&C', system: 'cctv' } });
+  const created = await page.request.post(API, { headers: H(), data: { projectId: 'e2e-proj', code, title: 'CCTV T&C', system: 'cctv' } });
   test.skip(created.status() === 502 || created.status() === 404 || !created.ok(), 'commissioning API not reachable');
   const rec = await created.json();
   const id = rec.id;
   for (const n of ['1', '2']) {
-    const t = await (await page.request.post(`${API}/${id}/test-items`, { data: { pointNo: n, description: `Cam ${n} live view` } })).json();
-    await page.request.put(`${API}/${id}/test-items/${t.id}/result`, { data: { result: 'pass', actual: 'OK' } });
+    const t = await (await page.request.post(`${API}/${id}/test-items`, { headers: H(), data: { pointNo: n, description: `Cam ${n} live view` } })).json();
+    await page.request.put(`${API}/${id}/test-items/${t.id}/result`, { headers: H(), data: { result: 'pass', actual: 'OK' } });
   }
-  await page.request.post(`${API}/${id}/punch`, { data: { description: 'Loose connector at Cam 2', severity: 'major' } });
+  await page.request.post(`${API}/${id}/punch`, { headers: H(), data: { description: 'Loose connector at Cam 2', severity: 'major' } });
 
   // Open the 360 — test sheet + punch list rendered; the record is "Tested" (all points passed).
   await page.goto(`/commissioning/${id}`, { waitUntil: 'domcontentloaded' });

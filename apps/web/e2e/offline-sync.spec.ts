@@ -17,6 +17,8 @@
 import { expect, request as apiRequest, test, type Page } from '@playwright/test';
 
 const REPORTS_URL = '/site/daily-reports';
+import { apiAuthHeaders } from './api-auth';
+
 const API_BASE = process.env.AURA_API_URL ?? 'http://localhost:4000';
 /** Marks rows this spec creates so assertions can count only their own. */
 const TAG = `e2e-offline-${Date.now()}`;
@@ -94,7 +96,9 @@ test.describe('offline field journey', () => {
   // so the picker has no options unless this spec supplies one. Idempotent — an instance that
   // already has projects is left alone.
   test.beforeAll(async () => {
-    const ctx = await apiRequest.newContext({ baseURL: API_BASE });
+    // Direct to the API, so the session cookie does not apply — carry a bearer token when the
+    // environment has auth on.
+    const ctx = await apiRequest.newContext({ baseURL: API_BASE, extraHTTPHeaders: apiAuthHeaders() });
     try {
       const existing = await ctx.get('/api/v1/projects/projects');
       const rows = existing.ok() ? ((await existing.json()) as unknown[]) : [];

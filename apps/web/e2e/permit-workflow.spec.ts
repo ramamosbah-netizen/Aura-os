@@ -7,6 +7,7 @@
 // The API is seeded through the web BFF; if the API is unreachable the spec skips (the web shell
 // degrades gracefully, so there is nothing to drive).
 import { expect, test } from '@playwright/test';
+import { altApiAuthHeaders, authEnabled } from './api-auth';
 
 const RUN = Date.now().toString().slice(-6);
 
@@ -43,17 +44,38 @@ test('permit register → 360 → approve → close, with the authorisation gate
   ).json();
 
   // ── A permit WITH the approved assessment — the happy path.
-  const permit = await (
-    await page.request.post(`${baseURL}/api/hse/ptws`, {
-      data: {
-        projectId: 'e2e-hse-proj',
-        permitType: 'hot_work',
-        ...openWindow(),
-        description: `E2E welding ${RUN}`,
-        riskAssessmentId: ra.id,
-      },
-    })
-  ).json();
+  //
+  // Requested by a DIFFERENT actor when auth is on. The permit is approved below by the signed-in
+  // session user, and segregation of duties refuses self-authorisation — so with a single principal
+  // this journey is not merely awkward to test, it is correctly impossible. That gate was inert
+  // before auth was enabled (no actor ⇒ no recorded requester), which is exactly why turning auth
+  // on is worth doing rather than working around.
+  const alt = altApiAuthHeaders();
+  const apiBase = process.env.AURA_API_URL ?? 'http://localhost:4000';
+  const permit = alt
+    ? await (
+        await page.request.post(`${apiBase}/api/v1/hse/ptws`, {
+          headers: alt,
+          data: {
+            projectId: 'e2e-hse-proj',
+            permitType: 'hot_work',
+            ...openWindow(),
+            description: `E2E welding ${RUN}`,
+            riskAssessmentId: ra.id,
+          },
+        })
+      ).json()
+    : await (
+        await page.request.post(`${baseURL}/api/hse/ptws`, {
+          data: {
+            projectId: 'e2e-hse-proj',
+            permitType: 'hot_work',
+            ...openWindow(),
+            description: `E2E welding ${RUN}`,
+            riskAssessmentId: ra.id,
+          },
+        })
+      ).json();
 
   // 1. The register lists both, and flags the one with no assessment.
   await page.goto('/hse/permits', { waitUntil: 'domcontentloaded' });
@@ -110,4 +132,53 @@ test('a rejected permit carries its reason and re-opens for correction (UI)', as
 
   await page.getByTestId('btn-reopen').click();
   await expect(page.getByTestId('permit-status')).toHaveText('Draft');
+});
+
+/**
+ * Segregation of duties, proven in the browser.
+ *
+ * This assertion was impossible before the suite ran authenticated: with no verifier the API has no
+ * actor, so nothing is recorded as the requester and the gate has nothing to compare against. Now
+ * the signed-in user requests the permit through the BFF and then tries to approve their own — and
+ * is refused by the service, not by the UI.
+ */
+test('a permit cannot be approved by the person who requested it (UI)', async ({ page, baseURL }) => {
+  test.skip(!authEnabled(), 'no verifier configured — the API records no requester, so SoD is inert');
+
+  const raRes = await page.request.post(`${baseURL}/api/hse/risk-assessments`, {
+    data: {
+      projectId: 'e2e-hse-proj',
+      reference: `RA-SOD-${RUN}`,
+      activity: 'Self-approval attempt',
+      hazards: [{ hazard: 'Fire', likelihood: 3, severity: 3, controls: 'Watch', residualLikelihood: 1, residualSeverity: 2 }],
+    },
+  });
+  test.skip(raRes.status() === 502 || raRes.status() === 404, 'HSE API not running behind the web shell');
+  const ra = await raRes.json();
+  expect((await page.request.put(`${baseURL}/api/hse/risk-assessments/${ra.id}/approve`)).ok()).toBeTruthy();
+
+  // Requested through the BFF, so the session user is recorded as the requester.
+  const mine = await (
+    await page.request.post(`${baseURL}/api/hse/ptws`, {
+      data: {
+        projectId: 'e2e-hse-proj',
+        permitType: 'electrical',
+        ...openWindow(),
+        description: `E2E self-approval ${RUN}`,
+        riskAssessmentId: ra.id,
+      },
+    })
+  ).json();
+
+  await page.goto(`/hse/permits/${mine.id}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('permit-status')).toHaveText('Requested');
+
+  // Every displayed gate passes — the assessment is approved and the window is open — so the UI
+  // offers the button. The refusal comes from the service, which is the point: the control does not
+  // depend on the page having reasoned correctly.
+  await expect(page.getByTestId('btn-approve')).toBeEnabled();
+  await page.getByTestId('btn-approve').click();
+
+  await expect(page.getByTestId('permit-action-error')).toContainText('other than the requester');
+  await expect(page.getByTestId('permit-status')).toHaveText('Requested');
 });

@@ -30,6 +30,7 @@ import { AgentEvaluationService } from './agent-evaluation.service';
 import { RevenueAgentsService } from './revenue-agents.service';
 import { ManagementAgentsService } from './management-agents.service';
 import { SaasCreditBillingService } from './saas-credit-billing.service';
+import { AgentGovernanceService } from './agent-governance.service';
 
 /**
  * The Intelligence layer (L3) — read-only consumers of the event spine on the kernel AI
@@ -46,6 +47,7 @@ import { SaasCreditBillingService } from './saas-credit-billing.service';
     AgentCollaborationService, AgentWorkflowEngine, AgentMarketplaceService, DigitalTwinService,
     CapabilityGuardService, DocumentIngestionService, AgentPilotSuiteService,
     AgentEvaluationService, RevenueAgentsService, ManagementAgentsService, SaasCreditBillingService,
+    AgentGovernanceService,
   ],
   exports: [
     PipelineProjection, InsightService, PricingService, AutonomyService,
@@ -56,6 +58,7 @@ import { SaasCreditBillingService } from './saas-credit-billing.service';
     AgentCollaborationService, AgentWorkflowEngine, AgentMarketplaceService, DigitalTwinService,
     CapabilityGuardService, DocumentIngestionService, AgentPilotSuiteService,
     AgentEvaluationService, RevenueAgentsService, ManagementAgentsService, SaasCreditBillingService,
+    AgentGovernanceService,
   ],
 })
 export class IntelligenceModule {}

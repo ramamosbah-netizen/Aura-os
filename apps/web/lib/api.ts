@@ -19,6 +19,24 @@ export async function authHeader(): Promise<Record<string, string>> {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
+/**
+ * Forward the client's replay-safety headers to the API.
+ *
+ * The offline engine replays a queued mutation under the same `Idempotency-Key` every time, and
+ * the API's global idempotency interceptor is the only thing that turns that into "runs at most
+ * once". A BFF route that builds its outbound header set from scratch drops the key, and the
+ * guarantee silently stops at the proxy: the API sees two unrelated creates and writes two rows.
+ * Any route that a queued write can reach has to pass these through.
+ */
+export function replayHeaders(request: Request): Record<string, string> {
+  const forwarded: Record<string, string> = {};
+  for (const name of ['idempotency-key', 'x-operation-id', 'x-client-entity-id']) {
+    const value = request.headers.get(name);
+    if (value) forwarded[name] = value;
+  }
+  return forwarded;
+}
+
 /** The signed-in user (decoded for display only — the API verifies), or null. */
 export async function currentUser(): Promise<SessionUser | null> {
   return decodeSessionUser(await sessionToken());

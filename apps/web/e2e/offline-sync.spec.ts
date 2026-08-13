@@ -127,6 +127,49 @@ test.describe('offline field journey', () => {
       .catch(() => {});
   });
 
+  // Leave nothing behind.
+  //
+  // Playwright gives each test its own context, so in principle this spec's IndexedDB queue,
+  // localStorage fallback, service worker and its cache all die with it. "In principle" is doing
+  // a lot of work there: this is the one spec that deliberately manufactures a half-finished
+  // write and a browser that dies holding it, and the failure mode when that state does escape —
+  // a later spec's mutation quietly swallowed by a queue or served from a stale cache-first
+  // response — reads as a bug in the *next* file, which is the most expensive kind of flake to
+  // chase. The teardown is cheap; wearing it is cheaper than proving every time that the
+  // isolation still holds after someone adds a `storageState` or a shared context.
+  test.afterEach(async ({ context }) => {
+    await context.setOffline(false).catch(() => undefined);
+
+    const open = context.pages().find((p) => !p.isClosed());
+    const scratch = open ?? (await context.newPage().catch(() => null));
+    if (!scratch) return;
+
+    try {
+      // Needs a real origin: storage APIs are unavailable on about:blank.
+      if (!scratch.url().startsWith('http')) {
+        await scratch.goto(REPORTS_URL, { waitUntil: 'domcontentloaded' });
+      }
+      await scratch.evaluate(async () => {
+        await new Promise<void>((resolve) => {
+          const req = indexedDB.deleteDatabase('aura_offline_db');
+          req.onsuccess = req.onerror = req.onblocked = () => resolve();
+        });
+        localStorage.removeItem('aura_offline_fallback_queue');
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+      });
+    } catch {
+      // The context is on its way out regardless — a teardown that throws would mask the real
+      // failure of the test it is tearing down.
+    }
+  });
+
   test('a report created with no network is queued locally rather than lost', async ({ page, context }) => {
     const desc = `${TAG} queued-while-offline`;
     await fillReport(page, desc);
@@ -174,22 +217,63 @@ test.describe('offline field journey', () => {
     await page.waitForTimeout(1000);
     expect((await readQueue(page)).length, 'item must be durably queued before the crash').toBeGreaterThan(0);
 
-    // Come back online and kill the page immediately — the sync may be in flight, which is the
-    // dangerous window: the server may have committed while the client never saw the response.
+    // Stage the crash rather than racing it.
+    //
+    // This used to reconnect and call `page.close()` a beat later, hoping to land inside the
+    // in-flight window. That made the test a coin flip on something worse than timing: when the
+    // close won, the item was still `pending`, so the reopened session sent it for the very first
+    // time and no replay — and therefore no deduplication — was ever exercised. The test only
+    // *passed* in the runs where it failed to set up its own scenario.
+    //
+    // Instead, hold the sync POST open on the client side *after* the server has finished with
+    // it. The write commits, the response is dropped on the floor, and the page dies believing
+    // nothing happened. That is the one state a client genuinely cannot reason about, and the
+    // only one where the server-side idempotency lease is load-bearing.
+    //
+    // `page.route`, not `context.route`: the interception has to die with this page so it cannot
+    // touch the replay the reopened page is about to make.
+    await page.route('**/api/site/daily-reports', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      // Let the request complete cleanly at the server before abandoning it. Tearing down a
+      // request mid-flight instead leaves the shared dev server logging an aborted stream, which
+      // is state this spec would be exporting to whatever runs next.
+      await route.fetch();
+      // Deliberately never fulfilled.
+    });
+
     await context.setOffline(false);
+
+    // The row landing server-side is the proof the interrupted attempt got through — poll for it
+    // rather than sleeping at the race.
+    await expect
+      .poll(async () => serverCount(page, desc), { timeout: 30_000, intervals: [250] })
+      .toBe(1);
+    expect(
+      (await readQueue(page)).filter((q) => q.endpoint.includes('daily-reports') && q.status === 'syncing'),
+      'the kill has to happen with the item mid-flight, or this test proves nothing',
+    ).toHaveLength(1);
+
     await page.close();
 
     // Same context → same origin storage, so IndexedDB survives exactly as it would a real crash.
     const reopened = await context.newPage();
     await reopened.goto(REPORTS_URL, { waitUntil: 'domcontentloaded' });
 
+    // The point of the whole exercise: the reopened session finds an item stranded in `syncing`,
+    // cannot know it already committed, and must replay it. Only the server honouring the
+    // repeated Idempotency-Key keeps this at 1 — without the lease (or with a BFF that drops the
+    // header on the way through) this reads 2.
     await expect
       .poll(async () => serverCount(reopened, desc), { timeout: 30_000, intervals: [500] })
       .toBe(1);
 
-    // The point of the whole exercise: a resumed replay must not double-commit. If the retry had
-    // gone through without the server-side lease, this would read 2.
-    await reopened.waitForTimeout(3000);
+    // …and stays at 1 once the replay has definitively been made and answered.
+    await expect
+      .poll(async () => (await readQueue(reopened)).filter((q) => q.endpoint.includes('daily-reports')).length, {
+        timeout: 30_000,
+        intervals: [500],
+      })
+      .toBe(0);
     expect(await serverCount(reopened, desc), 'the resumed replay must not create a second row').toBe(1);
   });
 

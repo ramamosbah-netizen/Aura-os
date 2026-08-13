@@ -59,7 +59,7 @@ Staging the crash properly then surfaced a live product bug the suite had never 
 
 **Verified:** `offline-sync.spec.ts --repeat-each 6` → 24/24, the crash test ~3.9s where it previously timed out at 32s · full browser suite on `main` **28 passed / 0 failed / 1 skipped** · five `offline-sync` → *X* pairings all green · typecheck, web unit, `next build` clean · lint 0 errors. Negative control: removing the header forwarding makes the spec read **2 rows**, so the assertion is load-bearing.
 
-**Carried forward:** the poisoning claim is *neither confirmed nor cleared* — it needs one `offline-sync` → `permit-workflow` run **on this branch** once #210 lands. Scores are untouched: nothing here was measured against the readiness rubric.
+**The poisoning claim does not reproduce.** Run five times at `104e67f1` in an isolated worktree with the spec **unfixed**: `offline-sync:168` failed once, in the genuine way, and **both `permit-workflow` tests passed in that same run** (10/10 across all five). Rev 2.2 called it "reproduced deterministically"; one counterexample settles that. Measured pre-auth, at the commit the claim was made against — Rev 2.5 has since changed how `permit-workflow` behaves, so the pairing is worth re-checking under auth. Scores are untouched: nothing here was measured against the readiness rubric.
 
 ### Rev 2.3 — 2026-08-12 (G-08 CLOSED: amc, assets, fleet)
 

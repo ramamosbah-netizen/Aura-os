@@ -64,6 +64,10 @@ export class AmcService {
     return this.store.findTicket(id);
   }
 
+  async findWorkOrder(id: string): Promise<WorkOrder | null> {
+    return this.store.findWorkOrder(id);
+  }
+
   async listWorkOrders(tenantId: string, contractId?: string): Promise<WorkOrder[]> {
     return this.store.listWorkOrders(tenantId, contractId);
   }
@@ -100,6 +104,19 @@ export class AmcService {
     location?: GeoCoordinate;
     scheduledDate?: Date;
   }): Promise<WorkOrder> {
+    // Contract gate: billable service cannot be dispatched under a contract that has expired or
+    // been terminated. Without this, the AMC → AR reactor happily invoices against a dead
+    // agreement — the commercial mirror of authorising work with no permit.
+    if (params.contractId) {
+      const contract = await this.store.findContract(params.contractId);
+      if (!contract) throw new Error(`service contract ${params.contractId} not found`);
+      if (!contract.isActive()) {
+        throw new Error(
+          `a work order can only be raised against an active service contract (${contract.contractNumber} is '${contract.status}' and runs to ${contract.endDate.toISOString().slice(0, 10)})`,
+        );
+      }
+    }
+
     const order = new WorkOrder({ id: genId(), ...params });
     await this.store.saveWorkOrder(order);
     this.logger.log(`[AMC] Work order created: ${order.orderNumber} (${order.type}/${order.priority})`);
@@ -115,10 +132,31 @@ export class AmcService {
     return order;
   }
 
+  /** assigned → in_progress: the technician is on site. Reachable for the first time here. */
+  async startWorkOrder(id: string): Promise<WorkOrder> {
+    const order = await this.store.findWorkOrder(id);
+    if (!order) throw new Error(`Work order ${id} not found`);
+    order.startWork();
+    await this.store.saveWorkOrder(order);
+    this.logger.log(`[AMC] Work order ${order.orderNumber} started`);
+    return order;
+  }
+
+  async cancelWorkOrder(id: string): Promise<WorkOrder> {
+    const order = await this.store.findWorkOrder(id);
+    if (!order) throw new Error(`Work order ${id} not found`);
+    order.cancel();
+    await this.store.saveWorkOrder(order);
+    this.logger.log(`[AMC] Work order ${order.orderNumber} cancelled`);
+    return order;
+  }
+
   async completeWorkOrder(id: string, cost?: number): Promise<WorkOrder> {
     const order = await this.store.findWorkOrder(id);
     if (!order) throw new Error(`Work order ${id} not found`);
-    order.complete(cost);
+    // The SLA the order is judged against is the one on its governing contract.
+    const governing = order.contractId ? await this.store.findContract(order.contractId) : null;
+    order.complete(cost, governing?.slaResolutionHours);
     await this.store.saveWorkOrder(order);
 
     // Emit on the spine so the AMC → AR reactor can bill a completed, costed visit.
@@ -279,8 +317,21 @@ export class AmcService {
   async generateDueVisits(tenantId: string, asOf: Date = new Date()): Promise<WorkOrder[]> {
     const schedules = await this.store.listPpms(tenantId);
     const created: WorkOrder[] = [];
+    let skipped = 0;
     for (const schedule of schedules) {
       if (!schedule.isDue(asOf)) continue;
+
+      // Same contract gate as a manually raised order. A schedule left running against an expired
+      // contract would otherwise keep minting billable visits forever — the sweep is exactly where
+      // nobody is watching, so it is the last place that check should be missing.
+      if (schedule.contractId) {
+        const contract = await this.store.findContract(schedule.contractId);
+        if (!contract?.isActive()) {
+          skipped += 1;
+          continue;
+        }
+      }
+
       const order = new WorkOrder({
         id: genId(),
         tenantId: schedule.tenantId,
@@ -297,7 +348,10 @@ export class AmcService {
       await this.store.savePpm(schedule);
       created.push(order);
     }
-    this.logger.log(`[AMC] Generated ${created.length} preventive visit(s) due as of ${asOf.toISOString().slice(0, 10)}`);
+    this.logger.log(
+      `[AMC] Generated ${created.length} preventive visit(s) due as of ${asOf.toISOString().slice(0, 10)}` +
+        (skipped > 0 ? ` · skipped ${skipped} on inactive contracts` : ''),
+    );
     return created;
   }
 

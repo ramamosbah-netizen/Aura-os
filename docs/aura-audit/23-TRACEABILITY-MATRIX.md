@@ -17,12 +17,12 @@ Requirement (business capability) → Module → API surface → DB (migration/t
 | Finance AR/AP/tax/FX | finance | `finance`, `statements`, `budget`, `period-close` | finance migs | `/finance` | ✓ 33 finance tests |
 | Bank recon / PDC / guarantees | finance | `finance` | finance migs | `/finance` | ✓ service tests |
 | Subcontracts + backcharge | subcontracts | `subcontracts` (1) | subcontract migs | `/subcontracts` | ✓ module tests |
-| Engineering / drawings | engineering | (1 controller) | engineering migs | `/engineering` | △ model-only |
-| Document control | doccontrol | (1 controller) | doccontrol migs | `/doccontrol` | △ model-only |
-| Site execution | site | (1 controller) | site migs | `/site` | △ events only |
-| QA/QC (ITP/NCR) | quality | (1 controller) | quality migs | `/quality` | △ |
-| HSE | hse | (1 controller) | hse migs | `/hse` | △ CRUD |
-| Commissioning → Handover | commissioning | `commissioning` (2) | commissioning migs | `/commissioning`,`/handover` | △ event-wired |
+| ▲ Engineering / drawings | engineering | (1 controller) | engineering migs + **`0224`** | `/engineering/drawings`, `/drawings/[id]` | ✓ `engineering-drawing-workflow.e2e` + **browser** `drawing-workflow.spec` |
+| ▲ Document control | doccontrol | (1 controller) | doccontrol migs + **`0226`** | `/doccontrol/register`, `/register/[id]`, `/transmittals` | ✓ `doccontrol-document-workflow.e2e` + **browser** `document-workflow.spec` |
+| ▲ Site execution | site | (1 controller) | site migs + **`0227`** | `/site/daily-reports`, `/site/execution/[id]` | ✓ `site-execution-workflow.e2e` + **browser** `site-execution.spec` |
+| ▲ QA/QC (ITP/NCR) | quality | (1 controller) | quality migs + **`0225`** | `/quality/ncrs`, `/quality/ncrs/[id]` | ✓ `quality-ncr-workflow.e2e` + **browser** `ncr-workflow.spec` |
+| HSE | hse | (1 controller) | hse migs | `/hse` | △ CRUD — **unchanged at Rev 2** |
+| ▲ Commissioning → Handover | commissioning | `commissioning` (2) | commissioning migs + **`0228`** | `/commissioning`, `/commissioning/[id]`, `/handover` | ✓ `commissioning-handover-workflow.e2e` + **browser** `commissioning-workflow.spec` (commissioning side; **handover depth still △**) |
 | AMC / work orders | amc | (1 controller) | amc migs | `/amc` | △ |
 | Assets | assets | (1 controller) | assets migs | `/assets` | △ |
 | HR | hr | (1 controller) | hr migs `0025+` | `/hr` | △ 9 tests, thin API |
@@ -31,12 +31,15 @@ Requirement (business capability) → Module → API surface → DB (migration/t
 | Notifications | core/notifications | (subscriber + store) | notification migs | `/notifications` | △ delivery unverified |
 | Admin control plane | admin | 13 controllers | config/identity migs | `/admin` (24 pages) | △ |
 | Auth / identity | core | `auth` | identity migs | `/login` | ✓ guard tests |
-| Multi-tenancy (RLS) | core | (all) | `0163/0164` + 128 RLS migs | (all) | ✓ isolation tests (dev) |
+| Multi-tenancy (RLS) | core | (all) | `0163/0164` + **148 `CREATE POLICY`** statements *(Rev 1's "128 RLS migs" was a mismeasurement — see `README.md`)* | (all) | ✓ isolation tests (dev) + `rbac-tenant-isolation.e2e` |
 | Idempotency | core | (spine creates) | idempotency mig | — | ✓ |
 | Events / outbox | core | `events` | `0001`,`0013` | `/events` | ✓ subscriber tests |
 | Field service / mobile | — | ✗ | ✗ | ✗ | ✗ |
 
-## Coverage summary
-- **Fully traceable (req→API→DB→UI→test):** CRM, tendering, contracts, finance, procurement, inventory, projects — the acquisition-to-cash spine.
-- **Partial (req→API→DB, thin UI/test):** engineering, doccontrol, site, QA/QC, HSE, commissioning, handover, AMC, assets, HR, fleet, notifications.
+## Coverage summary (Rev 2)
+
+- **Fully traceable (req→API→DB→UI→test):** CRM, tendering, contracts, finance, procurement, inventory, projects — the acquisition-to-cash spine — **plus (Rev 2) engineering, doccontrol, site, QA/QC and commissioning**, which additionally carry **browser-level** journey proof the spine does not.
+- **Partial (req→API→DB, thin UI/test):** HSE, handover, AMC, assets, HR, fleet, notifications.
 - **Absent:** field service / mobile / offline.
+
+> **Traceability caveat (Rev 2).** "Fully traceable" for the spine still means *API-level* test evidence only — the spine has **no browser E2E** (P0 G-03). The five delivery-half rows are, on the UI-proof axis, now better evidenced than the spine rows they sit beneath.

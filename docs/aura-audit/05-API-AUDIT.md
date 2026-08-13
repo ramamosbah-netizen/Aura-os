@@ -46,17 +46,17 @@ Global `ValidationPipe({ transform, whitelist, forbidUnknownValues:false, expose
 | Finding | Status | Evidence |
 |---|---|---|
 | Enforcement off unless verifier configured | `BLOCKED_BY_CONFIGURATION` | `permissions.guard.ts:100`, `main.ts` posture gate |
-| No rate limiting / throttling on the API | `MISSING` | no `@nestjs/throttler` / limiter in `main.ts` or modules |
+| ~~No rate limiting / throttling on the API~~ **RESOLVED (Rev 2)** | `VERIFIED_IMPLEMENTED` | `EdgeRateLimitGuard` registered globally — `main.ts:59-60`; `core/src/http/rate-limit.guard.ts` (+ tests) |
 | Fine-grained permission seed breadth unverified | `NOT VERIFIED` | derivation works; role→permission grants not exhaustively audited |
 | Global search endpoint is O(all entities) per call | `PARTIALLY_IMPLEMENTED` | `search.service.ts` (`16`) |
 | Pagination adopted additively, not universally | `PARTIALLY_IMPLEMENTED` | `*/paged` routes exist alongside unpaged `list` |
-| CORS is `enableCors()` (permissive default) | `PARTIALLY_IMPLEMENTED` | `main.ts` — no explicit origin allowlist |
+| ~~CORS is `enableCors()` (permissive default)~~ **RESOLVED (Rev 2)** | `VERIFIED_IMPLEMENTED` (mechanism) · `NOT VERIFIED` (prod value) | `resolveCors({ allowedOrigins: CORS_ALLOWED_ORIGINS, isProduction })` — `main.ts:55-57`, `core/src/http/edge-security.ts:41` |
 
 ## Recommendations
 
-1. **P1:** add rate limiting (per-IP + per-actor) before public exposure.
-2. **P1:** tighten CORS to an explicit origin allowlist in production.
+1. ~~**P1:** add rate limiting (per-IP + per-actor) before public exposure.~~ **DONE (Rev 2)** — commit `2377a5a1`. *Note the limiter keys on client IP, so calls arriving via the Next BFF share one bucket (see `ci.yml` `RATE_LIMIT_MAX`); per-actor limiting is still worth adding.*
+2. ~~**P1:** tighten CORS to an explicit origin allowlist in production.~~ **DONE (Rev 2)** — mechanism landed; confirm `CORS_ALLOWED_ORIGINS` is set per environment.
 3. **P1:** audit the role→permission grant matrix for completeness against the derived taxonomy.
 4. **P2:** finish pagination adoption on remaining list endpoints; replace search fan-out with a projection.
 
-**API maturity score: 76/100** — mechanism is strong; deductions for missing rate limiting, permissive CORS, and config-gated enforcement.
+**API maturity score: 76 → 80/100 (Rev 2 re-estimate)** — mechanism is strong and the perimeter gaps are closed; remaining deduction is config-gated auth enforcement and per-actor rate limiting.

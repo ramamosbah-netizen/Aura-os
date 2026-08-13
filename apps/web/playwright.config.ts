@@ -2,6 +2,7 @@
 // Boots `next dev` on a scratch port and runs headless chromium smoke checks.
 // The API is optional: the web shell degrades gracefully when it is unreachable.
 import { defineConfig, devices } from '@playwright/test';
+import { STORAGE_STATE } from './e2e/global-setup';
 
 const PORT = Number(process.env.WEB_PORT ?? 3100);
 // localhost, NOT 127.0.0.1: Next dev blocks cross-origin dev resources from a bare IP, which
@@ -22,9 +23,14 @@ export default defineConfig({
   // is worth more than the minute it saves.
   workers: 1,
   reporter: [['list']],
+  // Signs in once through the real login form and saves the session (G-03). When the API runs with
+  // a verifier configured, PermissionsGuard engages on every route, so without a shared session the
+  // whole suite is refused. No-ops when auth is off, so the local setup is unchanged.
+  globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: BASE_URL,
     trace: 'on-first-retry',
+    storageState: STORAGE_STATE,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {

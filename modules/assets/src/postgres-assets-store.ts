@@ -230,6 +230,16 @@ export class PostgresAssetMaintenanceStore implements AssetMaintenanceStore {
     return res.rows.map(this.mapMaintenance);
   }
 
+  async findByAsset(tenantId: string, assetId: string): Promise<AssetMaintenance[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_asset_maintenance
+        where tenant_id = $1 and asset_id = $2
+        order by created_at desc`,
+      [tenantId, assetId],
+    );
+    return res.rows.map(this.mapMaintenance);
+  }
+
   private mapMaintenance(row: QueryResultRow): AssetMaintenance {
     return {
       id: row.id,

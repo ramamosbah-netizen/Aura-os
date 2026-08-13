@@ -38,16 +38,32 @@ function build(): { svc: HseService; emitted: Array<{ type: string; payload: Rec
   return { svc, emitted };
 }
 
+/** An approved risk assessment + an open validity window — the preconditions for approving a permit. */
+async function seedApprovedRa(svc: HseService, tenantId = 't1'): Promise<string> {
+  const ra = await svc.createRiskAssessment({
+    tenantId, projectId: 'p1', reference: 'RA-100', activity: 'Hot work',
+    hazards: [{ hazard: 'Fire', likelihood: 3, severity: 4, controls: 'Fire watch', residualLikelihood: 1, residualSeverity: 2 }],
+  });
+  await svc.approveRiskAssessment(tenantId, ra.id);
+  return ra.id;
+}
+
+const OPEN_WINDOW = {
+  validFrom: new Date(Date.now() - 3600_000).toISOString(),
+  validTo: new Date(Date.now() + 3600_000).toISOString(),
+};
+
 describe('Permit to Work lifecycle', () => {
   it('requests then approves a permit, emitting hse.ptw.issued with the permit window', async () => {
     const { svc, emitted } = build();
+    const riskAssessmentId = await seedApprovedRa(svc);
     const permit = await svc.requestPermit({
       tenantId: 't1',
       projectId: 'p1',
       permitType: 'hot_work',
-      validFrom: '2026-07-10T06:00:00Z',
-      validTo: '2026-07-10T18:00:00Z',
+      ...OPEN_WINDOW,
       description: '  Welding on level 3  ',
+      riskAssessmentId,
     });
     expect(permit.status).toBe('requested');
     expect(permit.description).toBe('Welding on level 3'); // trimmed by the factory
@@ -83,9 +99,11 @@ describe('Incident report → close', () => {
     expect(incident.status).not.toBe('closed');
     expect(emitted.map((e) => e.type)).toContain('hse.incident.reported');
 
-    const closed = await svc.closeIncident('t1', null, incident.id);
+    await svc.investigateIncident('t1', null, incident.id);
+    const closed = await svc.closeIncident('t1', null, incident.id, 'Ramp not cordoned during washdown');
     expect(closed.status).toBe('closed');
-    await expect(svc.closeIncident('t1', null, 'missing')).rejects.toThrow(/not found/);
+    expect(closed.rootCause).toBe('Ramp not cordoned during washdown');
+    await expect(svc.closeIncident('t1', null, 'missing', 'x')).rejects.toThrow(/not found/);
   });
 });
 

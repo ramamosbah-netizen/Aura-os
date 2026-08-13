@@ -19,7 +19,7 @@ This closes the classic hole where direct `pool.query` reads (list/get) bypass t
 
 ## Layer 3 — Database (RLS) — `VERIFIED_IMPLEMENTED` in code, `NOT VERIFIED` in prod
 
-- 128 migrations touch RLS; `0163_enforce_rls_tenant_isolation.sql` + `0164_rls_activation_closure.sql` enable+FORCE RLS with predicate `tenant_id = current_tenant_id()` and create the least-privilege `aura_app` role (NOSUPERUSER/NOBYPASSRLS).
+- **148 `CREATE POLICY` statements** across the migration set *(Rev 1's "128 migrations touch RLS" was not reproducible — see the correction in `README.md`)*; `0163_enforce_rls_tenant_isolation.sql` + `0164_rls_activation_closure.sql` enable+FORCE RLS with predicate `tenant_id = current_tenant_id()` and create the least-privilege `aura_app` role (NOSUPERUSER/NOBYPASSRLS).
 - Boot-time `evaluateRlsPosture` refuses production if the connection role bypasses RLS.
 - **Caveat:** RLS is *inert* if the runtime connects as a superuser/BYPASSRLS role. Whether staging/prod actually run under `aura_app` is **NOT VERIFIED** here (runtime/ops state). Prior project state: enforced on **dev only**. → this is the platform's #1 production blocker.
 

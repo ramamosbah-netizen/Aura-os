@@ -8,10 +8,10 @@ Format: Risk → Evidence → Probability → Impact → Severity → Mitigation
 | R2 | **Auth misconfigured** (no verifier) → open API | `permissions.guard.ts:100` no-op when auth off | Low (gate is fatal in prod) | Catastrophic | **Critical** | Keep fail-closed gate; add deploy checklist + smoke test hitting a protected route unauthenticated |
 | R3 | **UI regression ships undetected** | 1 browser E2E | High | High | **High** | Spine smoke suite in CI |
 | R4 | **Search collapses at scale** | in-memory fan-out | High (at growth) | High | **High** | FTS/projection index |
-| R5 | **Silent data-integrity drift** (orphans) | 54 FKs/198 tables | Med | High | **High** | Orphan-scan CI gate; selective FKs |
+| R5 | **Silent data-integrity drift** (orphans) | 62 FKs/218 tables @ Rev 2 | Med | High | **High** | Orphan-scan CI gate; selective FKs |
 | R6 | **Financial rounding errors** | float money | Med | High (audited $) | **High** | Decimal money type + balancing tests |
 | R7 | **Reactor failure unnoticed** | dead-letter exists, no operator UI | Med | High | **High** | Outbox/dead-letter admin + alerts |
-| R8 | **Brute-force / API abuse** | no rate limiting | Med | Med | **Med** | Throttler + WAF |
+| R8 | ~~**Brute-force / API abuse**~~ **MITIGATED (Rev 2)** | global `EdgeRateLimitGuard` (`main.ts:59-60`) | Low | Med | **Low** | Residual: per-actor limits + WAF; limiter keys on IP so BFF traffic shares a bucket |
 | R9 | **Error masking erodes trust** | `getJson`→null | High | Med | **High** | Distinct error/empty states |
 | R10 | **Single-process contention** | in-proc bus + monolith | Med | Med | **Med** | Worker process / broker for reactors |
 | R11 | **Unbounded list endpoints** | pagination partial | Med | Med | **Med** | Enforce pagination |

@@ -24,13 +24,14 @@ Comparing *architectural capability*, not screen-count. "≈" = credible primiti
 | Financial controls (GL/AR/AP/tax/FX/consolidation) | ✓ | ≈ | Real domain + tests; double-entry enforcement unproven |
 | Project controls (WBS/EVM/schedule/cost ledger) | Primavera ✓ | ≈ | Real EVM + cost/quantity ledgers |
 | Procurement/inventory (P2P/3-way match) | ✓ | ≈ | Real; batch/valuation △ |
-| Document control / engineering | ✓ | △ | Data model yes, workflow/UI thin |
-| QA/QC · HSE | Procore ✓ | △ | CRUD-level |
+| Document control / engineering | ✓ | **≈** | **Rev 2:** governed revision + drawing state machines, Register/360 UI, browser E2E |
+| QA/QC · HSE | Procore ✓ | **≈** | **Rev 2–2.2:** NCR corrective-action loop; permit-to-work with 3 enforced approval gates + incident/CAPA gate |
 | Workflow engine | ServiceNow ✓ | △ | Orchestrator + approval matrix + event reactors; no visual designer/BPMN |
 | Audit / event sourcing | ✓ | ≈ | Append-only `aura_events` + outbox |
 | Integrations (connectors/webhooks) | ✓ | △ | Connector + webhook kernel; catalog thin |
 | Scalability (proven) | ✓ | ✗ | Unbenchmarked; search fan-out |
 | Governance/extensibility | ✓ | ≈ | ADR registry, form engine, module manager, feature flags |
+| Asset / fleet / maintenance management | ✓ | **≈** | **Rev 2.3:** governed work-order lifecycle + contract gate + stamped SLA outcome; asset disposal gate; fine dispute resolution |
 | Mobile / offline / field service | Procore ✓ | ✗ | Absent |
 | Reporting/analytics | ✓ | △ | Real KPIs, freshness/materialization thin |
 | Compliance (SOC2/audit trails/retention) | ✓ | △ | Audit + data-lifecycle present; certified controls ✗ |

@@ -75,10 +75,15 @@ export class PostgresHseIncidentStore implements HseIncidentStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_hse_incidents (
-        id, tenant_id, company_id, project_id, project_name, date, severity, description, location_detail, status, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        id, tenant_id, company_id, project_id, project_name, date, severity, description, location_detail, status, investigated_by, investigation_started_at, root_cause, closed_by, closed_at, created_by, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       on conflict (id) do update set
         status = excluded.status,
+        investigated_by = excluded.investigated_by,
+        investigation_started_at = excluded.investigation_started_at,
+        root_cause = excluded.root_cause,
+        closed_by = excluded.closed_by,
+        closed_at = excluded.closed_at,
         updated_at = excluded.updated_at`,
       [
         incident.id,
@@ -91,6 +96,11 @@ export class PostgresHseIncidentStore implements HseIncidentStore {
         incident.description,
         incident.locationDetail,
         incident.status,
+        incident.investigatedBy,
+        incident.investigationStartedAt,
+        incident.rootCause,
+        incident.closedBy,
+        incident.closedAt,
         incident.createdBy,
         incident.createdAt,
         incident.updatedAt,
@@ -146,6 +156,11 @@ export class PostgresHseIncidentStore implements HseIncidentStore {
       description: row.description,
       locationDetail: row.location_detail,
       status: row.status,
+      investigatedBy: row.investigated_by ?? null,
+      investigationStartedAt: row.investigation_started_at ? row.investigation_started_at.toISOString() : null,
+      rootCause: row.root_cause ?? null,
+      closedBy: row.closed_by ?? null,
+      closedAt: row.closed_at ? row.closed_at.toISOString() : null,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
@@ -160,12 +175,16 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_hse_ptws (
-        id, tenant_id, company_id, project_id, project_name, permit_type, valid_from, valid_to, description, status, approved_by, approved_at, closed_by, closed_at, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        id, tenant_id, company_id, project_id, project_name, permit_type, valid_from, valid_to, description, status, risk_assessment_id, requested_by, requested_at, approved_by, approved_at, rejection_reason, closed_by, closed_at, created_by, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       on conflict (id) do update set
         status = excluded.status,
+        risk_assessment_id = excluded.risk_assessment_id,
+        requested_by = excluded.requested_by,
+        requested_at = excluded.requested_at,
         approved_by = excluded.approved_by,
         approved_at = excluded.approved_at,
+        rejection_reason = excluded.rejection_reason,
         closed_by = excluded.closed_by,
         closed_at = excluded.closed_at,
         updated_at = excluded.updated_at`,
@@ -180,8 +199,12 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
         permit.validTo,
         permit.description,
         permit.status,
+        permit.riskAssessmentId,
+        permit.requestedBy,
+        permit.requestedAt,
         permit.approvedBy,
         permit.approvedAt,
+        permit.rejectionReason,
         permit.closedBy,
         permit.closedAt,
         permit.createdBy,
@@ -239,8 +262,12 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
       validTo: row.valid_to.toISOString(),
       description: row.description,
       status: row.status,
+      riskAssessmentId: row.risk_assessment_id ?? null,
+      requestedBy: row.requested_by ?? null,
+      requestedAt: row.requested_at ? row.requested_at.toISOString() : null,
       approvedBy: row.approved_by,
       approvedAt: row.approved_at ? row.approved_at.toISOString() : null,
+      rejectionReason: row.rejection_reason ?? null,
       closedBy: row.closed_by ?? null,
       closedAt: row.closed_at ? row.closed_at.toISOString() : null,
       createdBy: row.created_by,
@@ -296,6 +323,20 @@ export class PostgresCapaActionStore implements CapaActionStore {
     const res = await this.pool.query(
       `select * from public.aura_hse_capas where project_id = $1 and tenant_id = $2 order by due_date asc`,
       [projectId, tenantId],
+    );
+    return res.rows.map(this.mapCapa);
+  }
+
+  async findBySource(
+    sourceType: CapaAction['sourceType'],
+    sourceId: string,
+    tenantId: string,
+  ): Promise<CapaAction[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_hse_capas
+        where source_type = $1 and source_id = $2 and tenant_id = $3
+        order by due_date asc`,
+      [sourceType, sourceId, tenantId],
     );
     return res.rows.map(this.mapCapa);
   }

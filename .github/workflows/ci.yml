@@ -385,19 +385,34 @@ jobs:
           # the Next server's single address, so the whole suite shares one bucket and trips the
           # 300/min default partway through. A browser suite's burst is not a traffic profile;
           # raised here rather than weakened in the product.
-          RATE_LIMIT_MAX=100000 PORT=4000 nohup node dist/main.js > api.log 2>&1 &
+          # AUTH ON (G-03 login leg). Setting a verifier engages PermissionsGuard across the whole
+          # surface, which is the point: the suite then proves the app works for an AUTHENTICATED
+          # user rather than for the dev pass-through actor. Grants only hydrate from Postgres and
+          # there is no DATABASE_URL here, so AUTH_SEED_DEV_ADMIN grants the runner the r-admin
+          # role in memory. It is refused outright when NODE_ENV=production or a database is
+          # configured — see AccessService.seedDevAdminGrant and dev-admin-seed.test.ts.
+          RATE_LIMIT_MAX=100000 PORT=4000 AUTH_JWT_SECRET=e2e-only-not-a-real-secret AUTH_DEV_PASSWORD=e2e-password AUTH_SEED_DEV_ADMIN=true AUTH_DEV_ADMIN_USER=u-admin,u-approver nohup node dist/main.js > api.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:4000/api/v1/health >/dev/null && break
             sleep 1
           done
           curl -sf http://localhost:4000/api/v1/health >/dev/null \
             || { echo "::error::API did not become healthy"; cat api.log; exit 1; }
+          # Fail loudly if the verifier did not engage. Otherwise the suite passes while silently
+          # testing the unauthenticated path — exactly the gap this is meant to close.
+          curl -sf http://localhost:4000/api/v1/auth/status | grep -q '"enabled":true' \
+            || { echo "::error::auth did not engage - the suite would run unauthenticated"; cat api.log; exit 1; }
 
       - name: Smoke
         run: pnpm --filter @aura/web e2e
         env:
           CI: 'true'
           AURA_API_URL: http://localhost:4000
+          E2E_USERNAME: u-admin
+          E2E_PASSWORD: e2e-password
+          # A second granted actor. Segregation of duties refuses self-authorisation, so the
+          # permit-approval journey needs one principal to request and another to approve.
+          E2E_ALT_USERNAME: u-approver
 
       - name: API log on failure
         if: failure()

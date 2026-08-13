@@ -66,6 +66,7 @@ const EMPTY_LINE: FormLineItem = { description: '', quantity: 1, unitPrice: 0, v
 
 registerFieldRenderer('select', ({ field, value, onChange, disabled, invalid }) => (
   <select
+    data-testid={`field-${field.name}`}
     className={`select${invalid ? ' input-error' : ''}`}
     value={value}
     onChange={(e) => {
@@ -85,6 +86,7 @@ registerFieldRenderer('select', ({ field, value, onChange, disabled, invalid }) 
 
 registerFieldRenderer('textarea', ({ field, value, onChange, disabled, invalid }) => (
   <textarea
+    data-testid={`field-${field.name}`}
     className={`textarea${invalid ? ' input-error' : ''}`}
     value={value}
     onChange={(e) => onChange(e.target.value)}
@@ -97,6 +99,7 @@ const inputRenderer =
   (type: 'text' | 'date', inputMode?: 'decimal'): FieldRenderer =>
   ({ field, value, onChange, disabled, invalid }) => (
     <input
+      data-testid={`field-${field.name}`}
       className={`input${invalid ? ' input-error' : ''}`}
       type={type}
       inputMode={inputMode}

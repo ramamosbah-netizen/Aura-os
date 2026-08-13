@@ -1,6 +1,6 @@
 import { apiBase, authHeader } from '@/lib/api';
 
-const ALLOWED = new Set(['assign', 'dispute', 'pay']);
+const ALLOWED = new Set(['assign', 'dispute', 'resolve-dispute', 'pay']);
 
 export async function PUT(request: Request, props: { params: Promise<{ id: string; action: string }> }): Promise<Response> {
   const { id, action } = await props.params;

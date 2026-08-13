@@ -25,7 +25,11 @@ interface ProjectLite { id: string; contractId: string | null; title: string; st
 interface TenderLite { id: string; title: string; accountId: string | null; accountName: string | null; value: number; }
 
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+// Locale pinned: a bare toLocaleDateString() renders en-AE on the Node server and en-US in the
+// browser, so React discards the whole subtree on hydration and re-renders it — which reads as
+// an intermittently missing element to anything driving the page. Overlaps the wider sweep in
+// PR #213; reconcile there.
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 
 export default function ContractsRegisterClient({ contracts, bonds, projects, wonTenders }: {
   contracts: Contract[];
@@ -127,7 +131,7 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
           <p style={st.muted}>{contracts.length === 0 ? 'No contracts yet — win a tender or convert an accepted quotation.' : 'Nothing matches the filter.'}</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: 1000 }}>
+            <table className="data-table" style={{ minWidth: 1000 }} data-testid="contracts-register">
               <thead><tr>
                 {['Contract', 'Client', 'Value', 'Status', 'Chain', 'Bonds', 'Awarded', 'Actions'].map((h) => <th key={h}>{h}</th>)}
               </tr></thead>

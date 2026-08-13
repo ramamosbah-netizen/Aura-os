@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -30,6 +30,8 @@ class RequestPermitDto {
   @IsString() validFrom!: string;
   @IsString() validTo!: string;
   @IsString() description!: string;
+  /** The risk assessment authorising the work — approval is refused without an approved one. */
+  @IsOptional() @IsString() riskAssessmentId?: string;
 }
 
 class RaiseCapaDto {
@@ -87,10 +89,32 @@ export class HseController {
     });
   }
 
-  @Put('incidents/:id/close')
-  closeIncident(@Param('id') id: string): Promise<HseIncident> {
+  @Put('incidents/:id/investigate')
+  investigateIncident(@Param('id') id: string): Promise<HseIncident> {
     const ctx = this.tenant.get();
-    return this.hseService.closeIncident(ctx.tenantId, ctx.actorId, id);
+    return this.hseService.investigateIncident(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Put('incidents/:id/close')
+  closeIncident(@Param('id') id: string, @Body() dto: { rootCause?: string }): Promise<HseIncident> {
+    if (!dto?.rootCause?.trim()) throw new BadRequestException('rootCause is required to close an incident');
+    const ctx = this.tenant.get();
+    return this.hseService.closeIncident(ctx.tenantId, ctx.actorId, id, dto.rootCause);
+  }
+
+  @Put('incidents/:id/reopen')
+  reopenIncident(@Param('id') id: string): Promise<HseIncident> {
+    const ctx = this.tenant.get();
+    return this.hseService.reopenIncident(ctx.tenantId, ctx.actorId, id);
+  }
+
+  /** Incident 360 — the record with the corrective actions raised against it. */
+  @Get('incidents/:id/detail')
+  async incidentDetail(@Param('id') id: string) {
+    const ctx = this.tenant.get();
+    const detail = await this.hseService.getIncidentDetail(ctx.tenantId, id);
+    if (!detail) throw new NotFoundException(`incident ${id} not found`);
+    return detail;
   }
 
   @Get('incidents')
@@ -129,6 +153,7 @@ export class HseController {
       validFrom: dto.validFrom,
       validTo: dto.validTo,
       description: dto.description,
+      riskAssessmentId: dto.riskAssessmentId,
       createdBy: ctx.actorId || undefined,
     });
   }
@@ -139,10 +164,44 @@ export class HseController {
     return this.hseService.approvePermit(ctx.tenantId, ctx.actorId, id);
   }
 
+  @Put('ptws/:id/request')
+  requestPermitApproval(@Param('id') id: string): Promise<PermitToWork> {
+    const ctx = this.tenant.get();
+    return this.hseService.requestPermitApproval(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Put('ptws/:id/reject')
+  rejectPermit(@Param('id') id: string, @Body() dto: { reason?: string }): Promise<PermitToWork> {
+    if (!dto?.reason?.trim()) throw new BadRequestException('reason is required to reject a permit');
+    const ctx = this.tenant.get();
+    return this.hseService.rejectPermit(ctx.tenantId, ctx.actorId, id, dto.reason);
+  }
+
+  @Put('ptws/:id/reopen')
+  reopenPermit(@Param('id') id: string): Promise<PermitToWork> {
+    const ctx = this.tenant.get();
+    return this.hseService.reopenPermit(ctx.tenantId, ctx.actorId, id);
+  }
+
+  @Put('ptws/:id/expire')
+  expirePermit(@Param('id') id: string): Promise<PermitToWork> {
+    const ctx = this.tenant.get();
+    return this.hseService.expirePermit(ctx.tenantId, ctx.actorId, id);
+  }
+
   @Put('ptws/:id/close')
   closePermit(@Param('id') id: string): Promise<PermitToWork> {
     const ctx = this.tenant.get();
     return this.hseService.closePermit(ctx.tenantId, ctx.actorId, id);
+  }
+
+  /** Permit 360 — the permit with the risk assessment that authorises it. */
+  @Get('ptws/:id/detail')
+  async permitDetail(@Param('id') id: string) {
+    const ctx = this.tenant.get();
+    const detail = await this.hseService.getPermitDetail(ctx.tenantId, id);
+    if (!detail) throw new NotFoundException(`permit ${id} not found`);
+    return detail;
   }
 
   @Get('ptws')

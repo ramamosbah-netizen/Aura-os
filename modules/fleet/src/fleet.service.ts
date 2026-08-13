@@ -5,7 +5,7 @@ import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner }
 import { type Vehicle, makeVehicle } from './domain/vehicle';
 import { type FuelLog, makeFuelLog } from './domain/fuel-log';
 import { type MaintenanceRecord, makeMaintenanceRecord } from './domain/maintenance';
-import { type TrafficFine, makeTrafficFine, assignFine, disputeFine, payFine } from './domain/traffic-fine';
+import { type TrafficFine, makeTrafficFine, assignFine, disputeFine, resolveDispute, payFine } from './domain/traffic-fine';
 import { type SalikCharge, type NewSalikCharge, type SalikSummary, makeSalikCharge, allocateSalik, disputeSalik, summariseSalik } from './domain/salik-charge';
 import { type VehicleTelemetry, makeVehicleTelemetry, FLEET_TELEMETRY_EVENT } from './domain/telemetry';
 import { type VehicleStore, type FuelLogStore, type MaintenanceStore, type TrafficFineStore, type SalikChargeStore, type TelemetryStore, type VehicleFilter, type FuelLogFilter, type MaintenanceFilter, type TrafficFineFilter, type SalikChargeFilter } from './store.interface';
@@ -326,6 +326,21 @@ export class FleetService {
     if (!fine) throw new Error(`traffic fine ${id} not found`);
     const updated = disputeFine(fine);
     await this.trafficFineStore.save(updated);
+    return updated;
+  }
+
+  /**
+   * Close a dispute: upheld cancels the fine, rejected returns it to `pending` so recovery can
+   * resume. Without this, a disputed fine could never leave that state.
+   */
+  async resolveFineDispute(tenantId: string, id: string, upheld: boolean): Promise<TrafficFine> {
+    const fine = await this.trafficFineStore.findById(tenantId, id);
+    if (!fine) throw new Error(`traffic fine ${id} not found`);
+    const updated = resolveDispute(fine, upheld);
+    await this.trafficFineStore.save(updated);
+    this.logger.log(
+      `Fine ${updated.fineNumber} dispute ${upheld ? 'upheld — cancelled' : 'rejected — liability stands'}`,
+    );
     return updated;
   }
 

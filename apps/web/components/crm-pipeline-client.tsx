@@ -34,7 +34,11 @@ const GAP_LABEL: Record<string, string> = {
 const SOURCES = ['website', 'referral', 'campaign', 'cold_call', 'other'] as const;
 
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+// Locale pinned: a bare toLocaleDateString() renders en-AE on the Node server and en-US in the
+// browser, so React discards the whole subtree on hydration and re-renders it — which reads as
+// an intermittently missing element to anything driving the page. Overlaps the wider sweep in
+// PR #213; reconcile there.
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString('en-AE');
 
 export type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list';
 
@@ -348,7 +352,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       {/* view switch + creates (switcher hides when the workspace owns the tabs) */}
       <div style={s.tabBar}>
         {!controlledView && (['command', 'board', 'analytics', 'sources', 'executive', 'list'] as View[]).map((v) => (
-          <button key={v} type="button" style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
+          <button key={v} type="button" data-testid={`pipeline-view-${v}`} style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
             {v === 'command' ? 'Overview' : v[0].toUpperCase() + v.slice(1)}
           </button>
         ))}
@@ -936,7 +940,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
           <div style={s.panel}>
             <div style={s.panelTitle}>Opportunities ({opps.length})</div>
             {opps.length === 0 ? <p style={s.muted}>No opportunities yet — convert a qualified lead, or create one directly.</p> : (
-              <table style={s.table}><thead><tr>
+              <table style={s.table} data-testid="opportunities-list"><thead><tr>
                 {['Title', 'Account', 'Value', 'Stage', 'Win %', 'Close', 'Path', 'Owner', 'Next action', ''].map((h) => <th key={h} style={s.th}>{h}</th>)}
               </tr></thead><tbody>
                 {opps.map((o) => (

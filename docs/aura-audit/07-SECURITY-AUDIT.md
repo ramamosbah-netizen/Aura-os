@@ -1,6 +1,6 @@
 # 07 — Security Audit
 
-The security *architecture* is a genuine strength; the residual risk is that **enforcement is precondition-gated on correct per-environment configuration**, and that some perimeter controls (rate limiting, CORS) are absent.
+The security *architecture* is a genuine strength; the residual risk is that **enforcement is precondition-gated on correct per-environment configuration**. ~~and that some perimeter controls (rate limiting, CORS) are absent~~ — **superseded at Rev 2: the perimeter controls now exist** (see below); what remains is verifying their per-environment *values*.
 
 ## Severity matrix
 
@@ -8,8 +8,9 @@ The security *architecture* is a genuine strength; the residual risk is that **e
 |---|---|---|---|
 | **CRITICAL** | Production RLS/least-privilege posture unverified on staging/prod | `NOT VERIFIED` / `BLOCKED_BY_INFRASTRUCTURE` | `main.ts` RLS gate; `0163/0164`; live DB not inspectable here |
 | **HIGH** | Authorization inert until JWT verifier configured (default off) | `BLOCKED_BY_CONFIGURATION` | `permissions.guard.ts:100`; `main.ts` auth posture |
-| **HIGH** | No API rate limiting / brute-force protection | `MISSING` | no throttler in `main.ts`/modules |
-| **MEDIUM** | Permissive CORS (`enableCors()` no allowlist) | `PARTIALLY_IMPLEMENTED` | `main.ts` |
+| ~~**HIGH**~~ **RESOLVED (Rev 2)** | ~~No API rate limiting / brute-force protection~~ | `VERIFIED_IMPLEMENTED` | `EdgeRateLimitGuard` registered as a **global guard** — `apps/api/src/main.ts:59-60`; implementation + tests in `core/src/http/rate-limit.guard.ts` |
+| ~~**MEDIUM**~~ **RESOLVED (Rev 2)** | ~~Permissive CORS (`enableCors()` no allowlist)~~ | `VERIFIED_IMPLEMENTED` (mechanism) · `NOT VERIFIED` (prod value) | `resolveCors({ allowedOrigins: process.env.CORS_ALLOWED_ORIGINS, isProduction })` with a boot warning — `main.ts:55-57`, `core/src/http/edge-security.ts:41` |
+| **LOW** (Rev 2, new) | CSP + body-size cap now present | `VERIFIED_IMPLEMENTED` | `cspFor(...)` per-route CSP header (`main.ts:49`, `edge-security.ts:110`); `BODY_LIMIT` request cap |
 | **MEDIUM** | Fine-grained role→permission grant breadth unverified | `NOT VERIFIED` | derivation covers routes; grants not audited |
 | **MEDIUM** | File-upload validation (MIME/size/AV) not verified | `NOT VERIFIED` | `DOCUMENT_STORAGE` seam exists; validation depth unchecked |
 | **LOW** | `ssl: { rejectUnauthorized: false }` for managed PG | `IMPLEMENTED_BUT_UNVERIFIED` | `pg-pool.ts:23` — pragmatic for Supabase, but disables cert validation |
@@ -46,7 +47,7 @@ The security *architecture* is a genuine strength; the residual risk is that **e
 
 1. **P0:** verify and document that staging/prod connect as `NOBYPASSRLS aura_app` with FORCE RLS; add a startup assertion log to every environment.
 2. **P0/ops:** ensure production sets `AUTH_JWKS_URL`/secret + `AUTH_REQUIRED=true`; treat the fail-closed gate as the backstop, not the plan.
-3. **P1:** add rate limiting and a `gitleaks` CI gate; tighten CORS.
+3. ~~**P1:** add rate limiting and a `gitleaks` CI gate; tighten CORS.~~ **Rev 2: rate limiting and the CORS allowlist are DONE** (commit `2377a5a1`, `G-07` closed in `18`). **Still outstanding:** the `gitleaks` secret-scanning CI gate (`G-15`), and confirming `CORS_ALLOWED_ORIGINS` is actually set in each non-dev environment.
 4. **P1:** verify upload MIME/size validation and signed-URL access for the DMS.
 5. **P2:** consider real cert validation for managed PG (pin CA) instead of `rejectUnauthorized:false`.
 

@@ -6,12 +6,12 @@
 aura-os/                      pnpm workspace + turbo
 ├── apps/
 │   ├── api/                  NestJS host — controllers, bootstrap, cross-module wiring
-│   └── web/                  Next.js App Router (151 pages, Server Components)
+│   └── web/                  Next.js App Router (164 pages @ Rev 2, Server Components)
 ├── core/                     @aura/core — kernel: events, tenancy, identity, DMS, config, audit
 ├── shared/                   @aura/shared — domain types, forms, security, pagination, DTOs
 ├── modules/                  20 domain packages (@aura/crm, @aura/finance, …)
 ├── packages/sdk/             @aura/sdk — spec-generated API client (CI drift-gated)
-├── infrastructure/migrations 220 sequential SQL migrations
+├── infrastructure/migrations 228 sequential SQL migrations
 ├── scripts/                  ADR + migration-policy tooling
 ├── docs/                     ADRs, reports, master-report, this audit
 ├── docker-compose.yml        api + web + postgres

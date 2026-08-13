@@ -42,6 +42,57 @@ export class AccessService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await this.hydrate();
     this.seedStandardRoles();
+    this.seedDevAdminGrant();
+  }
+
+  /**
+   * DEV-ONLY: grant the dev actor the `r-admin` role so an authenticated session can actually do
+   * anything.
+   *
+   * Roles are seeded on every boot but **grants only hydrate from Postgres**, so an in-memory boot
+   * has zero grants — turning auth on there makes `PermissionsGuard` refuse every route, which is
+   * precisely what blocked the authenticated browser suite (audit G-03). This closes that, and
+   * nothing else: it is the stand-in for the real grant administration that a deployed tenant does
+   * through `/admin`.
+   *
+   * Three independent conditions must all hold, so this cannot drift into production:
+   *   1. `AUTH_SEED_DEV_ADMIN=true` — explicit opt-in, never a default
+   *   2. `NODE_ENV !== 'production'` — refused outright, and loudly, if it is
+   *   3. no `DATABASE_URL` — a real database carries real grants; never touch them
+   */
+  seedDevAdminGrant(): void {
+    if (process.env.AUTH_SEED_DEV_ADMIN?.trim() !== 'true') return;
+
+    if (process.env.NODE_ENV === 'production') {
+      // Refuse rather than silently ignore: an operator who set this in prod has a wrong mental
+      // model of the deployment and needs to see it.
+      this.logger.error(
+        'AUTH_SEED_DEV_ADMIN is set in production and was REFUSED. Grant administration belongs in /admin; remove this variable.',
+      );
+      return;
+    }
+
+    if (this.pool) {
+      this.logger.warn(
+        'AUTH_SEED_DEV_ADMIN ignored: a database is configured, so grants come from aura_access_grants.',
+      );
+      return;
+    }
+
+    // Comma-separated, because a single principal cannot exercise segregation of duties: the
+    // permit-to-work gate refuses self-authorisation, so proving it end to end needs a second
+    // actor to request what the first one approves.
+    const userIds = (process.env.AUTH_DEV_ADMIN_USER?.trim() || 'u-admin')
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
+    const tenantId = process.env.AUTH_DEV_ADMIN_TENANT?.trim() || 'dev-tenant';
+    for (const userId of userIds) {
+      this.addGrantInMemory({ userId, roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: tenantId } });
+    }
+    this.logger.warn(
+      `DEV ONLY — granted [${userIds.join(', ')}] the r-admin role on tenant '${tenantId}' (in-memory boot, AUTH_SEED_DEV_ADMIN=true).`,
+    );
   }
 
   /** Seed default enterprise roles across all 19 ELV business modules if not registered. */

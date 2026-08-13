@@ -252,7 +252,7 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
           <p style={st.muted}>{all.length === 0 ? 'No accounts yet — add one above.' : 'No accounts match this view.'}</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={st.table}>
+            <table style={st.table} data-testid="accounts-portfolio">
               <thead>
                 <tr>
                   {['Account', 'Relationship', 'Owner', 'Active Deals', 'Pipeline', 'Contracts', 'Projects', 'Outstanding', 'Health', 'Last Activity', ''].map((h, i) => (

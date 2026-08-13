@@ -113,6 +113,16 @@ export class InMemoryCapaActionStore implements CapaActionStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  async findBySource(
+    sourceType: CapaAction['sourceType'],
+    sourceId: string,
+    tenantId: string,
+  ): Promise<CapaAction[]> {
+    return Array.from(this.items.values())
+      .filter((i) => i.sourceType === sourceType && i.sourceId === sourceId && i.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
   async findAll(tenantId: string): Promise<CapaAction[]> {
     return Array.from(this.items.values())
       .filter((i) => i.tenantId === tenantId)

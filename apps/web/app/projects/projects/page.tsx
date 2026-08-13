@@ -111,7 +111,7 @@ export default async function ProjectsPage({
         ) : projects.length === 0 ? (
           <p style={st.muted}>No projects yet — start one from an active contract above.</p>
         ) : (
-          <table style={st.table}>
+          <table style={st.table} data-testid="projects-register">
             <thead>
               <tr>
                 {['Title', 'From contract', 'Account', 'Status', 'Value', 'Created', ''].map((h, i) => (

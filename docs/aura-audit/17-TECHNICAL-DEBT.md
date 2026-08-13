@@ -8,11 +8,11 @@ The codebase is **notably clean** for its size: **14** TODO/FIXME/HACK markers a
 |---|---|---|---|---|
 | D1 | **Search fan-out** loads all entities in memory | `PARTIALLY_IMPLEMENTED` | `search.service.ts` | Scale wall (`16`) |
 | D2 | **`getJson` swallows all errors → `null`** | `PARTIALLY_IMPLEMENTED` | `apps/web/lib/api.ts` | Masks 4xx/5xx as empty state (`06`) |
-| D3 | **Thin DB referential integrity** (54 FKs / 198 tables) | `PARTIALLY_IMPLEMENTED` | migrations | Orphan risk (`04`) |
+| D3 | **Thin DB referential integrity** (62 FKs / 218 tables @ Rev 2; ratio unchanged) | `PARTIALLY_IMPLEMENTED` | migrations | Orphan risk (`04`) |
 | D4 | **Back-half module UI/orchestration thinness** | `PARTIALLY_IMPLEMENTED` | `02` | Journeys not completable in-app (`03`,`10`,`11`) |
 | D5 | **Pagination adopted additively, not enforced** | `PARTIALLY_IMPLEMENTED` | `*/paged` routes | Unbounded lists |
 | D6 | **No caching layer** | `MISSING` | — | Recompute cost |
-| D7 | **Permissive CORS + no rate limiting** | `MISSING` | `main.ts` | Perimeter (`07`) |
+| ~~D7~~ | ~~**Permissive CORS + no rate limiting**~~ **CLEARED (Rev 2)** | `VERIFIED_IMPLEMENTED` | `main.ts:55-60`, `core/src/http/` | Perimeter (`07`, G-07 closed) |
 | D8 | **`ssl.rejectUnauthorized:false`** for managed PG | `IMPLEMENTED_BUT_UNVERIFIED` | `pg-pool.ts:23` | MITM surface on DB link |
 | D9 | **Money as `number` + `toFixed(2)`** | `PARTIALLY_IMPLEMENTED` | `wbs.ts`, aging | Float rounding drift (`09`) |
 | D10 | **Coverage gate absent** despite coverage run | `PARTIALLY_IMPLEMENTED` | `ci.yml` | Regressions slip |

@@ -1,0 +1,3 @@
+
+# Playwright session state written by e2e/global-setup.ts (never commit a session)
+e2e/.auth/

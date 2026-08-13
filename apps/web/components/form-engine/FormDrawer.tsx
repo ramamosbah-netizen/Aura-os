@@ -64,8 +64,14 @@ export default function FormDrawer(props: FormDrawerProps) {
     };
   }, [props.schema]);
 
-  // key flips once the merged schema lands → useFormEngine re-initializes on it
-  return <FormDrawerImpl key={effective ? 'fx' : 'base'} {...props} schema={effective ?? props.schema} />;
+  // The key flip exists so useFormEngine re-initializes on a *patched* schema. Keying it on
+  // "the fetch resolved" instead remounted every drawer in the app, because the no-overrides
+  // path above resolves to the identical schema object — a remount that changes nothing.
+  // It is not harmless: the remount resets FormDrawerImpl's `open`/`values` state, so a user
+  // who opened a drawer before the overrides request landed had it silently closed and their
+  // typed input discarded. Remount only when the schema actually differs.
+  const patched = effective !== null && effective !== props.schema;
+  return <FormDrawerImpl key={patched ? 'fx' : 'base'} {...props} schema={effective ?? props.schema} />;
 }
 
 function FormDrawerImpl({
@@ -197,6 +203,10 @@ function FormDrawerImpl({
 
   const { evaluation } = engine;
   const blocked = engine.touched && (Object.keys(evaluation.fieldErrors).length > 0 || evaluation.errors.length > 0);
+  // Stable E2E hooks, keyed by entity so a page hosting several drawers stays unambiguous
+  // (e.g. Projects renders both a create and a per-row edit drawer). Every create flow in the
+  // app routes through here, so these four testids cover the whole surface — G-03.
+  const slug = schema.entity.toLowerCase().replace(/\s+/g, '-');
   const toolbar = formToolbarActions(schema);
   const formApi: FormApi = {
     schema,
@@ -210,17 +220,17 @@ function FormDrawerImpl({
   return (
     <>
       {mode === 'create' ? (
-        <button type="button" className="btn btn-primary" onClick={openDrawer}>
+        <button type="button" data-testid={`create-${slug}`} className="btn btn-primary" onClick={openDrawer}>
           <span aria-hidden>＋</span> {buttonLabel ?? `New ${schema.entity}`}
         </button>
       ) : (
-        <button type="button" className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12.5 }} onClick={openDrawer}>
+        <button type="button" data-testid={`${mode}-${slug}`} className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12.5 }} onClick={openDrawer}>
           {buttonLabel ?? (isEdit ? 'Edit' : mode === 'clone' ? 'Clone' : 'View')}
         </button>
       )}
 
       {toast ? (
-        <div className="toast" role="status">
+        <div className="toast" role="status" data-testid="form-toast">
           <span className="dot" /> {toast}
         </div>
       ) : null}
@@ -228,7 +238,7 @@ function FormDrawerImpl({
       {open ? (
         <>
           <div className="drawer-overlay" onClick={close} />
-          <div ref={panelRef} className="drawer" role="dialog" aria-modal="true" aria-label={`${isEdit ? 'Edit' : 'New'} ${schema.entity}`}>
+          <div ref={panelRef} data-testid={`drawer-${slug}`} className="drawer" role="dialog" aria-modal="true" aria-label={`${isEdit ? 'Edit' : 'New'} ${schema.entity}`}>
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="drawer-head">
                 <div>
@@ -249,7 +259,7 @@ function FormDrawerImpl({
               </div>
 
               <div className="drawer-body">
-                {err ? <div className="drawer-error">{err}</div> : null}
+                {err ? <div className="drawer-error" data-testid={`drawer-error-${slug}`}>{err}</div> : null}
                 {evaluation.errors.map((m, i) => (
                   <div key={`e${i}`} className="drawer-error">
                     {m}
@@ -276,7 +286,7 @@ function FormDrawerImpl({
                   {isView ? 'Close' : 'Cancel'}
                 </button>
                 {!isView ? (
-                  <button type="submit" className="btn btn-primary" disabled={busy}>
+                  <button type="submit" data-testid={`submit-${slug}`} className="btn btn-primary" disabled={busy}>
                     {busy ? 'Saving…' : isEdit ? 'Save changes' : `Create ${schema.entity}`}
                   </button>
                 ) : null}

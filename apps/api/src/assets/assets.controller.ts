@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Param, Post, Put, Query, NotFoundException } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -106,6 +106,15 @@ export class AssetsController {
   listAssets(): Promise<Asset[]> {
     const ctx = this.tenant.get();
     return this.assetsService.listAssets(ctx.tenantId);
+  }
+
+  /** Asset 360 — the register row with its maintenance, open-job count, and disposal. */
+  @Get(':id/detail')
+  async assetDetail(@Param('id') id: string) {
+    const ctx = this.tenant.get();
+    const detail = await this.assetsService.getAssetDetail(ctx.tenantId, id);
+    if (!detail) throw new NotFoundException(`asset ${id} not found`);
+    return detail;
   }
 
   @Get(':id/depreciation')

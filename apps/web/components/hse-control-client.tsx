@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
 
+/** Surface the API's own refusal text (the taxonomy sends a useful message) rather than a generic one. */
+async function extractError(res: Response): Promise<string> {
+  const data = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+  return data?.message || data?.error || `Request failed (${res.status})`;
+}
+
 interface Project {
   id: string;
   title: string;
@@ -81,7 +87,15 @@ interface SafetyTrainingRecord {
   updatedAt: string;
 }
 
+interface RiskAssessmentLite {
+  id: string;
+  reference: string;
+  activity: string;
+  status: string;
+}
+
 interface Props {
+  riskAssessments: RiskAssessmentLite[];
   initialIncidents: HseIncident[];
   initialPermits: PermitToWork[];
   initialCapas: CapaAction[];
@@ -95,6 +109,7 @@ export default function HseControlClient({
   initialCapas,
   initialTrainingRecords,
   projects,
+  riskAssessments,
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'incidents' | 'ptws' | 'capas' | 'training'>('incidents');
@@ -106,12 +121,28 @@ export default function HseControlClient({
 
   const today = new Date().toISOString().split('T')[0];
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.title }));
+  // A permit cannot be approved without an approved assessment, so offer them at request time.
+  const riskAssessmentOptions = riskAssessments.map((r) => ({ value: r.id, label: `${r.reference} — ${r.activity}` }));
 
-  const handleCloseIncident = async (id: string) => {
+  // Closing an incident is now a governed step (0229): it walks reported → investigating → closed,
+  // needs a root cause, and is refused while corrective actions are still open. Prompt for the
+  // cause here rather than silently sending a close the API will reject.
+  const handleCloseIncident = async (id: string, status: string) => {
     setError(null);
     try {
-      const res = await fetch(`/api/hse/incidents/${id}/close`, { method: 'PUT' });
-      if (!res.ok) throw new Error(await res.text());
+      if (status === 'reported') {
+        const started = await fetch(`/api/hse/incidents/${id}/investigate`, { method: 'PUT' });
+        if (!started.ok) throw new Error(await extractError(started));
+      }
+      const rootCause = window.prompt('Root cause (required to close this incident):')?.trim();
+      if (!rootCause) return;
+
+      const res = await fetch(`/api/hse/incidents/${id}/close`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ rootCause }),
+      });
+      if (!res.ok) throw new Error(await extractError(res));
       router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to close safety incident');
@@ -251,7 +282,7 @@ export default function HseControlClient({
                       <td style={st.td}>
                         {i.status !== 'closed' && (
                           <button
-                            onClick={() => handleCloseIncident(i.id)}
+                            onClick={() => handleCloseIncident(i.id, i.status)}
                             style={st.btnApprove}
                           >
                             Close Incident
@@ -294,8 +325,20 @@ export default function HseControlClient({
                 { name: 'validFrom', label: 'Valid from', kind: 'date', required: true, transform: 'isoDate' },
                 { name: 'validTo', label: 'Valid to', kind: 'date', required: true, transform: 'isoDate' },
                 { name: 'description', label: 'Work & safety controls', kind: 'textarea', required: true, placeholder: 'Activities, safety measures, gas readings, rescue team allocations…' },
+                {
+                  name: 'riskAssessmentId',
+                  label: 'Risk assessment',
+                  kind: 'select',
+                  span: 2,
+                  placeholder: riskAssessmentOptions.length > 0 ? 'Select the approved assessment' : 'No approved assessments yet',
+                  hint: 'Required before this permit can be approved — only approved assessments are listed.',
+                  options: riskAssessmentOptions,
+                },
               ]}
             />
+            <a href="/hse/permits" style={st.registerLink} data-testid="link-permit-register">
+              Open Permit Register →
+            </a>
           </div>
 
           {/* List panel */}
@@ -555,6 +598,7 @@ export default function HseControlClient({
 }
 
 const st = {
+  registerLink: { color: 'var(--accent, #2563eb)', textDecoration: 'none', fontWeight: 600, fontSize: 13.5, alignSelf: 'center' } as CSSProperties,
   tabs: { display: 'flex', gap: 8, margin: '0 0 24px' } as CSSProperties,
   tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   tabBtn: {

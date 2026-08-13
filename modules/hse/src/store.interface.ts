@@ -34,6 +34,8 @@ export interface CapaActionStore {
   save(action: CapaAction, tx?: TxHandle): Promise<void>;
   findById(id: string, tenantId: string): Promise<CapaAction | null>;
   findByProject(projectId: string, tenantId: string): Promise<CapaAction[]>;
+  /** Corrective actions raised against one source record — powers the incident close gate. */
+  findBySource(sourceType: CapaAction['sourceType'], sourceId: string, tenantId: string): Promise<CapaAction[]>;
   findAll(tenantId: string): Promise<CapaAction[]>;
 }
 

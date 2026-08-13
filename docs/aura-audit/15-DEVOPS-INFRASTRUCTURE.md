@@ -22,7 +22,7 @@ This is a genuinely strong pipeline: it gates on architecture governance, schema
 
 ## Migrations in the deploy path — `VERIFIED_IMPLEMENTED`
 
-- 220 sequential migrations; `MigrationGateService` degrades business routes to 503 when the DB is behind the build (`main.ts`), keeping health/metrics/docs reachable.
+- **228** sequential migrations (Rev 1: 220); `MigrationGateService` degrades business routes to 503 when the DB is behind the build (`main.ts`), keeping health/metrics/docs reachable.
 - `pnpm db:migrate` runs the chain.
 
 ## Gaps

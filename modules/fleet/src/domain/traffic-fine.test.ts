@@ -54,6 +54,7 @@ describe('TrafficFine', () => {
 
   it('cannot assign an already-paid fine', () => {
     const f = payFine(makeTrafficFine(base));
-    expect(() => assignFine(f, 'emp-7')).toThrow('cannot assign');
+    // Phrased "can only" so the API error taxonomy maps a state conflict to 409, not 400.
+    expect(() => assignFine(f, 'emp-7')).toThrow(/can only advance/);
   });
 });

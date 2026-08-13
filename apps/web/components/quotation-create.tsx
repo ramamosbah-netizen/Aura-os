@@ -96,12 +96,12 @@ export default function QuotationCreate() {
   }
 
   if (!open) {
-    return <button type="button" style={st.openBtn} onClick={() => setOpen(true)}>+ New quotation</button>;
+    return <button type="button" data-testid="create-quotation" style={st.openBtn} onClick={() => setOpen(true)}>+ New quotation</button>;
   }
 
   return (
     <div style={st.backdrop} onClick={() => !busy && setOpen(false)}>
-      <div style={st.drawer} onClick={(e) => e.stopPropagation()}>
+      <div style={st.drawer} data-testid="drawer-quotation" onClick={(e) => e.stopPropagation()}>
         <div style={st.head}>
           <b>New quotation</b>
           <button type="button" style={st.x} onClick={() => setOpen(false)} aria-label="close">✕</button>
@@ -111,6 +111,7 @@ export default function QuotationCreate() {
         <label style={st.label}>Customer
           <div style={st.combo}>
             <input
+              data-testid="field-customer"
               value={query}
               onChange={(e) => { setQuery(e.target.value); setPicked(null); }}
               placeholder="Search or type a new customer…"
@@ -140,6 +141,7 @@ export default function QuotationCreate() {
 
         <label style={st.label}>Subject
           <input
+            data-testid="field-subject"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="What the quote is for — e.g. Tower B ELV fit-out"
@@ -149,10 +151,10 @@ export default function QuotationCreate() {
           <span style={st.sub}>Becomes the title of the contract and the project.</span>
         </label>
 
-        {err && <p style={st.err}>{err}</p>}
+        {err && <p style={st.err} data-testid="drawer-error-quotation">{err}</p>}
 
         <div style={st.foot}>
-          <button type="button" style={st.primary} onClick={() => void submit()} disabled={busy || !trimmed}>
+          <button type="button" data-testid="submit-quotation" style={st.primary} onClick={() => void submit()} disabled={busy || !trimmed}>
             {busy ? 'Creating…' : 'Create & open pricing sheet →'}
           </button>
           <button type="button" style={st.ghost} onClick={() => setOpen(false)} disabled={busy}>Cancel</button>

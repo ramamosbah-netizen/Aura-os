@@ -7,6 +7,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // ------------------------------------------------------------------- types
 
@@ -45,7 +46,7 @@ function timeAgo(iso: string | null): string {
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
 }
-const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const clock = (iso: string) => new Date(iso).toLocaleTimeString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, hour: '2-digit', minute: '2-digit' });
 const money = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 const AVATAR_COLORS = ['#7aa2f7', '#9ece6a', '#e0af68', '#f7768e', '#bb9af7', '#2ac3de', '#ff9e64'];
 const avatarColor = (name: string) => AVATAR_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
@@ -486,7 +487,7 @@ function MailPane({ me, users, mailbox, onChanged }: {
             <div style={st.mailMeta}>
               <span style={{ ...st.avatar(26), background: avatarColor(open.from) }}>{displayName(open.from)[0]}</span>
               <span><strong>{displayName(open.from)}</strong> → {open.to.map(displayName).join(', ')}</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{new Date(open.sentAt).toLocaleString()}</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{new Date(open.sentAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</span>
             </div>
             <div style={st.mailBody}>{open.body || <em style={{ color: 'var(--muted)' }}>(no body)</em>}</div>
           </div>
@@ -557,7 +558,7 @@ function NotificationsPane({ items, onChanged }: { items: HubNotification[]; onC
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: n.read ? 500 : 700, fontSize: 14 }}>{n.title}</div>
               {n.body ? <div style={st.inboxDetail}>{n.body}</div> : null}
-              <div style={{ ...st.channelTime, marginTop: 4 }}>{new Date(n.createdAt).toLocaleString()}</div>
+              <div style={{ ...st.channelTime, marginTop: 4 }}>{new Date(n.createdAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</div>
             </div>
             {!n.read ? (
               <button type="button" style={st.ghostBtn} disabled={busy} onClick={() => void markRead(n.id)}>Mark read</button>

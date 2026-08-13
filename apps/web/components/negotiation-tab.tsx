@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import type { CommQuotation } from './commercial-workspace';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // The negotiation log — what was asked, what was answered, what the competition was doing.
 //
@@ -36,7 +37,7 @@ interface Summary {
 
 const aed = (n: number): string => `AED ${Math.round(n).toLocaleString('en-AE')}`;
 const day = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' });
+  new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: 'numeric', month: 'short', year: 'numeric' });
 
 /** How each entry type reads in the log. */
 const TYPE: Record<string, { label: string; icon: string; tone?: string }> = {

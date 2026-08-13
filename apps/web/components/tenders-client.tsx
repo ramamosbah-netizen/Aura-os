@@ -3,6 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TenderCreate, { TenderEdit } from './tender-create';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Tendering · Tenders — the bid register. Every tender shows its urgency
 // (submission deadline), its provenance (source opportunity), its internal
@@ -33,7 +34,7 @@ const ACTIVE_STATUSES = ['draft', 'qualifying', 'estimating', 'priced'];
 const SOURCE_LABELS: Record<string, string> = { invitation: 'Invitation', public: 'Public', private: 'Private', opportunity: 'Opportunity' };
 
 const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 export default function TendersClient({ tenders, accounts, sheets, quotations, contracts }: {
   tenders: Tender[];

@@ -7,6 +7,7 @@ import ExportButton from './export-button';
 import NextBestActionBanner from './ui/next-best-action-banner';
 import SaveViewButton from './save-view-button';
 import SignatureCanvas from './ui/signature-canvas';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Project { id: string; title: string }
 
@@ -214,7 +215,7 @@ export default function HandoverClient({
 
                   {accepted ? (
                     <p style={st.signoff}>
-                      ✓ Accepted {p.acceptedAt ? new Date(p.acceptedAt).toLocaleDateString() : ''} by <strong>{p.clientRepresentative}</strong>
+                      ✓ Accepted {p.acceptedAt ? new Date(p.acceptedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : ''} by <strong>{p.clientRepresentative}</strong>
                       {p.warrantyStartDate ? ` — warranty: ${p.warrantyMonths ?? 12} months from ${p.warrantyStartDate}` : ''}
                     </p>
                   ) : (

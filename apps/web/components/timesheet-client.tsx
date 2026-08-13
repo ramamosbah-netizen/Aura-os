@@ -5,6 +5,7 @@ import ProjectPicker from './ui/project-picker';
 
 import { type CSSProperties, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface TimesheetEntry {
   id: string;
@@ -19,7 +20,11 @@ interface TimesheetEntry {
 }
 
 function fmtDate(d: string): string {
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  // A timesheet day ('2026-08-13') carries no time and no zone. Parsed bare it means midnight in
+  // whichever zone the runtime happens to be in, which lands on the previous day for any viewer
+  // east of the display zone — so anchor both the parse and the render to UTC and let the value
+  // mean the literal date it says.
+  return new Date(d + 'T00:00:00Z').toLocaleDateString(DISPLAY_LOCALE, { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 const statusColor: Record<string, string> = { draft: 'var(--muted)', submitted: 'var(--accent)', approved: 'var(--good)', rejected: 'var(--bad)' };

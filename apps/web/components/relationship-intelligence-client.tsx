@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Relationship Intelligence — the CRM alert engine. A single ranked list of
 // "act on this now" signals across accounts, opportunities and quotes, filterable
@@ -40,7 +41,7 @@ export const SEV = {
   low: { label: 'Low', color: 'var(--muted)' },
 } as const;
 
-const fmt = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString() : '—');
+const fmt = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : '—');
 
 export default function RelationshipIntelligenceClient({ data }: { data: AlertsPayload | null }) {
   const [kind, setKind] = useState('');

@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import type { CommQuotation } from './commercial-workspace';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // The Documents tab — the DMS access-control layer (#168) made visible and usable.
 //
@@ -41,7 +42,7 @@ const SOURCE_WORD: Record<string, string> = {
 };
 
 const day = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' });
+  new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: 'numeric', month: 'short', year: 'numeric' });
 
 export default function DocumentsTab({ quotations }: { quotations: CommQuotation[] }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);

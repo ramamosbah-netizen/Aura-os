@@ -1,8 +1,9 @@
 'use client';
 
-import { type CSSProperties, useState } from 'react';
+import { Fragment, type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { InvoiceEdit } from './invoice-create';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Invoice {
   id: string;
@@ -46,7 +47,7 @@ function fmt(iso: string): string {
 // browser, so React discards the whole subtree on hydration and re-renders it — which reads as
 // an intermittently missing element to anything driving the page. Overlaps the wider sweep in
 // PR #213; reconcile there.
-  return new Date(iso).toLocaleDateString('en-AE');
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
 export default function InvoicesList({
@@ -171,8 +172,8 @@ export default function InvoicesList({
               const matchOk = poMatch && grnMatch;
 
               return (
-                <>
-                  <tr key={inv.id} style={isPaying ? s.rowSelected : s.row}>
+                <Fragment key={inv.id}>
+                  <tr style={isPaying ? s.rowSelected : s.row}>
                     <td style={s.td}>
                       <a
                         href={`/finance/invoices/${inv.id}`}
@@ -234,7 +235,7 @@ export default function InvoicesList({
 
                   {/* Expanded 3-Way Match Verification Card */}
                   {hasPo && (
-                    <tr key={`match-audit-${inv.id}`} style={s.auditBg}>
+                    <tr style={s.auditBg}>
                       <td colSpan={9} style={s.auditCell}>
                         <div style={s.auditContainer}>
                           <h4 style={s.auditTitle}>3-Way Matching Auditor</h4>
@@ -262,7 +263,7 @@ export default function InvoicesList({
 
                   {/* Inline Payment Form & Double-Entry Preview */}
                   {isPaying && (
-                    <tr key={`pay-form-${inv.id}`} style={s.expandedBg}>
+                    <tr style={s.expandedBg}>
                       <td colSpan={9} style={s.expandedCell}>
                         <div style={s.payFormContainer}>
                           <h4 style={{ margin: '0 0 10px 0', fontSize: 13.5, color: 'var(--accent)' }}>
@@ -363,7 +364,7 @@ export default function InvoicesList({
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

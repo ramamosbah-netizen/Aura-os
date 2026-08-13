@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Customer dossier — A4 print sheet (browser print-to-PDF, the platform's
 // document pattern). Everything the Account 360 knows, print-formatted.
@@ -24,7 +25,7 @@ interface Payload {
 }
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 2 }).format(n);
-const d = (iso: string): string => new Date(iso).toLocaleDateString('en-GB');
+const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 export default function AccountDossierPrint({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

@@ -5,6 +5,7 @@ import EmptyState from './ui/empty-state';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Vehicle {
   id: string;
@@ -543,7 +544,7 @@ export default function FleetControlClient({
                         <td style={st.tdCode}>{v.lastLongitude}</td>
                         <td style={st.tdBold}>{v.lastSpeed} km/h</td>
                         <td style={st.tdCode}>{v.lastOdometer?.toLocaleString()} km</td>
-                        <td style={st.tdMuted}>{v.lastTelemetryAt ? new Date(v.lastTelemetryAt).toLocaleString() : '—'}</td>
+                        <td style={st.tdMuted}>{v.lastTelemetryAt ? new Date(v.lastTelemetryAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

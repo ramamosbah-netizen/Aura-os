@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 /**
  * Work-order action bar (G-08 residue). Renders only the commands legal from the current status
@@ -12,6 +13,10 @@ import { useRouter } from 'next/navigation';
 export default function WorkOrderActions({ id, status }: { id: string; status: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
+  // landing on the server-rendered markup is otherwise swallowed without trace.
+  const hydrated = useHydrated();
+  const locked = busy || !hydrated;
   const [error, setError] = useState<string | null>(null);
   const [technician, setTechnician] = useState('');
   const [cost, setCost] = useState('');
@@ -47,17 +52,17 @@ export default function WorkOrderActions({ id, status }: { id: string; status: s
             style={st.input}
             placeholder="Technician"
             value={technician}
-            onChange={(e) => setTechnician(e.target.value)}
+            onChange={(e) => setTechnician(e.target.value)} disabled={locked}
             data-testid="input-technician"
           />
-          <button style={st.primary} disabled={busy} data-testid="btn-assign" onClick={() => void run('assign', { technicianId: technician })}>
+          <button style={st.primary} disabled={locked} data-testid="btn-assign" onClick={() => void run('assign', { technicianId: technician })}>
             Assign technician
           </button>
         </div>
       )}
 
       {status === 'assigned' && (
-        <button style={st.ghost} disabled={busy} data-testid="btn-start" onClick={() => void run('start')}>
+        <button style={st.ghost} disabled={locked} data-testid="btn-start" onClick={() => void run('start')}>
           Start work
         </button>
       )}
@@ -69,12 +74,12 @@ export default function WorkOrderActions({ id, status }: { id: string; status: s
             placeholder="Billable cost"
             inputMode="decimal"
             value={cost}
-            onChange={(e) => setCost(e.target.value)}
+            onChange={(e) => setCost(e.target.value)} disabled={locked}
             data-testid="input-cost"
           />
           <button
             style={st.primary}
-            disabled={busy}
+            disabled={locked}
             data-testid="btn-complete"
             onClick={() => void run('complete', cost ? { cost: Number(cost) } : {})}
           >
@@ -84,7 +89,7 @@ export default function WorkOrderActions({ id, status }: { id: string; status: s
       )}
 
       {!terminal && (
-        <button style={st.danger} disabled={busy} data-testid="btn-cancel" onClick={() => void run('cancel')}>
+        <button style={st.danger} disabled={locked} data-testid="btn-cancel" onClick={() => void run('cancel')}>
           Cancel
         </button>
       )}

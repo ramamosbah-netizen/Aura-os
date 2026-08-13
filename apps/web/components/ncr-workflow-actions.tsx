@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 /**
  * NCR corrective-action bar. Renders only the commands legal from the current status and POSTs them
@@ -11,6 +12,10 @@ import { useRouter } from 'next/navigation';
 export default function NcrWorkflowActions({ id, status }: { id: string; status: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
+  // landing on the server-rendered markup is otherwise swallowed without trace.
+  const hydrated = useHydrated();
+  const locked = busy || !hydrated;
   const [error, setError] = useState<string | null>(null);
   const [rootCause, setRootCause] = useState('');
   const [correctiveAction, setCorrectiveAction] = useState('');
@@ -44,28 +49,28 @@ export default function NcrWorkflowActions({ id, status }: { id: string; status:
     <div style={st.wrap} data-testid="ncr-actions" data-status={status}>
       {status === 'raised' && (
         <div style={st.group}>
-          <input style={st.input} placeholder="Root cause (required)" value={rootCause} onChange={(e) => setRootCause(e.target.value)} />
-          <input style={{ ...st.input, minWidth: 220 }} placeholder="Corrective action (required)" value={correctiveAction} onChange={(e) => setCorrectiveAction(e.target.value)} />
-          <input style={st.input} placeholder="Assign to" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-plan" onClick={() => run('plan', { rootCause, correctiveAction, assignedTo })}>
+          <input style={st.input} placeholder="Root cause (required)" value={rootCause} onChange={(e) => setRootCause(e.target.value)} disabled={locked} />
+          <input style={{ ...st.input, minWidth: 220 }} placeholder="Corrective action (required)" value={correctiveAction} onChange={(e) => setCorrectiveAction(e.target.value)} disabled={locked} />
+          <input style={st.input} placeholder="Assign to" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-plan" onClick={() => run('plan', { rootCause, correctiveAction, assignedTo })}>
             Plan corrective action
           </button>
         </div>
       )}
 
       {status === 'action_planned' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-correct" onClick={() => run('correct')}>
+        <button style={st.primary} disabled={locked} data-testid="btn-correct" onClick={() => run('correct')}>
           Mark corrected
         </button>
       )}
 
       {status === 'corrected' && (
         <div style={st.group}>
-          <input style={{ ...st.input, minWidth: 260 }} placeholder="Verification note (required to reject)" value={note} onChange={(e) => setNote(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-verify-accept" onClick={() => run('verify', { accepted: true, note })}>
+          <input style={{ ...st.input, minWidth: 260 }} placeholder="Verification note (required to reject)" value={note} onChange={(e) => setNote(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-verify-accept" onClick={() => run('verify', { accepted: true, note })}>
             Verify &amp; close
           </button>
-          <button style={st.danger} disabled={busy} data-testid="btn-verify-reject" onClick={() => run('verify', { accepted: false, note })}>
+          <button style={st.danger} disabled={locked} data-testid="btn-verify-reject" onClick={() => run('verify', { accepted: false, note })}>
             Reject correction
           </button>
         </div>

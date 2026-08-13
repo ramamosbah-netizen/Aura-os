@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 /**
  * Drawing workflow action bar (G-32). Renders only the commands legal from the current status and
@@ -11,6 +12,10 @@ import { useRouter } from 'next/navigation';
 export default function DrawingWorkflowActions({ id, status }: { id: string; status: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
+  // landing on the server-rendered markup is otherwise swallowed without trace.
+  const hydrated = useHydrated();
+  const locked = busy || !hydrated;
   const [error, setError] = useState<string | null>(null);
   // Inline field state for commands that carry a payload.
   const [recipient, setRecipient] = useState('');
@@ -45,30 +50,30 @@ export default function DrawingWorkflowActions({ id, status }: { id: string; sta
     <div style={st.wrap} data-testid="workflow-actions" data-status={status}>
       {status === 'draft' && (
         <div style={st.group}>
-          <input style={st.input} placeholder="Recipient (e.g. Consultant)" value={recipient} onChange={(e) => setRecipient(e.target.value)} />
-          <input style={st.input} placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-submit" onClick={() => run('submit', { recipient, purpose })}>
+          <input style={st.input} placeholder="Recipient (e.g. Consultant)" value={recipient} onChange={(e) => setRecipient(e.target.value)} disabled={locked} />
+          <input style={st.input} placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-submit" onClick={() => run('submit', { recipient, purpose })}>
             Submit for review
           </button>
         </div>
       )}
 
       {status === 'submitted' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-start-review" onClick={() => run('start-review')}>
+        <button style={st.primary} disabled={locked} data-testid="btn-start-review" onClick={() => run('start-review')}>
           Start review
         </button>
       )}
 
       {status === 'under_review' && (
         <div style={st.group}>
-          <input style={{ ...st.input, minWidth: 260 }} placeholder="Reviewer comments (required to reject/return)" value={comments} onChange={(e) => setComments(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-approve" onClick={() => run('review', { outcome: 'approved', comments })}>
+          <input style={{ ...st.input, minWidth: 260 }} placeholder="Reviewer comments (required to reject/return)" value={comments} onChange={(e) => setComments(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-approve" onClick={() => run('review', { outcome: 'approved', comments })}>
             Approve
           </button>
-          <button style={st.warn} disabled={busy} data-testid="btn-return" onClick={() => run('review', { outcome: 'returned_for_revision', comments })}>
+          <button style={st.warn} disabled={locked} data-testid="btn-return" onClick={() => run('review', { outcome: 'returned_for_revision', comments })}>
             Return for revision
           </button>
-          <button style={st.danger} disabled={busy} data-testid="btn-reject" onClick={() => run('review', { outcome: 'rejected', comments })}>
+          <button style={st.danger} disabled={locked} data-testid="btn-reject" onClick={() => run('review', { outcome: 'rejected', comments })}>
             Reject
           </button>
         </div>
@@ -76,8 +81,8 @@ export default function DrawingWorkflowActions({ id, status }: { id: string; sta
 
       {(status === 'rejected' || status === 'revision_required') && (
         <div style={st.group}>
-          <input style={{ ...st.input, minWidth: 260 }} placeholder="Reason for revision (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-revise" onClick={() => run('revise', { reason })}>
+          <input style={{ ...st.input, minWidth: 260 }} placeholder="Reason for revision (required)" value={reason} onChange={(e) => setReason(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-revise" onClick={() => run('revise', { reason })}>
             Raise next revision
           </button>
         </div>
@@ -85,16 +90,16 @@ export default function DrawingWorkflowActions({ id, status }: { id: string; sta
 
       {status === 'approved' && (
         <div style={st.group}>
-          <input style={st.input} placeholder="Recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)} />
-          <input style={st.input} placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-transmit" onClick={() => run('transmit', { recipient, purpose: purpose || 'For Construction' })}>
+          <input style={st.input} placeholder="Recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)} disabled={locked} />
+          <input style={st.input} placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-transmit" onClick={() => run('transmit', { recipient, purpose: purpose || 'For Construction' })}>
             Transmit
           </button>
         </div>
       )}
 
       {status === 'transmitted' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-close" onClick={() => run('close')}>
+        <button style={st.primary} disabled={locked} data-testid="btn-close" onClick={() => run('close')}>
           Close
         </button>
       )}

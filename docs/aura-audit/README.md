@@ -22,6 +22,22 @@ This audit is **evidence-driven**. Every material claim is anchored to a file pa
 
 ## Revision history
 
+### Rev 2.4 — 2026-08-13 (`offline-sync:168` closed — and two corrections to how it was reported)
+
+The flaky spec this audit has now mis-diagnosed twice is fixed (PR #210). Both earlier readings were wrong, and the second error is the one worth recording: **Rev 2.2 called it a test-isolation defect, and it was not.**
+
+| Rev 2.2 said | What it actually was |
+|---|---|
+| A flaky spec | A spec that **raced its own setup**. It killed the page against the reconnect; when the close won, the item was still `pending`, so the reopened session sent it for the *first* time and the deduplication under test was never exercised. The **green** runs were the ones that failed to stage the scenario |
+| Its offline queue poisons the next spec | Unreproducible at `1a14a036`, where `permit-workflow.spec.ts` does not exist. Playwright isolates contexts per test. The one genuinely shared channel was an **aborted in-flight request against the common `next dev` server** |
+| An open test-isolation defect | **Two engine defects.** A reclaimed stranded item served a backoff it had never earned (`updateOfflineItemStatus(…, 'pending')` stamps `lastAttemptAt = now`), and nothing anywhere acted on a computed backoff — every deferred retry fell through to the 60s sweep, past the spec's own 30s poll |
+
+Staging the crash properly then surfaced a live product bug the suite had never been able to reach: the Next BFF rebuilt its outbound headers and **dropped `Idempotency-Key`**, so every offline replay double-committed. A field engineer's report, filed offline and replayed after a crash, was landing twice.
+
+**Verified:** `offline-sync.spec.ts --repeat-each 6` → 24/24, the crash test ~3.9s where it previously timed out at 32s · full browser suite on `main` **28 passed / 0 failed / 1 skipped** · five `offline-sync` → *X* pairings all green · typecheck, web unit, `next build` clean · lint 0 errors. Negative control: removing the header forwarding makes the spec read **2 rows**, so the assertion is load-bearing.
+
+**Carried forward:** the poisoning claim is *neither confirmed nor cleared* — it needs one `offline-sync` → `permit-workflow` run **on this branch** once #210 lands. Scores are untouched: nothing here was measured against the readiness rubric.
+
 ### Rev 2.3 — 2026-08-12 (G-08 CLOSED: amc, assets, fleet)
 
 The last three modules named in G-08. None is a safety control, so each was judged on whether it kept a **financial or recovery record honest** — and none of them did.
@@ -73,7 +89,7 @@ First revision to record work done **in response to** the audit rather than mere
 
 A product bug surfaced while making it pass: `FormDrawer` keyed its remount on *"the overrides fetch resolved"* rather than *"the schema changed"*, so every drawer in the app remounted once for nothing — and a user who opened one before that request landed had it **silently closed and their typed input discarded**. Fixed in the same commit.
 
-*(Rev 2.1 also claimed this fix cured `offline-sync:168`. It did not — see the correction in `14`. That spec is flaky and remains an open test-isolation defect.)*
+*(Rev 2.1 also claimed this fix cured `offline-sync:168`. It did not — see the corrections in `14`. Rev 2.2 then called it an open test-isolation defect; **Rev 2.4 corrects that too** and closes the spec, for reasons that had nothing to do with isolation.)*
 
 **G-03 remains P0.** Its acceptance reads *"login → create+read"*; the create+read half is done and green, the **login** half is blocked — `AUTH_JWT_SECRET` engages `PermissionsGuard` across the whole surface, and on an in-memory boot no user holds a grant, so every route would 403. That needs a dev-grant seeding decision, which belongs with G-02. Per Rev 2's own rule — *a gate is binary* — the P0 and the ~68 headline stand.
 

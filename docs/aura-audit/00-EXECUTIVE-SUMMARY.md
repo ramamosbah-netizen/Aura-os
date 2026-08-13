@@ -3,7 +3,7 @@
 **Commit audited:** `24cbb47a` · **Date:** 2026-08-10 · **Method:** source-of-truth verification, documentation distrusted.
 **Revision 2:** `1a14a036` (`main`) · **2026-08-12** — five delivery-half workflow verticals merged (PRs #205–#209). See `README.md` § Revision history.
 
-> **Rev 2 in one line:** the *functional* half of Rev 1's critique is largely answered — the delivery half is no longer CRUD — while the *verification and operational* half, which is what actually gates production, is **unchanged**. The verdict below stands.
+> **Rev 2.5 in one line:** both halves of Rev 1's critique are now answered in the repository — the delivery half is governed (G-08), and the verification gap is closed with an authenticated spine suite (G-03). What still gates production is **operational**: two assertions about environments this repo cannot inspect.
 
 ## 1. What AURA OS actually is
 
@@ -31,29 +31,29 @@ This is **not a prototype and not a mock**. The domain logic, persistence, event
 ## 4. What is missing or not verified (`MISSING` / `NOT VERIFIED`)
 
 - **Production RLS posture** — the code enforces least-privilege `aura_app` role only where the DB was migrated to it. Whether staging/prod actually run under a `NOBYPASSRLS` role is **NOT VERIFIED** from the repo (it is runtime/ops state).
-- **UI end-to-end coverage of the spine** — **Rev 2:** web E2E rose from 1 to **10** specs, and CI now boots a real API behind them, so the five delivery-half journeys are genuinely proven at the UI layer. But **no spec covers the acquisition-to-cash spine** (lead→quote→contract→project→invoice→payment) — verified by grep over `apps/web/e2e`. The commercially critical journey remains untested at the UI layer, which is why P0 #3 below still stands.
+- ~~**UI end-to-end coverage of the spine**~~ — **resolved at Rev 2.5.** 13 browser specs / 41 tests run against a real API, and the spine journey is driven **signed in** through the real login form. This was Rev 1's sharpest evidence gap; it is now the part of the suite with the strongest proof.
 - **Performance evidence** — no benchmarks; scale claims are architectural estimates only.
 - **Referential integrity at the DB** — only **62 explicit FKs** across **218** tables (Rev 1: 54/198); most relationships are app-enforced. The ratio is unchanged at Rev 2.
 
 ## 5. Strongest vs weakest
 
 - **Strongest:** the **security/tenancy/persistence kernel** — fail-closed bootstrap, tenant-scoped pooling, dual-store seam, outbox relay, deploy-readiness pipeline. This is genuinely enterprise-grade *architecture*.
-- **Weakest:** **verification** — performance evidence is absent and the spine has no UI proof, so confidence in end-to-end correctness there rests on unit tests and design review, not on proof of live behavior.
-- **Rev 2 note — the weakness has inverted.** At Rev 1 the spine was the well-covered half and the delivery half was unproven. After PRs #205–#209 the **delivery half is the only part with browser-level proof of its journeys**, while the spine — the commercially critical path — has none. The residual verification risk is now concentrated where the money is.
+- **Weakest:** **performance evidence** — there are still no benchmarks, so scale claims remain architectural estimates. *(Verification was the Rev 1 answer here; at Rev 2.5 both halves of the product carry browser-level journey proof and the spine runs authenticated, so it no longer is.)*
+- **Rev 2.5 note — the inversion is resolved.** Rev 1 had the spine well-covered and the delivery half unproven; Rev 2 inverted that. Both halves now carry browser-level journey proof, and the spine additionally proves it **signed in**.
 
 ## 6. Production blockers (P0)
 
 1. **RLS/least-privilege posture on staging & production is unverified.** Ship-gate: prove the runtime connects as a `NOBYPASSRLS` role with FORCE RLS, on every non-dev environment. (`08-MULTITENANCY-AUDIT.md`)
 2. **Authorization is off until a verifier is set.** Ship-gate: production deploy must configure `AUTH_JWKS_URL`/`AUTH_JWT_SECRET` and `AUTH_REQUIRED=true`; the fail-closed gate turns this into a hard boot precondition, but it is an ops action that must be verified. (`07-SECURITY-AUDIT.md`)
-3. **No UI end-to-end regression net over the spine.** Ship-gate unchanged: a smoke suite covering the spine journeys (lead→quote→contract→project→invoice→payment). **Rev 2:** the harness now exists (CI boots an API for Playwright) and five delivery-half specs demonstrate the pattern — so this is now a **well-scoped test deliverable rather than an infrastructure problem**, but the gate itself is **not met**. (`14-TESTING-QA-AUDIT.md`)
+3. ~~**No UI end-to-end regression net over the spine.**~~ **CLOSED at Rev 2.5.** The suite signs in through the real login form and drives all six spine records through the UI, authenticated — 41 passed / 0 failed, twice. CI fails the job if the verifier did not engage. (`14-TESTING-QA-AUDIT.md`)
 
 ## 7. Is it safe for real enterprise customers?
 
-**Not yet — but the distance is small and mostly operational, not architectural.** The design is safe by construction (fail-closed). The residual risk is that safety depends on *configuration being correct in each environment* and on *test evidence that does not yet exist for the UI*. Close the 3 P0s and the platform is defensible for a controlled pilot.
+**Not yet — but at Rev 2.5 the distance is *entirely* operational.** The design is safe by construction (fail-closed), and the UI test evidence that Rev 1 found missing now exists and runs authenticated. What is left is that safety depends on *configuration being correct in each environment*: prove the production database runs under a `NOBYPASSRLS` role, and that a real verifier is set. Close those 2 P0s and the platform is defensible for a controlled pilot.
 
 ## 8. Realistic maturity & one-line verdict
 
-> **AURA OS is currently at Architectural Maturity Level 3.5, with ~68/100 production readiness, and requires 3 P0 blockers and 7 P1 items before enterprise production deployment.**
+> **AURA OS is currently at Architectural Maturity Level 3.5, with ~68/100 production readiness, and requires 2 P0 blockers and 7 P1 items before enterprise production deployment — and both remaining P0s are operational, not engineering.**
 
 The architecture is Tier-1-shaped; the *evidence and operational hardening* are what separate it from Tier-1 reality.
 

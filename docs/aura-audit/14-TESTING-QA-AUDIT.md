@@ -59,7 +59,7 @@ The +7 is 6 new spine tests plus `offline-sync:168`, which passed in that run.
 
 | Gap | Rev 2 status | Impact |
 |---|---|---|
-| ~~No browser E2E over the spine journey~~ **DELIVERED (Rev 2.1)** | `VERIFIED_IMPLEMENTED` — G-03 gate still open on its `login →` leg only | `spine-journey.spec.ts` creates + reads all six spine records through the real UI. Suite 27→34 passing. The spine net now exists; what is missing is an **authenticated** run (blocked on grant seeding, see `18`) |
+| ~~No browser E2E over the spine journey~~ **CLOSED (Rev 2.5)** | `VERIFIED_IMPLEMENTED` — **G-03 closed** | The suite signs in through the real login form, then creates and reads back all six spine records **authenticated**. 41 passed / 0 failed, twice, on a cold server against an auth-enabled API |
 | ~~API E2E back-half coverage~~ **COMPLETE (Rev 2.3)** | `VERIFIED_IMPLEMENTED` | +10 specs: engineering, quality, doccontrol, site, commissioning, compliance, ELV devices, RBAC tenant isolation, HSE, **amc/assets/fleet**. **Only inventory still lacks E2E** |
 | Coverage % unproven here | `NOT VERIFIED` (unchanged) | CI computes it but no threshold gate observed |
 | No load/performance tests | `MISSING` (unchanged) | Scale behavior unmeasured (`16`) |
@@ -98,4 +98,4 @@ The +7 is 6 new spine tests plus `offline-sync:168`, which passed in that run.
 4. **P2:** add load tests targeting the search fan-out and list endpoints (`16`).
 5. **P2 (Rev 2):** reconsider the `test.skip`-on-502/404 guard in the workflow specs — it makes an unreachable API look like a pass at the spec level.
 
-**Testing maturity score: 62 → 68 (Rev 2 estimate) → 72/100 (Rev 2.1).** Unlike the Rev 2 figure, this one is backed by an **executed** suite (34 passing, table above), not a design-review estimate. Both halves of the product now carry browser-level journey proof. Held back by the missing **authenticated** spine run, the ungated coverage floor, and no load/DAST testing.
+**Testing maturity score: 62 → 68 (Rev 2 estimate) → 72 (Rev 2.1) → 76/100 (Rev 2.5).** Unlike the Rev 2 figure, this one is backed by an **executed** suite (34 passing, table above), not a design-review estimate. Both halves of the product now carry browser-level journey proof. Held back by the missing **authenticated** spine run, the ungated coverage floor, and no load/DAST testing.

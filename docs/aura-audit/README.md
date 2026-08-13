@@ -1,6 +1,6 @@
 # AURA OS — Master Reverse-Engineering & Production-Readiness Audit
 
-> **Verdict (Rev 2.3):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **3 P0 blockers** and **7 P1 items** resolved before enterprise production deployment.
+> **Verdict (Rev 2.5):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **2 P0 blockers** and **7 P1 items** resolved before enterprise production deployment. **Both remaining P0s are operational** — no code change in this repository can close them.
 >
 > The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is largely closed by five merged workflow verticals; **Rev 2.2** governs HSE and **Rev 2.3 closes G-08 outright** (amc, assets, fleet). **Rev 2.1** records the first remediation done *in response to* this audit — the spine browser E2E suite (G-03), which is green but leaves the gate's `login →` leg blocked on a separate decision.
 
@@ -21,6 +21,29 @@ This audit is **evidence-driven**. Every material claim is anchored to a file pa
 | Auditor | Principal Architect / CTO / Security / QA composite review |
 
 ## Revision history
+
+### Rev 2.5 — 2026-08-13 (G-03 CLOSED — the suite now signs in)
+
+The last P0 a repository change could close. **P0 count 3 → 2**, the first movement since Rev 1.
+
+The blocker was never writing the spec. Setting `AUTH_JWT_SECRET` engages `PermissionsGuard` across the *whole* surface, and grants only ever hydrated from Postgres — so an in-memory boot had none and every route refused. Measured directly:
+
+| Request | Result |
+|---|---|
+| `POST /crm/accounts` unauthenticated | **403** |
+| the same call with a granted token | **201** |
+
+`AUTH_SEED_DEV_ADMIN` supplies that grant, behind three independent guards — the flag must be the literal `"true"`, `NODE_ENV` must not be production (refused *loudly* if it is), and no `DATABASE_URL` may be configured. Each guard has its own test. It takes a **list** of users, because segregation of duties cannot be exercised by one principal.
+
+Playwright global setup signs in through the **real login form** once and shares the session; CI boots the API with a verifier and **fails the job if auth did not engage**, so the suite cannot quietly pass on the unauthenticated path — which is the failure mode this whole gate exists to prevent.
+
+**Turning auth on immediately made a real control bite.** `permit-workflow` started failing because the signed-in user both requested *and* approved a permit, and segregation of duties refused it — correctly. That gate had been **inert** for as long as auth was off: no actor meant no recorded requester. A new browser test now asserts that refusal, which could not have been written before.
+
+Also pins the locale on three client components whose bare `toLocaleDateString()` renders `en-AE` on the server and `en-US` in the browser, so React discarded the subtree on hydration and elements vanished mid-assertion. A real bug, still live on `main`; overlaps the wider sweep in PR #213.
+
+**Verified:** full browser suite **41 passed / 0 failed / 1 skipped, twice**, on a cold web server against a fresh auth-enabled API — including the login test and all six spine journeys. core identity 50 · api unit 76 · api e2e 43 files / 220 tests · typecheck clean · lint 0 errors.
+
+**What is NOT claimed:** G-01 and G-02 are untouched. This proves the app works for an authenticated user against a dev-seeded grant. It says nothing about production RLS posture or a real IdP — and **no further code in this repository will move the readiness number.**
 
 ### Rev 2.4 — 2026-08-13 (`offline-sync:168` closed — and two corrections to how it was reported)
 
@@ -131,7 +154,7 @@ Re-measured at Rev 2 commit `1a14a036`. The Rev 1 column is retained so every de
 | RLS policy statements | ~~128~~ *(see note)* | **148** `CREATE POLICY` · 40 `ROW LEVEL SECURITY` lines in 15 files | `grep -c 'CREATE POLICY'` |
 | Test files (source) | 249 | **262** | `find … -name '*.test.ts'` excl. dist/node_modules |
 | API E2E specs (Supertest) | 33 | **43** | `find apps/api/test -name '*.e2e-spec.ts'` |
-| Web E2E specs (Playwright) | 1 | **13** | `find apps/web/e2e -name '*.spec.ts'` |
+| Web E2E specs (Playwright) | 1 | **13** (41 tests, run **authenticated**) | `find apps/web/e2e -name '*.spec.ts'` |
 | Cross-module reactors | 28 | **29** | `grep -c "subscribe('…'" cross-module-subscriber.ts` |
 | Persistence stores | 284 (110 PG / 93 in-memory) | *not re-measured* | every in-memory store has a Postgres counterpart |
 | ADRs | 19 | *not re-measured* | `find *adr* -name '*.md'` |
@@ -152,14 +175,14 @@ Rev 2 scores are **re-estimates from merged source on the same design-review bas
 | Multi-tenancy | 83 | 83 | App-guard + RLS + tenant-scoped pool; **not verified on prod DB** |
 | ERP functionality | 66 | **76** | **Every** business module owning a lifecycle now enforces it (G-08 closed) |
 | Workflow integrity | 72 | **75** | 29 cross-module reactors + 5 new in-module state machines with enforced gates |
-| Testing | 62 | **72** ᴿ²·¹ | 262 unit/module + 41 API E2E + 11 browser E2E (**34 passing, executed**); spine now covered, authenticated run still missing |
+| Testing | 62 | **76** ᴿ²·⁵ | 262 unit/module + 43 API E2E + 13 browser E2E (**41 passing, executed, authenticated**) |
 | DevOps | 80 | 80 | Mature CI + migration gate + restore drill + Docker |
 | Observability | 70 | 70 | Metrics, correlation IDs, OTLP, health, migration gate |
 | Performance/Scale | 52 | 52 | In-memory search fan-out; no caching layer; unbenchmarked |
 | UX | 62 | **66** | Delivery-half journeys now completable in-app; degraded-state masking remains |
 | Data integrity | 74 | **76** | 62 explicit FKs (+8); new child records keyed to parents |
 | Documentation | 80 | 80 | Extensive ADRs, reports, master-report |
-| **Overall** | **~68** | **~68** | **Unchanged — gated by 3 open P0s.** Weighted arithmetic rises 73.4 → 76.1; see `20` |
+| **Overall** | **~68** | **~68** | **Unchanged — gated by 2 open P0s, both operational.** Weighted arithmetic rises 73.4 → 76.4; see `20` |
 
 ## Gap & risk headline
 

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson, getJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 import QuotationsWorkspace from '../../../components/quotations-workspace';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ interface Quotation {
 }
 
 export default async function QuotationsPage() {
-  const quotations = await getJson<Quotation[]>('/api/crm/quotations');
+  const result = await fetchJson<Quotation[]>('/api/crm/quotations');
 
   return (
     <div style={st.page}>
@@ -37,7 +38,13 @@ export default async function QuotationsPage() {
         contract in one click; every quote keeps its source (opportunity or tender) and its account.
       </p>
       <section style={{ marginTop: 10 }}>
-        {quotations === null ? <p style={st.muted}>API offline.</p> : <QuotationsWorkspace initialQuotations={quotations} />}
+        {/* This page already distinguished failure from empty, but called every failure "API offline" —
+            a 403 is not an outage, and telling a user their session lapsed is a different instruction. */}
+        {result.ok ? (
+          <QuotationsWorkspace initialQuotations={result.data} />
+        ) : (
+          <DataStateNotice error={result.error} subject="quotations" />
+        )}
       </section>
     </div>
   );

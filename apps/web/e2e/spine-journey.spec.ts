@@ -103,6 +103,39 @@ test.describe('login', () => {
   });
 });
 
+/**
+ * G-05: a refused read must not render as an empty one.
+ *
+ * This is the assertion that would have caught the original defect. `getJson` returned `null` for
+ * every failure, so a signed-out user looking at the account portfolio saw exactly what a user with
+ * genuinely zero accounts saw. For an ERP that is not a cosmetic problem: "you have no customers"
+ * and "we could not tell you about your customers" are different statements, and only one of them
+ * is ever true.
+ *
+ * Runs signed OUT on purpose — with a verifier configured the API refuses, which is the real-world
+ * shape of an expired session or a missing grant.
+ */
+test.describe('refused reads', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('a denied portfolio read says denied, not empty', async ({ page, baseURL }) => {
+    const status = await page.request.get(`${baseURL}/api/auth/status`).catch(() => null);
+    const authOn = status?.ok() ? (((await status.json()) as { enabled?: boolean }).enabled ?? false) : false;
+    test.skip(!authOn, 'no verifier configured — an unauthenticated read succeeds as the dev actor');
+
+    await page.goto('/crm/accounts', { waitUntil: 'domcontentloaded' });
+
+    // The distinction itself: an error surface, not a zero-row table.
+    const notice = page.getByTestId('data-error');
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveAttribute('data-error-kind', /forbidden|unauthorized/);
+
+    // And it must never imply the tenant simply has no data.
+    await expect(notice).not.toContainText(/no accounts/i);
+    await expect(page.getByTestId('accounts-portfolio')).toHaveCount(0);
+  });
+});
+
 test('account: create → read in the portfolio', async ({ page }) => {
   await page.goto('/crm/accounts', { waitUntil: 'domcontentloaded' });
   await createViaDrawer(page, 'account', { name: ACCOUNT });

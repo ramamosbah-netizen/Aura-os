@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson, getJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 import ProjectCreate, { ProjectEdit } from '../../../components/project-create';
 
 export const dynamic = 'force-dynamic';
@@ -66,8 +67,8 @@ export default async function ProjectsPage({
   // The end of the deal chain: projects from our own API, and the "from contract" options
   // from the Contracts API (status=active) — each active contract carries its account
   // snapshot, so a project inherits the account transitively (Project ← Contract ← … ← CRM).
-  const [projects, activeContracts] = await Promise.all([
-    getJson<Project[]>('/api/projects/projects'),
+  const [projectsResult, activeContracts] = await Promise.all([
+    fetchJson<Project[]>('/api/projects/projects'),
     getJson<ActiveContract[]>('/api/contracts/contracts?status=active'),
   ]);
 
@@ -75,8 +76,8 @@ export default async function ProjectsPage({
   let wbsNodes: WbsNode[] = [];
   let evmMetrics: EvmMetrics | null = null;
 
-  if (projectId && projects) {
-    selectedProject = projects.find((p) => p.id === projectId) ?? null;
+  if (projectId && projectsResult.ok) {
+    selectedProject = (projectsResult.data ?? []).find((p) => p.id === projectId) ?? null;
     if (selectedProject) {
       const [nodes, evm] = await Promise.all([
         getJson<WbsNode[]>(`/api/projects/wbs?projectId=${projectId}`),
@@ -106,9 +107,10 @@ export default async function ProjectsPage({
       />
 
       <section style={st.panel}>
-        {projects === null ? (
-          <p style={st.muted}>API offline.</p>
-        ) : projects.length === 0 ? (
+        {/* "API offline" was the message for every failure, including a refusal. */}
+        {!projectsResult.ok ? (
+          <DataStateNotice error={projectsResult.error} subject="projects" compact />
+        ) : (projectsResult.data ?? []).length === 0 ? (
           <p style={st.muted}>No projects yet — start one from an active contract above.</p>
         ) : (
           <table style={st.table} data-testid="projects-register">
@@ -122,7 +124,7 @@ export default async function ProjectsPage({
               </tr>
             </thead>
             <tbody>
-              {projects.map((p) => (
+              {(projectsResult.data ?? []).map((p) => (
                 <tr key={p.id} style={projectId === p.id ? { background: 'rgba(255,255,255,0.03)' } : undefined}>
                   <td style={st.td}>
                     <a href={`/projects/projects?projectId=${p.id}`} style={st.link}>

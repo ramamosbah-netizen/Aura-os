@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ProjectTeam from './project-team';
 
 // Project 360 — delivery + commercial control in one place. The project
 // INHERITS its commercial context from the chain (contract value → budget),
@@ -28,7 +29,7 @@ interface Closeout { id: string; status: string; items: CloseoutItem[]; handover
 interface Evm { plannedValue: number; earnedValue: number; actualCost: number; spi: number; cpi: number; }
 interface CertSummary { grossCertifiedToDate: number; retentionHeld: number; percentComplete: number; }
 
-type Tab = 'variations' | 'eot' | 'closeout';
+type Tab = 'variations' | 'eot' | 'closeout' | 'team';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
@@ -176,6 +177,7 @@ export default function Project360Client({ project }: { project: Project }) {
           ['variations', `Variations (${variations.length})`],
           ['eot', `Delays & EOT (${eots.length})`],
           ['closeout', `Closeout${closeout ? ` (${closeoutDone}/${closeout.items.length})` : ''}`],
+          ['team', 'Team'],
         ] as Array<[Tab, string]>).map(([id, label]) => (
           <button key={id} style={{ ...st.tab, ...(tab === id ? st.tabOn : {}) }} onClick={() => setTab(id)}>{label}</button>
         ))}
@@ -258,6 +260,8 @@ export default function Project360Client({ project }: { project: Project }) {
             </div>
           )
         )}
+
+        {tab === 'team' && <ProjectTeam projectId={project.id} />}
       </section>
     </div>
   );

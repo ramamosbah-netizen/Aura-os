@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 interface OpenPunch { id: string; description: string; severity: string }
 
@@ -15,6 +16,10 @@ export default function CommissioningActions({
 }: { id: string; status: string; openPunch: OpenPunch[]; allPassed: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
+  // landing on the server-rendered markup is otherwise swallowed without trace.
+  const hydrated = useHydrated();
+  const locked = busy || !hydrated;
   const [error, setError] = useState<string | null>(null);
   const [by, setBy] = useState('');
   const [witness, setWitness] = useState('');
@@ -50,7 +55,7 @@ export default function CommissioningActions({
         <div style={st.punchGate} data-testid="punch-gate">
           <strong>{openPunch.length} open punch item(s)</strong> must be closed before sign-off:
           {openPunch.map((p) => (
-            <button key={p.id} style={st.closeBtn} disabled={busy} data-testid={`close-punch-${p.id}`}
+            <button key={p.id} style={st.closeBtn} disabled={locked} data-testid={`close-punch-${p.id}`}
               onClick={() => call(`punch/${p.id}/close`, { resolution: `Rectified: ${p.description}` })}>
               Close “{p.description}” →
             </button>
@@ -59,11 +64,11 @@ export default function CommissioningActions({
       )}
 
       <div style={st.group}>
-        <input style={st.input} placeholder="Commissioned by" value={by} onChange={(e) => setBy(e.target.value)} />
-        <input style={st.input} placeholder="Witnessed by (consultant/client)" value={witness} onChange={(e) => setWitness(e.target.value)} />
+        <input style={st.input} placeholder="Commissioned by" value={by} onChange={(e) => setBy(e.target.value)} disabled={locked} />
+        <input style={st.input} placeholder="Witnessed by (consultant/client)" value={witness} onChange={(e) => setWitness(e.target.value)} disabled={locked} />
         <button
           style={{ ...st.primary, ...(allPassed && openPunch.length === 0 ? {} : st.primaryDim) }}
-          disabled={busy}
+          disabled={locked}
           data-testid="btn-commission"
           onClick={() => call('commission', { commissionedBy: by || 'Engineer', witnessedBy: witness || 'Consultant' })}
         >

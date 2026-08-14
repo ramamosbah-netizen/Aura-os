@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson, getJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 import ContractsRegisterClient from '../../../components/contracts-register-client';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,8 @@ interface Bond { id: string; contractId: string; kind: string; expiryDate: strin
 interface ProjectLite { id: string; contractId: string | null; title: string; status: string; }
 
 export default async function ContractsPage() {
-  const [contracts, wonTenders, bonds, projects] = await Promise.all([
-    getJson<Contract[]>('/api/contracts/contracts'),
+  const [contractsResult, wonTenders, bonds, projects] = await Promise.all([
+    fetchJson<Contract[]>('/api/contracts/contracts'),
     getJson<Tender[]>('/api/tendering/tenders?status=won'),
     getJson<Bond[]>('/api/contracts/bonds'),
     getJson<ProjectLite[]>('/api/projects/projects'),
@@ -34,12 +35,18 @@ export default async function ContractsPage() {
         Awarded engagements — where the deal chain closes. Signing a contract creates its Project
         automatically; each row shows its chain (tender → project) and the bond watchlist.
       </p>
+      {/* Only the register itself is load-bearing: an empty bond or tender picker degrades
+          harmlessly, but "no contracts" is a claim about the business. */}
+      {!contractsResult.ok ? (
+        <DataStateNotice error={contractsResult.error} subject="contracts" />
+      ) : (
       <ContractsRegisterClient
-        contracts={contracts ?? []}
+        contracts={contractsResult.data ?? []}
         bonds={bonds ?? []}
         projects={projects ?? []}
         wonTenders={(wonTenders ?? []).map((t) => ({ id: t.id, title: t.title, accountId: t.accountId, accountName: t.accountName, value: t.value }))}
       />
+      )}
     </div>
   );
 }

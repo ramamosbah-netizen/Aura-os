@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson, getJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 import InvoiceCreate from '../../../components/invoice-create';
 import InvoicesList from '../../../components/invoices-list';
 
@@ -45,8 +46,8 @@ export default async function InvoicesPage() {
   // Closing the operate loop: invoices from our own API, and the "against PO" options from
   // the Procurement API (status=received) — each PO carries supplier + project, so an
   // invoice inherits both (PO ← Project, no joins).
-  const [invoices, pos, grns, bankAccounts] = await Promise.all([
-    getJson<Invoice[]>('/api/finance/invoices'),
+  const [invoicesResult, pos, grns, bankAccounts] = await Promise.all([
+    fetchJson<Invoice[]>('/api/finance/invoices'),
     getJson<PoLite[]>('/api/procurement/purchase-orders'),
     getJson<GoodsReceipt[]>('/api/inventory/grns'),
     getJson<Account[]>('/api/finance/accounts?type=asset'),
@@ -75,11 +76,11 @@ export default async function InvoicesPage() {
       />
 
       <section style={{ marginTop: 20 }}>
-        {invoices === null ? (
-          <p style={st.muted}>API offline.</p>
+        {!invoicesResult.ok ? (
+          <DataStateNotice error={invoicesResult.error} subject="invoices" compact />
         ) : (
           <InvoicesList
-            invoices={invoices}
+            invoices={invoicesResult.data ?? []}
             bankAccounts={bankAccounts ?? []}
             pos={pos ?? []}
             grns={grns ?? []}

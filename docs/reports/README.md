@@ -1,6 +1,8 @@
 # AURA OS — Report Index
 
-91 reports, newest first within each section. **Index last reviewed: 2026-08-05.**
+91 reports, newest first within each section. **Index last reviewed: 2026-08-13.**
+
+> **The current authority on platform state is [`docs/aura-audit/`](../aura-audit/README.md)** (24 documents, revision 2.6, 2026-08-13) — not this folder. It supersedes the readiness figure below and carries its own gap register (G-01…G-20). Reports here remain useful as dated records and for the journey scores, which the audit does not measure.
 
 ## Read these first
 
@@ -8,7 +10,8 @@
 |---|---|
 | [2026-08-05 Consolidated Gap Register](2026-08-05-consolidated-gap-register.md) | **Every open gap in one place** — 50 rows (G-01…G-50) across security, integrity, delivery spine, ELV vertical, field/mobile, UX, scale, modules, journeys and competitive position. Stable IDs, per-row provenance. **Start here to see what's left.** |
 | [2026-08-05 Platform State Verification](2026-08-05-platform-state-verification.md) | **Latest live verification** — what the running app actually does, plus the accuracy review that produced this index |
-| [2026-08-03 Enterprise Readiness Audit](2026-08-03-enterprise-readiness-audit.md) | **The enterprise-readiness tracker.** P0/P1/P2 rows with fix status and history. Last measured readiness: **54/100** (2026-08-03) |
+| [**AURA OS Master Audit** (`docs/aura-audit/`)](../aura-audit/README.md) | **Start here.** Evidence-driven reverse-engineering + production-readiness audit, revision **2.6** (2026-08-13). Readiness **~68/100**, **2 P0 blockers** (both operational), 6 P1. Its [gap register](../aura-audit/18-MASTER-GAP-REGISTER.md) is the live one |
+| [2026-08-03 Enterprise Readiness Audit](2026-08-03-enterprise-readiness-audit.md) | 🗄️ The earlier readiness tracker (54/100, 2026-08-03). **Different rubric** from the audit above — the two numbers are not a trend, and this one has not been re-measured |
 | [2026-08-03 Junior-User Walkthrough](2026-08-03-junior-user-walkthrough.md) | Screen-by-screen UX companion to the readiness audit |
 | [2026-08-02 Module Depth Gap Audit](2026-08-02-module-depth-gap-audit.md) | Per-module functional depth, all modules |
 | [2026-07-27 Experience Architecture (L5)](2026-07-27-aura-os-experience-architecture.md) | The navigation/IA design the app is being built toward |
@@ -23,15 +26,19 @@
 
 ## Numbers you may quote
 
-Per the project's report-integrity rule, a score is quotable only if it was measured in a live run. As of 2026-08-05:
+Per the project's report-integrity rule, a score is quotable only if it was measured in a live run. As of 2026-08-13:
 
 | Measure | Value | Measured | Source |
 |---|---|---|---|
-| Enterprise-production readiness | **54 / 100** | 2026-08-03 | [readiness audit](2026-08-03-enterprise-readiness-audit.md) — **not** re-measured since |
+| Enterprise-production readiness | **~68 / 100** | 2026-08-13 (rev 2.6) | [master audit](../aura-audit/20-PRODUCTION-READINESS.md) — weighted components total **76.7**, held at ~68 by an open production-gate penalty (2 P0s) |
+| ~~Enterprise-production readiness~~ | ~~54 / 100~~ | 2026-08-03 | [earlier readiness audit](2026-08-03-enterprise-readiness-audit.md) — **superseded**, and a *different rubric*: do not read 54 → 68 as an improvement |
+| Browser E2E suite | **42 passed / 0 failed**, authenticated | 2026-08-13 | `apps/web/e2e` — executed twice on a fresh auth-enabled API ([audit `14`](../aura-audit/14-TESTING-QA-AUDIT.md)) |
 | Journey Score · Direct Sale | **87 / 100**, E2E **PASS** | 2026-07-20 on `f829007` | [close-out re-run](2026-07-20-journey-direct-sale-closeout.md) (history: 82 → 85 → 87) |
 | Journey Score · Tender | **65 / 100** | 2026-07-17 | [CRM operating review](2026-07-17-crm-operating-review.md) |
 
 No 100/100 has ever been measured for any journey. Production-build performance has never been measured — dev-server timings are not a substitute.
+
+The audit's **dimension** scores (architecture, security, ERP functionality and so on) are design-review re-estimates from merged source, **not** live benchmarks — with one exception, Testing, which is backed by the executed browser suite. The audit labels them as such; quote them the same way.
 
 ---
 

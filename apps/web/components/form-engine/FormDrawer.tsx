@@ -50,28 +50,42 @@ function fetchOverrides(schemaId: string): Promise<FormOverrides | null> {
  * admin configured, and assertFormValid enforces the same merge server-side.
  * Falls back to the code schema when the read fails; the drawer starts closed,
  * so the pre-open remount is invisible.
+ *
+ * Everything here keys on the STABLE `schema.id`, never on props.schema's object identity.
+ * The legacy CreateDrawer rebuilds its FormSchema object on every render (its `fields` prop is
+ * a fresh array literal at the call site), so an identity-based effect dep or remount key would
+ * refire and flip on *every* parent re-render — remounting FormDrawerImpl, and with it the open
+ * drawer's `open`/`values` state and even the trigger button. That is the regression that broke
+ * the spine E2E: the `create-opportunity` button lives in the impl, so a churning key detached
+ * it mid-click ("element is not stable"). We store only the override *outcome* (sticky per id)
+ * and re-apply it to the live props.schema each render, so schema content stays fresh while the
+ * key transitions base→patched at most once.
  */
 export default function FormDrawer(props: FormDrawerProps) {
-  const [effective, setEffective] = useState<FormSchema | null>(null);
+  const schemaId = props.schema.id;
+  const [resolvedOverrides, setResolvedOverrides] = useState<{ id: string; overrides: FormOverrides | null } | null>(null);
 
   useEffect(() => {
     let live = true;
-    void fetchOverrides(props.schema.id).then((o) => {
-      if (live) setEffective(hasOverrides(o) ? applyFormOverrides(props.schema, o) : props.schema);
+    void fetchOverrides(schemaId).then((o) => {
+      if (live) setResolvedOverrides({ id: schemaId, overrides: hasOverrides(o) ? o : null });
     });
     return () => {
       live = false;
     };
-  }, [props.schema]);
+    // Deps are exhaustive: the effect reads only schemaId (props.schema's stable identity — the
+    // overridesCache is keyed by it too). The merge against props.schema happens in render, below,
+    // deliberately keeping this off props.schema's object identity so it can't refire per render.
+  }, [schemaId]);
 
-  // The key flip exists so useFormEngine re-initializes on a *patched* schema. Keying it on
-  // "the fetch resolved" instead remounted every drawer in the app, because the no-overrides
-  // path above resolves to the identical schema object — a remount that changes nothing.
-  // It is not harmless: the remount resets FormDrawerImpl's `open`/`values` state, so a user
-  // who opened a drawer before the overrides request landed had it silently closed and their
-  // typed input discarded. Remount only when the schema actually differs.
-  const patched = effective !== null && effective !== props.schema;
-  return <FormDrawerImpl key={patched ? 'fx' : 'base'} {...props} schema={effective ?? props.schema} />;
+  // `patched` is a sticky boolean, decided once when the overrides resolve for this id — not a
+  // live object comparison — so the remount key cannot oscillate under a churning schema prop.
+  // The merge runs against the *current* props.schema so live enrichment (e.g. a select whose
+  // options grow as records are added) still flows through without a remount.
+  const ready = resolvedOverrides !== null && resolvedOverrides.id === schemaId;
+  const patched = ready && resolvedOverrides.overrides !== null;
+  const schema = patched ? applyFormOverrides(props.schema, resolvedOverrides.overrides!) : props.schema;
+  return <FormDrawerImpl key={patched ? `${schemaId}:fx` : `${schemaId}:base`} {...props} schema={schema} />;
 }
 
 function FormDrawerImpl({

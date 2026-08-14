@@ -121,6 +121,7 @@ export default function Project360Client({ project }: { project: Project }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <a href={`/project/${project.id}`} className="btn btn-primary" style={st.actBtn}>▦ Delivery Workspace →</a>
           {project.status === 'planned' && (
             <button className="btn btn-primary" style={st.actBtn} disabled={busy} onClick={() => setStatus('active')}>▶ Start execution</button>
           )}

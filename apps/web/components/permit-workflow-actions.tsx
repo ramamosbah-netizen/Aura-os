@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 /**
  * Permit-to-work action bar (G-08 residue). Renders only the commands legal from the current
@@ -50,10 +51,16 @@ export default function PermitWorkflowActions({
   const terminal = status === 'closed' || status === 'expired';
   const blocked = blockingGates.length > 0;
 
+  // Nothing here is live until React has attached its handlers — see `useHydrated`. The failing
+  // runs of the browser suite sent no approve PUT at all, because the click landed on markup that
+  // only looked interactive.
+  const hydrated = useHydrated();
+  const locked = busy || !hydrated;
+
   return (
     <div style={st.wrap} data-testid="permit-actions" data-status={status}>
       {status === 'draft' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-request" onClick={() => void run('request')}>
+        <button style={st.primary} disabled={locked} data-testid="btn-request" onClick={() => void run('request')}>
           Request approval
         </button>
       )}
@@ -62,7 +69,7 @@ export default function PermitWorkflowActions({
         <>
           <button
             style={blocked ? st.primaryDisabled : st.primary}
-            disabled={busy || blocked}
+            disabled={locked || blocked}
             title={blocked ? `Blocked: ${blockingGates.join('; ')}` : undefined}
             data-testid="btn-approve"
             onClick={() => void run('approve')}
@@ -75,9 +82,13 @@ export default function PermitWorkflowActions({
               placeholder="Reason for rejection"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              // Controlled, so typing before hydration is written to the DOM and then thrown away
+              // when React takes over — the same swallowed-input failure as the buttons, and it
+              // would submit a rejection with no reason attached.
+              disabled={locked}
               data-testid="input-reject-reason"
             />
-            <button style={st.danger} disabled={busy} data-testid="btn-reject" onClick={() => void run('reject', { reason })}>
+            <button style={st.danger} disabled={locked} data-testid="btn-reject" onClick={() => void run('reject', { reason })}>
               Reject
             </button>
           </div>
@@ -85,19 +96,19 @@ export default function PermitWorkflowActions({
       )}
 
       {status === 'rejected' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-reopen" onClick={() => void run('reopen')}>
+        <button style={st.primary} disabled={locked} data-testid="btn-reopen" onClick={() => void run('reopen')}>
           Re-open to correct
         </button>
       )}
 
       {status === 'approved' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-close" onClick={() => void run('close')}>
+        <button style={st.primary} disabled={locked} data-testid="btn-close" onClick={() => void run('close')}>
           Close permit (work complete, area safe)
         </button>
       )}
 
       {(status === 'requested' || status === 'approved') && (
-        <button style={st.ghost} disabled={busy} data-testid="btn-expire" onClick={() => void run('expire')}>
+        <button style={st.ghost} disabled={locked} data-testid="btn-expire" onClick={() => void run('expire')}>
           Expire
         </button>
       )}

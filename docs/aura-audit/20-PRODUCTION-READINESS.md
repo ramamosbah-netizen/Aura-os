@@ -8,7 +8,7 @@ Each dimension scored 0–100 from **repository evidence only**. Weights reflect
 |---|--:|--:|--:|--:|--:|---|
 | Architecture | 10 | 86 | 8.60 | 86 | 8.60 | `01` |
 | Backend | 8 | 80 | 6.40 | 80 | 6.40 | `01`,`05` |
-| Frontend | 7 | 64 | 4.48 | **68** | **4.76** | `06` |
+| Frontend | 7 | 64 | 4.48 | **72** ᴿ²·⁶ | **5.04** | `06` |
 | Database | 9 | 84 | 7.56 | 84 | 7.56 | `04` |
 | Security | 12 | 71 | 8.52 | **74** | **8.88** | `07` |
 | Multi-tenancy | 10 | 83 | 8.30 | 83 | 8.30 | `08` |
@@ -18,12 +18,12 @@ Each dimension scored 0–100 from **repository evidence only**. Weights reflect
 | DevOps | 5 | 80 | 4.00 | 80 | 4.00 | `15` |
 | Observability | 4 | 70 | 2.80 | 70 | 2.80 | below |
 | Performance | 5 | 52 | 2.60 | 52 | 2.60 | `16` |
-| UX | 3 | 62 | 1.86 | **66** | **1.98** | `06` |
+| UX | 3 | 62 | 1.86 | **68** | **2.04** | `06` |
 | Data integrity | 3 | 74 | 2.22 | **76** | **2.28** | `04` |
 | Documentation | 1 | 80 | 0.80 | 80 | 0.80 | ADRs/reports |
-| **Total** | **100** | — | **73.4** | — | **76.4** | |
+| **Total** | **100** | — | **73.4** | — | **76.7** | |
 
-**Reported overall: ~68/100 — unchanged through Rev 2.5.** The weighted arithmetic yields **73.4 at Rev 1 and 76.4 at Rev 2.5**, adjusted **down to ~68** by a **production-gate penalty**: the P0 blockers are *go/no-go* conditions whose failure would invalidate the higher architecture/tenancy scores in practice. **Two remain** (G-01 prod RLS posture, G-02 auth configuration), both runtime/ops state. Until they are proven, effective readiness stays below the component average.
+**Reported overall: ~68/100 — unchanged through Rev 2.5.** The weighted arithmetic yields **73.4 at Rev 1 and 76.7 at Rev 2.6**, adjusted **down to ~68** by a **production-gate penalty**: the P0 blockers are *go/no-go* conditions whose failure would invalidate the higher architecture/tenancy scores in practice. **Two remain** (G-01 prod RLS posture, G-02 auth configuration), both runtime/ops state. Until they are proven, effective readiness stays below the component average.
 
 > **Why the headline still did not move — and what changed underneath it.** G-03 is **closed** at Rev 2.5: the suite signs in and drives the spine authenticated. That is the first P0 to fall, and it takes the count from 3 to 2. The headline holds anyway, because a gate is binary and **G-01 and G-02 are still unproven** — and neither can be settled from the repository. They are assertions about *your environments*: that production connects as a `NOBYPASSRLS` role with FORCE RLS, and that a real verifier is configured with `AUTH_REQUIRED=true`.
 >
@@ -47,7 +47,7 @@ Each dimension scored 0–100 from **repository evidence only**. Weights reflect
 | ▲ Browser E2E on delivery-half workflows | **DONE** (Rev 2 — 5 specs, CI runs them against a live API) | ✅ |
 | ▲ Delivery-half completable in-app journeys | **DONE** (Rev 2 — PRs #205–#209; extended to HSE at Rev 2.2 and amc/assets/fleet at Rev 2.3 — **G-08 closed**) | ✅ |
 | ▲ Rate limiting + CORS allowlist | **DONE** (Rev 2) — `EdgeRateLimitGuard` is a global guard (`main.ts:59-60`); `resolveCors` enforces a `CORS_ALLOWED_ORIGINS` allowlist (`main.ts:55-57`). *Per-env value still ops state* | ✅ (G-07 closed) |
-| Error-state semantics fixed | **OPEN** (unchanged) | P1 (G-05) |
+| ▲ Error-state semantics fixed | **DONE for load-bearing lists (Rev 2.6)** — failure, refusal and genuine empty now render distinctly; a browser test asserts a denied read says denied, with a negative control proving the assertion bites | P2 (G-05 residue) |
 | Backup/restore rehearsed | **DONE** (CI restore drill) | ✅ |
 | Migration deploy-gate | **DONE** | ✅ |
 | Fail-closed auth/RLS bootstrap | **DONE** | ✅ |

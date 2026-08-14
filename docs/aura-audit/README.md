@@ -1,8 +1,8 @@
 # AURA OS — Master Reverse-Engineering & Production-Readiness Audit
 
-> **Verdict (Rev 2.5):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **2 P0 blockers** and **7 P1 items** resolved before enterprise production deployment. **Both remaining P0s are operational** — no code change in this repository can close them.
+> **Verdict (Rev 2.6):** AURA OS is at **Architectural Maturity Level 3.5 (Production Application trending Enterprise Platform)**, with **~68/100 production readiness**, and requires **2 P0 blockers** and **6 P1 items** resolved before enterprise production deployment. **Both remaining P0s are operational** — no code change in this repository can close them.
 >
-> The readiness headline is **unchanged from Rev 1 by design**: all three P0 blockers remain open. Rev 2 records that the *delivery-half depth* gap (G-08) is largely closed by five merged workflow verticals; **Rev 2.2** governs HSE and **Rev 2.3 closes G-08 outright** (amc, assets, fleet). **Rev 2.1** records the first remediation done *in response to* this audit — the spine browser E2E suite (G-03), which is green but leaves the gate's `login →` leg blocked on a separate decision.
+> The readiness headline is **unchanged from Rev 1 by design** — a gate is binary, and two P0s are still unproven. What has changed is *which* work remains: **G-03, G-07 and G-08 are closed**, and **G-05 dropped to P2**. Every P0 a repository change could close is closed. The two survivors, G-01 (production RLS posture) and G-02 (auth configuration), are assertions about environments this repo cannot inspect — so **no further code here moves the number**.
 
 This audit is **evidence-driven**. Every material claim is anchored to a file path, migration, endpoint, or test in the repository as it exists at the commit below. Documentation and developer claims were treated as the *lowest* tier of evidence and verified against executable source. Where something could not be verified from the repository (e.g. the live posture of the staging/production database), it is explicitly marked **NOT VERIFIED**.
 
@@ -21,6 +21,24 @@ This audit is **evidence-driven**. Every material claim is anchored to a file pa
 | Auditor | Principal Architect / CTO / Security / QA composite review |
 
 ## Revision history
+
+### Rev 2.6 — 2026-08-13 (G-05: reads stop lying about emptiness)
+
+`getJson` returned `null` for every failure, so a 500, a 403 and a genuinely empty list rendered identically. In an ERP that is not cosmetic — *"you have no unpaid invoices"* and *"we could not load your unpaid invoices"* are different statements about the business, and only one of them is ever true.
+
+`fetchJson` now returns either data or a **classified** error, and `DataStateNotice` renders each distinctly from `EmptyState`. Migrated the surfaces the browser suite covers: accounts, quotations, contracts, projects, invoices, and the permit/work-order/asset registers. On multi-fetch pages only the load-bearing read moved — an empty bond or PO picker degrades harmlessly, *"no contracts"* does not.
+
+`getJson` is **kept**, delegating to `fetchJson`, so the ~440 other call sites are untouched. That is a decision, not unfinished work: for badges and secondary panels an empty render is the right degradation, and rewriting 451 call sites to make a point would be churn.
+
+Three pages had already tried to draw this distinction and called every failure **"API offline"** — wrong for a 403, and useless to someone whose session simply lapsed.
+
+**The wording is the remedy**, so the unit tests assert it: no message may claim emptiness, a refusal must say the records may exist, an expired session must say what to do and that nothing was lost.
+
+**Negative control:** reverting the accounts page to the old behaviour makes the new browser test fail (element not found); restoring it makes it pass. The assertion bites.
+
+**Verified:** full browser suite **42 passed / 0 failed / 1 skipped, twice**, on a fresh auth-enabled API · web unit 8 · typecheck clean · lint 0 errors. G-05 drops **P1 → P2**; Frontend 68 → 72, weighted total 76.4 → 76.7.
+
+*Suite-stability note:* runs against an API carrying data from a dozen earlier runs showed 2–11 varying failures; a fresh API is green twice over, so that is accumulated local state. G-05 does make a transient read failure fail **fast and visibly** rather than time out — which is the intended behaviour, and worth knowing when reading a red run.
 
 ### Rev 2.5 — 2026-08-13 (G-03 CLOSED — the suite now signs in)
 
@@ -169,7 +187,7 @@ Rev 2 scores are **re-estimates from merged source on the same design-review bas
 |---|--:|--:|---|
 | Architecture | 86 | 86 | Modular monolith, ports/adapters, dual-store seam, event-driven, 19 ADRs |
 | Backend | 80 | 80 | 20 well-factored domain packages; back-half orchestration now deeper (see `02`) |
-| Frontend | 64 | **68** | 164 SSR pages (+13); back-half registers/360s added; error-swallowing unfixed |
+| Frontend | 64 | **72** ᴿ²·⁶ | 164 SSR pages; back-half registers/360s; **error states no longer masquerade as empty** |
 | Database | 84 | 84 | 218 tables, gap-free migrations, 358 indexes, comprehensive RLS |
 | Security | 71 | **74** | Fail-closed design **+ edge hardening now real** (rate-limit guard, CORS allowlist, CSP, body cap); still config-gated on auth |
 | Multi-tenancy | 83 | 83 | App-guard + RLS + tenant-scoped pool; **not verified on prod DB** |
@@ -179,16 +197,16 @@ Rev 2 scores are **re-estimates from merged source on the same design-review bas
 | DevOps | 80 | 80 | Mature CI + migration gate + restore drill + Docker |
 | Observability | 70 | 70 | Metrics, correlation IDs, OTLP, health, migration gate |
 | Performance/Scale | 52 | 52 | In-memory search fan-out; no caching layer; unbenchmarked |
-| UX | 62 | **66** | Delivery-half journeys now completable in-app; degraded-state masking remains |
+| UX | 62 | **68** | Delivery-half journeys completable in-app; failure vs refusal vs empty now distinguishable |
 | Data integrity | 74 | **76** | 62 explicit FKs (+8); new child records keyed to parents |
 | Documentation | 80 | 80 | Extensive ADRs, reports, master-report |
-| **Overall** | **~68** | **~68** | **Unchanged — gated by 2 open P0s, both operational.** Weighted arithmetic rises 73.4 → 76.4; see `20` |
+| **Overall** | **~68** | **~68** | **Unchanged — gated by 2 open P0s, both operational.** Weighted arithmetic rises 73.4 → 76.7; see `20` |
 
 ## Gap & risk headline
 
 - **P0 blockers: 3 (all still open)** — (1) RLS enforcement posture on staging/prod **NOT VERIFIED** (dev-only per code + prior state); (2) authorization is **inert until a JWT verifier is configured** — production must set it (fail-closed gate exists but is an ops precondition); (3) **no browser E2E over the spine journey**. Rev 2 nuance: browser specs rose 1 → 10 and now cover the five delivery-half workflows end-to-end in CI against a real API, but the Rev 1 ship-gate — lead→quote→contract→project→invoice→payment — remains **uncovered** (verified by grep over `apps/web/e2e`).
 - **Closed outright: G-07** (edge hardening) and **G-08** (delivery-half journeys, closed at Rev 2.3).
-- **P1 items: 7** (Rev 1: 9 by count, "~11" in the Rev 1 headline) — search fan-out scaling (G-04), silent frontend error-swallowing (G-05), thin FK-level referential integrity (G-06), no caching / unenforced pagination (G-09), float money (G-10), no outbox operator UI (G-11), inventory lot/valuation depth (G-12).
+- **P1 items: 6** (Rev 1: 9 by count, "~11" in the Rev 1 headline) — search fan-out scaling (G-04), thin FK-level referential integrity (G-06), no caching / unenforced pagination (G-09), float money (G-10), no outbox operator UI (G-11), inventory lot/valuation depth (G-12). *(G-05 dropped to P2 at Rev 2.6.)*
   - **G-08 (delivery-half UI journeys) largely closed** → downgraded to **P2**, scoped to the four modules still at CRUD level (hse, fleet, assets, amc).
   - **G-07 (rate limiting + CORS allowlist) CLOSED** — edge hardening is on `main` (commit `2377a5a1`). Note this was **not** delivered by the five workflow PRs; it landed on a parallel branch and Rev 1 simply went stale on merge. See the note in `18`.
 

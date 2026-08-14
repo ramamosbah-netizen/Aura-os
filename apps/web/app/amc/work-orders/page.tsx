@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +41,16 @@ function statusStyle(status: string): CSSProperties {
 }
 
 export default async function WorkOrderRegisterPage() {
-  const orders = (await getJson<WorkOrder[]>('/api/amc/work-orders')) ?? [];
+  const result = await fetchJson<WorkOrder[]>('/api/amc/work-orders');
+  if (!result.ok) {
+    return (
+      <div style={st.page}>
+        <h1 style={st.h1}>Work Order Register</h1>
+        <DataStateNotice error={result.error} subject="the work order register" />
+      </div>
+    );
+  }
+  const orders = result.data ?? [];
   const rank = (s: string): number => (s === 'completed' || s === 'cancelled' ? 1 : 0);
   const rows = [...orders].sort((a, b) => rank(a.status) - rank(b.status) || b.createdAt.localeCompare(a.createdAt));
 

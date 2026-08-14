@@ -20,6 +20,7 @@ import {
   type OpportunityAttention,
   type OpportunityStage,
   type ResolvedNextAction,
+  moneyNumber as r2,
 } from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
 import { ContractService, type Contract } from '@aura/contracts';
@@ -76,7 +77,6 @@ const NEXT_FORWARD_STAGE: Partial<Record<OpportunityStage, OpportunityStage>> = 
   proposal: 'negotiation',
 };
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 @Controller('crm/opportunities')
 export class Opportunity360Controller {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { moneyNumber } from '@aura/shared';
 
 /**
  * Salik (Dubai road toll) charge against a fleet vehicle — a fixed fee deducted each time the
@@ -97,7 +98,7 @@ export function summariseSalik(charges: SalikCharge[]): SalikSummary {
     else if (c.status === 'disputed') s.disputed++;
     if (c.status !== 'disputed') s.totalAmount += c.amount;
   }
-  s.totalAmount = Math.round(s.totalAmount * 100) / 100;
+  s.totalAmount = moneyNumber(s.totalAmount);
   return s;
 }
 

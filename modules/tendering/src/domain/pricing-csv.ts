@@ -1,11 +1,11 @@
 import type { BOQItem } from './boq';
 import type { RateBuildUp } from './estimate';
+import { moneyNumber as r2 } from '@aura/shared';
 
 // Pricing-sheet CSV export — one row per BOQ item, mirroring the company's
 // original "Cost & Resource Breakdown" spreadsheet columns. Pure row builders
 // (the platform CSV pattern: shared toCsv + a @Header'd controller route).
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export const PRICING_SHEET_CSV_COLUMNS = [
   'itemCode',

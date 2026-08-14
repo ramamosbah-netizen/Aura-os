@@ -1,3 +1,4 @@
+import { moneyNumber as r2 } from '@aura/shared';
 import type { Account, AccountType } from './account';
 import type { Journal } from './journal';
 
@@ -81,7 +82,6 @@ export interface CashFlow {
   byCounterpart: StatementLine[]; // cash attributed to each non-cash counterpart account
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Date portion (YYYY-MM-DD) of a journal's postedAt, for inclusive range filtering. */
 function postedDate(j: Journal): string {

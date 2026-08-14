@@ -1,3 +1,4 @@
+import { moneyNumber as round2 } from '@aura/shared';
 import type { Invoice } from './invoice';
 import { type AgingBucketKey, type BucketTotals, bucketFor } from './ar-aging';
 
@@ -19,7 +20,6 @@ export interface ApAgingReport {
   grandTotal: number;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 function emptyBuckets(): BucketTotals {
   return { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };

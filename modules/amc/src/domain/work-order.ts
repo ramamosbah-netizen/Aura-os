@@ -1,6 +1,7 @@
 // ============================================================
 // AMC Domain: Work Order
 // ============================================================
+import { roundDecimal } from '@aura/shared';
 
 export type WorkOrderPriority = 'low' | 'medium' | 'high' | 'critical';
 export type WorkOrderType = 'preventive' | 'corrective' | 'inspection';
@@ -139,7 +140,7 @@ export class WorkOrder {
     if (slaResolutionHours !== undefined) {
       const elapsedHours = (at.getTime() - this.createdAt.getTime()) / 3_600_000;
       this.slaResolutionHours = slaResolutionHours;
-      this.resolutionHours = Math.round(elapsedHours * 100) / 100;
+      this.resolutionHours = roundDecimal(elapsedHours);
       this.slaMet = elapsedHours <= slaResolutionHours;
     }
     this.updatedAt = new Date();

@@ -1,4 +1,5 @@
 import type { StockDirection } from './stock';
+import { moneyNumber as r2 } from '@aura/shared';
 
 /**
  * FIFO cost engine — replays movements chronologically into cost layers: a receipt pushes a
@@ -15,7 +16,6 @@ export interface FifoValuation {
   layers: FifoLayer[]; // remaining, oldest first
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export interface FifoIssue {
   cogs: number;           // FIFO cost of the issued units

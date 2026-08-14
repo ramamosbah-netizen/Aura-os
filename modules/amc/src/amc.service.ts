@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { makeEvent, type Page, type PageParams } from '@aura/shared';
+import { makeEvent, type Page, type PageParams, roundDecimal } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { AmcStore, AMC_STORE } from './store.interface';
 import { ServiceContract, ContractStatus } from './domain/service-contract';
@@ -231,7 +231,7 @@ export class AmcService {
       .map((t) => ({
         ticket: t,
         slaStatus: t.slaStatus(now),
-        hoursRemaining: Math.round(((t.slaDueAt.getTime() - now.getTime()) / 3_600_000) * 10) / 10,
+        hoursRemaining: roundDecimal((t.slaDueAt.getTime() - now.getTime()) / 3_600_000, 1),
       }))
       .sort((a, b) => a.hoursRemaining - b.hoursRemaining);
   }

@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 
 /**
  * Cost Centre — a management-accounting dimension. Journal lines may be tagged with a
@@ -56,7 +56,6 @@ export interface CostCenterReport {
 
 interface JLine { debit: number; credit: number; costCenterId: Id | null }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Fold GL journal lines by cost-centre tag (debits − credits); untagged lines roll into `unallocated`. */
 export function buildCostCenterReport(centers: CostCenter[], lines: JLine[]): CostCenterReport {

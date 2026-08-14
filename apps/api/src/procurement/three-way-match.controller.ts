@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
+import { moneyNumber } from '@aura/shared';
 import { PurchaseOrderService } from '@aura/procurement';
 import { GoodsReceiptService } from '@aura/inventory';
 import { InvoiceService } from '@aura/finance';
@@ -49,7 +50,7 @@ export class ThreeWayMatchController {
           .filter((i) => i.status !== 'cancelled')
           .reduce((s, i) => s + (i.value || 0), 0);
         const ordered = po.value || 0;
-        const billingExposure = Math.round((invoiced - received) * 100) / 100;
+        const billingExposure = moneyNumber(invoiced - received);
 
         let matchStatus: MatchRow['matchStatus'];
         const eq = (a: number, b: number) => Math.abs(a - b) < 0.01;

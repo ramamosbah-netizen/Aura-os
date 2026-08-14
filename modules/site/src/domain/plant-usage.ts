@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { moneyNumber as r2 } from '@aura/shared';
 
 // Site domain — framework-free. A PlantUsage records a plant/equipment item working on a project
 // for a number of hours at an hourly rate (owned-fleet internal hire rate or external hire cost).
@@ -41,7 +42,6 @@ export interface NewPlantUsage {
   createdBy?: string | null;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function makePlantUsage(input: NewPlantUsage): PlantUsage {
   if (!input.equipment || !input.equipment.trim()) throw new Error('equipment is required');

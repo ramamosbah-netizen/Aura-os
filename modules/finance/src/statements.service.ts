@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Id } from '@aura/shared';
+import { type Id, moneyNumber } from '@aura/shared';
 import { ACCOUNT_STORE, type AccountStore } from './account-store';
 import { JOURNAL_STORE, type JournalStore } from './journal-store';
 import { buildEliminations, eliminationTotal } from './domain/journal';
@@ -99,7 +99,7 @@ export class StatementsService {
       companies,
       eliminations: {
         entries: eliminations.length,
-        amount: Math.round(eliminationTotal(journals) * 100) / 100,
+        amount: moneyNumber(eliminationTotal(journals)),
         // group revenue before vs after removing intra-group transactions
         revenueBeforeElimination: groupBefore.totalRevenue,
         revenueAfterElimination: buildIncomeStatement(accounts, consolidatedJournals, null, asOf).totalRevenue,

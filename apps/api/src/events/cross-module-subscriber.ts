@@ -8,7 +8,7 @@ import { AccountService, OpportunityService, QuotationService, SignalService, is
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { AmcService } from '@aura/amc';
-import { type DomainEvent, projectCompletionSignal, contractCompletionSignal } from '@aura/shared';
+import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney } from '@aura/shared';
 
 /**
  * Cross-module event subscriber — the reactor that wires the deal chain.
@@ -801,7 +801,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           companyId: e.companyId,
           reference: `PR-RO-${code}`,
           title: `Replenish ${name} (${code}) — ${suggestedQty} ${unit} (on-hand ${balanceAfter} ≤ reorder ${reorderLevel})`,
-          value: Math.round(suggestedQty * avgCost * 100) / 100,
+          value: Number(mulMoney(suggestedQty, avgCost)),
           status: 'draft',
         });
         this.logger.log(
@@ -824,7 +824,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
         const direction = p.direction as string;
         const quantity = Number(p.quantity) || 0;
         const unitCost = Number(p.unitCost) || 0;
-        const amount = Math.round(quantity * unitCost * 100) / 100;
+        const amount = Number(mulMoney(quantity, unitCost));
         if (amount <= 0) return; // nothing to value (no cost captured)
         const code = (p.code as string) ?? '';
         const unit = (p.unit as string) ?? 'pcs';
@@ -875,7 +875,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
       const direction = p.direction as string;
       const quantity = Number(p.quantity) || 0;
       const unitCost = Number(p.unitCost) || 0;
-      const cost = Math.round(quantity * unitCost * 100) / 100;
+      const cost = Number(mulMoney(quantity, unitCost));
       if (quantity <= 0) return;
       const sign = direction === 'out' ? 1 : -1; // issue adds cost/qty; return reverses both
       const code = (p.code as string) ?? '';

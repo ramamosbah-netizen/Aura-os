@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, convertMoney } from '@aura/shared';
 
 // Finance domain — framework-free. A (supplier / AP) Invoice is raised against a Purchase
 // Order — the "pay" step that closes the operate loop (spend -> receive -> pay). It
@@ -72,7 +72,7 @@ export function makeInvoice(input: NewInvoice): Invoice {
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     currency: (input.currency ?? 'AED').trim().toUpperCase(),
     exchangeRate: input.exchangeRate === undefined ? 1 : Number(input.exchangeRate),
-    baseValue: Math.round((Number.isFinite(input.value) ? Number(input.value) : 0) * (input.exchangeRate === undefined ? 1 : Number(input.exchangeRate)) * 100) / 100,
+    baseValue: Number(convertMoney(Number.isFinite(input.value) ? Number(input.value) : 0, input.exchangeRate === undefined ? 1 : Number(input.exchangeRate))),
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

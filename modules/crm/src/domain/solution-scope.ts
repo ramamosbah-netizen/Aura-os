@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as round2 } from '@aura/shared';
 
 // Pre-award discovery (R4) — the structured front-half the audit found missing. Two opportunity-scoped
 // artifacts turn a deal from tribal-knowledge + spreadsheets into a priceable scope:
@@ -96,7 +96,6 @@ export interface NewSolutionScope {
   lines?: NewScopeLine[];
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function makeScopeLine(input: NewScopeLine): ScopeLine {
   const quantity = Number(input.quantity);

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { assertSameTenant, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { assertSameTenant, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull, roundDecimal } from '@aura/shared';
 import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   type NewPricingSheet, type PricingSheet, type SheetComparison,
@@ -142,7 +142,7 @@ export class PricingSheetService {
     const all = await this.store.list({ tenantId: sheet.tenantId, limit: 200 });
     const frozen = all.filter((s) => s.status === 'frozen' && s.id !== sheet.id);
     const avgMarginPercent = frozen.length > 0
-      ? Math.round((frozen.reduce((sum, s) => sum + s.totals.marginPercent, 0) / frozen.length) * 10) / 10
+      ? roundDecimal(frozen.reduce((sum, s) => sum + s.totals.marginPercent, 0) / frozen.length, 1)
       : null;
 
     return {

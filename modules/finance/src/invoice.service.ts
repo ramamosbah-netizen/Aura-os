@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId, diffFields } from '@aura/shared';
+import { type Id, makeEvent, newId, diffFields, moneyNumber } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService, AccessService, TenantContext } from '@aura/core';
 import type { Currency } from '@aura/shared';
 import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeInvoice } from './domain/invoice';
@@ -294,7 +294,7 @@ export class InvoiceService implements OnModuleInit {
     const reval = await this.fxRevaluation(tenantId, asOf);
     // AP is a credit-normal liability: a higher current rate means we owe MORE in base terms,
     // so a positive delta (base@current − base@booked) is an economic LOSS. Invert for P&L.
-    const economicGain = Math.round(-reval.totalGainLoss * 100) / 100;
+    const economicGain = moneyNumber(-reval.totalGainLoss);
     if (economicGain === 0) return { revaluation: reval, journalId: null };
 
     const apControl = await this.ensureAccount(tenantId, '2010', 'Accounts Payable', 'liability');

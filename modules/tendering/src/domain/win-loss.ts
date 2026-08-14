@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 
 // Tendering domain — framework-free. A TenderOutcome records how a bid concluded:
 // who we were up against, what they (and we) bid, and why it went the way it did.
@@ -47,7 +47,6 @@ export interface NewTenderOutcome {
   createdBy?: Id | null;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function makeTenderOutcome(input: NewTenderOutcome): TenderOutcome {
   if (!input.tenderId) throw new Error('tenderId is required');

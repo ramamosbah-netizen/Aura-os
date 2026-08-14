@@ -1,4 +1,4 @@
-import { daysUntil, type Id, isOnExpiryWatchlist, newId } from '@aura/shared';
+import { daysUntil, type Id, isOnExpiryWatchlist, newId, moneyNumber } from '@aura/shared';
 
 // Contracts domain — framework-free. A Bond/Guarantee is a bank instrument
 // securing a contract obligation: performance bond, advance-payment guarantee,
@@ -61,7 +61,7 @@ export function makeContractBond(input: NewContractBond): ContractBond {
     kind: input.kind,
     reference: input.reference.trim(),
     bank: input.bank?.trim() || null,
-    amount: Math.round(amount * 100) / 100,
+    amount: moneyNumber(amount),
     issueDate: input.issueDate ?? null,
     expiryDate: input.expiryDate ?? null,
     status: 'active',

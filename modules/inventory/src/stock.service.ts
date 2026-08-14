@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, makeEvent, mulMoney } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import {
   STOCK_EVENT,
@@ -210,7 +210,7 @@ export class StockService {
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
       .map((m) => ({ direction: m.direction, quantity: m.quantity, unitCost: m.unitCost }));
     const f = computeFifo(moves);
-    return { code: item.code, ...f, wacValue: Math.round(item.quantityOnHand * item.avgCost * 100) / 100 };
+    return { code: item.code, ...f, wacValue: Number(mulMoney(item.quantityOnHand, item.avgCost)) };
   }
 
   /** Inventory valuation report: each item's on-hand × WAC, plus the grand total. */

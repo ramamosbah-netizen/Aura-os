@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as round2 } from '@aura/shared';
 
 /**
  * Staff Advance / salary loan — an employee borrows against future salary, repaid in installments
@@ -57,7 +57,6 @@ export function makeStaffAdvance(input: NewStaffAdvance): StaffAdvance {
   };
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function approveAdvance(a: StaffAdvance, approverId: Id): StaffAdvance {
   if (a.status !== 'requested') throw new Error(`cannot approve from status ${a.status}`);

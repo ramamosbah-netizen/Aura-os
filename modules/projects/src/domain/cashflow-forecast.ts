@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 
 /**
  * Project Cash-Flow Forecast — a per-project projection of monthly inflows (progress billing /
@@ -41,7 +41,6 @@ export interface NewCashflowPeriod {
   outflow?: number;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function buildPeriod(input: NewCashflowPeriod): CashflowPeriod {
   if (!input.period || !/^\d{4}-\d{2}$/.test(input.period)) throw new Error('period must be YYYY-MM');

@@ -10,6 +10,7 @@
 // Pure and framework-free; the app layer feeds it cost (from Projects CBS/EVM), contract
 // value, and billing (from Finance AR), so no module need depend on another.
 // ============================================================
+import { moneyNumber as r2, mulMoney } from '@aura/shared';
 
 export interface RevenueRecognitionInput {
   /** Contract/booked value to recognise against (the project value carried from the contract). */
@@ -52,7 +53,6 @@ export interface RevenueRecognition {
   eacOverridden: boolean;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function recognizeRevenue(input: RevenueRecognitionInput): RevenueRecognition {
   const contractValue = Number(input.contractValue) || 0;
@@ -62,7 +62,7 @@ export function recognizeRevenue(input: RevenueRecognitionInput): RevenueRecogni
   const estimatedTotalCost = Math.max(Number(input.estimatedTotalCost) || 0, costIncurred);
 
   const fraction = estimatedTotalCost > 0 ? Math.min(costIncurred / estimatedTotalCost, 1) : 0;
-  const recognizedRevenue = r2(contractValue * fraction);
+  const recognizedRevenue = Number(mulMoney(contractValue, fraction));
   const diff = recognizedRevenue - billedToDate;
 
   // Onerous contracts (IAS 37, as applied to IFRS-15 contracts): when a contract is expected to

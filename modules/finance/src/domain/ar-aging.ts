@@ -1,3 +1,4 @@
+import { moneyNumber as round2 } from '@aura/shared';
 import type { CustomerInvoice } from './customer-invoice';
 
 /**
@@ -37,7 +38,6 @@ export interface ArAgingReport {
   grandTotal: number;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 function emptyBuckets(): BucketTotals {
   return { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };

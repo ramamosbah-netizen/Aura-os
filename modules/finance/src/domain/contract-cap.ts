@@ -1,3 +1,4 @@
+import { moneyNumber as round2 } from '@aura/shared';
 import type { ContractCapSnapshot } from '../contract-cap.port';
 
 /**
@@ -33,7 +34,6 @@ export interface ContractCapResult {
   reason?: string;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * A tolerance of one fils. Invoice totals are built from line quantity × unit price × VAT, so a

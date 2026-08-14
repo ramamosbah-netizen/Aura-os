@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 
 // Procurement domain — framework-free. A FrameworkAgreement (blanket agreement) locks a
 // supplier to agreed rates over a validity window with a ceiling value; call-off POs draw
@@ -52,7 +52,6 @@ export interface NewFrameworkAgreement {
   createdBy?: Id | null;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function makeFrameworkAgreement(input: NewFrameworkAgreement): FrameworkAgreement {

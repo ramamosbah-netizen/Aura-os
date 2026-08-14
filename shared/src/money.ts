@@ -79,3 +79,12 @@ export function convertMoney(amount: MoneyInput, fxRate: MoneyInput, dp = 2): st
 export function moneyNumber(x: MoneyInput, dp = 2): number {
   return Number(roundMoney(x, dp));
 }
+
+/**
+ * Exact half-up rounding for NON-money decimals — hours, days, percentages — that still suffer the
+ * same `Math.round(n*100)/100` boundary bug. Same engine as `moneyNumber`, named to keep intent
+ * honest where the value is not currency.
+ */
+export function roundDecimal(x: MoneyInput, dp = 2): number {
+  return Number(roundMoney(x, dp));
+}

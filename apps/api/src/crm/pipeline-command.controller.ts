@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { ActivityService, ContactService, OpportunityService, ATTENTION_THRESHOLDS, lastActivityByRecord, isQuiet } from '@aura/crm';
-import { type Opportunity, buyingJourneyAlignment, rollupByCategory } from '@aura/shared';
+import { type Opportunity, buyingJourneyAlignment, rollupByCategory, moneyNumber as r2 } from '@aura/shared';
 
 // Sales Pipeline Command Center — the sales manager's cockpit. Turns the raw
 // opportunity list into portfolio KPIs, a weighted forecast, pipeline aging,
@@ -10,7 +10,6 @@ import { type Opportunity, buyingJourneyAlignment, rollupByCategory } from '@aur
 // contacts (no extra store).
 
 const ACTIVE = (o: Opportunity): boolean => o.stage !== 'won' && o.stage !== 'lost';
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 const daysBetween = (iso: string): number => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
 interface OwnerRow {

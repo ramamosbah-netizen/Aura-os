@@ -1,4 +1,4 @@
-import { type Id, type EstimationLineInput, estimateLine, newId } from '@aura/shared';
+import { type Id, type EstimationLineInput, estimateLine, newId, moneyNumber as round2 } from '@aura/shared';
 
 // The PricingSheet — pricing as its OWN aggregate, not a JSON pocket inside a quotation.
 //
@@ -63,7 +63,6 @@ export interface NewPricingSheet {
   createdBy?: Id | null;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Roll the whole sheet up through the estimation engine — one number set, computed one way. */
 export function computeSheetTotals(lines: EstimationLineInput[]): PricingSheetTotals {

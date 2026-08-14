@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as round2 } from '@aura/shared';
 
 // The Project Transaction Engine — the sub-ledger between the ERP modules and the CBS/WBS.
 //
@@ -86,7 +86,6 @@ export function makeCostTransaction(input: NewCostTransaction): CostTransaction 
 
 /** Roll a set of ledger entries into committed / actual totals — the CBS balance IS this sum. */
 export function ledgerTotals(txns: CostTransaction[]): { committed: number; actual: number } {
-  const round2 = (n: number): number => Math.round(n * 100) / 100;
   let committed = 0;
   let actual = 0;
   for (const t of txns) {

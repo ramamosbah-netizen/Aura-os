@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { moneyNumber as r2 } from '@aura/shared';
 
 /**
  * The typed line-items of a Site Daily Report (G-34). Each belongs to one report (`dailyReportId`)
@@ -27,7 +28,6 @@ const lineBase = (input: { tenantId: string; companyId?: string | null; dailyRep
   createdAt: new Date().toISOString(),
 });
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 // ── Labour ───────────────────────────────────────────────────────────────────
 

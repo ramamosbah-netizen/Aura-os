@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as round2 } from '@aura/shared';
 import type { Quotation, QuotationLine } from './quotation';
 
 /**
@@ -75,7 +75,6 @@ export interface CommercialVariance {
   drifted: boolean;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Compare a contract's value against its locked commercial baseline — the drift detector. */
 export function commercialVariance(baselineTotal: number, contractValue: number): CommercialVariance {

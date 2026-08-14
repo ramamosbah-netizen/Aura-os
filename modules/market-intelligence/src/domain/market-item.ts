@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber, roundDecimal } from '@aura/shared';
 
 // Market Intelligence — the reference catalogue behind pricing.
 //
@@ -131,7 +131,7 @@ export interface NewMarketItem {
 const nonNeg = (v: number | undefined, field: string): number => {
   const n = Number(v ?? 0);
   if (!Number.isFinite(n) || n < 0) throw new Error(`${field} must be a non-negative number`);
-  return Math.round(n * 100) / 100;
+  return moneyNumber(n);
 };
 
 export function makeMarketItem(input: NewMarketItem, now = new Date()): MarketItem {
@@ -175,5 +175,5 @@ export function makeMarketItem(input: NewMarketItem, now = new Date()): MarketIt
 /** Implied margin % of a benchmark — sell vs cost. Null when there is no sell or no cost to compare. */
 export function marketItemMarginPercent(item: Pick<MarketItem, 'benchmarkCost' | 'benchmarkSell'>): number | null {
   if (item.benchmarkSell <= 0) return null;
-  return Math.round(((item.benchmarkSell - item.benchmarkCost) / item.benchmarkSell) * 1000) / 10;
+  return roundDecimal(((item.benchmarkSell - item.benchmarkCost) / item.benchmarkSell) * 100, 1);
 }

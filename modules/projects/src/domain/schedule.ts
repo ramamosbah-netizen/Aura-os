@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, roundDecimal } from '@aura/shared';
 
 /**
  * Project Schedule (Gantt data) — one per project: an ordered list of tasks with planned dates,
@@ -135,7 +135,7 @@ export function summariseSchedule(sch: ProjectSchedule): ScheduleSummary {
     taskCount: t.length,
     plannedStart,
     plannedEnd,
-    percentComplete: Math.round((doneDur / totalDur) * 1000) / 10,
+    percentComplete: roundDecimal((doneDur / totalDur) * 100, 1),
     baselineSet,
     scheduleVarianceDays: baselineSet ? daysBetween(baseEnd, plannedEnd) : 0,
   };

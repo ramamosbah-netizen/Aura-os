@@ -2,6 +2,8 @@
  * Leave-balance accrual — computed (no table): an employee accrues `annualDays` pro-rata from
  * their join date; approved leave consumes it. remaining = accrued − taken.
  */
+import { roundDecimal } from '@aura/shared';
+
 export interface LeaveInput { startDate: string; endDate: string; status: string }
 
 export interface LeaveBalance {
@@ -31,7 +33,7 @@ export function computeLeaveBalance(input: { annualDays: number; joinedDate: str
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.joinedDate)) throw new Error('joinedDate must be YYYY-MM-DD');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.asOf)) throw new Error('asOf must be YYYY-MM-DD');
   const monthsWorked = monthsBetween(input.joinedDate, input.asOf);
-  const accrued = Math.round((annualDays * monthsWorked / 12) * 100) / 100;
+  const accrued = roundDecimal(annualDays * monthsWorked / 12);
   const taken = input.leaves.filter((l) => l.status === 'approved').reduce((s, l) => s + leaveDays(l.startDate, l.endDate), 0);
-  return { annualDays, asOf: input.asOf, monthsWorked, accrued, taken, remaining: Math.round((accrued - taken) * 100) / 100 };
+  return { annualDays, asOf: input.asOf, monthsWorked, accrued, taken, remaining: roundDecimal(accrued - taken) };
 }

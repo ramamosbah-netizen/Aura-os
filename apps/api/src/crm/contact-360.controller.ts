@@ -12,6 +12,7 @@ import {
   type Quotation,
 } from '@aura/crm';
 import type { Opportunity } from '@aura/shared';
+import { moneyNumber as r2 } from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
 import { ContractService, type Contract } from '@aura/contracts';
 import { ProjectService, type Project } from '@aura/projects';
@@ -48,7 +49,6 @@ interface Contact360Payload {
   timeline: TimelineEntry[];
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 @Controller('crm/contacts')
 export class Contact360Controller {

@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, mulMoney } from '@aura/shared';
 
 // A valuation line on an Interim Payment Certificate (IPC). A remeasurement IPC certifies work per
 // BOQ (measured) item — quantity × rate — so the client is billed for measured progress. Each line
@@ -55,7 +55,7 @@ export function makeIpcLine(input: NewIpcLine): IpcLine {
     quantity,
     unit: input.unit?.trim() || 'nr',
     rate,
-    amount: Math.round(quantity * rate * 100) / 100,
+    amount: Number(mulMoney(quantity, rate)),
     createdAt: new Date().toISOString(),
   };
 }

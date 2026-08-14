@@ -1,5 +1,5 @@
 import { TenantContext } from '@aura/core';
-import { sameTenantOrNull } from '@aura/shared';
+import { sameTenantOrNull, moneyNumber as round2, roundDecimal } from '@aura/shared';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { Id } from '@aura/shared';
 import { type MarketItem, type NewMarketItem, makeMarketItem } from './domain/market-item';
@@ -24,7 +24,6 @@ const STARTER_CATALOGUE: ReadonlyArray<Omit<NewMarketItem, 'tenantId'>> = [
   { name: 'IP Video Door Station', brand: 'Hikvision', category: 'INTERCOM', unit: 'each', benchmarkCost: 620, benchmarkSell: 1050, installHours: 2.5, source: 'distributor offer', asOf: '2026-06-01' },
 ];
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Indicative supply lead time (days) by category — a starting point, editable per item. */
 const LEAD_TIME_BY_CATEGORY: Record<string, number> = {
@@ -83,7 +82,7 @@ export class MarketItemService {
         warrantyMonths: 12,
         crewSize: (spec.installHours ?? 0) >= 4 ? 2 : 1,
         // Commissioning: roughly half the install for active devices; passive items need none.
-        commissioningHours: spec.category === 'STRUCTURED_CABLING' ? 0 : Math.round(((spec.installHours ?? 0) / 2) * 100) / 100,
+        commissioningHours: spec.category === 'STRUCTURED_CABLING' ? 0 : roundDecimal((spec.installHours ?? 0) / 2, 2),
         confidence: 75,
       }));
     }

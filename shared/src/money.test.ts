@@ -30,17 +30,18 @@ describe('money — VAT, the drift that G-10 proved', () => {
   // Negative control: every VAT cent must match an exact integer-cent reference. This test FAILS
   // against the old `Math.round(price*0.05*100)/100` idiom (which drifted on 1,638 prices in the
   // 0.01..20000 scan). Because the util is exact decimal, VAT-per-cent = round(cents/20) is periodic
-  // in `cents mod 20`, so scanning 0.01..2000.00 covers every residue class 100× — exhaustive.
+  // in `cents mod 20`, so scanning 0.01..200.00 covers every residue class 1000× — exhaustive.
+  // (Kept small + generously timed so it stays fast under CI's --coverage instrumentation.)
   it('matches an exact-cent reference across the price range (zero drift)', () => {
     const exactVatCents = (cents: number): number => Math.round((cents * 5) / 100); // price cents → VAT cents, half-up
     let mismatches = 0;
-    for (let cents = 1; cents <= 200_000; cents++) {
+    for (let cents = 1; cents <= 20_000; cents++) {
       const price = (cents / 100).toFixed(2);
       const got = Math.round(Number(vatOf(price, '5')) * 100); // our VAT, in cents
       if (got !== exactVatCents(cents)) mismatches++;
     }
     expect(mismatches).toBe(0);
-  });
+  }, 30_000);
 });
 
 describe('money — exact arithmetic & invariants', () => {

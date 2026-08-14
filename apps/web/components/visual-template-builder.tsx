@@ -186,7 +186,7 @@ export default function VisualTemplateBuilder({
         text = text.replace('{{WorkCompleted}}', 'AED 120,000.00');
         text = text.replace('{{RetentionAmount}}', 'AED 12,000.00');
         text = text.replace('{{NetCertified}}', 'AED 108,000.00');
-        text = text.replace('{{CurrentDate}}', new Date().toLocaleDateString());
+        text = text.replace('{{CurrentDate}}', new Date().toLocaleDateString('en-AE'));
         text = text.replace('{{GeneratedBy}}', 'ERP Admin Agent');
 
         doc.text(text, xMm, yMm + 3);

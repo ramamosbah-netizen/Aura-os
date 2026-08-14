@@ -3,6 +3,7 @@
 import { type CSSProperties, Fragment, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface StockItem {
   id: string;
@@ -37,7 +38,7 @@ interface Detail {
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function StockClient({ initialItems }: { initialItems: StockItem[] }) {

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { type CSSProperties } from 'react';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 export interface AuditDiffField {
   fieldName: string;
@@ -45,7 +46,7 @@ export default function AuraAuditDiffViewer({
             <div style={st.meta}>
               <span>Entity: <strong>{entityType} ({entityId})</strong></span> ·{' '}
               <span>Actor: <strong>{actorName}</strong></span>
-              {timestamp && <span> · <strong>{new Date(timestamp).toLocaleString()}</strong></span>}
+              {timestamp && <span> · <strong>{new Date(timestamp).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</strong></span>}
             </div>
           </div>
           <button type="button" style={st.closeBtn} onClick={onClose}>✕</button>

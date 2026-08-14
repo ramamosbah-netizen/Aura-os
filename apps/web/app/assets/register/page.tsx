@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,16 @@ function statusStyle(status: string): CSSProperties {
 const money = (n: number): string => (n ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 
 export default async function AssetRegisterPage() {
-  const assets = (await getJson<Asset[]>('/api/assets')) ?? [];
+  const result = await fetchJson<Asset[]>('/api/assets');
+  if (!result.ok) {
+    return (
+      <div style={st.page}>
+        <h1 style={st.h1}>Asset Register</h1>
+        <DataStateNotice error={result.error} subject="the asset register" />
+      </div>
+    );
+  }
+  const assets = result.data ?? [];
   const rank = (s: string): number => (s === 'disposed' ? 1 : 0);
   const rows = [...assets].sort((a, b) => rank(a.status) - rank(b.status) || a.name.localeCompare(b.name));
 

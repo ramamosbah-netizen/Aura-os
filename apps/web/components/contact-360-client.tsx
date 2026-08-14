@@ -7,6 +7,7 @@ import {
   STRENGTH_LABEL, STRENGTH_COLOR, STRENGTH_OPTIONS,
 } from './stakeholder-meta';
 import Timeline from './timeline';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Contact 360 — the stakeholder command center. Header (role + strength + account
 // hierarchy) → snapshot → stakeholder map (manager / reports / peers) → the deals
@@ -50,7 +51,7 @@ interface Payload {
 type Tab = 'overview' | 'deals' | 'activity';
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
-const d = (iso: string): string => new Date(iso).toLocaleDateString();
+const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 function ago(iso: string | null): string {
   if (!iso) return 'never';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);

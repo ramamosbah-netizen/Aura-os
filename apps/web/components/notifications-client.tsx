@@ -3,10 +3,11 @@
 import { type CSSProperties, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Notification { id: string; title: string; body: string; category: string; read: boolean; createdAt: string }
 
-function fmt(iso: string) { return new Date(iso).toLocaleString(); }
+function fmt(iso: string) { return new Date(iso).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }); }
 
 export default function NotificationsClient({ initial }: { initial: Notification[] }) {
   const router = useRouter();

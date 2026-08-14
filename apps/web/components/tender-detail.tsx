@@ -3,6 +3,7 @@
 import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { computeBidScore, recommendationFor, DEFAULT_BID_CRITERIA, type BidCriterion, type BidRecommendation } from '@aura/shared';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Tender {
   id: string;
@@ -345,7 +346,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
             <span style={s.refTag}>{tender.reference || 'REF-PENDING'}</span>
             <h1 style={s.title}>{tender.title}</h1>
             <p style={s.subtitle}>
-              Customer: <strong>{tender.accountName ?? '—'}</strong> | Created: {new Date(tender.createdAt).toLocaleDateString()}
+              Customer: <strong>{tender.accountName ?? '—'}</strong> | Created: {new Date(tender.createdAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}
               {tender.source && <> | Source: <strong>{SOURCE_LABELS[tender.source] ?? tender.source}</strong></>}
               {tender.submissionDeadline && <> | Deadline: <strong>{tender.submissionDeadline}</strong></>}
             </p>
@@ -1238,7 +1239,7 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
             {REC[latest.recommendation].label}
           </span>
           <span style={{ fontSize: 22, fontWeight: 800 }}>{latest.totalScore}<span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>/100</span></span>
-          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>decided {new Date(latest.createdAt).toLocaleDateString()}</span>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>decided {new Date(latest.createdAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</span>
           {latest.notes && <span style={{ fontSize: 13, color: 'var(--text)', fontStyle: 'italic' }}>“{latest.notes}”</span>}
         </div>
       ) : (
@@ -1288,7 +1289,7 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
                 <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5, color: 'var(--muted)' }}>
                   <span style={{ fontWeight: 700, color: REC[r.recommendation].color, minWidth: 96 }}>{REC[r.recommendation].label}</span>
                   <span style={{ fontWeight: 700, color: 'var(--text)' }}>{r.totalScore}/100</span>
-                  <span>{new Date(r.createdAt).toLocaleDateString()}</span>
+                  <span>{new Date(r.createdAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</span>
                   {r.notes && <span style={{ fontStyle: 'italic' }}>“{r.notes}”</span>}
                 </div>
               ))}

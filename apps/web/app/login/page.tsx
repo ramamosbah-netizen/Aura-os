@@ -2,6 +2,7 @@
 
 import { type CSSProperties, type FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -9,6 +10,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // The form is not usable until React owns it.
+  //
+  // These inputs are controlled, so anything typed into the server-rendered markup before
+  // hydration lands in the DOM and is then discarded when React attaches — leaving `username` and
+  // `password` empty while the boxes look filled. Submitting in that window posts blank credentials
+  // and the API answers, correctly, "invalid credentials". The user sees a rejection of something
+  // they can plainly see they typed, and no amount of retrying the same way helps.
+  //
+  // `useHydrated` is false in the SSR HTML and true once React attaches, so disabling the fields
+  // and the submit until then makes the form honest about when it can accept input.
+  const ready = useHydrated();
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -67,6 +80,7 @@ export default function LoginPage() {
             placeholder="Username"
             autoComplete="username"
             autoFocus
+            disabled={!ready}
           />
 
           <label style={s.label} htmlFor="login-pass">
@@ -80,10 +94,11 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
+            disabled={!ready}
             autoComplete="current-password"
           />
 
-          <button type="submit" data-testid="login-submit" style={s.btn} disabled={busy}>
+          <button type="submit" data-testid="login-submit" style={s.btn} disabled={busy || !ready}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
           {err ? <p style={s.err} data-testid="login-error">{err}</p> : null}

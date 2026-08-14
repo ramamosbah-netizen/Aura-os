@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Accounts register — A4 print sheet of every CRM account (browser print-to-PDF).
 
@@ -17,7 +18,7 @@ interface Account {
   createdAt: string;
 }
 
-const d = (iso: string): string => new Date(iso).toLocaleDateString('en-GB');
+const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 export default function AccountsRegisterPrint() {
   const [rows, setRows] = useState<Account[] | null>(null);

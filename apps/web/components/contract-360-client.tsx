@@ -3,6 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Contract 360 — where the deal chain closes. One page for the awarded
 // contract's whole commercial life: workflow (Activate/Sign → the reactor
@@ -44,7 +45,7 @@ interface QuotationLite { id: string; quoteNumber: string; status: string; conve
 type Tab = 'obligations' | 'bonds' | 'certificates';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 const BOND_KIND_LABEL: Record<string, string> = {
   performance: 'Performance bond', advance_payment: 'Advance payment guarantee',
   retention: 'Retention bond', warranty: 'Warranty bond', tender_bond: 'Tender bond',

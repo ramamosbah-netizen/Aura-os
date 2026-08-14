@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 /**
  * Site daily-report action bar (G-34). Renders only the commands legal from the current status and
@@ -11,6 +12,10 @@ import { useRouter } from 'next/navigation';
 export default function SiteReportActions({ id, status }: { id: string; status: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
+  // landing on the server-rendered markup is otherwise swallowed without trace.
+  const hydrated = useHydrated();
+  const locked = busy || !hydrated;
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState('');
 
@@ -38,16 +43,16 @@ export default function SiteReportActions({ id, status }: { id: string; status: 
   return (
     <div style={st.wrap} data-testid="report-actions" data-status={status}>
       {status === 'draft' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-submit" onClick={() => run('submit', 'PUT')}>Submit for review</button>
+        <button style={st.primary} disabled={locked} data-testid="btn-submit" onClick={() => run('submit', 'PUT')}>Submit for review</button>
       )}
       {status === 'submitted' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-start-review" onClick={() => run('start-review', 'POST')}>Start review</button>
+        <button style={st.primary} disabled={locked} data-testid="btn-start-review" onClick={() => run('start-review', 'POST')}>Start review</button>
       )}
       {status === 'under_review' && (
         <div style={st.group}>
-          <input style={{ ...st.input, minWidth: 240 }} placeholder="Rejection reason (required to reject)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-approve" onClick={() => run('approve', 'POST')}>Approve</button>
-          <button style={st.danger} disabled={busy} data-testid="btn-reject" onClick={() => run('reject', 'POST', { reason })}>Reject</button>
+          <input style={{ ...st.input, minWidth: 240 }} placeholder="Rejection reason (required to reject)" value={reason} onChange={(e) => setReason(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-approve" onClick={() => run('approve', 'POST')}>Approve</button>
+          <button style={st.danger} disabled={locked} data-testid="btn-reject" onClick={() => run('reject', 'POST', { reason })}>Reject</button>
         </div>
       )}
       {status === 'approved' && <span style={st.locked} data-testid="report-locked">🔒 Approved — this report is immutable. Raise the next day&apos;s report.</span>}

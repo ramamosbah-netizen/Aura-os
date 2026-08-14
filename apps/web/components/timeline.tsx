@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useEffect, useState } from 'react';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Unified Timeline — one chronological feed for a CRM record, merging domain
 // events (stage changes, quotes, contracts…) with logged activities. Fed by
@@ -17,7 +18,7 @@ interface TimelineEntry {
 }
 
 const TONE: Record<string, string> = { good: 'var(--good)', bad: 'var(--bad)', accent: 'var(--accent)', muted: 'var(--muted)' };
-const fmt = (iso: string): string => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const fmt = (iso: string): string => new Date(iso).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, dateStyle: 'medium', timeStyle: 'short' });
 
 export default function Timeline({ recordId, limit = 50 }: { recordId: string; limit?: number }) {
   const [entries, setEntries] = useState<TimelineEntry[] | null>(null);

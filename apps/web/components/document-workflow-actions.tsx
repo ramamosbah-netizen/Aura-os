@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/use-hydrated';
 
 /**
  * Document approval action bar (G-33). Operates on the active revision, rendering only the commands
@@ -11,6 +12,10 @@ import { useRouter } from 'next/navigation';
 export default function DocumentWorkflowActions({ revisionId, status }: { revisionId: string; status: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
+  // landing on the server-rendered markup is otherwise swallowed without trace.
+  const hydrated = useHydrated();
+  const locked = busy || !hydrated;
   const [error, setError] = useState<string | null>(null);
   const [comments, setComments] = useState('');
   const [reason, setReason] = useState('');
@@ -41,25 +46,25 @@ export default function DocumentWorkflowActions({ revisionId, status }: { revisi
   return (
     <div style={st.wrap} data-testid="document-actions" data-status={status}>
       {status === 'draft' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-submit" onClick={() => run('submit')}>Submit for review</button>
+        <button style={st.primary} disabled={locked} data-testid="btn-submit" onClick={() => run('submit')}>Submit for review</button>
       )}
       {status === 'submitted' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-start-review" onClick={() => run('start-review')}>Start review</button>
+        <button style={st.primary} disabled={locked} data-testid="btn-start-review" onClick={() => run('start-review')}>Start review</button>
       )}
       {status === 'under_review' && (
         <div style={st.group}>
-          <input style={{ ...st.input, minWidth: 240 }} placeholder="Comments / rejection reason" value={comments} onChange={(e) => setComments(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-approve" onClick={() => run('approve', { comments })}>Approve</button>
-          <button style={st.danger} disabled={busy} data-testid="btn-reject" onClick={() => run('reject', { reason: comments })}>Reject</button>
+          <input style={{ ...st.input, minWidth: 240 }} placeholder="Comments / rejection reason" value={comments} onChange={(e) => setComments(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-approve" onClick={() => run('approve', { comments })}>Approve</button>
+          <button style={st.danger} disabled={locked} data-testid="btn-reject" onClick={() => run('reject', { reason: comments })}>Reject</button>
         </div>
       )}
       {status === 'approved' && (
-        <button style={st.primary} disabled={busy} data-testid="btn-issue" onClick={() => run('issue')}>Issue</button>
+        <button style={st.primary} disabled={locked} data-testid="btn-issue" onClick={() => run('issue')}>Issue</button>
       )}
       {(status === 'rejected' || status === 'issued') && (
         <div style={st.group}>
-          <input style={{ ...st.input, minWidth: 240 }} placeholder="Reason for new revision (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button style={st.primary} disabled={busy} data-testid="btn-revise" onClick={() => run('revise', { reason })}>Raise next revision</button>
+          <input style={{ ...st.input, minWidth: 240 }} placeholder="Reason for new revision (required)" value={reason} onChange={(e) => setReason(e.target.value)} disabled={locked} />
+          <button style={st.primary} disabled={locked} data-testid="btn-revise" onClick={() => run('revise', { reason })}>Raise next revision</button>
         </div>
       )}
       {immutable && <span style={st.locked} data-testid="document-locked">🔒 This revision is superseded and immutable.</span>}

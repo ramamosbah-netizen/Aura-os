@@ -35,5 +35,6 @@ export * from './agent-evaluation.service';
 export * from './revenue-agents.service';
 export * from './management-agents.service';
 export * from './saas-credit-billing.service';
+export * from './agent-governance.service';
 export * from './intelligence.module';
 

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,18 @@ function isOverdue(p: Permit): boolean {
 }
 
 export default async function PermitRegisterPage() {
-  const permits = (await getJson<Permit[]>('/api/hse/ptws')) ?? [];
+  const result = await fetchJson<Permit[]>('/api/hse/ptws');
+  // A failed or refused read must not render as "no permits" — on a safety register that reads as
+  // "nothing is authorised right now", which is the opposite of what an unknown state means.
+  if (!result.ok) {
+    return (
+      <div style={st.page}>
+        <h1 style={st.h1}>Permit to Work Register</h1>
+        <DataStateNotice error={result.error} subject="the permit register" />
+      </div>
+    );
+  }
+  const permits = result.data ?? [];
   // Live permits first; closed and expired sink.
   const rank = (s: string): number => (s === 'closed' || s === 'expired' ? 1 : 0);
   const rows = [...permits].sort(

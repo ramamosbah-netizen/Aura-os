@@ -4,6 +4,8 @@
  * net book value as of a date. Supports straight-line and double-declining-balance; both stop at
  * the salvage floor and never depreciate below it.
  */
+import { moneyNumber as round2 } from '@aura/shared';
+
 export type DepreciationMethod = 'straight_line' | 'declining_balance';
 
 export interface DepreciationPeriod {
@@ -34,7 +36,6 @@ export interface DepreciationInput {
   asOf: string; // YYYY-MM-DD
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Whole months between two YYYY-MM-DD dates (day-of-month ignored), clamped at 0. */
 export function monthsBetween(from: string, to: string): number {

@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, mulMoney, moneyNumber, roundDecimal } from '@aura/shared';
 
 /**
  * Stock — the on-hand side of Inventory (GRNs record *receipts against POs*; stock tracks
@@ -111,7 +111,7 @@ export function uomFactor(item: Pick<StockItem, 'unit' | 'altUnits'>, unit?: str
 export function toBaseQty(item: Pick<StockItem, 'unit' | 'altUnits'>, quantity: number, unit?: string): number {
   const q = Number(quantity);
   if (!Number.isFinite(q) || q <= 0) throw new Error('quantity must be positive');
-  return Math.round(q * uomFactor(item, unit) * 10000) / 10000;
+  return roundDecimal(q * uomFactor(item, unit), 4);
 }
 
 export type StockDirection = 'in' | 'out';
@@ -181,7 +181,7 @@ export function makeStockMovement(input: NewStockMovement, balanceAfter: number,
     reason: input.reason?.trim() || (input.direction === 'in' ? 'receipt' : 'issue'),
     balanceAfter,
     unitCost,
-    valueAfter: Math.round(balanceAfter * newAvgCost * 100) / 100,
+    valueAfter: Number(mulMoney(balanceAfter, newAvgCost)),
     projectId: input.projectId ?? null,
     cbsNodeId: input.cbsNodeId ?? null,
     boqItemId: input.boqItemId ?? null,
@@ -215,9 +215,9 @@ export function summariseValuation(items: StockItem[]): ValuationSummary {
     unit: i.unit,
     quantityOnHand: i.quantityOnHand,
     avgCost: i.avgCost,
-    totalValue: Math.round(i.quantityOnHand * i.avgCost * 100) / 100,
+    totalValue: Number(mulMoney(i.quantityOnHand, i.avgCost)),
   }));
-  const grandTotal = Math.round(lines.reduce((s, l) => s + l.totalValue, 0) * 100) / 100;
+  const grandTotal = moneyNumber(lines.reduce((s, l) => s + l.totalValue, 0));
   return { lines, grandTotal };
 }
 

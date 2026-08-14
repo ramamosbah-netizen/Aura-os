@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { moneyNumber as r2 } from '@aura/shared';
 
 // HR domain — framework-free. A PerformanceAppraisal is a review-cycle record for an employee:
 // weighted competency scores → an overall 0–100 rating, with a draft → submitted → acknowledged
@@ -47,7 +48,6 @@ export interface NewPerformanceAppraisal {
   createdBy?: string | null;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Weighted 0–100 overall from criteria (each score 0–5, weights normalised). */
 export function computeOverallScore(criteria: AppraisalCriterion[]): number {

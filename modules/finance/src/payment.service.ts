@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId } from '@aura/shared';
+import { type Id, makeEvent, newId, addMoney } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { FINANCE_EVENT } from './domain/invoice';
 import { type Payment, type NewPayment, makePayment } from './domain/payment';
@@ -80,7 +80,7 @@ export class PaymentService implements OnModuleInit {
     //      are normal for a contractor, so the invoice now stays open until it is settled.
     const priorPayments = await this.store.list({ tenantId: payment.tenantId, invoiceId: payment.invoiceId });
     const alreadyPaid = priorPayments.reduce((sum, p) => sum + p.amount, 0);
-    const cumulative = Math.round((alreadyPaid + payment.amount) * 100) / 100;
+    const cumulative = Number(addMoney(alreadyPaid, payment.amount));
     if (cumulative > invoice.value + 0.001) {
       // Phrased "insufficient …" deliberately: the error taxonomy classifies that as a 409
       // state conflict, which is what this is — the invoice's remaining balance forbids the

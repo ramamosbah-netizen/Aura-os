@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { moneyNumber as r2 } from '@aura/shared';
 
 // Assets domain — framework-free. A Disposal record retires an asset (sale, scrap, write-off,
 // trade-in) and books the gain/loss vs its net book value at disposal, so Finance can post
@@ -35,7 +36,6 @@ export interface NewAssetDisposal {
   createdBy?: string | null;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function makeAssetDisposal(input: NewAssetDisposal): AssetDisposal {
   const proceeds = r2(Number(input.proceeds) || 0);

@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as round2 } from '@aura/shared';
 
 /**
  * Petty Cash — an imprest cash float held by a custodian (typically per site/office).
@@ -45,7 +45,6 @@ export function makePettyCashFund(input: NewPettyCashFund): PettyCashFund {
   };
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export type PettyCashTxType = 'topup' | 'expense';
 

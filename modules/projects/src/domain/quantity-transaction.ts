@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 
 // The Project Quantity Ledger — the physical twin of the Cost Ledger.
 //
@@ -107,7 +107,6 @@ export interface QuantityPosition {
   progressPct: number;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Roll a BOQ item's quantity transactions into its live position — the source of truth for progress. */
 export function quantityPosition(boqItemId: Id, txns: QuantityTransaction[]): QuantityPosition {

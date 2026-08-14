@@ -3,12 +3,12 @@ import {
   type Id, makeEvent,
   type ForecastSnapshot, type ForecastableOpp, type ForecastDiff,
   captureForecast, diffForecast, CRM_FORECAST_EVENT,
+  moneyNumber as r2,
 } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { CRM_FORECAST_SNAPSHOT_STORE, type ForecastSnapshotStore } from './forecast-snapshot-store';
 import { OpportunityService } from './opportunity.service';
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export interface ForecastCapture {
   batchId: Id;

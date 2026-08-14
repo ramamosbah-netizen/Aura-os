@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { moneyNumber as r2 } from '@aura/shared';
 
 // Site domain — framework-free. A LabourAllocation records daily manpower on a project by
 // trade (headcount × hours), the basis for labour productivity, cost allocation, and the
@@ -46,7 +47,6 @@ export interface NewLabourAllocation {
   createdBy?: string | null;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function makeLabourAllocation(input: NewLabourAllocation): LabourAllocation {
   const now = new Date().toISOString();

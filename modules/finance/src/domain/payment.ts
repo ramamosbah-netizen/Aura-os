@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber } from '@aura/shared';
 
 export interface Payment {
   id: Id;
@@ -46,7 +46,7 @@ export function makePayment(input: NewPayment): Payment {
     tenantId: input.tenantId,
     invoiceId: input.invoiceId,
     bankAccountId: input.bankAccountId,
-    amount: Math.round(amount * 100) / 100,
+    amount: moneyNumber(amount),
     reference: input.reference?.trim() || null,
     paidAt: input.paidAt || new Date().toISOString(),
     createdBy: input.createdBy ?? null,

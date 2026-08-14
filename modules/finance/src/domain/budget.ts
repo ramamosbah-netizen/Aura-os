@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 import type { Account, AccountType } from './account';
 import type { Journal } from './journal';
 import { accountBalances } from './statements';
@@ -48,7 +48,6 @@ export interface NewBudget {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function makeBudget(input: NewBudget): Budget {
   const name = (input.name || '').trim();

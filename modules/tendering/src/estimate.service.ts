@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, makeEvent, mulMoney } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { TENDER_ESTIMATE_EVENT, type NewRateBuildUp, type RateBuildUp, type TenderEstimate, compileResourceBreakdown, makeRateBuildUp, summariseEstimate } from './domain/estimate';
 import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
@@ -67,7 +67,7 @@ export class EstimateService {
       await this.boqStore.saveBOQItem({
         ...item,
         rate,
-        totalAmount: Math.round(item.quantity * rate * 100) / 100,
+        totalAmount: Number(mulMoney(item.quantity, rate)),
         updatedAt: new Date().toISOString(),
       });
       // The tender value is the roll-up — it follows the applied rate immediately (T3). Before

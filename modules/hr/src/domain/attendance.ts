@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, roundDecimal } from '@aura/shared';
 
 /**
  * Attendance — one record per employee per day: check-in/out clock times, a status, and
@@ -50,7 +50,7 @@ export function computeWorkedHours(checkIn: string | null | undefined, checkOut:
   if (!checkIn || !checkOut) return 0;
   const mins = toMinutes(checkOut) - toMinutes(checkIn);
   if (mins <= 0) throw new Error('check-out must be after check-in');
-  return Math.round((mins / 60) * 100) / 100;
+  return roundDecimal(mins / 60);
 }
 
 export function makeAttendanceRecord(input: NewAttendanceRecord): AttendanceRecord {
@@ -110,7 +110,7 @@ export function summariseAttendance(records: AttendanceRecord[]): AttendanceSumm
     else if (r.status === 'holiday') s.holiday++;
     s.totalHours += r.workedHours;
   }
-  s.totalHours = Math.round(s.totalHours * 100) / 100;
+  s.totalHours = roundDecimal(s.totalHours);
   return s;
 }
 

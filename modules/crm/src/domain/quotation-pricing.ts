@@ -1,4 +1,4 @@
-import { type EstimationLineInput, estimateLine } from '@aura/shared';
+import { type EstimationLineInput, estimateLine, moneyNumber as round2 } from '@aura/shared';
 import type { QuotationLine, QuotationStatus } from './quotation';
 
 // Quotation pricing sheet — the INTERNAL rate build-up behind a client quotation
@@ -128,7 +128,6 @@ export interface QuotationPricingView extends QuotationPricingSheet {
   revision: number;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? n : 0;

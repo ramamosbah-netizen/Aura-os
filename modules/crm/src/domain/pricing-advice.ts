@@ -4,6 +4,7 @@
 // function over real numbers — the line's own margin, the catalogue benchmark, and what the shop
 // quoted before — and it produces findings a person could verify. The AI turns these into prose;
 // it does not invent them. If the AI is unavailable, the findings still stand on their own.
+import { roundDecimal } from '@aura/shared';
 
 export interface SheetLineForAdvice {
   description: string;
@@ -56,7 +57,7 @@ export interface PricingAdvice {
   headline: string;
 }
 
-const round1 = (n: number): number => Math.round(n * 10) / 10;
+const round1 = (n: number): number => roundDecimal(n, 1);
 const marginPct = (cost: number, price: number): number => (price > 0 ? round1(((price - cost) / price) * 100) : 0);
 
 function bandOf(margin: number): MarginBand {

@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber } from '@aura/shared';
 import type { BOQItem } from './boq';
 
 // Tendering domain — framework-free. A RateBuildUp is the estimator's cost build-up
@@ -113,8 +113,8 @@ export interface NewRateBuildUp {
   createdBy?: Id | null;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
-const r4 = (n: number): number => Math.round(n * 10000) / 10000;
+const r2 = (n: number): number => moneyNumber(n);
+const r4 = (n: number): number => moneyNumber(n, 4);
 
 const nn = (v: unknown): number => {
   const n = Number(v) || 0;

@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber } from '@aura/shared';
 
 // Payment Certificates domain — framework-free. An Interim Payment Certificate (IPC) is the
 // periodic progress-billing instrument against a main Contract: the contractor applies for the
@@ -45,7 +45,7 @@ export interface PaymentCertificate {
   certifiedAt: string | null;
 }
 
-const round2 = (n: number): number => Math.round((Number(n) || 0) * 100) / 100;
+const round2 = (n: number): number => moneyNumber(Number(n) || 0);
 
 export interface CertificateInputs {
   contractValue: number;

@@ -8,6 +8,7 @@
  *    IBAN, pay period, days, fixed + variable income.
  * Pure + framework-free; the service feeds it payroll runs joined to employee bank details.
  */
+import { moneyNumber } from '@aura/shared';
 
 export interface WpsEmployer {
   establishmentId: string; // MoHRE establishment / employer MOL id
@@ -59,7 +60,7 @@ export function generateSif(employer: WpsEmployer, lines: WpsEmployeeLine[], now
   if (lines.length === 0) throw new Error('no payroll records for the period');
   lines.forEach(validateWpsLine);
 
-  const round = (n: number): number => Math.round(n * 100) / 100;
+  const round = (n: number): number => moneyNumber(n);
   const totalSalary = round(lines.reduce((s, l) => s + l.fixedIncome + l.variableIncome, 0));
   const fileDate = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}`;
   const fileTime = `${two(now.getHours())}${two(now.getMinutes())}`;

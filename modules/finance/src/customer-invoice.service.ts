@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type Id, type PageParams, type Currency, makeEvent } from '@aura/shared';
+import { type Id, type PageParams, type Currency, makeEvent, moneyNumber } from '@aura/shared';
 import { EVENT_STORE, type EventStore, ExchangeRateService, TenantContext } from '@aura/core';
 import {
   CUSTOMER_INVOICE_EVENT,
@@ -81,7 +81,7 @@ export class CustomerInvoiceService {
   /** Compute the AR FX revaluation and post the unrealized gain/loss journal to the GL. */
   async postFxRevaluation(tenantId: string, asOf?: string, actorId?: Id): Promise<{ revaluation: Awaited<ReturnType<CustomerInvoiceService['fxRevaluation']>>; journalId: string | null }> {
     const reval = await this.fxRevaluation(tenantId, asOf);
-    const gl = Math.round(reval.totalGainLoss * 100) / 100;
+    const gl = moneyNumber(reval.totalGainLoss);
     if (gl === 0) return { revaluation: reval, journalId: null };
 
     const arControl = await this.ensureAccount(tenantId, '1200', 'Accounts Receivable', 'asset');

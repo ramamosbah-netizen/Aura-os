@@ -3,6 +3,8 @@
  * For each open (issued/partially_paid) non-base invoice: outstanding is revalued from its
  * booked rate to the current rate; delta = base@current − base@booked (positive = gain).
  */
+import { moneyNumber as r2, convertMoney } from '@aura/shared';
+
 export interface RevalInvoice {
   invoiceNumber: string;
   currency: string;
@@ -30,7 +32,6 @@ export interface FxRevaluation {
   totalGainLoss: number;
 }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 const AR_OPEN = ['issued', 'partially_paid'];
 
 /** rateFor: current rate (foreign→base) per currency. Base-currency invoices are excluded. */
@@ -50,8 +51,8 @@ export function computeFxRevaluation(
     if (outstanding <= 0) continue;
     const bookedRate = Number(inv.exchangeRate) || 1;
     const currentRate = Number(rateFor(inv.currency)) || bookedRate;
-    const baseAtBooked = r2(outstanding * bookedRate);
-    const baseAtCurrent = r2(outstanding * currentRate);
+    const baseAtBooked = Number(convertMoney(outstanding, bookedRate));
+    const baseAtCurrent = Number(convertMoney(outstanding, currentRate));
     lines.push({
       invoiceNumber: inv.invoiceNumber, currency: inv.currency, outstanding,
       bookedRate, currentRate, baseAtBooked, baseAtCurrent, gainLoss: r2(baseAtCurrent - baseAtBooked),

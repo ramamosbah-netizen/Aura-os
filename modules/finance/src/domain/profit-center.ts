@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 
 /**
  * Profit Centre — a management-accounting dimension tracking contribution (revenue − cost)
@@ -57,7 +57,6 @@ export interface ProfitCenterReport {
 
 interface JLine { debit: number; credit: number; profitCenterId: Id | null }
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Fold GL journal lines by profit-centre tag; contribution = credit − debit. Untagged → unallocated. */
 export function buildProfitCenterReport(centers: ProfitCenter[], lines: JLine[]): ProfitCenterReport {

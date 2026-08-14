@@ -164,17 +164,19 @@ This is the **one enforcement gap to close** (see §A). Today the guard checks p
 
 ## 4. Proposed build sequence (one PR per slice)
 
-| # | Slice | Delivers | Depends on |
-|---|---|---|---|
-| **P1** | Project Membership + Team UI | grants scoped to `project:X`; add/remove members | — |
-| **P2** | Scope enforcement in guard | engineers see only their projects (Q12) | P1 |
-| **P3** | Project Workspace shell + nav | `/project/[id]` with the delivery tree, lists pre-filtered | P2 |
-| **P4** | Project Dashboard + KPI digest | Q9 composition (also the AI context payload) | P3 |
-| **P5** | AI context assembler (read-only) | "today's project status" grounded in real data | P4 |
-| **P6** | AI tool layer + confirm gate (green-tier) | "create today's site report", add line-items | P5 |
-| **P7** | AI suggest-only (red-tier) + audit `agent` field | prepared-but-human-committed gate actions | P6 |
+| # | Slice | Delivers | Depends on | Status |
+|---|---|---|---|---|
+| **P1** | Project Membership + Team UI | grants scoped to `project:X`; add/remove members | — | **✅ shipped (PR #214)** |
+| **P2** | Scope enforcement in guard | engineers see only their projects (Q12) | P1 | **✅ shipped** |
+| **P3** | Project Workspace shell + nav | `/project/[id]` with the delivery tree, lists pre-filtered | P2 | next |
+| **P4** | Project Dashboard + KPI digest | Q9 composition (also the AI context payload) | P3 | — |
+| **P5** | AI context assembler (read-only) | "today's project status" grounded in real data | P4 | — |
+| **P6** | AI tool layer + confirm gate (green-tier) | "create today's site report", add line-items | P5 | — |
+| **P7** | AI suggest-only (red-tier) + audit `agent` field | prepared-but-human-committed gate actions | P6 | see [[p7-01-governed-metered-runtime]] (parallel) |
 
 P1–P4 are mostly **wiring existing primitives** (low risk). P5–P7 are the genuinely new capability and should be gated behind a feature flag until the confirm-gate UX is proven.
+
+**P2 as built (`PermissionsGuard`):** on a project-scoped module (`projects`, `engineering`, `site`, `quality`, `hse`, `commissioning`, `doccontrol`) the guard resolves the touched project from `params.projectId` / `body.projectId` / `query.projectId` and stamps `AccessTarget.resource = project:<id>`. A `resource:project:X` grant then authorises X and only X; an org/tenant grant is unaffected (org grants match by `orgPath`, ignoring the resource) — so the change is strictly additive and enterprise access is untouched. **Boundary:** routes that address an entity only by its own id (e.g. `site/daily-reports/:id`) do not expose the project without loading it, so a project-only member is not yet authorised there — resolving entity→project (service-layer or a per-route resolver) is a follow-up slice. Enforcement engages only when an auth verifier is configured (dev/CI run auth-off pass-through), so no current environment behaviour changes.
 
 ---
 

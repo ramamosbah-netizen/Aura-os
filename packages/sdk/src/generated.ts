@@ -3935,24 +3935,24 @@ export class AuraSdk {
     return this.http.request('PATCH', `/projects/wbs/${encodeURIComponent(id)}/progress`, body, undefined, opts);
   }
 
-  /** GET /api/v1/projects/{id}/assignable */
-  projectMembersAssignable(id: string, opts?: RequestOptions): Promise<unknown> {
-    return this.http.request('GET', `/projects/${encodeURIComponent(id)}/assignable`, undefined, undefined, opts);
+  /** GET /api/v1/projects/{projectId}/assignable */
+  projectMembersAssignable(projectId: string, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('GET', `/projects/${encodeURIComponent(projectId)}/assignable`, undefined, undefined, opts);
   }
 
-  /** GET /api/v1/projects/{id}/members */
-  projectMembersList(id: string, opts?: RequestOptions): Promise<unknown> {
-    return this.http.request('GET', `/projects/${encodeURIComponent(id)}/members`, undefined, undefined, opts);
+  /** GET /api/v1/projects/{projectId}/members */
+  projectMembersList(projectId: string, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('GET', `/projects/${encodeURIComponent(projectId)}/members`, undefined, undefined, opts);
   }
 
-  /** POST /api/v1/projects/{id}/members */
-  projectMembersAdd(id: string, body?: unknown, opts?: RequestOptions): Promise<unknown> {
-    return this.http.request('POST', `/projects/${encodeURIComponent(id)}/members`, body, undefined, opts);
+  /** POST /api/v1/projects/{projectId}/members */
+  projectMembersAdd(projectId: string, body?: unknown, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('POST', `/projects/${encodeURIComponent(projectId)}/members`, body, undefined, opts);
   }
 
-  /** DELETE /api/v1/projects/{id}/members/{userId} */
-  projectMembersRemove(id: string, userId: string, query?: Record<string, string | number | boolean | undefined>, opts?: RequestOptions): Promise<unknown> {
-    return this.http.request('DELETE', `/projects/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`, undefined, query, opts);
+  /** DELETE /api/v1/projects/{projectId}/members/{userId} */
+  projectMembersRemove(projectId: string, userId: string, query?: Record<string, string | number | boolean | undefined>, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('DELETE', `/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, undefined, query, opts);
   }
 
   /** GET /api/v1/quality/audits */

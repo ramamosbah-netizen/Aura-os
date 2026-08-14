@@ -44,8 +44,8 @@ export class ProjectMembersController {
 
   /** The delivery-role catalog + assignable active users for the add-member form. */
   @Permissions('projects.member.manage')
-  @Get(':id/assignable')
-  assignable(@Param('id') _projectId: string): {
+  @Get(':projectId/assignable')
+  assignable(@Param('projectId') _projectId: string): {
     roles: Array<{ id: string; name: string }>;
     users: Array<{ userId: string; displayName: string; email: string }>;
   } {
@@ -60,14 +60,14 @@ export class ProjectMembersController {
   }
 
   @Permissions('projects.member.read')
-  @Get(':id/members')
-  list(@Param('id') projectId: string): MemberView[] {
+  @Get(':projectId/members')
+  list(@Param('projectId') projectId: string): MemberView[] {
     return this.membersOf(projectId);
   }
 
   @Permissions('projects.member.manage')
-  @Post(':id/members')
-  add(@Param('id') projectId: string, @Body() dto: { userId?: string; roleId?: string }): { ok: true; member: MemberView } {
+  @Post(':projectId/members')
+  add(@Param('projectId') projectId: string, @Body() dto: { userId?: string; roleId?: string }): { ok: true; member: MemberView } {
     const userId = dto?.userId?.trim();
     const roleId = dto?.roleId?.trim();
     if (!userId) throw new BadRequestException('userId is required');
@@ -87,9 +87,9 @@ export class ProjectMembersController {
   }
 
   @Permissions('projects.member.manage')
-  @Delete(':id/members/:userId')
+  @Delete(':projectId/members/:userId')
   remove(
-    @Param('id') projectId: string,
+    @Param('projectId') projectId: string,
     @Param('userId') userId: string,
     @Query('roleId') roleId?: string,
   ): { removed: boolean } {

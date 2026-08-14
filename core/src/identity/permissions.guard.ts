@@ -18,6 +18,40 @@ import { type AccessTarget, type OrgLevel, type Id, AccessDeniedError } from '@a
 /** Modules whose routes stay outside the permission taxonomy (public / infra surfaces). */
 const DERIVE_EXEMPT_MODULES = new Set(['health', 'auth', 'metrics']);
 
+/**
+ * Modules whose routes are scoped to a delivery PROJECT (Project Delivery Workspace, slice P2).
+ * On these, when the touched project is knowable from the request, the guard stamps it onto the
+ * AccessTarget as `resource: project:<id>`. That makes a project-scoped grant
+ * (`resource:project:X`, the membership P1 writes) authorise action on project X and *only* X —
+ * while an org/tenant grant still authorises everything (org grants match by `orgPath`, ignoring
+ * the resource), so enterprise roles are entirely unaffected. Purely additive.
+ */
+const PROJECT_SCOPED_MODULES = new Set([
+  'projects',
+  'engineering',
+  'site',
+  'quality',
+  'hse',
+  'commissioning',
+  'doccontrol',
+]);
+
+/**
+ * The project a request acts on, when it is knowable WITHOUT loading the entity: an explicit
+ * `:projectId` route param, or a `projectId` in the body (creates) or query (lists). Routes that
+ * address an entity only by its own id (e.g. `site/daily-reports/:id`) do not expose the project
+ * here; those stay governed by an org grant until a later slice resolves entity→project. Returns
+ * a trimmed non-empty string or null.
+ */
+function pickProjectId(req: {
+  params?: Record<string, unknown>;
+  body?: Record<string, unknown>;
+  query?: Record<string, unknown>;
+}): string | null {
+  const candidate = req?.params?.projectId ?? req?.body?.projectId ?? req?.query?.projectId;
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+}
+
 const METHOD_ACTION: Record<string, string> = {
   GET: 'read',
   HEAD: 'read',
@@ -136,11 +170,25 @@ export class PermissionsGuard implements CanActivate {
       orgPath.push({ level: 'company', id: companyId });
     }
 
+    // Project scope (P2): on a project-scoped module, stamp the touched project onto the target so a
+    // project-scoped grant authorises it (and a grant for a *different* project does not). No project
+    // in the request → no resource, and org/tenant grants still authorise via `orgPath`.
+    let resource: AccessTarget['resource'];
+    if (context.getType() === 'http') {
+      const ctrlPath = ((Reflect.getMetadata('path', context.getClass()) as string) ?? '').replace(/^\/+/, '');
+      const moduleId = ctrlPath.split('/')[0];
+      if (PROJECT_SCOPED_MODULES.has(moduleId)) {
+        const projectId = pickProjectId(context.switchToHttp().getRequest() ?? {});
+        if (projectId) resource = { type: 'project', id: projectId };
+      }
+    }
+
     try {
       for (const permission of requiredPermissions) {
         const target: AccessTarget = {
           permission,
           orgPath,
+          ...(resource ? { resource } : {}),
         };
         this.access.assert(actorId, target);
       }

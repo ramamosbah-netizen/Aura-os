@@ -1,6 +1,6 @@
 # AURA OS — Report Index
 
-91 reports, newest first within each section. **Index last reviewed: 2026-08-13.**
+92 reports, newest first within each section. **Index last reviewed: 2026-08-14.**
 
 > **The current authority on platform state is [`docs/aura-audit/`](../aura-audit/README.md)** (24 documents, revision 2.6, 2026-08-13) — not this folder. It supersedes the readiness figure below and carries its own gap register (G-01…G-20). Reports here remain useful as dated records and for the journey scores, which the audit does not measure.
 
@@ -118,6 +118,7 @@ The five 2026-07-24 walkthroughs are a **progressive series** — each documents
 
 | Date | Report | Status |
 |---|---|:--:|
+| 2026-08-14 | [G-10 Money Model Map & Float-Drift Evidence](2026-08-14-g10-money-model-map.md) | 🟢 *the money path traced end-to-end; drift proven (1,638 real VAT cases), reaches the tax invoice + GL* |
 | 2026-07-11 | [Module Manager + Settings](2026-07-11-module-manager.md) | 🗄️ |
 | 2026-07-10 | [Admin Center Depth Wave](2026-07-10-admin-depth-wave.md) | 🗄️ |
 | 2026-07-09 | [P0 Deploy Wave](2026-07-09-p0-deploy-wave.md) · [P2 Wave 1](2026-07-09-p2-wave1.md) | 🗄️ |

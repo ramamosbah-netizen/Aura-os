@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, mulMoney, vatOf, sumMoney, addMoney, subMoney, convertMoney } from '@aura/shared';
 
 /**
  * Customer (AR / sales) Invoice — the bill *raised to a client*, the receivable side that
@@ -69,8 +69,10 @@ export interface NewCustomerInvoice {
   createdBy?: Id | null;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
-
+// Money is computed exactly (big.js) and rounded through the shared half-up policy — see
+// shared/src/money.ts and docs/reports/2026-08-14-g10-money-model-map.md (G-10). This is the UAE
+// tax-invoice path, so the VAT value must be exact: VAT on 0.70 is 0.04, not 0.03. Domain fields
+// stay `number` (Phase 1); validation is unchanged — only the arithmetic moved off float.
 export function buildLine(input: NewCustomerInvoiceLine): CustomerInvoiceLine {
   const qty = Number(input.quantity);
   const price = Number(input.unitPrice);
@@ -79,8 +81,8 @@ export function buildLine(input: NewCustomerInvoiceLine): CustomerInvoiceLine {
   if (!Number.isFinite(qty) || qty <= 0) throw new Error('line quantity must be positive');
   if (!Number.isFinite(price) || price < 0) throw new Error('line unit price cannot be negative');
   if (!Number.isFinite(vatRate) || vatRate < 0) throw new Error('line vat rate cannot be negative');
-  const lineNet = round2(qty * price);
-  return { description: input.description.trim(), quantity: qty, unitPrice: price, vatRate, lineNet, lineVat: round2(lineNet * (vatRate / 100)) };
+  const lineNet = mulMoney(qty, price);
+  return { description: input.description.trim(), quantity: qty, unitPrice: price, vatRate, lineNet: Number(lineNet), lineVat: Number(vatOf(lineNet, vatRate)) };
 }
 
 export interface InvoiceTotals {
@@ -90,9 +92,9 @@ export interface InvoiceTotals {
 }
 
 export function computeTotals(lines: CustomerInvoiceLine[]): InvoiceTotals {
-  const subtotal = round2(lines.reduce((s, l) => s + l.lineNet, 0));
-  const vatTotal = round2(lines.reduce((s, l) => s + l.lineVat, 0));
-  return { subtotal, vatTotal, total: round2(subtotal + vatTotal) };
+  const subtotal = sumMoney(lines.map((l) => l.lineNet));
+  const vatTotal = sumMoney(lines.map((l) => l.lineVat));
+  return { subtotal: Number(subtotal), vatTotal: Number(vatTotal), total: Number(addMoney(subtotal, vatTotal)) };
 }
 
 export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice {
@@ -106,7 +108,7 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
   const exchangeRate = input.exchangeRate === undefined ? 1 : Number(input.exchangeRate);
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error('exchangeRate must be positive');
   if (currency === 'AED' && exchangeRate !== 1) throw new Error('base-currency (AED) invoices must have exchangeRate 1');
-  const baseTotal = round2(total * exchangeRate);
+  const baseTotal = Number(convertMoney(total, exchangeRate));
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -145,7 +147,7 @@ export function recordReceipt(inv: CustomerInvoice, amount: number): CustomerInv
   }
   const a = Number(amount);
   if (!Number.isFinite(a) || a <= 0) throw new Error('receipt amount must be positive');
-  const amountPaid = round2(inv.amountPaid + a);
+  const amountPaid = Number(addMoney(inv.amountPaid, a));
   if (amountPaid > inv.total + 0.001) throw new Error(`receipt exceeds invoice balance (paid ${inv.amountPaid}, total ${inv.total})`);
   const status: CustomerInvoiceStatus = amountPaid >= inv.total - 0.001 ? 'paid' : 'partially_paid';
   return { ...inv, amountPaid, status };
@@ -158,7 +160,7 @@ export function cancelInvoice(inv: CustomerInvoice): CustomerInvoice {
 }
 
 export function balanceOf(inv: CustomerInvoice): number {
-  return round2(inv.total - inv.amountPaid);
+  return Number(subMoney(inv.total, inv.amountPaid));
 }
 
 export const CUSTOMER_INVOICE_EVENT = {

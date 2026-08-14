@@ -148,3 +148,23 @@ describe('quotation subject', () => {
     expect(makeQuotation(base).subject).toBeNull();
   });
 });
+
+describe('G-10 — VAT is exact, no float drift (regression)', () => {
+  it.each([
+    [0.70, 0.04],
+    [2.90, 0.15],
+    [20.70, 1.04],
+    [80.30, 4.02],
+  ])('buildQuotationLine VAT on AED %s is exact', (price, expectedVat) => {
+    expect(buildQuotationLine({ description: 'x', quantity: 1, unitPrice: price }).lineVat).toBe(expectedVat);
+  });
+
+  it('holds total === subtotal + vatTotal across drift-prone lines', () => {
+    const t = computeQuotationTotals(
+      [0.70, 2.90, 20.70, 80.30].map((unitPrice) => buildQuotationLine({ description: 'x', quantity: 1, unitPrice })),
+    );
+    expect(t.subtotal).toBe(104.60);
+    expect(t.vatTotal).toBe(5.25);
+    expect(t.total).toBe(109.85);
+  });
+});

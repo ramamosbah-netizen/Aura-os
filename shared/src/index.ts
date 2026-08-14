@@ -46,6 +46,7 @@ export * from './domain/forecast-snapshot';
 export * from './domain/account-growth';
 export * from './domain/crm';
 export * from './pagination';
+export * from './money';
 export * from './forms';
 export * from './command-center';
 export * from './workspace';

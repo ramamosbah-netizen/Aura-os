@@ -1,4 +1,4 @@
-import { type Id, type EstimationLineInput, newId } from '@aura/shared';
+import { type Id, type EstimationLineInput, newId, mulMoney, vatOf, sumMoney, addMoney } from '@aura/shared';
 // quotation-pricing has only a type-only dep back on this file, so this value
 // import is one-way at runtime — no cycle.
 import { type QuotationPricingInput, emptyPricingLine } from './quotation-pricing';
@@ -166,8 +166,10 @@ export interface NewQuotation {
   createdBy?: Id | null;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
-
+// Money is computed exactly (big.js) and rounded through the shared half-up policy — see
+// shared/src/money.ts and docs/reports/2026-08-14-g10-money-model-map.md (G-10). The domain fields
+// stay `number` (Phase 1); the VALUES are now correct, e.g. VAT on 0.70 is 0.04, not 0.03. Input
+// validation is unchanged — only the arithmetic moved off float.
 export function buildQuotationLine(input: NewQuotationLine): QuotationLine {
   const qty = Number(input.quantity);
   const price = Number(input.unitPrice);
@@ -176,8 +178,8 @@ export function buildQuotationLine(input: NewQuotationLine): QuotationLine {
   if (!Number.isFinite(qty) || qty <= 0) throw new Error('line quantity must be positive');
   if (!Number.isFinite(price) || price < 0) throw new Error('line unit price cannot be negative');
   if (!Number.isFinite(vatRate) || vatRate < 0) throw new Error('line vat rate cannot be negative');
-  const lineNet = round2(qty * price);
-  return { description: input.description.trim(), quantity: qty, unitPrice: price, vatRate, lineNet, lineVat: round2(lineNet * (vatRate / 100)) };
+  const lineNet = mulMoney(qty, price);
+  return { description: input.description.trim(), quantity: qty, unitPrice: price, vatRate, lineNet: Number(lineNet), lineVat: Number(vatOf(lineNet, vatRate)) };
 }
 
 export interface QuotationTotals {
@@ -187,9 +189,9 @@ export interface QuotationTotals {
 }
 
 export function computeQuotationTotals(lines: QuotationLine[]): QuotationTotals {
-  const subtotal = round2(lines.reduce((s, l) => s + l.lineNet, 0));
-  const vatTotal = round2(lines.reduce((s, l) => s + l.lineVat, 0));
-  return { subtotal, vatTotal, total: round2(subtotal + vatTotal) };
+  const subtotal = sumMoney(lines.map((l) => l.lineNet));
+  const vatTotal = sumMoney(lines.map((l) => l.lineVat));
+  return { subtotal: Number(subtotal), vatTotal: Number(vatTotal), total: Number(addMoney(subtotal, vatTotal)) };
 }
 
 /** Trim each exclusion, drop blanks, and dedupe case-insensitively while keeping first spelling. */

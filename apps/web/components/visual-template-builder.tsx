@@ -17,6 +17,7 @@ import {
   FileText
 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 export type ComponentType = 'header' | 'footer' | 'body' | 'signature' | 'stamp' | 'table' | 'image';
 
@@ -186,7 +187,8 @@ export default function VisualTemplateBuilder({
         text = text.replace('{{WorkCompleted}}', 'AED 120,000.00');
         text = text.replace('{{RetentionAmount}}', 'AED 12,000.00');
         text = text.replace('{{NetCertified}}', 'AED 108,000.00');
-        text = text.replace('{{CurrentDate}}', new Date().toLocaleDateString('en-AE'));
+        // hydration-safe: builds a string for the exported PDF on click, never rendered to the DOM.
+        text = text.replace('{{CurrentDate}}', new Date().toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }));
         text = text.replace('{{GeneratedBy}}', 'ERP Admin Agent');
 
         doc.text(text, xMm, yMm + 3);

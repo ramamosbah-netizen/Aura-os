@@ -3,7 +3,23 @@
 **Date:** 2026-08-15
 **Builds on:** [2026-08-15-frontend-surface-audit.md](2026-08-15-frontend-surface-audit.md) (Phase 1 — surface existence)
 **This phase measures the second and third levels:** *Frontend surface* (is there a place?) **and** *Usability/UX* (can the engineer actually finish the work?).
-**Still no build.** This document is the register that Phase 2B/2C execute against.
+This document is the register that Phase 2B/2C execute against.
+
+---
+
+## Progress log (updated 2026-08-15)
+
+Foundation build has started (open in **[PR #225](https://github.com/ramamosbah-netizen/Aura-os/pull/225)**). Each slice gated static → unit → prod build → **live browser** (never "compile = done"). Frontend/UX only; backend untouched.
+
+| Slice | Status | Verification |
+|---|---|---|
+| **2C-thin PR-01** — `aura-data-table` operational register + `DataState` + `RelatedRecords`/`ActivityTimeline` + `useMediaQuery` | ✅ **DONE + gated** | 20 query-engine tests + prod build + live browser (search/sort/filter+URL, filter→page-1 reset, deep-link/refresh, mobile cards, empty/loading). Caught+fixed a real `next/headers` client-boundary bug the build missed → extracted `lib/data-error.ts`. |
+| **PR-04** — promote `crm/record-shell` → shared `ui/record.tsx` (+ `related`/`activity`; 5 CRM 360s untouched via re-export) | ✅ **DONE + gated** (residual note) | typecheck/lint/48 tests/prod build + SSR-render of the full surface via the re-export path. Live hydration of project-nested routes flaky in the sandbox pane → primitives are unchanged production code, risk covered. |
+| **PR-05** — Project Context (URL-derived, no stored state → kills URL↔state divergence) | ✅ **DONE + gated** (residual note) | 15 scope tests + prod build + live browser, 2 real projects: init, deep-link/refresh restore, **divergence guard (URL id === server head id)**, **isolation (A→B no carryover)**, structured AI context, AI-dock transport captured on the wire. Setter-click covered by `buildScopeUrl` tests. |
+| **PR-02** — app-shell responsive audit | ⏳ next | shell already carries 22 responsive signals — audit not rebuild |
+| **PR-06** — ELV workspace (first real adopter of the foundation) | ⏳ queued | register → Device 360 → workflow → cross-module → AI, on Project Context |
+
+Deployed locally to the Desktop stack (web :3000 / API :4000) and confirmed serving the new build.
 
 ## The three levels being separated
 
@@ -165,11 +181,12 @@ These two are the only P0 items where "frontend over existing backend" doesn't c
 
 ---
 
-## Part G — Execution sequence (proposed)
+## Part G — Execution sequence
 
-- **2C-thin (pull forward):** adopt `aura-data-table` (search/sort/paginate/saved-views) + a responsive shell. One PR. Every later page inherits it.
-- **2B build order:** P0-1 ELV → P0-2 Project Command Center → P0-3 My Day → P0-4 Actions → P0-7 Communications → P0-8 Calendar → P0-10 Reporting → P0-6 Risks → (P0-5 Issues / P0-9 Meetings per backend note) → P1 series → P2 series.
+- **2C-thin (foundation) — ✅ DONE ([PR #225](https://github.com/ramamosbah-netizen/Aura-os/pull/225)):** `aura-data-table` operational register, `DataState`, `RelatedRecords`/`ActivityTimeline`, `useMediaQuery`, shared `ui/record.tsx` (PR-04), and URL-derived Project Context (PR-05). Every later page inherits these.
+- **⏳ Remaining foundation:** PR-02 app-shell responsive audit (shell already has 22 responsive signals — audit, not rebuild).
+- **2B build order (next):** **P0-1 ELV** → P0-2 Project Command Center → P0-3 My Day → P0-4 Actions → P0-7 Communications → P0-8 Calendar → P0-10 Reporting → P0-6 Risks → (P0-5 Issues / P0-9 Meetings per backend note) → P1 series → P2 series.
 - **2C full:** per-page rubric sweep, module by module.
-- Each surface = **one small PR**, reuses the design system, registers in `nav.ts`, ships with loading/empty/error + responsive, and deep-links its related records.
+- Each surface = **one small PR**, reuses the design system, registers in `nav.ts`, ships with loading/empty/error + responsive, and deep-links its related records — each with its own **live behavioral gate**, not compile-only.
 
-**Recommended first slice: P0-1 (ELV workspace)** — the highest-value gap for an ELV contractor and a clean test of the whole pattern (register → 360 → workflow → cross-module handoff to Commissioning/Assets/AMC).
+**Next slice: P0-1 (ELV workspace)** — the highest-value gap for an ELV contractor and the first real adopter that exercises the whole foundation (register → Device 360 → workflow → cross-module handoff to Commissioning/Assets/AMC → Project Context + AI).

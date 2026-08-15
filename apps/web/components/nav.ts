@@ -85,6 +85,13 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    title: 'ELV',
+    glyph: '⚡',
+    items: [
+      { label: 'Devices', href: '/elv/devices', glyph: '⚡', desc: 'ELV device schedule — CCTV, access control, barriers, cabling…: system, location, cable/port, serial & IP, warranty and install→commission status' },
+    ],
+  },
+  {
     title: 'Operations',
     glyph: '⚙',
     items: [],

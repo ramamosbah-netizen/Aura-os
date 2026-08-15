@@ -18,9 +18,17 @@ The Phase-2C-thin UX foundation is **partially built and verified** (frontend-on
 | **Mobile** (92🔴 + 68🟠) | Rows→cards responsive mode + `useMediaQuery`/`useIsMobile` hook | [aura-data-table.tsx](../../apps/web/components/ui/aura-data-table.tsx), [use-media-query.ts](../../apps/web/lib/use-media-query.ts) | renders via `AuraDataTable` or branches layout on `useIsMobile()` |
 | **Connectivity** (93🔴) | `RelatedRecords` + `ActivityTimeline` (deep-linked) | [related-records.tsx](../../apps/web/components/ui/related-records.tsx) | adds a Related-records / History section to its 360 |
 | **States** (153🟠) | Composed `<DataState loading empty error>` contract | [data-state.tsx](../../apps/web/components/ui/data-state.tsx) | wraps its data region in `<DataState>` |
-| **Detail/360** (116🔴) | *(pending)* promote `crm/record-shell` → shared record shell | `crm/record-shell.tsx` | *(not yet — PR-04)* |
+| **Detail/360** (116🔴) | Shared record shell promoted `crm/record-shell` → [record.tsx](../../apps/web/components/ui/record.tsx) (every module, not just CRM) + `related`/`activity` props | [record.tsx](../../apps/web/components/ui/record.tsx) | composes `RecordShell` for its 360 |
 
-**Still pending in P0-A:** shared record-shell (PR-04), Project Context provider (PR-05), app-shell responsive audit (PR-02).
+### Foundation build log (each gated: static → unit → prod build → live browser)
+
+| PR | What | Verification |
+|---|---|---|
+| **PR-01** `AuraDataTable` operational register + `DataState` + `RelatedRecords`/`ActivityTimeline` + `useMediaQuery` | ✅ **PASS** | 20 query-engine unit tests + prod build + **live prod browser**: search/sort/filter+URL, filter→page-1 reset, deep-link/refresh restore, mobile cards, empty/loading. Caught+fixed a real `next/headers` client-boundary bug the build missed → extracted `lib/data-error.ts`. |
+| **PR-04** promote `crm/record-shell` → shared `ui/record.tsx` (+ `related`/`activity` integration; 5 CRM 360s untouched via re-export) | ✅ **PASS** (residual note) | typecheck/lint/48 tests/prod build + SSR-render of the full surface via the re-export path. Live hydration of project-nested routes flaky in the sandbox pane → primitives are unchanged production code, so risk covered. |
+| **PR-05** Project Context — URL-derived, no stored state (kills URL↔state divergence) | ✅ **PASS** (residual note) | 15 scope unit tests + prod build + **live browser, 2 real projects**: init, deep-link/refresh restore, **divergence guard (URL id === server head id)**, **isolation (A→B no carryover)**, structured AI context, AI-dock transport captured on the wire. Setter-click not live-captured (project-route hydration flaky) → covered by `buildScopeUrl` tests. |
+
+**Still pending in P0-A:** app-shell responsive audit (PR-02). Then PR-06 ELV (first real adopter of this foundation).
 
 > **Honest delta note:** the only aggregate number that changed since the first sweep is **States 1🟢 → 9🟢**. This is *not* per-page adoption — it is a static-scan artifact: the ~9 pages that already import the `data-state` module now see all three state keywords because the new `DataState` wrapper was added to that same file. Real per-page State improvements will register only as pages wrap their content in `<DataState>`. Every other axis is unchanged, confirming no page has adopted the new register/connectivity primitives yet. This reinforces the report's standing caveat: **static score ≠ usability verdict** — acceptance is proven by real user-journey tests (see the Gap Register), not by the scan.
 

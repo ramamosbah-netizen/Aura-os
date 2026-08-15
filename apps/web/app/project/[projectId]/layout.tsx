@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { getJson } from '@/lib/api';
 import ProjectShell from '@/components/project-shell';
+import { ProjectContextProvider } from '@/lib/project-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,5 +28,9 @@ export default async function ProjectLayout({
   const project = await getJson<ProjectHead>(`/api/projects/projects/${projectId}`);
   if (!project) notFound();
 
-  return <ProjectShell project={project}>{children}</ProjectShell>;
+  return (
+    <ProjectContextProvider project={project}>
+      <ProjectShell project={project}>{children}</ProjectShell>
+    </ProjectContextProvider>
+  );
 }

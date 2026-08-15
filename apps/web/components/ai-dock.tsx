@@ -1,9 +1,10 @@
 'use client';
 
 import { type CSSProperties, type FormEvent, useState, useRef, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { findNavMatch } from './nav';
 import { RECORD_TITLE_EVENT } from './record-chrome';
+import { readProjectScope, toAIContext } from '@/lib/project-scope';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -46,6 +47,7 @@ function suggestionsFor(pathname: string, record: string | null): string[] {
 
 export default function AiDock() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -115,6 +117,13 @@ export default function AiDock() {
             path: pathname,
             module: navMatch ? `${navMatch.group} · ${navMatch.label}` : null,
             record,
+            // Structured project scope, read from the SAME URL the engineer is on — so the AI can
+            // never reason about a different project/area/discipline than what's on screen. IDs
+            // only, not display text; not authorization (the API/RLS still enforces access). Nested
+            // in `page` so it rides the existing forwarded object — no API-contract change.
+            projectContext: toAIContext(
+              readProjectScope(pathname, new URLSearchParams(searchParams.toString())),
+            ),
           },
         }),
       });

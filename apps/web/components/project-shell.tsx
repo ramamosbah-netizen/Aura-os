@@ -4,6 +4,8 @@ import type { CSSProperties, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { PROJECT_AREAS } from '@/lib/project-areas';
+import { useProjectContext } from '@/lib/project-context';
+import { ELV_DISCIPLINES } from '@/lib/project-scope';
 
 // Project Delivery Workspace shell (slice P3). One project, all delivery areas in one place: a
 // context header + a left rail that re-projects the delivery modules under `/project/[id]/…`.
@@ -24,6 +26,7 @@ const NAV: Array<{ slug: string; label: string; icon: string }> = [
 
 export default function ProjectShell({ project, children }: { project: ProjectHead; children: ReactNode }) {
   const pathname = usePathname();
+  const { disciplineId, setDiscipline } = useProjectContext();
   const base = `/project/${project.id}`;
   const badge =
     project.status === 'active' ? 'badge badge-good'
@@ -40,6 +43,20 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
           <span className={badge}>{project.status}</span>
           {project.reference ? <span style={st.ref}>{project.reference}</span> : null}
         </div>
+        <label style={st.discLabel}>
+          Discipline lens
+          <select
+            aria-label="Discipline lens"
+            value={disciplineId ?? ''}
+            onChange={(e) => setDiscipline(e.target.value || null)}
+            style={st.discSelect}
+          >
+            <option value="">All disciplines</option>
+            {ELV_DISCIPLINES.map((d) => (
+              <option key={d.id} value={d.id}>{d.label}</option>
+            ))}
+          </select>
+        </label>
         <nav style={st.nav}>
           {NAV.map((item) => {
             const href = item.slug ? `${base}/${item.slug}` : base;
@@ -66,6 +83,8 @@ const st = {
   projName: { fontSize: 15, fontWeight: 800, color: 'var(--text)', lineHeight: 1.3, marginBottom: 6 } as CSSProperties,
   projMeta: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 } as CSSProperties,
   ref: { fontSize: 11, color: 'var(--muted)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
+  discLabel: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 14 } as CSSProperties,
+  discSelect: { padding: '6px 8px', background: 'var(--panel)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer', textTransform: 'none', letterSpacing: 0, fontWeight: 400 } as CSSProperties,
   nav: { display: 'flex', flexDirection: 'column', gap: 2 } as CSSProperties,
   navItem: { display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 8, color: 'var(--muted)', textDecoration: 'none', fontSize: 13, fontWeight: 600 } as CSSProperties,
   navOn: { background: 'var(--panel)', color: 'var(--accent)', border: '1px solid var(--border)' } as CSSProperties,

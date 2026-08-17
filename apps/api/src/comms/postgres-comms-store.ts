@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage } from '@aura/shared';
+import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind } from '@aura/shared';
 import type { CommsStore, StoredChannel, TimelineEntry } from './comms-store';
 
 interface ChannelRow { id: string; kind: string; name: string; company_id: string | null; members: string[] | null }
@@ -7,11 +7,6 @@ interface MessageRow {
   id: string; channel_id: string; sender: string; kind: string; body: string; sent_at: Date | string;
   att_name: string | null; att_mime: string | null; att_size: string | number | null; att_data_url: string | null;
 }
-interface MailRow {
-  id: string; from_user: string; subject: string; body: string; sent_at: Date | string;
-  recipients: string[] | null; read_by: string[] | null;
-}
-
 const iso = (value: Date | string): string => (value instanceof Date ? value.toISOString() : new Date(value).toISOString());
 
 /**
@@ -119,75 +114,9 @@ export class PostgresCommsStore implements CommsStore {
     );
   }
 
-  /** Sender or recipient — the only two ways a mail is yours. */
-  async listMailFor(tenantId: string, username: string): Promise<MailMessage[]> {
-    const { rows } = await this.pool.query<MailRow>(
-      `select m.id, m.from_user, m.subject, m.body, m.sent_at,
-              coalesce(array_agg(r.username order by r.username) filter (where r.username is not null), '{}') as recipients,
-              coalesce(array_agg(r.username order by r.username) filter (where r.read_at is not null), '{}') as read_by
-         from public.aura_comms_mail m
-         left join public.aura_comms_mail_recipients r on r.mail_id = m.id and r.tenant_id = m.tenant_id
-        where m.tenant_id = $1
-          and (m.from_user = $2 or exists (
-                select 1 from public.aura_comms_mail_recipients x
-                 where x.tenant_id = m.tenant_id and x.mail_id = m.id and x.username = $2))
-        group by m.id, m.from_user, m.subject, m.body, m.sent_at
-        order by m.sent_at desc`,
-      [tenantId, username],
-    );
-    return rows.map(this.toMail);
-  }
 
-  async getMail(tenantId: string, mailId: string): Promise<MailMessage | null> {
-    const { rows } = await this.pool.query<MailRow>(
-      `select m.id, m.from_user, m.subject, m.body, m.sent_at,
-              coalesce(array_agg(r.username order by r.username) filter (where r.username is not null), '{}') as recipients,
-              coalesce(array_agg(r.username order by r.username) filter (where r.read_at is not null), '{}') as read_by
-         from public.aura_comms_mail m
-         left join public.aura_comms_mail_recipients r on r.mail_id = m.id and r.tenant_id = m.tenant_id
-        where m.tenant_id = $1 and m.id = $2
-        group by m.id, m.from_user, m.subject, m.body, m.sent_at`,
-      [tenantId, mailId],
-    );
-    return rows[0] ? this.toMail(rows[0]) : null;
-  }
 
-  private toMail(r: MailRow): MailMessage {
-    // The sender's own copy is read by construction, which is what the shared model's readBy means.
-    const readBy = [r.from_user, ...(r.read_by ?? [])];
-    return {
-      id: r.id,
-      from: r.from_user,
-      to: r.recipients ?? [],
-      subject: r.subject,
-      body: r.body,
-      sentAt: iso(r.sent_at),
-      readBy: [...new Set(readBy)],
-    };
-  }
 
-  async addMail(
-    tenantId: string,
-    companyId: string | null,
-    mail: MailMessage,
-    thread: { threadId: string; parentMailId: string | null; forwardedFromMailId: string | null },
-  ): Promise<void> {
-    await this.pool.query(
-      `insert into public.aura_comms_mail
-         (id, tenant_id, company_id, from_user, subject, body, sent_at, thread_id, parent_mail_id, forwarded_from_mail_id)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [mail.id, tenantId, companyId, mail.from, mail.subject, mail.body, mail.sentAt,
-        thread.threadId, thread.parentMailId, thread.forwardedFromMailId],
-    );
-    for (const username of mail.to) {
-      await this.pool.query(
-        `insert into public.aura_comms_mail_recipients (tenant_id, mail_id, username, kind)
-         values ($1, $2, $3, 'to')
-         on conflict (tenant_id, mail_id, username) do nothing`,
-        [tenantId, mail.id, username],
-      );
-    }
-  }
 
   async publishTimeline(tenantId: string, entry: TimelineEntry): Promise<void> {
     // ON CONFLICT on (tenant, subject) — a replayed sync re-publishes the same activity, and the
@@ -209,12 +138,4 @@ export class PostgresCommsStore implements CommsStore {
     );
   }
 
-  async markMailRead(tenantId: string, mailId: string, username: string, at: string): Promise<void> {
-    // Scoped to the recipient row: a non-recipient marking someone else's mail read updates nothing.
-    await this.pool.query(
-      `update public.aura_comms_mail_recipients set read_at = $4
-        where tenant_id = $1 and mail_id = $2 and username = $3 and read_at is null`,
-      [tenantId, mailId, username, at],
-    );
-  }
 }

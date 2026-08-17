@@ -153,6 +153,10 @@ import { CommsService } from './comms/comms.service';
 import { COMMS_STORE } from './comms/comms-store';
 import { InMemoryCommsStore } from './comms/in-memory-comms-store';
 import { PostgresCommsStore } from './comms/postgres-comms-store';
+import { MAIL_STORE } from './comms/mail/mail-store';
+import { InMemoryMailStore } from './comms/mail/in-memory-mail-store';
+import { PostgresMailStore } from './comms/mail/postgres-mail-store';
+import { MailService } from './comms/mail/mail.service';
 import { WorkItemsController } from './work-items/work-items.controller';
 import { WorkItemsService } from './work-items/work-items.service';
 
@@ -186,6 +190,15 @@ import { WorkItemsService } from './work-items/work-items.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresCommsStore(pool) : new InMemoryCommsStore(),
     },
+    {
+      // THE mail write path (migrations 0234-0236). CommsService.sendMail delegates here too, so
+      // the legacy endpoint and MailService cannot produce differently-shaped mail.
+      provide: MAIL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresMailStore(pool) : new InMemoryMailStore(),
+    },
+    MailService,
   ],
 })
 export class AppModule {}

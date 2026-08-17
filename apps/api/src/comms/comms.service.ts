@@ -19,6 +19,7 @@ import {
 } from '@aura/shared';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
 import { COMMS_STORE, type CommsStore, type StoredChannel, type TimelineEntry } from './comms-store';
+import { MAIL_STORE, type MailStore } from './mail/mail-store';
 
 /**
  * Who may see a channel, and therefore its messages and their attachments.
@@ -58,6 +59,39 @@ export function canAccessChannel(
   return isAdmin || channel.members.includes(username);
 }
 
+/**
+ * Project a canonical MailRecord back to the legacy MailMessage the web hub consumes. Kept as a
+ * projection rather than a stored shape so the old consumers keep working untouched while the
+ * canonical model moves ahead of them.
+ */
+function toLegacyMail(mail: MailRecordLike): MailMessage {
+  // BCC is deliberately absent. The legacy MailMessage has a single flat `to[]` with no way to
+  // mark a recipient blind, so including one would show every reader who was copied invisibly —
+  // the exact disclosure a blind copy exists to prevent. A shape that cannot represent it safely
+  // does not get to carry it.
+  const recipients = mail.participants.filter((p) => p.role === 'to' || p.role === 'cc');
+  const sender = mail.fromUser ?? mail.participants.find((p) => p.role === 'from')?.userId ?? '';
+  return {
+    id: mail.id,
+    from: sender,
+    to: recipients.map((p) => p.userId ?? p.address ?? '').filter(Boolean),
+    subject: mail.subject,
+    body: mail.body,
+    sentAt: mail.sentAt ?? mail.createdAt,
+    readBy: [sender, ...recipients.filter((p) => p.readAt).map((p) => p.userId ?? p.address ?? '')].filter(Boolean),
+  };
+}
+
+interface MailRecordLike {
+  id: string;
+  fromUser: string | null;
+  subject: string;
+  body: string;
+  sentAt: string | null;
+  createdAt: string;
+  participants: Array<{ role: string; address?: string | null; userId?: string | null; readAt?: string | null }>;
+}
+
 export interface ChannelSummary extends ChatChannel {
   unread: number;
   lastMessageAt: string | null;
@@ -83,6 +117,9 @@ export class CommsService {
     private readonly workspace: WorkspaceConfigService,
     private readonly notifications: NotificationService,
     @Inject(COMMS_STORE) private readonly store: CommsStore,
+    // The single mail write path. Mail is a facet of this context, so the legacy endpoint uses the
+    // same persistence as MailService rather than a parallel one of its own.
+    @Inject(MAIL_STORE) private readonly mail: MailStore,
   ) {}
 
   /**
@@ -211,17 +248,53 @@ export class CommsService {
 
   /** The user's mailbox (inbox + sent + unread). */
   async mailbox(tenantId: string, username: string): Promise<Mailbox> {
-    return mailboxFor(await this.store.listMailFor(tenantId, username), username);
+    // Reads follow the write: mail lives in the mail store now, and this projects it back to the
+    // legacy MailMessage shape so /workspace and Communication see exactly what they saw before.
+    const records = await this.mail.list(tenantId, { userId: username, limit: 200 });
+    const sent = await this.mail.list(tenantId, { userId: username, folder: 'sent', limit: 200 });
+    const projected = [...records, ...sent]
+      .filter((mail, index, all) => all.findIndex((other) => other.id === mail.id) === index)
+      .map((mail) => toLegacyMail(mail));
+    return mailboxFor(projected, username);
   }
 
   /** Send internal mail — every recipient gets a notification. */
   async sendMail(tenantId: string, input: NewMail, companyId: string | null = null): Promise<MailMessage | { error: string }> {
     const result = makeMail(input);
     if ('error' in result) return result;
-    // A root mail is its own thread. Reply/forward edges are populated in C3; the columns exist
-    // now so threading is never retrofitted onto mail that was already sent.
-    await this.store.addMail(tenantId, companyId, result, {
-      threadId: result.id, parentMailId: null, forwardedFromMailId: null,
+    // Delegated to THE mail write path (C3.1). The legacy endpoint keeps its old request and
+    // response shape so /workspace and Communication are untouched, but the row it produces is
+    // written exactly like one composed through MailService: canonical participants and the legacy
+    // projection in one transaction. One writer per operation, not merely one per table.
+    await this.mail.save(tenantId, {
+      id: result.id,
+      tenantId,
+      companyId,
+      accountId: null,
+      direction: 'outbound',
+      state: 'sent',
+      fromUser: result.from,
+      subject: result.subject,
+      body: result.body,
+      bodyHtml: null,
+      snippet: result.body.length > 140 ? `${result.body.slice(0, 137)}…` : result.body,
+      // Internal recipients are addressed by AURA user; no username is ever written as an address.
+      participants: [
+        { role: 'from', address: null, userId: result.from },
+        ...result.to.map((username) => ({ role: 'to' as const, address: null, userId: username })),
+      ],
+      threadId: result.id,
+      parentMailId: null,
+      forwardedFromMailId: null,
+      providerMessageId: null,
+      providerThreadId: null,
+      internetMessageId: null,
+      inReplyTo: null,
+      referencesHeader: null,
+      sentAt: result.sentAt,
+      failedReason: null,
+      createdAt: result.sentAt,
+      updatedAt: result.sentAt,
     });
     await this.publishTimeline(tenantId, {
       id: newId(),
@@ -255,11 +328,12 @@ export class CommsService {
   async markMailRead(tenantId: string, username: string, mailId: string): Promise<void> {
     // Only sender and recipients can see a mail at all, so anyone else asking to mark it read is
     // probing for existence — concealed as a 404, like the channel reads.
-    const mail = await this.store.getMail(tenantId, mailId);
-    if (!mail || (mail.from !== username && !mail.to.includes(username))) {
+    const mail = await this.mail.get(tenantId, mailId);
+    const onEnvelope = mail?.participants.some((p) => p.userId === username) ?? false;
+    if (!mail || (!onEnvelope && mail.fromUser !== username)) {
       throw new NotFoundException(`mail ${mailId} not found`);
     }
-    await this.store.markMailRead(tenantId, mailId, username, new Date().toISOString());
+    await this.mail.markRead(tenantId, mailId, { userId: username }, new Date().toISOString());
   }
 
   /**

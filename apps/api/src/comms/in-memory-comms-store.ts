@@ -1,11 +1,10 @@
-import type { ChatChannel, ChatMessage, MailMessage } from '@aura/shared';
+import type { ChatChannel, ChatMessage } from '@aura/shared';
 import type { CommsStore, StoredChannel, TimelineEntry } from './comms-store';
 
 interface TenantRows {
   channels: Map<string, StoredChannel>;
   messages: Map<string, ChatMessage[]>;
   lastRead: Map<string, string>;
-  mail: MailMessage[];
   timeline: Map<string, TimelineEntry>;
 }
 
@@ -20,7 +19,7 @@ export class InMemoryCommsStore implements CommsStore {
   private rows(tenantId: string): TenantRows {
     let t = this.tenants.get(tenantId);
     if (!t) {
-      t = { channels: new Map(), messages: new Map(), lastRead: new Map(), mail: [], timeline: new Map() };
+      t = { channels: new Map(), messages: new Map(), lastRead: new Map(), timeline: new Map() };
       this.tenants.set(tenantId, t);
     }
     return t;
@@ -56,17 +55,8 @@ export class InMemoryCommsStore implements CommsStore {
     this.rows(tenantId).lastRead.set(`${channelId}::${username}`, at);
   }
 
-  async listMailFor(tenantId: string, username: string): Promise<MailMessage[]> {
-    return this.rows(tenantId).mail.filter((m) => m.from === username || m.to.includes(username));
-  }
 
-  async getMail(tenantId: string, mailId: string): Promise<MailMessage | null> {
-    return this.rows(tenantId).mail.find((m) => m.id === mailId) ?? null;
-  }
 
-  async addMail(tenantId: string, _companyId: string | null, mail: MailMessage): Promise<void> {
-    this.rows(tenantId).mail.push(mail);
-  }
 
   async publishTimeline(tenantId: string, entry: TimelineEntry): Promise<void> {
     // Keyed by subject so a republish overwrites rather than duplicates, mirroring the unique
@@ -79,9 +69,4 @@ export class InMemoryCommsStore implements CommsStore {
     return [...this.rows(tenantId).timeline.values()].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   }
 
-  async markMailRead(tenantId: string, mailId: string, username: string): Promise<void> {
-    const mail = this.rows(tenantId).mail.find((m) => m.id === mailId);
-    // Only a recipient has anything to mark: the sender's copy is read by construction.
-    if (mail && mail.to.includes(username) && !mail.readBy.includes(username)) mail.readBy.push(username);
-  }
 }

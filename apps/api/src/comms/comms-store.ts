@@ -1,4 +1,4 @@
-import type { ChatChannel, ChatMessage, MailMessage } from '@aura/shared';
+import type { ChatChannel, ChatMessage } from '@aura/shared';
 
 /**
  * A channel plus the company it belongs to. `companyId: null` means tenant-global — the seeded
@@ -58,20 +58,16 @@ export interface CommsStore {
   getLastRead(tenantId: string, channelId: string, username: string): Promise<string | null>;
   setLastRead(tenantId: string, channelId: string, username: string, at: string): Promise<void>;
 
-  /** Mail visible to the user: everything they sent or received. */
-  listMailFor(tenantId: string, username: string): Promise<MailMessage[]>;
-  getMail(tenantId: string, mailId: string): Promise<MailMessage | null>;
   /**
-   * `thread` carries the real reply/forward edges. A root mail is its own thread; a reply inherits
-   * its parent's threadId. Kept out of MailMessage so the shared model stays unchanged in C1.
+   * Mail CREATION deliberately does not live here. There is one mail write path — MailStore.save —
+   * and CommsService.sendMail delegates to it, so canonical participants and the legacy projection
+   * are always written together. An `addMail` here would be exactly the independent writer that
+   * lets the two models drift apart while every individual test still passes.
+   *
+   * The same goes for reading it: getMail / listMailFor / markMailRead have moved to MailStore, so
+   * CommsStore is a CHAT store now. CommsService keeps the old /comms/mail endpoints as a
+   * compatibility adapter and delegates every mail operation to the mail facet.
    */
-  addMail(
-    tenantId: string,
-    companyId: string | null,
-    mail: MailMessage,
-    thread: { threadId: string; parentMailId: string | null; forwardedFromMailId: string | null },
-  ): Promise<void>;
-  markMailRead(tenantId: string, mailId: string, username: string, at: string): Promise<void>;
 
   /**
    * Index an activity on the Communication timeline. Idempotent per (tenant, subject): re-publishing

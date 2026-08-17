@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CommsController } from './comms.controller';
 import { CommsService, canAccessChannel } from './comms.service';
 import { InMemoryCommsStore } from './in-memory-comms-store';
+import { InMemoryMailStore } from './mail/in-memory-mail-store';
 import type { WorkspaceConfigService } from '../workspace/workspace-config.service';
 
 /**
@@ -27,7 +28,8 @@ function makeService() {
     get: vi.fn().mockResolvedValue({ assignments: { [ALICE]: 'finance', [BOB]: 'finance', [MALLORY]: 'hr' } }),
   } as unknown as WorkspaceConfigService;
   const notifications = { record: vi.fn().mockResolvedValue(undefined) } as unknown as NotificationService;
-  return { service: new CommsService(workspace, notifications, store), store };
+  const mail = new InMemoryMailStore();
+  return { service: new CommsService(workspace, notifications, store, mail), store, mail };
 }
 
 /** Establish a DM between Alice and Bob carrying one message. */

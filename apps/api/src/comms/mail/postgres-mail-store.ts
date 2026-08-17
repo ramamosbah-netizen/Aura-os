@@ -36,12 +36,11 @@ export class PostgresMailStore implements MailStore {
   constructor(private readonly pool: Pool) {}
 
   /**
-   * Canonical write — mail row plus its participants — in ONE transaction.
+   * Canonical write — mail row, participants, and the derived legacy projection — in ONE transaction.
    *
-   * Exactly one writer per table. This store owns the canonical rows; C1's comms store still owns
-   * the legacy aura_comms_mail_recipients projection for the mail IT sends, and neither writes the
-   * other's table. Two independent writers is precisely how the old and new models drift apart
-   * while every individual test keeps passing.
+   * THE single mail write path. CommsService.sendMail delegates here too, so there is one writer
+   * per operation rather than merely one per table: canonical rows and the legacy projection are
+   * written together, and cannot describe different envelopes.
    */
   async save(tenantId: string, mail: MailRecord): Promise<void> {
     const client = await this.pool.connect();
@@ -72,30 +71,67 @@ export class PostgresMailStore implements MailStore {
 
       // Participants are replaced wholesale: an edited draft may have lost a recipient, and
       // merging would silently keep someone on an envelope the user removed them from.
+      //
+      // But mail_reads references participant ids, so a naive delete-and-reinsert would orphan
+      // every read receipt and silently mark read mail unread again. The read state is therefore
+      // captured by PERSON first and re-attached to the new rows afterwards.
+      const { rows: previousReads } = await client.query<{ key: string; read_at: Date | string }>(
+        `select coalesce('user:' || p.user_id, lower(p.address)) as key, r.read_at
+           from public.aura_comms_participants p
+           join public.aura_comms_mail_reads r on r.tenant_id = p.tenant_id and r.participant_id = p.id
+          where p.tenant_id = $1 and p.subject_type = 'mail' and p.subject_id = $2`,
+        [tenantId, mail.id],
+      );
+      const readBefore = new Map(previousReads.map((row) => [row.key, iso(row.read_at)]));
+
+      await client.query(
+        `delete from public.aura_comms_mail_reads where tenant_id = $1 and participant_id in (
+           select id from public.aura_comms_participants
+            where tenant_id = $1 and subject_type = 'mail' and subject_id = $2)`,
+        [tenantId, mail.id],
+      );
       await client.query(
         `delete from public.aura_comms_participants where tenant_id = $1 and subject_type = 'mail' and subject_id = $2`,
         [tenantId, mail.id],
       );
+
       for (const participant of mail.participants) {
+        const participantId = newId();
         await client.query(
           `insert into public.aura_comms_participants
              (id, tenant_id, subject_type, subject_id, role, address, display_name, user_id, contact_id)
            values ($1, $2, 'mail', $3, $4, $5, $6, $7, $8)`,
-          [newId(), tenantId, mail.id, participant.role, participant.address,
+          [participantId, tenantId, mail.id, participant.role, participant.address,
             participant.displayName ?? null, participant.userId ?? null, participant.contactId ?? null],
         );
+        // readAt on the record is a projection and is deliberately NOT written from here; only a
+        // receipt that already existed is carried across.
+        const key = participant.userId ? `user:${participant.userId}` : (participant.address ?? '').toLowerCase();
+        const previous = readBefore.get(key);
+        if (previous && participant.role !== 'from') {
+          await client.query(
+            `insert into public.aura_comms_mail_reads (tenant_id, mail_id, participant_id, read_at)
+             values ($1, $2, $3, $4) on conflict (tenant_id, participant_id) do nothing`,
+            [tenantId, mail.id, participantId, previous],
+          );
+        }
       }
 
-      // The legacy aura_comms_mail_recipients table is deliberately NOT written here.
+      // Legacy projection, DERIVED from the canonical participants in the same transaction.
       //
-      // Exactly one writer per table: C1's comms store owns the legacy projection for the mail it
-      // sends, and this store owns the canonical rows for the mail it sends. Writing both from
-      // both paths is how the old and new models drift apart while every individual test still
-      // passes — the failure the one-write-path rule exists to prevent.
-      //
-      // The consequence is stated rather than hidden: mail sent through the old CommsService path
-      // has no canonical participants yet. That gap closes when CommsService.sendMail moves onto
-      // this store, which is the last step before the legacy table can be removed.
+      // One writer per OPERATION, not merely per table: every mail — whether composed through
+      // MailService or sent through the old CommsService endpoint — lands here, so canonical rows
+      // and the legacy projection can never describe different envelopes. Only participants that
+      // map to an AURA user can be represented, because the old table keyed on username.
+      await client.query(`delete from public.aura_comms_mail_recipients where tenant_id = $1 and mail_id = $2`, [tenantId, mail.id]);
+      for (const participant of mail.participants) {
+        if (participant.role === 'from' || !participant.userId) continue;
+        await client.query(
+          `insert into public.aura_comms_mail_recipients (tenant_id, mail_id, username, kind)
+           values ($1, $2, $3, $4) on conflict do nothing`,
+          [tenantId, mail.id, participant.userId, participant.role],
+        );
+      }
 
       await client.query('COMMIT');
     } catch (error) {
@@ -124,6 +160,7 @@ export class PostgresMailStore implements MailStore {
         displayName: person.display_name,
         userId: person.user_id,
         contactId: person.contact_id,
+        readAt: isoOrNull(person.read_at),
       });
       byMail.set(person.subject_id, list);
     }

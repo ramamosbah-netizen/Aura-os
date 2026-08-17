@@ -41,6 +41,14 @@ export interface MailParticipant {
   displayName?: string | null;
   userId?: string | null;
   contactId?: string | null;
+  /**
+   * When this recipient opened it — a READ PROJECTION, hydrated from aura_comms_mail_reads.
+   *
+   * It is never persisted onto aura_comms_participants: that table describes who was on a
+   * communication, and "has this person read it" is a mail concept a meeting attendee has no use
+   * for. The convenience of reading it here must not turn into storing it there.
+   */
+  readAt?: string | null;
 }
 
 /** How a participant is identified for comparison — address if external, user otherwise. */

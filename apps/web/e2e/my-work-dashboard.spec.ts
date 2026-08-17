@@ -109,8 +109,13 @@ test('My Work centers expose real sources and keep actions inside AURA tabs', as
 
   await page.goto('/my-work/communication', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('my-communication-page')).toBeVisible();
-  await expect(page.getByText('WhatsApp', { exact: true })).toBeVisible();
-  await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
+  // Anchored on the section entry rather than on loose page text: the old exact-text assertions
+  // would break the moment the product legitimately shows the provider name in more than one
+  // place, which is the test dictating the design instead of protecting it.
+  const whatsapp = page.getByTestId('comm-section-whatsapp');
+  await expect(whatsapp).toBeVisible();
+  await expect(whatsapp).toContainText('WhatsApp');
+  await expect(whatsapp).toContainText('Not connected');
   for (const link of await page.getByTestId('my-communication-page').getByRole('link').all()) await expect(link).not.toHaveAttribute('target', '_blank');
 
   await page.goto('/my-work/favorites', { waitUntil: 'domcontentloaded' });

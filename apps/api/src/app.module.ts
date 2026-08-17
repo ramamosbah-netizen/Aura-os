@@ -157,6 +157,7 @@ import { MAIL_STORE } from './comms/mail/mail-store';
 import { InMemoryMailStore } from './comms/mail/in-memory-mail-store';
 import { PostgresMailStore } from './comms/mail/postgres-mail-store';
 import { MailService } from './comms/mail/mail.service';
+import { MailDispatchWorker } from './comms/mail/mail-dispatch.worker';
 import { WorkItemsController } from './work-items/work-items.controller';
 import { WorkItemsService } from './work-items/work-items.service';
 
@@ -199,6 +200,7 @@ import { WorkItemsService } from './work-items/work-items.service';
         pool ? new PostgresMailStore(pool) : new InMemoryMailStore(),
     },
     MailService,
+    MailDispatchWorker,
   ],
 })
 export class AppModule {}

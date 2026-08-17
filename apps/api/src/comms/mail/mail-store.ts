@@ -22,6 +22,7 @@ export interface DispatchRecord {
   scheduledTimezone: string;
   state: 'pending' | 'claimed' | 'processing' | 'done' | 'failed' | 'cancelled';
   attempts: number;
+  lastError?: string | null;
 }
 
 /**
@@ -55,6 +56,23 @@ export interface MailStore {
   findByProviderMessage(tenantId: string, accountId: string | null, providerMessageId: string): Promise<MailRecord | null>;
 
   upsertDispatch(tenantId: string, dispatch: DispatchRecord): Promise<void>;
+
+  /**
+   * Tenants that may have outbound work. Read from the users registry, which is deliberately
+   * outside tenant RLS (migration 0163) because authentication happens before a tenant context
+   * exists — so the worker can enumerate tenants without the dispatch table ever leaving RLS.
+   */
+  listTenantsWithMailbox(): Promise<string[]>;
+
+  /**
+   * Atomically take ownership of due work. The claim is the duplicate-execution guard: a row moves
+   * pending -> processing in one statement, so a second worker (or a second tick of the same one)
+   * finds nothing to take rather than sending the message twice.
+   */
+  claimDueDispatch(tenantId: string, now: string, limit: number): Promise<DispatchRecord[]>;
+  completeDispatch(tenantId: string, dispatchId: string, at: string): Promise<void>;
+  /** `retryAt` null means give up: the row is dead-lettered with its error rather than looping. */
+  failDispatch(tenantId: string, dispatchId: string, error: string, retryAt: string | null): Promise<void>;
   getDispatch(tenantId: string, subjectId: string): Promise<DispatchRecord | null>;
   cancelDispatch(tenantId: string, subjectId: string, at: string): Promise<void>;
 }

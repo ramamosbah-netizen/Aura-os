@@ -133,6 +133,44 @@ export class InMemoryMailStore implements MailStore {
     return found ? structuredClone(found) : null;
   }
 
+  async listTenantsWithMailbox(): Promise<string[]> {
+    return [...new Set([...this.mail.keys(), ...this.dispatch.keys()])];
+  }
+
+  async claimDueDispatch(tenantId: string, now: string, limit: number): Promise<DispatchRecord[]> {
+    const claimed: DispatchRecord[] = [];
+    for (const dispatch of this.queue(tenantId).values()) {
+      if (claimed.length >= limit) break;
+      // Only pending work that is actually due. Mirrors the Postgres claim exactly, including the
+      // fact that a claimed row is invisible to the next caller.
+      if (dispatch.state !== 'pending' || dispatch.scheduledAt > now) continue;
+      const taken = { ...dispatch, state: 'processing' as const };
+      this.queue(tenantId).set(dispatch.subjectId, taken);
+      claimed.push(structuredClone(taken));
+    }
+    return claimed;
+  }
+
+  async completeDispatch(tenantId: string, dispatchId: string, _at: string): Promise<void> {
+    for (const [key, dispatch] of this.queue(tenantId)) {
+      if (dispatch.id === dispatchId) this.queue(tenantId).set(key, { ...dispatch, state: 'done' });
+    }
+  }
+
+  async failDispatch(tenantId: string, dispatchId: string, error: string, retryAt: string | null): Promise<void> {
+    for (const [key, dispatch] of this.queue(tenantId)) {
+      if (dispatch.id !== dispatchId) continue;
+      this.queue(tenantId).set(key, {
+        ...dispatch,
+        attempts: dispatch.attempts + 1,
+        // Back to pending when there is another attempt to make; dead-lettered when there is not.
+        state: retryAt ? 'pending' : 'failed',
+        scheduledAt: retryAt ?? dispatch.scheduledAt,
+        lastError: error,
+      } as DispatchRecord);
+    }
+  }
+
   async cancelDispatch(tenantId: string, subjectId: string, _at: string): Promise<void> {
     const found = this.queue(tenantId).get(subjectId);
     // Mirrors the Postgres rule: a dispatch already in flight belongs to the worker.

@@ -310,9 +310,9 @@ export class PostgresMailStore implements MailStore {
   async getDispatch(tenantId: string, subjectId: string): Promise<DispatchRecord | null> {
     const { rows } = await this.pool.query<{
       id: string; subject_type: string; subject_id: string; account_id: string | null;
-      scheduled_at: Date | string; scheduled_timezone: string; state: string; attempts: number;
+      scheduled_at: Date | string; scheduled_timezone: string; state: string; attempts: number; last_error: string | null;
     }>(
-      `select id, subject_type, subject_id, account_id, scheduled_at, scheduled_timezone, state, attempts
+      `select id, subject_type, subject_id, account_id, scheduled_at, scheduled_timezone, state, attempts, last_error
          from public.aura_comms_dispatch
         where tenant_id = $1 and subject_id = $2
         order by created_at desc limit 1`,
@@ -328,7 +328,76 @@ export class PostgresMailStore implements MailStore {
       scheduledTimezone: row.scheduled_timezone,
       state: row.state as DispatchRecord['state'],
       attempts: Number(row.attempts ?? 0),
+      lastError: row.last_error ?? null,
     } : null;
+  }
+
+  async listTenantsWithMailbox(): Promise<string[]> {
+    // aura_users sits outside tenant RLS (migration 0163) because authentication happens before a
+    // tenant context exists. Reading it here is what lets the worker enumerate tenants WITHOUT the
+    // dispatch table having to leave RLS — the worker then binds each tenant and claims inside it.
+    const { rows } = await this.pool.query<{ tenant_id: string }>(
+      `select distinct tenant_id from public.aura_users where active`,
+    );
+    return rows.map((row) => row.tenant_id);
+  }
+
+  async claimDueDispatch(tenantId: string, now: string, limit: number): Promise<DispatchRecord[]> {
+    // One statement claims the work: the sub-select takes the rows with FOR UPDATE SKIP LOCKED, so
+    // a second worker walks past them instead of blocking, and the UPDATE flips them out of
+    // 'pending' before anyone else can read them. That atomic hand-off IS the duplicate-send guard.
+    const { rows } = await this.pool.query<{
+      id: string; subject_type: string; subject_id: string; account_id: string | null;
+      scheduled_at: Date | string; scheduled_timezone: string; state: string; attempts: number; last_error: string | null;
+    }>(
+      `update public.aura_comms_dispatch d
+          set state = 'processing', claimed_at = now()
+        where d.id in (
+          select id from public.aura_comms_dispatch
+           where tenant_id = $1 and state = 'pending' and scheduled_at <= $2
+           order by scheduled_at
+           limit $3
+           for update skip locked
+        )
+      returning d.id, d.subject_type, d.subject_id, d.account_id, d.scheduled_at,
+                d.scheduled_timezone, d.state, d.attempts, d.last_error`,
+      [tenantId, now, limit],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      subjectType: row.subject_type as DispatchRecord['subjectType'],
+      subjectId: row.subject_id,
+      accountId: row.account_id,
+      scheduledAt: iso(row.scheduled_at),
+      scheduledTimezone: row.scheduled_timezone,
+      state: row.state as DispatchRecord['state'],
+      attempts: Number(row.attempts ?? 0),
+      lastError: row.last_error,
+    }));
+  }
+
+  async completeDispatch(tenantId: string, dispatchId: string, at: string): Promise<void> {
+    await this.pool.query(
+      `update public.aura_comms_dispatch set state = 'done', processed_at = $3
+        where tenant_id = $1 and id = $2`,
+      [tenantId, dispatchId, at],
+    );
+  }
+
+  async failDispatch(tenantId: string, dispatchId: string, error: string, retryAt: string | null): Promise<void> {
+    // Back to 'pending' with a later schedule when there is another attempt to make; dead-lettered
+    // with the error when there is not. Same shape the outbox relay uses, so a stuck message is
+    // diagnosed the same way everywhere.
+    await this.pool.query(
+      `update public.aura_comms_dispatch
+          set attempts = attempts + 1,
+              last_error = $3,
+              state = case when $4::timestamptz is null then 'failed' else 'pending' end,
+              scheduled_at = coalesce($4::timestamptz, scheduled_at),
+              processed_at = case when $4::timestamptz is null then now() else null end
+        where tenant_id = $1 and id = $2`,
+      [tenantId, dispatchId, error, retryAt],
+    );
   }
 
   async cancelDispatch(tenantId: string, subjectId: string, at: string): Promise<void> {

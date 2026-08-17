@@ -279,3 +279,60 @@ describe('a failure mid-page never advances the checkpoint', () => {
     expect(outcome.error).toBeTruthy();
   });
 });
+
+describe('thread mapping is bounded by the tenant', () => {
+  it('a re-used Message-ID in another tenant does NOT graft onto this tenant’s thread', async () => {
+    // A Message-ID is minted by whoever sent the mail — it is neither unique nor trustworthy
+    // across organisations. Two tenants can legitimately hold the same one.
+    const shared = '<collision@example.com>';
+    const { engine, store } = harness([]);
+
+    const inTenantA = incoming({ providerThreadId: null, internetMessageId: shared, providerMessageId: 'pm-a' });
+    await engine.syncAccount(account({ tenantId: 'tenant-a' }), new ScriptedAdapter([page([inTenantA], 'c1')]), null);
+
+    // Tenant B receives a reply quoting the same Message-ID.
+    const inTenantB = incoming({ providerThreadId: null, inReplyTo: shared, providerMessageId: 'pm-b' });
+    await engine.syncAccount(account({ tenantId: 'tenant-b' }), new ScriptedAdapter([page([inTenantB], 'c1')]), null);
+
+    const a = await store.findByProviderMessage('tenant-a', 'acc-1', 'pm-a');
+    const b = await store.findByProviderMessage('tenant-b', 'acc-1', 'pm-b');
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    // It started its own thread rather than joining the other organisation's conversation.
+    expect(b!.threadId).not.toBe(a!.threadId);
+  });
+});
+
+describe('what the cursor actually promises', () => {
+  it('cursor N means every page UP TO N completed — not that N was attempted', async () => {
+    // page 1: fully imported.      page 2: one message fails part-way through.
+    const p1a = incoming({ providerMessageId: 'p1a' });
+    const p1b = incoming({ providerMessageId: 'p1b' });
+    const p2a = incoming({ providerMessageId: 'p2a' });
+    const p2broken = incoming({ providerMessageId: null });
+    const adapter = new ScriptedAdapter([
+      page([p1a, p1b], 'cur-1', true),
+      page([p2a, p2broken], 'cur-2', true),
+    ]);
+    const { engine, store } = harness([]);
+
+    const first = await engine.syncAccount(account(), adapter, null);
+
+    expect(first.cursor?.token).toBe('cur-1');
+    expect(first.imported).toBe(3); // both of page 1, plus p2a before the failure
+
+    // Restart from the honest checkpoint: page 2 is READ AGAIN. p2a collapses on
+    // (account, providerMessageId); the message that never imported gets another attempt.
+    // That is at-least-once PROCESSING with idempotent PERSISTENCE — not exactly-once processing.
+    const resumed = new ScriptedAdapter([page([p2a, incoming({ providerMessageId: 'p2b' })], 'cur-2', false)]);
+    const second = await engine.syncAccount(account(), resumed, first.cursor);
+
+    expect(resumed.calls).toEqual(['cur-1']);
+    expect(second.duplicates).toBe(1); // p2a, seen before
+    expect(second.imported).toBe(1);   // the retried message
+    expect(second.cursor?.token).toBe('cur-2');
+
+    const inbox = await store.list('tenant-a', { address: 'alice@aura.example', folder: 'inbox' });
+    expect(inbox).toHaveLength(4); // p1a, p1b, p2a, p2b — p2a exactly once despite two reads
+  });
+});

@@ -56,7 +56,14 @@ export interface MailStore {
   findByProviderMessage(tenantId: string, accountId: string | null, providerMessageId: string): Promise<MailRecord | null>;
   /** Any message AURA already holds from the same provider conversation, for thread mapping. */
   findByProviderThread(tenantId: string, accountId: string | null, providerThreadId: string): Promise<MailRecord | null>;
-  /** Thread mapping across systems: In-Reply-To / References point at an RFC Message-ID. */
+  /**
+   * Thread mapping across systems: In-Reply-To / References point at an RFC Message-ID.
+   *
+   * TENANT-SCOPED, always. A Message-ID is minted by whoever sent the mail, so it is neither
+   * unique nor trustworthy across organisations; matching one globally would let a message in one
+   * tenant graft itself onto another tenant's conversation. Implementations must filter on
+   * tenantId explicitly rather than relying on RLS being engaged.
+   */
   findByInternetMessageId(tenantId: string, internetMessageId: string): Promise<MailRecord | null>;
 
   /** Per-account sync checkpoint (migration 0237). */

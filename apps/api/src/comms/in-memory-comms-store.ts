@@ -1,8 +1,8 @@
 import type { ChatChannel, ChatMessage, MailMessage } from '@aura/shared';
-import type { CommsStore } from './comms-store';
+import type { CommsStore, StoredChannel } from './comms-store';
 
 interface TenantRows {
-  channels: Map<string, ChatChannel>;
+  channels: Map<string, StoredChannel>;
   messages: Map<string, ChatMessage[]>;
   lastRead: Map<string, string>;
   mail: MailMessage[];
@@ -25,16 +25,16 @@ export class InMemoryCommsStore implements CommsStore {
     return t;
   }
 
-  async listChannels(tenantId: string): Promise<ChatChannel[]> {
+  async listChannels(tenantId: string): Promise<StoredChannel[]> {
     return [...this.rows(tenantId).channels.values()];
   }
 
-  async ensureChannels(tenantId: string, channels: ChatChannel[]): Promise<void> {
+  async ensureChannels(tenantId: string, channels: ChatChannel[], _createdBy = 'system', companyId: string | null = null): Promise<void> {
     const t = this.rows(tenantId);
-    for (const channel of channels) if (!t.channels.has(channel.id)) t.channels.set(channel.id, channel);
+    for (const channel of channels) if (!t.channels.has(channel.id)) t.channels.set(channel.id, { ...channel, companyId });
   }
 
-  async getChannel(tenantId: string, channelId: string): Promise<ChatChannel | null> {
+  async getChannel(tenantId: string, channelId: string): Promise<StoredChannel | null> {
     return this.rows(tenantId).channels.get(channelId) ?? null;
   }
 

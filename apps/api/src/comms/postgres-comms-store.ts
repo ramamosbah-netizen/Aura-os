@@ -1,8 +1,8 @@
 import type { Pool } from 'pg';
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage } from '@aura/shared';
-import type { CommsStore } from './comms-store';
+import type { CommsStore, StoredChannel } from './comms-store';
 
-interface ChannelRow { id: string; kind: string; name: string; members: string[] | null }
+interface ChannelRow { id: string; kind: string; name: string; company_id: string | null; members: string[] | null }
 interface MessageRow {
   id: string; channel_id: string; sender: string; kind: string; body: string; sent_at: Date | string;
   att_name: string | null; att_mime: string | null; att_size: string | number | null; att_data_url: string | null;
@@ -24,28 +24,28 @@ const iso = (value: Date | string): string => (value instanceof Date ? value.toI
 export class PostgresCommsStore implements CommsStore {
   constructor(private readonly pool: Pool) {}
 
-  async listChannels(tenantId: string): Promise<ChatChannel[]> {
+  async listChannels(tenantId: string): Promise<StoredChannel[]> {
     const { rows } = await this.pool.query<ChannelRow>(
-      `select c.id, c.kind, c.name,
+      `select c.id, c.kind, c.name, c.company_id,
               coalesce(array_agg(m.username order by m.username) filter (where m.username is not null), '{}') as members
          from public.aura_comms_channels c
          left join public.aura_comms_channel_members m
            on m.channel_id = c.id and m.tenant_id = c.tenant_id
         where c.tenant_id = $1
-        group by c.id, c.kind, c.name
+        group by c.id, c.kind, c.name, c.company_id
         order by c.name`,
       [tenantId],
     );
-    return rows.map((r) => ({ id: r.id, kind: r.kind as ChatChannel['kind'], name: r.name, members: r.members ?? [] }));
+    return rows.map((r) => ({ id: r.id, kind: r.kind as ChatChannel['kind'], name: r.name, companyId: r.company_id, members: r.members ?? [] }));
   }
 
-  async ensureChannels(tenantId: string, channels: ChatChannel[], createdBy: string): Promise<void> {
+  async ensureChannels(tenantId: string, channels: ChatChannel[], createdBy: string, companyId: string | null = null): Promise<void> {
     for (const channel of channels) {
       await this.pool.query(
-        `insert into public.aura_comms_channels (id, tenant_id, kind, name, created_by)
-         values ($1, $2, $3, $4, $5)
+        `insert into public.aura_comms_channels (id, tenant_id, company_id, kind, name, created_by)
+         values ($1, $2, $3, $4, $5, $6)
          on conflict (id) do nothing`,
-        [channel.id, tenantId, channel.kind, channel.name, createdBy],
+        [channel.id, tenantId, companyId, channel.kind, channel.name, createdBy],
       );
       for (const username of channel.members) {
         await this.pool.query(
@@ -58,7 +58,7 @@ export class PostgresCommsStore implements CommsStore {
     }
   }
 
-  async getChannel(tenantId: string, channelId: string): Promise<ChatChannel | null> {
+  async getChannel(tenantId: string, channelId: string): Promise<StoredChannel | null> {
     const channels = await this.listChannels(tenantId);
     return channels.find((c) => c.id === channelId) ?? null;
   }

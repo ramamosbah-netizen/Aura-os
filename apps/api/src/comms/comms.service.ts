@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationService } from '@aura/core';
 import {
   type ChatChannel,
@@ -15,10 +15,47 @@ import {
   makeChatMessage,
   makeMail,
   unreadChatCount,
-  visibleChannels,
 } from '@aura/shared';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
-import { COMMS_STORE, type CommsStore } from './comms-store';
+import { COMMS_STORE, type CommsStore, type StoredChannel } from './comms-store';
+
+/**
+ * Who may see a channel, and therefore its messages and their attachments.
+ *
+ *   company     — everyone in the tenant. Unchanged: this is the all-hands channel.
+ *   dm          — the two participants, and NOBODY else. Deliberately no admin bypass: an
+ *                 administrator needs to run the platform, not read two colleagues' private
+ *                 messages. This is the one rule that tightens existing behaviour, because
+ *                 `visibleChannels` handed an admin every DM in the tenant.
+ *   team/dept/  — members, or an admin. Administering a shared workspace channel is a real job.
+ *   project
+ *
+ * Exported so the negative security tests can drive it directly as well as through HTTP.
+ */
+export function canAccessChannel(
+  channel: StoredChannel,
+  username: string,
+  isAdmin: boolean,
+  callerCompanyId: string | null = null,
+): boolean {
+  // Company isolation is checked FIRST, so it cannot be argued away by membership or by being an
+  // administrator. A channel stamped for company Y is not company X's to read, full stop.
+  //
+  // `companyId: null` on the channel means tenant-global — the seeded directory channels, shared
+  // by the whole tenant. This mirrors the workflow store's tenant-global convention rather than
+  // inventing a second one.
+  //
+  // Worth stating plainly: today every locally issued session carries companyId = null, because
+  // auth.controller mints `companyId: null` and verify() falls back to null when the IdP sends no
+  // company claim. So this rule is INERT in the current deployment — which is exactly why it is
+  // tested with explicit company values instead of through a session, and why writing
+  // `channel.companyId === ctx.companyId` and calling it isolation would have been false comfort.
+  if (channel.companyId !== null && channel.companyId !== callerCompanyId) return false;
+
+  if (channel.kind === 'dm') return channel.members.includes(username);
+  if (channel.kind === 'company') return true;
+  return isAdmin || channel.members.includes(username);
+}
 
 export interface ChannelSummary extends ChatChannel {
   unread: number;
@@ -52,7 +89,7 @@ export class CommsService {
    * upsert, so this adds a channel a new department earned without touching the messages already
    * in the ones that existed — which is what makes a restart invisible to users.
    */
-  private async channelsFor(tenantId: string): Promise<ChatChannel[]> {
+  private async channelsFor(tenantId: string): Promise<StoredChannel[]> {
     if (!this.seeded.has(tenantId)) {
       const config = await this.workspace.get(tenantId);
       const expected = defaultChannelsForDirectory(config.assignments);
@@ -70,13 +107,11 @@ export class CommsService {
   }
 
   /** Channels the user can see, with unread counts — DMs appear once used. */
-  async channels(tenantId: string, username: string, isAdmin: boolean): Promise<ChannelSummary[]> {
+  async channels(tenantId: string, username: string, isAdmin: boolean, companyId: string | null = null): Promise<ChannelSummary[]> {
     const all = await this.channelsFor(tenantId);
-    const visible = visibleChannels(all, username, isAdmin);
-    const withDms = [
-      ...visible,
-      ...all.filter((c) => c.kind === 'dm' && c.members.includes(username) && !visible.includes(c)),
-    ];
+    // One rule decides the list and the reads, so a channel can never be listed to someone who
+    // would then be refused its messages — or worse, listed to someone who would not be.
+    const withDms = all.filter((c) => canAccessChannel(c, username, isAdmin, companyId));
     return Promise.all(withDms.map(async (c) => {
       const msgs = await this.store.listMessages(tenantId, c.id);
       const last = msgs[msgs.length - 1] ?? null;
@@ -90,24 +125,52 @@ export class CommsService {
   }
 
   /** Open (or create) the DM channel between two users. */
-  async openDm(tenantId: string, me: string, peer: string): Promise<ChatChannel> {
+  async openDm(tenantId: string, me: string, peer: string, companyId: string | null = null): Promise<ChatChannel> {
     const id = dmChannelId(me, peer);
     const existing = await this.store.getChannel(tenantId, id);
     if (existing) return existing;
     const channel: ChatChannel = { id, kind: 'dm', name: displayName(peer), members: [me, peer].sort() };
-    await this.store.ensureChannels(tenantId, [channel], me);
+    await this.store.ensureChannels(tenantId, [channel], me, companyId);
+    return channel;
+  }
+
+  /**
+   * The channel, if this caller may see it. Returns 404 rather than 403 for a channel they may
+   * not: a distinct "forbidden" would confirm that a given DM exists between two named people,
+   * which is itself the private fact. Same reason the workflow controller conceals out-of-scope
+   * instances. Cross-tenant ids land here too — the store only ever reads within the tenant.
+   */
+  private async requireChannel(
+    tenantId: string, username: string, channelId: string, isAdmin: boolean, companyId: string | null,
+  ): Promise<StoredChannel> {
+    await this.channelsFor(tenantId);
+    const channel = await this.store.getChannel(tenantId, channelId);
+    if (!channel || !canAccessChannel(channel, username, isAdmin, companyId)) {
+      throw new NotFoundException(`channel ${channelId} not found`);
+    }
     return channel;
   }
 
   /** Messages in a channel (marks the channel read for the caller). */
-  async messages(tenantId: string, username: string, channelId: string): Promise<ChatMessage[]> {
+  async messages(
+    tenantId: string, username: string, channelId: string, isAdmin = false, companyId: string | null = null,
+  ): Promise<ChatMessage[]> {
+    await this.requireChannel(tenantId, username, channelId, isAdmin, companyId);
     const msgs = await this.store.listMessages(tenantId, channelId);
     await this.store.setLastRead(tenantId, channelId, username, new Date().toISOString());
     return msgs;
   }
 
   /** Post a message; notifies the DM peer (chat notifications stay lightweight). */
-  async post(tenantId: string, input: NewChatMessage, companyId: string | null = null): Promise<ChatMessage | { error: string }> {
+  async post(
+    tenantId: string,
+    input: NewChatMessage,
+    companyId: string | null = null,
+    isAdmin = false,
+  ): Promise<ChatMessage | { error: string }> {
+    // Write access is the same question as read access, asked before the message exists — this
+    // also stops a post to an id that is not a channel at all creating a phantom conversation.
+    await this.requireChannel(tenantId, input.sender, input.channelId, isAdmin, companyId);
     const result = makeChatMessage(input);
     if ('error' in result) return result;
     await this.store.addMessage(tenantId, companyId, result);
@@ -159,12 +222,18 @@ export class CommsService {
   }
 
   async markMailRead(tenantId: string, username: string, mailId: string): Promise<void> {
+    // Only sender and recipients can see a mail at all, so anyone else asking to mark it read is
+    // probing for existence — concealed as a 404, like the channel reads.
+    const mail = await this.store.getMail(tenantId, mailId);
+    if (!mail || (mail.from !== username && !mail.to.includes(username))) {
+      throw new NotFoundException(`mail ${mailId} not found`);
+    }
     await this.store.markMailRead(tenantId, mailId, username, new Date().toISOString());
   }
 
   /** One badge feed: chat unread + mail unread (notifications count comes from its own endpoint). */
-  async unread(tenantId: string, username: string, isAdmin: boolean): Promise<{ chat: number; mail: number }> {
-    const summaries = await this.channels(tenantId, username, isAdmin);
+  async unread(tenantId: string, username: string, isAdmin: boolean, companyId: string | null = null): Promise<{ chat: number; mail: number }> {
+    const summaries = await this.channels(tenantId, username, isAdmin, companyId);
     const box = await this.mailbox(tenantId, username);
     return { chat: summaries.reduce((sum, c) => sum + c.unread, 0), mail: box.unread };
   }

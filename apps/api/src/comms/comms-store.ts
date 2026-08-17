@@ -1,5 +1,14 @@
 import type { ChatChannel, ChatMessage, MailMessage } from '@aura/shared';
 
+/**
+ * A channel plus the company it belongs to. `companyId: null` means tenant-global — the seeded
+ * directory channels are shared by the whole tenant, exactly like the workflow store's convention
+ * for tenant-global instances. Kept out of the shared ChatChannel so the web model is unchanged.
+ */
+export interface StoredChannel extends ChatChannel {
+  companyId: string | null;
+}
+
 /** DI token for the communication persistence store. */
 export const COMMS_STORE = Symbol('COMMS_STORE');
 
@@ -15,10 +24,10 @@ export const COMMS_STORE = Symbol('COMMS_STORE');
  */
 export interface CommsStore {
   /** Channels known to the tenant. Seeded from the workspace directory on first use. */
-  listChannels(tenantId: string): Promise<ChatChannel[]>;
+  listChannels(tenantId: string): Promise<StoredChannel[]>;
   /** Insert channels that do not exist yet. Idempotent, so seeding can run on every boot. */
-  ensureChannels(tenantId: string, channels: ChatChannel[], createdBy: string): Promise<void>;
-  getChannel(tenantId: string, channelId: string): Promise<ChatChannel | null>;
+  ensureChannels(tenantId: string, channels: ChatChannel[], createdBy: string, companyId?: string | null): Promise<void>;
+  getChannel(tenantId: string, channelId: string): Promise<StoredChannel | null>;
 
   listMessages(tenantId: string, channelId: string): Promise<ChatMessage[]>;
   addMessage(tenantId: string, companyId: string | null, message: ChatMessage): Promise<void>;

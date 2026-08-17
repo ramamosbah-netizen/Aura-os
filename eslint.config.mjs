@@ -11,7 +11,7 @@ export default tseslint.config(
       '**/.next/**',
       // NEXT_DIST_DIR (apps/web/next.config.ts) builds to a second directory. Unignored, its
       // generated bundles are linted as source — 41,996 errors the first time it was used.
-      '**/.next-e2e/**',
+      '**/.next-e2e*/**',
       '**/node_modules/**',
       '**/coverage/**',
       '**/*.d.ts',

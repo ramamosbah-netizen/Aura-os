@@ -125,6 +125,11 @@ test.describe('refused reads', () => {
 
     await page.goto('/crm/accounts', { waitUntil: 'domcontentloaded' });
 
+    // This case asserts what an anonymous read RENDERS, which only exists with the optimistic
+    // gate off — playwright.config.ts pins WEB_AUTH_REQUIRED=false on this server so the
+    // developer's .env.local cannot change the meaning of the test. The gate-on behaviour is
+    // asserted just as explicitly, in web-auth-gate.spec.ts.
+
     // The distinction itself: an error surface, not a zero-row table.
     const notice = page.getByTestId('data-error');
     await expect(notice).toBeVisible();

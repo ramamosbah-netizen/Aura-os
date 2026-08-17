@@ -22,10 +22,16 @@ test('project and operations share one usable delivery context', async ({ page, 
   });
   expect(report.ok()).toBe(true);
 
+  // Anonymous must not see project data. WHICH refusal depends on WEB_AUTH_REQUIRED: with the
+  // gate on the proxy redirects to /login (asserted in web-auth-gate.spec.ts, against a server
+  // that declares the flag); with it off — this server, per playwright.config.ts — the request
+  // reaches the page and must render a refusal instead. Asserting the redirect here made the
+  // spec pass only on a machine whose .env.local happened to enable the gate.
   const signedOut = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const signedOutPage = await signedOut.newPage();
   await signedOutPage.goto(`/project/${project.id}`, { waitUntil: 'domcontentloaded' });
-  await expect(signedOutPage).toHaveURL(/\/login/);
+  await expect(signedOutPage.getByTestId('data-error')).toBeVisible();
+  await expect(signedOutPage.getByText(PROJECT_TITLE)).toHaveCount(0);
   await signedOut.close();
 
   const denied = await browser.newContext({ storageState: { cookies: [], origins: [] } });

@@ -37,15 +37,28 @@ describe('WorkflowController request identity and scope', () => {
   it('reserves direct engine endpoints for workflow administrators', () => {
     expect(Reflect.getMetadata(PERMISSIONS_KEY, WorkflowController)).toEqual(['admin.workflows.manage']);
   });
-  it('stamps a new instance from request context and ignores spoofed identity fields', async () => {
+  it('stamps a new instance from request context', async () => {
     const { controller, workflow } = setup();
-    await controller.start('po.approval', {
-      aggregateType: 'procurement.po', aggregateId: 'po-1', companyId: 'company-b', userId: 'attacker',
-    });
+    await controller.start('po.approval', { aggregateType: 'procurement.po', aggregateId: 'po-1' });
 
     expect(workflow.start).toHaveBeenCalledWith('po.approval', {
       tenantId: 'tenant-a', companyId: 'company-a', aggregateType: 'procurement.po', aggregateId: 'po-1', createdBy: 'actor-a',
     });
+  });
+
+  // Refused, not ignored. Accepting these and discarding them silently is indistinguishable from
+  // honouring them, from the caller's side — the audit trail would name the session actor while
+  // the caller believed it named theirs.
+  it.each([
+    ['userId', { userId: 'attacker' }, /userId cannot be supplied/],
+    ['companyId', { companyId: 'company-b' }, /companyId cannot be supplied/],
+    ['both', { userId: 'attacker', companyId: 'company-b' }, /userId and companyId cannot be supplied/],
+  ])('refuses a start carrying %s', async (_label, spoofed, message) => {
+    const { controller, workflow } = setup();
+    await expect(
+      controller.start('po.approval', { aggregateType: 'procurement.po', aggregateId: 'po-1', ...spoofed }),
+    ).rejects.toThrow(message);
+    expect(workflow.start).not.toHaveBeenCalled();
   });
 
   it('always scopes list queries to the request tenant and company', async () => {
@@ -70,9 +83,17 @@ describe('WorkflowController request identity and scope', () => {
     expect(workflow.transition).not.toHaveBeenCalled();
   });
 
-  it('uses the authenticated actor for a scoped transition and ignores spoofed userId', async () => {
+  it('uses the authenticated actor for a scoped transition', async () => {
     const { controller, workflow } = setup();
-    await controller.transition('wf-1', { action: 'approve', userId: 'attacker', note: 'Reviewed', amount: 25_000 });
+    await controller.transition('wf-1', { action: 'approve', note: 'Reviewed', amount: 25_000 });
     expect(workflow.transition).toHaveBeenCalledWith('wf-1', 'approve', 'actor-a', { note: 'Reviewed', amount: 25_000 });
+  });
+
+  it('refuses a transition carrying userId, before it reads the instance', async () => {
+    const { controller, workflow } = setup();
+    await expect(controller.transition('wf-1', { action: 'approve', userId: 'attacker' }))
+      .rejects.toThrow(/userId cannot be supplied/);
+    expect(workflow.transition).not.toHaveBeenCalled();
+    expect(workflow.getInstance).not.toHaveBeenCalled();
   });
 });

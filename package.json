@@ -15,6 +15,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "db:migrate": "pnpm --filter @aura/api db:migrate",
+    "auth:configure-local": "node scripts/configure-local-auth.mjs",
     "test:coverage": "turbo run test -- --coverage",
     "audit": "pnpm audit --prod",
     "adr:new": "node scripts/adr-new.mjs",

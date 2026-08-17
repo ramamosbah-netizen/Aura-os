@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { NotificationService } from '@aura/core';
 import {
   type ChatChannel,
@@ -18,15 +18,7 @@ import {
   visibleChannels,
 } from '@aura/shared';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
-
-interface TenantComms {
-  channels: ChatChannel[];
-  /** channelId → messages (ascending sentAt) */
-  messages: Map<string, ChatMessage[]>;
-  /** `${username}:${channelId}` → lastReadAt ISO */
-  lastRead: Map<string, string>;
-  mail: MailMessage[];
-}
+import { COMMS_STORE, type CommsStore } from './comms-store';
 
 export interface ChannelSummary extends ChatChannel {
   unread: number;
@@ -35,36 +27,40 @@ export interface ChannelSummary extends ChatChannel {
 }
 
 /**
- * Team chat + internal mail, tenant-scoped. In-memory store (dev parity with the
- * other module stores); channels are seeded from the workspace directory so the
- * org structure (company / departments) matches the admin-configured roles.
- * Every chat message and mail emits a notification for its recipients — the
- * notification center is the single "everything" feed.
+ * Team chat + internal mail, tenant-scoped, persisted through CommsStore (migration 0234).
+ * Channels are seeded from the workspace directory so the org structure (company / departments)
+ * matches the admin-configured roles; seeding is idempotent, so a restart re-asserts the same
+ * channels without duplicating them or losing the conversations inside them.
+ *
+ * Every chat message and mail emits a notification for its recipients — the notification center
+ * is the single "everything" feed.
  */
 @Injectable()
 export class CommsService {
   private readonly logger = new Logger('Comms');
-  private readonly tenants = new Map<string, TenantComms>();
+  /** Tenants whose directory channels have been asserted this process. Not a data cache. */
+  private readonly seeded = new Set<string>();
 
   constructor(
     private readonly workspace: WorkspaceConfigService,
     private readonly notifications: NotificationService,
+    @Inject(COMMS_STORE) private readonly store: CommsStore,
   ) {}
 
-  private async tenant(tenantId: string): Promise<TenantComms> {
-    let t = this.tenants.get(tenantId);
-    if (!t) {
+  /**
+   * Assert the directory channels exist, once per process per tenant. `ensureChannels` is an
+   * upsert, so this adds a channel a new department earned without touching the messages already
+   * in the ones that existed — which is what makes a restart invisible to users.
+   */
+  private async channelsFor(tenantId: string): Promise<ChatChannel[]> {
+    if (!this.seeded.has(tenantId)) {
       const config = await this.workspace.get(tenantId);
-      t = {
-        channels: defaultChannelsForDirectory(config.assignments),
-        messages: new Map(),
-        lastRead: new Map(),
-        mail: [],
-      };
-      this.tenants.set(tenantId, t);
-      this.logger.log(`Seeded ${t.channels.length} chat channels for ${tenantId} from the workspace directory.`);
+      const expected = defaultChannelsForDirectory(config.assignments);
+      await this.store.ensureChannels(tenantId, expected, 'system');
+      this.seeded.add(tenantId);
+      this.logger.log(`Asserted ${expected.length} directory chat channels for ${tenantId}.`);
     }
-    return t;
+    return this.store.listChannels(tenantId);
   }
 
   private preview(m: ChatMessage): string {
@@ -75,53 +71,48 @@ export class CommsService {
 
   /** Channels the user can see, with unread counts — DMs appear once used. */
   async channels(tenantId: string, username: string, isAdmin: boolean): Promise<ChannelSummary[]> {
-    const t = await this.tenant(tenantId);
-    const visible = visibleChannels(t.channels, username, isAdmin);
+    const all = await this.channelsFor(tenantId);
+    const visible = visibleChannels(all, username, isAdmin);
     const withDms = [
       ...visible,
-      ...t.channels.filter((c) => c.kind === 'dm' && c.members.includes(username) && !visible.includes(c)),
+      ...all.filter((c) => c.kind === 'dm' && c.members.includes(username) && !visible.includes(c)),
     ];
-    return withDms.map((c) => {
-      const msgs = t.messages.get(c.id) ?? [];
+    return Promise.all(withDms.map(async (c) => {
+      const msgs = await this.store.listMessages(tenantId, c.id);
       const last = msgs[msgs.length - 1] ?? null;
       return {
         ...c,
-        unread: unreadChatCount(msgs, username, t.lastRead.get(`${username}:${c.id}`) ?? null),
+        unread: unreadChatCount(msgs, username, await this.store.getLastRead(tenantId, c.id, username)),
         lastMessageAt: last?.sentAt ?? null,
         lastPreview: last ? this.preview(last) : null,
       };
-    });
+    }));
   }
 
   /** Open (or create) the DM channel between two users. */
   async openDm(tenantId: string, me: string, peer: string): Promise<ChatChannel> {
-    const t = await this.tenant(tenantId);
     const id = dmChannelId(me, peer);
-    let ch = t.channels.find((c) => c.id === id);
-    if (!ch) {
-      ch = { id, kind: 'dm', name: displayName(peer), members: [me, peer].sort() };
-      t.channels.push(ch);
-    }
-    return ch;
+    const existing = await this.store.getChannel(tenantId, id);
+    if (existing) return existing;
+    const channel: ChatChannel = { id, kind: 'dm', name: displayName(peer), members: [me, peer].sort() };
+    await this.store.ensureChannels(tenantId, [channel], me);
+    return channel;
   }
 
   /** Messages in a channel (marks the channel read for the caller). */
   async messages(tenantId: string, username: string, channelId: string): Promise<ChatMessage[]> {
-    const t = await this.tenant(tenantId);
-    const msgs = t.messages.get(channelId) ?? [];
-    t.lastRead.set(`${username}:${channelId}`, new Date().toISOString());
+    const msgs = await this.store.listMessages(tenantId, channelId);
+    await this.store.setLastRead(tenantId, channelId, username, new Date().toISOString());
     return msgs;
   }
 
   /** Post a message; notifies the DM peer (chat notifications stay lightweight). */
-  async post(tenantId: string, input: NewChatMessage): Promise<ChatMessage | { error: string }> {
-    const t = await this.tenant(tenantId);
+  async post(tenantId: string, input: NewChatMessage, companyId: string | null = null): Promise<ChatMessage | { error: string }> {
     const result = makeChatMessage(input);
     if ('error' in result) return result;
-    const list = t.messages.get(result.channelId) ?? [];
-    list.push(result);
-    t.messages.set(result.channelId, list);
-    t.lastRead.set(`${input.sender}:${result.channelId}`, result.sentAt);
+    await this.store.addMessage(tenantId, companyId, result);
+    // Your own message never counts as unread to you.
+    await this.store.setLastRead(tenantId, result.channelId, input.sender, result.sentAt);
 
     const peer = dmPeer(result.channelId, input.sender);
     if (peer) {
@@ -140,16 +131,18 @@ export class CommsService {
 
   /** The user's mailbox (inbox + sent + unread). */
   async mailbox(tenantId: string, username: string): Promise<Mailbox> {
-    const t = await this.tenant(tenantId);
-    return mailboxFor(t.mail, username);
+    return mailboxFor(await this.store.listMailFor(tenantId, username), username);
   }
 
   /** Send internal mail — every recipient gets a notification. */
-  async sendMail(tenantId: string, input: NewMail): Promise<MailMessage | { error: string }> {
-    const t = await this.tenant(tenantId);
+  async sendMail(tenantId: string, input: NewMail, companyId: string | null = null): Promise<MailMessage | { error: string }> {
     const result = makeMail(input);
     if ('error' in result) return result;
-    t.mail.push(result);
+    // A root mail is its own thread. Reply/forward edges are populated in C3; the columns exist
+    // now so threading is never retrofitted onto mail that was already sent.
+    await this.store.addMail(tenantId, companyId, result, {
+      threadId: result.id, parentMailId: null, forwardedFromMailId: null,
+    });
     for (const recipient of result.to) {
       if (recipient === result.from) continue;
       await this.notifications.record({
@@ -166,9 +159,7 @@ export class CommsService {
   }
 
   async markMailRead(tenantId: string, username: string, mailId: string): Promise<void> {
-    const t = await this.tenant(tenantId);
-    const mail = t.mail.find((m) => m.id === mailId);
-    if (mail && !mail.readBy.includes(username)) mail.readBy.push(username);
+    await this.store.markMailRead(tenantId, mailId, username, new Date().toISOString());
   }
 
   /** One badge feed: chat unread + mail unread (notifications count comes from its own endpoint). */

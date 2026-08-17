@@ -150,6 +150,9 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import type { Pool } from 'pg';
 import { CommsController } from './comms/comms.controller';
 import { CommsService } from './comms/comms.service';
+import { COMMS_STORE } from './comms/comms-store';
+import { InMemoryCommsStore } from './comms/in-memory-comms-store';
+import { PostgresCommsStore } from './comms/postgres-comms-store';
 import { WorkItemsController } from './work-items/work-items.controller';
 import { WorkItemsService } from './work-items/work-items.service';
 
@@ -174,6 +177,14 @@ import { WorkItemsService } from './work-items/work-items.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresWorkspaceConfigStore(pool) : new InMemoryWorkspaceConfigStore(),
+    },
+    {
+      // Chat + internal mail (migration 0234). With a pool, conversations survive a restart;
+      // without one the API still boots, on the in-memory stand-in the test suite runs against.
+      provide: COMMS_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCommsStore(pool) : new InMemoryCommsStore(),
     },
   ],
 })

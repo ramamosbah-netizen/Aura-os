@@ -22,8 +22,12 @@
 -- ============================================================
 
 -- ── Channels + membership ───────────────────────────────────────────────────
+-- Channel ids are TEXT, not uuid: they are deterministic domain ids produced by the shared model
+-- ("ch-company", "ch-dept-finance", and dmChannelId() → "dm:u-a|u-b"). That determinism is what
+-- makes a DM channel resolvable from its two participants without a lookup, so the column follows
+-- the domain rather than forcing the domain onto a surrogate key.
 create table if not exists public.aura_comms_channels (
-  id           uuid        primary key,
+  id           text        primary key,
   tenant_id    text        not null,
   company_id   text,
   kind         text        not null default 'team',   -- company | department | team | dm | project
@@ -47,7 +51,7 @@ create policy tenant_isolation on public.aura_comms_channels
 
 create table if not exists public.aura_comms_channel_members (
   tenant_id  text        not null,
-  channel_id uuid        not null,
+  channel_id text        not null,
   username   text        not null,
   joined_at  timestamptz not null default now(),
   primary key (tenant_id, channel_id, username)
@@ -67,7 +71,7 @@ create table if not exists public.aura_comms_messages (
   id         uuid        primary key,
   tenant_id  text        not null,
   company_id text,
-  channel_id uuid        not null,
+  channel_id text        not null,
   sender     text        not null,
   kind       text        not null default 'text',     -- text | file | voice
   body       text        not null default '',
@@ -89,7 +93,7 @@ create policy tenant_isolation on public.aura_comms_messages
 -- Per-user, per-channel read watermark — the shape the unread badge actually queries.
 create table if not exists public.aura_comms_message_reads (
   tenant_id    text        not null,
-  channel_id   uuid        not null,
+  channel_id   text        not null,
   username     text        not null,
   last_read_at timestamptz not null default now(),
   primary key (tenant_id, channel_id, username)

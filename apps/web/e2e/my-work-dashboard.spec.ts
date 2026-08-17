@@ -82,6 +82,9 @@ test('My Work centers expose real sources and keep actions inside AURA tabs', as
   await expect(page.getByRole('navigation', { name: 'Task views' })).toBeVisible();
   await expect(page.getByLabel('Search tasks')).toBeVisible();
 
+  // Back to desktop: the mobile checks above leave a 390px viewport, where the approvals
+  // filters deliberately collapse (`.filters select{display:none}` under 700px).
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/my-work/approvals', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('my-approvals-page')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Approvals & Reviews' })).toBeVisible();
@@ -94,7 +97,14 @@ test('My Work centers expose real sources and keep actions inside AURA tabs', as
   await expect(page.getByLabel('Filter by domain')).toBeVisible();
   await expect(page.getByText('Tasks and My Day are not duplicated here')).toBeVisible();
   await page.getByRole('button', { name: /Waiting/ }).click();
-  await expect(page.getByText('Workflow projection not connected yet')).toBeVisible();
+  // Waiting/Returned/Completed are the "unavailable" views: AURA has no verified assignment state
+  // for them, and says so rather than inventing a zero. The previous assertion demanded the string
+  // 'Workflow projection not connected yet', which exists nowhere in the app, so it could never
+  // pass. This asserts the empty state the product actually renders.
+  await expect(
+    page.getByRole('table', { name: 'Approvals and reviews' })
+      .or(page.getByText('No verified items in this view')),
+  ).toBeVisible();
   for (const link of await page.getByTestId('my-approvals-page').getByRole('link').all()) await expect(link).not.toHaveAttribute('target', '_blank');
 
   await page.goto('/my-work/communication', { waitUntil: 'domcontentloaded' });

@@ -44,7 +44,7 @@ export const AURA_SUITES: AuraSuite[] = [
       { label: 'Meetings & MOM', description: 'Activities exist; agenda, decisions and formal minutes are incomplete.', href: '/crm/activities', status: 'PARTIALLY IMPLEMENTED', glyph: '◐' },
       { label: 'Notes', description: 'Target Notion-style knowledge workspace; persistence and collaboration are not implemented.', status: 'NOT IMPLEMENTED', glyph: '✎' },
     ],
-    owns: (href) => exact('/', '/my-work', '/my-work/my-day', '/workspace', '/inbox', '/notifications', '/views', '/search', '/ai', '/crm/activities', '/crm/contacts', '/documents', '/documents/control')(href),
+    owns: (href) => exact('/', '/my-work', '/my-work/my-day', '/my-work/command-center', '/workspace', '/inbox', '/notifications', '/views', '/search', '/ai', '/crm/activities', '/crm/contacts', '/documents', '/documents/control')(href),
   },
   {
     id: 'sales-pre-award', name: 'Sales & Pre-Award', shortName: 'Sales', glyph: '◎',

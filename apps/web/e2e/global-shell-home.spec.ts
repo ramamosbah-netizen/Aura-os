@@ -39,7 +39,9 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
   await expect(page.getByTestId('my-work-dashboard')).toBeVisible();
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
-  const myWorkTools = page.getByRole('region', { name: 'My Work' });
+  // exact: role-name matching is substring and case-insensitive, so a bare 'My Work' also
+  // matches the "My work summary" metrics region and counts its links too.
+  const myWorkTools = page.getByRole('region', { name: 'My Work', exact: true });
   await expect(myWorkTools.getByRole('link')).toHaveCount(7);
   for (const tool of ['My Day', 'Tasks', 'Approvals', 'Communication', 'Contacts', 'Files', 'Favorites']) {
     await expect(myWorkTools.getByRole('link', { name: new RegExp(`^${tool}`) })).toBeVisible();

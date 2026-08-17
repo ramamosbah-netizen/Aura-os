@@ -40,6 +40,9 @@ export const NAV: NavGroup[] = [
       { label: 'Home', href: '/', glyph: '⌂', desc: 'AURA OS front door and operating overview' },
       { label: 'My Work', href: '/my-work', glyph: '◆', desc: 'Your live personal command center' },
       { label: 'My Day', href: '/my-work/my-day', glyph: '◐', desc: 'Today: meetings, tasks, priorities, approvals & AI suggestions' },
+      // Home became a suite launcher, so the role-aware Command Center (the `perspective.*`
+      // CEO/CFO/PM views) needs its own href or the capability is configurable but unreachable.
+      { label: 'Command Center', href: '/my-work/command-center', glyph: '✦', desc: 'Role perspectives: CEO, CFO and PM dashboards over live data' },
       { label: 'My Workspace', href: '/workspace', glyph: '◉', desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page' },
       { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
       { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },

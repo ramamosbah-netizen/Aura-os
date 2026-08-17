@@ -9,6 +9,7 @@ import AuraTabAnchor from '@/components/aura-tab-anchor';
 import AuraTabLink from '@/components/aura-tab-link';
 import { PersonalTaskEditor, type TaskEditorInput } from '@/components/my-tasks-workspace';
 import type { WorkItem, WorkItemAction, WorkItemsPayload } from '@/lib/work-items';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from '@/components/my-day-command-center.module.css';
 
 export interface DailyMeeting {
@@ -59,9 +60,9 @@ function formatDate(value: string | null, fallback = 'No time set'): string {
   if (!value) return fallback;
   const parsed = new Date(value.length === 10 ? `${value}T12:00:00` : value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, value.includes('T')
-    ? { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }
-    : { day: 'numeric', month: 'short' }).format(parsed);
+  return new Intl.DateTimeFormat(DISPLAY_LOCALE, value.includes('T')
+    ? { timeZone: DISPLAY_TIME_ZONE, hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }
+    : { timeZone: DISPLAY_TIME_ZONE, day: 'numeric', month: 'short' }).format(parsed);
 }
 
 function originLabel(item: WorkItem): string {
@@ -232,7 +233,7 @@ export default function MyDayCommandCenter({
           <p>My Day owns today’s focus. My Tasks keeps the full register, and every domain workspace remains the authority for its records.</p>
         </div>
         <div className={styles.heroSide}>
-          <time dateTime={currentDate}>{new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dubai' }).format(new Date(`${currentDate}T12:00:00+04:00`))}</time>
+          <time dateTime={currentDate}>{new Intl.DateTimeFormat(DISPLAY_LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: DISPLAY_TIME_ZONE }).format(new Date(`${currentDate}T12:00:00+04:00`))}</time>
           <div><button type="button" className={styles.createAction} onClick={() => { setCreateError(null); setCreateNotice(null); setCreating(true); }}><Plus aria-hidden />New task</button><AuraTabLink href="/my-work/tasks" tabTitle="Tasks" tabType="My Work" tabKey="/my-work/tasks">All tasks</AuraTabLink><AuraTabLink href="/ai" tabTitle="AURA AI" tabType="My Work" className={styles.auraAction}><Sparkles aria-hidden />Prepare with AURA</AuraTabLink></div>
         </div>
       </header>

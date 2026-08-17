@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "auditDate": "2026-08-15",
+  "auditor": "Antigravity AI Forensic Audit Suite",
+  "repository": "AURA OS",
+  "summary": {
+    "discoveredAgents": 9,
+    "executableAgents": 9,
+    "agentsWithWorkingTools": 0,
+    "agentsWithBusinessDataAccess": 1,
+    "agentsCapableOfProposingActions": 9,
+    "agentsCapableOfExecutingActions": 0,
+    "governedAgents": 9,
+    "testedAgents": 9,
+    "verifiedAgents": 1,
+    "scores": {
+      "aiMaturityScore": 38,
+      "agentMaturityScore": 28,
+      "securityMaturityScore": 72,
+      "productionReadinessScore": 32
+    }
+  },
+  "providers": [
+    {
+      "name": "claude",
+      "sdk": "@anthropic-ai/sdk",
+      "activeModel": "claude-3-5-sonnet-20241022",
+      "envKey": "ANTHROPIC_API_KEY",
+      "status": "REAL_INTEGRATION",
+      "evidence": "core/src/ai/claude-provider.ts:L16"
+    },
+    {
+      "name": "local",
+      "sdk": "internal",
+      "activeModel": "local",
+      "envKey": null,
+      "status": "MOCKED",
+      "evidence": "core/src/ai/local-provider.ts:L14"
+    },
+    {
+      "name": "remote-embeddings",
+      "sdk": "native-fetch",
+      "activeModel": "text-embedding-3-small",
+      "envKey": "EMBEDDINGS_API_KEY",
+      "status": "REAL_INTEGRATION",
+      "evidence": "core/src/ai/embedder.ts:L37"
+    },
+    {
+      "name": "lexical-embeddings",
+      "sdk": "internal",
+      "activeModel": "lexical",
+      "envKey": null,
+      "status": "REAL_INTEGRATION",
+      "evidence": "core/src/ai/embedder.ts:L15"
+    }
+  ],
+  "agents": [
+    {
+      "id": "procurement_auditor",
+      "name": "Procurement Auditor Agent",
+      "location": "intelligence/src/ai-platform.service.ts:L140",
+      "promptKey": "procurement_audit_v1",
+      "model": "claude-3-5-sonnet",
+      "tools": ["fetch_po_matching_data"],
+      "capabilities": ["procurement.po.read", "procurement.grn.read", "finance.invoice.review"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L140"
+    },
+    {
+      "id": "cost_variance_agent",
+      "name": "Cost Variance & Risk Agent",
+      "location": "intelligence/src/ai-platform.service.ts:L151",
+      "promptKey": "cost_variance_v1",
+      "model": "claude-3-5-sonnet",
+      "tools": ["query_wbs_ledger"],
+      "capabilities": ["projects.wbs.read", "projects.cbs.read", "finance.gl.read", "projects.risk.create"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L151"
+    },
+    {
+      "id": "estimation_assistant",
+      "name": "IEC Rate Buildup Estimator",
+      "location": "intelligence/src/ai-platform.service.ts:L163",
+      "promptKey": "estimation_rate_v1",
+      "model": "gemini-2.0-flash",
+      "tools": ["lookup_historical_pricing"],
+      "capabilities": ["estimation.buildup.read", "estimation.buildup.create", "pricing.source.read"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L163"
+    },
+    {
+      "id": "site_safety_supervisor",
+      "name": "Site Safety Supervisor Agent",
+      "location": "intelligence/src/ai-platform.service.ts:L175",
+      "promptKey": "site_safety_v1",
+      "model": "gemini-2.0-flash",
+      "tools": ["scan_hse_logs"],
+      "capabilities": ["hse.incident.read", "hse.inspection.read", "hse.violation.create", "site.report.read"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L175"
+    },
+    {
+      "id": "sales_radar",
+      "name": "Sales Tender Radar Agent",
+      "location": "intelligence/src/ai-platform.service.ts:L187",
+      "promptKey": "procurement_audit_v1",
+      "model": "gemini-2.0-flash",
+      "tools": ["fetch_po_matching_data"],
+      "capabilities": ["crm.lead.read", "tendering.tender.read", "crm.lead.create"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L187"
+    },
+    {
+      "id": "tender_analyzer",
+      "name": "Tender Intelligence Analyzer",
+      "location": "intelligence/src/ai-platform.service.ts:L199",
+      "promptKey": "estimation_rate_v1",
+      "model": "claude-3-5-sonnet",
+      "tools": ["lookup_historical_pricing"],
+      "capabilities": ["tendering.boq.read", "tendering.specification.read"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L199"
+    },
+    {
+      "id": "quotation_agent",
+      "name": "Commercial Quotation Agent",
+      "location": "intelligence/src/ai-platform.service.ts:L211",
+      "promptKey": "cost_variance_v1",
+      "model": "claude-3-5-sonnet",
+      "tools": ["query_wbs_ledger"],
+      "capabilities": ["tendering.quotation.create", "finance.pricing.approve", "crm.quotation.create"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L211"
+    },
+    {
+      "id": "tendering_agent",
+      "name": "Tendering & BOQ Agent",
+      "location": "intelligence/src/ai-platform.service.ts:L223",
+      "promptKey": "estimation_rate_v1",
+      "model": "claude-3-5-sonnet",
+      "tools": ["lookup_historical_pricing"],
+      "capabilities": ["tendering.boq.read"],
+      "level": 3,
+      "status": "PARTIALLY_IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": false,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "intelligence/src/ai-platform.service.ts:L223"
+    },
+    {
+      "id": "executive_copilot",
+      "name": "Executive Copilot Agent",
+      "location": "intelligence/src/ai-platform.service.ts:L235",
+      "promptKey": "cost_variance_v1",
+      "model": "claude-3-5-sonnet",
+      "tools": ["query_wbs_ledger"],
+      "capabilities": ["admin.platform.manage", "*"],
+      "level": 5,
+      "status": "IMPLEMENTED",
+      "executable": true,
+      "toolCapable": false,
+      "dataCapable": true,
+      "actionCapable": true,
+      "directExecution": false,
+      "evidence": "apps/api/src/intelligence/intelligence.controller.ts:L144"
+    }
+  ],
+  "tools": [
+    {
+      "key": "fetch_po_matching_data",
+      "label": "Fetch PO & GRN Data",
+      "hasHandler": false,
+      "status": "REGISTERED_ONLY",
+      "evidence": "intelligence/src/ai-platform.service.ts:L106"
+    },
+    {
+      "key": "query_wbs_ledger",
+      "label": "Query WBS/CBS Ledger",
+      "hasHandler": false,
+      "status": "REGISTERED_ONLY",
+      "evidence": "intelligence/src/ai-platform.service.ts:L114"
+    },
+    {
+      "key": "lookup_historical_pricing",
+      "label": "Lookup Historical IEC Pricing",
+      "hasHandler": false,
+      "status": "REGISTERED_ONLY",
+      "evidence": "intelligence/src/ai-platform.service.ts:L122"
+    },
+    {
+      "key": "scan_hse_logs",
+      "label": "Scan HSE Incident Logs",
+      "hasHandler": false,
+      "status": "REGISTERED_ONLY",
+      "evidence": "intelligence/src/ai-platform.service.ts:L130"
+    }
+  ]
+}

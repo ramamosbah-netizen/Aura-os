@@ -170,6 +170,10 @@ export class PostgresWorkflowStore implements WorkflowStore {
       }
     };
     add('tenant_id', filter.tenantId);
+    if (filter.companyId !== undefined) {
+      if (filter.companyId === null) where.push('company_id IS NULL');
+      else add('company_id', filter.companyId);
+    }
     add('definition_key', filter.definitionKey);
     add('aggregate_type', filter.aggregateType);
     add('aggregate_id', filter.aggregateId);

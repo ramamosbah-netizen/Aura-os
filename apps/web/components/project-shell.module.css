@@ -1,0 +1,217 @@
+.workspace {
+  display: flex;
+  min-height: calc(100vh - 142px);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--accent) 3%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.rail {
+  position: sticky;
+  top: 142px;
+  width: 252px;
+  height: calc(100vh - 142px);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px 18px;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(14px);
+  overflow-y: auto;
+}
+
+.backLink,
+.aiLink,
+.navItem {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.backLink {
+  gap: 7px;
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.backLink:hover,
+.aiLink:hover { color: var(--text); }
+
+.projectIdentity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.identityMark {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--accent);
+  font: 800 12px/1 ui-monospace, monospace;
+  letter-spacing: .08em;
+}
+
+.identityCopy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.eyebrow,
+.lens > span {
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.projectName {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.projectMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 11px 0 18px 49px;
+}
+
+.reference { color: var(--muted); font-size: 10.5px; }
+
+.lens {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.lens select {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 34px 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.navigation { display: flex; flex-direction: column; gap: 3px; }
+
+.navItem {
+  position: relative;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+  transition: color .16s ease, background .16s ease, border-color .16s ease;
+}
+
+.navItem:hover { color: var(--text); background: var(--panel-2); }
+
+.navItemActive {
+  border-color: var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.navItemActive::before {
+  content: '';
+  position: absolute;
+  left: -17px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.navItemActive svg { color: var(--accent); }
+
+.aiLink {
+  gap: 9px;
+  margin-top: auto;
+  padding: 12px 10px 2px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.content {
+  min-width: 0;
+  flex: 1;
+  padding: 30px clamp(20px, 3vw, 42px) 72px;
+}
+
+@media (max-width: 900px) {
+  .workspace { display: block; min-height: auto; }
+  .rail {
+    position: relative;
+    top: auto;
+    width: auto;
+    height: auto;
+    padding: 14px 16px 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+  .backLink { margin-bottom: 12px; }
+  .projectIdentity { padding-right: min(46vw, 300px); }
+  .projectMeta { margin-bottom: 12px; }
+  .lens {
+    position: absolute;
+    top: 48px;
+    right: 16px;
+    width: min(42vw, 280px);
+    margin: 0;
+  }
+  .navigation {
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 4px 0 2px;
+    scrollbar-width: thin;
+  }
+  .navItem { flex-shrink: 0; min-height: 36px; white-space: nowrap; }
+  .navItemActive::before {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: -3px;
+    width: auto;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+  }
+  .aiLink { display: none; }
+  .content { padding: 22px 16px 56px; }
+}
+
+@media (max-width: 560px) {
+  .projectIdentity { padding-right: 0; }
+  .projectMeta { margin-left: 49px; }
+  .lens { position: static; width: 100%; margin: 4px 0 10px; }
+}

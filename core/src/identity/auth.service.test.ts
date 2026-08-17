@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { AuthService } from './auth.service';
+import { AuthService, authSessionTtlSeconds } from './auth.service';
 import { TokenRevocationStore } from './token-revocation';
 
 const SECRET = 'unit-secret-please-change';
@@ -15,6 +15,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env.AUTH_JWT_SECRET;
+  delete process.env.AUTH_SESSION_TTL_SECONDS;
 });
 
 describe('AuthService — refresh & revoke', () => {
@@ -41,5 +42,12 @@ describe('AuthService — refresh & revoke', () => {
     expect(auth.refresh(undefined)).toBeNull();
     expect(auth.revoke(undefined)).toBe(false);
     expect(auth.revoke('Basic xyz')).toBe(false);
+  });
+
+  it('uses a bounded configurable session lifetime', () => {
+    expect(authSessionTtlSeconds('28800')).toBe(28_800);
+    expect(authSessionTtlSeconds('20')).toBe(3600);
+    expect(authSessionTtlSeconds('999999')).toBe(3600);
+    expect(authSessionTtlSeconds('not-a-number')).toBe(3600);
   });
 });

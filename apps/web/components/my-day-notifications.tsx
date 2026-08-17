@@ -35,7 +35,7 @@ const RECORD_HREF: Record<string, (id: string) => string> = {
   'crm.quotation': (id) => `/crm/quotations/${id}`,
   'tendering.tender': (id) => `/tendering/tenders/${id}`,
   'contracts.contract': (id) => `/contracts/contracts/${id}`,
-  'projects.project': (id) => `/projects/projects/${id}`,
+  'projects.project': (id) => `/project/${id}`,
 };
 
 function hrefFor(n: Notification): string | null {

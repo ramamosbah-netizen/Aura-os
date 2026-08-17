@@ -20,7 +20,8 @@ interface Project {
   title: string;
 }
 
-export default async function PurchaseRequestsPage() {
+export default async function PurchaseRequestsPage({ searchParams }: { searchParams: Promise<{ record?: string }> }) {
+  const { record } = await searchParams;
   const [prs, projects] = await Promise.all([
     getJson<PurchaseRequest[]>('/api/procurement/purchase-requests'),
     getJson<Project[]>('/api/projects/projects'),
@@ -38,7 +39,7 @@ export default async function PurchaseRequestsPage() {
         {prs === null || projects === null ? (
           <p style={st.muted}>API offline.</p>
         ) : (
-          <PrList initialPrs={prs} projects={projects} />
+          <PrList initialPrs={prs} projects={projects} focusedId={record ?? ''} />
         )}
       </section>
     </div>

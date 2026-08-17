@@ -1,15 +1,26 @@
 'use client';
 
-import type { CSSProperties, ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  Bot,
+  ClipboardCheck,
+  FileStack,
+  Gauge,
+  HardHat,
+  LayoutDashboard,
+  RadioTower,
+  ShieldCheck,
+  Users,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 import { PROJECT_AREAS } from '@/lib/project-areas';
 import { useProjectContext } from '@/lib/project-context';
 import { ELV_DISCIPLINES } from '@/lib/project-scope';
-
-// Project Delivery Workspace shell (slice P3). One project, all delivery areas in one place: a
-// context header + a left rail that re-projects the delivery modules under `/project/[id]/…`.
-// The engines and 360s are unchanged — this is the surface that gathers them around a project.
+import styles from './project-shell.module.css';
 
 interface ProjectHead {
   id: string;
@@ -18,77 +29,103 @@ interface ProjectHead {
   status: string;
 }
 
-const NAV: Array<{ slug: string; label: string; icon: string }> = [
-  { slug: '', label: 'Overview', icon: '📊' },
-  ...PROJECT_AREAS.map((a) => ({ slug: a.slug, label: a.label, icon: a.icon })),
-  { slug: 'team', label: 'Team', icon: '👥' },
+const AREA_ICONS: Record<string, LucideIcon> = {
+  engineering: RadioTower,
+  site: HardHat,
+  quality: ClipboardCheck,
+  hse: ShieldCheck,
+  commissioning: Wrench,
+  documents: FileStack,
+};
+
+const NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = [
+  { slug: '', label: 'Command center', icon: LayoutDashboard },
+  { slug: 'controls', label: 'Project controls', icon: Gauge },
+  ...PROJECT_AREAS.map((area) => ({
+    slug: area.slug,
+    label: area.label,
+    icon: AREA_ICONS[area.slug] ?? Gauge,
+  })),
+  { slug: 'team', label: 'Project team', icon: Users },
 ];
 
 export default function ProjectShell({ project, children }: { project: ProjectHead; children: ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { disciplineId, setDiscipline } = useProjectContext();
   const base = `/project/${project.id}`;
-  const badge =
+  const query = searchParams.toString();
+  const scoped = (href: string): string => (query ? `${href}?${query}` : href);
+  const statusClass =
     project.status === 'active' ? 'badge badge-good'
-    : project.status === 'completed' ? 'badge badge-accent'
-    : project.status === 'cancelled' ? 'badge badge-bad'
-    : 'badge';
+      : project.status === 'completed' ? 'badge badge-accent'
+        : project.status === 'cancelled' ? 'badge badge-bad'
+          : 'badge';
 
   return (
-    <div style={st.wrap}>
-      <aside style={st.rail}>
-        <Link href="/projects/projects" style={st.back}>← All projects</Link>
-        <div style={st.projName}>{project.title}</div>
-        <div style={st.projMeta}>
-          <span className={badge}>{project.status}</span>
-          {project.reference ? <span style={st.ref}>{project.reference}</span> : null}
+    <div className={styles.workspace}>
+      <aside className={styles.rail} aria-label="Project workspace">
+        <Link href="/projects/projects" className={styles.backLink}>
+          <ArrowLeft size={14} aria-hidden />
+          All projects
+        </Link>
+
+        <div className={styles.projectIdentity}>
+          <div className={styles.identityMark} aria-hidden>
+            {project.reference?.slice(0, 2).toUpperCase() || 'PX'}
+          </div>
+          <div className={styles.identityCopy}>
+            <span className={styles.eyebrow}>Project context</span>
+            <strong className={styles.projectName}>{project.title}</strong>
+          </div>
         </div>
-        <label style={st.discLabel}>
-          Discipline lens
+
+        <div className={styles.projectMeta}>
+          <span className={statusClass}>{project.status}</span>
+          {project.reference ? <code className={styles.reference}>{project.reference}</code> : null}
+        </div>
+
+        <label className={styles.lens}>
+          <span>System / discipline lens</span>
           <select
-            aria-label="Discipline lens"
+            aria-label="System or discipline lens"
             value={disciplineId ?? ''}
-            onChange={(e) => setDiscipline(e.target.value || null)}
-            style={st.discSelect}
+            onChange={(event) => setDiscipline(event.target.value || null)}
           >
-            <option value="">All disciplines</option>
-            {ELV_DISCIPLINES.map((d) => (
-              <option key={d.id} value={d.id}>{d.label}</option>
+            <option value="">All systems</option>
+            {ELV_DISCIPLINES.map((discipline) => (
+              <option key={discipline.id} value={discipline.id}>{discipline.label}</option>
             ))}
           </select>
         </label>
-        <nav style={st.nav}>
+
+        <nav className={styles.navigation} aria-label="Project delivery areas">
           {NAV.map((item) => {
             const href = item.slug ? `${base}/${item.slug}` : base;
-            const active = item.slug ? pathname === href || pathname.startsWith(`${href}/`) : pathname === base;
+            const active = item.slug
+              ? pathname === href || pathname.startsWith(`${href}/`)
+              : pathname === base;
+            const Icon = item.icon;
             return (
-              <Link key={item.slug || 'overview'} href={href} style={{ ...st.navItem, ...(active ? st.navOn : {}) }}>
-                <span style={st.navIcon}>{item.icon}</span>
-                {item.label}
+              <Link
+                key={item.slug || 'overview'}
+                href={scoped(href)}
+                className={active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon size={16} strokeWidth={1.8} aria-hidden />
+                <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
-        <Link href="/ai" style={st.ai}>🤖 AI Assistant</Link>
+
+        <Link href="/ai" className={styles.aiLink}>
+          <Bot size={16} aria-hidden />
+          Open AI workspace
+        </Link>
       </aside>
-      <section style={st.content}>{children}</section>
+      <section className={styles.content}>{children}</section>
     </div>
   );
 }
-
-const st = {
-  wrap: { display: 'flex', gap: 0, alignItems: 'stretch', minHeight: 'calc(100vh - 120px)' } as CSSProperties,
-  rail: { width: 232, flexShrink: 0, borderRight: '1px solid var(--border)', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
-  back: { color: 'var(--muted)', textDecoration: 'none', fontSize: 12, marginBottom: 12 } as CSSProperties,
-  projName: { fontSize: 15, fontWeight: 800, color: 'var(--text)', lineHeight: 1.3, marginBottom: 6 } as CSSProperties,
-  projMeta: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 } as CSSProperties,
-  ref: { fontSize: 11, color: 'var(--muted)', fontFamily: 'ui-monospace, monospace' } as CSSProperties,
-  discLabel: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 14 } as CSSProperties,
-  discSelect: { padding: '6px 8px', background: 'var(--panel)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer', textTransform: 'none', letterSpacing: 0, fontWeight: 400 } as CSSProperties,
-  nav: { display: 'flex', flexDirection: 'column', gap: 2 } as CSSProperties,
-  navItem: { display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 8, color: 'var(--muted)', textDecoration: 'none', fontSize: 13, fontWeight: 600 } as CSSProperties,
-  navOn: { background: 'var(--panel)', color: 'var(--accent)', border: '1px solid var(--border)' } as CSSProperties,
-  navIcon: { fontSize: 14, width: 18, textAlign: 'center' } as CSSProperties,
-  ai: { marginTop: 'auto', paddingTop: 16, color: 'var(--muted)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600 } as CSSProperties,
-  content: { flex: 1, minWidth: 0, padding: '24px 28px 64px' } as CSSProperties,
-};

@@ -60,7 +60,8 @@ export default function AiDock() {
   // away on every page, not a place you navigate to.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key.toLowerCase() === 'j' && (e.metaKey || e.ctrlKey)) {
+      const key = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+      if (key === 'j' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen((o) => !o);
       } else if (e.key === 'Escape' && open) {
@@ -161,7 +162,7 @@ export default function AiDock() {
 
   if (!open) {
     return (
-      <button type="button" style={s.fab} onClick={() => setOpen(true)} aria-label="Open AURA Copilot" title="Ask AURA Copilot (⌘J)">
+      <button type="button" className="ai-dock-fab" style={s.fab} onClick={() => setOpen(true)} aria-label="Open AURA Copilot" title="Ask AURA Copilot (⌘J)">
         <span style={{ fontSize: 16 }}>✦</span> Ask AURA Copilot
         <span style={s.fabKbd}>⌘J</span>
       </button>
@@ -169,7 +170,7 @@ export default function AiDock() {
   }
 
   return (
-    <div style={s.panel}>
+    <div className="ai-dock-panel" style={s.panel}>
       <header style={s.header}>
         <span style={s.title}>
           <span style={{ color: 'var(--accent)' }}>✦</span> AURA Copilot

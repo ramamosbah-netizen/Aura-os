@@ -127,7 +127,7 @@ export default async function ProjectsPage({
               {(projectsResult.data ?? []).map((p) => (
                 <tr key={p.id} style={projectId === p.id ? { background: 'rgba(255,255,255,0.03)' } : undefined}>
                   <td style={st.td}>
-                    <a href={`/projects/projects?projectId=${p.id}`} style={st.link}>
+                    <a href={`/project/${p.id}`} style={st.link}>
                       {p.title}
                     </a>
                   </td>
@@ -139,7 +139,11 @@ export default async function ProjectsPage({
                   <td style={st.td}>{money(p.value)}</td>
                   <td style={st.tdMuted}>{fmt(p.createdAt)}</td>
                   <td style={st.td}>
-                    <ProjectEdit project={p} />
+                    <div style={st.actions}>
+                      <a href={`/project/${p.id}`} style={st.workspaceLink}>Workspace</a>
+                      <a href={`/projects/projects?projectId=${p.id}`} style={st.planLink}>WBS</a>
+                      <ProjectEdit project={p} />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -200,4 +204,7 @@ const st = {
     textDecoration: 'none',
     fontWeight: 600,
   } as CSSProperties,
+  actions: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, whiteSpace: 'nowrap' } as CSSProperties,
+  workspaceLink: { color: 'var(--accent)', fontSize: 11.5, fontWeight: 700 } as CSSProperties,
+  planLink: { color: 'var(--muted)', fontSize: 11.5, fontWeight: 600 } as CSSProperties,
 };

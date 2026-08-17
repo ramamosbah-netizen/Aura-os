@@ -34,6 +34,19 @@ export function mapGroupsToRoles(groups: unknown, csv: string | undefined): stri
   return [...roles];
 }
 
+const DEFAULT_SESSION_TTL_SECONDS = 3600;
+const MIN_SESSION_TTL_SECONDS = 300;
+const MAX_SESSION_TTL_SECONDS = 86_400;
+
+/** Parse the self-issued session lifetime with a safe, bounded fallback. */
+export function authSessionTtlSeconds(raw = process.env.AUTH_SESSION_TTL_SECONDS): number {
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < MIN_SESSION_TTL_SECONDS || parsed > MAX_SESSION_TTL_SECONDS) {
+    return DEFAULT_SESSION_TTL_SECONDS;
+  }
+  return parsed;
+}
+
 /** Caches a hosted IdP's JWKS (public keys), refreshed on TTL or a key-miss (rotation). */
 class JwksCache {
   private jwks: Jwks | null = null;
@@ -73,6 +86,7 @@ export class AuthService {
   private readonly jwksUrl = (process.env.AUTH_JWKS_URL ?? process.env.SUPABASE_JWKS_URL)?.trim() || null;
   private readonly jwksCache = this.jwksUrl ? new JwksCache(this.jwksUrl) : null;
   private readonly defaultTenant = process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
+  private readonly ttlSeconds = authSessionTtlSeconds();
 
   // NOTE: union-typed params (`X | null`) emit `Object` in design:paramtypes under
   // strict mode, so @Optional() silently injects nothing — explicit @Inject required.
@@ -97,6 +111,11 @@ export class AuthService {
   /** Only the HS256 secret can mint tokens (the dev-login path); IdP tokens come from the IdP. */
   get canMint(): boolean {
     return this.secret !== null;
+  }
+
+  /** Lifetime applied to self-issued login and refreshed sessions. */
+  get sessionTtlSeconds(): number {
+    return this.ttlSeconds;
   }
 
   /** Verify an Authorization header into a request context, or null if absent/invalid. */
@@ -138,7 +157,7 @@ export class AuthService {
   }
 
   /** Sliding-session refresh: re-mint a fresh token from a still-valid, non-revoked self-issued one. */
-  refresh(authorization: string | undefined, ttlSeconds = 3600): string | null {
+  refresh(authorization: string | undefined, ttlSeconds = this.ttlSeconds): string | null {
     if (!this.secret) return null;
     const token = this.tokenOf(authorization);
     if (!token) return null;
@@ -196,7 +215,7 @@ export class AuthService {
   }
 
   /** Mint a token — used by the dev-login / dev-token endpoints. Throws if no HS256 secret. */
-  mint(claims: AuthClaims, ttlSeconds = 3600): string {
+  mint(claims: AuthClaims, ttlSeconds = this.ttlSeconds): string {
     if (!this.secret) throw new Error('AUTH_JWT_SECRET not set — cannot mint tokens');
     return signJwt(claims, this.secret, ttlSeconds);
   }

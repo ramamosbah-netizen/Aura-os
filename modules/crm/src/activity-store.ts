@@ -6,6 +6,9 @@ export const CRM_ACTIVITY_STORE = Symbol('CRM_ACTIVITY_STORE');
 
 export interface ActivityFilter {
   tenantId?: string;
+  /** Server-side personal-work projection; never fetch the tenant stream to filter in a UI. */
+  assigneeId?: string;
+  createdBy?: string;
   relatedType?: string;
   relatedId?: string;
   status?: string;

@@ -5,7 +5,11 @@ import { SESSION_COOKIE } from '@/lib/session';
 // Login BFF: forward credentials to the API, then store the returned token in an
 // httpOnly cookie. The token never touches client JS.
 export async function POST(request: Request): Promise<Response> {
-  const body = (await request.json().catch(() => ({}))) as { username?: unknown; password?: unknown };
+  const body = (await request.json().catch(() => ({}))) as {
+    username?: unknown;
+    password?: unknown;
+    code?: unknown;
+  };
   try {
     const res = await fetch(`${apiBase()}/api/v1/auth/login`, {
       method: 'POST',
@@ -13,12 +17,14 @@ export async function POST(request: Request): Promise<Response> {
       body: JSON.stringify({
         username: typeof body.username === 'string' ? body.username : undefined,
         password: typeof body.password === 'string' ? body.password : undefined,
+        code: typeof body.code === 'string' ? body.code : undefined,
       }),
       cache: 'no-store',
     });
     const data = (await res.json().catch(() => ({}))) as {
       token?: string;
       user?: unknown;
+      expiresIn?: number;
       message?: string;
       error?: string;
     };
@@ -29,8 +35,10 @@ export async function POST(request: Request): Promise<Response> {
     store.set(SESSION_COOKIE, data.token, {
       httpOnly: true,
       sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: 3600,
+      maxAge: Number.isInteger(data.expiresIn) && Number(data.expiresIn) > 0 ? Number(data.expiresIn) : 3600,
+      priority: 'high',
     });
     return Response.json({ user: data.user ?? null });
   } catch {

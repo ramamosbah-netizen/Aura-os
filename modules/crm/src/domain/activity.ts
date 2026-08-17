@@ -25,6 +25,8 @@ export const ACTIVITY_TYPES: readonly ActivityType[] = [
  * hours. OVERDUE / TODAY / THIS_WEEK stay derived from `dueDate`, never persisted.
  */
 export type ActivityStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
+export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly';
+export const TASK_RECURRENCES: readonly TaskRecurrence[] = ['none', 'daily', 'weekly', 'monthly'];
 
 /**
  * Communication direction — who reached out. Only meaningful for the conversational types
@@ -97,6 +99,11 @@ export interface Activity {
   relatedName: string | null;
   /** Tasks: when it is due and who owns it. */
   dueDate: string | null;
+  reminderAt?: string | null;
+  reminderSentAt?: string | null;
+  recurrence?: TaskRecurrence;
+  recurrenceEndsOn?: string | null;
+  recurrenceSeriesId?: Id | null;
   status: ActivityStatus;
   /** G11 — when work actually began (set by startActivity; null while still planned). */
   startedAt: string | null;
@@ -122,12 +129,27 @@ export interface NewActivity {
   relatedId?: Id | null;
   relatedName?: string | null;
   dueDate?: string | null;
+  reminderAt?: string | null;
+  reminderSentAt?: string | null;
+  recurrence?: TaskRecurrence;
+  recurrenceEndsOn?: string | null;
+  recurrenceSeriesId?: Id | null;
   status?: ActivityStatus;
   outcome?: string | null;
   direction?: CommunicationDirection | null;
   counterparty?: string | null;
   assigneeId?: Id | null;
   createdBy?: Id | null;
+}
+
+export interface ActivityDetailsPatch {
+  subject?: string;
+  notes?: string | null;
+  dueDate?: string | null;
+  reminderAt?: string | null;
+  reminderSentAt?: string | null;
+  recurrence?: TaskRecurrence;
+  recurrenceEndsOn?: string | null;
 }
 
 export function makeActivity(input: NewActivity): Activity {
@@ -142,6 +164,11 @@ export function makeActivity(input: NewActivity): Activity {
     relatedId: input.relatedId ?? null,
     relatedName: input.relatedName?.trim() || null,
     dueDate: input.dueDate ?? null,
+    reminderAt: input.reminderAt ?? null,
+    reminderSentAt: input.reminderSentAt ?? null,
+    recurrence: input.recurrence ?? 'none',
+    recurrenceEndsOn: input.recurrenceEndsOn ?? null,
+    recurrenceSeriesId: input.recurrenceSeriesId ?? null,
     status: input.status ?? 'open',
     startedAt: null,
     completedAt: null,
@@ -153,6 +180,28 @@ export function makeActivity(input: NewActivity): Activity {
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };
+}
+
+/** Edit the user-owned planning fields without rewriting lifecycle or ownership state. */
+export function editActivity(a: Activity, patch: ActivityDetailsPatch): Activity {
+  if (a.status === 'cancelled') throw new Error('cannot edit an archived activity');
+  const subject = patch.subject === undefined ? a.subject : patch.subject.trim();
+  if (!subject) throw new Error('subject is required');
+  return {
+    ...a,
+    subject,
+    notes: patch.notes === undefined ? a.notes : (patch.notes?.trim() || null),
+    dueDate: patch.dueDate === undefined ? a.dueDate : patch.dueDate,
+    reminderAt: patch.reminderAt === undefined ? (a.reminderAt ?? null) : patch.reminderAt,
+    reminderSentAt: patch.reminderSentAt === undefined ? (a.reminderSentAt ?? null) : patch.reminderSentAt,
+    recurrence: patch.recurrence === undefined ? (a.recurrence ?? 'none') : patch.recurrence,
+    recurrenceEndsOn: patch.recurrenceEndsOn === undefined ? (a.recurrenceEndsOn ?? null) : patch.recurrenceEndsOn,
+  };
+}
+
+/** Recoverable delete for personal work: archive it from active views, preserving audit history. */
+export function archiveActivity(a: Activity): Activity {
+  return { ...a, status: 'cancelled' };
 }
 
 /** G11 — begin work on a planned activity (idempotent while already in progress). */
@@ -184,5 +233,7 @@ export function reopenActivity(a: Activity): Activity {
 /** CRM activity events on the spine. */
 export const CRM_ACTIVITY_EVENT = {
   created: 'crm.activity.created',
+  updated: 'crm.activity.updated',
+  archived: 'crm.activity.archived',
   completed: 'crm.activity.completed',
 } as const;

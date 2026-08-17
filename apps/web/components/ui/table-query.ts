@@ -13,7 +13,7 @@ export interface TableQueryState {
 }
 
 /** Free-text search. When `searchFields` is given, only those fields are scanned; else all values. */
-export function applySearch<T extends Record<string, unknown>>(
+export function applySearch<T extends object>(
   rows: T[],
   search: string,
   searchFields?: (keyof T)[],
@@ -27,18 +27,18 @@ export function applySearch<T extends Record<string, unknown>>(
 }
 
 /** Exact-match faceting: for each non-empty value, keep rows whose field equals it (string-compared). */
-export function applyFilters<T extends Record<string, unknown>>(rows: T[], filterVals: Record<string, string>): T[] {
+export function applyFilters<T extends object>(rows: T[], filterVals: Record<string, string>): T[] {
   const active = Object.entries(filterVals).filter(([, v]) => v);
   if (active.length === 0) return rows;
-  return rows.filter((item) => active.every(([k, v]) => String(item[k] ?? '') === v));
+  return rows.filter((item) => active.every(([k, v]) => String((item as Record<string, unknown>)[k] ?? '') === v));
 }
 
 /** Stable-ish sort with null/undefined pushed last, direction-aware. Returns a new array. */
-export function applySort<T extends Record<string, unknown>>(rows: T[], sortKey: string | null, sortDir: 'asc' | 'desc'): T[] {
+export function applySort<T extends object>(rows: T[], sortKey: string | null, sortDir: 'asc' | 'desc'): T[] {
   if (!sortKey) return rows;
   return [...rows].sort((a, b) => {
-    const va = a[sortKey];
-    const vb = b[sortKey];
+    const va = (a as Record<string, unknown>)[sortKey];
+    const vb = (b as Record<string, unknown>)[sortKey];
     if (va === vb) return 0;
     if (va === null || va === undefined) return 1;
     if (vb === null || vb === undefined) return -1;

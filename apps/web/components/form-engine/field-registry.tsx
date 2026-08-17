@@ -14,6 +14,9 @@ export interface FieldRendererProps {
   onChange: (value: string, option?: FormSelectOption) => void;
   disabled: boolean;
   invalid: boolean;
+  id: string;
+  describedBy?: string;
+  required: boolean;
   /** only provided for line-item kinds */
   lines?: FormLineItem[];
   onLinesChange?: (rows: FormLineItem[]) => void;
@@ -64,8 +67,9 @@ export function formToolbarActions(schema: FormSchema): FormToolbarAction[] {
 
 const EMPTY_LINE: FormLineItem = { description: '', quantity: 1, unitPrice: 0, vatRate: 5 };
 
-registerFieldRenderer('select', ({ field, value, onChange, disabled, invalid }) => (
+registerFieldRenderer('select', ({ field, value, onChange, disabled, invalid, id, describedBy, required }) => (
   <select
+    id={id}
     data-testid={`field-${field.name}`}
     className={`select${invalid ? ' input-error' : ''}`}
     value={value}
@@ -74,6 +78,9 @@ registerFieldRenderer('select', ({ field, value, onChange, disabled, invalid }) 
       onChange(e.target.value, opt);
     }}
     disabled={disabled}
+    required={required}
+    aria-invalid={invalid}
+    aria-describedby={describedBy}
   >
     <option value="">{field.placeholder ?? '— select —'}</option>
     {(field.options ?? []).map((o) => (
@@ -84,21 +91,26 @@ registerFieldRenderer('select', ({ field, value, onChange, disabled, invalid }) 
   </select>
 ));
 
-registerFieldRenderer('textarea', ({ field, value, onChange, disabled, invalid }) => (
+registerFieldRenderer('textarea', ({ field, value, onChange, disabled, invalid, id, describedBy, required }) => (
   <textarea
+    id={id}
     data-testid={`field-${field.name}`}
     className={`textarea${invalid ? ' input-error' : ''}`}
     value={value}
     onChange={(e) => onChange(e.target.value)}
     placeholder={field.placeholder}
     disabled={disabled}
+    required={required}
+    aria-invalid={invalid}
+    aria-describedby={describedBy}
   />
 ));
 
 const inputRenderer =
   (type: 'text' | 'date', inputMode?: 'decimal'): FieldRenderer =>
-  ({ field, value, onChange, disabled, invalid }) => (
+  ({ field, value, onChange, disabled, invalid, id, describedBy, required }) => (
     <input
+      id={id}
       data-testid={`field-${field.name}`}
       className={`input${invalid ? ' input-error' : ''}`}
       type={type}
@@ -107,6 +119,9 @@ const inputRenderer =
       onChange={(e) => onChange(e.target.value)}
       placeholder={field.placeholder}
       disabled={disabled}
+      required={required}
+      aria-invalid={invalid}
+      aria-describedby={describedBy}
     />
   );
 
@@ -114,7 +129,7 @@ registerFieldRenderer('text', inputRenderer('text'));
 registerFieldRenderer('number', inputRenderer('text', 'decimal'));
 registerFieldRenderer('date', inputRenderer('date'));
 
-registerFieldRenderer('lines', ({ lines = [{ ...EMPTY_LINE }], onLinesChange, disabled }) => {
+registerFieldRenderer('lines', ({ field, lines = [{ ...EMPTY_LINE }], onLinesChange, disabled, invalid, describedBy, required }) => {
   const patch = (i: number, p: Partial<FormLineItem>) =>
     onLinesChange?.(lines.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const subtotal = lines.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
@@ -135,6 +150,10 @@ registerFieldRenderer('lines', ({ lines = [{ ...EMPTY_LINE }], onLinesChange, di
             placeholder="Line description…"
             onChange={(e) => patch(i, { description: e.target.value })}
             disabled={disabled}
+            required={required}
+            aria-invalid={invalid}
+            aria-describedby={describedBy}
+            aria-label={`${field.label}, line ${i + 1}, description`}
           />
           <input
             className="input"
@@ -142,6 +161,7 @@ registerFieldRenderer('lines', ({ lines = [{ ...EMPTY_LINE }], onLinesChange, di
             value={l.quantity}
             onChange={(e) => patch(i, { quantity: Number(e.target.value) || 0 })}
             disabled={disabled}
+            aria-label={`${field.label}, line ${i + 1}, quantity`}
           />
           <input
             className="input"
@@ -149,6 +169,7 @@ registerFieldRenderer('lines', ({ lines = [{ ...EMPTY_LINE }], onLinesChange, di
             value={l.unitPrice}
             onChange={(e) => patch(i, { unitPrice: Number(e.target.value) || 0 })}
             disabled={disabled}
+            aria-label={`${field.label}, line ${i + 1}, unit price`}
           />
           <input
             className="input"
@@ -156,12 +177,13 @@ registerFieldRenderer('lines', ({ lines = [{ ...EMPTY_LINE }], onLinesChange, di
             value={l.vatRate}
             onChange={(e) => patch(i, { vatRate: Number(e.target.value) || 0 })}
             disabled={disabled}
+            aria-label={`${field.label}, line ${i + 1}, VAT percent`}
           />
           <button
             type="button"
             className="line-remove"
             onClick={() => onLinesChange?.(lines.length > 1 ? lines.filter((_, j) => j !== i) : lines)}
-            aria-label="Remove line"
+            aria-label={`Remove line ${i + 1}`}
             disabled={disabled}
           >
             ✕

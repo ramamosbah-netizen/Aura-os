@@ -25,6 +25,32 @@ export interface ProjectArea {
   rowHref?: string;
 }
 
+type ProjectAreaRow = Record<string, unknown>;
+
+const normaliseLensValue = (value: unknown): string =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+/**
+ * Apply the cross-module discipline lens without hiding records that are genuinely
+ * project-wide. A row with an explicit discipline/system must match the selected
+ * lens; a row with no such field remains visible because it applies to the whole
+ * project (for example a general permit or daily report).
+ */
+export function filterAreaRows<T extends ProjectAreaRow>(rows: T[], disciplineId?: string | null): T[] {
+  const selected = normaliseLensValue(disciplineId);
+  if (!selected) return rows;
+
+  return rows.filter((row) => {
+    const explicit = [row.discipline, row.system, row.systemType]
+      .map(normaliseLensValue)
+      .filter(Boolean);
+    return explicit.length === 0 || explicit.some((value) => value === selected);
+  });
+}
+
 export const PROJECT_AREAS: ProjectArea[] = [
   {
     slug: 'engineering',

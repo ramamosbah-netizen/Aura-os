@@ -44,7 +44,6 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
   const projectByContract = useMemo(() => {
@@ -158,7 +157,7 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {c.tenderId && <a href={`/tendering/tenders/${c.tenderId}`} style={st.chip} title="Source tender">◳ Tender</a>}
                         {project
-                          ? <a href={`/projects/projects/${project.id}`} style={{ ...st.chip, marginLeft: c.tenderId ? 6 : 0, color: 'var(--good)' }} title={project.title}>▦ {project.status}</a>
+                          ? <a href={`/project/${project.id}`} style={{ ...st.chip, marginLeft: c.tenderId ? 6 : 0, color: 'var(--good)' }} title={project.title}>▦ {project.status}</a>
                           : <span style={{ ...st.chip, marginLeft: c.tenderId ? 6 : 0, color: 'var(--muted)' }}>▦ on signing</span>}
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>

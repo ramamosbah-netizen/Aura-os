@@ -5,7 +5,7 @@
 // leaves resolve through the field-type registry; every change re-runs the
 // shared evaluateForm() so rules and formulas react live with no reload.
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState, type KeyboardEvent } from 'react';
 import type { ReactNode } from 'react';
 import {
   evaluateForm,
@@ -169,6 +169,7 @@ function LayoutNodeView({
   busy: boolean;
   path: string;
 }): ReactNode {
+  const controlId = `fe-${path.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const [activeTab, setActiveTab] = useState(0);
   const [collapsed, setCollapsed] = useState<boolean>(
     (node.type === 'section' && node.collapsed) === true,
@@ -188,7 +189,7 @@ function LayoutNodeView({
         <div className="fe-section span-2">
           {node.label ? (
             node.collapsible ? (
-              <button type="button" className="fe-section-head fe-collapsible" onClick={() => setCollapsed((c) => !c)}>
+              <button type="button" className="fe-section-head fe-collapsible" aria-expanded={!collapsed} aria-controls={`${controlId}-content`} onClick={() => setCollapsed((c) => !c)}>
                 <span className={`fe-chevron${collapsed ? '' : ' open'}`}>▸</span>
                 {node.label}
               </button>
@@ -197,7 +198,7 @@ function LayoutNodeView({
             )
           ) : null}
           {node.description ? <p className="fe-section-desc">{node.description}</p> : null}
-          {!collapsed ? <LayoutList nodes={node.children} engine={engine} busy={busy} path={path} grid /> : null}
+          {!collapsed ? <div id={`${controlId}-content`}><LayoutList nodes={node.children} engine={engine} busy={busy} path={path} grid /></div> : null}
         </div>
       );
 
@@ -215,22 +216,26 @@ function LayoutNodeView({
     case 'tabs':
       return (
         <div className="fe-tabs span-2">
-          <div className="fe-tabbar" role="tablist">
+          <div className="fe-tabbar" role="tablist" aria-label="Form sections">
             {node.tabs.map((t, i) => (
               <button
                 key={t.id ?? i}
                 type="button"
                 role="tab"
+                id={`${controlId}-tab-${i}`}
+                aria-controls={`${controlId}-panel-${i}`}
                 aria-selected={activeTab === i}
+                tabIndex={activeTab === i ? 0 : -1}
                 className={`fe-tab${activeTab === i ? ' active' : ''}`}
                 onClick={() => setActiveTab(i)}
+                onKeyDown={(event) => navigateTabs(event, i, node.tabs.length, setActiveTab)}
               >
                 {t.label}
               </button>
             ))}
           </div>
           {node.tabs.map((t, i) => (
-            <div key={t.id ?? i} role="tabpanel" hidden={activeTab !== i}>
+            <div key={t.id ?? i} id={`${controlId}-panel-${i}`} role="tabpanel" aria-labelledby={`${controlId}-tab-${i}`} tabIndex={0} hidden={activeTab !== i}>
               <LayoutList nodes={t.children} engine={engine} busy={busy} path={`${path}.t${i}`} grid />
             </div>
           ))}
@@ -245,12 +250,14 @@ function LayoutNodeView({
               <button
                 type="button"
                 className="fe-section-head fe-collapsible"
+                aria-expanded={Boolean(openPanels[i])}
+                aria-controls={`${controlId}-panel-${i}`}
                 onClick={() => setOpenPanels((s) => ({ ...s, [i]: !s[i] }))}
               >
                 <span className={`fe-chevron${openPanels[i] ? ' open' : ''}`}>▸</span>
                 {p.label}
               </button>
-              {openPanels[i] ? <LayoutList nodes={p.children} engine={engine} busy={busy} path={`${path}.p${i}`} grid /> : null}
+              {openPanels[i] ? <div id={`${controlId}-panel-${i}`}><LayoutList nodes={p.children} engine={engine} busy={busy} path={`${path}.p${i}`} grid /></div> : null}
             </div>
           ))}
         </div>
@@ -267,6 +274,7 @@ function LayoutNodeView({
 }
 
 function FieldView({ name, engine, busy }: { name: string; engine: FormEngine; busy: boolean }) {
+  const generatedId = useId().replace(/:/g, '');
   const field = engine.schema.fields.find((f) => f.name === name);
   if (!field) return null;
 
@@ -280,10 +288,14 @@ function FieldView({ name, engine, busy }: { name: string; engine: FormEngine; b
   const disabled = busy || st?.disabled === true || st?.readonly === true;
   // computed / rule-set values come from the evaluation, user input from state
   const value = field.formula ? (engine.evaluation.values[field.name] ?? '') : (engine.values[field.name] ?? '');
+  const fieldId = `field-${field.name}-${generatedId}`;
+  const hintId = `${fieldId}-hint`;
+  const errorId = `${fieldId}-error`;
+  const describedBy = [fieldError || formulaError ? errorId : null, field.hint && !fieldError ? hintId : null].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className={`field${span === 2 ? ' span-2' : ''}`}>
-      <label className="field-label">
+      <label className="field-label" htmlFor={field.kind === 'lines' ? undefined : fieldId}>
         {field.label}
         {st?.required ? <span className="req">*</span> : null}
       </label>
@@ -293,12 +305,28 @@ function FieldView({ name, engine, busy }: { name: string; engine: FormEngine; b
         onChange: (v, option) => engine.setField(field.name, v, option),
         disabled,
         invalid: fieldError !== undefined,
+        id: fieldId,
+        describedBy,
+        required: st?.required === true,
         lines: field.kind === 'lines' ? engine.lines[field.name] : undefined,
         onLinesChange: field.kind === 'lines' ? (rows) => engine.setLines(field.name, rows) : undefined,
       })}
-      {fieldError ? <span className="field-hint fe-field-error">{fieldError}</span> : null}
-      {formulaError ? <span className="field-hint fe-field-error">Formula: {formulaError}</span> : null}
-      {field.hint && !fieldError ? <span className="field-hint">{field.hint}</span> : null}
+      {fieldError ? <span id={errorId} role="alert" className="field-hint fe-field-error">{fieldError}</span> : null}
+      {formulaError ? <span id={errorId} role="alert" className="field-hint fe-field-error">Formula: {formulaError}</span> : null}
+      {field.hint && !fieldError ? <span id={hintId} className="field-hint">{field.hint}</span> : null}
     </div>
   );
+}
+
+function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, index: number, count: number, select: (index: number) => void) {
+  let next: number;
+  if (event.key === 'ArrowRight') next = (index + 1) % count;
+  else if (event.key === 'ArrowLeft') next = (index - 1 + count) % count;
+  else if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = count - 1;
+  else return;
+  event.preventDefault();
+  select(next);
+  const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  tabs?.[next]?.focus();
 }

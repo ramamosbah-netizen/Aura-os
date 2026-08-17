@@ -37,8 +37,9 @@ export const NAV: NavGroup[] = [
     title: 'Home',
     glyph: '⌂',
     items: [
-      { label: 'My Work', href: '/', glyph: '◆', desc: 'Your live personal command center' },
-      { label: 'My Day', href: '/crm/my-day', glyph: '◐', desc: 'Today: meetings, tasks, priorities, approvals & AI suggestions' },
+      { label: 'Home', href: '/', glyph: '⌂', desc: 'AURA OS front door and operating overview' },
+      { label: 'My Work', href: '/my-work', glyph: '◆', desc: 'Your live personal command center' },
+      { label: 'My Day', href: '/my-work/my-day', glyph: '◐', desc: 'Today: meetings, tasks, priorities, approvals & AI suggestions' },
       { label: 'My Workspace', href: '/workspace', glyph: '◉', desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page' },
       { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
       { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },

@@ -210,16 +210,37 @@ export class DmsService {
   }
 
   /** Documents shared with this actor — excludes their own, which they reach by ownership. */
-  async sharedWithMe(actor: DocumentActor): Promise<Array<{ document: Document; permissions: DocumentPermission[] }>> {
+  async sharedWithMe(actor: DocumentActor): Promise<Array<{
+    document: Document;
+    permissions: DocumentPermission[];
+    currentVersionFile: Pick<DocumentVersion, 'version' | 'fileName' | 'contentType' | 'sizeBytes'>;
+  }>> {
     const mine = await this.permissions.listForSubjects(actor.tenantId, DocumentAccessResolver.subjectsOf(actor));
     const byDoc = new Map<string, DocumentPermission[]>();
     for (const p of mine) byDoc.set(p.documentId, [...(byDoc.get(p.documentId) ?? []), p]);
-    const out: Array<{ document: Document; permissions: DocumentPermission[] }> = [];
+    const out: Array<{
+      document: Document;
+      permissions: DocumentPermission[];
+      currentVersionFile: Pick<DocumentVersion, 'version' | 'fileName' | 'contentType' | 'sizeBytes'>;
+    }> = [];
     for (const [documentId, permissions] of byDoc) {
       const found = await this.store.get(documentId);
       if (!found || found.document.tenantId !== actor.tenantId) continue;
       if (found.document.createdBy === actor.userId) continue;
-      out.push({ document: found.document, permissions });
+      const current = found.versions.find((version) => version.version === found.document.currentVersion);
+      // A valid DMS document always has its current immutable version. Refuse to project a
+      // broken metadata row instead of guessing a filename/content type in the UI.
+      if (!current) continue;
+      out.push({
+        document: found.document,
+        permissions,
+        currentVersionFile: {
+          version: current.version,
+          fileName: current.fileName,
+          contentType: current.contentType,
+          sizeBytes: current.sizeBytes,
+        },
+      });
     }
     return out;
   }

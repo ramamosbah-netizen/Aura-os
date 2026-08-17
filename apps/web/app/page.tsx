@@ -1,7 +1,9 @@
 import type { CSSProperties } from 'react';
+import Link from 'next/link';
 import type { DomainEvent, Document, WorkspaceConfig, WorkspaceMe } from '@aura/shared';
 import { apiBase, currentUser, getJson } from '@/lib/api';
 import RoleDashboardShell from '../components/role-dashboard-shell';
+import AuraHomeGrid from '@/components/aura-home-grid';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +70,7 @@ function displayName(sub: string | undefined): string | null {
   return base.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default async function WorkspacePage() {
+export async function AuraWorkspace({ variant }: { variant: 'home' | 'my-work' }) {
   const [user, events, documents, invoices, bankAccounts, projects, pipelineData, ledgers, inbox, me, workspaceConfig] =
     await Promise.all([
       currentUser(),
@@ -87,7 +89,19 @@ export default async function WorkspacePage() {
   const online = events !== null || documents !== null;
 
   return (
-    <div style={s.shell}>
+    <div style={s.shell} data-testid={variant === 'home' ? 'aura-home' : 'my-work'}>
+      <header style={s.hero}>
+        <div>
+          <p style={s.eyebrow}>{variant === 'home' ? 'AURA OS / HOME' : 'AURA OS / MY WORK'}</p>
+          <h1 style={s.heroTitle}>{variant === 'home' ? 'One operating view across the business.' : 'Your decisions, priorities and next actions.'}</h1>
+          <p style={s.heroCopy}>{variant === 'home' ? 'Start with what needs attention, enter a project, or choose a suite. Every view stays connected to the same records and permissions.' : 'A role-aware command center built from your live inbox, project signals and permitted actions.'}</p>
+        </div>
+        <nav style={s.heroActions} aria-label={variant === 'home' ? 'Home actions' : 'My Work actions'}>
+          {variant === 'home' ? <Link href="/my-work" style={s.primaryAction}>Open My Work</Link> : <Link href="/workspace?tab=inbox" style={s.primaryAction}>Open inbox</Link>}
+          <Link href="/projects/projects" style={s.secondaryAction}>Projects</Link>
+          <Link href="/suites" style={s.secondaryAction}>All suites</Link>
+        </nav>
+      </header>
       {!online ? (
         <section style={s.panel}>
           <h1 style={s.h1}>Command Center</h1>
@@ -116,13 +130,25 @@ export default async function WorkspacePage() {
         />
       )}
 
-      <footer style={s.footer}>AURA OS · Enterprise Command Center</footer>
+      <footer style={s.footer}>AURA OS · {variant === 'home' ? 'Enterprise Home' : 'My Work'}</footer>
     </div>
   );
 }
 
+export default async function AuraHomePage() {
+  const user = await currentUser();
+  return <AuraHomeGrid userName={displayName(user?.sub) ?? 'AURA User'} />;
+}
+
 const s = {
   shell: { maxWidth: 1080, margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
+  hero: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 22, padding: '20px 0 24px', borderBottom: '1px solid var(--border)', marginBottom: 18, flexWrap: 'wrap' } as CSSProperties,
+  eyebrow: { margin: '0 0 7px', color: 'var(--accent)', fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase' } as CSSProperties,
+  heroTitle: { maxWidth: 720, margin: 0, fontSize: 'clamp(26px, 4vw, 40px)', lineHeight: 1.05, letterSpacing: '-0.045em' } as CSSProperties,
+  heroCopy: { maxWidth: 720, margin: '10px 0 0', color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.6 } as CSSProperties,
+  heroActions: { display: 'flex', gap: 8, flexWrap: 'wrap' } as CSSProperties,
+  primaryAction: { display: 'inline-flex', alignItems: 'center', minHeight: 42, padding: '0 14px', borderRadius: 10, background: 'var(--accent)', color: 'var(--accent-ink)', textDecoration: 'none', fontSize: 13, fontWeight: 750 } as CSSProperties,
+  secondaryAction: { display: 'inline-flex', alignItems: 'center', minHeight: 42, padding: '0 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', textDecoration: 'none', fontSize: 13, fontWeight: 650 } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 12px', letterSpacing: -0.5 } as CSSProperties,
   panel: {
     background: 'var(--panel)',

@@ -1,130 +1,244 @@
-import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import Link from 'next/link';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Boxes,
+  ClipboardList,
+  FolderKanban,
+  PackageCheck,
+  ShoppingCart,
+  TrendingUp,
+} from 'lucide-react';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice, { DataDegradedNotice } from '@/components/ui/data-state';
+import styles from './operations-overview.module.css';
 
 export const dynamic = 'force-dynamic';
 
-// Operations Overview — the workspace cockpit (Phase 4b). One front door across the operational
-// domains: procurement spend, requests awaiting approval, and inventory that needs reordering.
-// Every figure is READ from live endpoints (procurement + inventory) — no fabricated numbers.
-
-interface Po { status?: string; value?: number }
-interface Pr { status: string; value?: number }
+interface Po { status?: string; value?: number; projectId?: string | null }
+interface Pr { status: string; value?: number; projectId?: string | null; title?: string; reference?: string | null }
 interface Stock { code?: string; name?: string; quantityOnHand?: number; avgCost?: number; reorderLevel?: number; reorderQty?: number }
+interface Evm {
+  plannedValue: number;
+  earnedValue: number;
+  actualCost: number;
+  costVariance: number;
+  scheduleVariance: number;
+  cpi: number;
+  spi: number;
+}
+interface PortfolioProject {
+  id: string;
+  title: string;
+  reference?: string | null;
+  accountName?: string | null;
+  status: 'planned' | 'active' | 'completed' | 'cancelled';
+  value: number;
+  evm: Evm;
+  atRisk: boolean;
+}
 
 const CLOSED_PO = new Set(['received', 'closed', 'cancelled', 'completed']);
-const aed = (n: number): string => 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+const aed = (value: number): string => `AED ${Math.round(value).toLocaleString()}`;
+const indexTone = (value: number): string => value >= 1 ? styles.good : value >= 0.9 ? styles.warn : styles.bad;
 
 export default async function OperationsOverviewPage() {
-  const [pos, prs, stock] = await Promise.all([
-    getJson<Po[]>('/api/procurement/purchase-orders'),
-    getJson<Pr[]>('/api/procurement/purchase-requests'),
-    getJson<Stock[]>('/api/inventory/stock'),
+  const [portfolioResult, poResult, prResult, stockResult] = await Promise.all([
+    fetchJson<PortfolioProject[]>('/api/projects/projects/portfolio'),
+    fetchJson<Po[]>('/api/procurement/purchase-orders'),
+    fetchJson<Pr[]>('/api/procurement/purchase-requests'),
+    fetchJson<Stock[]>('/api/inventory/stock'),
   ]);
 
-  const anyData = pos !== null || prs !== null || stock !== null;
-  const poRows = pos ?? [];
-  const prRows = prs ?? [];
-  const stkRows = stock ?? [];
+  const results = [portfolioResult, poResult, prResult, stockResult];
+  const failedReads = results.filter((result) => !result.ok).length;
+  const firstError = results.find((result) => !result.ok);
+  if (failedReads === results.length && firstError && !firstError.ok) {
+    return <DataStateNotice error={firstError.error} subject="the operations command center" />;
+  }
 
-  const openPos = poRows.filter((p) => !CLOSED_PO.has((p.status ?? '').toLowerCase()));
-  const openPoValue = openPos.reduce((s, p) => s + (Number(p.value) || 0), 0);
-  const poSpend = poRows.reduce((s, p) => s + (Number(p.value) || 0), 0);
-  const pendingPrs = prRows.filter((p) => (p.status ?? '').toLowerCase() === 'draft');
-  const pendingPrValue = pendingPrs.reduce((s, p) => s + (Number(p.value) || 0), 0);
-  const stockValue = stkRows.reduce((s, i) => s + (Number(i.quantityOnHand) || 0) * (Number(i.avgCost) || 0), 0);
-  const lowStock = stkRows
-    .filter((i) => (Number(i.reorderLevel) || 0) > 0 && (Number(i.quantityOnHand) || 0) <= (Number(i.reorderLevel) || 0))
+  const projects = portfolioResult.ok ? portfolioResult.data ?? [] : [];
+  const poRows = poResult.ok ? poResult.data ?? [] : [];
+  const prRows = prResult.ok ? prResult.data ?? [] : [];
+  const stockRows = stockResult.ok ? stockResult.data ?? [] : [];
+
+  const activeProjects = projects
+    .filter((project) => project.status === 'active')
+    .sort((a, b) => Number(b.atRisk) - Number(a.atRisk) || a.title.localeCompare(b.title));
+  const atRisk = activeProjects.filter((project) => project.atRisk);
+  const openPos = poRows.filter((po) => !CLOSED_PO.has((po.status ?? '').toLowerCase()));
+  const openPoValue = openPos.reduce((sum, po) => sum + (Number(po.value) || 0), 0);
+  const submittedPrs = prRows.filter((pr) => pr.status.toLowerCase() === 'submitted');
+  const draftPrs = prRows.filter((pr) => pr.status.toLowerCase() === 'draft');
+  const submittedPrValue = submittedPrs.reduce((sum, pr) => sum + (Number(pr.value) || 0), 0);
+  const stockValue = stockRows.reduce(
+    (sum, item) => sum + (Number(item.quantityOnHand) || 0) * (Number(item.avgCost) || 0),
+    0,
+  );
+  const lowStock = stockRows
+    .filter((item) => (Number(item.reorderLevel) || 0) > 0 && (Number(item.quantityOnHand) || 0) <= (Number(item.reorderLevel) || 0))
     .sort((a, b) => (Number(a.quantityOnHand) || 0) - (Number(b.quantityOnHand) || 0));
 
   return (
-    <div style={st.page}>
-      <h1 style={st.h1}>Operations · Overview</h1>
-      <p style={st.sub}>The operations cockpit — what is committed, what is awaiting approval, and what needs reordering, across every domain.</p>
+    <main className={styles.page} data-testid="operations-command-center">
+      <header className={styles.hero}>
+        <div>
+          <div className={styles.eyebrow}><span aria-hidden /> Operations command center</div>
+          <h1>Project delivery operations</h1>
+          <p>Active projects first, with the supply and approval signals that can interrupt field execution.</p>
+        </div>
+        <div className={styles.heroActions}>
+          <Link href="/projects/dashboard" className={styles.secondaryAction}>Portfolio</Link>
+          <Link href="/procurement/purchase-requests" className={styles.primaryAction}>
+            <ClipboardList size={15} aria-hidden /> Purchase requests
+          </Link>
+        </div>
+      </header>
 
-      {!anyData ? (
-        <p style={st.offline}>Live data unavailable — the API is offline. The cockpit fills in as soon as it is back.</p>
-      ) : (
-        <>
-          <div style={st.cards}>
-            <Kpi label="Open POs" value={String(openPos.length)} sub={aed(openPoValue)} accent />
-            <Kpi label="PO spend (all)" value={aed(poSpend)} sub={`${poRows.length} orders`} />
-            <Kpi label="Requests to approve" value={String(pendingPrs.length)} sub={aed(pendingPrValue)} bad={pendingPrs.length > 0} />
-            <Kpi label="Stock value" value={aed(stockValue)} sub={`${stkRows.length} items`} />
-            <Kpi label="Below reorder" value={String(lowStock.length)} sub="need replenishment" bad={lowStock.length > 0} />
+      {failedReads > 0 ? (
+        <DataDegradedNotice message={`${failedReads} live data source${failedReads === 1 ? ' is' : 's are'} temporarily unavailable. Available sections remain live.`} />
+      ) : null}
+
+      <section className={styles.projectSection} aria-labelledby="active-projects-heading">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.sectionKicker}>Project delivery spine</span>
+            <h2 id="active-projects-heading">Active projects</h2>
           </div>
+          <div className={styles.sectionSummary}>
+            <span><b>{activeProjects.length}</b> active</span>
+            <span className={atRisk.length ? styles.bad : styles.good}><b>{atRisk.length}</b> at risk</span>
+          </div>
+        </div>
 
-          <div style={st.twoCol}>
-            <section className="panel" style={st.panel}>
-              <h3 style={st.h3}>Needs reordering <span style={st.count}>{lowStock.length}</span></h3>
-              <p style={st.hint}>Items at or below their reorder level — raise a purchase request to replenish.</p>
-              {lowStock.length === 0 ? (
-                <p style={st.muted}>Every stocked item is above its reorder level.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {lowStock.slice(0, 8).map((i, idx) => (
-                    <a key={i.code ?? idx} href="/inventory/stock" style={st.row}>
-                      <span style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.name ?? i.code ?? 'Item'}</span>
-                      <span style={{ fontSize: 12.5, color: 'var(--bad)' }}>{i.quantityOnHand ?? 0} on hand</span>
-                      <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>reorder ≤ {i.reorderLevel}</span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </section>
+        {activeProjects.length === 0 ? (
+          <div className={styles.emptyProjects}>
+            <FolderKanban size={20} aria-hidden />
+            <div><strong>No active projects</strong><span>Start project execution to bring it into this command center.</span></div>
+          </div>
+        ) : (
+          <div className={styles.projectGrid}>
+            {activeProjects.slice(0, 8).map((project) => {
+              const projectOpenPos = openPos.filter((po) => po.projectId === project.id);
+              const projectSubmittedPrs = submittedPrs.filter((pr) => pr.projectId === project.id);
+              const completion = project.evm.plannedValue > 0
+                ? Math.max(0, Math.min(100, (project.evm.earnedValue / project.evm.plannedValue) * 100))
+                : null;
+              return (
+                <Link key={project.id} href={`/project/${project.id}`} className={project.atRisk ? `${styles.projectCard} ${styles.projectCardRisk}` : styles.projectCard}>
+                  <div className={styles.projectTopline}>
+                    <span className={project.atRisk ? styles.riskFlag : styles.liveFlag}>
+                      {project.atRisk ? 'Needs attention' : 'On watch'}
+                    </span>
+                    {project.reference ? <code>{project.reference}</code> : null}
+                  </div>
+                  <div className={styles.projectTitleRow}>
+                    <div>
+                      <h3>{project.title}</h3>
+                      <p>{project.accountName ?? 'Project delivery'}</p>
+                    </div>
+                    <ArrowRight size={17} aria-hidden />
+                  </div>
+                  <div className={styles.progressHeader}>
+                    <span>Earned-value completion</span>
+                    <strong>{completion === null ? 'No baseline' : `${Math.round(completion)}%`}</strong>
+                  </div>
+                  <div className={styles.progressTrack} aria-hidden>
+                    <span style={{ width: `${completion ?? 0}%` }} />
+                  </div>
+                  <div className={styles.projectSignals}>
+                    <span>SPI <b className={indexTone(project.evm.spi)}>{project.evm.spi.toFixed(2)}</b></span>
+                    <span>CPI <b className={indexTone(project.evm.cpi)}>{project.evm.cpi.toFixed(2)}</b></span>
+                    <span>Open PO <b>{projectOpenPos.length}</b></span>
+                    <span>PR approval <b className={projectSubmittedPrs.length ? styles.warn : undefined}>{projectSubmittedPrs.length}</b></span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-            <section className="panel" style={st.panel}>
-              <h3 style={st.h3}>Procurement queue</h3>
-              <div style={st.qline}><span style={{ color: 'var(--muted)' }}>Requests awaiting approval</span><strong>{pendingPrs.length} · {aed(pendingPrValue)}</strong></div>
-              <div style={st.qline}><span style={{ color: 'var(--muted)' }}>Open purchase orders</span><strong>{openPos.length} · {aed(openPoValue)}</strong></div>
-              <div style={st.qline}><span style={{ color: 'var(--muted)' }}>Total committed spend</span><strong>{aed(poSpend)}</strong></div>
+      <section className={styles.supplySection} aria-labelledby="supply-heading">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.sectionKicker}>Operational control</span>
+            <h2 id="supply-heading">Supply and approval pulse</h2>
+          </div>
+        </div>
 
-              <h4 style={{ ...st.h3, fontSize: 12.5, marginTop: 16 }}>Jump to a domain</h4>
-              <div style={st.links}>
-                <a href="/procurement/dashboard" style={st.link}>Procurement →</a>
-                <a href="/inventory/dashboard" style={st.link}>Inventory →</a>
-                <a href="/engineering" style={st.link}>Engineering →</a>
-                <a href="/quality/control" style={st.link}>Quality →</a>
-                <a href="/hse/control" style={st.link}>HSE →</a>
-                <a href="/hr/dashboard" style={st.link}>People →</a>
-                <a href="/fleet/control" style={st.link}>Fleet →</a>
-                <a href="/subcontracts/subcontracts" style={st.link}>Subcontracts →</a>
+        <div className={styles.kpiGrid}>
+          <Kpi icon={ShoppingCart} label="Open purchase orders" value={String(openPos.length)} detail={aed(openPoValue)} />
+          <Kpi icon={ClipboardList} label="Awaiting PR approval" value={String(submittedPrs.length)} detail={aed(submittedPrValue)} alert={submittedPrs.length > 0} />
+          <Kpi icon={PackageCheck} label="Draft purchase requests" value={String(draftPrs.length)} detail="not yet submitted" />
+          <Kpi icon={Boxes} label="Inventory value" value={aed(stockValue)} detail={`${stockRows.length} stocked items`} />
+          <Kpi icon={AlertTriangle} label="Below reorder" value={String(lowStock.length)} detail="need replenishment" alert={lowStock.length > 0} />
+        </div>
+
+        <div className={styles.queueGrid}>
+          <section className={styles.queuePanel}>
+            <div className={styles.queueHeading}>
+              <div><span className={styles.sectionKicker}>Material risk</span><h3>Below reorder level</h3></div>
+              <Link href="/inventory/stock">Inventory <ArrowRight size={14} aria-hidden /></Link>
+            </div>
+            {lowStock.length === 0 ? (
+              <p className={styles.clearMessage}>Every stocked item is above its reorder level.</p>
+            ) : (
+              <div className={styles.queueRows}>
+                {lowStock.slice(0, 7).map((item, index) => (
+                  <Link key={item.code ?? index} href="/inventory/stock" className={styles.queueRow}>
+                    <span className={styles.queueCode}>{item.code ?? 'ITEM'}</span>
+                    <strong>{item.name ?? item.code ?? 'Stock item'}</strong>
+                    <span className={styles.bad}>{item.quantityOnHand ?? 0} on hand</span>
+                    <small>reorder at {item.reorderLevel ?? 0}</small>
+                  </Link>
+                ))}
               </div>
-            </section>
-          </div>
-        </>
-      )}
-    </div>
+            )}
+          </section>
+
+          <section className={styles.queuePanel}>
+            <div className={styles.queueHeading}>
+              <div><span className={styles.sectionKicker}>Approval flow</span><h3>Purchase requests</h3></div>
+              <Link href="/procurement/purchase-requests">Open register <ArrowRight size={14} aria-hidden /></Link>
+            </div>
+            <div className={styles.approvalSummary}>
+              <div><span>Submitted for approval</span><strong className={submittedPrs.length ? styles.warn : styles.good}>{submittedPrs.length}</strong><small>{aed(submittedPrValue)}</small></div>
+              <div><span>Draft, not submitted</span><strong>{draftPrs.length}</strong><small>requires owner action</small></div>
+              <div><span>Open PO commitment</span><strong>{openPos.length}</strong><small>{aed(openPoValue)}</small></div>
+            </div>
+            <div className={styles.domainLinks}>
+              <Link href="/procurement/dashboard">Procurement</Link>
+              <Link href="/site/control">Site</Link>
+              <Link href="/quality/control">Quality</Link>
+              <Link href="/hse/control">HSE</Link>
+              <Link href="/commissioning">Commissioning</Link>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
   );
 }
 
-function Kpi({ label, value, sub, accent, bad }: { label: string; value: string; sub?: string; accent?: boolean; bad?: boolean }) {
+function Kpi({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  alert,
+}: {
+  icon: typeof TrendingUp;
+  label: string;
+  value: string;
+  detail: string;
+  alert?: boolean;
+}) {
   return (
-    <div style={st.card}>
-      <div style={st.cardLabel}>{label}</div>
-      <div style={{ ...st.cardVal, ...(accent ? { color: 'var(--accent)' } : bad ? { color: 'var(--bad)' } : {}) }}>{value}</div>
-      {sub ? <div style={st.cardSub}>{sub}</div> : null}
+    <div className={styles.kpiCard}>
+      <div className={styles.kpiLabel}><Icon size={15} aria-hidden /><span>{label}</span></div>
+      <strong className={alert ? styles.bad : undefined}>{value}</strong>
+      <small>{detail}</small>
     </div>
   );
 }
-
-const st: Record<string, CSSProperties> = {
-  page: { maxWidth: 1200, margin: '0 auto', padding: '28px 28px 64px' },
-  h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 },
-  sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 720, lineHeight: 1.5 },
-  offline: { color: 'var(--muted)', padding: '18px 0' },
-  cards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 },
-  card: { padding: '13px 16px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--panel)' },
-  cardLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  cardVal: { fontSize: 20, fontWeight: 800, marginTop: 4 },
-  cardSub: { fontSize: 11, color: 'var(--muted)', marginTop: 3 },
-  twoCol: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 },
-  panel: { padding: 16 },
-  h3: { fontSize: 14, fontWeight: 700, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 8 },
-  hint: { fontSize: 12, color: 'var(--muted)', margin: '0 0 12px' },
-  count: { fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft, rgba(247,178,59,.12))', borderRadius: 999, padding: '1px 8px' },
-  muted: { color: 'var(--muted)', fontSize: 13, padding: '6px 0' },
-  row: { display: 'flex', alignItems: 'center', gap: 12, padding: '9px 10px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--panel-2)', textDecoration: 'none', color: 'var(--text)' },
-  qline: { display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--border)', fontSize: 13 },
-  links: { display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap' },
-  link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, fontSize: 13 },
-};

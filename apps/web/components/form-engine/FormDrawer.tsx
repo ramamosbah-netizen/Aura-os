@@ -252,11 +252,11 @@ function FormDrawerImpl({
       {open ? (
         <>
           <div className="drawer-overlay" onClick={close} />
-          <div ref={panelRef} data-testid={`drawer-${slug}`} className="drawer" role="dialog" aria-modal="true" aria-label={`${isEdit ? 'Edit' : 'New'} ${schema.entity}`}>
+          <div ref={panelRef} data-testid={`drawer-${slug}`} className="drawer" role="dialog" aria-modal="true" aria-labelledby={`drawer-title-${slug}`}>
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="drawer-head">
                 <div>
-                  <h2 className="drawer-title">
+                  <h2 id={`drawer-title-${slug}`} className="drawer-title">
                     {isEdit ? `Edit ${schema.entity}`
                       : isView ? schema.entity
                       : mode === 'clone' ? `New ${schema.entity} (copy)`
@@ -273,14 +273,14 @@ function FormDrawerImpl({
               </div>
 
               <div className="drawer-body">
-                {err ? <div className="drawer-error" data-testid={`drawer-error-${slug}`}>{err}</div> : null}
+                {err ? <div className="drawer-error" role="alert" data-testid={`drawer-error-${slug}`}>{err}</div> : null}
                 {evaluation.errors.map((m, i) => (
-                  <div key={`e${i}`} className="drawer-error">
+                  <div key={`e${i}`} className="drawer-error" role="alert">
                     {m}
                   </div>
                 ))}
                 {evaluation.warnings.map((m, i) => (
-                  <div key={`w${i}`} className="fe-warning">
+                  <div key={`w${i}`} className="fe-warning" role="status">
                     {m}
                   </div>
                 ))}

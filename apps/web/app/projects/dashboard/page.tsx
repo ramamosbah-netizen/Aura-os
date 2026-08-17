@@ -69,7 +69,7 @@ export default async function ProjectsDashboardPage() {
               <ul style={st.riskList}>
                 {atRisk.map((r) => (
                   <li key={r.id} style={st.riskRow}>
-                    <Link href={`/projects/projects/${r.id}`} style={st.riskLink}>{r.title}</Link>
+                    <Link href={`/project/${r.id}`} style={st.riskLink}>{r.title}</Link>
                     <span style={st.riskMeta}>
                       SPI <b style={{ color: idxColor(r.evm.spi) }}>{r.evm.spi.toFixed(2)}</b> · CPI <b style={{ color: idxColor(r.evm.cpi) }}>{r.evm.cpi.toFixed(2)}</b>
                       {r.evm.costVariance < 0 ? ` · ${AED(r.evm.costVariance)} over` : ''}
@@ -92,7 +92,7 @@ export default async function ProjectsDashboardPage() {
                     const complete = r.evm.plannedValue > 0 ? r.evm.earnedValue / r.evm.plannedValue : 0;
                     return (
                       <tr key={r.id} style={r.atRisk ? st.rowRisk : undefined}>
-                        <td style={st.td}><Link href={`/projects/projects/${r.id}`} style={st.plink}>{r.title}</Link></td>
+                        <td style={st.td}><Link href={`/project/${r.id}`} style={st.plink}>{r.title}</Link></td>
                         <td style={st.tdMuted}>{r.accountName || '—'}</td>
                         <td style={st.tdMuted}>{r.status}</td>
                         <td style={st.tdNum}>{AED(r.value || 0)}</td>

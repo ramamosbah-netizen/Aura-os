@@ -19,6 +19,8 @@ export class InMemoryActivityStore implements ActivityStore {
   async list(filter: ActivityFilter = {}): Promise<Activity[]> {
     let out = [...this.activities.values()];
     if (filter.tenantId) out = out.filter((a) => a.tenantId === filter.tenantId);
+    if (filter.assigneeId) out = out.filter((a) => a.assigneeId === filter.assigneeId);
+    if (filter.createdBy) out = out.filter((a) => a.createdBy === filter.createdBy);
     if (filter.relatedType) out = out.filter((a) => a.relatedType === filter.relatedType);
     if (filter.relatedId) out = out.filter((a) => a.relatedId === filter.relatedId);
     if (filter.status) out = out.filter((a) => a.status === filter.status);

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import EmptyState from '@/components/ui/empty-state';
+import DocumentFileLink from '@/components/document-file-link';
 import type { Document } from '@aura/shared';
 import { getJson } from '@/lib/api';
 
@@ -9,8 +10,10 @@ function fmt(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export default async function DocumentsPage() {
+export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ record?: string }> }) {
+  const { record } = await searchParams;
   const docs = await getJson<Document[]>('/api/documents');
+  const orderedDocs = docs ? [...docs].sort((a, b) => Number(b.id === record) - Number(a.id === record)) : null;
 
   return (
     <div style={st.page}>
@@ -20,9 +23,9 @@ export default async function DocumentsPage() {
         history.
       </p>
       <section style={st.panel}>
-        {docs === null ? (
+        {orderedDocs === null ? (
           <p style={st.muted}>API offline.</p>
-        ) : docs.length === 0 ? (
+        ) : orderedDocs.length === 0 ? (
           <EmptyState compact title="No documents yet" description="Upload or generate documents to build the register." />
         ) : (
           <table style={st.table}>
@@ -36,9 +39,11 @@ export default async function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
-              {docs.map((d) => (
-                <tr key={d.id}>
-                  <td style={st.td}>{d.title}</td>
+              {orderedDocs.map((d) => (
+                <tr key={d.id} id={`document-${d.id}`} style={d.id === record ? st.focused : undefined}>
+                  <td style={st.td}>
+                    <span style={st.titleCell}><span>{d.title}</span><DocumentFileLink documentId={d.id} title={d.title} /></span>
+                  </td>
                   <td style={st.td}>
                     <span style={st.tag}>{d.kind}</span>
                   </td>
@@ -80,6 +85,7 @@ const st = {
     borderBottom: '1px solid var(--border)',
   } as CSSProperties,
   td: { padding: '11px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  titleCell: { alignItems: 'center', display: 'flex', gap: 10, justifyContent: 'space-between' } as CSSProperties,
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
   tag: {
     fontSize: 12,
@@ -88,4 +94,5 @@ const st = {
     borderRadius: 6,
     padding: '2px 8px',
   } as CSSProperties,
+  focused: { background: 'color-mix(in srgb, var(--accent) 10%, transparent)', outline: '1px solid var(--accent)', outlineOffset: -1 } as CSSProperties,
 };

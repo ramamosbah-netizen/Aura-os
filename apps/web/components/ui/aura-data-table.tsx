@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, type CSSProperties } from 'react';
+import React, { useState, useMemo, useEffect, useId, type CSSProperties, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -70,6 +70,8 @@ export interface AuraDataTableProps<T> {
   bulkActions?: React.ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
+  filteredEmptyTitle?: string;
+  filteredEmptyDescription?: string;
   onEmptyAction?: () => void;
   emptyActionLabel?: string;
   loading?: boolean;
@@ -99,9 +101,11 @@ export interface AuraDataTableProps<T> {
    *  sorting/paginating locally and reports state so the parent can refetch a page. */
   totalCount?: number;
   onQueryChange?: (q: TableQuery) => void;
+  /** Accessible name for the register. Falls back to a string title or “Data register”. */
+  ariaLabel?: string;
 }
 
-export default function AuraDataTable<T extends Record<string, any>>({
+export default function AuraDataTable<T extends object>({
   columns,
   data,
   keyExtractor,
@@ -116,6 +120,8 @@ export default function AuraDataTable<T extends Record<string, any>>({
   bulkActions,
   emptyTitle = 'No line items found',
   emptyDescription = 'There are no items matching your criteria in this view.',
+  filteredEmptyTitle = 'No matching records',
+  filteredEmptyDescription = 'Change or clear the active filters and try again.',
   onEmptyAction,
   emptyActionLabel,
   loading = false,
@@ -133,6 +139,7 @@ export default function AuraDataTable<T extends Record<string, any>>({
   urlKey,
   totalCount,
   onQueryChange,
+  ariaLabel,
 }: AuraDataTableProps<T>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -159,6 +166,8 @@ export default function AuraDataTable<T extends Record<string, any>>({
     () => new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key)),
   );
   const [colMenuOpen, setColMenuOpen] = useState(false);
+  const columnMenuId = useId();
+  const registerLabel = ariaLabel ?? (typeof title === 'string' ? title : 'Data register');
 
   const effPageSize = pageSize ?? (data.length || 1);
 
@@ -225,7 +234,9 @@ export default function AuraDataTable<T extends Record<string, any>>({
   const renderAutoCard = (row: T, idx: number) => {
     const primary = visibleColumns.find((c) => c.priority === 'primary') ?? visibleColumns[0];
     const rest = visibleColumns.filter((c) => c !== primary);
-    const cell = (col: AuraColumn<T>) => (col.render ? col.render(row, idx) : (row[col.key] ?? '—'));
+    const cell = (col: AuraColumn<T>): React.ReactNode => col.render
+      ? col.render(row, idx)
+      : renderValue((row as Record<string, unknown>)[col.key]);
     return (
       <div style={st.cardInner}>
         <div style={st.cardTitle}>{primary ? cell(primary) : keyExtractor(row, idx)}</div>
@@ -242,7 +253,7 @@ export default function AuraDataTable<T extends Record<string, any>>({
   };
 
   return (
-    <div style={st.container}>
+    <div style={st.container} aria-busy={loading}>
       {title && <div style={st.tableTitle}>{title}</div>}
 
       {/* Toolbar */}
@@ -293,13 +304,13 @@ export default function AuraDataTable<T extends Record<string, any>>({
           {toolbarExtra}
           {columnToggle && (
             <div style={{ position: 'relative' }}>
-              <button type="button" style={st.iconBtn} onClick={() => setColMenuOpen((o) => !o)} aria-expanded={colMenuOpen}>
+              <button type="button" style={st.iconBtn} onClick={() => setColMenuOpen((o) => !o)} aria-expanded={colMenuOpen} aria-controls={columnMenuId} aria-haspopup="menu">
                 ▦ Columns
               </button>
               {colMenuOpen && (
-                <div style={st.colMenu}>
+                <div id={columnMenuId} role="menu" aria-label="Visible columns" style={st.colMenu} onKeyDown={(event) => { if (event.key === 'Escape') { setColMenuOpen(false); } }}>
                   {columns.map((c) => (
-                    <label key={c.key} style={st.colMenuItem}>
+                    <label key={c.key} style={st.colMenuItem} role="menuitemcheckbox" aria-checked={!hiddenCols.has(c.key)}>
                       <input
                         type="checkbox"
                         checked={!hiddenCols.has(c.key)}
@@ -317,8 +328,8 @@ export default function AuraDataTable<T extends Record<string, any>>({
             </div>
           )}
           <div style={st.densityGroup}>
-            <button type="button" style={density === 'comfortable' ? st.densityBtnActive : st.densityBtn} onClick={() => setDensity('comfortable')} title="Comfortable">☰</button>
-            <button type="button" style={density === 'compact' ? st.densityBtnActive : st.densityBtn} onClick={() => setDensity('compact')} title="Compact">≡</button>
+            <button type="button" aria-label="Comfortable density" aria-pressed={density === 'comfortable'} style={density === 'comfortable' ? st.densityBtnActive : st.densityBtn} onClick={() => setDensity('comfortable')} title="Comfortable">☰</button>
+            <button type="button" aria-label="Compact density" aria-pressed={density === 'compact'} style={density === 'compact' ? st.densityBtnActive : st.densityBtn} onClick={() => setDensity('compact')} title="Compact">≡</button>
           </div>
         </div>
       </div>
@@ -333,13 +344,21 @@ export default function AuraDataTable<T extends Record<string, any>>({
             return href ? (
               <Link key={key} href={href} style={st.cardLink}>{body}</Link>
             ) : (
-              <div key={key} style={st.card} onClick={onRowClick ? () => onRowClick(row, idx) : undefined}>{body}</div>
+              <div
+                key={key}
+                style={{ ...st.card, ...(onRowClick ? st.clickableRow : {}) }}
+                role={onRowClick ? 'button' : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={onRowClick ? () => onRowClick(row, idx) : undefined}
+                onKeyDown={onRowClick ? (event) => activateRow(event, () => onRowClick(row, idx)) : undefined}
+              >{body}</div>
             );
           })}
         </div>
       ) : (
         <div style={st.tableContainer}>
           <table style={st.table}>
+            <caption className="sr-only">{registerLabel}</caption>
             <thead style={stickyHeader ? st.stickyThead : undefined}>
               <tr>
                 {selectable && (
@@ -350,16 +369,15 @@ export default function AuraDataTable<T extends Record<string, any>>({
                 {visibleColumns.map((col) => (
                   <th
                     key={col.key}
-                    style={{ ...st.th, padding, textAlign: col.align ?? 'left', width: col.width, cursor: col.sortable ? 'pointer' : 'default' }}
-                    onClick={() => col.sortable && handleSort(col.key)}
+                    style={{ ...st.th, padding: col.sortable ? 0 : padding, textAlign: col.align ?? 'left', width: col.width }}
                     aria-sort={sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                   >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {col.sortable ? <button type="button" style={{ ...st.sortButton, padding, justifyContent: col.align === 'right' ? 'flex-end' : 'flex-start' }} onClick={() => handleSort(col.key)} aria-label={`Sort by ${col.label}${sortKey === col.key ? `, currently ${sortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`}>
                       <span>{col.label}</span>
-                      {col.sortable && sortKey === col.key && (
+                      {sortKey === col.key && (
                         <span style={{ fontSize: 10, color: 'var(--accent)' }}>{sortDir === 'asc' ? '▲' : '▼'}</span>
                       )}
-                    </div>
+                    </button> : <span>{col.label}</span>}
                   </th>
                 ))}
               </tr>
@@ -381,8 +399,8 @@ export default function AuraDataTable<T extends Record<string, any>>({
                   <td colSpan={visibleColumns.length + (selectable ? 1 : 0)} style={st.emptyTd}>
                     <div style={st.emptyBox}>
                       <span style={st.emptyIcon}>📂</span>
-                      <h4 style={st.emptyTitle}>{emptyTitle}</h4>
-                      <p style={st.emptyDesc}>{emptyDescription}</p>
+                      <h4 style={st.emptyTitle}>{activeFilterCount > 0 ? filteredEmptyTitle : emptyTitle}</h4>
+                      <p style={st.emptyDesc}>{activeFilterCount > 0 ? filteredEmptyDescription : emptyDescription}</p>
                       {onEmptyAction && emptyActionLabel && (
                         <button type="button" style={st.emptyBtn} onClick={onEmptyAction}>+ {emptyActionLabel}</button>
                       )}
@@ -403,6 +421,9 @@ export default function AuraDataTable<T extends Record<string, any>>({
                       <tr
                         style={{ ...st.row, ...(isSelected ? st.selectedRow : {}), ...(expanded ? st.expandedRowHead : {}), ...(clickable ? st.clickableRow : {}) }}
                         onClick={onRowClick && !href ? () => onRowClick(row, idx) : undefined}
+                        role={onRowClick && !href ? 'button' : undefined}
+                        tabIndex={onRowClick && !href ? 0 : undefined}
+                        onKeyDown={onRowClick && !href ? (event) => activateRow(event, () => onRowClick(row, idx)) : undefined}
                       >
                         {selectable && (
                           <td style={{ ...st.td, padding }} onClick={(e) => e.stopPropagation()}>
@@ -410,16 +431,16 @@ export default function AuraDataTable<T extends Record<string, any>>({
                           </td>
                         )}
                         {visibleColumns.map((col, ci) => {
-                          const cellVal = row[col.key];
+                          const cellVal = (row as Record<string, unknown>)[col.key];
                           const isPrimary = col.priority === 'primary';
                           const isMuted = col.priority === 'muted';
-                          const content = col.render ? col.render(row, idx) : (cellVal ?? '—');
+                          const content = col.render ? col.render(row, idx) : renderValue(cellVal);
                           return (
                             <td
                               key={col.key}
                               style={{ ...st.td, padding, textAlign: col.align ?? 'left', fontWeight: isPrimary ? 700 : 400, color: isMuted ? 'var(--muted)' : 'var(--text)' }}
                             >
-                              {href && ci === 0 && !col.render ? <Link href={href} style={st.rowLink}>{content}</Link> : content}
+                              {href && ci === 0 ? <Link href={href} style={st.rowLink}>{content}</Link> : content}
                             </td>
                           );
                         })}
@@ -441,7 +462,7 @@ export default function AuraDataTable<T extends Record<string, any>>({
 
       {/* Footer: count + pagination */}
       <div style={st.footer}>
-        <span>
+        <span aria-live="polite">
           {paginating && total > 0
             ? `${(currentPage - 1) * effPageSize + 1}–${Math.min(currentPage * effPageSize, total)} of ${total}`
             : `${total} ${total === 1 ? 'record' : 'records'}`}
@@ -466,23 +487,24 @@ const st: Record<string, CSSProperties> = {
   toolbarLeft: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1, minWidth: 0 },
   searchBox: { position: 'relative', display: 'flex', alignItems: 'center', minWidth: 220, flex: '0 1 320px' },
   searchIcon: { position: 'absolute', left: 10, fontSize: 13, color: 'var(--muted)' },
-  searchInput: { width: '100%', padding: '7px 28px 7px 32px', background: 'var(--panel)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 12.5, color: 'var(--text)' },
-  clearSearchBtn: { position: 'absolute', right: 8, background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 },
-  filterSelect: { padding: '7px 10px', background: 'var(--panel)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' },
-  clearAll: { background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  searchInput: { width: '100%', minHeight: 44, padding: '7px 36px 7px 32px', background: 'var(--panel)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 12.5, color: 'var(--text)' },
+  clearSearchBtn: { position: 'absolute', right: 2, width: 40, height: 40, background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 },
+  filterSelect: { minHeight: 44, padding: '7px 10px', background: 'var(--panel)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' },
+  clearAll: { minHeight: 44, background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   toolbarRight: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   selectionBar: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 },
   selectionCount: { fontWeight: 700, color: 'var(--accent)' },
-  iconBtn: { background: 'var(--panel)', border: '1px solid var(--border-strong)', color: 'var(--text)', padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 8 },
+  iconBtn: { minHeight: 44, background: 'var(--panel)', border: '1px solid var(--border-strong)', color: 'var(--text)', padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 8 },
   colMenu: { position: 'absolute', right: 0, top: '110%', zIndex: 20, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 8, minWidth: 180, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 4 },
   colMenuItem: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '3px 4px', cursor: 'pointer' },
   densityGroup: { display: 'flex', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: 2 },
-  densityBtn: { background: 'transparent', border: 'none', color: 'var(--muted)', padding: '4px 9px', fontSize: 13, fontWeight: 600, cursor: 'pointer', borderRadius: 6 },
-  densityBtnActive: { background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--accent)', padding: '4px 9px', fontSize: 13, fontWeight: 700, cursor: 'pointer', borderRadius: 6 },
+  densityBtn: { width: 44, height: 40, background: 'transparent', border: 'none', color: 'var(--muted)', padding: '4px 9px', fontSize: 13, fontWeight: 600, cursor: 'pointer', borderRadius: 6 },
+  densityBtnActive: { width: 44, height: 40, background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--accent)', padding: '4px 9px', fontSize: 13, fontWeight: 700, cursor: 'pointer', borderRadius: 6 },
   tableContainer: { maxHeight: 'calc(100vh - 300px)', minHeight: 200, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', position: 'relative' },
   table: { width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12.5 },
   stickyThead: { position: 'sticky', top: 0, zIndex: 10, background: 'var(--panel)', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' },
   th: { background: 'var(--panel)', borderBottom: '2px solid var(--border)', color: 'var(--muted)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, userSelect: 'none', whiteSpace: 'nowrap' },
+  sortButton: { display: 'inline-flex', alignItems: 'center', gap: 4, width: '100%', minHeight: 44, border: 0, background: 'transparent', color: 'inherit', font: 'inherit', textTransform: 'inherit', letterSpacing: 'inherit', cursor: 'pointer' },
   row: { transition: 'background-color 0.15s ease' },
   clickableRow: { cursor: 'pointer' },
   selectedRow: { background: 'var(--accent-soft)' },
@@ -494,11 +516,11 @@ const st: Record<string, CSSProperties> = {
   emptyIcon: { fontSize: 32 },
   emptyTitle: { fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text)' },
   emptyDesc: { fontSize: 12.5, color: 'var(--muted)', margin: 0, maxWidth: 360 },
-  emptyBtn: { marginTop: 6, background: 'var(--accent)', color: 'var(--accent-ink)', padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer' },
+  emptyBtn: { minHeight: 44, marginTop: 6, background: 'var(--accent)', color: 'var(--accent-ink)', padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer' },
   skeletonCell: { height: 16, borderRadius: 4, width: '80%' },
   footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, color: 'var(--muted)', padding: '4px 6px', flexWrap: 'wrap', gap: 8 },
   pager: { display: 'flex', alignItems: 'center', gap: 8 },
-  pageBtn: { background: 'var(--panel)', border: '1px solid var(--border-strong)', color: 'var(--text)', padding: '4px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  pageBtn: { minHeight: 44, background: 'var(--panel)', border: '1px solid var(--border-strong)', color: 'var(--text)', padding: '4px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   pageInfo: { fontSize: 12, color: 'var(--muted)' },
   // mobile cards
   cardList: { display: 'flex', flexDirection: 'column', gap: 10 },
@@ -511,3 +533,18 @@ const st: Record<string, CSSProperties> = {
   cardLabel: { color: 'var(--muted)' },
   cardValue: { color: 'var(--text)', textAlign: 'right', minWidth: 0 },
 };
+
+function renderValue(value: unknown): React.ReactNode {
+  if (value === null || value === undefined || value === '') return '—';
+  if (React.isValidElement(value)) return value;
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  return String(value);
+}
+
+function activateRow(event: KeyboardEvent<HTMLElement>, action: () => void) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    action();
+  }
+}

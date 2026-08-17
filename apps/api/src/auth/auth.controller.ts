@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpException, HttpStatus, Post, Query, UnauthorizedException } from '@nestjs/common';
 import { AuthService, MfaService, Permissions, UsersService, throttleFromEnv } from '@aura/core';
-import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
+import { generateTotpSecret, readSecret, totpAuthUri, verifyTotp } from '@aura/shared';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 interface DevTokenDto {
   sub?: string;
@@ -13,6 +14,11 @@ interface LoginDto {
   password?: string;
   /** TOTP code — required once the account has an *active* MFA enrolment (gap #13). */
   code?: string;
+}
+
+function credentialsMatch(actual: string | undefined, expected: string): boolean {
+  const digest = (value: string) => createHash('sha256').update(value, 'utf8').digest();
+  return timingSafeEqual(digest(actual ?? ''), digest(expected));
 }
 
 /**
@@ -37,14 +43,32 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() dto: LoginDto): Promise<{ token: string; user: { sub: string; tenantId: string } }> {
+  async login(@Body() dto: LoginDto): Promise<{
+    token: string;
+    expiresIn: number;
+    user: { sub: string; tenantId: string };
+  }> {
     if (!this.auth.canMint) {
       throw new ForbiddenException('login (dev token mint) requires AUTH_JWT_SECRET');
     }
     const username = (dto.username ?? '').trim() || 'u-admin';
+    const tenantId = process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
+
+    // Optional local-login allow-list. This is deliberately separate from RBAC: authentication
+    // decides who may obtain a token; AccessService decides what that identity may do.
+    const allowedUsers = new Set(
+      (process.env.AUTH_LOCAL_LOGIN_USERS ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    );
+    if (allowedUsers.size > 0 && !allowedUsers.has(username)) {
+      this.throttle.recordFailure(username);
+      throw new UnauthorizedException('invalid credentials');
+    }
 
     // Users registry (Vol 15 §2.2): a deactivated account cannot log in at all.
-    if (!this.users.isActive('dev-tenant', username)) {
+    if (!this.users.isActive(tenantId, username)) {
       throw new UnauthorizedException('account is deactivated — contact an administrator');
     }
 
@@ -57,10 +81,16 @@ export class AuthController {
       );
     }
 
-    // Dev credential policy: require AUTH_DEV_PASSWORD when set, otherwise accept any.
-    // This is the stand-in for the hosted-IdP login that will issue the real token.
-    const expected = process.env.AUTH_DEV_PASSWORD?.trim();
-    if (expected && dto.password !== expected) {
+    // Local credential policy: once API lockdown is on, a secret is mandatory. Secret files
+    // keep the value out of process listings and committed env files.
+    const expected = readSecret('AUTH_DEV_PASSWORD');
+    if (!expected && process.env.AUTH_REQUIRED === 'true') {
+      throw new HttpException(
+        'local login is not configured — set AUTH_DEV_PASSWORD or AUTH_DEV_PASSWORD_FILE',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    if (expected && !credentialsMatch(dto.password, expected)) {
       const after = this.throttle.recordFailure(username);
       if (after.locked) {
         throw new HttpException('account locked after too many failed attempts', HttpStatus.TOO_MANY_REQUESTS);
@@ -85,9 +115,9 @@ export class AuthController {
     }
 
     this.throttle.reset(username);
-    const tenantId = 'dev-tenant';
     return {
       token: this.auth.mint({ sub: username, tenantId, companyId: null }),
+      expiresIn: this.auth.sessionTtlSeconds,
       user: { sub: username, tenantId },
     };
   }

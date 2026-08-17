@@ -5,6 +5,8 @@ export const WORKFLOW_STORE = Symbol('WORKFLOW_STORE');
 
 export interface WorkflowInstanceFilter {
   tenantId?: string;
+  /** Exact company scope. `null` means tenant-global instances only; undefined means unfiltered. */
+  companyId?: string | null;
   definitionKey?: string;
   aggregateType?: string;
   aggregateId?: string;

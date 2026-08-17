@@ -703,7 +703,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
               p.title,
               <Pill key="s" text={p.status} />,
               d(p.createdAt),
-              <a key="a" href={`/projects/projects/${p.id}`} style={st.rowLink}>Open →</a>,
+              <a key="a" href={`/project/${p.id}`} style={st.rowLink}>Open →</a>,
             ])}
             empty="No projects for this client yet."
           />

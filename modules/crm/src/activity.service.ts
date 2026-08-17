@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { assertSameTenant, type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
 import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
-import { CRM_ACTIVITY_EVENT, type Activity, type NewActivity, cancelActivity, completeActivity, makeActivity, reopenActivity, startActivity } from './domain/activity';
+import { CRM_ACTIVITY_EVENT, type Activity, type ActivityDetailsPatch, type NewActivity, archiveActivity, cancelActivity, completeActivity, editActivity, makeActivity, reopenActivity, startActivity } from './domain/activity';
 import { CRM_ACTIVITY_STORE, type ActivityFilter, type ActivityStore } from './activity-store';
 
 /**
@@ -36,6 +36,42 @@ export class ActivityService {
     ]);
     this.logger.log(`Activity created: ${activity.type} "${activity.subject}" (${activity.id})`);
     return activity;
+  }
+
+  async updateDetails(id: Id, patch: ActivityDetailsPatch, actorId?: Id | null): Promise<Activity> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'activity', id);
+    const updated = editActivity(existing, patch);
+    await this.store.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: CRM_ACTIVITY_EVENT.updated,
+        tenantId: updated.tenantId,
+        companyId: updated.companyId,
+        actorId: actorId ?? null,
+        aggregateType: 'crm.activity',
+        aggregateId: updated.id,
+        payload: { subject: updated.subject, dueDate: updated.dueDate },
+      }),
+    ]);
+    return updated;
+  }
+
+  async archive(id: Id, actorId?: Id | null): Promise<Activity> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'activity', id);
+    const updated = archiveActivity(existing);
+    await this.store.save(updated);
+    await this.events.append([
+      makeEvent({
+        type: CRM_ACTIVITY_EVENT.archived,
+        tenantId: updated.tenantId,
+        companyId: updated.companyId,
+        actorId: actorId ?? null,
+        aggregateType: 'crm.activity',
+        aggregateId: updated.id,
+        payload: { subject: updated.subject },
+      }),
+    ]);
+    return updated;
   }
 
   async cancel(id: Id): Promise<Activity> {

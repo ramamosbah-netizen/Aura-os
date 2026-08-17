@@ -22,10 +22,12 @@ export function newAdrId() {
 
 /** Parse a leading `---\n…\n---` frontmatter block. Returns {data, body} or null. */
 function parseFrontmatter(text) {
-  const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  // CRLF-tolerant: on Windows checkouts git hands us `---\r\n`, which an LF-only
+  // pattern reads as "no frontmatter" and the migrator then duplicates.
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!m) return null;
   const data = {};
-  for (const line of m[1].split('\n')) {
+  for (const line of m[1].split(/\r?\n/)) {
     const kv = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
     if (!kv) continue;
     const [, key, raw] = kv;

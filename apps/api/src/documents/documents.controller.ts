@@ -127,7 +127,11 @@ export class DocumentsController {
 
   /** Documents other people have shared with the caller. */
   @Get('shared-with-me')
-  sharedWithMe(): Promise<Array<{ document: Document; permissions: DocumentPermission[] }>> {
+  sharedWithMe(): Promise<Array<{
+    document: Document;
+    permissions: DocumentPermission[];
+    currentVersionFile: Pick<DocumentVersion, 'version' | 'fileName' | 'contentType' | 'sizeBytes'>;
+  }>> {
     return this.dms.sharedWithMe(this.actor());
   }
 
@@ -178,6 +182,7 @@ export class DocumentsController {
   async download(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Query('version') version?: string,
+    @Query('inline') inline?: string,
   ): Promise<StreamableFile> {
     // DOWNLOAD is checked inside the service, against the document — the bytes are no longer
     // reachable by holding a storage key.
@@ -187,9 +192,13 @@ export class DocumentsController {
         version ? Number(version) : null,
         this.actor(),
       );
+      // Inline rendering is intentionally limited to PDFs. A caller cannot turn an arbitrary
+      // HTML/SVG upload into active same-origin content simply by adding `?inline=true`.
+      const inlinePdf = inline === 'true' && v.contentType.split(';', 1)[0]?.trim().toLowerCase() === 'application/pdf';
+      const safeFileName = v.fileName.replace(/[\r\n"]/g, '').slice(0, 255) || 'document';
       return new StreamableFile(bytes, {
         type: v.contentType,
-        disposition: `attachment; filename="${v.fileName.replace(/"/g, '')}"`,
+        disposition: `${inlinePdf ? 'inline' : 'attachment'}; filename="${safeFileName}"`,
       });
     } catch (err) {
       if (err instanceof Error && err.name === 'DocumentAccessDeniedError') throw err;

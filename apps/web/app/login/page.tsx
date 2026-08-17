@@ -8,6 +8,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [showMfa, setShowMfa] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -32,13 +34,21 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, code: showMfa ? code : undefined }),
       });
       if (!res.ok) {
         const d = (await res.json().catch(() => ({}))) as { error?: string };
-        setErr(d.error ?? 'Sign-in failed. Check your username and password.');
+        const message = d.error ?? 'Sign-in failed. Check your username and password.';
+        if (/mfa code required/i.test(message)) {
+          setShowMfa(true);
+          setErr('Enter the verification code from your authenticator app.');
+        } else {
+          setErr(message);
+        }
       } else {
-        router.push('/');
+        const requested = new URLSearchParams(window.location.search).get('next');
+        const destination = requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/';
+        router.push(destination);
         router.refresh();
       }
     } catch {
@@ -97,6 +107,25 @@ export default function LoginPage() {
             disabled={!ready}
             autoComplete="current-password"
           />
+
+          {showMfa ? (
+            <>
+              <label style={s.label} htmlFor="login-code">
+                Verification code
+              </label>
+              <input
+                id="login-code"
+                data-testid="login-mfa-code"
+                style={s.input}
+                inputMode="numeric"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="6-digit code"
+                autoComplete="one-time-code"
+                disabled={!ready}
+              />
+            </>
+          ) : null}
 
           <button type="submit" data-testid="login-submit" style={s.btn} disabled={busy || !ready}>
             {busy ? 'Signing in…' : 'Sign in'}

@@ -193,7 +193,7 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
         <span style={{ ...st.chainNode, borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 800 }}>▤ CONTRACT</span>
         <span style={st.arrow}>→</span>
         {project
-          ? <a href={`/projects/projects/${project.id}`} style={{ ...st.chainNode, ...st.chainOn, color: 'var(--good)' }}>▦ {project.title} ({project.status})</a>
+          ? <a href={`/project/${project.id}`} style={{ ...st.chainNode, ...st.chainOn, color: 'var(--good)' }}>▦ {project.title} ({project.status})</a>
           : <span style={st.chainNode}>▦ project appears on activation</span>}
       </div>
 

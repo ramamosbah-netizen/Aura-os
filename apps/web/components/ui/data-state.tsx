@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import Link from 'next/link';
-import { describeDataError, type DataError } from '@/lib/data-error';
+import { describeDataError, type DataError } from '../../lib/data-error';
 
 // DataStateNotice — the counterpart to EmptyState, for when we could NOT answer the question.
 //
@@ -12,15 +12,16 @@ import { describeDataError, type DataError } from '@/lib/data-error';
 //
 // Server-compatible (no client hooks). `role="alert"` rather than `role="status"` — this is a
 // problem the user should be told about, not an ambient state.
-interface DataStateNoticeProps {
+export interface DataStateNoticeProps {
   error: DataError;
   /** What the user was trying to see, e.g. "accounts" — makes the message concrete. */
   subject?: string;
   /** Compact variant for inline/table failures. */
   compact?: boolean;
+  action?: ReactNode;
 }
 
-export default function DataStateNotice({ error, subject, compact = false }: DataStateNoticeProps) {
+export default function DataStateNotice({ error, subject, compact = false, action }: DataStateNoticeProps) {
   const { title, description } = describeDataError(error);
   const denied = error.kind === 'forbidden' || error.kind === 'unauthorized';
 
@@ -44,6 +45,7 @@ export default function DataStateNotice({ error, subject, compact = false }: Dat
           Sign in again
         </Link>
       ) : null}
+      {action ? <div style={{ marginTop: 8 }}>{action}</div> : null}
     </div>
   );
 }
@@ -63,7 +65,7 @@ export default function DataStateNotice({ error, subject, compact = false }: Dat
 // Precedence is deliberate: error wins over empty (a failed load is not "no data"), and
 // loading wins over both. Server-compatible when `loading` is false; the spinner branch is
 // only reached in client components that pass a live loading flag.
-interface DataStateProps {
+export interface DataStateProps {
   /** True while the data is in flight. Renders a skeleton block (or `loadingFallback`). */
   loading?: boolean;
   /** A classified load failure, or null/undefined when the load succeeded. */
@@ -75,6 +77,8 @@ interface DataStateProps {
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: ReactNode;
+  /** Distinguishes a genuinely empty register from a query that returned no matches. */
+  emptyKind?: 'no-records' | 'no-results';
   /** Custom loading UI; defaults to a shimmer block sized for a register. */
   loadingFallback?: ReactNode;
   compact?: boolean;
@@ -89,6 +93,7 @@ export function DataState({
   emptyTitle,
   emptyDescription,
   emptyAction,
+  emptyKind = 'no-records',
   loadingFallback,
   compact = false,
   children,
@@ -103,16 +108,41 @@ export function DataState({
   }
   if (error) return <DataStateNotice error={error} subject={subject} compact={compact} />;
   if (empty) {
+    const noResults = emptyKind === 'no-results';
     return (
-      <div style={{ ...st.wrap, ...st.emptyLook, padding: compact ? '20px 18px' : '40px 24px' }}>
-        <div style={st.icon} aria-hidden>📭</div>
-        <h2 style={st.title}>{emptyTitle ?? `No ${subject ?? 'records'} yet`}</h2>
-        {emptyDescription && <p style={st.desc}>{emptyDescription}</p>}
+      <div role="status" data-data-state={emptyKind} style={{ ...st.wrap, ...st.emptyLook, padding: compact ? '20px 18px' : '40px 24px' }}>
+        <div style={st.icon} aria-hidden>{noResults ? '🔎' : '📭'}</div>
+        <h2 style={st.title}>{emptyTitle ?? (noResults ? `No matching ${subject ?? 'records'}` : `No ${subject ?? 'records'} yet`)}</h2>
+        <p style={st.desc}>{emptyDescription ?? (noResults ? 'Change or clear the active filters and try again.' : 'Records will appear here when they are created.')}</p>
         {emptyAction && <div style={{ marginTop: 8 }}>{emptyAction}</div>}
       </div>
     );
   }
   return <>{children}</>;
+}
+
+export function DataDegradedNotice({
+  message,
+  action,
+  compact = false,
+}: {
+  message: ReactNode;
+  action?: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="data-degraded"
+      data-data-state="degraded"
+      style={{ ...st.degraded, padding: compact ? '9px 12px' : '12px 14px' }}
+    >
+      <span aria-hidden>⚠</span>
+      <span>{message}</span>
+      {action ? <span style={{ marginLeft: 'auto' }}>{action}</span> : null}
+    </div>
+  );
 }
 
 const st: Record<string, CSSProperties> = {
@@ -130,6 +160,7 @@ const st: Record<string, CSSProperties> = {
   // Denied is not a fault — it is the system working. Amber, not red.
   denied: { borderColor: 'rgba(245,158,11,.4)', background: 'rgba(245,158,11,.06)' },
   failed: { borderColor: 'rgba(239,68,68,.4)', background: 'rgba(239,68,68,.06)' },
+  degraded: { display: 'flex', alignItems: 'center', gap: 9, border: '1px solid color-mix(in srgb, var(--warn) 42%, transparent)', borderRadius: 10, background: 'var(--warn-soft)', color: 'var(--text)', fontSize: 13 },
   icon: { fontSize: 22, lineHeight: 1 },
   title: { fontSize: 15, margin: 0, fontWeight: 700 },
   desc: { color: 'var(--muted)', fontSize: 13.5, margin: 0, maxWidth: 520, lineHeight: 1.5 },

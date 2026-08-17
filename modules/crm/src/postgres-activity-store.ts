@@ -15,6 +15,11 @@ interface Row {
   related_id: string | null;
   related_name: string | null;
   due_date: string | null;
+  reminder_at: Date | string | null;
+  reminder_sent_at: Date | string | null;
+  recurrence: string;
+  recurrence_ends_on: string | null;
+  recurrence_series_id: string | null;
   status: string;
   started_at: Date | string | null;
   completed_at: Date | string | null;
@@ -27,7 +32,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, type, subject, notes, related_type, related_id, related_name, due_date, status, started_at, completed_at, outcome, direction, counterparty, assignee_id, created_by, created_at';
+  'id, tenant_id, company_id, type, subject, notes, related_type, related_id, related_name, due_date, reminder_at, reminder_sent_at, recurrence, recurrence_ends_on, recurrence_series_id, status, started_at, completed_at, outcome, direction, counterparty, assignee_id, created_by, created_at';
 
 function rowToActivity(r: Row): Activity {
   return {
@@ -41,6 +46,11 @@ function rowToActivity(r: Row): Activity {
     relatedId: r.related_id,
     relatedName: r.related_name,
     dueDate: r.due_date,
+    reminderAt: r.reminder_at instanceof Date ? r.reminder_at.toISOString() : (r.reminder_at ? String(r.reminder_at) : null),
+    reminderSentAt: r.reminder_sent_at instanceof Date ? r.reminder_sent_at.toISOString() : (r.reminder_sent_at ? String(r.reminder_sent_at) : null),
+    recurrence: (r.recurrence || 'none') as Activity['recurrence'],
+    recurrenceEndsOn: r.recurrence_ends_on,
+    recurrenceSeriesId: r.recurrence_series_id,
     status: r.status as Activity['status'],
     startedAt: r.started_at instanceof Date ? r.started_at.toISOString() : (r.started_at ? String(r.started_at) : null),
     completedAt: r.completed_at instanceof Date ? r.completed_at.toISOString() : (r.completed_at ? String(r.completed_at) : null),
@@ -59,13 +69,15 @@ export class PostgresActivityStore implements ActivityStore {
 
   async save(a: Activity): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_crm_activities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      `INSERT INTO public.aura_crm_activities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        ON CONFLICT (id) DO UPDATE SET
          subject = EXCLUDED.subject, notes = EXCLUDED.notes, due_date = EXCLUDED.due_date,
+         reminder_at = EXCLUDED.reminder_at, reminder_sent_at = EXCLUDED.reminder_sent_at,
+         recurrence = EXCLUDED.recurrence, recurrence_ends_on = EXCLUDED.recurrence_ends_on, recurrence_series_id = EXCLUDED.recurrence_series_id,
          status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, outcome = EXCLUDED.outcome,
          direction = EXCLUDED.direction, counterparty = EXCLUDED.counterparty,
          assignee_id = EXCLUDED.assignee_id`,
-      [a.id, a.tenantId, a.companyId, a.type, a.subject, a.notes, a.relatedType, a.relatedId, a.relatedName, a.dueDate, a.status, a.startedAt, a.completedAt, a.outcome, a.direction, a.counterparty, a.assigneeId, a.createdBy, a.createdAt],
+      [a.id, a.tenantId, a.companyId, a.type, a.subject, a.notes, a.relatedType, a.relatedId, a.relatedName, a.dueDate, a.reminderAt ?? null, a.reminderSentAt ?? null, a.recurrence ?? 'none', a.recurrenceEndsOn ?? null, a.recurrenceSeriesId ?? null, a.status, a.startedAt, a.completedAt, a.outcome, a.direction, a.counterparty, a.assigneeId, a.createdBy, a.createdAt],
     );
   }
 
@@ -81,6 +93,8 @@ export class PostgresActivityStore implements ActivityStore {
       if (val) { params.push(val); where.push(`${col} = $${params.length}`); }
     };
     add('tenant_id', filter.tenantId);
+    add('assignee_id', filter.assigneeId);
+    add('created_by', filter.createdBy);
     add('related_type', filter.relatedType);
     add('related_id', filter.relatedId);
     add('status', filter.status);

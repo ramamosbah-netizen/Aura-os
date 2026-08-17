@@ -137,18 +137,45 @@ export class AuthService {
     return authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : null;
   }
 
-  /** Sliding-session refresh: re-mint a fresh token from a still-valid, non-revoked self-issued one. */
+  /**
+   * The verified claims of a presented self-issued token, or null. Read-only — for callers
+   * that must re-check the *token's* identity rather than the request context (e.g. refresh
+   * must know whose account to re-validate before deciding to renew).
+   */
+  claimsOf(authorization: string | undefined): { sub: string; tenantId: string } | null {
+    if (!this.secret) return null;
+    const token = this.tokenOf(authorization);
+    if (!token) return null;
+    const claims = verifyJwt(token, this.secret);
+    if (!claims?.sub || !claims.tenantId) return null;
+    return { sub: claims.sub, tenantId: claims.tenantId };
+  }
+
+  /**
+   * Sliding-session refresh: re-mint from a still-valid, non-revoked self-issued token.
+   *
+   * ROTATES — the presented token is revoked as the replacement is minted, so a copy
+   * captured earlier in the session stops working the moment the session refreshes. Without
+   * rotation every token ever issued in a session stays valid until its own expiry, and a
+   * single captured token grants access for the full TTL no matter what the user does.
+   */
   refresh(authorization: string | undefined, ttlSeconds = 3600): string | null {
     if (!this.secret) return null;
     const token = this.tokenOf(authorization);
     if (!token) return null;
     const claims = verifyJwt(token, this.secret);
     if (!claims?.sub || !claims.tenantId || this.revocation.isRevoked(claims.jti)) return null;
-    return signJwt(
+    const next = signJwt(
       { sub: claims.sub, tenantId: claims.tenantId, companyId: (claims.companyId ?? null) as Id | null },
       this.secret,
       ttlSeconds,
     );
+    // Revoke only after the replacement exists, so a mint failure cannot strand the caller
+    // with neither token.
+    if (claims.jti && typeof claims.exp === 'number') {
+      this.revocation.revoke(claims.jti, claims.exp);
+    }
+    return next;
   }
 
   /** Revoke the presented token (logout / compromise response). True if a jti was denylisted. */

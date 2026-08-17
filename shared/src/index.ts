@@ -13,6 +13,7 @@ export * from './identity/access';
 export * from './identity/jwt';
 export * from './identity/jwks';
 export * from './identity/totp';
+export * from './identity/password';
 export * from './security/field-crypto';
 export * from './security/secret-source';
 export * from './admin/modules';

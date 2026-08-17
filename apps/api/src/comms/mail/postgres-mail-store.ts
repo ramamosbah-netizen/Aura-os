@@ -11,6 +11,7 @@ interface MailRow {
   provider_message_id: string | null; provider_thread_id: string | null;
   internet_message_id: string | null; in_reply_to: string | null; references_header: string | null;
   sent_at: Date | string | null; failed_reason: string | null;
+  delivery_key: string | null; delivery_started_at: Date | string | null; delivery_attempts: number;
   created_at: Date | string; updated_at: Date | string;
 }
 
@@ -51,8 +52,9 @@ export class PostgresMailStore implements MailStore {
            (id, tenant_id, company_id, account_id, direction, state, from_user, subject, body,
             body_html, snippet, thread_id, parent_mail_id, forwarded_from_mail_id,
             provider_message_id, provider_thread_id, internet_message_id, in_reply_to,
-            references_header, sent_at, failed_reason, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+            references_header, sent_at, failed_reason, created_at, updated_at,
+            delivery_key, delivery_started_at, delivery_attempts)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
          on conflict (id) do update set
            account_id = excluded.account_id, direction = excluded.direction, state = excluded.state,
            subject = excluded.subject, body = excluded.body, body_html = excluded.body_html,
@@ -62,11 +64,15 @@ export class PostgresMailStore implements MailStore {
            provider_thread_id = excluded.provider_thread_id,
            internet_message_id = excluded.internet_message_id, in_reply_to = excluded.in_reply_to,
            references_header = excluded.references_header, sent_at = excluded.sent_at,
-           failed_reason = excluded.failed_reason, updated_at = excluded.updated_at`,
+           failed_reason = excluded.failed_reason, updated_at = excluded.updated_at,
+           delivery_key = excluded.delivery_key,
+           delivery_started_at = excluded.delivery_started_at,
+           delivery_attempts = excluded.delivery_attempts`,
         [mail.id, tenantId, mail.companyId, mail.accountId, mail.direction, mail.state, mail.fromUser,
           mail.subject, mail.body, mail.bodyHtml, mail.snippet, mail.threadId, mail.parentMailId,
           mail.forwardedFromMailId, mail.providerMessageId, mail.providerThreadId, mail.internetMessageId,
-          mail.inReplyTo, mail.referencesHeader, mail.sentAt, mail.failedReason, mail.createdAt, mail.updatedAt],
+          mail.inReplyTo, mail.referencesHeader, mail.sentAt, mail.failedReason, mail.createdAt, mail.updatedAt,
+          mail.deliveryKey, mail.deliveryStartedAt, mail.deliveryAttempts],
       );
 
       // Participants are replaced wholesale: an edited draft may have lost a recipient, and
@@ -191,6 +197,9 @@ export class PostgresMailStore implements MailStore {
       referencesHeader: row.references_header,
       sentAt: isoOrNull(row.sent_at),
       failedReason: row.failed_reason,
+      deliveryKey: row.delivery_key,
+      deliveryStartedAt: isoOrNull(row.delivery_started_at),
+      deliveryAttempts: Number(row.delivery_attempts ?? 0),
       createdAt: iso(row.created_at),
       updatedAt: iso(row.updated_at),
     };
@@ -342,6 +351,17 @@ export class PostgresMailStore implements MailStore {
         where tenant_id = $1 and id = $2`,
       [tenantId, accountId, cursor, error, at],
     );
+  }
+
+  /** Messages stuck mid-attempt: the crash signature the recovery sweep looks for. */
+  async listStalledDeliveries(tenantId: string, olderThan: string, limit: number): Promise<MailRecord[]> {
+    const { rows } = await this.pool.query<MailRow>(
+      `select * from public.aura_comms_mail
+        where tenant_id = $1 and state = 'sending' and delivery_started_at < $2
+        order by delivery_started_at limit $3`,
+      [tenantId, olderThan, limit],
+    );
+    return this.hydrate(tenantId, rows);
   }
 
   async upsertDispatch(tenantId: string, dispatch: DispatchRecord): Promise<void> {

@@ -33,7 +33,15 @@ export type MailCapability =
   | 'attachments'
   | 'read_state'
   | 'drafts'
-  | 'scheduled_send';
+  | 'scheduled_send'
+  /**
+   * The provider deduplicates a retry carrying the same idempotency key. This is the ONLY true
+   * exactly-once path available to a client: without it, a crash between "provider accepted" and
+   * "we recorded it" can only be RESOLVED after the fact, never prevented.
+   */
+  | 'idempotent_send'
+  /** The provider can be asked whether it already holds a message, by key or Message-ID. */
+  | 'lookup_sent';
 
 /** Connection lifecycle, matching the status vocabulary the account table already constrains. */
 export type ProviderStatus =
@@ -116,8 +124,14 @@ export interface MailProviderAdapter {
   /** Cheap liveness/config probe. Must never throw for a misconfigured account — report it. */
   health(account: MailAccountRef): Promise<ProviderHealth>;
 
-  /** Hand the message to the provider. Throwing marks the attempt failed; the engine decides retry. */
-  send(account: MailAccountRef, mail: MailRecord): Promise<DeliveryResult>;
+  /**
+   * Hand the message to the provider. Throwing marks the attempt failed; the engine decides retry.
+   *
+   * `deliveryKey` is stable across every retry of the same message. A provider advertising
+   * `idempotent_send` MUST pass it through so a repeated attempt is collapsed on their side; one
+   * that does not may ignore it, and recovery falls back to `findSent`.
+   */
+  send(account: MailAccountRef, mail: MailRecord, deliveryKey?: string): Promise<DeliveryResult>;
 
   /**
    * Fetch messages changed since the cursor. Must be safe to call twice with the same cursor:
@@ -137,6 +151,16 @@ export interface MailProviderAdapter {
 
   /** Ask the provider to hold a message until `sendAt`, where it supports that natively. */
   scheduleSend?(account: MailAccountRef, mail: MailRecord, sendAt: string): Promise<DeliveryResult>;
+
+  /**
+   * Did this provider already accept this message? Asked during recovery, when AURA crashed
+   * between the provider accepting and the result being written down.
+   *
+   * Looked up by the AURA-minted delivery key or Message-ID, both attached BEFORE the first
+   * attempt precisely so this question can be asked afterwards. Returning null means "no record of
+   * it", which the engine treats as safe to resend.
+   */
+  findSent?(account: MailAccountRef, handle: { deliveryKey: string; internetMessageId: string | null }): Promise<DeliveryResult | null>;
 }
 
 /**

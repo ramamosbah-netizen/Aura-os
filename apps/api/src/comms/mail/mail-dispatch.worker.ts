@@ -1,13 +1,15 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { newId } from '@aura/shared';
 import { TenantContext } from '@aura/core';
 import { AuraInternalMailAdapter } from './aura-internal-adapter';
 import {
   MailProviderRegistry,
   PermanentDeliveryError,
   requireCapability,
+  supports,
   type MailAccountRef,
 } from './mail-delivery';
-import type { MailRecord } from './mail-domain';
+import { SENDING_STALE_MS, type MailRecord } from './mail-domain';
 import { MAIL_STORE, type DispatchRecord, type MailStore } from './mail-store';
 
 /** How often to look for due work. */
@@ -89,6 +91,10 @@ export class MailDispatchWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   private async drainTenant(tenantId: string, now: string): Promise<{ sent: number; failed: number }> {
+    // Resolve crashed attempts BEFORE taking new work, so a message stuck in `sending` is settled
+    // rather than sitting ambiguous while newer mail goes out around it.
+    await this.recoverStalled(tenantId, now);
+
     const claimed = await this.store.claimDueDispatch(tenantId, now, BATCH);
     let sent = 0;
     let failed = 0;
@@ -99,18 +105,28 @@ export class MailDispatchWorker implements OnModuleInit, OnModuleDestroy {
     return { sent, failed };
   }
 
-  /** Resolve the account this message goes out through. */
-  private accountFor(mail: MailRecord, tenantId: string): MailAccountRef {
-    // Until Admin Center manages accounts, mail with no account goes through aura-internal. The
-    // shape is the real one, so attaching a configured account later changes data, not code.
+  /**
+   * Resolve the account this message goes out through.
+   *
+   * Until Admin Center manages accounts, mail with no account goes through aura-internal and the
+   * synthesised connection grants whatever the ADAPTER can do. That is not a shortcut: account
+   * capabilities model what an external connection was PERMITTED (a mailbox linked read-only, a
+   * scope not consented to), and a locally synthesised account has no such restriction to express.
+   * Hard-coding a list here silently withheld capabilities the provider actually had — which is
+   * how the recovery path first came to park messages it could have resolved.
+   *
+   * Once real accounts exist, capabilities come from the row and the intersection does its job.
+   */
+  private accountFor(mail: MailRecord, tenantId: string, provider = 'aura-internal'): MailAccountRef {
+    const adapter = this.registry.has(provider) ? this.registry.get(provider) : null;
     return {
-      id: mail.accountId ?? 'aura-internal',
+      id: mail.accountId ?? provider,
       tenantId,
       companyId: mail.companyId,
-      provider: 'aura-internal',
+      provider,
       externalAccountId: null,
       address: mail.participants.find((p) => p.role === 'from')?.address ?? 'aura@internal',
-      capabilities: ['send', 'reply', 'reply_all', 'forward', 'attachments', 'read_state', 'scheduled_send'],
+      capabilities: adapter ? [...adapter.capabilities] : ['send'],
       status: 'connected',
     };
   }
@@ -136,16 +152,31 @@ export class MailDispatchWorker implements OnModuleInit, OnModuleDestroy {
       return false;
     }
 
-    await this.store.save(tenantId, { ...mail, state: 'sending', updatedAt: new Date().toISOString() });
+    // The delivery key and Message-ID are minted BEFORE the provider is called, and never
+    // regenerated. That ordering is the whole mechanism: a key created after a successful send
+    // would be useless for asking, afterwards, whether that send happened.
+    const deliveryKey = mail.deliveryKey ?? `aura-mail:${mail.id}`;
+    const internetMessageId = mail.internetMessageId ?? `<${mail.id}@aura.internal>`;
+    const attemptStartedAt = new Date().toISOString();
+    const attempting: MailRecord = {
+      ...mail,
+      state: 'sending',
+      deliveryKey,
+      internetMessageId,
+      deliveryStartedAt: attemptStartedAt,
+      deliveryAttempts: mail.deliveryAttempts + 1,
+      updatedAt: attemptStartedAt,
+    };
+    await this.store.save(tenantId, attempting);
 
     try {
-      const account = this.accountFor(mail, tenantId);
+      const account = this.accountFor(attempting, tenantId);
       const adapter = this.registry.get(account.provider);
       requireCapability(adapter, account, 'send');
-      const result = await adapter.send(account, mail);
+      const result = await adapter.send(account, attempting, deliveryKey);
 
       await this.store.save(tenantId, {
-        ...mail,
+        ...attempting,
         state: 'sent',
         sentAt: result.sentAt,
         providerMessageId: result.providerMessageId,
@@ -157,7 +188,7 @@ export class MailDispatchWorker implements OnModuleInit, OnModuleDestroy {
       await this.store.completeDispatch(tenantId, dispatch.id, result.sentAt);
       return true;
     } catch (error) {
-      return this.recordFailure(tenantId, dispatch, mail, error as Error);
+      return this.recordFailure(tenantId, dispatch, attempting, error as Error);
     }
   }
 
@@ -185,6 +216,82 @@ export class MailDispatchWorker implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(`Mail ${mail.id} attempt ${attempts} failed, retrying at ${retryAt}: ${error.message}`);
     }
     return false;
+  }
+
+  /**
+   * Settle messages left in `sending` by a crashed process.
+   *
+   * This is the window C3.3 could not close: the provider accepted the message, the process died
+   * before `sent` was written, and the row is now genuinely AMBIGUOUS. Resending risks a duplicate
+   * the recipient sees; abandoning risks a mail the user believes they sent. Guessing either way
+   * is unacceptable, so the message is either RESOLVED or handed to a human.
+   *
+   *   provider can be asked (`lookup_sent`)  -> ask; record `sent` if it already has it, otherwise
+   *                                             requeue, which is safe because it never went out.
+   *   provider deduplicates (`idempotent_send`) -> requeue with the SAME key; the provider collapses
+   *                                             the retry on its side.
+   *   neither                                -> park as `needs_review`. Surfacing an ambiguity to a
+   *                                             person beats inventing an answer.
+   */
+  async recoverStalled(tenantId: string, now: string): Promise<{ resolved: number; requeued: number; parked: number }> {
+    const cutoff = new Date(new Date(now).getTime() - SENDING_STALE_MS).toISOString();
+    const stalled = await this.store.listStalledDeliveries(tenantId, cutoff, BATCH);
+    const totals = { resolved: 0, requeued: 0, parked: 0 };
+
+    for (const mail of stalled) {
+      const account = this.accountFor(mail, tenantId);
+      const adapter = this.registry.has(account.provider) ? this.registry.get(account.provider) : null;
+      const at = new Date().toISOString();
+
+      if (adapter && supports(adapter, account, 'lookup_sent') && adapter.findSent) {
+        const found = await adapter.findSent(account, {
+          deliveryKey: mail.deliveryKey ?? `aura-mail:${mail.id}`,
+          internetMessageId: mail.internetMessageId,
+        });
+        if (found) {
+          // It DID go out. Record the truth rather than sending a second copy.
+          await this.store.save(tenantId, {
+            ...mail, state: 'sent', sentAt: found.sentAt,
+            providerMessageId: found.providerMessageId, providerThreadId: found.providerThreadId,
+            internetMessageId: found.internetMessageId ?? mail.internetMessageId,
+            deliveryStartedAt: null, updatedAt: at,
+          });
+          totals.resolved += 1;
+          this.logger.log(`Recovered mail ${mail.id}: the provider already had it.`);
+          continue;
+        }
+        await this.requeue(tenantId, mail, at);
+        totals.requeued += 1;
+        continue;
+      }
+
+      if (adapter && supports(adapter, account, 'idempotent_send')) {
+        // Safe to try again: the provider collapses the retry on the stable delivery key.
+        await this.requeue(tenantId, mail, at);
+        totals.requeued += 1;
+        continue;
+      }
+
+      await this.store.save(tenantId, {
+        ...mail,
+        state: 'needs_review',
+        failedReason: 'Interrupted while sending. This provider cannot confirm whether it was delivered, so AURA will not resend it automatically.',
+        deliveryStartedAt: null,
+        updatedAt: at,
+      });
+      totals.parked += 1;
+      this.logger.warn(`Mail ${mail.id} parked for review — delivery outcome unknown and unverifiable.`);
+    }
+
+    return totals;
+  }
+
+  private async requeue(tenantId: string, mail: MailRecord, at: string): Promise<void> {
+    await this.store.save(tenantId, { ...mail, state: 'queued', deliveryStartedAt: null, updatedAt: at });
+    await this.store.upsertDispatch(tenantId, {
+      id: newId(), subjectType: 'mail', subjectId: mail.id, accountId: mail.accountId,
+      scheduledAt: at, scheduledTimezone: 'UTC', state: 'pending', attempts: 0,
+    });
   }
 
   /** Exposed for tests and for a future admin "retry now" action. */

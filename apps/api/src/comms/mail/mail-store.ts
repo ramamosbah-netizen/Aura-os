@@ -70,6 +70,12 @@ export interface MailStore {
   getSyncCursor(tenantId: string, accountId: string): Promise<string | null>;
   saveSyncCursor(tenantId: string, accountId: string, cursor: string | null, error: string | null, at: string): Promise<void>;
 
+  /**
+   * Messages left in `sending` past the staleness threshold — the signature of a process that
+   * crashed between handing a message to a provider and writing down what happened.
+   */
+  listStalledDeliveries(tenantId: string, olderThan: string, limit: number): Promise<MailRecord[]>;
+
   upsertDispatch(tenantId: string, dispatch: DispatchRecord): Promise<void>;
 
   /**

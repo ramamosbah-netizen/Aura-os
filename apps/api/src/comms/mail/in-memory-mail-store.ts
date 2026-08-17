@@ -147,6 +147,13 @@ export class InMemoryMailStore implements MailStore {
     else this.cursors.set(`${tenantId}::${accountId}`, cursor);
   }
 
+  async listStalledDeliveries(tenantId: string, olderThan: string, limit: number): Promise<MailRecord[]> {
+    return [...this.box(tenantId).values()]
+      .filter((mail) => mail.state === 'sending' && (mail.deliveryStartedAt ?? '') < olderThan)
+      .slice(0, limit)
+      .map((mail) => this.hydrate(tenantId, mail));
+  }
+
   async upsertDispatch(tenantId: string, dispatch: DispatchRecord): Promise<void> {
     this.queue(tenantId).set(dispatch.subjectId, structuredClone(dispatch));
   }

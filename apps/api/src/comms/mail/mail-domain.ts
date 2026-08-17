@@ -12,6 +12,9 @@ import { newId } from '@aura/shared';
  * change. C3.5 moves the UI onto this model deliberately, not as a side effect.
  */
 
+/** How long a message may sit in `sending` before it is treated as a crashed attempt. */
+export const SENDING_STALE_MS = 5 * 60_000;
+
 export type MailState =
   | 'draft'      // composed, never queued — editable and deletable
   | 'scheduled'  // a dispatch row exists and has not fired
@@ -20,7 +23,8 @@ export type MailState =
   | 'sent'       // the provider accepted it
   | 'failed'     // delivery gave up; failedReason says why
   | 'cancelled'  // withdrawn before it left
-  | 'received';  // inbound, synced from a provider
+  | 'received'      // inbound, synced from a provider
+  | 'needs_review'; // ambiguous after a crash and not resolvable automatically
 
 export type MailDirection = 'inbound' | 'outbound';
 export type RecipientRole = 'from' | 'to' | 'cc' | 'bcc';
@@ -82,6 +86,14 @@ export interface MailRecord {
   referencesHeader: string | null;
   sentAt: string | null;
   failedReason: string | null;
+  /**
+   * Stable idempotency key, minted once when the message is first queued and never regenerated —
+   * regenerating per attempt would defeat the entire mechanism.
+   */
+  deliveryKey: string | null;
+  /** When the CURRENT attempt began; a stale value is the crash signature. */
+  deliveryStartedAt: string | null;
+  deliveryAttempts: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -167,6 +179,9 @@ export function makeDraft(input: ComposeInput): MailRecord {
     referencesHeader: null,
     sentAt: null,
     failedReason: null,
+    deliveryKey: null,
+    deliveryStartedAt: null,
+    deliveryAttempts: 0,
     createdAt: now,
     updatedAt: now,
   };

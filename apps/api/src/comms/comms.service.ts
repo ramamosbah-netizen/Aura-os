@@ -293,6 +293,9 @@ export class CommsService {
       referencesHeader: null,
       sentAt: result.sentAt,
       failedReason: null,
+      deliveryKey: null,
+      deliveryStartedAt: null,
+      deliveryAttempts: 0,
       createdAt: result.sentAt,
       updatedAt: result.sentAt,
     });

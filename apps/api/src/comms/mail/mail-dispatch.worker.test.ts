@@ -196,3 +196,135 @@ describe('tenant isolation', () => {
     expect(run.mock.calls[0]![0]).toMatchObject({ tenantId: 'tenant-a', actorId: 'system' });
   });
 });
+
+describe('the crash window (C3.4b)', () => {
+  /** A message the provider may or may not have taken: left in `sending` by a dead process. */
+  async function stalled(store: InMemoryMailStore, svc: MailService) {
+    const draft = await svc.createDraft(ALICE, { to: ['client@example.com'], subject: 'Interrupted', body: 'x' });
+    const mail = await store.get('tenant-a', draft.id);
+    await store.save('tenant-a', {
+      ...mail!,
+      state: 'sending',
+      deliveryKey: `aura-mail:${draft.id}`,
+      internetMessageId: `<${draft.id}@aura.internal>`,
+      // Older than the staleness threshold, which is what distinguishes a crash from an
+      // attempt that is legitimately in flight right now.
+      deliveryStartedAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+      deliveryAttempts: 1,
+    });
+    return draft.id;
+  }
+
+  class LookupAdapter extends RecordingAdapter {
+    readonly capabilities: MailCapability[] = ['send', 'lookup_sent'];
+    constructor(private readonly alreadySent: boolean) { super('ok'); }
+    async findSent() {
+      return this.alreadySent
+        ? { providerMessageId: 'already-there', providerThreadId: 't', internetMessageId: '<m@x>', sentAt: '2026-08-18T10:00:00.000Z' }
+        : null;
+    }
+  }
+
+  it('does NOT resend when the provider confirms it already has the message', async () => {
+    const store = new InMemoryMailStore();
+    const svc = new MailService(store);
+    const worker = new MailDispatchWorker(store, tenantContext);
+    const adapter = new LookupAdapter(true);
+    worker.registerAdapterForTesting(adapter);
+    const id = await stalled(store, svc);
+
+    const outcome = await worker.recoverStalled('tenant-a', new Date().toISOString());
+
+    expect(outcome.resolved).toBe(1);
+    expect(adapter.sends).toBe(0); // the recipient must not see a second copy
+    const mail = await store.get('tenant-a', id);
+    expect(mail!.state).toBe('sent');
+    expect(mail!.sentAt).toBe('2026-08-18T10:00:00.000Z');
+    expect(mail!.providerMessageId).toBe('already-there');
+  });
+
+  it('requeues when the provider confirms it never got it', async () => {
+    const store = new InMemoryMailStore();
+    const svc = new MailService(store);
+    const worker = new MailDispatchWorker(store, tenantContext);
+    worker.registerAdapterForTesting(new LookupAdapter(false));
+    const id = await stalled(store, svc);
+
+    const outcome = await worker.recoverStalled('tenant-a', new Date().toISOString());
+
+    expect(outcome.requeued).toBe(1);
+    expect((await store.get('tenant-a', id))!.state).toBe('queued');
+    expect((await store.getDispatch('tenant-a', id))!.state).toBe('pending');
+  });
+
+  it('requeues with the SAME delivery key when the provider deduplicates retries', async () => {
+    class IdempotentAdapter extends RecordingAdapter {
+      readonly capabilities: MailCapability[] = ['send', 'idempotent_send'];
+      keys: Array<string | undefined> = [];
+      async send(_a: MailAccountRef, _m: MailRecord, key?: string) {
+        this.keys.push(key);
+        return super.send();
+      }
+    }
+    const store = new InMemoryMailStore();
+    const svc = new MailService(store);
+    const worker = new MailDispatchWorker(store, tenantContext);
+    const adapter = new IdempotentAdapter('ok');
+    worker.registerAdapterForTesting(adapter);
+    const id = await stalled(store, svc);
+    const keyBefore = (await store.get('tenant-a', id))!.deliveryKey;
+
+    await worker.recoverStalled('tenant-a', new Date().toISOString());
+    await worker.drain();
+
+    // Same key across the retry — regenerating it per attempt would defeat provider-side dedupe.
+    expect(adapter.keys).toEqual([keyBefore]);
+    expect((await store.get('tenant-a', id))!.deliveryKey).toBe(keyBefore);
+  });
+
+  it('parks for review when the provider can neither confirm nor deduplicate', async () => {
+    const store = new InMemoryMailStore();
+    const svc = new MailService(store);
+    const worker = new MailDispatchWorker(store, tenantContext);
+    // The reference adapter supports neither lookup_sent nor idempotent_send.
+    worker.registerAdapterForTesting(new RecordingAdapter());
+    const id = await stalled(store, svc);
+
+    const outcome = await worker.recoverStalled('tenant-a', new Date().toISOString());
+
+    expect(outcome.parked).toBe(1);
+    const mail = await store.get('tenant-a', id);
+    // Neither resent (possible duplicate) nor abandoned (possible lost mail) — surfaced.
+    expect(mail!.state).toBe('needs_review');
+    expect(mail!.sentAt).toBeNull();
+    expect(mail!.failedReason).toMatch(/cannot confirm whether it was delivered/);
+  });
+
+  it('leaves an attempt that is legitimately in flight alone', async () => {
+    const store = new InMemoryMailStore();
+    const svc = new MailService(store);
+    const worker = new MailDispatchWorker(store, tenantContext);
+    worker.registerAdapterForTesting(new RecordingAdapter());
+    const draft = await svc.createDraft(ALICE, { to: ['client@example.com'], body: 'x' });
+    const mail = await store.get('tenant-a', draft.id);
+    await store.save('tenant-a', { ...mail!, state: 'sending', deliveryStartedAt: new Date().toISOString() });
+
+    const outcome = await worker.recoverStalled('tenant-a', new Date().toISOString());
+
+    expect(outcome).toEqual({ resolved: 0, requeued: 0, parked: 0 });
+    expect((await store.get('tenant-a', draft.id))!.state).toBe('sending');
+  });
+
+  it('mints the delivery key BEFORE the provider is called, so it can be asked afterwards', async () => {
+    const { svc, worker, store } = harness();
+    const draft = await svc.createDraft(ALICE, { to: ['client@example.com'], body: 'x' });
+    await svc.queueForSend(ALICE, draft.id);
+
+    await worker.drain();
+
+    const mail = await store.get('tenant-a', draft.id);
+    expect(mail!.deliveryKey).toBe(`aura-mail:${draft.id}`);
+    expect(mail!.internetMessageId).toBeTruthy();
+    expect(mail!.deliveryAttempts).toBe(1);
+  });
+});

@@ -1,11 +1,12 @@
 import type { ChatChannel, ChatMessage, MailMessage } from '@aura/shared';
-import type { CommsStore, StoredChannel } from './comms-store';
+import type { CommsStore, StoredChannel, TimelineEntry } from './comms-store';
 
 interface TenantRows {
   channels: Map<string, StoredChannel>;
   messages: Map<string, ChatMessage[]>;
   lastRead: Map<string, string>;
   mail: MailMessage[];
+  timeline: Map<string, TimelineEntry>;
 }
 
 /**
@@ -19,7 +20,7 @@ export class InMemoryCommsStore implements CommsStore {
   private rows(tenantId: string): TenantRows {
     let t = this.tenants.get(tenantId);
     if (!t) {
-      t = { channels: new Map(), messages: new Map(), lastRead: new Map(), mail: [] };
+      t = { channels: new Map(), messages: new Map(), lastRead: new Map(), mail: [], timeline: new Map() };
       this.tenants.set(tenantId, t);
     }
     return t;
@@ -65,6 +66,17 @@ export class InMemoryCommsStore implements CommsStore {
 
   async addMail(tenantId: string, _companyId: string | null, mail: MailMessage): Promise<void> {
     this.rows(tenantId).mail.push(mail);
+  }
+
+  async publishTimeline(tenantId: string, entry: TimelineEntry): Promise<void> {
+    // Keyed by subject so a republish overwrites rather than duplicates, mirroring the unique
+    // index the Postgres store relies on.
+    this.rows(tenantId).timeline.set(`${entry.subjectType}::${entry.subjectId}`, entry);
+  }
+
+  /** Read side used by the timeline tests; the Overview query lands in a later slice. */
+  async listTimeline(tenantId: string): Promise<TimelineEntry[]> {
+    return [...this.rows(tenantId).timeline.values()].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   }
 
   async markMailRead(tenantId: string, mailId: string, username: string): Promise<void> {

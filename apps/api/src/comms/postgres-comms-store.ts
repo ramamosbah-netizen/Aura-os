@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage } from '@aura/shared';
-import type { CommsStore, StoredChannel } from './comms-store';
+import type { CommsStore, StoredChannel, TimelineEntry } from './comms-store';
 
 interface ChannelRow { id: string; kind: string; name: string; company_id: string | null; members: string[] | null }
 interface MessageRow {
@@ -187,6 +187,26 @@ export class PostgresCommsStore implements CommsStore {
         [tenantId, mail.id, username],
       );
     }
+  }
+
+  async publishTimeline(tenantId: string, entry: TimelineEntry): Promise<void> {
+    // ON CONFLICT on (tenant, subject) — a replayed sync re-publishes the same activity, and the
+    // timeline must show it once. The derived labels are refreshed so a corrected record is not
+    // left with a stale preview.
+    await this.pool.query(
+      `insert into public.aura_comms_timeline
+         (id, tenant_id, company_id, occurred_at, channel, direction, actor,
+          subject_type, subject_id, title, preview, visibility, visibility_key)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       on conflict (tenant_id, subject_type, subject_id) do update
+         set occurred_at = excluded.occurred_at,
+             title       = excluded.title,
+             preview     = excluded.preview,
+             visibility  = excluded.visibility,
+             visibility_key = excluded.visibility_key`,
+      [entry.id, tenantId, entry.companyId, entry.occurredAt, entry.channel, entry.direction, entry.actor,
+        entry.subjectType, entry.subjectId, entry.title, entry.preview, entry.visibility, entry.visibilityKey],
+    );
   }
 
   async markMailRead(tenantId: string, mailId: string, username: string, at: string): Promise<void> {

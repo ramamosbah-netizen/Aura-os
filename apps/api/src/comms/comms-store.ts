@@ -9,6 +9,28 @@ export interface StoredChannel extends ChatChannel {
   companyId: string | null;
 }
 
+/**
+ * One activity on the Communication timeline. A NARROW PROJECTION of a record that lives
+ * elsewhere: `subjectType`/`subjectId` point at the owner, and title/preview are derived labels
+ * so the Overview timeline renders without joining every channel. Nothing here is authoritative —
+ * rebuilding the table from the owning records must lose nothing.
+ */
+export interface TimelineEntry {
+  id: string;
+  companyId: string | null;
+  occurredAt: string;
+  channel: 'chat' | 'mail' | 'whatsapp' | 'meeting' | 'file_share';
+  direction: 'inbound' | 'outbound' | 'internal';
+  actor: string | null;
+  subjectType: string;
+  subjectId: string;
+  title: string;
+  preview: string | null;
+  /** The channel's own authorization answer, carried so readers inherit it rather than re-derive it. */
+  visibility: 'participants' | 'channel' | 'tenant';
+  visibilityKey: string | null;
+}
+
 /** DI token for the communication persistence store. */
 export const COMMS_STORE = Symbol('COMMS_STORE');
 
@@ -50,4 +72,10 @@ export interface CommsStore {
     thread: { threadId: string; parentMailId: string | null; forwardedFromMailId: string | null },
   ): Promise<void>;
   markMailRead(tenantId: string, mailId: string, username: string, at: string): Promise<void>;
+
+  /**
+   * Index an activity on the Communication timeline. Idempotent per (tenant, subject): re-publishing
+   * the same record must not double it, because a sync that replays is normal, not exceptional.
+   */
+  publishTimeline(tenantId: string, entry: TimelineEntry): Promise<void>;
 }

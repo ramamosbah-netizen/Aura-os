@@ -14,10 +14,11 @@ import {
   mailboxFor,
   makeChatMessage,
   makeMail,
+  newId,
   unreadChatCount,
 } from '@aura/shared';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
-import { COMMS_STORE, type CommsStore, type StoredChannel } from './comms-store';
+import { COMMS_STORE, type CommsStore, type StoredChannel, type TimelineEntry } from './comms-store';
 
 /**
  * Who may see a channel, and therefore its messages and their attachments.
@@ -170,12 +171,28 @@ export class CommsService {
   ): Promise<ChatMessage | { error: string }> {
     // Write access is the same question as read access, asked before the message exists — this
     // also stops a post to an id that is not a channel at all creating a phantom conversation.
-    await this.requireChannel(tenantId, input.sender, input.channelId, isAdmin, companyId);
+    const channel = await this.requireChannel(tenantId, input.sender, input.channelId, isAdmin, companyId);
     const result = makeChatMessage(input);
     if ('error' in result) return result;
     await this.store.addMessage(tenantId, companyId, result);
     // Your own message never counts as unread to you.
     await this.store.setLastRead(tenantId, result.channelId, input.sender, result.sentAt);
+    await this.publishTimeline(tenantId, {
+      id: newId(),
+      companyId,
+      occurredAt: result.sentAt,
+      channel: 'chat',
+      direction: 'internal',
+      actor: result.sender,
+      subjectType: 'message',
+      subjectId: result.id,
+      title: channel.name,
+      preview: this.preview(result),
+      // The channel decides who may read it, so the timeline carries that answer rather than
+      // inventing a second one.
+      visibility: 'channel',
+      visibilityKey: result.channelId,
+    });
 
     const peer = dmPeer(result.channelId, input.sender);
     if (peer) {
@@ -206,6 +223,20 @@ export class CommsService {
     await this.store.addMail(tenantId, companyId, result, {
       threadId: result.id, parentMailId: null, forwardedFromMailId: null,
     });
+    await this.publishTimeline(tenantId, {
+      id: newId(),
+      companyId,
+      occurredAt: result.sentAt,
+      channel: 'mail',
+      direction: 'outbound',
+      actor: result.from,
+      subjectType: 'mail',
+      subjectId: result.id,
+      title: result.subject,
+      preview: result.body.length > 140 ? `${result.body.slice(0, 137)}…` : result.body,
+      visibility: 'participants',
+      visibilityKey: result.id,
+    });
     for (const recipient of result.to) {
       if (recipient === result.from) continue;
       await this.notifications.record({
@@ -229,6 +260,21 @@ export class CommsService {
       throw new NotFoundException(`mail ${mailId} not found`);
     }
     await this.store.markMailRead(tenantId, mailId, username, new Date().toISOString());
+  }
+
+  /**
+   * Index an activity on the Communication timeline.
+   *
+   * Failure here is logged, never thrown: the timeline is a projection, and losing a row from it
+   * must not cost the user the message they actually sent. A dropped row is recoverable by
+   * republishing from the owning record; a rejected send is not.
+   */
+  private async publishTimeline(tenantId: string, entry: TimelineEntry): Promise<void> {
+    try {
+      await this.store.publishTimeline(tenantId, entry);
+    } catch (error) {
+      this.logger.warn(`Timeline publish failed for ${entry.subjectType} ${entry.subjectId}: ${(error as Error).message}`);
+    }
   }
 
   /** One badge feed: chat unread + mail unread (notifications count comes from its own endpoint). */

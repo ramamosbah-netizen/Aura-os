@@ -292,6 +292,51 @@ export class PostgresMailStore implements MailStore {
     return (await this.hydrate(tenantId, rows))[0] ?? null;
   }
 
+  async findByProviderThread(tenantId: string, accountId: string | null, providerThreadId: string): Promise<MailRecord | null> {
+    const { rows } = await this.pool.query<MailRow>(
+      `select * from public.aura_comms_mail
+        where tenant_id = $1 and provider_thread_id = $2
+          and coalesce(account_id, '00000000-0000-0000-0000-000000000000'::uuid)
+              = coalesce($3::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+        order by coalesce(sent_at, created_at) limit 1`,
+      [tenantId, providerThreadId, accountId],
+    );
+    return (await this.hydrate(tenantId, rows))[0] ?? null;
+  }
+
+  async findByInternetMessageId(tenantId: string, internetMessageId: string): Promise<MailRecord | null> {
+    // Deliberately NOT account-scoped: a reply may arrive on a different mailbox than the one the
+    // original went out through, and it still belongs to the same conversation.
+    const { rows } = await this.pool.query<MailRow>(
+      `select * from public.aura_comms_mail
+        where tenant_id = $1 and internet_message_id = $2
+        order by coalesce(sent_at, created_at) limit 1`,
+      [tenantId, internetMessageId],
+    );
+    return (await this.hydrate(tenantId, rows))[0] ?? null;
+  }
+
+  async getSyncCursor(tenantId: string, accountId: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ sync_cursor: string | null }>(
+      `select sync_cursor from public.aura_comms_accounts where tenant_id = $1 and id = $2`,
+      [tenantId, accountId],
+    );
+    return rows[0]?.sync_cursor ?? null;
+  }
+
+  async saveSyncCursor(tenantId: string, accountId: string, cursor: string | null, error: string | null, at: string): Promise<void> {
+    await this.pool.query(
+      `update public.aura_comms_accounts
+          set sync_cursor = $3,
+              last_sync_error = $4,
+              sync_state = case when $4::text is null then 'idle' else 'error' end,
+              last_sync_at = $5,
+              updated_at = now()
+        where tenant_id = $1 and id = $2`,
+      [tenantId, accountId, cursor, error, at],
+    );
+  }
+
   async upsertDispatch(tenantId: string, dispatch: DispatchRecord): Promise<void> {
     await this.pool.query(
       `insert into public.aura_comms_dispatch

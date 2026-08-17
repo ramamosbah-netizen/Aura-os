@@ -54,6 +54,14 @@ export interface MailStore {
    * mail AURA already holds rather than importing a second copy.
    */
   findByProviderMessage(tenantId: string, accountId: string | null, providerMessageId: string): Promise<MailRecord | null>;
+  /** Any message AURA already holds from the same provider conversation, for thread mapping. */
+  findByProviderThread(tenantId: string, accountId: string | null, providerThreadId: string): Promise<MailRecord | null>;
+  /** Thread mapping across systems: In-Reply-To / References point at an RFC Message-ID. */
+  findByInternetMessageId(tenantId: string, internetMessageId: string): Promise<MailRecord | null>;
+
+  /** Per-account sync checkpoint (migration 0237). */
+  getSyncCursor(tenantId: string, accountId: string): Promise<string | null>;
+  saveSyncCursor(tenantId: string, accountId: string, cursor: string | null, error: string | null, at: string): Promise<void>;
 
   upsertDispatch(tenantId: string, dispatch: DispatchRecord): Promise<void>;
 

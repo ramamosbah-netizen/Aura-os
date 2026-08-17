@@ -12,6 +12,8 @@ export class InMemoryMailStore implements MailStore {
   /** Stands in for aura_comms_mail_reads: `${mailId}::${participantKey}` -> readAt. */
   private readonly reads = new Map<string, Map<string, string>>();
   private readonly dispatch = new Map<string, Map<string, DispatchRecord>>();
+  /** Stands in for aura_comms_accounts.sync_cursor. */
+  private readonly cursors = new Map<string, string>();
 
   private box(tenantId: string): Map<string, MailRecord> {
     let box = this.mail.get(tenantId);
@@ -122,6 +124,27 @@ export class InMemoryMailStore implements MailStore {
       (mail) => mail.providerMessageId === providerMessageId && (mail.accountId ?? null) === (accountId ?? null),
     );
     return found ? this.hydrate(tenantId, found) : null;
+  }
+
+  async findByProviderThread(tenantId: string, accountId: string | null, providerThreadId: string): Promise<MailRecord | null> {
+    const found = [...this.box(tenantId).values()].find(
+      (mail) => mail.providerThreadId === providerThreadId && (mail.accountId ?? null) === (accountId ?? null),
+    );
+    return found ? this.hydrate(tenantId, found) : null;
+  }
+
+  async findByInternetMessageId(tenantId: string, internetMessageId: string): Promise<MailRecord | null> {
+    const found = [...this.box(tenantId).values()].find((mail) => mail.internetMessageId === internetMessageId);
+    return found ? this.hydrate(tenantId, found) : null;
+  }
+
+  async getSyncCursor(tenantId: string, accountId: string): Promise<string | null> {
+    return this.cursors.get(`${tenantId}::${accountId}`) ?? null;
+  }
+
+  async saveSyncCursor(tenantId: string, accountId: string, cursor: string | null): Promise<void> {
+    if (cursor === null) this.cursors.delete(`${tenantId}::${accountId}`);
+    else this.cursors.set(`${tenantId}::${accountId}`, cursor);
   }
 
   async upsertDispatch(tenantId: string, dispatch: DispatchRecord): Promise<void> {

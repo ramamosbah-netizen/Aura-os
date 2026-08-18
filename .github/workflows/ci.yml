@@ -185,7 +185,7 @@ jobs:
       # production would. Concretely, it is what catches a cross-tenant boot hydrate — a SELECT
       # with no tenant bound returns ZERO rows under aura_app, and an empty registry would
       # silently read as "everyone is active".
-      - name: S1-RLS.7 — seed, login and tenant isolation under aura_app
+      - name: S1-RLS.7 + S2 — auth chain, session lifecycle and revocation under aura_app
         run: |
           cd apps/api
           APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"
@@ -216,7 +216,20 @@ jobs:
           # 2. The token authorises a protected request. Exercises the guard, which loads the
           #    tenant registry on demand — the path that replaced the boot hydrate.
           curl -sf -H "Authorization: Bearer $tok" http://localhost:4500/api/v1/crm/accounts > /dev/null || { echo '::error::protected request failed under aura_app'; cat api-authrole.log; exit 1; }
-          echo "OK protected request authorised under aura_app"
+          echo "OK protected request authorised under aura_app (valid session ⇒ token accepted)"
+
+          # 2b. S2 SESSION REVOCATION on real PostgreSQL. The request above proved the sid'd token is
+          #     accepted while the session is LIVE. Now revoke the session server-side (logout) and
+          #     prove the SAME still-signed, unexpired token is refused — the sid boundary, not exp,
+          #     and same-node cache eviction makes it immediate. (Cross-replica is bounded by
+          #     AUTH_SESSION_CACHE_TTL_MS, not immediate — not asserted here, deliberately.)
+          curl -s -o /dev/null -X POST http://localhost:4500/api/v1/auth/logout -H "Authorization: Bearer $tok"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $tok" http://localhost:4500/api/v1/crm/accounts)
+          test "$code" != "200" || { echo "::error::revoked session STILL authorised the protected route (got 200)"; cat api-authrole.log; exit 1; }
+          echo "OK revoked session ⇒ protected route refused ($code)"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/refresh -H "Authorization: Bearer $tok")
+          test "$code" = "401" || { echo "::error::revoked session was refreshable (got $code, expected 401)"; cat api-authrole.log; exit 1; }
+          echo "OK revoked session ⇒ refresh refused (401)"
 
           # 3. Wrong password is still refused — the credential is real, not waved through.
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"wrong-password-entirely"}')

@@ -158,7 +158,13 @@ export class PermissionsGuard implements CanActivate {
     }
 
     // Users registry (Vol 15 §2.2): a registered-and-deactivated user is refused on
-    // every guarded request, token validity notwithstanding. Sync in-memory check.
+    // every guarded request, token validity notwithstanding.
+    //
+    // `ensureTenant` loads this tenant once, then the check itself stays a sync in-memory
+    // lookup on the hot path. The request already has its tenant bound, which is what makes
+    // the read possible at all under fail-closed RLS — the old cross-tenant boot hydrate
+    // returned nothing under the production role and silently degraded to "everyone active".
+    if (this.users) await this.users.ensureTenant(tenantId);
     if (this.users && !this.users.isActive(tenantId, actorId)) {
       throw new ForbiddenException(`account ${actorId} is deactivated`);
     }

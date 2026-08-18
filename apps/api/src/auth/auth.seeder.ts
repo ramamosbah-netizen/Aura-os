@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { AccessService } from '@aura/core';
+import { AccessService, CredentialsService, TenantContext, UsersService } from '@aura/core';
 import { ELV_ROLE_MATRIX } from './elv-roles';
 
 /**
@@ -16,9 +16,15 @@ import { ELV_ROLE_MATRIX } from './elv-roles';
 export class AuthSeeder implements OnModuleInit {
   private readonly logger = new Logger('AuthSeeder');
 
-  constructor(private readonly access: AccessService) {}
+  constructor(
+    private readonly access: AccessService,
+    private readonly users: UsersService,
+    private readonly credentials: CredentialsService,
+    private readonly tenant: TenantContext,
+  ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
+    await this.seedDevIdentities();
     // The standard ELV role set. Separated from the dev grants below: these are the roles a
     // real deployment starts from, the grants below are demo identities.
     for (const role of ELV_ROLE_MATRIX) {
@@ -65,5 +71,62 @@ export class AuthSeeder implements OnModuleInit {
       attributes: { approvalLimit: 500_000 },
     });
     this.logger.log('Seeded approval matrix: u-admin/u-approver (unlimited) · u-director (≤500k) · u-manager (≤50k) in dev-tenant.');
+  }
+
+  /**
+   * Dev sign-in bootstrap.
+   *
+   * Login now requires a REGISTERED identity with a REAL credential, so the demo grants
+   * above are no longer enough to sign in — an id the users registry has never seen is not
+   * a user. This registers the demo accounts and gives each a hashed password taken from
+   * `AUTH_DEV_PASSWORD`.
+   *
+   * That variable used to BE the authentication check: any password was accepted when it
+   * was unset, and when it was set every account in the deployment shared it. It is now
+   * only a dev bootstrap for explicitly named accounts — every other account is refused
+   * until an administrator sets its password.
+   *
+   * Refused outright in production, where passwords come from the admin API.
+   */
+  private async seedDevIdentities(): Promise<void> {
+    const password = process.env.AUTH_DEV_PASSWORD?.trim();
+    if (!password) {
+      this.logger.warn(
+        'AUTH_DEV_PASSWORD is not set — no dev account has a password, so every sign-in will be refused. ' +
+          'Set it (dev only) or set a password via POST /api/v1/admin/users/:id/password.',
+      );
+      return;
+    }
+    if (process.env.NODE_ENV === 'production') {
+      this.logger.error('AUTH_DEV_PASSWORD is set in production and was REFUSED. Remove this variable.');
+      return;
+    }
+
+    const tenantId = process.env.AUTH_DEV_ADMIN_TENANT?.trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
+    const accounts = (process.env.AUTH_DEV_ADMIN_USER?.trim() || 'u-admin')
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
+
+    // TENANT-BOUND. `auth_credentials` is FORCE ROW LEVEL SECURITY, so its policy applies to
+    // every role including the owner — a seeder that writes with no tenant bound has its
+    // INSERT rejected by `with check`, not silently mis-scoped. Boot runs outside any request,
+    // so nothing binds a tenant unless we do it here.
+    //
+    // This is the correct direction: seeding is a tenant-scoped operation and should look
+    // like one. The alternative — exempting the seeder from RLS — would make the bootstrap
+    // path the one place tenant isolation does not apply.
+    await this.tenant.run({ tenantId, companyId: null, actorId: null }, async () => {
+      for (const userId of accounts) {
+        this.users.save({ tenantId, userId, displayName: userId, active: true });
+        // Never clobber a password that has already been set for this account.
+        if (await this.credentials.has(tenantId, userId)) continue;
+        await this.credentials.setPassword(tenantId, userId, password, { mustChange: false });
+      }
+    });
+    this.logger.warn(
+      `DEV ONLY — registered [${accounts.join(', ')}] on '${tenantId}' with a password from AUTH_DEV_PASSWORD. ` +
+        'Every other account is refused until an administrator sets its password.',
+    );
   }
 }

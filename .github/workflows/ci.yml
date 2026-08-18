@@ -113,7 +113,11 @@ jobs:
       - name: Boot the built API against the migrated database
         run: |
           cd apps/api
-          AUTH_JWT_SECRET=ci-drill-secret AUTH_REQUIRED=true PORT=4300 nohup node dist/main.js > api.log 2>&1 &
+          # AUTH_DEV_PASSWORD + AUTH_DEV_ADMIN_USER seed a REAL hashed credential for the two
+          # demo accounts. Before the S1 auth rebuild this step ran with neither, and the seed
+          # below still authenticated — because login accepted ANY password when
+          # AUTH_DEV_PASSWORD was unset. This job was passing *because of* the auth bypass.
+          AUTH_JWT_SECRET=ci-drill-secret AUTH_REQUIRED=true PORT=4300 AUTH_DEV_PASSWORD=ci-demo-seed-password AUTH_DEV_ADMIN_USER=u-admin,u-approver nohup node dist/main.js > api.log 2>&1 &
           echo $! > api.pid
           for i in $(seq 1 60); do
             curl -sf http://localhost:4300/api/v1/health > /dev/null && break
@@ -141,7 +145,7 @@ jobs:
           git diff --exit-code packages/sdk/src/generated.ts
 
       - name: Seed the demo dataset through the live API
-        run: AURA_API_URL=http://localhost:4300 node apps/api/scripts/seed-demo.mjs
+        run: AURA_API_URL=http://localhost:4300 SEED_PASS=ci-demo-seed-password node apps/api/scripts/seed-demo.mjs
 
       # ── R1 activation closure ──────────────────────────────────────────────────────────
       # The steps above run as the DB owner (BYPASSRLS), which proves nothing about enforcement.
@@ -170,6 +174,63 @@ jobs:
           # read it back — exercises the tenant-scoped read pool under aura_app
           curl -sf "http://localhost:4400/api/v1/crm/accounts" | grep -q 'RLS Activation Co' \
             || { echo '::error::tenant-scoped read failed under aura_app'; cat api-app.log; exit 1; }
+
+      # ── S1-RLS.7: the AUTH chain under the production role ────────────────────────────
+      # The step below proves a business write works as aura_app, but with auth OFF. Auth is the
+      # path that reads aura_users / auth_credentials / aura_user_mfa — the tables whose RLS
+      # posture S1 changed — so it needs its own proof under the enforced role.
+      #
+      # This is the gap that made S1's earlier verification incomplete: every other job runs the
+      # API as the DB owner, which is exempt from ENABLE and therefore cannot fail the way
+      # production would. Concretely, it is what catches a cross-tenant boot hydrate — a SELECT
+      # with no tenant bound returns ZERO rows under aura_app, and an empty registry would
+      # silently read as "everyone is active".
+      - name: S1-RLS.7 — seed, login and tenant isolation under aura_app
+        run: |
+          cd apps/api
+          APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"
+          # Account choice matters here. Every job above shares ONE database (the `aura` service
+          # container), and the owner-role boot already seeded credentials for u-admin/u-approver.
+          # The seeder deliberately NEVER clobbers an existing password, so pointing this step at
+          # u-admin would skip the write and then try to log in with a password the row does not
+          # hold — a false failure that says nothing about RLS. We use u-director instead: it is
+          # granted the dev admin role at every boot (so the protected-request check below still
+          # passes) but carries NO pre-seeded credential, so THIS boot — running as aura_app — is
+          # the one that writes it, under FORCE RLS, which is exactly what the step claims to prove.
+          DATABASE_URL="$APP_URL" AUTH_JWT_SECRET=ci-app-role-secret AUTH_REQUIRED=true PORT=4500 AUTH_DEV_PASSWORD=ci-app-role-password AUTH_DEV_ADMIN_USER=u-director AUTH_DEFAULT_TENANT=dev-tenant nohup node dist/main.js > api-authrole.log 2>&1 &
+          echo $! > api-authrole.pid
+          for i in $(seq 1 60); do curl -sf http://localhost:4500/api/v1/health > /dev/null && break; sleep 1; done
+          curl -sf http://localhost:4500/api/v1/health || { echo '::error::API did not boot as aura_app with auth on'; cat api-authrole.log; exit 1; }
+
+          # 1. Seeding wrote a real credential THROUGH aura_app under FORCE RLS, and login reads
+          #    it back. Fails if the seeder is not tenant-bound or the policy is wrong.
+          # NOTE: no `-f` and no `set -e` abort here. `curl -sf` exits 22 on an HTTP error, which
+          # under `bash -e` kills the step before the diagnostics below can run — turning a real
+          # failure into an unexplained exit code. Capture the status and body, then decide.
+          body=$(curl -s -o /tmp/login-body.json -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password"}' || true)
+          echo "login HTTP $body"; cat /tmp/login-body.json || true; echo
+          tok=$(grep -o '"token":"[^"]*"' /tmp/login-body.json 2>/dev/null | cut -d'"' -f4 || true)
+          test -n "$tok" || { echo '::error::login failed as aura_app — seed or credential read is broken under RLS'; echo '--- api-authrole.log ---'; cat api-authrole.log; exit 1; }
+          echo "OK login succeeded under aura_app (tenant-aware seed + per-tenant registry load)"
+
+          # 2. The token authorises a protected request. Exercises the guard, which loads the
+          #    tenant registry on demand — the path that replaced the boot hydrate.
+          curl -sf -H "Authorization: Bearer $tok" http://localhost:4500/api/v1/crm/accounts > /dev/null || { echo '::error::protected request failed under aura_app'; cat api-authrole.log; exit 1; }
+          echo "OK protected request authorised under aura_app"
+
+          # 3. Wrong password is still refused — the credential is real, not waved through.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"wrong-password-entirely"}')
+          test "$code" = "401" || { echo "::error::wrong password returned $code, expected 401"; exit 1; }
+          echo "OK wrong password refused (401)"
+
+          # 4. CROSS-TENANT: the same credential must not authenticate into another tenant. The
+          #    requested tenant is untrusted input; RLS scopes the lookup to it, so u-director is
+          #    simply not a registered identity there.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password","tenantId":"other-tenant"}')
+          test "$code" = "401" || { echo "::error::cross-tenant login returned $code, expected 401"; cat api-authrole.log; exit 1; }
+          echo "OK cross-tenant login denied (401)"
+
+          kill "$(cat api-authrole.pid)" 2>/dev/null || true
 
       - name: R1 activation — DB-level fail-closed + no-bypass proof under aura_app
         run: |

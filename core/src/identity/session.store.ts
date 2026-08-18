@@ -177,7 +177,18 @@ export class SessionStore {
       }
       this.cache.delete(sid);
     }
-    const record = await this.get(tenantId, sid);
+    let record: SessionRecord | null;
+    try {
+      record = await this.get(tenantId, sid);
+    } catch (err) {
+      // FAIL CLOSED. A database error at the boundary DENIES — it must NEVER fall back to the
+      // in-memory Map or wave the request through. This is the Postgres-drops-after-boot case, not
+      // a misconfiguration: a live pool whose query() throws is a "session not live", exactly like
+      // a revoked or absent one. (A still-cached positive entry is honoured for its ≤ TTL window;
+      // this is only the cache-miss read.)
+      this.logger.error(`session validate for ${sid} failed CLOSED (denied): ${(err as Error).message}`);
+      return null;
+    }
     if (!record || record.revokedAt !== null || record.expiresAt <= now) return null;
     this.cache.set(sid, { record, cachedAt: now });
     return record;

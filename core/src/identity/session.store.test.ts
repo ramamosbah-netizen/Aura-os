@@ -1,3 +1,4 @@
+import type { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionStore } from './session.store';
 import { TenantContext } from '../tenancy/tenant-context';
@@ -94,3 +95,31 @@ describe('SessionStore persistence guard', () => {
     expect(() => new SessionStore(null, new TenantContext())).toThrow(/requires a database/i);
   });
 });
+
+// Distinct from the startup guard above: here the pool EXISTS (boot succeeded) but a query throws
+// at runtime — Postgres dropped after boot. The boundary must fail CLOSED, never consult the Map.
+describe('SessionStore runtime DB failure (pool present, query() throws)', () => {
+  function failingPool(): Pool {
+    return { query: () => Promise.reject(new Error('connection terminated unexpectedly')) } as unknown as Pool;
+  }
+
+  it('validate() denies on a query failure — does not throw, does not fall back to the Map', async () => {
+    const store = new SessionStore(failingPool(), new TenantContext());
+    // A live pool whose query() throws (PostgreSQL outage after boot) is treated as "not live":
+    // validate resolves to null (deny). It must NOT reject and must NOT read process-local state.
+    await expect(store.validate(TENANT, randomSid())).resolves.toBeNull();
+  });
+
+  it('a cached positive entry is NOT synthesised from a failing DB — a fresh sid simply denies', async () => {
+    const store = new SessionStore(failingPool(), new TenantContext());
+    // No prior successful read means no cache entry, so the failing read is the only path: deny.
+    const first = await store.validate(TENANT, randomSid());
+    const second = await store.validate(TENANT, randomSid());
+    expect(first).toBeNull();
+    expect(second).toBeNull();
+  });
+});
+
+function randomSid(): string {
+  return '00000000-0000-4000-8000-0000000000ff';
+}

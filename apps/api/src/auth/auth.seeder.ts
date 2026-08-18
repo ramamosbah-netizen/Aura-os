@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { AccessService, CredentialsService, TenantContext, UsersService } from '@aura/core';
+import { readSecret } from '@aura/shared';
 import { ELV_ROLE_MATRIX } from './elv-roles';
 
 /**
@@ -89,10 +90,14 @@ export class AuthSeeder implements OnModuleInit {
    * Refused outright in production, where passwords come from the admin API.
    */
   private async seedDevIdentities(): Promise<void> {
-    const password = process.env.AUTH_DEV_PASSWORD?.trim();
+    // Read through the secret seam, so `AUTH_DEV_PASSWORD_FILE` (vault/secret mount, and what
+    // scripts/configure-local-auth.mjs writes) works exactly like the plain variable. Reading
+    // `process.env` directly here was the reason a fully-configured local setup still booted
+    // with no credential: the `_FILE` form was silently ignored and every sign-in was refused.
+    const password = readSecret('AUTH_DEV_PASSWORD');
     if (!password) {
       this.logger.warn(
-        'AUTH_DEV_PASSWORD is not set — no dev account has a password, so every sign-in will be refused. ' +
+        'AUTH_DEV_PASSWORD (or AUTH_DEV_PASSWORD_FILE) is not set — no dev account has a password, so every sign-in will be refused. ' +
           'Set it (dev only) or set a password via POST /api/v1/admin/users/:id/password.',
       );
       return;

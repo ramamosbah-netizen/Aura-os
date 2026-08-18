@@ -21,6 +21,7 @@ const INTERNAL_ALLOWLIST: RegExp[] = [
   /^no handler for X$/, // CommandBus misconfiguration — a programming error, not client input
   /^poison: simulated handler failure$/, // poison-queue test subscriber — intentional failure
   /^migration X failed: X$/, // boot-time auto-migrate error — caught in onModuleInit, never reaches a request
+  /^X — the app role holds no DDL rights/, // same boot-time path: the DDL-privilege hint the gate logs, never a response
 ];
 
 function tsFiles(dir: string): string[] {

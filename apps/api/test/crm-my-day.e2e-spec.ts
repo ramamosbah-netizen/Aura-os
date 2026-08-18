@@ -37,7 +37,11 @@ describe('C4 my day (HTTP)', () => {
     await app?.close();
   });
 
-  const day = (n: number): string => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  // The service composes the day in the BUSINESS time zone (Asia/Dubai — see buildMyDay), so the
+  // fixture dates have to be keyed the same way. Keying them in UTC instead made this spec fail
+  // for the four hours a day when the two calendars disagree (20:00–24:00 UTC).
+  const day = (n: number): string =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dubai' }).format(new Date(Date.now() + n * 86400000));
   const today = day(0);
 
   it('composes one rep\'s day from activities, leads and deals — and keeps it off everyone else\'s', async () => {

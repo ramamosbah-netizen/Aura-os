@@ -2,10 +2,24 @@
 
 **Date:** 2026-08-17
 **Branch:** `claude/aura-os-auth-system-246a53`
-**Status:** S1 security boundary **implemented and locally verified, including a fresh-database
-migration run and fail-closed RLS on a real PostgreSQL engine.** Confirmation on the CI
-Postgres service is still outstanding. Authentication is **not** yet production-ready — see
-*Explicitly not done*.
+**Status:** **S1 core + PostgreSQL migration/RLS gates: CI VERIFIED.**
+**Production-role runtime verification: OPEN** (S1-RLS.4 + .7).
+
+CI proves the schema boundary on real PostgreSQL — 234 migrations from a fresh database, an
+idempotent re-run, `auth_credentials` inside the RLS fitness gate, 204/204 tenant tables with
+ENABLE + FORCE + policy, a real credential seed feeding a real login, and CI no longer
+depending on the auth bypass.
+
+What it does **not** prove is that the runtime survives under the production role. CI runs the
+API as the database owner, so this chain is still untested end to end:
+
+```
+API running as aura_app  →  tenant-aware boot  →  login  →  MFA
+     →  protected request  →  cross-tenant attempt denied
+```
+
+Until that passes, this is schema security verified, not production-role runtime verified.
+Authentication is **not** production-ready.
 
 **Migrations:** `0233_auth_credentials.sql`, `0234_identity_rls_policies.sql`
 

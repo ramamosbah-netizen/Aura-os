@@ -119,7 +119,9 @@ export class AuthenticationService {
     identifier: string,
     password: string,
   ): Promise<AuthenticationResult> {
-    // 1. Registered identity.
+    // 1. Registered identity. Load this tenant's registry first: there is no cross-tenant
+    //    boot hydrate any more, and under the production role there could not be one.
+    await this.users.ensureTenant(tenantId);
     const user = this.users.get(tenantId, identifier);
     if (!user) {
       await dummyVerify();
@@ -199,6 +201,7 @@ export class AuthenticationService {
 
     // Re-check the account: a user deactivated while the challenge was outstanding must not
     // complete it into a live session.
+    await this.users.ensureTenant(challenge.tenantId);
     if (!this.users.isActive(challenge.tenantId, challenge.userId)) {
       this.challenges.consume(challengeId);
       return this.deny('inactive-user', challenge.tenantId, challenge.userId);

@@ -1,0 +1,87 @@
+/* Email workspace. Three panes on desktop (folders / list / reader), collapsing to one column on
+   a phone so the open message stays readable rather than being pushed below two lists. */
+
+.mail{display:grid;grid-template-columns:180px minmax(260px,340px) minmax(0,1fr);gap:12px;min-height:560px}
+
+.rail{display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px}
+.compose{margin-bottom:6px;padding:9px 12px;border:none;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-size:13px;font-weight:700;cursor:pointer}
+.folder{display:flex;align-items:center;gap:8px;padding:8px 10px;border:none;border-radius:9px;background:none;color:var(--text);font-size:13px;cursor:pointer;text-align:left}
+.folder:hover{background:var(--panel-2)}
+.folder svg{width:15px;height:15px;flex:0 0 auto}
+.folderActive{background:var(--panel-2);outline:1px solid var(--border);font-weight:650}
+.search{display:flex;align-items:center;gap:7px;margin-top:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:7px 9px}
+.search svg{width:14px;height:14px;color:var(--muted);flex:0 0 auto}
+.search input{background:none;border:none;outline:none;color:var(--text);font-size:12.5px;width:100%;min-width:0}
+
+.list{display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:8px;overflow:auto;max-height:640px}
+.row{display:flex;align-items:flex-start;gap:10px;width:100%;padding:9px 10px;border:none;border-radius:10px;background:none;color:var(--text);cursor:pointer;text-align:left}
+.row:hover{background:var(--panel-2)}
+.rowActive{background:var(--panel-2);outline:1px solid var(--border)}
+.rowMain{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.rowMain strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rowMain small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.snippet{opacity:.85}
+.rowSide{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto}
+.rowSide time{color:var(--muted);font-size:10.5px}
+
+.state{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 6px;border-radius:6px;border:1px solid var(--border);color:var(--muted);background:var(--panel-2);white-space:nowrap}
+/* Uncertain is visually distinct from both success and failure, because it is neither. */
+.stateUncertain{color:#b45309;border-color:rgba(180,83,9,.35);background:rgba(180,83,9,.08)}
+
+.reader{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;min-height:560px;max-height:640px;overflow:auto}
+.message header h3{margin:0 0 6px;font-size:16px}
+.meta{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 8px;color:var(--muted);font-size:12px}
+.body{margin-top:12px;font-size:13.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.uncertain{display:flex;gap:9px;align-items:flex-start;margin:12px 0 0;padding:10px 12px;border-radius:10px;background:rgba(180,83,9,.08);border:1px solid rgba(180,83,9,.3);color:var(--text);font-size:12.5px;line-height:1.55}
+.uncertain svg{width:16px;height:16px;flex:0 0 auto;color:#b45309}
+.failed{margin:10px 0 0;padding:9px 11px;border-radius:9px;background:rgba(220,53,69,.1);border:1px solid rgba(220,53,69,.25);color:#dc3545;font-size:12.5px}
+
+.thread{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}
+.thread summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+.thread p{margin:8px 0 0;font-size:12.5px;color:var(--muted);line-height:1.5}
+
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.actions button{padding:7px 12px;border-radius:9px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);font-size:12.5px;cursor:pointer}
+.actions button:disabled{opacity:.45;cursor:not-allowed}
+
+.replyBox{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.replyBox input,.replyBox textarea{background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:8px 10px;font-size:13px;outline:none;font-family:inherit}
+.replyBox button{align-self:flex-start;padding:7px 13px;border-radius:9px;border:none;background:var(--accent);color:var(--accent-ink);font-size:12.5px;font-weight:650;cursor:pointer}
+
+.composer{display:flex;flex-direction:column;gap:9px}
+.composer h3{margin:0 0 4px;font-size:16px}
+.composer label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted);font-weight:600}
+.composer input,.composer select,.composer textarea{background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:8px 10px;font-size:13px;outline:none;font-family:inherit}
+.composerActions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
+.composerActions button{padding:8px 14px;border-radius:9px;border:none;background:var(--accent);color:var(--accent-ink);font-size:13px;font-weight:650;cursor:pointer}
+.composerActions button:disabled{opacity:.45;cursor:not-allowed}
+.composerActions input[type=datetime-local]{flex:0 0 auto}
+
+.attachHint{display:flex;align-items:center;gap:7px;margin:2px 0 0;color:var(--muted);font-size:12px}
+.attachHint svg{width:14px;height:14px;flex:0 0 auto}
+.hint{margin:0;color:var(--muted);font-size:11.5px}
+.notice{margin:12px 0 0;padding:8px 11px;border-radius:9px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-size:12.5px}
+
+.loading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;margin:auto}
+.loading svg{width:15px;height:15px;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.stateBox,.placeholder{margin:auto;text-align:center;max-width:320px;padding:20px}
+.stateBox strong,.placeholder strong{display:block;font-size:14px;margin-bottom:5px}
+.stateBox p,.placeholder p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.55}
+
+@media (max-width:1050px){
+  .mail{grid-template-columns:150px minmax(220px,1fr)}
+  .reader{grid-column:1 / -1}
+}
+
+@media (max-width:700px){
+  .mail{grid-template-columns:1fr}
+  .rail{flex-direction:row;flex-wrap:wrap;align-items:center}
+  .search{margin-top:0;flex:1 1 100%}
+  .list{max-height:240px}
+  .reader{min-height:380px}
+  /* 16px stops iOS zooming the viewport when a field takes focus. */
+  .composer input,.composer textarea,.replyBox input,.replyBox textarea{font-size:16px}
+}

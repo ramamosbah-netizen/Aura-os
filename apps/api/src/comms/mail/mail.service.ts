@@ -275,6 +275,43 @@ export class MailService {
     return { mail, imported: true };
   }
 
+  /**
+   * One folder of the mailbox, with an optional text search.
+   *
+   * `needs-review` is a first-class folder rather than a filter on failures: a message whose
+   * delivery outcome is UNKNOWN must not be listed among the ones that definitely failed, or the
+   * user is told something the system does not know.
+   */
+  async folder(
+    caller: MailCaller,
+    folder: 'inbox' | 'sent' | 'drafts' | 'scheduled' | 'needs-review',
+    query: string | null = null,
+  ): Promise<MailRecord[]> {
+    // needs-review and sent both read the caller's outgoing mail; they differ only in which
+    // states they keep, so the store sees one folder and the filter does the rest.
+    const storeFolder = folder === 'needs-review' ? 'sent' : folder;
+    const base = await this.store.list(caller.tenantId, {
+      userId: caller.userId, address: caller.address, folder: storeFolder, limit: 200,
+    });
+
+    const scoped = folder === 'needs-review'
+      ? base.filter((mail) => mail.state === 'needs_review' || mail.state === 'failed')
+      : folder === 'sent'
+        // Sent holds everything that has LEFT the composer, including mail still queued or in
+        // flight. Restricting it to `sent` made a message disappear between the user pressing send
+        // and the dispatch worker running — the one moment they most need to see it. Each row
+        // carries its own state, so "Queued to send" is shown as exactly that, never as Sent.
+        ? base.filter((mail) => ['sent', 'queued', 'sending'].includes(mail.state))
+        : base;
+
+    const needle = (query ?? '').trim().toLowerCase();
+    if (!needle) return scoped;
+    return scoped.filter((mail) =>
+      mail.subject.toLowerCase().includes(needle)
+      || mail.body.toLowerCase().includes(needle)
+      || mail.participants.some((p) => (p.address ?? p.userId ?? '').toLowerCase().includes(needle)));
+  }
+
   async list(caller: MailCaller, filter: Omit<MailFilter, 'address' | 'userId'>): Promise<MailRecord[]> {
     return this.store.list(caller.tenantId, { ...filter, address: caller.address, userId: caller.userId });
   }

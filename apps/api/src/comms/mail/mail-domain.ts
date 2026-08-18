@@ -237,7 +237,15 @@ export function replyRecipients(
   const sender = source.participants.find((p) => p.role === 'from');
   const keep = (p: MailParticipant): boolean => participantKey(p) !== me;
 
-  const to = sender && keep(sender) ? [{ ...sender, role: 'to' as const }] : [];
+  // Replying to a message you sent yourself — following up from the Sent folder — is an ordinary
+  // act, and the audience is the people it was addressed to, not yourself. Deriving the audience
+  // from `from` alone left nobody to reply to and the reply was refused outright.
+  const outgoing = sender !== undefined && !keep(sender);
+  const to = outgoing
+    ? source.participants.filter((p) => p.role === 'to').filter(keep).map((p) => ({ ...p, role: 'to' as const }))
+    : sender && keep(sender)
+      ? [{ ...sender, role: 'to' as const }]
+      : [];
   if (!all) return { to, cc: [] };
 
   const seen = new Set([me, ...to.map(participantKey)]);

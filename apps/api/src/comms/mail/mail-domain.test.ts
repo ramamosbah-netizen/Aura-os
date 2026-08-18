@@ -130,6 +130,29 @@ describe('reply and reply-all', () => {
     expect([...to, ...cc].map((p) => p.address)).not.toContain('auditor@aura.example');
   });
 
+  it('replying to mail you sent yourself answers the people you addressed', () => {
+    // Following up from the Sent folder. Deriving the audience from `from` alone left nobody to
+    // reply to, because the sender IS the replier, and the reply was refused outright.
+    const mine = sent({
+      participants: [
+        { role: 'from', address: 'alice@aura.example' },
+        { role: 'to', address: 'client@example.com' },
+        { role: 'cc', address: 'colleague@aura.example' },
+        { role: 'bcc', address: 'auditor@aura.example' },
+      ],
+    });
+
+    const { to, cc } = replyRecipients(mine, { address: 'alice@aura.example' }, false);
+    expect(to.map((p) => p.address)).toEqual(['client@example.com']);
+    expect(cc).toEqual([]);
+
+    const all = replyRecipients(mine, { address: 'alice@aura.example' }, true);
+    expect(all.cc.map((p) => p.address)).toEqual(['colleague@aura.example']);
+    // Still not to yourself, and still never the blind copy.
+    expect([...all.to, ...all.cc].map((p) => p.address)).not.toContain('alice@aura.example');
+    expect([...all.to, ...all.cc].map((p) => p.address)).not.toContain('auditor@aura.example');
+  });
+
   it('does not duplicate an address that appears twice on the envelope', () => {
     const noisy = sent({
       participants: [

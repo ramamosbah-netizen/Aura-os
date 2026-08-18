@@ -332,6 +332,29 @@ export class PostgresMailStore implements MailStore {
     return (await this.hydrate(tenantId, rows))[0] ?? null;
   }
 
+  async listAccounts(tenantId: string, channel: string): Promise<Array<{
+    id: string; provider: string; label: string; status: string; capabilities: string[];
+  }>> {
+    const { rows } = await this.pool.query<{
+      id: string; provider: string; display_label: string; status: string; capabilities: unknown;
+    }>(
+      `select id, provider, display_label, status, capabilities
+         from public.aura_comms_accounts
+        where tenant_id = $1 and channel = $2
+        order by display_label`,
+      [tenantId, channel],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      label: row.display_label || row.provider,
+      // Reported as configured, never upgraded: an account the admin has not finished connecting
+      // shows as not_configured so the UI cannot imply a live mailbox.
+      status: row.status,
+      capabilities: Array.isArray(row.capabilities) ? row.capabilities as string[] : [],
+    }));
+  }
+
   async getSyncCursor(tenantId: string, accountId: string): Promise<string | null> {
     const { rows } = await this.pool.query<{ sync_cursor: string | null }>(
       `select sync_cursor from public.aura_comms_accounts where tenant_id = $1 and id = $2`,

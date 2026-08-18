@@ -66,6 +66,11 @@ export interface MailStore {
    */
   findByInternetMessageId(tenantId: string, internetMessageId: string): Promise<MailRecord | null>;
 
+  /** Connected accounts for a channel — what the sender picker may honestly offer. */
+  listAccounts(tenantId: string, channel: string): Promise<Array<{
+    id: string; provider: string; label: string; status: string; capabilities: string[];
+  }>>;
+
   /** Per-account sync checkpoint (migration 0237). */
   getSyncCursor(tenantId: string, accountId: string): Promise<string | null>;
   saveSyncCursor(tenantId: string, accountId: string, cursor: string | null, error: string | null, at: string): Promise<void>;

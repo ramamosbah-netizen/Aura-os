@@ -138,6 +138,12 @@ export class InMemoryMailStore implements MailStore {
     return found ? this.hydrate(tenantId, found) : null;
   }
 
+  async listAccounts(): Promise<Array<{ id: string; provider: string; label: string; status: string; capabilities: string[] }>> {
+    // Without a database there are no configured accounts, and inventing one would let the UI
+    // offer a sender that cannot send.
+    return [];
+  }
+
   async getSyncCursor(tenantId: string, accountId: string): Promise<string | null> {
     return this.cursors.get(`${tenantId}::${accountId}`) ?? null;
   }

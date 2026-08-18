@@ -16,6 +16,7 @@ import { fetchJson, getJson } from '@/lib/api';
 import AuraTabLink from '@/components/aura-tab-link';
 import AuraTabAnchor from '@/components/aura-tab-anchor';
 import InternalChat, { type ChatChannelView, type ChatUserView } from '@/components/internal-chat';
+import EmailWorkspace, { type MailAccountView } from '@/components/email-workspace';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from '@/components/my-work-center.module.css';
 
@@ -41,7 +42,7 @@ interface RecentCommunication {
  * working capability elsewhere links to it, and one with no implementation says so rather than
  * offering a button that does nothing.
  */
-type ViewId = 'overview' | 'email' | 'chat' | 'meetings' | 'whatsapp' | 'files' | 'contacts' | 'history';
+type ViewId = 'overview' | 'email' | 'chat' | 'meetings' | 'whatsapp' | 'files' | 'contacts';
 
 const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mail }> = [
   { id: 'overview', label: 'Overview', status: 'Live', icon: LayoutDashboard },
@@ -51,26 +52,26 @@ const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mai
   { id: 'whatsapp', label: 'WhatsApp', status: 'Not connected', icon: MessageCircleMore },
   { id: 'files', label: 'Shared Files', status: 'Live', icon: Share2 },
   { id: 'contacts', label: 'Contacts', status: 'Live', icon: ContactRound },
-  { id: 'history', label: 'History', status: 'Live', icon: History },
 ];
 
 export default async function MyCommunicationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; channel?: string }>;
+  searchParams: Promise<{ view?: string; channel?: string; mail?: string }>;
 }) {
-  const { view: requestedView, channel: deepLinkedChannel } = await searchParams;
+  const { view: requestedView, channel: deepLinkedChannel, mail: deepLinkedMail } = await searchParams;
   // A bare ?channel= link means "open this conversation", so it implies the chat view.
   const view: ViewId = (VIEWS.find((entry) => entry.id === requestedView)?.id
-    ?? (deepLinkedChannel ? 'chat' : 'overview'));
+    ?? (deepLinkedChannel ? 'chat' : deepLinkedMail ? 'email' : 'overview'));
 
   // Channels use fetchJson so a refusal is distinguishable from an empty list. C1 conceals
   // channels a user may not see, and rendering "no conversations" for a 403 would misreport it.
-  const [channelResult, mailbox, me, users] = await Promise.all([
+  const [channelResult, mailbox, me, users, accounts] = await Promise.all([
     fetchJson<ChatChannelView[]>('/api/comms/channels'),
     getJson<Mailbox>('/api/comms/mail'),
     getJson<WorkspaceMe>('/api/workspace/me'),
     getJson<WorkspaceUser[]>('/api/workspace/users'),
+    getJson<MailAccountView[]>('/api/comms/mailbox/accounts'),
   ]);
   const channels = channelResult.ok ? channelResult.data : null;
 
@@ -168,14 +169,11 @@ export default async function MyCommunicationPage({
             <span className={styles.stat}><strong>{mailbox ? mailbox.unread : '—'}</strong><small>Unread mail</small></span>
             <span className={styles.stat}><strong>{channels ? channels.length : '—'}</strong><small>Conversations you belong to</small></span>
           </div>
-          {historyList}
-        </section>
-      ) : null}
-
-      {view === 'history' ? (
-        <section className={styles.section} aria-labelledby="recent-communication">
           <header className={styles.sectionHead}>
-            <div><h2 id="recent-communication">Latest communication history</h2><p>Most recent available chat and mail activity.</p></div>
+            <div>
+              <h2 id="comm-timeline-title">Communication timeline</h2>
+              <p>What actually happened, newest first. History is part of Overview rather than a separate destination — one timeline, two lenses.</p>
+            </div>
             <span className={styles.badge}><History aria-hidden /> Recent</span>
           </header>
           {historyList}
@@ -185,14 +183,13 @@ export default async function MyCommunicationPage({
       {view === 'email' ? (
         <section className={styles.section} aria-labelledby="comm-email-title">
           <header className={styles.sectionHead}>
-            <div><h2 id="comm-email-title">Email</h2><p>AURA internal mail is implemented and lives in the communication hub. External providers are not connected.</p></div>
+            <div>
+              <h2 id="comm-email-title">Email</h2>
+              <p>Inbox, Sent, Drafts, Scheduled and anything waiting on a delivery decision — all inside Communication.</p>
+            </div>
           </header>
-          <AuraTabLink href="/workspace?tab=mail" tabTitle="Mail" tabType="Communication" className={styles.decision}>
-            <span className={styles.verb}>Mail</span>
-            <span className={styles.decisionMain}><strong>Open internal mail</strong><small>{mailbox ? `${mailbox.inbox.length} in inbox · ${mailbox.unread} unread` : 'Mailbox unavailable'}</small></span>
-            <ArrowRight aria-hidden />
-          </AuraTabLink>
-          <p className={styles.truth}><ShieldCheck aria-hidden /><span>Microsoft 365 and Gmail are not configured. No external mailbox is connected, and none is simulated here.</span></p>
+          <EmailWorkspace me={me?.username ?? ''} accounts={(accounts ?? []) as MailAccountView[]} initialMailId={deepLinkedMail ?? null} />
+          <p className={styles.truth}><ShieldCheck aria-hidden /><span>Microsoft 365 and Gmail are not configured. Only accounts an administrator has connected can send, and none is simulated here.</span></p>
         </section>
       ) : null}
 

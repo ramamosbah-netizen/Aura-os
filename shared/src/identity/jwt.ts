@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Id } from '../domain/id';
 
 // Minimal HS256 JWT — the same node:crypto dependency the webhook signer already uses.
@@ -11,7 +11,18 @@ export interface AuthClaims {
   sub: Id;
   tenantId: Id;
   companyId?: Id | null;
-  /** JWT ID — unique per token; the handle used to revoke a specific token. */
+  /**
+   * Session id (S2) — the `auth_sessions` row this access token belongs to. The verification
+   * boundary checks the named session is still live, so revoking the session invalidates every
+   * still-signature-valid access token that carries this `sid`, before its own `exp`.
+   */
+  sid?: string;
+  /**
+   * JWT ID — OPT-IN only. Self-issued access tokens no longer carry one: revocation is by session
+   * (`sid`) and by the opaque refresh family, so a per-token id had no remaining use and was
+   * dropped (final access token = {sub, tenantId, sid, iat, exp}). Verifiers still honour a `jti`
+   * when a hosted IdP includes one.
+   */
   jti?: string;
   /** Seconds since epoch (stamped by signJwt). */
   iat?: number;
@@ -27,10 +38,14 @@ function sign(data: string, secret: string): string {
   return createHmac('sha256', secret).update(data).digest('base64url');
 }
 
-/** Encode + sign an HS256 JWT. `ttlSeconds` sets `exp` (default 1h; negative = already expired). */
+/**
+ * Encode + sign an HS256 JWT. `ttlSeconds` sets `exp` (default 1h; negative = already expired).
+ * `jti` is OPT-IN — included only if the caller passes one; it is no longer auto-generated, so a
+ * self-issued access token is exactly `{sub, tenantId, sid?, iat, exp}` and nothing more.
+ */
 export function signJwt(claims: AuthClaims, secret: string, ttlSeconds = 3600): string {
   const iat = Math.floor(Date.now() / 1000);
-  const body: AuthClaims = { ...claims, jti: claims.jti ?? randomUUID(), iat, exp: iat + ttlSeconds };
+  const body: AuthClaims = { ...claims, iat, exp: iat + ttlSeconds };
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = b64url(JSON.stringify(body));
   return `${header}.${payload}.${sign(`${header}.${payload}`, secret)}`;

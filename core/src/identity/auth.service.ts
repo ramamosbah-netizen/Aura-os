@@ -13,6 +13,8 @@ import type { TenantInfo } from '../tenancy/tenant-context';
 import { TokenRevocationStore } from './token-revocation';
 import { AccessService } from './access.service';
 import { ServiceAccountsService } from './service-accounts.service';
+import { SessionStore } from './session.store';
+import { RefreshTokenStore } from './refresh-token.store';
 
 /**
  * Parse the AUTH_GROUP_ROLE_MAP csv (`<idp-group>=<aura-role>,…`) and resolve which AURA
@@ -32,19 +34,6 @@ export function mapGroupsToRoles(groups: unknown, csv: string | undefined): stri
     if (role) roles.add(role);
   }
   return [...roles];
-}
-
-const DEFAULT_SESSION_TTL_SECONDS = 3600;
-const MIN_SESSION_TTL_SECONDS = 300;
-const MAX_SESSION_TTL_SECONDS = 86_400;
-
-/** Parse the self-issued session lifetime with a safe, bounded fallback. */
-export function authSessionTtlSeconds(raw = process.env.AUTH_SESSION_TTL_SECONDS): number {
-  const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed < MIN_SESSION_TTL_SECONDS || parsed > MAX_SESSION_TTL_SECONDS) {
-    return DEFAULT_SESSION_TTL_SECONDS;
-  }
-  return parsed;
 }
 
 /** Caches a hosted IdP's JWKS (public keys), refreshed on TTL or a key-miss (rotation). */
@@ -86,7 +75,6 @@ export class AuthService {
   private readonly jwksUrl = (process.env.AUTH_JWKS_URL ?? process.env.SUPABASE_JWKS_URL)?.trim() || null;
   private readonly jwksCache = this.jwksUrl ? new JwksCache(this.jwksUrl) : null;
   private readonly defaultTenant = process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
-  private readonly ttlSeconds = authSessionTtlSeconds();
 
   // NOTE: union-typed params (`X | null`) emit `Object` in design:paramtypes under
   // strict mode, so @Optional() silently injects nothing — explicit @Inject required.
@@ -94,6 +82,8 @@ export class AuthService {
     private readonly revocation: TokenRevocationStore,
     @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
     @Optional() @Inject(ServiceAccountsService) private readonly serviceAccounts: ServiceAccountsService | null = null,
+    @Optional() @Inject(SessionStore) private readonly sessions: SessionStore | null = null,
+    @Optional() @Inject(RefreshTokenStore) private readonly refreshTokens: RefreshTokenStore | null = null,
   ) {
     const modes = [this.jwksCache ? 'JWKS (IdP)' : null, this.secret ? 'HS256 (self-issued)' : null].filter(Boolean);
     if (modes.length > 0) {
@@ -111,11 +101,6 @@ export class AuthService {
   /** Only the HS256 secret can mint tokens (the dev-login path); IdP tokens come from the IdP. */
   get canMint(): boolean {
     return this.secret !== null;
-  }
-
-  /** Lifetime applied to self-issued login and refreshed sessions. */
-  get sessionTtlSeconds(): number {
-    return this.ttlSeconds;
   }
 
   /** Verify an Authorization header into a request context, or null if absent/invalid. */
@@ -142,35 +127,67 @@ export class AuthService {
       if (claims?.sub && !this.revocation.isRevoked(claims.jti as string | undefined)) return this.toContext(claims);
     }
 
-    // 2. Self-issued HS256 (dev) token.
+    // 2. Self-issued HS256 (dev/login) token.
     if (this.secret) {
       const claims = verifyJwt(token, this.secret);
       if (claims?.sub && claims.tenantId && !this.revocation.isRevoked(claims.jti)) {
+        // A token that names a session (S2 login) is trusted only while that session is live —
+        // this is what makes revocation bite BEFORE `exp`. A token with no `sid` (dev-token mint,
+        // test-minted) carries no session binding and is not session-checked; dev-token minting is
+        // gated and refused in production, so real production login tokens always carry a sid.
+        if (claims.sid && this.sessions) {
+          const live = await this.sessions.validate(claims.tenantId, claims.sid as string);
+          if (!live) return null;
+        }
         return { tenantId: claims.tenantId, companyId: (claims.companyId ?? null) as Id | null, actorId: claims.sub };
       }
     }
     return null;
   }
 
+  /**
+   * Revoke the SESSION named by the presented token's `sid` (server-side logout), AND its refresh
+   * family. Once revoked, every still-signature-valid access token carrying that sid is refused at
+   * the boundary above, and the refresh tokens can no longer be rotated. Returns true if a live
+   * session was revoked.
+   */
+  async revokeSession(authorization: string | undefined, reason = 'logout'): Promise<boolean> {
+    if (!this.secret || !this.sessions) return false;
+    const token = this.tokenOf(authorization);
+    if (!token) return false;
+    const claims = verifyJwt(token, this.secret);
+    if (!claims?.sid || !claims.tenantId) return false;
+    // Lock/touch order matches rotate() — refresh tokens BEFORE the session — so concurrent
+    // logout + rotation cannot deadlock. A logged-out session's refresh tokens must die with it,
+    // or a held refresh token could mint fresh access tokens after logout.
+    if (this.refreshTokens) await this.refreshTokens.revokeForSession(claims.tenantId, claims.sid as string);
+    const revoked = await this.sessions.revoke(claims.tenantId, claims.sid as string, reason);
+    return revoked;
+  }
+
   private tokenOf(authorization: string | undefined): string | null {
     return authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : null;
   }
 
-  /** Sliding-session refresh: re-mint a fresh token from a still-valid, non-revoked self-issued one. */
-  refresh(authorization: string | undefined, ttlSeconds = this.ttlSeconds): string | null {
+  /**
+   * The verified claims of a presented self-issued token, or null. Read-only — for callers that
+   * must re-check the *token's* identity rather than the request context.
+   */
+  claimsOf(authorization: string | undefined): { sub: string; tenantId: string } | null {
     if (!this.secret) return null;
     const token = this.tokenOf(authorization);
     if (!token) return null;
     const claims = verifyJwt(token, this.secret);
-    if (!claims?.sub || !claims.tenantId || this.revocation.isRevoked(claims.jti)) return null;
-    return signJwt(
-      { sub: claims.sub, tenantId: claims.tenantId, companyId: (claims.companyId ?? null) as Id | null },
-      this.secret,
-      ttlSeconds,
-    );
+    if (!claims?.sub || !claims.tenantId) return null;
+    return { sub: claims.sub, tenantId: claims.tenantId };
   }
 
-  /** Revoke the presented token (logout / compromise response). True if a jti was denylisted. */
+  // The transitional "re-mint a JWT from a JWT" refresh has been REMOVED. Renewal now flows through
+  // the opaque refresh token (RefreshTokenStore) via AuthenticationService.refreshSession: the
+  // authoritative session/refresh lifecycle is the only thing that extends a login, and rotation +
+  // replay-containment live in the DB, not in a self-issued token's jti.
+
+  /** Revoke a presented IdP token by its `jti` (self-issued tokens carry none). */
   revoke(authorization: string | undefined): boolean {
     if (!this.secret) return false;
     const token = this.tokenOf(authorization);
@@ -215,7 +232,7 @@ export class AuthService {
   }
 
   /** Mint a token — used by the dev-login / dev-token endpoints. Throws if no HS256 secret. */
-  mint(claims: AuthClaims, ttlSeconds = this.ttlSeconds): string {
+  mint(claims: AuthClaims, ttlSeconds = 3600): string {
     if (!this.secret) throw new Error('AUTH_JWT_SECRET not set — cannot mint tokens');
     return signJwt(claims, this.secret, ttlSeconds);
   }

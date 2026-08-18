@@ -285,7 +285,7 @@ export class PlatformAdminController {
           lockSec: Math.round(Number(process.env.AUTH_LOCKOUT_DURATION_MS ?? 300_000) / 1000),
         },
       },
-      mfa: await this.mfa.listEnrolments(),
+      mfa: await this.mfa.listEnrolments(this.tenant.get().tenantId),
       sso: { jwksConfigured: !!process.env.AUTH_JWKS_URL?.trim(), groupRoleMap },
       pii: {
         encryptionConfigured: !!readSecret('PII_ENCRYPTION_KEY'),

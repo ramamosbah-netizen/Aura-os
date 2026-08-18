@@ -144,7 +144,7 @@ export class AuthenticationService {
     // 4. Second factor. An active enrolment ends this step with a CHALLENGE — the branch
     //    that could return a session is not reachable from here.
     if (await this.mfa.activeSecret(tenantId, identifier)) {
-      const challenge = this.challenges.issue({
+      const challenge = await this.challenges.issue({
         kind: 'mfa',
         tenantId,
         userId: identifier,
@@ -158,7 +158,7 @@ export class AuthenticationService {
     // 5. A must-change credential is likewise a challenge, not a session with a flag on it:
     //    the client cannot proceed to real work by ignoring a boolean it was handed.
     if (credential.mustChangePassword) {
-      const challenge = this.challenges.issue({
+      const challenge = await this.challenges.issue({
         kind: 'password_change',
         tenantId,
         userId: identifier,
@@ -175,42 +175,48 @@ export class AuthenticationService {
   /**
    * Step 2 — answer an MFA challenge. The ONLY path from an enrolled account to a session.
    *
-   * The identity comes from the stored challenge, never from the request: a caller cannot
-   * complete userA's challenge into a session for userB.
+   * `tenantId` is re-supplied by the caller (it is not in the access-less challenge exchange) and
+   * is UNTRUSTED — a scoping key, not a grant. The challenge store is RLS-scoped to it, so a
+   * challenge id from another tenant simply is not found; the identity still comes from the stored
+   * challenge, never the request, so a caller cannot complete userA's challenge into userB's session.
    */
-  async completeMfa(challengeId: string, code: string): Promise<AuthenticationResult> {
-    const challenge = this.challenges.get(challengeId, 'mfa');
-    if (!challenge) return this.deny('unknown-challenge', 'unknown', '(challenge)');
-    return this.inTenant(challenge.tenantId, () => this.completeMfaBound(challenge, challengeId, code));
+  async completeMfa(tenantId: string, challengeId: string, code: string): Promise<AuthenticationResult> {
+    return this.inTenant(tenantId, () => this.completeMfaBound(tenantId, challengeId, code));
   }
 
   private async completeMfaBound(
-    challenge: import('./auth-challenge.store').AuthChallenge,
+    tenantId: string,
     challengeId: string,
     code: string,
   ): Promise<AuthenticationResult> {
+    const challenge = await this.challenges.get(tenantId, challengeId, 'mfa');
+    if (!challenge) return this.deny('unknown-challenge', tenantId, '(challenge)');
+
     const secret = await this.mfa.activeSecret(challenge.tenantId, challenge.userId);
     if (!secret || !code?.trim() || !verifyTotp(secret, code.trim())) {
       // A wrong code burns an attempt on the challenge AND counts toward the account
       // lockout — otherwise the second factor is an unlimited-guess six-digit space for
       // anyone already holding the password.
-      this.challenges.recordAttempt(challengeId);
+      await this.challenges.recordAttempt(tenantId, challengeId);
       await this.credentials.recordMfaFailure(challenge.tenantId, challenge.userId);
       return this.deny('bad-mfa-code', challenge.tenantId, challenge.userId);
     }
 
-    // Re-check the account: a user deactivated while the challenge was outstanding must not
-    // complete it into a live session.
+    // ATOMIC single-use gate: claim the challenge BEFORE issuing anything. Two concurrent requests
+    // may both verify the same TOTP code, but only the one whose consume returns true owns the
+    // challenge — the loser gets false and is denied, so exactly one session is ever minted.
+    const claimed = await this.challenges.consume(tenantId, challengeId, 'mfa');
+    if (!claimed) return this.deny('unknown-challenge', tenantId, challenge.userId);
+
+    // Re-check the account AFTER claiming: a user deactivated while the challenge was outstanding
+    // must not complete it into a live session.
     await this.users.ensureTenant(challenge.tenantId);
     if (!this.users.isActive(challenge.tenantId, challenge.userId)) {
-      this.challenges.consume(challengeId);
       return this.deny('inactive-user', challenge.tenantId, challenge.userId);
     }
 
-    this.challenges.consume(challengeId);
-
     if (challenge.mustChangePassword) {
-      const next = this.challenges.issue({
+      const next = await this.challenges.issue({
         kind: 'password_change',
         tenantId: challenge.tenantId,
         userId: challenge.userId,
@@ -227,17 +233,18 @@ export class AuthenticationService {
    * Step 2' — satisfy a forced password change. Sets the new password and, only then,
    * issues the session. A must-change account never gets a usable session without changing.
    */
-  async completePasswordChange(challengeId: string, newPassword: string): Promise<AuthenticationResult | { kind: 'rejected'; message: string }> {
-    const challenge = this.challenges.get(challengeId, 'password_change');
-    if (!challenge) return this.deny('unknown-challenge', 'unknown', '(challenge)');
-    return this.inTenant(challenge.tenantId, () => this.completePasswordChangeBound(challenge, challengeId, newPassword));
+  async completePasswordChange(tenantId: string, challengeId: string, newPassword: string): Promise<AuthenticationResult | { kind: 'rejected'; message: string }> {
+    return this.inTenant(tenantId, () => this.completePasswordChangeBound(tenantId, challengeId, newPassword));
   }
 
   private async completePasswordChangeBound(
-    challenge: import('./auth-challenge.store').AuthChallenge,
+    tenantId: string,
     challengeId: string,
     newPassword: string,
   ): Promise<AuthenticationResult | { kind: 'rejected'; message: string }> {
+    const challenge = await this.challenges.get(tenantId, challengeId, 'password_change');
+    if (!challenge) return this.deny('unknown-challenge', tenantId, '(challenge)');
+
     try {
       await this.credentials.setPassword(challenge.tenantId, challenge.userId, newPassword, { mustChange: false });
     } catch (err) {
@@ -245,7 +252,11 @@ export class AuthenticationService {
       return { kind: 'rejected', message: (err as Error).message };
     }
 
-    this.challenges.consume(challengeId);
+    // Claim the challenge only AFTER the new password is set, so a policy rejection above leaves it
+    // alive for a retry. Under concurrency the password set is idempotent and exactly one consume
+    // wins, so only one session is issued.
+    const claimed = await this.challenges.consume(tenantId, challengeId, 'password_change');
+    if (!claimed) return this.deny('unknown-challenge', tenantId, challenge.userId);
     await this.record(challenge.tenantId, challenge.userId, 'password.changed', { forced: true });
     return this.issue(challenge.tenantId, challenge.userId, challenge.credentialId, false, { mfa: false });
   }

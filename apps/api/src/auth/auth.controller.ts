@@ -98,11 +98,17 @@ export class AuthController {
     return this.render(result);
   }
 
-  /** Step 2: answer an MFA challenge. The only path from an enrolled account to a token. */
+  /**
+   * Step 2: answer an MFA challenge. The only path from an enrolled account to a token.
+   *
+   * `tenantId` is re-supplied (defaulting exactly as `login` does) so the RLS-scoped challenge
+   * store can find the challenge — it is an untrusted scoping key, not an authorization claim.
+   */
   @Post('login/mfa')
   @HttpCode(HttpStatus.OK)
-  async loginMfa(@Body() dto: { challengeId?: string; code?: string }): Promise<LoginResponse | { challenge: string; challengeId: string }> {
-    const result = await this.authentication.completeMfa((dto?.challengeId ?? '').trim(), dto?.code ?? '');
+  async loginMfa(@Body() dto: { challengeId?: string; code?: string; tenantId?: string }): Promise<LoginResponse | { challenge: string; challengeId: string }> {
+    const tenantId = (dto?.tenantId ?? '').trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
+    const result = await this.authentication.completeMfa(tenantId, (dto?.challengeId ?? '').trim(), dto?.code ?? '');
     return this.render(result);
   }
 
@@ -110,9 +116,11 @@ export class AuthController {
   @Post('login/password-change')
   @HttpCode(HttpStatus.OK)
   async loginPasswordChange(
-    @Body() dto: { challengeId?: string; newPassword?: string },
+    @Body() dto: { challengeId?: string; newPassword?: string; tenantId?: string },
   ): Promise<LoginResponse | { challenge: string; challengeId: string }> {
+    const tenantId = (dto?.tenantId ?? '').trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
     const result = await this.authentication.completePasswordChange(
+      tenantId,
       (dto?.challengeId ?? '').trim(),
       dto?.newPassword ?? '',
     );

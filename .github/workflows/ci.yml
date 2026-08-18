@@ -232,6 +232,32 @@ jobs:
 
           kill "$(cat api-authrole.pid)" 2>/dev/null || true
 
+      # ── S2 gate: persistent auth_challenges under the production role ───────────────────────
+      # The challenge store moved from a node-pinned Map to migration 0235. This step proves, as
+      # aura_app (NOBYPASSRLS, non-owner) with SEPARATE connections, that RLS scopes every path and
+      # that the atomic `DELETE … RETURNING` consume is single-winner under a genuine concurrent
+      # race — the property a single-connection (PGlite) run cannot establish. See the script header.
+      - name: S2 — auth_challenges RLS scoping + concurrent single-use under aura_app
+        run: |
+          cd apps/api
+          DATABASE_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable" \
+            node scripts/auth-challenge-verify.mjs
+
+      # 0235 must roll back and re-apply cleanly (Vol 23 #25 — every new migration carries @DOWN).
+      # Runs as the owner (job-level DATABASE_URL) because it DROPs/CREATEs. Re-applies immediately
+      # so the database is whole for the restore drill below.
+      - name: S2 — 0235 rollback + re-apply is clean
+        run: |
+          cd apps/api
+          node scripts/migrate.mjs down
+          gone=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('auth_challenges','auth_sessions','auth_refresh_tokens');")
+          test "$gone" = "0" || { echo "::error::0235 @DOWN left tables behind (count=$gone)"; exit 1; }
+          echo "OK 0235 @DOWN dropped all three S2 tables"
+          node scripts/migrate.mjs
+          back=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('auth_challenges','auth_sessions','auth_refresh_tokens');")
+          test "$back" = "3" || { echo "::error::0235 re-apply did not restore all three tables (count=$back)"; exit 1; }
+          echo "OK 0235 re-applied cleanly — all three S2 tables present"
+
       - name: R1 activation — DB-level fail-closed + no-bypass proof under aura_app
         run: |
           APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"

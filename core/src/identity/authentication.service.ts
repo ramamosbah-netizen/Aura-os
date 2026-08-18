@@ -59,7 +59,7 @@ export interface AuthenticationInput {
 /** The result of rotating a refresh token. Every failure is the same opaque `invalid`. */
 export type RefreshOutcome =
   | { kind: 'refreshed'; accessToken: string; refreshToken: string; expiresInSeconds: number; userId: string; tenantId: string }
-  | { kind: 'invalid' };
+  | { kind: 'invalid'; reason?: string };
 
 @Injectable()
 export class AuthenticationService {
@@ -296,8 +296,9 @@ export class AuthenticationService {
     }
     if (outcome.kind === 'replay') {
       await this.record(tenantId, '(refresh)', 'refresh.replay', { familyId: outcome.familyId });
+      return { kind: 'invalid', reason: 'replay' };
     }
-    return { kind: 'invalid' };
+    return { kind: 'invalid', reason: outcome.reason };
   }
 
   /** The single place a session is created, once every step has passed. */

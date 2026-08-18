@@ -37,7 +37,7 @@ import { UsersService } from './users.service';
 export type RotateOutcome =
   | { kind: 'rotated'; sessionId: string; userId: string; familyId: string; token: string; expiresAt: number }
   | { kind: 'replay'; sessionId: string; familyId: string } // known-consumed token reused → contained
-  | { kind: 'invalid' }; // unknown / expired / revoked / ineligible session
+  | { kind: 'invalid'; reason?: string }; // unknown / expired / revoked / ineligible (reason: diag only)
 
 export interface IssuedRefreshToken {
   token: string;
@@ -146,7 +146,7 @@ export class RefreshTokenStore {
    * the session's user on success; `replay` / `invalid` otherwise (all opaque to the caller).
    */
   async rotate(tenantId: string, presented: string): Promise<RotateOutcome> {
-    if (!presented) return { kind: 'invalid' };
+    if (!presented) return { kind: 'invalid', reason: 'empty' };
     const hash = hashRefreshToken(presented);
     const newToken = generateRefreshToken();
     const newHash = hashRefreshToken(newToken);
@@ -167,7 +167,7 @@ export class RefreshTokenStore {
         );
         if (r1.rowCount === 0) {
           this.logger.warn('rotate deny: refresh token not found for this tenant');
-          return { kind: 'invalid' }; // unknown
+          return { kind: 'invalid', reason: 'not-found' }; // unknown
         }
         const t = r1.rows[0];
 
@@ -179,7 +179,7 @@ export class RefreshTokenStore {
         }
         if (t.state !== 'active' || t.expired) {
           this.logger.warn(`rotate deny: token state=${t.state} expired=${t.expired}`);
-          return { kind: 'invalid' }; // revoked / expired
+          return { kind: 'invalid', reason: `state:${t.state}/expired:${t.expired}` }; // revoked / expired
         }
 
         // 3. Lock the session (lock order: R1 then session, everywhere).
@@ -194,8 +194,9 @@ export class RefreshTokenStore {
         );
         const s = ses.rows[0];
         // 4 + 5. Session live/absolute/idle AND user active — all IN THIS TRANSACTION.
-        let ineligible = !s || s.ineligible;
-        if (ineligible) {
+        let denyReason: string | null = null;
+        if (!s || s.ineligible) {
+          denyReason = `session:${!s ? 'missing' : 'flags'}`;
           this.logger.warn(`rotate deny: session ineligible (missing=${!s} flags=${s?.ineligible})`);
         } else {
           const u = await client.query<{ active: boolean }>(
@@ -205,14 +206,14 @@ export class RefreshTokenStore {
           // FAIL-CLOSED for refresh: a missing user row is ineligible (login already requires a
           // registry row, so a legitimate refresh always has one; a deleted row must deny).
           if ((u.rowCount ?? 0) === 0 || u.rows[0].active === false) {
-            this.logger.warn(`rotate deny: user ineligible (rows=${u.rowCount} active=${u.rows[0]?.active}) for ${s.user_id}`);
-            ineligible = true;
+            denyReason = `user:rows=${u.rowCount}/active=${u.rows[0]?.active}`;
+            this.logger.warn(`rotate deny: user ineligible (${denyReason}) for ${s.user_id}`);
           }
         }
         // 6. Ineligible → the family and the session die; R1 is NOT consumed into a usable R2.
-        if (ineligible) {
+        if (denyReason) {
           await this.containFamily(client, tenantId, t.family_id, t.session_id, 'refresh_ineligible');
-          return { kind: 'invalid' };
+          return { kind: 'invalid', reason: denyReason };
         }
 
         // 7. Consume R1. 8. Issue R2. 9. Advance the session's idle clock — all before COMMIT.
@@ -305,12 +306,12 @@ export class RefreshTokenStore {
     return this.lock(hash, async () => {
       const now = Date.now();
       const t = this.local.get(hash);
-      if (!t || t.tenantId !== tenantId) return { kind: 'invalid' };
+      if (!t || t.tenantId !== tenantId) return { kind: 'invalid', reason: 'not-found' };
       if (t.state === 'consumed') {
         await this.containLocal(tenantId, t.familyId, t.sessionId, 'refresh_replay');
         return { kind: 'replay', sessionId: t.sessionId, familyId: t.familyId };
       }
-      if (t.state !== 'active' || t.expiresAt <= now) return { kind: 'invalid' };
+      if (t.state !== 'active' || t.expiresAt <= now) return { kind: 'invalid', reason: `state:${t.state}` };
 
       // Raw session state (NOT the access-boundary cache) + user activity, in the critical section.
       const s = await this.sessionStore.get(tenantId, t.sessionId);
@@ -325,7 +326,7 @@ export class RefreshTokenStore {
         u.active === false;
       if (ineligible) {
         await this.containLocal(tenantId, t.familyId, t.sessionId, 'refresh_ineligible');
-        return { kind: 'invalid' };
+        return { kind: 'invalid', reason: 'ineligible' };
       }
 
       t.state = 'consumed';

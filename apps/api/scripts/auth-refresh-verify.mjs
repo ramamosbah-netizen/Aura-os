@@ -84,6 +84,8 @@ async function rotate(refreshToken) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
   });
+  const deny = res.headers.get('x-refresh-deny');
+  if (deny) console.log(`DIAG rotate denied: ${deny}`);
   const body = res.ok ? await res.json().catch(() => ({})) : null;
   return { status: res.status, access: body?.token, refresh: body?.refreshToken };
 }

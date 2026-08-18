@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpCode, HttpException, HttpStatus, Post, Query, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpCode, HttpException, HttpStatus, Post, Query, Res, UnauthorizedException } from '@nestjs/common';
 import { AuditService, AuthService, AuthenticationService, CredentialsService, MfaService, Permissions, TenantContext, UsersService, type AuthSession } from '@aura/core';
 import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
 
@@ -169,10 +169,16 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Body() dto: { refreshToken?: string; tenantId?: string },
+    @Res({ passthrough: true }) res: { setHeader: (name: string, value: string) => void },
   ): Promise<{ token: string; refreshToken: string; expiresIn: number }> {
     const tenantId = (dto?.tenantId ?? '').trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
     const outcome = await this.authentication.refreshSession(tenantId, (dto?.refreshToken ?? '').trim());
     if (outcome.kind !== 'refreshed') {
+      // Diagnostic ONLY outside production: surface the internal denial reason so CI can see it.
+      // The response body stays opaque; production never sets this header.
+      if (process.env.NODE_ENV !== 'production' && outcome.reason) {
+        res.setHeader('X-Refresh-Deny', outcome.reason);
+      }
       throw new UnauthorizedException('cannot refresh — token missing, invalid, expired, or revoked');
     }
     return { token: outcome.accessToken, refreshToken: outcome.refreshToken, expiresIn: outcome.expiresInSeconds };

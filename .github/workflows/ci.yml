@@ -246,6 +246,7 @@ jobs:
           # S2 REFRESH: opaque rotation + replay containment + the R1||R1 race, exercised through the
           # REAL rotate transaction over HTTP against this aura_app API on real PostgreSQL.
           AUTH_USER=u-director AUTH_PASS=ci-app-role-password API_URL=http://localhost:4500 \
+            DIAG_DATABASE_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable" \
             node scripts/auth-refresh-verify.mjs || { echo '--- api-authrole.log ---'; cat api-authrole.log; exit 1; }
 
           kill "$(cat api-authrole.pid)" 2>/dev/null || true

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { SessionStore } from './session.store';
 
 // Session issuance — the ONE place a session or token comes into existence.
 //
@@ -46,22 +47,34 @@ function accessTtlSeconds(): number {
 
 @Injectable()
 export class SessionService {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly sessions: SessionStore,
+  ) {}
 
   /**
    * Create a session for an identity that has FULLY authenticated — password verified and,
    * where enrolled, the second factor satisfied. Callers must not reach this with a partial
    * authentication; `AuthenticationService` is the only intended caller, and it can only
    * get here past both steps.
+   *
+   * S2: this now persists an `auth_sessions` row and stamps its id as the access token's `sid`.
+   * The access token stays short-lived and self-verifying, but the boundary additionally checks
+   * that `sid` names a live session — so revoking the session ends the token before its `exp`.
    */
-  create(subject: SessionSubject): AuthSession {
+  async create(subject: SessionSubject): Promise<AuthSession> {
     const expiresInSeconds = accessTtlSeconds();
+    const session = await this.sessions.create({
+      tenantId: subject.tenantId,
+      userId: subject.userId,
+      credentialId: subject.credentialId,
+    });
     return {
       userId: subject.userId,
       tenantId: subject.tenantId,
       companyId: null,
       accessToken: this.auth.mint(
-        { sub: subject.userId, tenantId: subject.tenantId, companyId: null },
+        { sub: subject.userId, tenantId: subject.tenantId, companyId: null, sid: session.id },
         expiresInSeconds,
       ),
       expiresInSeconds,

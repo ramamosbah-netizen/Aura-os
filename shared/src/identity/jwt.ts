@@ -11,6 +11,12 @@ export interface AuthClaims {
   sub: Id;
   tenantId: Id;
   companyId?: Id | null;
+  /**
+   * Session id (S2) — the `auth_sessions` row this access token belongs to. The verification
+   * boundary checks the named session is still live, so revoking the session invalidates every
+   * still-signature-valid access token that carries this `sid`, before its own `exp`.
+   */
+  sid?: string;
   /** JWT ID — unique per token; the handle used to revoke a specific token. */
   jti?: string;
   /** Seconds since epoch (stamped by signJwt). */

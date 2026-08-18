@@ -23,9 +23,9 @@ describe('AuthService — refresh & revoke', () => {
     expect(await auth.contextFromHeader(`Bearer ${token}`)).toMatchObject({ actorId: 'u-admin', tenantId: 'dev-tenant' });
   });
 
-  it('refreshes a valid token into a distinct fresh one', () => {
+  it('refreshes a valid token into a distinct fresh one', async () => {
     const token = auth.mint({ sub: 'u-admin', tenantId: 'dev-tenant', companyId: null });
-    const fresh = auth.refresh(`Bearer ${token}`);
+    const fresh = await auth.refresh(`Bearer ${token}`);
     expect(fresh).toBeTruthy();
     expect(fresh).not.toBe(token);
   });
@@ -34,11 +34,11 @@ describe('AuthService — refresh & revoke', () => {
     const token = auth.mint({ sub: 'u-admin', tenantId: 'dev-tenant', companyId: null });
     expect(auth.revoke(`Bearer ${token}`)).toBe(true);
     expect(await auth.contextFromHeader(`Bearer ${token}`)).toBeNull();
-    expect(auth.refresh(`Bearer ${token}`)).toBeNull();
+    expect(await auth.refresh(`Bearer ${token}`)).toBeNull();
   });
 
-  it('is a no-op without a bearer token', () => {
-    expect(auth.refresh(undefined)).toBeNull();
+  it('is a no-op without a bearer token', async () => {
+    expect(await auth.refresh(undefined)).toBeNull();
     expect(auth.revoke(undefined)).toBe(false);
     expect(auth.revoke('Basic xyz')).toBe(false);
   });

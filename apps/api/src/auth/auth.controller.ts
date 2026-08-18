@@ -172,12 +172,26 @@ export class AuthController {
     @Res({ passthrough: true }) res: { setHeader: (name: string, value: string) => void },
   ): Promise<{ token: string; refreshToken: string; expiresIn: number }> {
     const tenantId = (dto?.tenantId ?? '').trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
-    const outcome = await this.authentication.refreshSession(tenantId, (dto?.refreshToken ?? '').trim());
+    const diag = process.env.NODE_ENV !== 'production';
+    let outcome;
+    try {
+      outcome = await this.authentication.refreshSession(tenantId, (dto?.refreshToken ?? '').trim());
+    } catch (err) {
+      // A THROW from the rotation transaction (not a clean invalid) — surface it (dev/CI only).
+      const msg = `throw:${(err as Error)?.message ?? err}`;
+      if (diag) {
+        res.setHeader('X-Refresh-Deny', msg.slice(0, 200));
+        console.error(`X-REFRESH-DENY-DIAG ${msg}`);
+      }
+      throw new UnauthorizedException('cannot refresh — internal error');
+    }
     if (outcome.kind !== 'refreshed') {
       // Diagnostic ONLY outside production: surface the internal denial reason so CI can see it.
       // The response body stays opaque; production never sets this header.
-      if (process.env.NODE_ENV !== 'production' && outcome.reason) {
-        res.setHeader('X-Refresh-Deny', outcome.reason);
+      if (diag) {
+        const reason = outcome.reason ?? 'no-reason';
+        res.setHeader('X-Refresh-Deny', reason);
+        console.error(`X-REFRESH-DENY-DIAG ${reason}`);
       }
       throw new UnauthorizedException('cannot refresh — token missing, invalid, expired, or revoked');
     }

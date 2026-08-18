@@ -165,7 +165,10 @@ export class RefreshTokenStore {
              FROM public.auth_refresh_tokens WHERE tenant_id=$1 AND token_hash=$2 FOR UPDATE`,
           [tenantId, hash],
         );
-        if (r1.rowCount === 0) return { kind: 'invalid' }; // unknown
+        if (r1.rowCount === 0) {
+          this.logger.warn('rotate deny: refresh token not found for this tenant');
+          return { kind: 'invalid' }; // unknown
+        }
         const t = r1.rows[0];
 
         // 2. Classify. Only a KNOWN, previously-consumed token is a replay.
@@ -174,7 +177,10 @@ export class RefreshTokenStore {
           this.logger.warn(`refresh replay detected — family ${t.family_id} contained`);
           return { kind: 'replay', sessionId: t.session_id, familyId: t.family_id };
         }
-        if (t.state !== 'active' || t.expired) return { kind: 'invalid' }; // revoked / expired
+        if (t.state !== 'active' || t.expired) {
+          this.logger.warn(`rotate deny: token state=${t.state} expired=${t.expired}`);
+          return { kind: 'invalid' }; // revoked / expired
+        }
 
         // 3. Lock the session (lock order: R1 then session, everywhere).
         const ses = await client.query<{ user_id: string; ineligible: boolean }>(
@@ -189,14 +195,19 @@ export class RefreshTokenStore {
         const s = ses.rows[0];
         // 4 + 5. Session live/absolute/idle AND user active — all IN THIS TRANSACTION.
         let ineligible = !s || s.ineligible;
-        if (!ineligible) {
+        if (ineligible) {
+          this.logger.warn(`rotate deny: session ineligible (missing=${!s} flags=${s?.ineligible})`);
+        } else {
           const u = await client.query<{ active: boolean }>(
             `SELECT active FROM public.aura_users WHERE tenant_id=$1 AND user_id=$2`,
             [tenantId, s.user_id],
           );
           // FAIL-CLOSED for refresh: a missing user row is ineligible (login already requires a
           // registry row, so a legitimate refresh always has one; a deleted row must deny).
-          if ((u.rowCount ?? 0) === 0 || u.rows[0].active === false) ineligible = true;
+          if ((u.rowCount ?? 0) === 0 || u.rows[0].active === false) {
+            this.logger.warn(`rotate deny: user ineligible (rows=${u.rowCount} active=${u.rows[0]?.active}) for ${s.user_id}`);
+            ineligible = true;
+          }
         }
         // 6. Ineligible → the family and the session die; R1 is NOT consumed into a usable R2.
         if (ineligible) {

@@ -113,7 +113,11 @@ jobs:
       - name: Boot the built API against the migrated database
         run: |
           cd apps/api
-          AUTH_JWT_SECRET=ci-drill-secret AUTH_REQUIRED=true PORT=4300 nohup node dist/main.js > api.log 2>&1 &
+          # AUTH_DEV_PASSWORD + AUTH_DEV_ADMIN_USER seed a REAL hashed credential for the two
+          # demo accounts. Before the S1 auth rebuild this step ran with neither, and the seed
+          # below still authenticated — because login accepted ANY password when
+          # AUTH_DEV_PASSWORD was unset. This job was passing *because of* the auth bypass.
+          AUTH_JWT_SECRET=ci-drill-secret AUTH_REQUIRED=true PORT=4300 AUTH_DEV_PASSWORD=ci-demo-seed-password AUTH_DEV_ADMIN_USER=u-admin,u-approver nohup node dist/main.js > api.log 2>&1 &
           echo $! > api.pid
           for i in $(seq 1 60); do
             curl -sf http://localhost:4300/api/v1/health > /dev/null && break
@@ -141,7 +145,7 @@ jobs:
           git diff --exit-code packages/sdk/src/generated.ts
 
       - name: Seed the demo dataset through the live API
-        run: AURA_API_URL=http://localhost:4300 node apps/api/scripts/seed-demo.mjs
+        run: AURA_API_URL=http://localhost:4300 SEED_PASS=ci-demo-seed-password node apps/api/scripts/seed-demo.mjs
 
       # ── R1 activation closure ──────────────────────────────────────────────────────────
       # The steps above run as the DB owner (BYPASSRLS), which proves nothing about enforcement.

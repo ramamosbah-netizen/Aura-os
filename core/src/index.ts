@@ -18,6 +18,7 @@ export * from './identity/credentials.service';
 export * from './identity/authentication.service';
 export * from './identity/auth-challenge.store';
 export * from './identity/session.service';
+export * from './identity/session.store';
 export * from './identity/rls-posture';
 export * from './identity/auth-posture';
 export * from './identity/service-accounts.service';

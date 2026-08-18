@@ -243,6 +243,16 @@ jobs:
           DATABASE_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable" \
             node scripts/auth-challenge-verify.mjs
 
+      # SessionStore rests on auth_sessions. Prove the DB layer under the production role: RLS
+      # tenant isolation, tenant-scoped + single-effect revocation under contention, absolute
+      # expiry as a row property. The boundary cache/validate logic is covered by the unit + e2e
+      # suites; this is the RLS/concurrency half only reachable on real PostgreSQL as aura_app.
+      - name: S2 — auth_sessions RLS scoping + tenant-scoped revocation under aura_app
+        run: |
+          cd apps/api
+          DATABASE_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable" \
+            node scripts/auth-session-verify.mjs
+
       # 0235 must roll back and re-apply cleanly (Vol 23 #25 — every new migration carries @DOWN).
       # Runs as the owner (job-level DATABASE_URL) because it DROPs/CREATEs. Re-applies immediately
       # so the database is whole for the restore drill below.

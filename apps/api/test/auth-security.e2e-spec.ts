@@ -436,4 +436,47 @@ describe('authentication security boundary (HTTP)', () => {
     const replay = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${original}`);
     expect(replay.status).toBe(401);
   });
+
+  // === S2 session lifecycle: revocation bites before exp ========================
+  //
+  // The decisive S2 invariant. A login token is cryptographically valid until its exp, but it
+  // names a session (sid). Revoking that session must refuse the SAME token at the boundary —
+  // otherwise a "logout" or a compromise response leaves a stolen token usable for the full TTL.
+
+  it('revoking a session refuses its still-valid access token at the boundary (sid, not jti)', async () => {
+    const res = await login({ username: ALICE, password: PASSWORD });
+    expect(res.status).toBe(200);
+    const token: string = res.body.token;
+    expect(token).toEqual(expect.any(String));
+
+    // The boundary accepts it now.
+    const before = await auth.contextFromHeader(`Bearer ${token}`);
+    expect(before?.actorId).toBe(ALICE);
+
+    // Revoke ONLY the session — not the jti denylist — so what we prove is the sid check, not the
+    // transitional token denylist. The token's signature and exp are untouched.
+    const revoked = await auth.revokeSession(`Bearer ${token}`);
+    expect(revoked).toBe(true);
+
+    // The same token, still signature-valid with exp in the future, is now refused.
+    const after = await auth.contextFromHeader(`Bearer ${token}`);
+    expect(after).toBeNull();
+  });
+
+  it('logout revokes server-side, so the token can no longer be refreshed', async () => {
+    const res = await login({ username: ALICE, password: PASSWORD });
+    const token: string = res.body.token;
+
+    // Refresh works while the session is live.
+    const ok = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${token}`);
+    expect(ok.status).toBe(201);
+
+    // Logout revokes the session server-side …
+    const out = await http.post('/api/v1/auth/logout').set('Authorization', `Bearer ${token}`);
+    expect(out.body.revoked).toBe(true);
+
+    // … so even a still-valid token cannot be refreshed into a fresh one.
+    const denied = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${token}`);
+    expect(denied.status).toBe(401);
+  });
 });

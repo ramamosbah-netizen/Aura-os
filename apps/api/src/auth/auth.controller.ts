@@ -158,7 +158,7 @@ export class AuthController {
 
   /** Sliding-session refresh — exchange a still-valid token for a fresh one. */
   @Post('refresh')
-  refresh(@Headers('authorization') authorization?: string): { token: string } {
+  async refresh(@Headers('authorization') authorization?: string): Promise<{ token: string }> {
     // Re-check the account on every refresh. Without this a user deactivated mid-session
     // renews their token indefinitely and deactivation only bites on guarded routes.
     // Identity is read from the PRESENTED token, not the request context.
@@ -166,17 +166,23 @@ export class AuthController {
     if (presented && !this.users.isActive(presented.tenantId, presented.sub)) {
       throw new UnauthorizedException(`account ${presented.sub} is deactivated`);
     }
-    // Rotates: the presented jti is revoked as the replacement is minted, so a copy
-    // captured earlier in the session cannot be replayed after a refresh.
-    const token = this.auth.refresh(authorization);
+    // Rotates AND respects revocation: the presented jti is denylisted as the replacement is
+    // minted, and a token whose session has been revoked cannot be refreshed at all.
+    const token = await this.auth.refresh(authorization);
     if (!token) throw new UnauthorizedException('cannot refresh — token missing, invalid, or revoked');
     return { token };
   }
 
-  /** Logout — revoke the presented token by its jti so it can no longer authenticate. */
+  /**
+   * Logout — SERVER-SIDE revocation. Kills the session named by the token's `sid` so every
+   * still-valid access token carrying it is refused at the boundary, and also denylists this
+   * token's jti (transitional, immediate on this node). Either one succeeding counts as revoked.
+   */
   @Post('logout')
-  logout(@Headers('authorization') authorization?: string): { revoked: boolean } {
-    return { revoked: this.auth.revoke(authorization) };
+  async logout(@Headers('authorization') authorization?: string): Promise<{ revoked: boolean }> {
+    const sessionRevoked = await this.auth.revokeSession(authorization);
+    const tokenRevoked = this.auth.revoke(authorization);
+    return { revoked: sessionRevoked || tokenRevoked };
   }
 
   /**

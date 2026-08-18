@@ -269,7 +269,7 @@ export class AuthenticationService {
     mustChangePassword: boolean,
     metadata: Record<string, unknown>,
   ): Promise<AuthenticationResult> {
-    const session = this.sessions.create({ userId, tenantId, credentialId, mustChangePassword });
+    const session = await this.sessions.create({ userId, tenantId, credentialId, mustChangePassword });
     await this.record(tenantId, userId, 'login.succeeded', { ...metadata, credentialId });
     return { kind: 'authenticated', session };
   }

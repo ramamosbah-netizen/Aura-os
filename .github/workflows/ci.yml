@@ -248,6 +248,48 @@ jobs:
           AUTH_USER=u-director AUTH_PASS=ci-app-role-password API_URL=http://localhost:4500 \
             node scripts/auth-refresh-verify.mjs || { echo '--- api-authrole.log ---'; cat api-authrole.log; exit 1; }
 
+          # 6. MFA, end to end under aura_app. Enrolment and the TOTP secret live in
+          #    aura_user_mfa, which migration 0234 re-keyed to (tenant_id, user_id) and put
+          #    under FORCE RLS — so this exercises that table through the enforced role.
+          body=$(curl -s -o /tmp/login2.json -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password"}')
+          tok=$(grep -o '"token":"[^"]*"' /tmp/login2.json | cut -d'"' -f4)
+          test -n "$tok" || { echo '::error::re-login before MFA test failed'; cat /tmp/login2.json; exit 1; }
+
+          curl -s -o /tmp/enroll.json -X POST http://localhost:4500/api/v1/auth/mfa/enroll -H "Authorization: Bearer $tok" -H 'content-type: application/json' -d '{}'
+          secret=$(grep -o '"secret":"[^"]*"' /tmp/enroll.json | cut -d'"' -f4)
+          test -n "$secret" || { echo '::error::mfa enroll returned no secret'; cat /tmp/enroll.json; cat api-authrole.log; exit 1; }
+
+          codegen='const s=require("@aura/shared");console.log(s.totpCodeAt(process.argv[1]));'
+          otp=$(node -e "$codegen" "$secret")
+          code=$(curl -s -o /tmp/act.json -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/mfa/activate -H "Authorization: Bearer $tok" -H 'content-type: application/json' -d "{\"code\":\"$otp\"}")
+          test "$code" = "201" -o "$code" = "200" || { echo "::error::mfa activate returned $code"; cat /tmp/act.json; exit 1; }
+          echo "OK MFA activated under aura_app (write to aura_user_mfa through FORCE RLS)"
+
+          # Password alone must now yield a CHALLENGE and no token of any kind.
+          curl -s -o /tmp/mfa1.json -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password"}'
+          chal=$(grep -o '"challengeId":"[^"]*"' /tmp/mfa1.json | cut -d'"' -f4)
+          test -n "$chal" || { echo '::error::MFA enrolled but login did not challenge'; cat /tmp/mfa1.json; exit 1; }
+          grep -q '"token"' /tmp/mfa1.json && { echo '::error::SECURITY — a token was issued alongside the MFA challenge'; cat /tmp/mfa1.json; exit 1; }
+          echo "OK password step returned an MFA challenge and NO token"
+
+          # A wrong code must not complete it.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login/mfa -H 'content-type: application/json' -d "{\"challengeId\":\"$chal\",\"code\":\"000000\",\"tenantId\":\"dev-tenant\"}")
+          test "$code" = "401" || { echo "::error::wrong TOTP returned $code, expected 401"; exit 1; }
+          echo "OK wrong TOTP refused (401)"
+
+          # The correct code is the only path to a session.
+          otp=$(node -e "$codegen" "$secret")
+          curl -s -o /tmp/mfa2.json -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password"}'
+          chal=$(grep -o '"challengeId":"[^"]*"' /tmp/mfa2.json | cut -d'"' -f4)
+          curl -s -o /tmp/mfa3.json -X POST http://localhost:4500/api/v1/auth/login/mfa -H 'content-type: application/json' -d "{\"challengeId\":\"$chal\",\"code\":\"$otp\",\"tenantId\":\"dev-tenant\"}"
+          mtok=$(grep -o '"token":"[^"]*"' /tmp/mfa3.json | cut -d'"' -f4)
+          test -n "$mtok" || { echo '::error::valid TOTP did not issue a session'; cat /tmp/mfa3.json; cat api-authrole.log; exit 1; }
+          echo "OK valid TOTP issued a session (MFA is the only path for an enrolled account)"
+
+          # Reset so the account is left as we found it.
+          curl -s -o /dev/null -X DELETE "http://localhost:4500/api/v1/auth/mfa?account=u-director" -H "Authorization: Bearer $mtok"
+
+
           kill "$(cat api-authrole.pid)" 2>/dev/null || true
 
       # ── S2 gate: persistent auth_challenges under the production role ───────────────────────
@@ -255,6 +297,32 @@ jobs:
       # aura_app (NOBYPASSRLS, non-owner) with SEPARATE connections, that RLS scopes every path and
       # that the atomic `DELETE … RETURNING` consume is single-winner under a genuine concurrent
       # race — the property a single-connection (PGlite) run cannot establish. See the script header.
+      # S1-RLS: tenant isolation on the IDENTITY tables, as aura_app. The R1 step below proves
+      # this for a business table; these three are the ones authentication reads, and they are
+      # the tables migration 0233/0234 changed. Three cases each — the third is the one an
+      # earlier draft of 0233 got wrong by allowing access when no tenant was bound.
+      - name: S1-RLS — identity tables deny cross-tenant and no-tenant access under aura_app
+        run: |
+          APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"
+          fail=0
+          for t in aura_users auth_credentials aura_user_mfa; do
+            own=$(psql "$APP_URL" -tAc "SELECT set_config('app.current_tenant_id','dev-tenant',false); SELECT count(*) FROM public.$t;" | tail -n1)
+            other=$(psql "$APP_URL" -tAc "SELECT set_config('app.current_tenant_id','other-tenant',false); SELECT count(*) FROM public.$t;" | tail -n1)
+            none=$(psql "$APP_URL" -tAc "SELECT set_config('app.current_tenant_id','',false); SELECT count(*) FROM public.$t;" | tail -n1)
+            echo "$t: own=$own cross=$other none=$none"
+            test "$own" -gt 0    || { echo "::error::$t — aura_app cannot read its OWN tenant"; fail=1; }
+            test "$other" = "0"  || { echo "::error::$t — CROSS-TENANT rows visible"; fail=1; }
+            test "$none" = "0"   || { echo "::error::$t — rows visible with NO tenant context (not fail-closed)"; fail=1; }
+          done
+          # A write aimed at another tenant must be refused by WITH CHECK, not silently re-scoped.
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -q -c "SELECT set_config('app.current_tenant_id','dev-tenant',false);" -c "INSERT INTO public.auth_credentials (tenant_id,user_id,password_hash) VALUES ('other-tenant','u-evil','scrypt\$x');" 2>/dev/null; then
+            echo "::error::cross-tenant INSERT into auth_credentials was ACCEPTED"; fail=1
+          else
+            echo "auth_credentials: cross-tenant INSERT refused by WITH CHECK"
+          fi
+          test "$fail" = "0" || exit 1
+          echo "OK identity tables: own tenant readable, cross-tenant denied, no-tenant denied, cross-tenant write refused"
+
       - name: S2 — auth_challenges RLS scoping + concurrent single-use under aura_app
         run: |
           cd apps/api

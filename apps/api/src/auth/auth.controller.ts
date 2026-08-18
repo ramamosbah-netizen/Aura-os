@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpCode, HttpException, HttpStatus, Post, Query, Res, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpCode, HttpException, HttpStatus, Post, Query, UnauthorizedException } from '@nestjs/common';
 import { AuditService, AuthService, AuthenticationService, CredentialsService, MfaService, Permissions, TenantContext, UsersService, type AuthSession } from '@aura/core';
 import { generateTotpSecret, totpAuthUri, verifyTotp } from '@aura/shared';
 
@@ -169,32 +169,21 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Body() dto: { refreshToken?: string; tenantId?: string },
-    @Res({ passthrough: true }) res: { setHeader: (name: string, value: string) => void },
   ): Promise<{ token: string; refreshToken: string; expiresIn: number }> {
     const tenantId = (dto?.tenantId ?? '').trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
-    const diag = process.env.NODE_ENV !== 'production';
-    let outcome;
+    // Deny with an opaque 401 in production/tests; ONLY when AUTH_DIAG=1 (set by the CI gate boot)
+    // do we ride the internal reason on the exception body so CI can see exactly which gate denied.
+    const deny = (reason: string): never => {
+      if (process.env.AUTH_DIAG === '1') throw new UnauthorizedException({ statusCode: 401, error: 'Unauthorized', message: 'cannot refresh', reason });
+      throw new UnauthorizedException('cannot refresh — token missing, invalid, expired, or revoked');
+    };
+    let outcome: Awaited<ReturnType<AuthenticationService['refreshSession']>>;
     try {
       outcome = await this.authentication.refreshSession(tenantId, (dto?.refreshToken ?? '').trim());
     } catch (err) {
-      // A THROW from the rotation transaction (not a clean invalid) — surface it (dev/CI only).
-      const msg = `throw:${(err as Error)?.message ?? err}`;
-      if (diag) {
-        res.setHeader('X-Refresh-Deny', msg.slice(0, 200));
-        console.error(`X-REFRESH-DENY-DIAG ${msg}`);
-      }
-      throw new UnauthorizedException('cannot refresh — internal error');
+      return deny(`throw:${(err as Error)?.message ?? err}`);
     }
-    if (outcome.kind !== 'refreshed') {
-      // Diagnostic ONLY outside production: surface the internal denial reason so CI can see it.
-      // The response body stays opaque; production never sets this header.
-      if (diag) {
-        const reason = outcome.reason ?? 'no-reason';
-        res.setHeader('X-Refresh-Deny', reason);
-        console.error(`X-REFRESH-DENY-DIAG ${reason}`);
-      }
-      throw new UnauthorizedException('cannot refresh — token missing, invalid, expired, or revoked');
-    }
+    if (outcome.kind !== 'refreshed') return deny(outcome.reason ?? 'no-reason');
     return { token: outcome.accessToken, refreshToken: outcome.refreshToken, expiresIn: outcome.expiresInSeconds };
   }
 

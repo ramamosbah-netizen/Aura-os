@@ -84,10 +84,9 @@ async function rotate(refreshToken) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
   });
-  const deny = res.headers.get('x-refresh-deny');
-  if (deny) console.log(`DIAG rotate denied: ${deny}`);
-  const body = res.ok ? await res.json().catch(() => ({})) : null;
-  return { status: res.status, access: body?.token, refresh: body?.refreshToken };
+  const body = await res.json().catch(() => ({}));
+  if (body?.reason) console.log(`DIAG rotate denied: ${body.reason}`);
+  return { status: res.status, access: body?.token, refresh: body?.refreshToken, reason: body?.reason };
 }
 
 async function protectedStatus(access) {
@@ -103,6 +102,7 @@ async function main() {
   await diagnose(first.refresh); // ground truth: what does the DB hold for this token/session/user?
 
   const rot = await rotate(first.refresh);
+  console.log(`DIAG first rotate → status=${rot.status} reason=${rot.reason ?? '(none)'} hasRefresh=${!!rot.refresh}`);
   check(rot.status === 200 && !!rot.refresh && rot.refresh !== first.refresh, 'rotate: fresh access + NEW refresh token issued');
   check((await protectedStatus(rot.access)) === 200, 'the rotated access token authorises a protected route');
 

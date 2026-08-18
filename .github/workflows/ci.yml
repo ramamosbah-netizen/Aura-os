@@ -197,7 +197,7 @@ jobs:
           # granted the dev admin role at every boot (so the protected-request check below still
           # passes) but carries NO pre-seeded credential, so THIS boot — running as aura_app — is
           # the one that writes it, under FORCE RLS, which is exactly what the step claims to prove.
-          DATABASE_URL="$APP_URL" AUTH_JWT_SECRET=ci-app-role-secret AUTH_REQUIRED=true PORT=4500 AUTH_DEV_PASSWORD=ci-app-role-password AUTH_DEV_ADMIN_USER=u-director AUTH_DEFAULT_TENANT=dev-tenant nohup node dist/main.js > api-authrole.log 2>&1 &
+          DATABASE_URL="$APP_URL" AUTH_JWT_SECRET=ci-app-role-secret AUTH_REQUIRED=true PORT=4500 AUTH_DEV_PASSWORD=ci-app-role-password AUTH_DEV_ADMIN_USER=u-director AUTH_DEFAULT_TENANT=dev-tenant AUTH_DIAG=1 nohup node dist/main.js > api-authrole.log 2>&1 &
           echo $! > api-authrole.pid
           for i in $(seq 1 60); do curl -sf http://localhost:4500/api/v1/health > /dev/null && break; sleep 1; done
           curl -sf http://localhost:4500/api/v1/health || { echo '::error::API did not boot as aura_app with auth on'; cat api-authrole.log; exit 1; }

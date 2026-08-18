@@ -62,6 +62,7 @@ async function diagnoseAfter(ctx) {
   const c = new pg.Client({ connectionString: DIAG_DB, ssl: false });
   try {
     await c.connect();
+    await c.query(`SELECT set_config('app.current_tenant_id','dev-tenant',false)`); // bind tenant or RLS hides everything
     const r1 = await c.query(`SELECT state, replaced_by FROM public.auth_refresh_tokens WHERE token_hash=$1`, [ctx.hash]);
     console.log(`DIAG after: R1 state=${r1.rows[0]?.state} replaced_by=${r1.rows[0]?.replaced_by ?? null}`);
     const fam = await c.query(

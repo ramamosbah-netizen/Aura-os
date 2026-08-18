@@ -35,14 +35,12 @@ describe('hs256 jwt', () => {
     expect(verifyJwt('a.b', SECRET)).toBeNull();
   });
 
-  it('stamps a unique jti on every token (the revocation handle)', () => {
+  it('does NOT stamp a jti unless the caller asks (S2 — jti retired; sid/refresh-family revoke instead)', () => {
     const a = verifyJwt(signJwt({ sub: 'u-1', tenantId: 't-1' }, SECRET), SECRET);
-    const b = verifyJwt(signJwt({ sub: 'u-1', tenantId: 't-1' }, SECRET), SECRET);
-    expect(typeof a?.jti).toBe('string');
-    expect(a?.jti).not.toBe(b?.jti);
+    expect(a?.jti).toBeUndefined();
   });
 
-  it('preserves a caller-supplied jti', () => {
+  it('preserves a caller-supplied jti (hosted-IdP tokens may still carry one)', () => {
     const claims = verifyJwt(signJwt({ sub: 'u-1', tenantId: 't-1', jti: 'fixed-id' }, SECRET), SECRET);
     expect(claims?.jti).toBe('fixed-id');
   });

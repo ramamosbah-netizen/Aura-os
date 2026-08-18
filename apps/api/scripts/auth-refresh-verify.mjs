@@ -10,74 +10,10 @@
 //       winner's R2 is unusable and its A2 is rejected at the sid boundary. Repeats reduce a
 //       false-green concurrency pass.
 
-import pg from 'pg';
-import { createHash } from 'node:crypto';
-
 const API = process.env.API_URL || 'http://localhost:4500';
 const USER = process.env.AUTH_USER;
 const PASS = process.env.AUTH_PASS;
-const DIAG_DB = process.env.DIAG_DATABASE_URL; // aura_app URL — reproduces the rotate SELECTs directly
 const RACES = 15;
-
-// Reproduce the rotate transaction's SELECTs against the DB (as aura_app), printing each result to
-// THIS script's stdout (CI captures it line-by-line, unlike the API's file-redirected logs). Shows
-// exactly why a rotation denies: token missing/state, session ineligible, or user row absent.
-async function diagnose(refreshToken) {
-  if (!DIAG_DB) return null;
-  const c = new pg.Client({ connectionString: DIAG_DB, ssl: false });
-  try {
-    await c.connect();
-    await c.query(`SELECT set_config('app.current_tenant_id','dev-tenant',false)`);
-    const hash = createHash('sha256').update(refreshToken, 'utf8').digest('hex');
-    const r1 = await c.query(
-      `SELECT id, session_id, family_id, state, (expires_at <= now()) AS expired FROM public.auth_refresh_tokens WHERE token_hash=$1`,
-      [hash],
-    );
-    console.log(`DIAG refresh_token rows=${r1.rowCount} ${JSON.stringify(r1.rows[0] || null)}`);
-    const row = r1.rows[0];
-    if (row) {
-      const ses = await c.query(
-        `SELECT user_id, revoked_at,
-                (expires_at <= now()) AS expired,
-                (now() - COALESCE(last_seen_at, created_at) > make_interval(secs => COALESCE(idle_timeout_seconds, 3600))) AS idle
-           FROM public.auth_sessions WHERE id=$1`,
-        [row.session_id],
-      );
-      console.log(`DIAG session rows=${ses.rowCount} ${JSON.stringify(ses.rows[0] || null)}`);
-      const u = await c.query(`SELECT active FROM public.aura_users WHERE user_id=$1`, [ses.rows[0]?.user_id]);
-      console.log(`DIAG aura_users rows=${u.rowCount} ${JSON.stringify(u.rows[0] || null)}`);
-    }
-    return row ? { sessionId: row.session_id, familyId: row.family_id, hash } : null;
-  } catch (e) {
-    console.log(`DIAG connect/query ERROR: ${e.message}`);
-    return null;
-  } finally {
-    await c.end().catch(() => {});
-  }
-}
-
-// Post-rotate snapshot: what did the rotation actually do to R1, the family and the session?
-async function diagnoseAfter(ctx) {
-  if (!DIAG_DB || !ctx) return;
-  const c = new pg.Client({ connectionString: DIAG_DB, ssl: false });
-  try {
-    await c.connect();
-    await c.query(`SELECT set_config('app.current_tenant_id','dev-tenant',false)`); // bind tenant or RLS hides everything
-    const r1 = await c.query(`SELECT state, replaced_by FROM public.auth_refresh_tokens WHERE token_hash=$1`, [ctx.hash]);
-    console.log(`DIAG after: R1 state=${r1.rows[0]?.state} replaced_by=${r1.rows[0]?.replaced_by ?? null}`);
-    const fam = await c.query(
-      `SELECT state, count(*) FROM public.auth_refresh_tokens WHERE family_id=$1 GROUP BY state ORDER BY state`,
-      [ctx.familyId],
-    );
-    console.log(`DIAG after: family states ${JSON.stringify(fam.rows)}`);
-    const ses = await c.query(`SELECT revoked_at, revoked_reason FROM public.auth_sessions WHERE id=$1`, [ctx.sessionId]);
-    console.log(`DIAG after: session revoked_at=${ses.rows[0]?.revoked_at ?? null} reason=${ses.rows[0]?.revoked_reason ?? null}`);
-  } catch (e) {
-    console.log(`DIAG after ERROR: ${e.message}`);
-  } finally {
-    await c.end().catch(() => {});
-  }
-}
 
 if (!USER || !PASS) {
   console.error('AUTH_USER and AUTH_PASS are required.');
@@ -106,12 +42,8 @@ async function rotate(refreshToken) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
   });
-  const body = await res.json().catch(() => ({}));
-  // The reason rides inside `message` ("refresh-diag reason=<x>") because the global filter drops
-  // custom fields; keep body.reason as a fallback.
-  const m = /reason=(.+)$/.exec(String(body?.message ?? ''));
-  const reason = m ? m[1] : body?.reason;
-  return { status: res.status, access: body?.token, refresh: body?.refreshToken, reason };
+  const body = res.ok ? await res.json().catch(() => ({})) : null;
+  return { status: res.status, access: body?.token, refresh: body?.refreshToken };
 }
 
 async function protectedStatus(access) {
@@ -124,11 +56,7 @@ async function main() {
   const first = await login();
   check(first.status === 200 && !!first.access && !!first.refresh, 'login returns an access token and an opaque refresh token');
 
-  const ctx = await diagnose(first.refresh); // ground truth: what does the DB hold before rotate?
-
   const rot = await rotate(first.refresh);
-  console.log(`DIAG first rotate → status=${rot.status} reason=${rot.reason ?? '(none)'} hasRefresh=${!!rot.refresh}`);
-  await diagnoseAfter(ctx); // what did the rotation do to R1 / family / session?
   check(rot.status === 200 && !!rot.refresh && rot.refresh !== first.refresh, 'rotate: fresh access + NEW refresh token issued');
   check((await protectedStatus(rot.access)) === 200, 'the rotated access token authorises a protected route');
 

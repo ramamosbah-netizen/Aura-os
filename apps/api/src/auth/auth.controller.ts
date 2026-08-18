@@ -171,21 +171,11 @@ export class AuthController {
     @Body() dto: { refreshToken?: string; tenantId?: string },
   ): Promise<{ token: string; refreshToken: string; expiresIn: number }> {
     const tenantId = (dto?.tenantId ?? '').trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
-    // Deny with an opaque 401 in production/tests; ONLY when AUTH_DIAG=1 (set by the CI gate boot)
-    // do we ride the internal reason on the exception body so CI can see exactly which gate denied.
-    const deny = (reason: string): never => {
-      // The global filter rebuilds error bodies to {statusCode, error, code, message, correlationId}
-      // and keeps only `message` — so the diagnostic reason rides IN the message (AUTH_DIAG=1 only).
-      if (process.env.AUTH_DIAG === '1') throw new UnauthorizedException(`refresh-diag reason=${reason}`);
+    const outcome = await this.authentication.refreshSession(tenantId, (dto?.refreshToken ?? '').trim());
+    if (outcome.kind !== 'refreshed') {
+      // One opaque refusal for every failure — unknown / expired / revoked / replayed / ineligible.
       throw new UnauthorizedException('cannot refresh — token missing, invalid, expired, or revoked');
-    };
-    let outcome: Awaited<ReturnType<AuthenticationService['refreshSession']>>;
-    try {
-      outcome = await this.authentication.refreshSession(tenantId, (dto?.refreshToken ?? '').trim());
-    } catch (err) {
-      return deny(`throw:${(err as Error)?.message ?? err}`);
     }
-    if (outcome.kind !== 'refreshed') return deny(outcome.reason ?? 'no-reason');
     return { token: outcome.accessToken, refreshToken: outcome.refreshToken, expiresIn: outcome.expiresInSeconds };
   }
 

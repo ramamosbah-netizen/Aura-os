@@ -209,8 +209,13 @@ export default function InternalChat({
       });
       if (!res.ok) return;
       const channel = (await res.json()) as ChatChannelView;
-      await refreshChannels();
+      // Switch the view BEFORE refreshing the rail, and never the other way round. Awaiting the
+      // rail first left the previous conversation on screen with its composer live for the whole
+      // round trip, so a message typed in that window was posted to the channel the user had just
+      // navigated away from — a private note landing in All company. The rail is cosmetic here and
+      // can catch up on its own.
       select(channel.id);
+      void refreshChannels();
     } catch { /* the rail is unchanged; the user can retry */ }
   }
 

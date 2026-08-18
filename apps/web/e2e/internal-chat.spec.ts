@@ -102,6 +102,13 @@ test('a direct message can be opened and used', async ({ page }) => {
   // The DM survives a reload too — it is a persisted channel, not a client-side one.
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('chat-message').filter({ hasText: line })).toBeVisible();
+
+  // And it went ONLY to the DM. Opening a conversation used to wait for the channel rail before
+  // switching the view, so a message sent in that window was posted to whatever was open before —
+  // a private line landing in All company. Asserting the message is visible in the DM does not
+  // catch that on its own; asserting it is absent from the channel it could have leaked into does.
+  await openCompanyChannel(page);
+  await expect(page.getByTestId('chat-message').filter({ hasText: line })).toHaveCount(0);
 });
 
 test('the chat is usable on a phone', async ({ page }) => {

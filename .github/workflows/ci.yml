@@ -189,7 +189,15 @@ jobs:
         run: |
           cd apps/api
           APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"
-          DATABASE_URL="$APP_URL" AUTH_JWT_SECRET=ci-app-role-secret AUTH_REQUIRED=true PORT=4500 AUTH_DEV_PASSWORD=ci-app-role-password AUTH_DEV_ADMIN_USER=u-admin AUTH_DEFAULT_TENANT=dev-tenant nohup node dist/main.js > api-authrole.log 2>&1 &
+          # Account choice matters here. Every job above shares ONE database (the `aura` service
+          # container), and the owner-role boot already seeded credentials for u-admin/u-approver.
+          # The seeder deliberately NEVER clobbers an existing password, so pointing this step at
+          # u-admin would skip the write and then try to log in with a password the row does not
+          # hold — a false failure that says nothing about RLS. We use u-director instead: it is
+          # granted the dev admin role at every boot (so the protected-request check below still
+          # passes) but carries NO pre-seeded credential, so THIS boot — running as aura_app — is
+          # the one that writes it, under FORCE RLS, which is exactly what the step claims to prove.
+          DATABASE_URL="$APP_URL" AUTH_JWT_SECRET=ci-app-role-secret AUTH_REQUIRED=true PORT=4500 AUTH_DEV_PASSWORD=ci-app-role-password AUTH_DEV_ADMIN_USER=u-director AUTH_DEFAULT_TENANT=dev-tenant nohup node dist/main.js > api-authrole.log 2>&1 &
           echo $! > api-authrole.pid
           for i in $(seq 1 60); do curl -sf http://localhost:4500/api/v1/health > /dev/null && break; sleep 1; done
           curl -sf http://localhost:4500/api/v1/health || { echo '::error::API did not boot as aura_app with auth on'; cat api-authrole.log; exit 1; }
@@ -199,7 +207,7 @@ jobs:
           # NOTE: no `-f` and no `set -e` abort here. `curl -sf` exits 22 on an HTTP error, which
           # under `bash -e` kills the step before the diagnostics below can run — turning a real
           # failure into an unexplained exit code. Capture the status and body, then decide.
-          body=$(curl -s -o /tmp/login-body.json -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-admin","password":"ci-app-role-password"}' || true)
+          body=$(curl -s -o /tmp/login-body.json -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password"}' || true)
           echo "login HTTP $body"; cat /tmp/login-body.json || true; echo
           tok=$(grep -o '"token":"[^"]*"' /tmp/login-body.json 2>/dev/null | cut -d'"' -f4 || true)
           test -n "$tok" || { echo '::error::login failed as aura_app — seed or credential read is broken under RLS'; echo '--- api-authrole.log ---'; cat api-authrole.log; exit 1; }
@@ -211,14 +219,14 @@ jobs:
           echo "OK protected request authorised under aura_app"
 
           # 3. Wrong password is still refused — the credential is real, not waved through.
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-admin","password":"wrong-password-entirely"}')
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"wrong-password-entirely"}')
           test "$code" = "401" || { echo "::error::wrong password returned $code, expected 401"; exit 1; }
           echo "OK wrong password refused (401)"
 
           # 4. CROSS-TENANT: the same credential must not authenticate into another tenant. The
-          #    requested tenant is untrusted input; RLS scopes the lookup to it, so u-admin is
+          #    requested tenant is untrusted input; RLS scopes the lookup to it, so u-director is
           #    simply not a registered identity there.
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-admin","password":"ci-app-role-password","tenantId":"other-tenant"}')
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password","tenantId":"other-tenant"}')
           test "$code" = "401" || { echo "::error::cross-tenant login returned $code, expected 401"; cat api-authrole.log; exit 1; }
           echo "OK cross-tenant login denied (401)"
 

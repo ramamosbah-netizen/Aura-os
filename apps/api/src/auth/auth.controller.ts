@@ -17,6 +17,8 @@ interface LoginDto {
 
 interface LoginResponse {
   token: string;
+  /** Opaque refresh token (S2). The web BFF moves this into an HttpOnly `aura_refresh` cookie. */
+  refreshToken: string;
   user: { sub: string; tenantId: string };
   expiresIn: number;
 }
@@ -157,20 +159,23 @@ export class AuthController {
   }
 
   /** Sliding-session refresh — exchange a still-valid token for a fresh one. */
+  /**
+   * Rotate an OPAQUE refresh token into a fresh access + refresh pair. The refresh token comes in
+   * the body (the web BFF reads it from the HttpOnly `aura_refresh` cookie); `tenantId` is an
+   * untrusted scoping key, exactly like login. This replaced the transitional "refresh a JWT with a
+   * JWT": rotation, replay containment, session-liveness and idle all live server-side now.
+   */
   @Post('refresh')
-  async refresh(@Headers('authorization') authorization?: string): Promise<{ token: string }> {
-    // Re-check the account on every refresh. Without this a user deactivated mid-session
-    // renews their token indefinitely and deactivation only bites on guarded routes.
-    // Identity is read from the PRESENTED token, not the request context.
-    const presented = this.auth.claimsOf(authorization);
-    if (presented && !this.users.isActive(presented.tenantId, presented.sub)) {
-      throw new UnauthorizedException(`account ${presented.sub} is deactivated`);
+  @HttpCode(HttpStatus.OK)
+  async refresh(
+    @Body() dto: { refreshToken?: string; tenantId?: string },
+  ): Promise<{ token: string; refreshToken: string; expiresIn: number }> {
+    const tenantId = (dto?.tenantId ?? '').trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
+    const outcome = await this.authentication.refreshSession(tenantId, (dto?.refreshToken ?? '').trim());
+    if (outcome.kind !== 'refreshed') {
+      throw new UnauthorizedException('cannot refresh — token missing, invalid, expired, or revoked');
     }
-    // Rotates AND respects revocation: the presented jti is denylisted as the replacement is
-    // minted, and a token whose session has been revoked cannot be refreshed at all.
-    const token = await this.auth.refresh(authorization);
-    if (!token) throw new UnauthorizedException('cannot refresh — token missing, invalid, or revoked');
-    return { token };
+    return { token: outcome.accessToken, refreshToken: outcome.refreshToken, expiresIn: outcome.expiresInSeconds };
   }
 
   /**
@@ -280,6 +285,7 @@ export class AuthController {
   private session(session: AuthSession): LoginResponse {
     return {
       token: session.accessToken,
+      refreshToken: session.refreshToken,
       user: { sub: session.userId, tenantId: session.tenantId },
       expiresIn: session.expiresInSeconds,
     };

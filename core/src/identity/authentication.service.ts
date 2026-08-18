@@ -5,6 +5,7 @@ import { AuthChallengeStore } from './auth-challenge.store';
 import { CredentialsService, type CredentialFailure } from './credentials.service';
 import { MfaService } from './mfa.service';
 import { SessionService, type AuthSession } from './session.service';
+import { RefreshTokenStore } from './refresh-token.store';
 import { UsersService } from './users.service';
 import { TenantContext } from '../tenancy/tenant-context';
 
@@ -55,6 +56,11 @@ export interface AuthenticationInput {
   password: string;
 }
 
+/** The result of rotating a refresh token. Every failure is the same opaque `invalid`. */
+export type RefreshOutcome =
+  | { kind: 'refreshed'; accessToken: string; refreshToken: string; expiresInSeconds: number; userId: string; tenantId: string }
+  | { kind: 'invalid' };
+
 @Injectable()
 export class AuthenticationService {
   private readonly logger = new Logger('Authentication');
@@ -65,6 +71,7 @@ export class AuthenticationService {
     private readonly mfa: MfaService,
     private readonly challenges: AuthChallengeStore,
     private readonly sessions: SessionService,
+    private readonly refreshTokens: RefreshTokenStore,
     private readonly tenant: TenantContext,
     @Optional() private readonly audit: AuditService | null = null,
   ) {}
@@ -259,6 +266,38 @@ export class AuthenticationService {
     if (!claimed) return this.deny('unknown-challenge', tenantId, challenge.userId);
     await this.record(challenge.tenantId, challenge.userId, 'password.changed', { forced: true });
     return this.issue(challenge.tenantId, challenge.userId, challenge.credentialId, false, { mfa: false });
+  }
+
+  /**
+   * Rotate a refresh token into a fresh access + refresh pair. This is the ONLY renewal path —
+   * the transitional "re-mint a JWT from a JWT" is gone. `tenantId` is an untrusted scoping key
+   * (the token is RLS-scoped to it); the opaque token's rotation is the proof.
+   *
+   * Gates, in order: (1) single-use rotation of the presented token — a replay of a spent token
+   * contains the whole family; (2) the session is still live (not revoked, not past its absolute
+   * cap); (3) not idle-timed-out; (4) the account is still active. Any failure returns the one
+   * opaque `invalid`, and — on replay / a dead session / idle / deactivation — the family and the
+   * session are revoked so a captured token cannot be reused.
+   */
+  async refreshSession(tenantId: string, presentedRefresh: string): Promise<RefreshOutcome> {
+    return this.inTenant(tenantId, () => this.refreshBound(tenantId, presentedRefresh));
+  }
+
+  private async refreshBound(tenantId: string, presentedRefresh: string): Promise<RefreshOutcome> {
+    // rotate() is the authoritative gate: it validated the session + user IN THE SAME transaction
+    // that consumed R1 and issued R2, so reaching 'rotated' already proves the session was live,
+    // absolute-valid, idle-valid and user-eligible. Family + session containment on replay /
+    // ineligibility also happened there. Here we only mint the access token that names the session.
+    const outcome = await this.refreshTokens.rotate(tenantId, presentedRefresh);
+    if (outcome.kind === 'rotated') {
+      const { accessToken, expiresInSeconds } = this.sessions.mintAccessFor({ id: outcome.sessionId, tenantId, userId: outcome.userId });
+      await this.record(tenantId, outcome.userId, 'refresh.rotated', { sessionId: outcome.sessionId });
+      return { kind: 'refreshed', accessToken, refreshToken: outcome.token, expiresInSeconds, userId: outcome.userId, tenantId };
+    }
+    if (outcome.kind === 'replay') {
+      await this.record(tenantId, '(refresh)', 'refresh.replay', { familyId: outcome.familyId });
+    }
+    return { kind: 'invalid' };
   }
 
   /** The single place a session is created, once every step has passed. */

@@ -14,6 +14,7 @@ import { TokenRevocationStore } from './token-revocation';
 import { AccessService } from './access.service';
 import { ServiceAccountsService } from './service-accounts.service';
 import { SessionStore } from './session.store';
+import { RefreshTokenStore } from './refresh-token.store';
 
 /**
  * Parse the AUTH_GROUP_ROLE_MAP csv (`<idp-group>=<aura-role>,…`) and resolve which AURA
@@ -82,6 +83,7 @@ export class AuthService {
     @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
     @Optional() @Inject(ServiceAccountsService) private readonly serviceAccounts: ServiceAccountsService | null = null,
     @Optional() @Inject(SessionStore) private readonly sessions: SessionStore | null = null,
+    @Optional() @Inject(RefreshTokenStore) private readonly refreshTokens: RefreshTokenStore | null = null,
   ) {
     const modes = [this.jwksCache ? 'JWKS (IdP)' : null, this.secret ? 'HS256 (self-issued)' : null].filter(Boolean);
     if (modes.length > 0) {
@@ -144,9 +146,10 @@ export class AuthService {
   }
 
   /**
-   * Revoke the SESSION named by the presented token's `sid` (server-side logout). Once revoked,
-   * every still-signature-valid access token carrying that sid is refused at the boundary above.
-   * Returns true if a live session was revoked.
+   * Revoke the SESSION named by the presented token's `sid` (server-side logout), AND its refresh
+   * family. Once revoked, every still-signature-valid access token carrying that sid is refused at
+   * the boundary above, and the refresh tokens can no longer be rotated. Returns true if a live
+   * session was revoked.
    */
   async revokeSession(authorization: string | undefined, reason = 'logout'): Promise<boolean> {
     if (!this.secret || !this.sessions) return false;
@@ -154,7 +157,12 @@ export class AuthService {
     if (!token) return false;
     const claims = verifyJwt(token, this.secret);
     if (!claims?.sid || !claims.tenantId) return false;
-    return this.sessions.revoke(claims.tenantId, claims.sid as string, reason);
+    // Lock/touch order matches rotate() — refresh tokens BEFORE the session — so concurrent
+    // logout + rotation cannot deadlock. A logged-out session's refresh tokens must die with it,
+    // or a held refresh token could mint fresh access tokens after logout.
+    if (this.refreshTokens) await this.refreshTokens.revokeForSession(claims.tenantId, claims.sid as string);
+    const revoked = await this.sessions.revoke(claims.tenantId, claims.sid as string, reason);
+    return revoked;
   }
 
   private tokenOf(authorization: string | undefined): string | null {
@@ -162,9 +170,8 @@ export class AuthService {
   }
 
   /**
-   * The verified claims of a presented self-issued token, or null. Read-only — for callers
-   * that must re-check the *token's* identity rather than the request context (e.g. refresh
-   * must know whose account to re-validate before deciding to renew).
+   * The verified claims of a presented self-issued token, or null. Read-only — for callers that
+   * must re-check the *token's* identity rather than the request context.
    */
   claimsOf(authorization: string | undefined): { sub: string; tenantId: string } | null {
     if (!this.secret) return null;
@@ -175,48 +182,12 @@ export class AuthService {
     return { sub: claims.sub, tenantId: claims.tenantId };
   }
 
-  /**
-   * Sliding-session refresh: re-mint from a still-valid, non-revoked self-issued token.
-   *
-   * ROTATES — the presented token is revoked as the replacement is minted, so a copy
-   * captured earlier in the session stops working the moment the session refreshes. Without
-   * rotation every token ever issued in a session stays valid until its own expiry, and a
-   * single captured token grants access for the full TTL no matter what the user does.
-   */
-  async refresh(authorization: string | undefined, ttlSeconds = 3600): Promise<string | null> {
-    if (!this.secret) return null;
-    const token = this.tokenOf(authorization);
-    if (!token) return null;
-    const claims = verifyJwt(token, this.secret);
-    if (!claims?.sub || !claims.tenantId || this.revocation.isRevoked(claims.jti)) return null;
-    // A session-bound token can only be refreshed while that session is live — otherwise revoking
-    // a session could be undone by refreshing its access token into a fresh one before it expires.
-    if (claims.sid && this.sessions) {
-      const live = await this.sessions.validate(claims.tenantId, claims.sid as string);
-      if (!live) return null;
-    }
-    const next = signJwt(
-      {
-        sub: claims.sub,
-        tenantId: claims.tenantId,
-        companyId: (claims.companyId ?? null) as Id | null,
-        // Carry the session id through the (transitional) refresh so the re-minted token still
-        // names its session and stays subject to server-side revocation. RefreshTokenStore replaces
-        // this whole path with opaque, rotating refresh tokens.
-        sid: claims.sid as string | undefined,
-      },
-      this.secret,
-      ttlSeconds,
-    );
-    // Revoke only after the replacement exists, so a mint failure cannot strand the caller
-    // with neither token.
-    if (claims.jti && typeof claims.exp === 'number') {
-      this.revocation.revoke(claims.jti, claims.exp);
-    }
-    return next;
-  }
+  // The transitional "re-mint a JWT from a JWT" refresh has been REMOVED. Renewal now flows through
+  // the opaque refresh token (RefreshTokenStore) via AuthenticationService.refreshSession: the
+  // authoritative session/refresh lifecycle is the only thing that extends a login, and rotation +
+  // replay-containment live in the DB, not in a self-issued token's jti.
 
-  /** Revoke the presented token (logout / compromise response). True if a jti was denylisted. */
+  /** Revoke a presented IdP token by its `jti` (self-issued tokens carry none). */
   revoke(authorization: string | undefined): boolean {
     if (!this.secret) return false;
     const token = this.tokenOf(authorization);

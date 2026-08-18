@@ -408,75 +408,90 @@ describe('authentication security boundary (HTTP)', () => {
     expect(res.status).toBe(403);
   });
 
-  // === session lifecycle ======================================================
+  // === S2 refresh lifecycle: opaque rotation + replay containment ==============
 
-  it('refuses to refresh a revoked token', async () => {
-    const token = auth.mint({ sub: ALICE, tenantId: TENANT, companyId: null });
-    await http.post('/api/v1/auth/logout').set('Authorization', `Bearer ${token}`).expect(201);
+  const loginPair = async (username: string): Promise<{ access: string; refresh: string }> => {
+    const res = await login({ username, password: PASSWORD });
+    expect(res.status).toBe(200);
+    return { access: res.body.token as string, refresh: res.body.refreshToken as string };
+  };
+  const refresh = (refreshToken: string) => http.post('/api/v1/auth/refresh').send({ refreshToken });
 
-    const res = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(401);
+  it('login returns an OPAQUE refresh token beside the access token (not a JWT)', async () => {
+    const { access, refresh: r } = await loginPair(ALICE);
+    expect(access).toEqual(expect.any(String));
+    expect(r).toEqual(expect.any(String));
+    expect(r.split('.').length).toBe(1); // opaque secret, not header.payload.sig
+  });
+
+  it('rotates a refresh token into a fresh WORKING access token whose JWT is the final shape', async () => {
+    const first = await loginPair(ALICE);
+    const res = await refresh(first.refresh).expect(200);
+    expect(res.body.refreshToken).toEqual(expect.any(String));
+    expect(res.body.refreshToken).not.toBe(first.refresh);
+
+    // The freshly minted A2 authenticates …
+    expect((await auth.contextFromHeader(`Bearer ${res.body.token}`))?.actorId).toBe(ALICE);
+    // … and its claims are EXACTLY {sub, tenantId, sid, iat, exp} — no jti.
+    const claims = JSON.parse(Buffer.from((res.body.token as string).split('.')[1], 'base64url').toString('utf8'));
+    expect(claims.sub).toBe(ALICE);
+    expect(claims.tenantId).toBe(TENANT);
+    expect(claims.sid).toEqual(expect.any(String));
+    expect(claims.iat).toEqual(expect.any(Number));
+    expect(claims.exp).toEqual(expect.any(Number));
+    expect(claims.jti).toBeUndefined();
+  });
+
+  it('single-use replay proves the FULL chain: family contained → session revoked → A2 rejected', async () => {
+    const first = await loginPair(ALICE);
+    const rotated = await refresh(first.refresh).expect(200);
+    const a2: string = rotated.body.token;
+    const successor: string = rotated.body.refreshToken;
+
+    // A2 works while the session is live.
+    expect((await auth.contextFromHeader(`Bearer ${a2}`))?.actorId).toBe(ALICE);
+
+    // Replay the already-consumed original → refused …
+    await refresh(first.refresh).expect(401);
+    // … the successor R2 is dead (family contained) …
+    await refresh(successor).expect(401);
+    // … and the session was revoked by the containment, so the already-issued A2 is now rejected
+    //     at the sid boundary even though its signature and exp are still valid.
+    expect(await auth.contextFromHeader(`Bearer ${a2}`)).toBeNull();
+  });
+
+  it('refuses an unknown refresh token', async () => {
+    await refresh('not-a-real-refresh-token').expect(401);
+  });
+
+  it('logout revokes the session AND its refresh family — the refresh token can no longer rotate', async () => {
+    const { access, refresh: r } = await loginPair(ALICE);
+    await http.post('/api/v1/auth/logout').set('Authorization', `Bearer ${access}`);
+    await refresh(r).expect(401);
   });
 
   it('refuses to refresh for a deactivated account', async () => {
-    const token = auth.mint({ sub: DORMANT, tenantId: TENANT, companyId: null });
-    const res = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(401);
+    const { refresh: r } = await loginPair(ALICE);
+    users.setActive(TENANT, ALICE, false);
+    try {
+      await refresh(r).expect(401);
+    } finally {
+      users.setActive(TENANT, ALICE, true); // restore for the other tests
+    }
   });
 
-  it('rotates on refresh, so the surrendered token stops working', async () => {
-    const original = auth.mint({ sub: ALICE, tenantId: TENANT, companyId: null });
-    const refreshed = await http
-      .post('/api/v1/auth/refresh')
-      .set('Authorization', `Bearer ${original}`)
-      .expect(201);
-    expect(refreshed.body.token).toEqual(expect.any(String));
-
-    // The token just exchanged must not be usable again — no replay after rotation.
-    const replay = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${original}`);
-    expect(replay.status).toBe(401);
-  });
-
-  // === S2 session lifecycle: revocation bites before exp ========================
-  //
-  // The decisive S2 invariant. A login token is cryptographically valid until its exp, but it
-  // names a session (sid). Revoking that session must refuse the SAME token at the boundary —
-  // otherwise a "logout" or a compromise response leaves a stolen token usable for the full TTL.
-
+  // === the decisive sid-boundary revocation ===================================
+  // A login token is cryptographically valid until its exp, but it names a session (sid). Revoking
+  // that session must refuse the SAME token at the boundary — otherwise a logout or a compromise
+  // response leaves a stolen token usable for the full access TTL.
   it('revoking a session refuses its still-valid access token at the boundary (sid, not jti)', async () => {
-    const res = await login({ username: ALICE, password: PASSWORD });
-    expect(res.status).toBe(200);
-    const token: string = res.body.token;
-    expect(token).toEqual(expect.any(String));
+    const { access } = await loginPair(ALICE);
+    expect((await auth.contextFromHeader(`Bearer ${access}`))?.actorId).toBe(ALICE);
 
-    // The boundary accepts it now.
-    const before = await auth.contextFromHeader(`Bearer ${token}`);
-    expect(before?.actorId).toBe(ALICE);
-
-    // Revoke ONLY the session — not the jti denylist — so what we prove is the sid check, not the
-    // transitional token denylist. The token's signature and exp are untouched.
-    const revoked = await auth.revokeSession(`Bearer ${token}`);
+    const revoked = await auth.revokeSession(`Bearer ${access}`);
     expect(revoked).toBe(true);
 
-    // The same token, still signature-valid with exp in the future, is now refused.
-    const after = await auth.contextFromHeader(`Bearer ${token}`);
-    expect(after).toBeNull();
-  });
-
-  it('logout revokes server-side, so the token can no longer be refreshed', async () => {
-    const res = await login({ username: ALICE, password: PASSWORD });
-    const token: string = res.body.token;
-
-    // Refresh works while the session is live.
-    const ok = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${token}`);
-    expect(ok.status).toBe(201);
-
-    // Logout revokes the session server-side …
-    const out = await http.post('/api/v1/auth/logout').set('Authorization', `Bearer ${token}`);
-    expect(out.body.revoked).toBe(true);
-
-    // … so even a still-valid token cannot be refreshed into a fresh one.
-    const denied = await http.post('/api/v1/auth/refresh').set('Authorization', `Bearer ${token}`);
-    expect(denied.status).toBe(401);
+    // Same token, still signature-valid with exp in the future, now refused because the session is gone.
+    expect(await auth.contextFromHeader(`Bearer ${access}`)).toBeNull();
   });
 });

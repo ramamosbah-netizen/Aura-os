@@ -194,6 +194,16 @@ export class SessionStore {
     return record;
   }
 
+  /**
+   * Evict the boundary cache entry for a session (cache-only, no DB write). Used when the session
+   * was already revoked through another path — the refresh replay/ineligibility containment revokes
+   * it in SQL inside the rotation transaction — so this node stops honouring a cached positive entry
+   * for its access tokens immediately, rather than after the cache TTL.
+   */
+  evict(sid: string): void {
+    this.cache.delete(sid);
+  }
+
   /** Revoke one session. Evicts the local cache so this node refuses it immediately. */
   async revoke(tenantId: string, sid: string, reason: string): Promise<boolean> {
     this.cache.delete(sid);

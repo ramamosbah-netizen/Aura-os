@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SessionStore } from './session.store';
+import { RefreshTokenStore } from './refresh-token.store';
 
 // Session issuance — the ONE place a session or token comes into existence.
 //
@@ -18,7 +19,7 @@ import { SessionStore } from './session.store';
 //     defect as the one being fixed, just wearing a resolver's clothes. Organizational
 //     context arrives in S3, PROVEN by membership, and `companyId` stays null until then.
 
-/** An issued session. S1 carries an access token only; S2 adds the refresh half. */
+/** An issued session — a short-lived access token AND the opaque refresh token that rotates it. */
 export interface AuthSession {
   userId: string;
   tenantId: string;
@@ -26,6 +27,11 @@ export interface AuthSession {
   companyId: string | null;
   accessToken: string;
   expiresInSeconds: number;
+  /**
+   * Opaque refresh-token secret (S2) — returned ONCE. The API hands it to its caller (the web BFF
+   * puts it in an HttpOnly cookie); it is never stored server-side except as a hash.
+   */
+  refreshToken: string;
   /** The credential that proved this session, for the audit trail. */
   credentialId: string;
   /** The client must force a password change before the session is useful for real work. */
@@ -50,6 +56,7 @@ export class SessionService {
   constructor(
     private readonly auth: AuthService,
     private readonly sessions: SessionStore,
+    private readonly refreshTokens: RefreshTokenStore,
   ) {}
 
   /**
@@ -69,6 +76,9 @@ export class SessionService {
       userId: subject.userId,
       credentialId: subject.credentialId,
     });
+    // The first refresh token starts the session's family. Rotating it (POST /auth/refresh) issues
+    // the next access token + next refresh token; a spent one being reused revokes the whole family.
+    const refresh = await this.refreshTokens.issueForSession(subject.tenantId, session.id);
     return {
       userId: subject.userId,
       tenantId: subject.tenantId,
@@ -78,8 +88,24 @@ export class SessionService {
         expiresInSeconds,
       ),
       expiresInSeconds,
+      refreshToken: refresh.token,
       credentialId: subject.credentialId,
       mustChangePassword: subject.mustChangePassword,
+    };
+  }
+
+  /**
+   * Mint a fresh access token for an ALREADY-live session (the refresh path). No new session and
+   * no new credential proof — the refresh-token rotation is the proof, checked by the caller.
+   */
+  mintAccessFor(session: { id: string; tenantId: string; userId: string }): { accessToken: string; expiresInSeconds: number } {
+    const expiresInSeconds = accessTtlSeconds();
+    return {
+      accessToken: this.auth.mint(
+        { sub: session.userId, tenantId: session.tenantId, companyId: null, sid: session.id },
+        expiresInSeconds,
+      ),
+      expiresInSeconds,
     };
   }
 }

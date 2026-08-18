@@ -185,7 +185,7 @@ jobs:
       # production would. Concretely, it is what catches a cross-tenant boot hydrate — a SELECT
       # with no tenant bound returns ZERO rows under aura_app, and an empty registry would
       # silently read as "everyone is active".
-      - name: S1-RLS.7 + S2 — auth chain, session lifecycle and revocation under aura_app
+      - name: S1-RLS.7 + S2 — auth chain, session + refresh lifecycle and revocation under aura_app
         run: |
           cd apps/api
           APP_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable"
@@ -242,6 +242,11 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4500/api/v1/auth/login -H 'content-type: application/json' -d '{"username":"u-director","password":"ci-app-role-password","tenantId":"other-tenant"}')
           test "$code" = "401" || { echo "::error::cross-tenant login returned $code, expected 401"; cat api-authrole.log; exit 1; }
           echo "OK cross-tenant login denied (401)"
+
+          # S2 REFRESH: opaque rotation + replay containment + the R1||R1 race, exercised through the
+          # REAL rotate transaction over HTTP against this aura_app API on real PostgreSQL.
+          AUTH_USER=u-director AUTH_PASS=ci-app-role-password API_URL=http://localhost:4500 \
+            node scripts/auth-refresh-verify.mjs || { echo '--- api-authrole.log ---'; cat api-authrole.log; exit 1; }
 
           kill "$(cat api-authrole.pid)" 2>/dev/null || true
 

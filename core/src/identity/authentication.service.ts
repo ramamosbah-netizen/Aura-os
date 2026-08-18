@@ -5,6 +5,7 @@ import { AuthChallengeStore } from './auth-challenge.store';
 import { CredentialsService, type CredentialFailure } from './credentials.service';
 import { MfaService } from './mfa.service';
 import { SessionService, type AuthSession } from './session.service';
+import { SessionStore } from './session.store';
 import { RefreshTokenStore } from './refresh-token.store';
 import { UsersService } from './users.service';
 import { TenantContext } from '../tenancy/tenant-context';
@@ -71,6 +72,7 @@ export class AuthenticationService {
     private readonly mfa: MfaService,
     private readonly challenges: AuthChallengeStore,
     private readonly sessions: SessionService,
+    private readonly sessionStore: SessionStore,
     private readonly refreshTokens: RefreshTokenStore,
     private readonly tenant: TenantContext,
     @Optional() private readonly audit: AuditService | null = null,
@@ -294,10 +296,15 @@ export class AuthenticationService {
       await this.record(tenantId, outcome.userId, 'refresh.rotated', { sessionId: outcome.sessionId });
       return { kind: 'refreshed', accessToken, refreshToken: outcome.token, expiresInSeconds, userId: outcome.userId, tenantId };
     }
+    // Containment revoked the session IN the rotation transaction (SQL). Evict the boundary cache
+    // for that sid here, on this node, so an already-issued & cached access token is refused
+    // IMMEDIATELY — not after the cache TTL. (Cross-replica remains bounded by the TTL, by design.)
     if (outcome.kind === 'replay') {
+      this.sessionStore.evict(outcome.sessionId);
       await this.record(tenantId, '(refresh)', 'refresh.replay', { familyId: outcome.familyId });
       return { kind: 'invalid', reason: 'replay' };
     }
+    if (outcome.sessionId) this.sessionStore.evict(outcome.sessionId);
     return { kind: 'invalid', reason: outcome.reason };
   }
 

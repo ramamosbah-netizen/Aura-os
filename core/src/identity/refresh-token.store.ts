@@ -37,7 +37,7 @@ import { UsersService } from './users.service';
 export type RotateOutcome =
   | { kind: 'rotated'; sessionId: string; userId: string; familyId: string; token: string; expiresAt: number }
   | { kind: 'replay'; sessionId: string; familyId: string } // known-consumed token reused → contained
-  | { kind: 'invalid'; reason?: string }; // unknown / expired / revoked / ineligible (reason: diag only)
+  | { kind: 'invalid'; reason?: string; sessionId?: string }; // sessionId set when containment revoked a session
 
 export interface IssuedRefreshToken {
   token: string;
@@ -213,7 +213,7 @@ export class RefreshTokenStore {
         // 6. Ineligible → the family and the session die; R1 is NOT consumed into a usable R2.
         if (denyReason) {
           await this.containFamily(client, tenantId, t.family_id, t.session_id, 'refresh_ineligible');
-          return { kind: 'invalid', reason: denyReason };
+          return { kind: 'invalid', reason: denyReason, sessionId: t.session_id };
         }
 
         // 7. Consume R1. 8. Issue R2. 9. Advance the session's idle clock — all before COMMIT.
@@ -326,7 +326,7 @@ export class RefreshTokenStore {
         u.active === false;
       if (ineligible) {
         await this.containLocal(tenantId, t.familyId, t.sessionId, 'refresh_ineligible');
-        return { kind: 'invalid', reason: 'ineligible' };
+        return { kind: 'invalid', reason: 'ineligible', sessionId: t.sessionId };
       }
 
       t.state = 'consumed';

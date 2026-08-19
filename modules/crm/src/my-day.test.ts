@@ -216,3 +216,18 @@ describe('buildMyDay — determinism', () => {
     expect(buildMyDay(input, NOW).date).toBe(TODAY);
   });
 });
+
+describe('buildMyDay — business timezone', () => {
+  it('uses the Dubai business date instead of the previous UTC date after local midnight', () => {
+    const afterDubaiMidnight = new Date('2026-08-16T21:30:00.000Z');
+    const result = buildMyDay({
+      userId: ME,
+      activities: [activity({ dueDate: '2026-08-17' })],
+      leads: [],
+      opportunities: [],
+    }, afterDubaiMidnight);
+    expect(result.date).toBe('2026-08-17');
+    expect(result.counts.today).toBe(1);
+    expect(result.now[0]).toMatchObject({ when: 'TODAY', dueDate: '2026-08-17' });
+  });
+});

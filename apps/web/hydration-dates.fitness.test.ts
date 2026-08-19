@@ -26,13 +26,26 @@ import { join, relative, resolve } from 'node:path';
 const WEB = resolve(__dirname);
 const ROOTS = ['app', 'components', 'lib'];
 
-/** A locale-sensitive formatting call of any kind. */
-const CALL = /\.toLocale(?:Date|Time)?String\(/;
+/**
+ * A locale-sensitive formatting call of any kind.
+ *
+ * `Intl.DateTimeFormat` is the same hazard by a different name, and was missed here until eight
+ * bare sites in the My Work components reproduced the hydration error in the browser.
+ */
+const CALL = /(?:\.toLocale(?:Date|Time)?String|Intl\.DateTimeFormat)\(/;
 /**
  * Pinned means BOTH halves are nailed down: an explicit locale, and a timeZone in the options.
  * A locale alone still leaves the day boundary free to move.
+ *
+ * Anchored, and matched against a slice that starts at the call itself, because an options object
+ * routinely wraps onto the next line. Judging whole lines reported already-pinned calls as bare;
+ * judging a few lines around the call did the opposite — a pinned neighbour vouched for a bare
+ * call, and a deliberately re-bared site passed. Anchoring is what makes the locale argument of
+ * THIS call the thing being read: `(undefined,` fails at the alternation before the window matters.
  */
-const PINNED = /\.toLocale(?:Date|Time)?String\(\s*(?:DISPLAY_LOCALE|'[^']+'|"[^"]+")\s*,\s*\{[^}]*\btimeZone\b/;
+const PINNED = /^(?:\.toLocale(?:Date|Time)?String|Intl\.DateTimeFormat)\(\s*(?:DISPLAY_LOCALE|'[^']+'|"[^"]+")\s*,[\s\S]{0,200}?\btimeZone\b/;
+/** Enough to cover an options object that wraps, far short of reaching the next statement. */
+const CALL_SLICE = 240;
 /**
  * `new Date()` with no argument is "now". The server and the browser read their clocks at
  * different instants, so these mismatch for a reason pinning cannot fix — they need a
@@ -95,13 +108,18 @@ function scan() {
       lines.forEach((line, i) => {
         if (!CALL.test(line)) return;
         // Money formatting: a .toLocaleString() with no Date anywhere on the line.
-        if (!DATE_ON_LINE.test(line) && !/\.toLocale(?:Date|Time)String\(/.test(line)) return;
+        if (!DATE_ON_LINE.test(line) && !/(?:\.toLocale(?:Date|Time)String|Intl\.DateTimeFormat)\(/.test(line)) return;
         // The reason may sit on the call itself or on the line above it.
         if (EXEMPT.test(line) || EXEMPT.test(lines[i - 1] ?? '')) return;
 
         const where = `${relative(WEB, file).replace(/\\/g, '/')}:${i + 1}`;
-        if (NOW.test(line)) now.push(where);
-        else if (!PINNED.test(line)) unpinned.push(where);
+        if (NOW.test(line)) { now.push(where); return; }
+        // Judge each call from where it starts, so a pinned call cannot vouch for a bare one
+        // sharing the line or sitting just above it. A line may hold more than one call.
+        const rest = lines.slice(i).join('\n');
+        const offsets: number[] = [];
+        for (const m of line.matchAll(new RegExp(CALL, 'g'))) offsets.push(m.index ?? 0);
+        if (offsets.some((offset) => !PINNED.test(rest.slice(offset, offset + CALL_SLICE)))) unpinned.push(where);
       });
     }
   }

@@ -3,6 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import type { CommQuotation } from './commercial-workspace';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import DocumentFileLink from '@/components/document-file-link';
 
 // The Documents tab — the DMS access-control layer (#168) made visible and usable.
 //
@@ -96,6 +97,9 @@ export default function DocumentsTab({ quotations }: { quotations: CommQuotation
     list.push(d);
     groups.set(d.aggregateId, list);
   }
+  const selectedDocument = selectedId
+    ? docs.find((document) => document.id === selectedId) ?? shared.find((entry) => entry.document.id === selectedId)?.document
+    : null;
 
   return (
     <div className="neg-grid">
@@ -151,15 +155,15 @@ export default function DocumentsTab({ quotations }: { quotations: CommQuotation
 
       <div style={st.panel}>
         {selectedId
-          ? <DocumentDetail key={selectedId} documentId={selectedId} users={users} onChanged={() => void loadDocs()} />
+          ? <DocumentDetail key={selectedId} documentId={selectedId} documentTitle={selectedDocument?.title ?? 'Document'} users={users} onChanged={() => void loadDocs()} />
           : <p style={st.muted}>Select a document to see who can access it, and to share it.</p>}
       </div>
     </div>
   );
 }
 
-function DocumentDetail({ documentId, users, onChanged }: {
-  documentId: string; users: UserRow[]; onChanged: () => void;
+function DocumentDetail({ documentId, documentTitle, users, onChanged }: {
+  documentId: string; documentTitle: string; users: UserRow[]; onChanged: () => void;
 }) {
   const [access, setAccess] = useState<Access | null>(null);
   const [perms, setPerms] = useState<Permission[] | null>(null);
@@ -203,7 +207,10 @@ function DocumentDetail({ documentId, users, onChanged }: {
       <div style={st.detailHead}>
         <b>What you can do with this</b>
         {canDownload && (
-          <a href={`/api/documents/${documentId}/content`} style={st.download}>Download →</a>
+          <span style={st.detailActions}>
+            <DocumentFileLink documentId={documentId} title={documentTitle} />
+            <a href={`/api/documents/${documentId}/content`} style={st.download}>Download →</a>
+          </span>
         )}
       </div>
 
@@ -339,6 +346,7 @@ const st = {
   rowSub: { color: 'var(--muted)', fontSize: 11.5 } as CSSProperties,
   panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 11, padding: 14 } as CSSProperties,
   detailHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 10 } as CSSProperties,
+  detailActions: { alignItems: 'center', display: 'flex', gap: 8 } as CSSProperties,
   download: { color: 'var(--accent)', textDecoration: 'none', fontSize: 12.5 } as CSSProperties,
   effList: { listStyle: 'none', margin: '0 0 14px', padding: 0, display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
   effRow: { display: 'grid', gridTemplateColumns: '90px 1fr', gap: 8, alignItems: 'baseline', fontSize: 12.5 } as CSSProperties,

@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
@@ -32,13 +32,20 @@ function fmt(iso: string): string {
 export default function PrList({
   initialPrs,
   projects,
+  focusedId = '',
 }: {
   initialPrs: PurchaseRequest[];
   projects: Project[];
+  focusedId?: string;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focusedId) return;
+    window.setTimeout(() => document.querySelector<HTMLElement>(`[data-pr-id="${CSS.escape(focusedId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  }, [focusedId]);
 
   async function updateStatus(id: string, status: 'approved' | 'rejected') {
     setBusyId(id);
@@ -113,7 +120,7 @@ export default function PrList({
               initialPrs.map((pr) => {
                 const isBusy = busyId === pr.id;
                 return (
-                  <tr key={pr.id} style={s.row}>
+                  <tr key={pr.id} data-pr-id={pr.id} style={{ ...s.row, ...(pr.id === focusedId ? s.focusedRow : {}) }}>
                     <td style={s.td}><strong>{pr.title}</strong></td>
                     <td style={s.tdMuted}>{pr.reference ?? '—'}</td>
                     <td style={s.tdMuted}>{pr.projectName ?? '—'}</td>
@@ -238,6 +245,7 @@ const s = {
   td: { padding: '11px 12px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' } as CSSProperties,
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', verticalAlign: 'middle' } as CSSProperties,
   row: { borderBottom: '1px solid var(--border)' } as CSSProperties,
+  focusedRow: { outline: '2px solid var(--accent)', outlineOffset: '-2px', background: 'var(--accent-soft)' } as CSSProperties,
   emptyCell: { padding: '20px 12px', color: 'var(--muted)', textAlign: 'center' } as CSSProperties,
   tag: (status: string): CSSProperties => {
     let color = 'var(--muted)';

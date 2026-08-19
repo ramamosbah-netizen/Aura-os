@@ -42,7 +42,7 @@ export default function OfflineSyncIndicator() {
 
   return (
     <>
-      <div style={st.container}>
+      <div className="app-offline-sync" style={st.container}>
         {!status.isOnline ? (
           <span style={st.badgeOffline} title="Offline mode — drafts saved to local storage">
             📡 Offline • {totalUnsynced} draft{totalUnsynced === 1 ? '' : 's'}

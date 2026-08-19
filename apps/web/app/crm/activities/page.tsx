@@ -29,8 +29,8 @@ const RELATED_LABEL: Record<string, string> = {
   opportunity: 'Opportunity', account: 'Account', contact: 'Contact', lead: 'Lead', quotation: 'Quotation',
 };
 
-export default async function CrmActivitiesPage({ searchParams }: { searchParams: Promise<{ relatedType?: string }> }) {
-  const { relatedType } = await searchParams;
+export default async function CrmActivitiesPage({ searchParams }: { searchParams: Promise<{ relatedType?: string; record?: string }> }) {
+  const { relatedType, record } = await searchParams;
   const scope = relatedType && RELATED_LABEL[relatedType] ? relatedType : '';
   const [activities, accounts, contacts, opportunities] = await Promise.all([
     getJson<Activity[]>('/api/crm/activities'),
@@ -53,6 +53,7 @@ export default async function CrmActivitiesPage({ searchParams }: { searchParams
         contacts={contacts ?? []}
         opportunities={opportunities ?? []}
         initialRelatedType={scope}
+        initialFocusedId={record ?? ''}
       />
     </div>
   );

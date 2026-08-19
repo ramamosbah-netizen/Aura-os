@@ -1,7 +1,7 @@
 'use client';
 
 import { type CSSProperties, useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { readTabs, closeTab, TABS_EVENT, type RecordTab } from '@/lib/tabs';
 
 /**
@@ -13,6 +13,9 @@ import { readTabs, closeTab, TABS_EVENT, type RecordTab } from '@/lib/tabs';
 export default function TabBar() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const currentHref = query ? `${pathname}?${query}` : pathname;
   const [tabs, setTabs] = useState<RecordTab[]>([]);
 
   useEffect(() => {
@@ -31,16 +34,16 @@ export default function TabBar() {
   function onClose(e: React.MouseEvent, tab: RecordTab) {
     e.stopPropagation();
     const neighbour = closeTab(tab.href);
-    if (pathname === tab.href) router.push(neighbour?.href ?? '/');
+    if (currentHref === tab.href) router.push(neighbour?.href ?? '/');
   }
 
   return (
-    <div style={s.strip} role="tablist" aria-label="Open records">
+    <div style={s.strip} role="tablist" aria-label="Open AURA tabs">
       {tabs.map((tab) => {
-        const active = pathname === tab.href;
+        const active = currentHref === tab.href;
         return (
           <div
-            key={tab.href}
+            key={tab.key ?? tab.href}
             role="tab"
             aria-selected={active}
             title={`${tab.type}: ${tab.title}`}

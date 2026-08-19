@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post } from '@nestjs/common';
-import { AuditService, Permissions, TenantContext, UsersService, type PlatformUser } from '@aura/core';
+import { AuditService, CredentialsService, Permissions, TenantContext, UsersService, type PlatformUser } from '@aura/core';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
 
 /**
@@ -16,6 +16,7 @@ export class UsersAdminController {
     private readonly workspace: WorkspaceConfigService,
     private readonly tenant: TenantContext,
     private readonly audit: AuditService,
+    private readonly credentials: CredentialsService,
   ) {}
 
   private auditLog(entityId: string, action: string, payload: Record<string, unknown>): void {
@@ -99,5 +100,42 @@ export class UsersAdminController {
     const removed = this.users.remove(this.tenant.get().tenantId, id);
     if (removed) this.auditLog(id, 'removed', {});
     return { removed };
+  }
+
+  /**
+   * Set (or reset) another account's password — the onboarding step S1 left with no route.
+   *
+   * After the credential rebuild, sign-in requires a REGISTERED identity with a REAL credential,
+   * and the only thing that could mint one was the dev bootstrap (`AUTH_DEV_PASSWORD`, dev-only,
+   * for named accounts). So an administrator could invite a user through `POST /admin/users` and
+   * then had no way to let them in — the seeder's own warning already pointed here, at a route
+   * that did not exist.
+   *
+   * `mustChange` defaults to TRUE: a password another person chose is a handover secret, not the
+   * user's password, so the next sign-in returns the `password_change` challenge instead of a
+   * session. Callers that genuinely want a directly-usable credential (test fixtures) opt out.
+   */
+  @Permissions('admin.users.manage')
+  @Post(':id/password')
+  async setPassword(
+    @Param('id') id: string,
+    @Body() dto: { password?: string; mustChange?: boolean },
+  ): Promise<{ userId: string; mustChange: boolean }> {
+    const tenantId = this.tenant.get().tenantId;
+    const user = this.users.get(tenantId, id);
+    if (!user) throw new NotFoundException(`user ${id} is not registered`);
+    const password = dto?.password ?? '';
+    const mustChange = dto?.mustChange !== false;
+    try {
+      await this.credentials.setPassword(tenantId, id, password, { mustChange });
+    } catch (err) {
+      // The service throws the policy reason ("password must be at least N characters"), which
+      // is a client mistake, not a server fault.
+      throw new BadRequestException((err as Error).message);
+    }
+    // NEVER the password, not even its length — an audit trail is read by more people than the
+    // admin screen is.
+    this.auditLog(id, 'password.set', { mustChange, byAdmin: true });
+    return { userId: id, mustChange };
   }
 }

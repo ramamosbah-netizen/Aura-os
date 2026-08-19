@@ -150,6 +150,18 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import type { Pool } from 'pg';
 import { CommsController } from './comms/comms.controller';
 import { CommsService } from './comms/comms.service';
+import { COMMS_STORE } from './comms/comms-store';
+import { InMemoryCommsStore } from './comms/in-memory-comms-store';
+import { PostgresCommsStore } from './comms/postgres-comms-store';
+import { MAIL_STORE } from './comms/mail/mail-store';
+import { InMemoryMailStore } from './comms/mail/in-memory-mail-store';
+import { PostgresMailStore } from './comms/mail/postgres-mail-store';
+import { MailService } from './comms/mail/mail.service';
+import { MailDispatchWorker } from './comms/mail/mail-dispatch.worker';
+import { MailSyncEngine } from './comms/mail/mail-sync.engine';
+import { MailboxController } from './comms/mail/mailbox.controller';
+import { WorkItemsController } from './work-items/work-items.controller';
+import { WorkItemsService } from './work-items/work-items.service';
 
 /**
  * The API host. Phase 0 wires only the kernel (CoreModule) + a health check and
@@ -157,8 +169,8 @@ import { CommsService } from './comms/comms.service';
  */
 @Module({
   imports: [GatesModule, FinanceWiringModule, CoreModule, CrmModule, MarketIntelligenceModule, TenderingModule, ContractsModule, ProjectsModule, IntelligenceModule, ProcurementModule, InventoryModule, FinanceModule, SubcontractsModule, EngineeringModule, DocControlModule, SiteModule, HseModule, QualityModule, HrModule, FleetModule, AssetsModule, TemplatesModule, AmcModule, CommissioningModule, ElvModule, ComplianceModule],
-  controllers: [HealthController, EventsController, DocumentsController, DocumentRequirementsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmSignalsController, LeadCommandController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, MyDayController, SourceFunnelController, ExecutiveCrmController, CrmAutomationController, DealBriefController, CrmActivitiesController, Opportunity360Controller, OpportunityDepthController, PreAwardController, PipelineCommandController, ForecastController, CampaignsController, NegotiationController, MarketIntelligenceController, ProductKnowledgeController, EstimationController, PricingSheetsController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, ProjectMembersController, IntelligenceController, ProcurementController, ThreeWayMatchController, SpendAnalyticsController, FrameworkAgreementsController, InventoryController, SerialsController, LocationsController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, CommissioningController, ElvDevicesController, ComplianceController, HandoverController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
-  providers: [MigrationGateService, SampleEventSubscriber, CrossModuleSubscriber, HandoverAmcSubscriber, CommissioningHandoverSubscriber, DrawingTransmittalSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService, AccountDocumentAccessProvider,
+  controllers: [WorkItemsController, HealthController, EventsController, DocumentsController, DocumentRequirementsController, WorkflowController, IntegrationController, AiController, Account360Controller, CrmAccountsController, CrmSignalsController, LeadCommandController, CrmLeadsController, Contact360Controller, CrmContactsController, ActivityCommandController, MyDayController, SourceFunnelController, ExecutiveCrmController, CrmAutomationController, DealBriefController, CrmActivitiesController, Opportunity360Controller, OpportunityDepthController, PreAwardController, PipelineCommandController, ForecastController, CampaignsController, NegotiationController, MarketIntelligenceController, ProductKnowledgeController, EstimationController, PricingSheetsController, CrmOpportunitiesController, CrmTimelineController, RelationshipIntelligenceController, CrmQuotationsController, TenderingController, BidScoresController, EstimatesController, TenderPricingController, WinLossController, ContractsController, BondsController, PaymentCertificatesController, ClausesController, ObligationsController, ProjectsController, ProjectMembersController, IntelligenceController, ProcurementController, ThreeWayMatchController, SpendAnalyticsController, FrameworkAgreementsController, InventoryController, SerialsController, LocationsController, FinanceController, StatementsController, PeriodCloseController, BudgetController, RevenueRecognitionController, FxController, SubcontractsController, EngineeringController, DocControlController, SiteController, HseController, QualityController, HrController, FleetController, AssetsController, AuthController, BuilderController, AuditController, AmcController, CommissioningController, ElvDevicesController, ComplianceController, HandoverController, SearchController, ViewsController, StockController, TransferController, NotificationsController, InboxController, WorkspaceController, CommsController, MailboxController, MetricsController, AccessAdminController, ApprovalMatrixAdminController, FeatureFlagsAdminController, ConnectorsAdminController, NumberingAdminController, SettingsAdminController, CompaniesAdminController, CalendarAdminController, PlatformAdminController, DataLifecycleController, UsersAdminController, ServiceAccountsAdminController, FormsAdminController, FormOverridesReadController],
+  providers: [WorkItemsService, MigrationGateService, SampleEventSubscriber, CrossModuleSubscriber, HandoverAmcSubscriber, CommissioningHandoverSubscriber, DrawingTransmittalSubscriber, NotificationsSubscriber, PoisonSubscriber, WorkflowSeeder, AuthSeeder, DemoSeeder, SearchService, InboxService, WorkspaceConfigService, CommsService, AccountDocumentAccessProvider,
     // Global permission guard — enforces @Permissions(...) on any handler. No-op until auth
     // is turned on (staged pass-through); undeclared handlers always pass.
     { provide: APP_GUARD, useClass: PermissionsGuard },
@@ -173,6 +185,25 @@ import { CommsService } from './comms/comms.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresWorkspaceConfigStore(pool) : new InMemoryWorkspaceConfigStore(),
     },
+    {
+      // Chat + internal mail (migration 0234). With a pool, conversations survive a restart;
+      // without one the API still boots, on the in-memory stand-in the test suite runs against.
+      provide: COMMS_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresCommsStore(pool) : new InMemoryCommsStore(),
+    },
+    {
+      // THE mail write path (migrations 0234-0236). CommsService.sendMail delegates here too, so
+      // the legacy endpoint and MailService cannot produce differently-shaped mail.
+      provide: MAIL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresMailStore(pool) : new InMemoryMailStore(),
+    },
+    MailService,
+    MailDispatchWorker,
+    MailSyncEngine,
   ],
 })
 export class AppModule {}

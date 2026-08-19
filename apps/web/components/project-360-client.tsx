@@ -4,13 +4,16 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'r
 import { useRouter } from 'next/navigation';
 import ProjectTeam from './project-team';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import AuraDataTable, { type AuraColumn } from './ui/aura-data-table';
+import { DataDegradedNotice } from './ui/data-state';
+import { RecordTabs, type TabDef } from './ui/record';
 
 // Project 360 — delivery + commercial control in one place. The project
 // INHERITS its commercial context from the chain (contract value → budget),
 // tracks execution (variations, delays/EOT, EVM), and CLOSES the chain:
 // finalizing closeout + completing the project completes the source contract.
 
-interface Project {
+export interface Project360Project {
   id: string;
   title: string;
   reference: string | null;
@@ -35,7 +38,31 @@ type Tab = 'variations' | 'eot' | 'closeout' | 'team';
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
-export default function Project360Client({ project }: { project: Project }) {
+const CONTROL_TABS: TabDef[] = [
+  { id: 'variations', label: 'Variations' },
+  { id: 'eot', label: 'Delays & EOT' },
+  { id: 'closeout', label: 'Closeout' },
+  { id: 'team', label: 'Team' },
+];
+
+const VARIATION_COLUMNS: AuraColumn<Variation>[] = [
+  { key: 'reference', label: 'Ref', priority: 'primary', sortable: true, render: (row) => <span style={{ fontFamily: 'ui-monospace, monospace' }}>{row.reference ?? '—'}</span> },
+  { key: 'title', label: 'Title', sortable: true },
+  { key: 'kind', label: 'Kind', sortable: true, render: (row) => <span style={{ textTransform: 'capitalize' }}>{row.kind}</span> },
+  { key: 'value', label: 'Value', sortable: true, render: (row) => <strong style={{ color: row.value < 0 ? 'var(--bad)' : 'var(--text)' }}>AED {aed(row.value)}</strong> },
+  { key: 'status', label: 'Status', sortable: true, render: (row) => <Status value={row.status} /> },
+  { key: 'createdAt', label: 'Raised', priority: 'muted', sortable: true, render: (row) => fmt(row.createdAt) },
+];
+
+const EOT_COLUMNS: AuraColumn<EotClaim>[] = [
+  { key: 'title', label: 'Claim', priority: 'primary', sortable: true },
+  { key: 'daysRequested', label: 'Days requested', sortable: true },
+  { key: 'daysGranted', label: 'Days granted', sortable: true, render: (row) => row.daysGranted ?? '—' },
+  { key: 'status', label: 'Status', sortable: true, render: (row) => <Status value={row.status} /> },
+  { key: 'createdAt', label: 'Raised', priority: 'muted', sortable: true, render: (row) => fmt(row.createdAt) },
+];
+
+export default function Project360Client({ project }: { project: Project360Project }) {
   const router = useRouter();
   const [variations, setVariations] = useState<Variation[]>([]);
   const [impact, setImpact] = useState<VariationImpact | null>(null);
@@ -47,14 +74,16 @@ export default function Project360Client({ project }: { project: Project }) {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadFailures, setLoadFailures] = useState(0);
 
   const load = useCallback(async () => {
+    let failures = 0;
     const j = async <T,>(url: string, fallback: T): Promise<T> => {
       try {
         const r = await fetch(url, { cache: 'no-store' });
-        if (!r.ok) return fallback;
+        if (!r.ok) { failures += 1; return fallback; }
         return (await r.json()) as T;
-      } catch { return fallback; }
+      } catch { failures += 1; return fallback; }
     };
     const [vs, imp, eot, cls, evmData, certSummary] = await Promise.all([
       j<Variation[]>(`/api/projects/variations?projectId=${project.id}`, []),
@@ -70,6 +99,7 @@ export default function Project360Client({ project }: { project: Project }) {
     setCloseout((Array.isArray(cls) ? cls : [])[0] ?? null);
     setEvm(evmData && Number.isFinite(evmData.earnedValue) ? evmData : null);
     setCerts(certSummary?.summary ?? null);
+    setLoadFailures(failures);
   }, [project.id, project.contractId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -101,9 +131,10 @@ export default function Project360Client({ project }: { project: Project }) {
   };
 
   return (
-    <div>
-      {err && <div style={st.err}>{err}</div>}
-      {msg && <div style={st.ok}>{msg}</div>}
+    <div data-testid="project-controls-client">
+      {err && <div role="alert" style={st.err}>{err}</div>}
+      {msg && <div role="status" style={st.ok}>{msg}</div>}
+      {loadFailures > 0 ? <DataDegradedNotice message={`${loadFailures} project-control data source${loadFailures === 1 ? ' is' : 's are'} unavailable. Available sections remain live.`} /> : null}
 
       {/* header */}
       <div style={st.header}>
@@ -121,7 +152,7 @@ export default function Project360Client({ project }: { project: Project }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a href={`/project/${project.id}`} className="btn btn-primary" style={st.actBtn}>▦ Delivery Workspace →</a>
+          <a href={`/project/${project.id}`} className="btn btn-primary" style={st.actBtn}>▦ Command center</a>
           {project.status === 'planned' && (
             <button className="btn btn-primary" style={st.actBtn} disabled={busy} onClick={() => setStatus('active')}>▶ Start execution</button>
           )}
@@ -174,16 +205,17 @@ export default function Project360Client({ project }: { project: Project }) {
       </div>
 
       {/* tabs */}
-      <div style={st.tabs}>
-        {([
-          ['variations', `Variations (${variations.length})`],
-          ['eot', `Delays & EOT (${eots.length})`],
-          ['closeout', `Closeout${closeout ? ` (${closeoutDone}/${closeout.items.length})` : ''}`],
-          ['team', 'Team'],
-        ] as Array<[Tab, string]>).map(([id, label]) => (
-          <button key={id} style={{ ...st.tab, ...(tab === id ? st.tabOn : {}) }} onClick={() => setTab(id)}>{label}</button>
-        ))}
-        <div style={{ flex: 1 }} />
+      <div style={st.controlRow}>
+        <RecordTabs
+          baseId="project-controls"
+          tabs={CONTROL_TABS.map((item) => ({
+            ...item,
+            count: item.id === 'variations' ? variations.length : item.id === 'eot' ? eots.length : undefined,
+          }))}
+          active={tab}
+          onChange={(id) => setTab(id as Tab)}
+        />
+        <div style={st.controlActions}>
         {tab === 'variations' && <a href="/projects/variations" style={st.linkBtn}>Variations register →</a>}
         {tab === 'closeout' && !closeout && (
           <button className="btn btn-primary" style={st.actBtn} disabled={busy}
@@ -191,46 +223,38 @@ export default function Project360Client({ project }: { project: Project }) {
             Start closeout checklist
           </button>
         )}
+        </div>
       </div>
 
-      <section className="panel">
+      <section id="project-controls-panel" role="tabpanel" aria-labelledby={`project-controls-tab-${tab}`} tabIndex={0} className="panel">
         {tab === 'variations' && (
-          variations.length === 0 ? <p style={st.muted}>No variation orders — scope changes land here (additions / omissions adjust the revised value).</p> : (
-            <table className="data-table">
-              <thead><tr>{['Ref', 'Title', 'Kind', 'Value', 'Status', 'Raised'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
-              <tbody>
-                {variations.map((v) => (
-                  <tr key={v.id}>
-                    <td style={{ fontFamily: 'ui-monospace, monospace' }}>{v.reference ?? '—'}</td>
-                    <td style={{ fontWeight: 600 }}>{v.title}</td>
-                    <td style={{ textTransform: 'capitalize' }}>{v.kind}</td>
-                    <td style={{ fontWeight: 600, color: v.value < 0 ? 'var(--bad)' : 'var(--text)' }}>AED {aed(v.value)}</td>
-                    <td><span className={v.status === 'approved' ? 'badge badge-good' : v.status === 'rejected' ? 'badge badge-bad' : 'badge'}>{v.status}</span></td>
-                    <td style={{ color: 'var(--muted)' }}>{fmt(v.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )
+          <AuraDataTable
+            ariaLabel="Project variations"
+            columns={VARIATION_COLUMNS}
+            data={variations}
+            keyExtractor={(row) => row.id}
+            searchFields={['reference', 'title', 'kind', 'status']}
+            searchPlaceholder="Search variations…"
+            pageSize={10}
+            columnToggle
+            emptyTitle="No variation orders"
+            emptyDescription="Scope changes and their approved commercial impact will appear here."
+          />
         )}
 
         {tab === 'eot' && (
-          eots.length === 0 ? <p style={st.muted}>No EOT claims — time-impact claims from the delay log appear here.</p> : (
-            <table className="data-table">
-              <thead><tr>{['Claim', 'Days requested', 'Days granted', 'Status', 'Raised'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
-              <tbody>
-                {eots.map((e) => (
-                  <tr key={e.id}>
-                    <td style={{ fontWeight: 600 }}>{e.title}</td>
-                    <td>{e.daysRequested}</td>
-                    <td>{e.daysGranted ?? '—'}</td>
-                    <td><span className={e.status === 'granted' || e.status === 'approved' ? 'badge badge-good' : e.status === 'rejected' ? 'badge badge-bad' : 'badge'}>{e.status}</span></td>
-                    <td style={{ color: 'var(--muted)' }}>{fmt(e.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )
+          <AuraDataTable
+            ariaLabel="Project delay and EOT claims"
+            columns={EOT_COLUMNS}
+            data={eots}
+            keyExtractor={(row) => row.id}
+            searchFields={['title', 'status']}
+            searchPlaceholder="Search EOT claims…"
+            pageSize={10}
+            columnToggle
+            emptyTitle="No EOT claims"
+            emptyDescription="Time-impact claims from the project delay log will appear here."
+          />
         )}
 
         {tab === 'closeout' && (
@@ -278,6 +302,13 @@ function Stat({ label, value, strong, accent, bad }: { label: string; value: str
   );
 }
 
+function Status({ value }: { value: string }) {
+  const tone = /approved|granted|closed|completed/i.test(value) ? 'badge badge-good'
+    : /rejected|cancelled|failed/i.test(value) ? 'badge badge-bad'
+      : 'badge';
+  return <span className={tone}>{value.replace(/_/g, ' ')}</span>;
+}
+
 const st = {
   err: { padding: '10px 12px', border: '1px solid var(--bad)', borderRadius: 10, color: 'var(--bad)', marginBottom: 12, fontSize: 13 } as CSSProperties,
   ok: { padding: '10px 12px', border: '1px solid var(--good)', borderRadius: 10, color: 'var(--good)', marginBottom: 12, fontSize: 13 } as CSSProperties,
@@ -286,15 +317,14 @@ const st = {
   subline: { display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)', marginTop: 6, alignItems: 'center' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
   actBtn: { padding: '8px 14px', fontSize: 12.5, fontWeight: 700 } as CSSProperties,
-  linkBtn: { border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
+  linkBtn: { minHeight: 44, display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,
   stats: { display: 'flex', gap: 22, flexWrap: 'wrap', padding: '14px 18px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', marginBottom: 12 } as CSSProperties,
   chain: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 16px', border: '1px dashed var(--border)', borderRadius: 12, marginBottom: 14, fontSize: 12.5 } as CSSProperties,
   chainNode: { border: '1px solid var(--border)', borderRadius: 999, padding: '4px 12px', color: 'var(--muted)', textDecoration: 'none' } as CSSProperties,
   chainOn: { color: 'var(--text)', borderColor: 'var(--accent)' } as CSSProperties,
   arrow: { color: 'var(--muted)' } as CSSProperties,
-  tabs: { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,
-  tab: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '7px 12px', borderRadius: 9, cursor: 'pointer' } as CSSProperties,
-  tabOn: { color: 'var(--accent)', borderColor: 'var(--accent)', fontWeight: 700 } as CSSProperties,
+  controlRow: { display: 'flex', gap: 10, alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,
+  controlActions: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginLeft: 'auto' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
   checkRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 6px', borderBottom: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' } as CSSProperties,
 };

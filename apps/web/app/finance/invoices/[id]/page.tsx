@@ -32,7 +32,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       ? { label: `Purchase order: ${invoice.poTitle ?? 'view'}`, href: `/procurement/purchase-orders/${invoice.poId}` }
       : null,
     invoice.projectId
-      ? { label: `Project: ${invoice.projectName ?? 'view'}`, href: `/projects/projects/${invoice.projectId}` }
+      ? { label: `Project: ${invoice.projectName ?? 'view'}`, href: `/project/${invoice.projectId}` }
       : null,
     { label: 'AP aging', href: '/finance/ap-aging' },
     { label: 'Ledger', href: '/finance/ledger' },

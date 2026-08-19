@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { SESSION_COOKIE } from './lib/session';
+import { decodeSessionUser, SESSION_COOKIE } from './lib/session';
 
 /**
  * Optimistic auth gate — Next 16 Proxy (formerly Middleware). Real authorization is
@@ -12,10 +12,15 @@ export function proxy(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   const isPublic =
     pathname === '/login' || pathname.startsWith('/api/auth/') || pathname.startsWith('/_next');
-  if (!isPublic && !request.cookies.get(SESSION_COOKIE)) {
+  const session = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!isPublic && !decodeSessionUser(session)) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    return NextResponse.redirect(url);
+    url.search = '';
+    url.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
+    const response = NextResponse.redirect(url);
+    if (session) response.cookies.delete(SESSION_COOKIE);
+    return response;
   }
   return NextResponse.next();
 }

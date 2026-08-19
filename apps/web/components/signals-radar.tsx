@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
@@ -83,7 +83,7 @@ function analyzeSignal(s: RadarSignal): AiRead {
 const contextHref = (t: string | null | undefined, id: string | null | undefined): string | null => {
   if (!t || !id) return null;
   const map: Record<string, string> = {
-    project: `/projects/projects/${id}`, contract: `/contracts/contracts/${id}`,
+    project: `/project/${id}`, contract: `/contracts/contracts/${id}`,
     tender: `/tendering/tenders/${id}`, opportunity: `/crm/opportunities/${id}`,
   };
   return map[t.toLowerCase()] ?? null;
@@ -155,8 +155,6 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
 
   const counts = data?.counts ?? { open: 0, new: 0, reviewing: 0, researching: 0, promoted: 0, dismissed: 0 };
   const signals = data?.signals ?? [];
-  const selected = useMemo(() => signals.find((s) => s.id === openId) ?? null, [signals, openId]);
-
   const call = async (id: string, path: string, method: string, body?: unknown): Promise<void> => {
     setBusy(id); setErr(null);
     try {

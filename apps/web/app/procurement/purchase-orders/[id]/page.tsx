@@ -28,7 +28,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
 
   const links = [
     po.projectId
-      ? { label: `Project: ${po.projectName ?? 'view'}`, href: `/projects/projects/${po.projectId}` }
+      ? { label: `Project: ${po.projectName ?? 'view'}`, href: `/project/${po.projectId}` }
       : null,
     { label: 'Print purchase order', href: `/procurement/purchase-orders/${po.id}/print` },
     { label: 'Goods receipts', href: '/inventory/grns' },

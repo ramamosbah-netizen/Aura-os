@@ -8,9 +8,13 @@ import { apiBase, authHeader } from '@/lib/api';
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   const url = new URL(_req.url);
+  const upstreamQuery = new URLSearchParams();
   const version = url.searchParams.get('version');
+  if (version) upstreamQuery.set('version', version);
+  if (url.searchParams.get('inline') === 'true') upstreamQuery.set('inline', 'true');
+  const query = upstreamQuery.size ? `?${upstreamQuery.toString()}` : '';
   try {
-    const res = await fetch(`${apiBase()}/api/v1/documents/${id}/content${version ? `?version=${version}` : ''}`, {
+    const res = await fetch(`${apiBase()}/api/v1/documents/${id}/content${query}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -22,6 +26,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       headers: {
         'content-type': res.headers.get('content-type') ?? 'application/octet-stream',
         'content-disposition': res.headers.get('content-disposition') ?? 'attachment',
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+        'cross-origin-resource-policy': 'same-origin',
       },
     });
   } catch {

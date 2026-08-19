@@ -10,6 +10,10 @@ const PORT = Number(process.env.WEB_PORT ?? 3100);
 // looks right while nothing hydrates — no effects, no fetches, every picker stuck on its loading
 // text. Two "gaps" in the admin suite were traced to this before the cause was found.
 const BASE_URL = `http://localhost:${PORT}`;
+// A second server with the optimistic auth gate ON, so both sides of WEB_AUTH_REQUIRED are
+// asserted against a declared environment instead of the developer's .env.local.
+const AUTH_GATE_PORT = PORT + 1;
+const AUTH_GATE_BASE_URL = `http://localhost:${AUTH_GATE_PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -32,13 +36,42 @@ export default defineConfig({
     trace: 'on-first-retry',
     storageState: STORAGE_STATE,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    // Invoke Next's bin via node directly — `pnpm exec` forces an implicit install that
-    // trips the ignored-build guard in this workspace and exits non-zero.
-    command: `node ./node_modules/next/dist/bin/next dev -p ${PORT}`,
-    url: BASE_URL,
-    timeout: 120_000,
-    reuseExistingServer: !process.env.CI,
-  },
+  projects: [
+    // Everything except the gate spec runs against the gate-OFF server.
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /web-auth-gate\.spec\.ts/ },
+    // The gate spec is the only thing that runs against the gate-ON server.
+    {
+      name: 'auth-gate',
+      testMatch: /web-auth-gate\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: AUTH_GATE_BASE_URL },
+    },
+  ],
+  // Two declared environments rather than one that inherits whatever the developer has.
+  //
+  // WEB_AUTH_REQUIRED changes a behaviour the suite asserts: with the gate off an anonymous read
+  // reaches the page and must RENDER a refusal; with it on the proxy bounces it to /login and
+  // there is no page. Both are correct, and both are now tested — each against a server that
+  // declares its own value, so neither depends on apps/web/.env.local. `pnpm auth:configure-local`
+  // writes WEB_AUTH_REQUIRED=true there, which silently flipped the spine suite's assumption and
+  // cost a wrong "pre-existing failure" call; an explicit env is what stops that recurring.
+  //
+  // Separate NEXT_DIST_DIR per server: Next refuses a second `next dev` sharing a build directory.
+  webServer: [
+    {
+      // Invoke Next's bin via node directly — `pnpm exec` forces an implicit install that
+      // trips the ignored-build guard in this workspace and exits non-zero.
+      command: `node ./node_modules/next/dist/bin/next dev -p ${PORT}`,
+      url: BASE_URL,
+      env: { WEB_AUTH_REQUIRED: 'false', NEXT_DIST_DIR: '.next-e2e' },
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: `node ./node_modules/next/dist/bin/next dev -p ${AUTH_GATE_PORT}`,
+      url: AUTH_GATE_BASE_URL,
+      env: { WEB_AUTH_REQUIRED: 'true', NEXT_DIST_DIR: '.next-e2e-auth' },
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });

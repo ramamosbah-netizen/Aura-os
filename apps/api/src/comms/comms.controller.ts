@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage, Mailbox } from '@aura/shared';
 import { CommsService, type ChannelSummary } from './comms.service';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
@@ -16,69 +16,81 @@ export class CommsController {
     private readonly tenant: TenantContext,
   ) {}
 
-  private async caller(): Promise<{ tenantId: string; username: string; isAdmin: boolean }> {
+  /**
+   * Identity comes from the verified request context and nowhere else. No route here takes a
+   * tenant, company or user field in its DTO, so the only way to act as someone is to hold their
+   * session — an id placed in a body or query cannot impersonate.
+   */
+  private async caller(): Promise<{ tenantId: string; companyId: string | null; username: string; isAdmin: boolean }> {
     const ctx = this.tenant.get();
     const username = ctx.actorId ?? DEV_USER;
     const me = await this.workspace.me(ctx.tenantId, username);
-    return { tenantId: ctx.tenantId, username, isAdmin: me.isAdmin };
+    return { tenantId: ctx.tenantId, companyId: ctx.companyId ?? null, username, isAdmin: me.isAdmin };
   }
 
   @Get('channels')
+  @Permissions('comms.channel.read')
   async channels(): Promise<ChannelSummary[]> {
-    const { tenantId, username, isAdmin } = await this.caller();
-    return this.comms.channels(tenantId, username, isAdmin);
+    const { tenantId, companyId, username, isAdmin } = await this.caller();
+    return this.comms.channels(tenantId, username, isAdmin, companyId);
   }
 
   @Post('dm')
+  @Permissions('comms.dm.create')
   async openDm(@Body() body: { peer?: string }): Promise<ChatChannel> {
     if (!body?.peer) throw new BadRequestException('peer is required');
-    const { tenantId, username } = await this.caller();
-    return this.comms.openDm(tenantId, username, body.peer);
+    const { tenantId, companyId, username } = await this.caller();
+    return this.comms.openDm(tenantId, username, body.peer, companyId);
   }
 
   @Get('channels/:id/messages')
+  @Permissions('comms.channel.read')
   async messages(@Param('id') id: string): Promise<ChatMessage[]> {
-    const { tenantId, username } = await this.caller();
-    return this.comms.messages(tenantId, username, id);
+    const { tenantId, companyId, username, isAdmin } = await this.caller();
+    return this.comms.messages(tenantId, username, id, isAdmin, companyId);
   }
 
   @Post('channels/:id/messages')
+  @Permissions('comms.channel.send')
   async post(
     @Param('id') id: string,
     @Body() body: { kind?: ChatMessageKind; text?: string; attachment?: ChatAttachment | null },
   ): Promise<ChatMessage> {
-    const { tenantId, username } = await this.caller();
+    const { tenantId, companyId, username, isAdmin } = await this.caller();
     const result = await this.comms.post(tenantId, {
       channelId: id,
       sender: username,
       kind: body?.kind ?? 'text',
       text: body?.text,
       attachment: body?.attachment ?? null,
-    });
+    }, companyId, isAdmin);
     if ('error' in result) throw new BadRequestException(result.error);
     return result;
   }
 
   @Get('mail')
+  @Permissions('comms.mail.read')
   async mailbox(): Promise<Mailbox> {
     const { tenantId, username } = await this.caller();
     return this.comms.mailbox(tenantId, username);
   }
 
   @Post('mail')
+  @Permissions('comms.mail.send')
   async sendMail(@Body() body: { to?: string[]; subject?: string; body?: string }): Promise<MailMessage> {
-    const { tenantId, username } = await this.caller();
+    const { tenantId, companyId, username } = await this.caller();
     const result = await this.comms.sendMail(tenantId, {
       from: username,
       to: body?.to ?? [],
       subject: body?.subject,
       body: body?.body,
-    });
+    }, companyId);
     if ('error' in result) throw new BadRequestException(result.error);
     return result;
   }
 
   @Post('mail/:id/read')
+  @Permissions('comms.mail.read')
   async markRead(@Param('id') id: string): Promise<{ ok: true }> {
     const { tenantId, username } = await this.caller();
     await this.comms.markMailRead(tenantId, username, id);
@@ -86,8 +98,9 @@ export class CommsController {
   }
 
   @Get('unread')
+  @Permissions('comms.channel.read')
   async unread(@Query() _q: unknown): Promise<{ chat: number; mail: number }> {
-    const { tenantId, username, isAdmin } = await this.caller();
-    return this.comms.unread(tenantId, username, isAdmin);
+    const { tenantId, companyId, username, isAdmin } = await this.caller();
+    return this.comms.unread(tenantId, username, isAdmin, companyId);
   }
 }

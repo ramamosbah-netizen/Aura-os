@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .next/
+# NEXT_DIST_DIR lets a second local server build elsewhere (see apps/web/next.config.ts).
+# Without this the output is untracked-but-not-ignored and lands in the next commit.
+.next-e2e*/
 .turbo/
 out/
 coverage/

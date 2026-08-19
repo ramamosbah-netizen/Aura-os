@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Pool } from 'pg';
-import { MigrationGateService, shouldAutoMigrate } from './migration-gate.service';
+import { Logger } from '@nestjs/common';
+import { MigrationGateService, migrationOwnerUrl, shouldAutoMigrate, sslFor } from './migration-gate.service';
 
 /** A pg-Pool stand-in whose SELECT returns the given applied filenames (or throws). */
 function fakePool(applied: string[] | Error): Pool {
@@ -153,5 +154,103 @@ describe('shouldAutoMigrate', () => {
       expect(shouldAutoMigrate({ AUTO_MIGRATE: v })).toBe(false);
     }
     expect(shouldAutoMigrate({ AUTO_MIGRATE: 'yes' })).toBe(true);
+  });
+});
+
+/**
+ * Which credential auto-migrate connects with. G-03 runs the API as `aura_app` (NOBYPASSRLS, no
+ * CREATE on schema public), so reusing the app pool for DDL cannot work on a role-split database:
+ * boot failed with a bare "permission denied for schema public" that read like a broken deploy.
+ */
+describe('migrationOwnerUrl', () => {
+  const saved = { url: process.env.MIGRATION_DATABASE_URL, file: process.env.MIGRATION_DATABASE_URL_FILE };
+
+  afterEach(() => {
+    for (const [k, v] of [['MIGRATION_DATABASE_URL', saved.url], ['MIGRATION_DATABASE_URL_FILE', saved.file]] as const) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  it('prefers the owner credential when one is configured', () => {
+    process.env.MIGRATION_DATABASE_URL = 'postgres://owner@db/postgres';
+    expect(migrationOwnerUrl()).toBe('postgres://owner@db/postgres');
+  });
+
+  it('honours the _FILE secret seam', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'owner-'));
+    const file = join(dir, 'migration-url');
+    writeFileSync(file, 'postgres://owner@db/from-file\n');
+    delete process.env.MIGRATION_DATABASE_URL;
+    process.env.MIGRATION_DATABASE_URL_FILE = file;
+    try {
+      expect(migrationOwnerUrl()).toBe('postgres://owner@db/from-file');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the app pool (null) when no owner credential is set — un-split setups', () => {
+    delete process.env.MIGRATION_DATABASE_URL;
+    delete process.env.MIGRATION_DATABASE_URL_FILE;
+    expect(migrationOwnerUrl()).toBeNull();
+  });
+});
+
+describe('sslFor', () => {
+  it('disables TLS for a local socket', () => {
+    expect(sslFor('postgresql://user:***@localhost:5432/postgres')).toBe(false);
+    expect(sslFor('postgresql://user:***@127.0.0.1:5432/postgres')).toBe(false);
+    expect(sslFor('postgresql://user:***@db.example.com:5432/postgres?sslmode=disable')).toBe(false);
+  });
+
+  it('keeps TLS on for hosted Postgres, without demanding a local CA', () => {
+    expect(sslFor('postgresql://user:***@aws-1.pooler.supabase.com:5432/postgres')).toEqual({ rejectUnauthorized: false });
+  });
+});
+
+describe('auto-migrate on a role-split database', () => {
+  let dir: string;
+  const prev = process.env.MIGRATIONS_DIR;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'gate-perm-'));
+    writeFileSync(join(dir, '0001_a.sql'), '-- a');
+    process.env.MIGRATIONS_DIR = dir;
+    delete process.env.MIGRATION_DATABASE_URL;
+  });
+
+  afterEach(() => {
+    if (prev === undefined) delete process.env.MIGRATIONS_DIR;
+    else process.env.MIGRATIONS_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('names the missing owner credential when the app role is refused DDL', async () => {
+    const logged: string[] = [];
+    const pool = {
+      query: vi.fn(async () => ({ rows: [] })),
+      connect: vi.fn(async () => ({
+        query: vi.fn(async (text: string) => {
+          if (/create table|alter table/i.test(text)) throw new Error('permission denied for schema public');
+          return { rows: [] };
+        }),
+        release: vi.fn(),
+      })),
+    } as unknown as Pool;
+
+    const gate = new MigrationGateService(pool);
+    vi.spyOn(Logger.prototype, 'error').mockImplementation((m: unknown) => { logged.push(String(m)); });
+    try {
+      await gate.onModuleInit();
+    } finally {
+      vi.restoreAllMocks();
+    }
+
+    const failure = logged.find((l) => l.includes('Auto-migrate failed'));
+    expect(failure).toBeDefined();
+    expect(failure).toContain('MIGRATION_DATABASE_URL');
+    // Still gated: a refused migration must leave the deploy-gate closed, not quietly open.
+    expect(gate.isDegraded()).toBe(true);
   });
 });

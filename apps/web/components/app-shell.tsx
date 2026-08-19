@@ -32,6 +32,7 @@ export default function AppShell({
   isAdmin?: boolean;
 }) {
   const pathname = usePathname();
+  const isHome = pathname === '/';
   // Module Manager: tenant-disabled business modules disappear from the nav for everyone
   // (the API rejects their routes with 403 regardless — this is the UX half).
   const [disabledModules, setDisabledModules] = useState<Set<string>>(new Set());
@@ -153,13 +154,23 @@ export default function AppShell({
 
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
 
+  const primaryNav = [
+    { label: 'Home', href: '/', glyph: '⌂', active: pathname === '/' },
+    { label: 'My Work', href: '/my-work', glyph: '◆', active: pathname === '/my-work' || pathname.startsWith('/workspace') || pathname.startsWith('/inbox') || pathname.startsWith('/notifications') || pathname.startsWith('/views') },
+    { label: 'Projects', href: '/projects/projects', glyph: '▥', active: pathname.startsWith('/project/') || pathname.startsWith('/projects/') },
+    { label: 'Suites', href: '/suites', glyph: '▦', active: pathname === '/suites' || pathname.startsWith('/suites/') },
+    { label: 'Reports', href: '/intelligence', glyph: '✶', active: pathname.startsWith('/intelligence') },
+    ...(isAdmin ? [{ label: 'Admin', href: '/admin', glyph: '🛠', active: pathname === '/admin' || pathname.startsWith('/admin/') }] : []),
+  ];
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
+      const key = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+      if (key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setPaletteOpen((o) => !o);
       }
-      if (e.key.toLowerCase() === 'b' && (e.metaKey || e.ctrlKey)) {
+      if (key === 'b' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         toggleSidebar();
       }
@@ -199,7 +210,7 @@ export default function AppShell({
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
-      {!sidebarHidden && (
+      {!sidebarHidden && !isHome && (
       <aside className="app-sidebar" style={s.sidebar} aria-label="Primary">
         <div className="sidebar-brand" style={s.brand}>
           <div style={s.brandLogo} aria-hidden>
@@ -210,57 +221,23 @@ export default function AppShell({
             <div style={s.brandSub}>ENTERPRISE ERP</div>
           </div>
         </div>
-        <nav style={s.nav} aria-label="Main navigation">
-          {(() => {
-            const home = groups.find((g) => g.title === 'Home');
-            const admin = groups.find((g) => g.title === 'Administration');
-            const workspaces = groups.filter((g) => g.title !== 'Home' && g.title !== 'Administration');
-            // A workspace is ONE line — it selects the workspace (lands on its first page). Its pages
-            // are the horizontal tab row, not sidebar children.
-            const wsLink = (group: (typeof groups)[number]) => {
-              const active = activeGroup === group.title;
-              return (
-                <Link
-                  key={group.title}
-                  href={groupAllItems(group)[0]?.href ?? '/'}
-                  className="sidebar-link"
-                  title={group.title}
-                  aria-current={active ? 'page' : undefined}
-                  style={active ? { ...s.link, ...s.linkActive } : s.link}
-                >
-                  <span style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>{group.glyph}</span>
-                  <span className="sidebar-label" style={{ fontWeight: 600 }}>{group.title}</span>
-                </Link>
-              );
-            };
-            return (
-              <>
-                {home?.items.map((item) => {
-                  const active = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="sidebar-link"
-                      title={item.label}
-                      aria-current={active ? 'page' : undefined}
-                      style={active ? { ...s.link, ...s.linkActive } : s.link}
-                    >
-                      <span style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>{item.glyph}</span>
-                      <span className="sidebar-label">{item.label}</span>
-                    </Link>
-                  );
-                })}
-                {workspaces.length > 0 && <div style={s.navDivider} />}
-                {workspaces.map(wsLink)}
-                {admin && <div style={s.navDivider} />}
-                {admin && wsLink(admin)}
-              </>
-            );
-          })()}
+        <nav className="global-primary-nav" style={s.nav} aria-label="Main navigation">
+          {primaryNav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="sidebar-link"
+              title={item.label}
+              aria-current={item.active ? 'page' : undefined}
+              style={item.active ? { ...s.link, ...s.linkActive } : s.link}
+            >
+              <span aria-hidden style={item.active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>{item.glyph}</span>
+              <span className="sidebar-label">{item.label}</span>
+            </Link>
+          ))}
         </nav>
         {user ? (
-          <div style={s.userBox}>
+          <div className="shell-account" style={s.userBox}>
             <div style={s.userInfo}>
               <span style={s.userDot} />
               <span style={s.userName}>{user.sub}</span>
@@ -275,7 +252,7 @@ export default function AppShell({
 
       <div style={s.col}>
         <header className="app-topbar" style={s.topbar}>
-          <button
+          {!isHome && <button
             type="button"
             style={s.hamburger}
             onClick={toggleSidebar}
@@ -283,7 +260,7 @@ export default function AppShell({
             title="Toggle sidebar (Ctrl+B)"
           >
             ☰
-          </button>
+          </button>}
           <button type="button" className="app-topbar-search" style={s.search} onClick={() => setPaletteOpen(true)}>
             <span style={{ color: 'var(--muted)' }}>Search or jump to…</span>
             <span style={s.kbdHint}>⌘K</span>
@@ -294,7 +271,7 @@ export default function AppShell({
           </div>
 
           {/* ── Quick Create Action ── */}
-          <div style={{ position: 'relative', marginRight: 10 }}>
+          <div className="app-topbar-create" style={{ position: 'relative', marginRight: 10 }}>
             <button
               type="button"
               style={{
@@ -336,6 +313,7 @@ export default function AppShell({
           {/* ── Pulsing Notification Bell ── */}
           <Link
             href="/inbox"
+            className="app-topbar-notifications"
             style={{
               position: 'relative',
               display: 'flex',
@@ -386,6 +364,7 @@ export default function AppShell({
           <div style={s.companySwitcher}>
             <button
               type="button"
+              className="app-topbar-company-button"
               style={s.companyButton}
               onClick={() => setCompanyDropdownOpen((o) => !o)}
             >

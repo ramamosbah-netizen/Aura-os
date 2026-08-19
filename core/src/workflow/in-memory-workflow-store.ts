@@ -45,6 +45,7 @@ export class InMemoryWorkflowStore implements WorkflowStore {
   async listInstances(filter: WorkflowInstanceFilter = {}): Promise<WorkflowInstance[]> {
     let out = [...this.instances.values()];
     if (filter.tenantId) out = out.filter((i) => i.tenantId === filter.tenantId);
+    if (filter.companyId !== undefined) out = out.filter((i) => i.companyId === filter.companyId);
     if (filter.definitionKey) out = out.filter((i) => i.definitionKey === filter.definitionKey);
     if (filter.aggregateType) out = out.filter((i) => i.aggregateType === filter.aggregateType);
     if (filter.aggregateId) out = out.filter((i) => i.aggregateId === filter.aggregateId);

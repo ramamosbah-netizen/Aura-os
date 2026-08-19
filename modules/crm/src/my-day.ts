@@ -141,7 +141,7 @@ function toTask(a: Activity, today: string, weekEnd: string): MyDayTask {
     relatedType: a.relatedType,
     relatedId: a.relatedId,
     relatedName: a.relatedName,
-    href: hrefFor(a.relatedType, a.relatedId),
+    href: hrefFor(a.relatedType, a.relatedId) ?? `/crm/activities?record=${encodeURIComponent(a.id)}`,
   };
 }
 
@@ -152,14 +152,28 @@ function byUrgency(a: MyDayTask, b: MyDayTask): number {
   return r !== 0 ? r : (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999');
 }
 
+function dateKeyAtTimeZone(value: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: '2-digit', year: 'numeric', timeZone,
+  }).formatToParts(value);
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function addDaysToKey(value: string, amount: number): string {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
 /**
  * Compose one person's day out of facts that already exist. Pure: same inputs + same `now` ⇒ same
  * output, which is why the whole page is testable without a database.
  */
-export function buildMyDay(input: MyDayInput, now: Date = new Date()): MyDay {
+export function buildMyDay(input: MyDayInput, now: Date = new Date(), timeZone = 'Asia/Dubai'): MyDay {
   const { userId } = input;
-  const today = now.toISOString().slice(0, 10);
-  const weekEnd = new Date(now.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+  const today = dateKeyAtTimeZone(now, timeZone);
+  const weekEnd = addDaysToKey(today, 7);
 
   // Attention facts come from the WHOLE activity stream, not just my slice: a colleague's call on
   // my lead still means the lead was touched. Only the work lists are filtered to me.

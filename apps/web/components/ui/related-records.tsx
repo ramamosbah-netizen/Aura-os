@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 
 // related-records + activity-timeline — the connectivity layer.
@@ -61,10 +61,11 @@ export function RelatedRecords({
   title?: string;
   groups: RelatedGroup[];
 }) {
+  const headingId = useId();
   const nonEmpty = groups.filter((g) => g.items.length > 0);
   return (
-    <section style={st.card}>
-      <div style={st.head}>{title}</div>
+    <section style={st.card} aria-labelledby={headingId}>
+      <h2 id={headingId} style={st.head}>{title}</h2>
       {nonEmpty.length === 0 ? (
         <p style={st.none}>No linked records yet.</p>
       ) : (
@@ -142,7 +143,7 @@ export function ActivityTimeline({
               <span style={st.eventTitle}>
                 {e.href ? <Link href={e.href} style={st.eventLink}>{e.title}</Link> : e.title}
               </span>
-              <span style={st.when}>{e.when ?? e.at}</span>
+              <time dateTime={e.at} style={st.when}>{e.when ?? e.at}</time>
             </div>
             {(e.actor || e.detail) && (
               <div style={st.eventDetail}>
@@ -160,7 +161,7 @@ export function ActivityTimeline({
 
 const st: Record<string, CSSProperties> = {
   card: { border: '1px solid var(--border)', borderRadius: 14, padding: 16, background: 'var(--panel)' },
-  head: { fontSize: 13, fontWeight: 700, marginBottom: 12 },
+  head: { fontSize: 13, fontWeight: 700, margin: '0 0 12px' },
   none: { color: 'var(--muted)', fontSize: 12.5, margin: 0 },
   groups: { display: 'flex', flexDirection: 'column', gap: 14 },
   group: {},

@@ -20,3 +20,19 @@
 // (a live clock, a "last seen" ticker) should not use them.
 export const DISPLAY_LOCALE = 'en-AE';
 export const DISPLAY_TIME_ZONE = 'Asia/Dubai';
+
+/**
+ * The viewer's own IANA zone, read at the moment it is asked for.
+ *
+ * The deliberate opposite of DISPLAY_TIME_ZONE, and the exception the note above describes: when
+ * a user schedules a message for 08:00 they mean 08:00 where they are, so the real zone is what
+ * has to reach the API. It lives here because this module is the one place allowed to construct
+ * a formatter, which keeps every Intl construction out of client components where an unpinned one
+ * would be a hydration bug.
+ *
+ * A function rather than a constant: read during a module's evaluation it would capture the
+ * SERVER's zone and hand it to every viewer.
+ */
+export function viewerTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || DISPLAY_TIME_ZONE;
+}

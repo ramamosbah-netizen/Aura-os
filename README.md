@@ -30,9 +30,35 @@ KERNEL         core/  (tenancy · auth/RBAC · event store + outbox · workflow 
 
 ```bash
 pnpm install
-pnpm build          # turbo: builds shared → core → api
+pnpm auth:configure-local   # generates the local JWT + master-admin secrets and .env.local
+pnpm build                  # turbo: builds shared → core → api
 pnpm --filter @aura/api start:dev   # API on http://localhost:4000/api
 ```
+
+Run `pnpm auth:configure-local` before you trust anything you see locally. Measured behaviour of
+an install that skips it (no `.env.local`, no secrets):
+
+| | Result |
+|---|---|
+| `GET /auth/status` | `{"enabled":false}` — no verifier is configured |
+| `POST /auth/login` | **403** `login (dev token mint) requires AUTH_JWT_SECRET` |
+| `GET /crm/accounts` with **no credentials** | **200** |
+
+So the failure mode is not "locked out", it is the opposite: an unauthenticated local API that
+answers every business route as the dev actor, and a login route that cannot issue a session at
+all. Permissions, tenant isolation and approval limits are all inert in that state, which makes it
+a bad mirror of production to develop against.
+
+After the bootstrap, `AUTH_REQUIRED=true`, login works, and the master-administrator grant is
+loaded — verified end to end: sign in as `u-admin`, then `GET /crm/accounts` → 200 as an
+*authorized* read. The command is idempotent and never overwrites an existing secret. It prints
+the *path* to the generated password file, not the password — read it from
+`.aura-storage/secrets/master-admin-password` to sign in as `u-admin`.
+
+Secrets are written to `.aura-storage/secrets/` (gitignored) and referenced from
+`apps/api/.env.local` as `*_FILE` paths, so no credential is ever stored in a committed file.
+`AUTH_LOCAL_LOGIN_USERS` in that file restricts local login to `u-admin`; add identities to it if
+a second local actor is needed (e.g. a maker-checker pair).
 
 ## Docs
 

@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Client } from 'pg';
 import type { Pool, PoolClient } from 'pg';
 import { PG_POOL } from '@aura/core';
+import { readSecret } from '@aura/shared';
 
 /**
  * Decide whether boot should auto-apply pending migrations. The first-run failure mode this
@@ -119,39 +121,72 @@ export class MigrationGateService implements OnModuleInit {
 
   /**
    * Apply pending migration files in filename order, each in its own transaction, recording the
-   * ledger row — the same contract as `apps/api/scripts/migrate.mjs`, but reusing the app pool so
-   * boot needs no second DB config. One client is held for the whole run so each file's
-   * BEGIN/DDL/INSERT/COMMIT lands on a single connection. Any failure aborts the run (throws);
-   * files already applied by this point stay applied (the ledger is the source of truth).
+   * ledger row — the same contract as `apps/api/scripts/migrate.mjs`. One connection is held for
+   * the whole run so each file's BEGIN/DDL/INSERT/COMMIT lands together. Any failure aborts the
+   * run (throws); files already applied stay applied (the ledger is the source of truth).
+   *
+   * The connection is deliberately NOT the app pool when an owner credential exists — see
+   * `migrationOwnerUrl`.
    */
   private async applyPending(pending: string[], dir: string): Promise<void> {
+    const ownerUrl = migrationOwnerUrl();
+    if (ownerUrl) {
+      this.logger.log('Auto-migrate connects as the schema owner (MIGRATION_DATABASE_URL), not the app role.');
+      const client = new Client({ connectionString: ownerUrl, ssl: sslFor(ownerUrl) });
+      await client.connect();
+      try {
+        await this.runPending(client, pending, dir);
+      } finally {
+        await client.end();
+      }
+      return;
+    }
+
     if (!this.pool) return;
+    // No owner credential configured. Correct for setups that never split the roles, where
+    // DATABASE_URL still owns the schema. On a role-split database it fails — and the rewrite
+    // below names the missing credential instead of leaving a bare "permission denied".
     const client: PoolClient = await this.pool.connect();
     try {
-      // The ledger may not exist yet on a truly fresh DB — create it exactly as the runner does.
-      await client.query(
-        `create table if not exists public.aura_migrations (
-           filename   text        primary key,
-           applied_at timestamptz not null default now()
-         )`,
-      );
-      for (const file of pending) {
-        const sql = readFileSync(join(dir, file), 'utf8');
-        const marker = sql.indexOf('-- @DOWN');
-        const up = marker < 0 ? sql : sql.slice(0, marker);
-        await client.query('BEGIN');
-        try {
-          await client.query(up);
-          await client.query('insert into public.aura_migrations (filename) values ($1)', [file]);
-          await client.query('COMMIT');
-          this.logger.log(`✓ auto-applied ${file}`);
-        } catch (err) {
-          await client.query('ROLLBACK').catch(() => undefined);
-          throw new Error(`migration ${file} failed: ${(err as Error).message}`);
-        }
+      await this.runPending(client, pending, dir);
+    } catch (err) {
+      const message = (err as Error).message;
+      if (/permission denied|must be owner/i.test(message)) {
+        throw new Error(
+          `${message} — the app role holds no DDL rights (G-03 runs the API as NOBYPASSRLS aura_app). ` +
+            'Set MIGRATION_DATABASE_URL to the schema-owning credential so auto-migrate uses it, or run ' +
+            '`pnpm --filter @aura/api db:migrate` and restart.',
+        );
       }
+      throw err;
     } finally {
       client.release();
+    }
+  }
+
+  /** Run the pending files on an already-open connection (pooled app client or owner client). */
+  private async runPending(client: SqlRunner, pending: string[], dir: string): Promise<void> {
+    // The ledger may not exist yet on a truly fresh DB — create it exactly as the runner does.
+    await client.query(
+      `create table if not exists public.aura_migrations (
+         filename   text        primary key,
+         applied_at timestamptz not null default now()
+       )`,
+    );
+    for (const file of pending) {
+      const sql = readFileSync(join(dir, file), 'utf8');
+      const marker = sql.indexOf('-- @DOWN');
+      const up = marker < 0 ? sql : sql.slice(0, marker);
+      await client.query('BEGIN');
+      try {
+        await client.query(up);
+        await client.query('insert into public.aura_migrations (filename) values ($1)', [file]);
+        await client.query('COMMIT');
+        this.logger.log(`✓ auto-applied ${file}`);
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw new Error(`migration ${file} failed: ${(err as Error).message}`);
+      }
     }
   }
 
@@ -234,4 +269,31 @@ function resolveMigrationsDir(): string | null {
     dir = parent;
   }
   return null;
+}
+
+/** Minimal shape shared by `pg`'s pooled client and a standalone `Client`. */
+interface SqlRunner {
+  query(text: string, values?: unknown[]): Promise<unknown>;
+}
+
+/**
+ * The credential auto-migrate connects with, or null to fall back to the app pool.
+ *
+ * G-03 split the roles: the API connects as `aura_app`, which is NOBYPASSRLS and holds no CREATE
+ * on schema public — deliberately, so a compromised app node cannot reshape the schema. Reusing
+ * the app pool for DDL therefore CANNOT work on a role-split database: every boot ended in
+ * `permission denied for schema public`, which reads as a broken deployment rather than as the
+ * privilege boundary it actually is. Schema work belongs to the owning credential, exactly as
+ * `scripts/migrate.mjs` has always done it. Read through the secret seam so
+ * `MIGRATION_DATABASE_URL_FILE` works the same way.
+ */
+export function migrationOwnerUrl(): string | null {
+  return readSecret('MIGRATION_DATABASE_URL');
+}
+
+/** Mirror the standalone runner: TLS off for local sockets, permissive for hosted PG. */
+export function sslFor(connectionString: string): false | { rejectUnauthorized: boolean } {
+  const local =
+    /(@|\/\/)(localhost|127\.0\.0\.1)/.test(connectionString) || /[?&]sslmode=disable/.test(connectionString);
+  return local ? false : { rejectUnauthorized: false };
 }

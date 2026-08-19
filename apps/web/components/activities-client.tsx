@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, type CSSProperties, useMemo, useState } from 'react';
+import { Fragment, type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
@@ -54,13 +54,15 @@ const RELATED_TYPE_LABEL: Record<string, string> = {
   opportunity: '◎ Opportunities', account: '◆ Accounts', contact: '☎ Contacts', lead: '⌥ Leads', quotation: '✎ Quotations',
 };
 
-export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '' }: {
+export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '', initialFocusedId = '' }: {
   initialActivities: Activity[];
   accounts: Account[];
   contacts: Contact[];
   opportunities: Opportunity[];
   /** Saved-view scope from the URL (e.g. 'opportunity') — pre-applies the related-type filter. */
   initialRelatedType?: string;
+  /** Deep-link focus from My Day or a notification. */
+  initialFocusedId?: string;
 }) {
   const router = useRouter();
   const [err, setErr] = useState('');
@@ -120,8 +122,14 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
 
   // Default to the most urgent non-empty bucket so the rep lands on what matters.
   const defaultTab = useMemo(() => (groups.find((g) => g.items.length > 0) ?? groups[0]).key, [groups]);
-  const activeKey = tab || defaultTab;
+  const focusedBucket = initialFocusedId ? groups.find((group) => group.items.some((activity) => activity.id === initialFocusedId)) : null;
+  const activeKey = tab || focusedBucket?.key || defaultTab;
   const active = groups.find((g) => g.key === activeKey) ?? groups[0];
+
+  useEffect(() => {
+    if (!initialFocusedId) return;
+    window.setTimeout(() => document.querySelector<HTMLElement>(`[data-activity-id="${CSS.escape(initialFocusedId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  }, [initialFocusedId, activeKey]);
 
   const act = async (a: Activity, action: 'complete' | 'cancel' | 'reopen' | 'start', body?: unknown): Promise<void> => {
     setBusy(true); setErr('');
@@ -233,7 +241,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
             <tbody>
               {active.items.map((a) => (
                 <Fragment key={a.id}>
-                <tr style={!isLive(a.status) ? { opacity: 0.7 } : undefined}>
+                <tr data-activity-id={a.id} style={{ ...(!isLive(a.status) ? { opacity: 0.7 } : {}), ...(a.id === initialFocusedId ? st.focusedRow : {}) }}>
                   <td style={{ width: 90 }}><span style={st.typeTag}>{TYPE_GLYPH[a.type] ?? '·'} {a.type.replace(/_/g, ' ')}</span></td>
                   <td>
                     <div style={{ fontWeight: 600 }}>
@@ -357,6 +365,7 @@ const st = {
   attentionReason: { fontSize: 11.5, color: 'var(--bad)' } as CSSProperties,
   attentionMore: { fontSize: 11.5, color: 'var(--muted)', marginTop: 8 } as CSSProperties,
   outcomeCell: { background: 'var(--panel-2, var(--panel))', padding: '10px 14px' } as CSSProperties,
+  focusedRow: { outline: '2px solid var(--accent)', outlineOffset: '-2px', background: 'var(--accent-soft)' } as CSSProperties,
   outcomeForm: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 720 } as CSSProperties,
   outcomeRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } as CSSProperties,
   outcomeLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', width: 64 } as CSSProperties,

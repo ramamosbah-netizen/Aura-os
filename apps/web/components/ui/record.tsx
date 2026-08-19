@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { RelatedRecords, ActivityTimeline, type RelatedGroup, type ActivityEvent } from './related-records';
 
 // Re-export the connectivity primitives so a 360 imports its whole toolkit from one module.
@@ -46,7 +46,7 @@ export function RecordHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div style={rs.header}>
+    <header className="aura-record-header" style={rs.header}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <h1 style={rs.h1}>{title}</h1>
         <div style={rs.subline}>
@@ -64,7 +64,7 @@ export function RecordHeader({
           {score.badge && <div style={{ ...rs.recBadge, color: toneColor(score.badgeTone), borderColor: toneColor(score.badgeTone) }}>{score.badge}</div>}
         </div>
       )}
-    </div>
+    </header>
   );
 }
 
@@ -94,11 +94,23 @@ export function KpiRow({ items }: { items: KpiItem[] }) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────────
 export interface TabDef { id: string; label: string; count?: number }
-export function RecordTabs({ tabs, active, onChange }: { tabs: TabDef[]; active: string; onChange: (id: string) => void }) {
+export function RecordTabs({ tabs, active, onChange, baseId = 'record' }: { tabs: TabDef[]; active: string; onChange: (id: string) => void; baseId?: string }) {
+  const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let next: number;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    onChange(tabs[next].id);
+    refs.current[next]?.focus();
+  };
   return (
-    <div style={rs.tabs}>
-      {tabs.map((t) => (
-        <button key={t.id} type="button" onClick={() => onChange(t.id)}
+    <div role="tablist" aria-label="Record sections" style={rs.tabs}>
+      {tabs.map((t, index) => (
+        <button key={t.id} type="button" role="tab" id={`${baseId}-tab-${t.id}`} aria-controls={`${baseId}-panel`} aria-selected={active === t.id} tabIndex={active === t.id ? 0 : -1} ref={(element) => { refs.current[index] = element; }} onKeyDown={(event) => onKeyDown(event, index)} onClick={() => onChange(t.id)}
           style={{ ...rs.tab, ...(active === t.id ? rs.tabOn : {}) }}>
           {t.label}
           {t.count !== undefined && t.count > 0 && <span style={rs.tabCount}>{t.count}</span>}
@@ -314,14 +326,15 @@ export function RecordShell({
   /** Record history — rendered below the body when provided. */
   activity?: { title?: string; events: ActivityEvent[] };
 }) {
+  const tabsId = useId().replace(/:/g, '');
   return (
     <div>
       {header}
       {kpis && kpis.length > 0 && <KpiRow items={kpis} />}
       {situation}
-      {tabs && tabs.length > 0 && activeTab && onTab && <RecordTabs tabs={tabs} active={activeTab} onChange={onTab} />}
-      <div style={rs.body}>
-        <div style={{ minWidth: 0 }}>{children}</div>
+      {tabs && tabs.length > 0 && activeTab && onTab && <RecordTabs tabs={tabs} active={activeTab} onChange={onTab} baseId={tabsId} />}
+      <div className="aura-record-body" style={rs.body}>
+        <div id={`${tabsId}-panel`} role={tabs && activeTab ? 'tabpanel' : undefined} aria-labelledby={tabs && activeTab ? `${tabsId}-tab-${activeTab}` : undefined} tabIndex={tabs && activeTab ? 0 : undefined} style={{ minWidth: 0 }}>{children}</div>
         {aside && <div style={rs.asideCol}>{aside}</div>}
       </div>
       {footer && <div style={{ marginTop: 16 }}>{footer}</div>}
@@ -356,14 +369,14 @@ const rs: Record<string, CSSProperties> = {
   scoreBox: { textAlign: 'center', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 16px', flexShrink: 0 },
   scoreLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
   recBadge: { marginTop: 5, fontSize: 10.5, fontWeight: 700, borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '1px 8px', letterSpacing: 0.4 },
-  primaryBtn: { border: '1px solid var(--accent)', background: 'var(--accent)', color: '#0b1020', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  ghostBtn: { border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },
+  primaryBtn: { minHeight: 44, border: '1px solid var(--accent)', background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  ghostBtn: { minHeight: 44, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },
   kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 16 },
   kpi: { border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', background: 'var(--panel)' },
   kpiLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },
   kpiValue: { fontSize: 18, fontWeight: 700, marginTop: 4 },
   tabs: { display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', marginBottom: 16 },
-  tab: { border: 'none', background: 'transparent', color: 'var(--muted)', padding: '8px 14px', fontSize: 13, cursor: 'pointer', borderBottomWidth: 2, borderBottomStyle: 'solid', borderBottomColor: 'transparent', marginBottom: -1, display: 'inline-flex', alignItems: 'center', gap: 6 },
+  tab: { minHeight: 44, border: 'none', background: 'transparent', color: 'var(--muted)', padding: '8px 14px', fontSize: 13, cursor: 'pointer', borderBottomWidth: 2, borderBottomStyle: 'solid', borderBottomColor: 'transparent', marginBottom: -1, display: 'inline-flex', alignItems: 'center', gap: 6 },
   tabOn: { color: 'var(--accent)', borderBottomColor: 'var(--accent)', fontWeight: 600 },
   tabCount: { fontSize: 11, background: 'var(--panel-2)', borderRadius: 999, padding: '0 7px', color: 'var(--muted)' },
   body: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 16, alignItems: 'start' },

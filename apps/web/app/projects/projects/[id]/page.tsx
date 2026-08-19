@@ -1,55 +1,23 @@
-import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
-import RecordChrome from '../../../../components/record-chrome';
-import Project360Client from '../../../../components/project-360-client';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-interface Project {
-  id: string;
-  title: string;
-  reference: string | null;
-  contractId: string | null;
-  contractTitle: string | null;
-  accountId: string | null;
-  accountName: string | null;
-  status: string;
-  value: number;
-  createdAt: string;
-}
-
 /**
- * Project 360 — delivery + commercial control: inherited budget vs variations vs
- * certification vs EVM, execution lifecycle, and the closeout that closes the
- * deal chain (completing the project completes the source contract).
+ * Compatibility route only. Project ownership lives under `/project/[projectId]`;
+ * keep this route until deprecation telemetry proves external bookmarks are gone.
  */
-export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const project = await getJson<Project>(`/api/projects/projects/${id}`);
-
-  if (!project) {
-    return (
-      <div style={st.container}>
-        <h1 style={st.h1}>Project Not Found</h1>
-        <a href="/projects/projects" style={st.link}>← Back to Projects</a>
-      </div>
-    );
+export default async function LegacyProjectDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const next = new URLSearchParams();
+  for (const [key, raw] of Object.entries(query)) {
+    for (const value of Array.isArray(raw) ? raw : raw ? [raw] : []) next.append(key, value);
   }
-
-  return (
-    <div style={st.container}>
-      <RecordChrome type="Project" title={project.title} />
-      <div style={st.navRow}>
-        <a href="/projects/projects" style={st.link}>← Back to Projects</a>
-      </div>
-      <Project360Client project={project} />
-    </div>
-  );
+  const suffix = next.toString();
+  redirect(`/project/${encodeURIComponent(id)}/controls${suffix ? `?${suffix}` : ''}`);
 }
-
-const st = {
-  container: { maxWidth: 1180, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
-  h1: { fontSize: 24, margin: '0 0 10px', color: 'var(--accent)' } as CSSProperties,
-  navRow: { marginBottom: 14 } as CSSProperties,
-  link: { color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 500 } as CSSProperties,
-};

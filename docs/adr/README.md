@@ -4,7 +4,7 @@
      the ADR files in this folder are the source of truth (YAML frontmatter). Run
      `pnpm adr:new "<title>"` to reserve the next number safely — never pick one manually. -->
 
-18 decisions.
+19 decisions.
 
 | # | Decision | Status | Category | Date | Links (↦ supersedes · related) |
 |--:|---|---|---|---|---|
@@ -26,3 +26,4 @@
 | [0016](0016-metadata-designer-sequence.md) | Metadata designer sequencing - forms, then list views, dashboards, custom entities | Accepted | Platform | 2026-07-03 | — |
 | [0017](0017-metadata-driven-definitions.md) | Metadata-Driven Definitions | Accepted | Architecture | 2026-07-05 | 0006 0011 0012 0016 |
 | [0018](0018-compliance-core.md) | Compliance Core | Accepted | Architecture | 2026-08-10 | 0011 0012 0002 0004 |
+| [0019](0019-canonical-project-360-route.md) | Canonical Project 360 route and ownership | Accepted | — | 2026-08-16 | — |

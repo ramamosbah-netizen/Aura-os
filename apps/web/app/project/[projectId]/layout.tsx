@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
 import ProjectShell from '@/components/project-shell';
+import DataStateNotice from '@/components/ui/data-state';
 import { ProjectContextProvider } from '@/lib/project-context';
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +26,12 @@ export default async function ProjectLayout({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const project = await getJson<ProjectHead>(`/api/projects/projects/${projectId}`);
-  if (!project) notFound();
+  const result = await fetchJson<ProjectHead>(`/api/projects/projects/${projectId}`);
+  if (!result.ok) {
+    if (result.error.kind === 'not-found') notFound();
+    return <main style={{ maxWidth: 760, margin: '0 auto', padding: 32 }}><DataStateNotice error={result.error} subject="this project" /></main>;
+  }
+  const project = result.data;
 
   return (
     <ProjectContextProvider project={project}>

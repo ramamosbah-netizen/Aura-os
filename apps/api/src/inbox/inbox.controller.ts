@@ -12,6 +12,7 @@ export class InboxController {
 
   @Get()
   list(): Promise<InboxItem[]> {
-    return this.inbox.list(this.tenant.get().tenantId);
+    const ctx = this.tenant.get();
+    return this.inbox.list(ctx.tenantId, ctx.actorId, ctx.companyId);
   }
 }

@@ -341,4 +341,40 @@ export class RefreshTokenStore {
     this.revokeFamilyLocal(tenantId, familyId);
     await this.sessionStore.revoke(tenantId, sessionId, reason);
   }
+
+  /**
+   * Revoke every token in the FAMILIES belonging to these sessions — used when a principal is
+   * deprovisioned. Family-wide, not session-wide: a family outlives the session row it was first
+   * issued against, so revoking per session can leave a descendant able to mint a new access
+   * token for an account that no longer exists.
+   */
+  async revokeForSessions(tenantId: string, sessionIds: string[]): Promise<number> {
+    if (sessionIds.length === 0) return 0;
+    if (!this.pool) {
+      const families = new Set(
+        [...this.local.values()]
+          .filter((r) => r.tenantId === tenantId && sessionIds.includes(r.sessionId))
+          .map((r) => r.familyId),
+      );
+      let n = 0;
+      for (const r of this.local.values()) {
+        if (r.tenantId === tenantId && families.has(r.familyId) && r.state !== 'revoked') {
+          r.state = 'revoked';
+          n++;
+        }
+      }
+      return n;
+    }
+    const res = await this.run(tenantId, () =>
+      this.pool!.query(
+        `UPDATE public.auth_refresh_tokens SET state='revoked'
+           WHERE tenant_id=$1 AND state IN ('active','consumed')
+             AND family_id IN (
+               SELECT DISTINCT family_id FROM public.auth_refresh_tokens
+                WHERE tenant_id=$1 AND session_id = ANY($2::uuid[]))`,
+        [tenantId, sessionIds],
+      ),
+    );
+    return res.rowCount ?? 0;
+  }
 }

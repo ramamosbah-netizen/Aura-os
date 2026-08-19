@@ -19,7 +19,33 @@ export const STORAGE_STATE = 'e2e/.auth/state.json';
 
 const EMPTY_STATE = { cookies: [], origins: [] };
 
+/**
+ * Refuse to start without the variables the suite genuinely needs, because both of these surface
+ * as ordinary assertion failures scattered across unrelated specs rather than as setup errors:
+ *
+ * - **No `AURA_API_URL`** → the token below is never minted, so every spec that calls the API on
+ *   its own port (offline-sync, the workflow specs) gets 401 and reports a product failure.
+ * - **An `E2E_ALT_USERNAME` that cannot sign in** → the segregation-of-duties specs quietly fall
+ *   back to asserting the refusal path, so a broken second actor looks like a passing suite.
+ *   Absent is a legitimate configuration; named-but-unusable is not.
+ *
+ * Deliberately NOT guarded: which backend the API runs on. The fixtures currently seed synthetic
+ * ids such as `e2e-proj`, which a real schema rejects as `invalid input syntax for type uuid` —
+ * but that is a defect in the fixtures, not a property of the suite. Refusing a database-backed
+ * API here would turn it into a permanent contract and keep the Postgres path untested for good.
+ */
+async function assertRunnableEnvironment(): Promise<void> {
+  if (!process.env.AURA_API_URL) {
+    throw new Error(
+      'e2e: AURA_API_URL is not set. Specs that call the API directly cannot be authenticated ' +
+        'without it and fail as 401s that look like product bugs. Set AURA_API_URL=http://localhost:4000 ' +
+        '(see the CI web-smoke job).',
+    );
+  }
+}
+
 export default async function globalSetup(config: FullConfig): Promise<void> {
+  await assertRunnableEnvironment();
   const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3100';
   mkdirSync(dirname(STORAGE_STATE), { recursive: true });
 
@@ -77,7 +103,14 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
           .post(`${apiBase}/api/v1/auth/login`, { data: { username: altUser, password } })
           .catch(() => null);
         const altToken = altRes?.ok() ? (((await altRes.json()) as { token?: string }).token ?? null) : null;
-        if (altToken) process.env.E2E_ALT_API_TOKEN = altToken;
+        if (!altToken) {
+          throw new Error(
+            `e2e global setup: E2E_ALT_USERNAME='${altUser}' was named but could not sign in. ` +
+              'Leaving it unset is fine — the segregation-of-duties specs then assert the refusal ' +
+              'path — but a named actor that cannot authenticate makes them pass for the wrong reason.',
+          );
+        }
+        process.env.E2E_ALT_API_TOKEN = altToken;
       }
     }
     await warmRoutes(page, baseURL);

@@ -19,6 +19,7 @@ import { AuthChallengeStore } from './identity/auth-challenge.store';
 import { SessionService } from './identity/session.service';
 import { SessionStore } from './identity/session.store';
 import { RefreshTokenStore } from './identity/refresh-token.store';
+import { UserDeprovisioningService } from './identity/user-deprovisioning.service';
 import { ServiceAccountsService } from './identity/service-accounts.service';
 import { CompaniesService } from './identity/companies.service';
 import { FormOverridesService } from './forms/form-overrides.service';
@@ -110,6 +111,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     SessionService,
     SessionStore,
     RefreshTokenStore,
+    UserDeprovisioningService,
     ServiceAccountsService,
     CompaniesService,
     FormOverridesService,
@@ -256,6 +258,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     SessionService,
     SessionStore,
     RefreshTokenStore,
+    UserDeprovisioningService,
     ServiceAccountsService,
     CompaniesService,
     FormOverridesService,

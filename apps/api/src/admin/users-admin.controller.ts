@@ -1,5 +1,14 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post } from '@nestjs/common';
-import { AuditService, CredentialsService, Permissions, TenantContext, UsersService, type PlatformUser } from '@aura/core';
+import {
+  AuditService,
+  CredentialsService,
+  Permissions,
+  TenantContext,
+  UserDeprovisioningService,
+  UsersService,
+  type DeprovisionResult,
+  type PlatformUser,
+} from '@aura/core';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
 
 /**
@@ -9,6 +18,13 @@ import { WorkspaceConfigService } from '../workspace/workspace-config.service';
  * their own screens — this list merges them so unregistered-but-assigned ids are
  * visible and one click registers them.
  */
+/**
+ * What the directory can say about an account's ability to SIGN IN, as opposed to its
+ * metadata. Registered-but-no-credential is the state an invited user sits in, and it was
+ * invisible: the row said "active" while the person could not get in at all.
+ */
+export type CredentialState = 'none' | 'active' | 'must_change' | 'disabled' | 'locked';
+
 @Controller('admin/users')
 export class UsersAdminController {
   constructor(
@@ -17,7 +33,19 @@ export class UsersAdminController {
     private readonly tenant: TenantContext,
     private readonly audit: AuditService,
     private readonly credentials: CredentialsService,
+    private readonly deprovisioning: UserDeprovisioningService,
   ) {}
+
+/**
+   * Map a credential to what the directory should SHOW. `locked` is derived rather than stored:
+   * a lockout is a moment in time, not a status, so an expired one must read as active again.
+   */
+  private async credentialState(tenantId: string, userId: string): Promise<CredentialState> {
+    const record = await this.credentials.describe(tenantId, userId);
+    if (!record) return 'none';
+    if (record.lockedUntil && record.lockedUntil.getTime() > Date.now()) return 'locked';
+    return record.status;
+  }
 
   private auditLog(entityId: string, action: string, payload: Record<string, unknown>): void {
     const ctx = this.tenant.get();
@@ -27,14 +55,14 @@ export class UsersAdminController {
   @Permissions('admin.users.manage')
   @Get()
   async list(): Promise<{
-    users: Array<PlatformUser & { workspaceRole: string | null; registered: boolean }>;
+    users: Array<PlatformUser & { workspaceRole: string | null; registered: boolean; credential: CredentialState }>;
   }> {
     const tenantId = this.tenant.get().tenantId;
     const registry = this.users.list(tenantId);
     const directory = await this.workspace.users(tenantId);
-    const byId = new Map<string, PlatformUser & { workspaceRole: string | null; registered: boolean }>();
+    const byId = new Map<string, PlatformUser & { workspaceRole: string | null; registered: boolean; credential: CredentialState }>();
     for (const u of registry) {
-      byId.set(u.userId, { ...u, workspaceRole: null, registered: true });
+      byId.set(u.userId, { ...u, workspaceRole: null, registered: true, credential: await this.credentialState(tenantId, u.userId) });
     }
     for (const d of directory) {
       const existing = byId.get(d.username);
@@ -51,6 +79,7 @@ export class UsersAdminController {
           active: true,
           workspaceRole: d.roleLabel,
           registered: false,
+          credential: 'none',
         });
       }
     }
@@ -94,13 +123,32 @@ export class UsersAdminController {
     return user;
   }
 
+  /**
+   * Deprovision an account: revoke its sessions and refresh-token families, purge its outstanding
+   * challenges, remove its credential, then remove the identity. Deleting only the identity row —
+   * which is what this did — left the principal able to keep acting on a session issued before the
+   * delete. See UserDeprovisioningService for why the order is the safety property.
+   */
   @Permissions('admin.users.manage')
   @Delete(':id')
-  remove(@Param('id') id: string): { removed: boolean } {
-    const removed = this.users.remove(this.tenant.get().tenantId, id);
-    if (removed) this.auditLog(id, 'removed', {});
-    return { removed };
+  async remove(@Param('id') id: string): Promise<DeprovisionResult> {
+    const ctx = this.tenant.get();
+    if (ctx.actorId === id) {
+      throw new BadRequestException('you cannot deprovision your own account');
+    }
+    const result = await this.deprovisioning.deprovision(ctx.tenantId, id);
+    // ONE event for the whole operation, stating what was actually removed. No secrets: counts and
+    // booleans only, never the credential or any token.
+    this.auditLog(id, 'user.deprovisioned', {
+      sessionsRevoked: result.sessionsRevoked,
+      refreshTokensRevoked: result.refreshTokensRevoked,
+      challengesPurged: result.challengesPurged,
+      credentialRemoved: result.credentialRemoved,
+      identityRemoved: result.identityRemoved,
+    });
+    return result;
   }
+
 
   /**
    * Set (or reset) another account's password — the onboarding step S1 left with no route.

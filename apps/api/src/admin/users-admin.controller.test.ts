@@ -66,3 +66,40 @@ describe('UsersAdminController — set another account password', () => {
     expect(payload).toContain('password.set');
   });
 });
+
+/**
+ * The directory used to answer "active" for an account that had no password at all — the state
+ * every invited user sits in. "Registered" and "can sign in" are different questions, and the
+ * screen could only see the first one.
+ */
+describe('UsersAdminController — the directory reports whether an account can sign in', () => {
+  const listing = (credential: Partial<Record<string, unknown>> | null, lockedUntil: Date | null = null) =>
+    new UsersAdminController(
+      { list: () => [{ tenantId: 'dev-tenant', userId: 'u-invited', displayName: '', email: '', companyId: null, active: true }] } as unknown as UsersService,
+      { users: async () => [] } as unknown as WorkspaceConfigService,
+      { get: () => ({ tenantId: 'dev-tenant', companyId: null, actorId: 'u-admin' }) } as unknown as TenantContext,
+      { log: vi.fn() } as unknown as AuditService,
+      { describe: async () => (credential ? { ...credential, lockedUntil } : null) } as unknown as CredentialsService,
+    );
+
+  it('says "none" for a registered account that has no credential yet', async () => {
+    const { users } = await listing(null).list();
+    expect(users[0]?.credential).toBe('none');
+  });
+
+  it('passes the stored status through for a usable credential', async () => {
+    expect((await listing({ status: 'active' }).list()).users[0]?.credential).toBe('active');
+    expect((await listing({ status: 'must_change' }).list()).users[0]?.credential).toBe('must_change');
+    expect((await listing({ status: 'disabled' }).list()).users[0]?.credential).toBe('disabled');
+  });
+
+  it('derives "locked" from a lockout that has not expired', async () => {
+    const future = new Date(Date.now() + 60_000);
+    expect((await listing({ status: 'active' }, future).list()).users[0]?.credential).toBe('locked');
+  });
+
+  it('reads an EXPIRED lockout as usable again — a lockout is a moment, not a status', async () => {
+    const past = new Date(Date.now() - 60_000);
+    expect((await listing({ status: 'active' }, past).list()).users[0]?.credential).toBe('active');
+  });
+});

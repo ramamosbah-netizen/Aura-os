@@ -95,10 +95,18 @@ test('compose → send now → Sent → open → reply', async ({ page }) => {
   await expect(sent.first().or(drafts)).toBeVisible();
 
   // Open it and reply. The reply is created as a draft — sending stays a separate, explicit act.
-  await page.goto(EMAIL, { waitUntil: 'domcontentloaded' });
-  await page.getByTestId('mail-folder-sent').click();
-  const row = page.getByTestId('mail-row').first();
-  await expect(row).toBeVisible();
+  //
+  // Wait for the DISPATCH, not just for the DOM. The step above already says queued → sent belongs
+  // to a background worker, and then this step assumed it had finished: `toBeVisible` re-checks the
+  // rendered list, but the folder does not re-fetch on its own, so a message still in flight left
+  // Sent empty for the whole timeout. Re-loading the folder until the row appears is the assertion
+  // that matches what the worker actually promises.
+  await expect(async () => {
+    await page.goto(EMAIL, { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('mail-folder-sent').click();
+    await expect(page.getByTestId('mail-row').filter({ hasText: subject }).first()).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  const row = page.getByTestId('mail-row').filter({ hasText: subject }).first();
   await row.click();
   await expect(page.getByTestId('mail-message')).toBeVisible();
 

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from 'dotenv';
 import pg from 'pg';
+import { selectRollbackTargets } from './migration-rollback.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url)); // apps/api/scripts
 const apiRoot = join(here, '..'); // apps/api
@@ -74,22 +75,31 @@ async function main() {
     return i < 0 ? { up: sql, down: null } : { up: sql.slice(0, i), down: sql.slice(i) };
   };
 
-  // Rollback mode: `node migrate.mjs down` reverts the most recently applied migration.
+  // Rollback mode:
+  //   node migrate.mjs down                          revert the most recently applied migration
+  //   node migrate.mjs down 0235_auth_sessions.sql   revert the tip down to AND INCLUDING that file
   if (process.argv[2] === 'down') {
-    const last = files.filter((f) => applied.has(f)).pop();
-    if (!last) { console.log('Nothing to roll back.'); return; }
-    const { down } = split(readFileSync(join(migrationsDir, last), 'utf8'));
-    if (!down) throw new Error(`${last} has no "-- @DOWN" section — cannot roll back`);
-    console.log(`↩ rolling back ${last} ...`);
-    await client.query('BEGIN');
-    try {
-      await client.query(down);
-      await client.query('delete from public.aura_migrations where filename = $1', [last]);
-      await client.query('COMMIT');
-      console.log(`✓ rolled back ${last}`);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw new Error(`rollback ${last} failed: ${err.message}`);
+    const targets = selectRollbackTargets(files, applied, process.argv[3]);
+    if (targets.length === 0) { console.log('Nothing to roll back.'); return; }
+    // Pre-flight EVERY @DOWN before touching the database: discovering a missing one halfway
+    // through would leave the schema partly unwound, which is worse than not starting at all.
+    const sections = targets.map((file) => {
+      const { down } = split(readFileSync(join(migrationsDir, file), 'utf8'));
+      if (!down) throw new Error(`${file} has no "-- @DOWN" section — cannot roll back`);
+      return { file, down };
+    });
+    for (const { file, down } of sections) {
+      console.log(`↩ rolling back ${file} ...`);
+      await client.query('BEGIN');
+      try {
+        await client.query(down);
+        await client.query('delete from public.aura_migrations where filename = $1', [file]);
+        await client.query('COMMIT');
+        console.log(`✓ rolled back ${file}`);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw new Error(`rollback ${file} failed: ${err.message}`);
+      }
     }
     return;
   }

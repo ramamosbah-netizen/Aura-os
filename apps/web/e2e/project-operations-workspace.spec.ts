@@ -34,9 +34,24 @@ test('project and operations share one usable delivery context', async ({ page, 
   await expect(signedOutPage.getByText(PROJECT_TITLE)).toHaveCount(0);
   await signedOut.close();
 
+  // A SIGNED-IN user without access — a different refusal from the anonymous one above. Sign-in
+  // now needs a registered identity with a real credential (S1), so the account is provisioned
+  // through the admin API instead of relying on the old behaviour where any username plus the
+  // shared dev password was accepted. It is deliberately given no grants.
+  const deniedUser = 'u-no-project-access';
+  const password = process.env.E2E_PASSWORD ?? 'e2e-password';
+  const registered = await page.request.post('/api/admin/users', {
+    data: { userId: deniedUser, displayName: 'No project access' },
+  });
+  expect(registered.ok()).toBe(true);
+  const credential = await page.request.post(`/api/admin/users/${deniedUser}/password`, {
+    data: { password, mustChange: false },
+  });
+  expect(credential.ok()).toBe(true);
+
   const denied = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const deniedLogin = await denied.request.post('/api/auth/login', {
-    data: { username: 'u-no-project-access', password: process.env.E2E_PASSWORD ?? 'e2e-password' },
+    data: { username: deniedUser, password },
   });
   expect(deniedLogin.ok()).toBe(true);
   const deniedPage = await denied.newPage();

@@ -27,7 +27,11 @@ async function fetchSpec() {
   const port = 4977;
   const child = spawn(process.execPath, ['dist/main.js'], {
     cwd: join(repo, 'apps', 'api'),
-    env: { ...process.env, PORT: String(port), DATABASE_URL: '', METRICS_ENABLED: '' },
+    // AUTH_STATE_PERSISTENCE is cleared for the same reason DATABASE_URL is: this boot exists
+    // only to read the route surface, and 'required' makes the session store refuse to start
+    // without a database — so a developer whose apps/api/.env.local sets it (the correct local
+    // setting) could not regenerate the SDK at all.
+    env: { ...process.env, PORT: String(port), DATABASE_URL: '', METRICS_ENABLED: '', AUTH_STATE_PERSISTENCE: '' },
     stdio: 'ignore',
   });
   try {

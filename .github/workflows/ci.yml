@@ -274,10 +274,14 @@ jobs:
       # 0235 must roll back and re-apply cleanly (Vol 23 #25 — every new migration carries @DOWN).
       # Runs as the owner (job-level DATABASE_URL) because it DROPs/CREATEs. Re-applies immediately
       # so the database is whole for the restore drill below.
+      # Names the migration explicitly. `down` with no argument reverts whatever is NEWEST, so this
+      # check silently started reverting a comms migration the moment the branch that added
+      # 0236-0241 merged — and then failed while asserting about 0235. Rolling back to a named file
+      # unwinds the tip down to it, so the assertion stays about the migration it is named for.
       - name: S2 — 0235 rollback + re-apply is clean
         run: |
           cd apps/api
-          node scripts/migrate.mjs down
+          node scripts/migrate.mjs down 0235_auth_sessions.sql
           gone=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('auth_challenges','auth_sessions','auth_refresh_tokens');")
           test "$gone" = "0" || { echo "::error::0235 @DOWN left tables behind (count=$gone)"; exit 1; }
           echo "OK 0235 @DOWN dropped all three S2 tables"
@@ -528,6 +532,21 @@ jobs:
           # A second granted actor. Segregation of duties refuses self-authorisation, so the
           # permit-approval journey needs one principal to request and another to approve.
           E2E_ALT_USERNAME: u-approver
+
+      # Playwright writes a page snapshot (error-context.md) and any trace next to each failure.
+      # Without this they die with the runner, so a browser failure that only happens in CI — the
+      # ones that matter most, because they cannot be reproduced locally — could only be guessed at
+      # from the one-line assertion in the log.
+      - name: Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: API log on failure
         if: failure()

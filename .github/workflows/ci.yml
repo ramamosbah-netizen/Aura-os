@@ -632,8 +632,11 @@ jobs:
 
       - name: Build and boot the API as aura_app
         run: |
+          # The API needs its WORKSPACE DEPENDENCIES built, not just itself: the '...' suffix
+          # includes them. Building only apps/api leaves @aura/core and friends unresolved and
+          # tsc fails with 540 "Cannot find module" errors before the database is ever touched.
+          pnpm --filter @aura/api... build
           cd apps/api
-          pnpm build
           # Same auth posture as TIER-2, so the tiers differ in the backend rather than the config.
           RATE_LIMIT_MAX=100000 PORT=4000 AUTH_JWT_SECRET=e2e-only-not-a-real-secret \
             AUTH_DEV_PASSWORD=e2e-password \

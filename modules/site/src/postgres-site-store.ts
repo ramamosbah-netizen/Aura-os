@@ -192,7 +192,15 @@ export class PostgresDailyReportStore implements DailyReportStore {
         id, tenant_id, company_id, project_id, project_name, date, work_description, manpower_count, equipment_count, status, created_by, created_at, updated_at,
         report_number, site_conditions, safety_notes, prepared_by, submitted_by, submitted_at, reviewed_by, reviewed_at, approved_by, approved_at, rejection_reason
       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
-      on conflict (tenant_id, project_id, date) do update set
+      -- Arbitrate on the PRIMARY KEY, because this is "persist this aggregate": every state
+      -- transition re-saves the same report by id. Arbitrating on the business key
+      -- (tenant_id, project_id, date) covered only that constraint, so a re-save raised
+      -- 'duplicate key value violates unique constraint aura_site_daily_reports_pkey' and the
+      -- whole governed lifecycle — submit, start-review, reject, approve — failed on PostgreSQL.
+      -- The in-memory store is a Map.set, which overwrites silently, so TIER-2 never saw it.
+      -- A genuinely duplicate report (different id, same project and day) still violates the
+      -- business UNIQUE and surfaces as a domain conflict, which is where that rule belongs.
+      on conflict (id) do update set
         work_description = excluded.work_description,
         manpower_count = excluded.manpower_count,
         equipment_count = excluded.equipment_count,

@@ -29,10 +29,10 @@ const EMPTY_STATE = { cookies: [], origins: [] };
  *   back to asserting the refusal path, so a broken second actor looks like a passing suite.
  *   Absent is a legitimate configuration; named-but-unusable is not.
  *
- * Deliberately NOT guarded: which backend the API runs on. The fixtures currently seed synthetic
- * ids such as `e2e-proj`, which a real schema rejects as `invalid input syntax for type uuid` —
- * but that is a defect in the fixtures, not a property of the suite. Refusing a database-backed
- * API here would turn it into a permanent contract and keep the Postgres path untested for good.
+ * Deliberately NOT guarded: which backend the API runs on. The suite is meant to run against BOTH —
+ * TIER-2 boots it in-memory for speed, TIER-3 boots it against PostgreSQL to catch what only exists
+ * in persistence. The fixtures seed through the API and use the ids it returns (see fixtures.ts),
+ * precisely so neither backend is special-cased here.
  */
 async function assertRunnableEnvironment(): Promise<void> {
   if (!process.env.AURA_API_URL) {

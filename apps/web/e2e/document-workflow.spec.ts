@@ -3,12 +3,13 @@
 // reject → raise new revision → submit → approve → issue, then verifies the revision history and an
 // illegal transition (409). Skips if the API is not running behind the web shell.
 import { expect, test } from '@playwright/test';
+import { projectFixtureId } from './fixtures';
 
 const num = `DOC-E2E-${Date.now().toString().slice(-6)}`;
 
 test('document register → 360 → reject → new rev → approve → issue (UI)', async ({ page, baseURL }) => {
   const create = await page.request.post(`${baseURL}/api/doccontrol/register`, {
-    data: { projectId: 'e2e-proj', documentNumber: num, title: 'E2E CCTV Specification', discipline: 'elv' },
+    data: { projectId: await projectFixtureId(page.request, baseURL), documentNumber: num, title: 'E2E CCTV Specification', discipline: 'elv' },
   });
   test.skip(create.status() === 502 || create.status() === 404, 'doccontrol API not running behind the web shell');
   expect(create.ok()).toBeTruthy();

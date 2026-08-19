@@ -3,6 +3,7 @@
 // 360 UI: commission is blocked while a defect is open (409 surfaced) → close the punch → commission
 // (witnessed sign-off). Skips if the API is not running behind the web shell.
 import { expect, test } from '@playwright/test';
+import { projectFixtureId } from './fixtures';
 
 import { apiAuthHeaders } from './api-auth';
 
@@ -11,9 +12,9 @@ const API = (process.env.AURA_API_URL ?? 'http://localhost:4000') + '/api/v1/com
 const H = () => apiAuthHeaders();
 const code = `CX-E2E-${Date.now().toString().slice(-6)}`;
 
-test('commissioning 360: punch gate blocks sign-off until closed (UI)', async ({ page }) => {
+test('commissioning 360: punch gate blocks sign-off until closed (UI)', async ({ page, baseURL }) => {
   // Seed via the backend: a CCTV record, two passing test points, and one open punch item.
-  const created = await page.request.post(API, { headers: H(), data: { projectId: 'e2e-proj', code, title: 'CCTV T&C', system: 'cctv' } });
+  const created = await page.request.post(API, { headers: H(), data: { projectId: await projectFixtureId(page.request, baseURL), code, title: 'CCTV T&C', system: 'cctv' } });
   test.skip(created.status() === 502 || created.status() === 404 || !created.ok(), 'commissioning API not reachable');
   const rec = await created.json();
   const id = rec.id;

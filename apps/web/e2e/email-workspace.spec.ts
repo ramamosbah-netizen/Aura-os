@@ -104,8 +104,16 @@ test('compose → send now → Sent → open → reply', async ({ page }) => {
   await expect(async () => {
     await page.goto(EMAIL, { waitUntil: 'domcontentloaded' });
     await page.getByTestId('mail-folder-sent').click();
-    await expect(page.getByTestId('mail-row').filter({ hasText: subject }).first()).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
+    // The folder list is fetched after hydration and measured at ~1.5s against a real database,
+    // so a 2s inner budget had no margin: every retry expired while the request was still in
+    // flight, and the outer loop ran out without ever giving the list a chance to render.
+    await expect(page.getByTestId('mail-row').filter({ hasText: subject }).first())
+      .toBeVisible({ timeout: Number(process.env.E2E_FOLDER_TIMEOUT ?? 10_000) });
+    // Budget from the WORKER, not from a wall-clock guess: MailDispatchWorker drains every 10s
+    // (POLL_MS), so a pass has to allow several drains plus the folder reload. Thirty seconds was
+    // enough against in-memory adapters and cut a PostgreSQL run off mid-flight — the message was
+    //  in the database moments after the test gave up.
+  }).toPass({ timeout: Number(process.env.E2E_DISPATCH_TIMEOUT ?? 60_000) });
   const row = page.getByTestId('mail-row').filter({ hasText: subject }).first();
   await row.click();
   await expect(page.getByTestId('mail-message')).toBeVisible();

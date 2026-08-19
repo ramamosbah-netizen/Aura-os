@@ -17,8 +17,12 @@ const AUTH_GATE_BASE_URL = `http://localhost:${AUTH_GATE_PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
-  expect: { timeout: 15_000 },
+  // TIER-3 drives the same specs against a real database, where every assertion sits behind SQL
+  // round-trips instead of a Map lookup. The budget is therefore configurable rather than pinned
+  // to what the in-memory tier happens to need — otherwise a slower backend fails on the clock and
+  // reads as a product difference.
+  timeout: Number(process.env.E2E_TEST_TIMEOUT ?? 60_000),
+  expect: { timeout: Number(process.env.E2E_EXPECT_TIMEOUT ?? 15_000) },
   fullyParallel: false,
   // One worker, everywhere. `fullyParallel: false` only orders tests *within* a file — separate
   // files still ran concurrently, and against a single `next dev` that means two workers racing

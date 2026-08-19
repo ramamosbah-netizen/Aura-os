@@ -69,6 +69,31 @@ export const SITE_EVENT = {
   surveyCompleted: SITE_SURVEY_EVENT.completed,
 };
 
+/**
+ * A daily report already exists for that project and day.
+ *
+ * Its own type so both the pre-check and the unique-violation translation raise exactly the same
+ * thing, and the taxonomy maps it to 409 rather than leaking SQL as a 400.
+ */
+/**
+ * Is this the "one report per project per day" unique index refusing the write?
+ *
+ * Matched on SQLSTATE 23505 plus the constraint name, not on the message text: the text is
+ * localisable and version-dependent, and every OTHER unique violation must keep its own meaning
+ * rather than being reported as a duplicate daily report.
+ */
+function isDailyReportDateViolation(err: unknown): boolean {
+  const e = err as { code?: string; constraint?: string } | null;
+  return e?.code === '23505' && e?.constraint === 'aura_site_daily_reports_tenant_id_project_id_date_key';
+}
+
+export class DailyReportExistsError extends Error {
+  constructor(date: string) {
+    super(`A daily report already exists for this project on ${date}.`);
+    this.name = 'DailyReportExistsError';
+  }
+}
+
 @Injectable()
 export class SiteService {
   private readonly logger = new Logger('SiteControl');
@@ -108,6 +133,7 @@ export class SiteService {
     createdBy?: string;
   }): Promise<DailyReport> {
     this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create');
+    await this.assertNoReportForDate(input.tenantId, input.projectId, input.date);
     const report = makeDailyReport(input);
     const event = makeEvent({
       type: SITE_REPORT_EVENT.created,
@@ -115,13 +141,46 @@ export class SiteService {
       aggregateType: 'site.daily_report', aggregateId: report.id,
       payload: { reportNumber: report.reportNumber, date: report.date, projectId: report.projectId },
     });
-    await this.tx.run(async (handle) => {
-      await this.dailyReportStore.save(report, handle);
-      await this.events.appendWithClient(handle, [event]);
-    });
+    try {
+      await this.tx.run(async (handle) => {
+        await this.dailyReportStore.save(report, handle);
+        await this.events.appendWithClient(handle, [event]);
+      });
+    } catch (err) {
+      // The pre-check above cannot be the guarantee — two concurrent creates both pass it. The
+      // unique index is the arbiter; a lost race is translated to the SAME refusal so the caller
+      // never sees a difference between losing a race and being second.
+      if (isDailyReportDateViolation(err)) throw new DailyReportExistsError(input.date);
+      throw err;
+    }
     this.logger.log(`Daily Report drafted: ${report.reportNumber} for project ${report.projectId}`);
     return report;
   }
+
+/**
+ * One daily report per project per day — refused HERE, in the domain, and again by the database.
+ *
+ * The schema has always carried `UNIQUE (tenant_id, project_id, date)`, but nothing checked it
+ * before persistence, so the rule was enforced in the wrong layer and expressed in the wrong
+ * contract: PostgreSQL raised `duplicate key value violates unique constraint …`, which the filter
+ * turned into a 400 VALIDATION carrying raw SQL at the user.
+ *
+ * Worse, before the upsert arbiter was corrected the rule did not bite at all: the insert said
+ * `on conflict (tenant_id, project_id, date) do update`, so a SECOND report — a different id, a
+ * different author — silently overwrote the first one in place. Two engineers filing the same
+ * day's diary meant the second replaced the first, and every test was green.
+ *
+ * The pre-check below is for the person: it names the conflict in a sentence they can act on. It
+ * is NOT the guarantee — two concurrent creates can both pass it. The unique index remains the
+ * arbiter, and `23505` is translated to the same refusal, so the race loses nothing.
+ */
+
+private async assertNoReportForDate(tenantId: string, projectId: string, date: string): Promise<void> {
+  const existing = await this.dailyReportStore.findByProject(projectId, tenantId);
+  if (existing.some((report) => report.date === date)) {
+    throw new DailyReportExistsError(date);
+  }
+}
 
   // ── Governed daily-report lifecycle ──────────────────────────────────────────
 

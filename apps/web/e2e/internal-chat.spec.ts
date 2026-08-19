@@ -111,6 +111,54 @@ test('a direct message can be opened and used', async ({ page }) => {
   await expect(page.getByTestId('chat-message').filter({ hasText: line })).toHaveCount(0);
 });
 
+/**
+ * The leak this exists to prevent, reproduced on purpose.
+ *
+ * Opening a conversation is a round trip. Until it lands, the composer on screen belongs to the
+ * conversation being opened while the client still knows the previous one — and a message typed in
+ * that window used to be posted to the previous conversation. It looked delivered, because the send
+ * appends optimistically to whatever list is displayed; only a reload showed the truth. Against the
+ * in-memory adapters the window is about a millisecond, so this never failed there. Against
+ * PostgreSQL it is hundreds of milliseconds, and five consecutive runs put a line meant for a
+ * private conversation into `ch-company`.
+ *
+ * Slowing the open makes the window enormous and the assertion deterministic on any backend.
+ */
+test('a message typed while a conversation is opening can never reach the previous one', async ({ page }) => {
+  await openChat(page);
+  await openCompanyChannel(page); // All company is what the composer would fall back to
+
+  await page.route('**/api/comms/dm', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await route.continue();
+  });
+
+  const line = `c2-race-proof-${Date.now()}`;
+  await page.getByRole('button', { name: /New/ }).click();
+  const picker = page.getByRole('group', { name: 'Start a direct message' });
+  await expect(picker).toBeVisible();
+  await picker.getByRole('button').first().click();
+
+  // While the conversation is opening there is nothing to type into: the composer addresses no
+  // settled conversation, so it refuses input rather than defaulting to the last one.
+  await expect(page.getByLabel('Message', { exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+
+  // Then do exactly what a user does — type the moment it lets you, and send.
+  await page.getByLabel('Message', { exact: true }).fill(line);
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByTestId('chat-message').filter({ hasText: line })).toBeVisible();
+
+  // The screen can lie about delivery; a reload cannot.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('internal-chat')).toBeVisible();
+  await expect(page.getByTestId('chat-message').filter({ hasText: line })).toBeVisible();
+
+  // And the channel it could have leaked into does not have it.
+  await openCompanyChannel(page);
+  await expect(page.getByTestId('chat-message').filter({ hasText: line })).toHaveCount(0);
+});
+
 test('the chat is usable on a phone', async ({ page }) => {
   // 8. Single column at 390px: the rail collapses above the conversation, and both stay usable.
   await page.setViewportSize({ width: 390, height: 844 });

@@ -655,15 +655,64 @@ jobs:
           curl -sf http://localhost:4000/api/v1/auth/status | grep -q '"enabled":true' \
             || { echo "::error::auth did not engage - the suite would run unauthenticated"; cat api-pg.log; exit 1; }
 
-      - name: Prove the runtime identity is least-privilege
+      - name: Prove the API itself runs as the least-privilege role
         run: |
-          # The point of the split: if the application can bypass RLS, every tenant-isolation
-          # assertion in the suite is decoration.
+          # Three independent facts, because the obvious check proves the weakest one.
+          #
+          #   (a) the ROLE's attributes            — psql on the app URL
+          #   (b) the API's OWN connection         — the API reports the role it actually connected
+          #                                          as, from evaluateRlsPosture at boot
+          #   (c) who really holds connections     — asked through the OWNER connection, so it is
+          #                                          not the app vouching for itself
+          #
+          # (a) alone would pass even if the API were quietly using some other credential.
           who=$(psql "$DATABASE_URL" -tAc "SELECT current_user;" | tr -d '[:space:]')
           bypass=$(psql "$DATABASE_URL" -tAc "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user;" | tr -d '[:space:]')
-          echo "runtime role: $who - superuser-or-bypassrls: $bypass"
-          test "$who" = "aura_app" || { echo "::error::the app is not connecting as aura_app (got $who)"; exit 1; }
+          echo "(a) role on DATABASE_URL: $who - superuser-or-bypassrls: $bypass"
+          test "$who" = "aura_app" || { echo "::error::DATABASE_URL does not resolve to aura_app (got $who)"; exit 1; }
           test "$bypass" = "f" || { echo "::error::the runtime role can bypass RLS - this tier proves nothing about isolation"; exit 1; }
+
+          echo "(b) the API's own posture line:"
+          grep -F 'RLS posture' apps/api/api-pg.log || { echo "::error::the API never reported its RLS posture"; exit 1; }
+          grep -F 'RLS posture' apps/api/api-pg.log | grep -q 'aura_app' \
+            || { echo "::error::the API did not report aura_app as its database role"; exit 1; }
+          grep -F 'RLS posture' apps/api/api-pg.log | grep -q 'non-BYPASSRLS' \
+            || { echo "::error::the API did not report a non-BYPASSRLS role"; exit 1; }
+
+          # (c) The API has served requests by now, so its pool is connected. Ask the owner which
+          # roles actually hold sessions — the app cannot fake this one about itself.
+          holders=$(psql "$OWNER_URL" -tAc "SELECT DISTINCT usename FROM pg_stat_activity WHERE datname = 'aura' AND usename IS NOT NULL AND pid <> pg_backend_pid();" | tr -d ' ' | sort | tr '\n' ' ')
+          echo "(c) roles holding live sessions: $holders"
+          echo "$holders" | grep -q 'aura_app' \
+            || { echo "::error::no live session belongs to aura_app - the API is connecting as something else"; exit 1; }
+
+      - name: Prove the second actor is genuinely limited
+        run: |
+          # Segregation of duties only means something if the two actors differ in AUTHORITY.
+          # u-approver is a wildcard admin by design (the boot seeder persists dealChainAdmin for it
+          # when a database is configured), so a suite using it would pass because the workflow
+          # refuses self-authorisation - not because the requester lacks the approver's rights.
+          grants=$(psql "$OWNER_URL" -tAc "SELECT string_agg(role_id, ',' ORDER BY role_id) FROM public.aura_access_grants WHERE user_id = 'u-e2e-checker';" | tr -d '[:space:]')
+          echo "grants held by u-e2e-checker: '$grants'"
+          test "$grants" = "hse" || { echo "::error::u-e2e-checker should hold exactly the hse role, holds '$grants'"; exit 1; }
+
+          token=$(curl -s -X POST http://localhost:4000/api/v1/auth/login \
+            -H 'content-type: application/json' \
+            -d '{"username":"u-e2e-checker","password":"e2e-password"}' | jq -r '.token // empty')
+          test -n "$token" || { echo "::error::the limited actor could not sign in"; cat apps/api/api-pg.log; exit 1; }
+
+          # POSITIVE: it can reach its own domain. A READ, deliberately — a write would need a valid
+          # project the limited actor cannot create, and a validation failure would then look
+          # exactly like a permission failure. This asks the authorization question and nothing else.
+          allowed=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/v1/hse/ptws -H "Authorization: Bearer $token")
+          echo "positive (hse read): $allowed"
+          test "$allowed" = "200" || { echo "::error::the limited actor cannot reach its own domain (got $allowed)"; exit 1; }
+
+          # NEGATIVE: and it is refused an admin-only action. 403, not 401 - it IS authenticated.
+          refused=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/v1/admin/users \
+            -H "Authorization: Bearer $token")
+          echo "negative (admin read): $refused"
+          test "$refused" = "403" || { echo "::error::the limited actor was not refused an admin-only action (got $refused)"; exit 1; }
 
       - name: Smoke
         run: pnpm --filter @aura/web e2e

@@ -58,6 +58,35 @@ import { DemoSeeder } from '../demo/demo.seeder';
  *  - §2.9 data admin — idempotent demo-data seed.
  * Routing edits themselves go through the settings service (`notify.*` keys).
  */
+/**
+ * The authentication half of the security posture, as a function of the environment.
+ *
+ * Pulled out of the controller so it is testable, and because it got a fact wrong: `devPasswordSet`
+ * read `process.env.AUTH_DEV_PASSWORD` directly, so a deployment configured the supported way —
+ * `AUTH_DEV_PASSWORD_FILE`, which is what scripts/configure-local-auth.mjs writes and what a
+ * secret mount provides — was reported as having NO dev password while dev sign-in worked fine.
+ * A posture screen that under-reports a live dev credential is worse than no screen.
+ */
+export function authPosture(): {
+  verifier: 'jwks' | 'hs256' | 'off';
+  required: boolean;
+  devTokensAllowed: boolean;
+  devPasswordSet: boolean;
+  lockout: { maxAttempts: number; windowSec: number; lockSec: number };
+} {
+  return {
+    verifier: process.env.AUTH_JWKS_URL?.trim() ? 'jwks' : readSecret('AUTH_JWT_SECRET') ? 'hs256' : 'off',
+    required: process.env.AUTH_REQUIRED === 'true',
+    devTokensAllowed: process.env.AUTH_ALLOW_DEV_TOKENS === 'true',
+    devPasswordSet: !!readSecret('AUTH_DEV_PASSWORD'),
+    lockout: {
+      maxAttempts: Number(process.env.AUTH_LOCKOUT_MAX_ATTEMPTS ?? 5),
+      windowSec: Math.round(Number(process.env.AUTH_LOCKOUT_WINDOW_MS ?? 60_000) / 1000),
+      lockSec: Math.round(Number(process.env.AUTH_LOCKOUT_DURATION_MS ?? 300_000) / 1000),
+    },
+  };
+}
+
 @Controller('admin/platform')
 export class PlatformAdminController {
   constructor(
@@ -274,17 +303,7 @@ export class PlatformAdminController {
       })
       .filter((p): p is { group: string; role: string } => p !== null);
     return {
-      auth: {
-        verifier: process.env.AUTH_JWKS_URL?.trim() ? 'jwks' : readSecret('AUTH_JWT_SECRET') ? 'hs256' : 'off',
-        required: process.env.AUTH_REQUIRED === 'true',
-        devTokensAllowed: process.env.AUTH_ALLOW_DEV_TOKENS === 'true',
-        devPasswordSet: !!process.env.AUTH_DEV_PASSWORD?.trim(),
-        lockout: {
-          maxAttempts: Number(process.env.AUTH_LOCKOUT_MAX_ATTEMPTS ?? 5),
-          windowSec: Math.round(Number(process.env.AUTH_LOCKOUT_WINDOW_MS ?? 60_000) / 1000),
-          lockSec: Math.round(Number(process.env.AUTH_LOCKOUT_DURATION_MS ?? 300_000) / 1000),
-        },
-      },
+      auth: authPosture(),
       mfa: await this.mfa.listEnrolments(this.tenant.get().tenantId),
       sso: { jwksConfigured: !!process.env.AUTH_JWKS_URL?.trim(), groupRoleMap },
       pii: {

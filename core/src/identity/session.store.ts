@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { PG_POOL } from '../events/pg-pool';
 import { TenantContext } from '../tenancy/tenant-context';
+import { UsersService } from './users.service';
 
 // Authoritative session state (S2, migration 0235 `auth_sessions`). A session exists ONLY once
 // every authentication requirement is satisfied; its `id` is the `sid` carried in the access
@@ -65,6 +66,10 @@ export class SessionStore {
   constructor(
     @Optional() @Inject(PG_POOL) private readonly pool: Pool | null = null,
     private readonly tenant: TenantContext,
+    // @Inject is NOT optional here: a union-typed parameter erases to Object, so Nest cannot
+    // resolve it by type and silently injects nothing — which turned the principal check below
+    // into a no-op that its own test caught.
+    @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
   ) {
     if (!this.pool && this.persistenceRequired()) {
       throw new Error(
@@ -173,7 +178,9 @@ export class SessionStore {
       // Absolute expiry is time-based, so it is enforceable straight from the cached record; a
       // revocation on another node is the only thing this positive entry can be stale about.
       if (cached.record.tenantId === tenantId && cached.record.revokedAt === null && cached.record.expiresAt > now) {
-        return cached.record;
+        // The principal check is NOT cached with the record: deprovisioning must bite immediately,
+        // not after the positive-cache TTL.
+        return (await this.principalIsLive(tenantId, cached.record.userId)) ? cached.record : null;
       }
       this.cache.delete(sid);
     }
@@ -190,6 +197,7 @@ export class SessionStore {
       return null;
     }
     if (!record || record.revokedAt !== null || record.expiresAt <= now) return null;
+    if (!(await this.principalIsLive(tenantId, record.userId))) return null;
     this.cache.set(sid, { record, cachedAt: now });
     return record;
   }
@@ -288,5 +296,46 @@ export class SessionStore {
       revokedAt: r.revoked_at === null ? null : Number(r.revoked_at),
       revokedReason: r.revoked_reason,
     };
+  }
+
+  /**
+   * Does the principal this session belongs to still exist, and is it still active?
+   *
+   * DEFENSE IN DEPTH. A session row that is unrevoked and unexpired used to be sufficient, so a
+   * deprovisioned account kept working: the identity row was gone while its session stayed live,
+   * and its access token could still change that account's own password (measured: 201). Session
+   * cleanup on deprovision is the primary fix; this is the check that means forgetting it
+   * somewhere else can never again be enough to keep a deleted principal alive.
+   *
+   * Requiring a REGISTERED user here is safe even though `isActive()` deliberately treats
+   * unregistered ids as active: a session can only come into being through sign-in, and sign-in
+   * already requires a registered identity with a credential. So "session exists but user does
+   * not" is never a legitimate state — it is exactly the state deprovisioning leaves behind.
+   */
+  private async principalIsLive(tenantId: string, userId: string): Promise<boolean> {
+    if (!this.users) return true; // wiring without the registry (tests) keeps the old behaviour
+    await this.users.ensureTenant(tenantId);
+    const user = this.users.get(tenantId, userId);
+    return user !== null && user.active !== false;
+  }
+
+  /**
+   * Every live session id for a principal. Deprovisioning needs the ids, not just a count: the
+   * refresh-token families hang off sessions, and revoking a session without its family would
+   * leave a token that can mint a new one.
+   */
+  async listForUser(tenantId: string, userId: string): Promise<string[]> {
+    if (!this.pool) {
+      return [...this.sessions.values()]
+        .filter((s) => s.tenantId === tenantId && s.userId === userId && s.revokedAt === null)
+        .map((s) => s.id);
+    }
+    const { rows } = await this.run(tenantId, () =>
+      this.pool!.query<{ id: string }>(
+        `SELECT id FROM public.auth_sessions WHERE tenant_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+        [tenantId, userId],
+      ),
+    );
+    return rows.map((r) => r.id);
   }
 }

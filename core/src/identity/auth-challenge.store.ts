@@ -245,4 +245,28 @@ export class AuthChallengeStore {
       if (challenge.tenantId === tenantId && challenge.expiresAt <= now) this.challenges.delete(k);
     }
   }
+
+  /**
+   * Drop every outstanding challenge for a principal. A challenge is pre-authentication state:
+   * it names an account and, once answered, mints a session. Leaving one behind for a deprovisioned
+   * user is leaving a half-open door — the identity is gone but the exchange that creates a session
+   * for it is not.
+   */
+  async purgeForUser(tenantId: string, userId: string): Promise<number> {
+    if (!this.pool) {
+      let n = 0;
+      for (const [id, c] of this.challenges.entries()) {
+        if (c.tenantId === tenantId && c.userId === userId) {
+          this.challenges.delete(id);
+          n++;
+        }
+      }
+      return n;
+    }
+    const res = await this.pool.query(
+      `DELETE FROM public.auth_challenges WHERE tenant_id = $1 AND user_id = $2`,
+      [tenantId, userId],
+    );
+    return res.rowCount ?? 0;
+  }
 }

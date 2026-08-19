@@ -4,14 +4,20 @@ import { type CSSProperties, type FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
 
+/** The second step sign-in can demand. `null` = the password step. */
+type Challenge = { kind: 'mfa' | 'password_change'; id: string } | null;
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [showMfa, setShowMfa] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [challenge, setChallenge] = useState<Challenge>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // The form is not usable until React owns it.
   //
@@ -25,32 +31,72 @@ export default function LoginPage() {
   // and the submit until then makes the form honest about when it can accept input.
   const ready = useHydrated();
 
+  function land(): void {
+    const requested = new URLSearchParams(window.location.search).get('next');
+    const destination = requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/';
+    router.push(destination);
+    router.refresh();
+  }
+
+  /**
+   * One submit for both steps. A challenge is answered at its own endpoint — the exchange is
+   * what mints the session, so there is no way to end up "signed in" without completing it.
+   */
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+
+    if (challenge?.kind === 'password_change' && newPassword !== confirmPassword) {
+      setErr('The two passwords do not match.');
+      return;
+    }
+
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch('/api/auth/login', {
+      const step = challenge
+        ? {
+            url: challenge.kind === 'mfa' ? '/api/auth/login/mfa' : '/api/auth/login/password-change',
+            body:
+              challenge.kind === 'mfa'
+                ? { challengeId: challenge.id, code }
+                : { challengeId: challenge.id, newPassword },
+          }
+        : { url: '/api/auth/login', body: { username, password } };
+
+      const res = await fetch(step.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username, password, code: showMfa ? code : undefined }),
+        body: JSON.stringify(step.body),
       });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        challenge?: string;
+        challengeId?: string;
+      };
+
       if (!res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { error?: string };
-        const message = d.error ?? 'Sign-in failed. Check your username and password.';
-        if (/mfa code required/i.test(message)) {
-          setShowMfa(true);
-          setErr('Enter the verification code from your authenticator app.');
-        } else {
-          setErr(message);
-        }
-      } else {
-        const requested = new URLSearchParams(window.location.search).get('next');
-        const destination = requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/';
-        router.push(destination);
-        router.refresh();
+        setErr(data.error ?? 'Sign-in failed. Check your username and password.');
+        return;
       }
+
+      // Still owed something. Note this can arrive from EITHER step — a forced password change
+      // can be followed by MFA — so the second step is a loop, not a fixed pair.
+      if (data.challenge === 'mfa' || data.challenge === 'password_change') {
+        setChallenge({ kind: data.challenge, id: data.challengeId ?? '' });
+        setPassword('');
+        setCode('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setNotice(
+          data.challenge === 'mfa'
+            ? 'Enter the verification code from your authenticator app.'
+            : 'Your password was set by an administrator. Choose your own to continue.',
+        );
+        return;
+      }
+
+      land();
     } catch {
       setErr('Could not reach the server. Please try again.');
     } finally {
@@ -75,40 +121,44 @@ export default function LoginPage() {
         </aside>
 
         <form onSubmit={submit} style={s.card}>
-          <h1 style={s.h1}>Sign in</h1>
-          <p style={s.welcome}>Welcome back. Enter your credentials to continue.</p>
+          <h1 style={s.h1}>{challenge ? 'One more step' : 'Sign in'}</h1>
+          <p style={s.welcome}>
+            {challenge ? notice : 'Welcome back. Enter your credentials to continue.'}
+          </p>
 
-          <label style={s.label} htmlFor="login-user">
-            Username
-          </label>
-          <input
-            id="login-user"
-            data-testid="login-username"
-            style={s.input}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Username"
-            autoComplete="username"
-            autoFocus
-            disabled={!ready}
-          />
+          {!challenge ? (
+            <>
+              <label style={s.label} htmlFor="login-user">
+                Username
+              </label>
+              <input
+                id="login-user"
+                data-testid="login-username"
+                style={s.input}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Username"
+                autoComplete="username"
+                autoFocus
+                disabled={!ready}
+              />
 
-          <label style={s.label} htmlFor="login-pass">
-            Password
-          </label>
-          <input
-            id="login-pass"
-            data-testid="login-password"
-            style={s.input}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            disabled={!ready}
-            autoComplete="current-password"
-          />
-
-          {showMfa ? (
+              <label style={s.label} htmlFor="login-pass">
+                Password
+              </label>
+              <input
+                id="login-pass"
+                data-testid="login-password"
+                style={s.input}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                disabled={!ready}
+                autoComplete="current-password"
+              />
+            </>
+          ) : challenge.kind === 'mfa' ? (
             <>
               <label style={s.label} htmlFor="login-code">
                 Verification code
@@ -122,13 +172,47 @@ export default function LoginPage() {
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="6-digit code"
                 autoComplete="one-time-code"
+                autoFocus
                 disabled={!ready}
               />
             </>
-          ) : null}
+          ) : (
+            <>
+              <label style={s.label} htmlFor="login-new-pass">
+                New password
+              </label>
+              <input
+                id="login-new-pass"
+                data-testid="login-new-password"
+                style={s.input}
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password"
+                autoComplete="new-password"
+                autoFocus
+                disabled={!ready}
+              />
+
+              <label style={s.label} htmlFor="login-confirm-pass">
+                Confirm new password
+              </label>
+              <input
+                id="login-confirm-pass"
+                data-testid="login-confirm-password"
+                style={s.input}
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repeat the new password"
+                autoComplete="new-password"
+                disabled={!ready}
+              />
+            </>
+          )}
 
           <button type="submit" data-testid="login-submit" style={s.btn} disabled={busy || !ready}>
-            {busy ? 'Signing in…' : 'Sign in'}
+            {busy ? 'Working…' : challenge?.kind === 'password_change' ? 'Set password and continue' : 'Sign in'}
           </button>
           {err ? <p style={s.err} data-testid="login-error">{err}</p> : null}
 

@@ -15,6 +15,8 @@ interface AdminUser {
   active: boolean;
   workspaceRole: string | null;
   registered: boolean;
+  /** Whether this account can actually SIGN IN — registration alone never could. */
+  credential: 'none' | 'active' | 'must_change' | 'disabled' | 'locked';
 }
 
 export default function UsersAdminClient() {
@@ -24,6 +26,7 @@ export default function UsersAdminClient() {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState({ userId: '', displayName: '', email: '', companyId: '' });
   const [edit, setEdit] = useState<Record<string, { displayName: string; email: string; companyId: string }>>({});
+  const [pwDraft, setPwDraft] = useState<Record<string, string>>({});
 
   const load = async (): Promise<void> => {
     try {
@@ -92,6 +95,42 @@ export default function UsersAdminClient() {
     }
   };
 
+  /**
+   * Give an account its first password, or reset a forgotten one.
+   *
+   * Registering a user does not let them in — sign-in needs a credential, and until this existed
+   * an invited person simply could not sign in, with nothing on the screen saying so. The password
+   * is always set as one the holder must change: it is a handover secret, known to whoever typed
+   * it here, so the account's real password is chosen by its owner at first sign-in.
+   */
+  const setUserPassword = async (u: AdminUser): Promise<void> => {
+    const value = pwDraft[u.userId] ?? '';
+    setErr(null);
+    setMsg(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(u.userId)}/password`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ password: value, mustChange: true }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(d.message ?? d.error ?? 'Could not set the password');
+        return;
+      }
+      setPwDraft((prev) => {
+        const next = { ...prev };
+        delete next[u.userId];
+        return next;
+      });
+      setMsg(`${u.userId} can sign in now — they will be asked to choose their own password.`);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (users === null && !err) return <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
 
   const list = users ?? [];
@@ -123,12 +162,14 @@ export default function UsersAdminClient() {
               <th style={st.th}>Company</th>
               <th style={st.th}>Workspace role</th>
               <th style={st.th}>Status</th>
+              <th style={st.th}>Sign-in</th>
               <th style={{ ...st.th, textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {list.map((u) => {
               const e = edit[u.userId];
+              const pw = pwDraft[u.userId];
               return (
                 <tr key={u.userId} style={!u.active ? { opacity: 0.55 } : undefined}>
                   <td style={st.td}><code style={st.code}>{u.userId}</code></td>
@@ -157,6 +198,21 @@ export default function UsersAdminClient() {
                   <td style={st.td}>
                     {!u.registered ? <Pill tone="info">unregistered</Pill> : u.active ? <Pill tone="good">active</Pill> : <Pill tone="bad">deactivated</Pill>}
                   </td>
+                  <td style={st.td} data-testid={`user-signin-${u.userId}`}>
+                    {!u.registered ? (
+                      <span style={st.dim}>—</span>
+                    ) : u.credential === 'none' ? (
+                      <Pill tone="bad">no password</Pill>
+                    ) : u.credential === 'must_change' ? (
+                      <Pill tone="info">must change</Pill>
+                    ) : u.credential === 'locked' ? (
+                      <Pill tone="bad">locked out</Pill>
+                    ) : u.credential === 'disabled' ? (
+                      <Pill tone="bad">disabled</Pill>
+                    ) : (
+                      <Pill tone="good">can sign in</Pill>
+                    )}
+                  </td>
                   <td style={{ ...st.td, textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {!u.registered ? (
                       <button className="btn" style={st.smallBtn} disabled={busy} onClick={() => void upsert({ userId: u.userId }, `${u.userId} registered.`)}>
@@ -178,6 +234,46 @@ export default function UsersAdminClient() {
                       </>
                     ) : (
                       <>
+                        {pw !== undefined ? (
+                          <>
+                            <input
+                              className="input"
+                              style={st.cellInput}
+                              type="password"
+                              value={pw}
+                              placeholder="New password"
+                              autoComplete="new-password"
+                              data-testid={`user-password-input-${u.userId}`}
+                              onChange={(ev) => setPwDraft({ ...pwDraft, [u.userId]: ev.target.value })}
+                            />{' '}
+                            <button
+                              className="btn btn-primary"
+                              style={st.smallBtn}
+                              disabled={busy || !pw.trim()}
+                              data-testid={`user-password-save-${u.userId}`}
+                              onClick={() => void setUserPassword(u)}
+                            >
+                              Set
+                            </button>{' '}
+                            <button
+                              className="btn"
+                              style={st.smallBtn}
+                              onClick={() => setPwDraft((prev) => { const n = { ...prev }; delete n[u.userId]; return n; })}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn"
+                            style={st.smallBtn}
+                            disabled={busy}
+                            data-testid={`user-set-password-${u.userId}`}
+                            onClick={() => setPwDraft({ ...pwDraft, [u.userId]: '' })}
+                          >
+                            {u.credential === 'none' ? 'Set password' : 'Reset password'}
+                          </button>
+                        )}{' '}
                         <button
                           className="btn"
                           style={st.smallBtn}
@@ -212,12 +308,13 @@ export default function UsersAdminClient() {
           Entra object id, or an email). Grant roles afterwards in Roles &amp; Access.
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input className="input" style={{ width: 160 }} placeholder="user id *" value={draft.userId} onChange={(e) => setDraft({ ...draft, userId: e.target.value })} />
-          <input className="input" style={{ width: 180 }} placeholder="display name" value={draft.displayName} onChange={(e) => setDraft({ ...draft, displayName: e.target.value })} />
+          <input className="input" style={{ width: 160 }} data-testid="new-user-id" placeholder="user id *" value={draft.userId} onChange={(e) => setDraft({ ...draft, userId: e.target.value })} />
+          <input className="input" style={{ width: 180 }} data-testid="new-user-name" placeholder="display name" value={draft.displayName} onChange={(e) => setDraft({ ...draft, displayName: e.target.value })} />
           <input className="input" style={{ width: 200 }} placeholder="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
           <input className="input" style={{ width: 150 }} placeholder="company id (optional)" value={draft.companyId} onChange={(e) => setDraft({ ...draft, companyId: e.target.value })} />
           <button
             className="btn btn-primary"
+            data-testid="new-user-register"
             disabled={busy || !draft.userId.trim()}
             onClick={() =>
               void upsert(

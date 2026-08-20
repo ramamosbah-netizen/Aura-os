@@ -4,8 +4,9 @@
 // that makes each one a workflow: the work order's SLA outcome, the asset's disposal gate, and the
 // traffic fine's dispute exits.
 import { expect, test } from '@playwright/test';
+import { runId } from './fixtures';
 
-const RUN = Date.now().toString().slice(-6);
+const RUN = runId();
 const DAY = 86_400_000;
 
 // `next dev` compiles a route the first time it is requested. These three registers and their 360s

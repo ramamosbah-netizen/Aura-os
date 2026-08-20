@@ -19,9 +19,14 @@ import { expect, request as apiRequest, test, type Page } from '@playwright/test
 const REPORTS_URL = '/site/daily-reports';
 import { apiAuthHeaders } from './api-auth';
 
+import { runId, scoped } from './fixtures';
+
 const API_BASE = process.env.AURA_API_URL ?? 'http://localhost:4000';
+
+/** This run's own project — created in beforeAll, chosen by name in the picker. */
+let projectTitle = '';
 /** Marks rows this spec creates so assertions can count only their own. */
-const TAG = `e2e-offline-${Date.now()}`;
+const TAG = `e2e-offline-${runId()}`;
 
 /** Read the offline queue straight out of IndexedDB — the engine exposes no window handle. */
 async function readQueue(page: Page): Promise<Array<{ status: string; endpoint: string; operationId: string }>> {
@@ -87,11 +92,17 @@ async function fillReport(page: Page, description: string, dayOffset = 0): Promi
         { timeout: 30_000, intervals: [400] },
       )
       .toBeGreaterThan(0);
-    const values = await picker.locator('option').evaluateAll((os) =>
-      os.map((o) => (o as HTMLOptionElement).value).filter(Boolean),
+    // Select THIS RUN's project by name, not whatever sits at position 0. The picker lists every
+    // project the actor can see, so the first option is decided by other data — and filing onto a
+    // project the spec does not own means both a report left on someone else's record and, on the
+    // next run, a collision with the fixed date below.
+    const options = await picker.locator('option').evaluateAll((os) =>
+      (os as HTMLOptionElement[]).map((o) => ({ value: o.value, label: o.textContent ?? '' })).filter((o) => o.value),
     );
-    expect(values, 'the project picker must offer a project to file against').not.toHaveLength(0);
-    await picker.selectOption(values[0]);
+    expect(options, 'the project picker must offer a project to file against').not.toHaveLength(0);
+    const own = options.find((o) => o.label.includes(projectTitle));
+    expect(own, `the picker must offer this run's own project ('${projectTitle}'), got: ${options.map((o) => o.label).join(' | ')}`).toBeTruthy();
+    await picker.selectOption(own!.value);
   }
 
   await work.fill(description);
@@ -105,27 +116,29 @@ async function fillReport(page: Page, description: string, dayOffset = 0): Promi
 }
 
 test.describe('offline field journey', () => {
-  // A report has to be filed against a project, and CI boots the API on empty in-memory stores,
-  // so the picker has no options unless this spec supplies one. Idempotent — an instance that
-  // already has projects is left alone.
+  // A report has to be filed against a project, and this spec files SEVERAL on fixed dates (see
+  // fillReport). It therefore owns its project rather than using whichever one happens to exist.
+  //
+  // It used to do the opposite — create a project only when the instance had none — which was
+  // wrong in both directions. Against a shared database it filed its reports onto somebody's real
+  // project. Against any database it reused the same project on a second run, and the daily-report
+  // table refuses a second report for one project on one day, so the re-run failed on seeding.
+  // Owning a run-scoped project makes the fixed dates safe again: the pair is new every run.
   test.beforeAll(async () => {
     // Direct to the API, so the session cookie does not apply — carry a bearer token when the
     // environment has auth on.
     const ctx = await apiRequest.newContext({ baseURL: API_BASE, extraHTTPHeaders: apiAuthHeaders() });
     try {
-      const existing = await ctx.get('/api/v1/projects/projects');
-      const rows = existing.ok() ? ((await existing.json()) as unknown[]) : [];
-      if (Array.isArray(rows) && rows.length > 0) return;
-
+      projectTitle = scoped('E2E Offline Fixture');
       const created = await ctx.post('/api/v1/projects/projects', {
-        data: { title: `E2E Offline Fixture ${Date.now()}`, status: 'active' },
+        data: { title: projectTitle, status: 'active' },
       });
       // Fail here, loudly, rather than let every test below time out on an empty <select> and
       // leave someone guessing which of the API, the page or the engine was at fault.
       if (!created.ok()) {
         throw new Error(
           `could not create the project fixture (${created.status()} from ${API_BASE}). ` +
-            'The offline journey needs at least one project to file a report against.',
+            'The offline journey needs a project of its own to file reports against.',
         );
       }
     } finally {

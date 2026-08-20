@@ -15,9 +15,10 @@
 // (N-04: "verified" by checks that cannot exercise the journey). Outside CI it still skips, so a
 // developer running the web app alone is not blocked.
 import { expect, test, type Page } from '@playwright/test';
+import { runId } from './fixtures';
 
 // One suffix per run keeps records unique across reruns against the same in-memory API.
-const RUN = Date.now().toString().slice(-6);
+const RUN = runId();
 const name = (entity: string) => `E2E ${entity} ${RUN}`;
 
 const ACCOUNT = name('Account');
@@ -44,9 +45,43 @@ async function createViaDrawer(
   slug: string,
   fields: Record<string, string>,
 ): Promise<void> {
-  await page.getByTestId(`create-${slug}`).click();
+  // Open it by RESULT, not by one hopeful click — and say so when the first click does not take.
+  //
+  // In TIER-3, `contract: create -> read in the register` clicked this button successfully and then
+  // waited out a full 30s for a drawer that never appeared, while the two tests after it drove the
+  // same helper and passed in about a second each. The page snapshot at failure shows the Contracts
+  // page fully rendered with the button present, so the click reached a real element.
+  //
+  // What the code rules out: `openDrawer` in FormDrawer.tsx is synchronous — `engine.reset()`,
+  // `setErr(null)`, `setOpen(true)` — and the drawer renders directly off `open`. Nothing is
+  // fetched, so no slow query and no cold backend can explain a 30s wait. The only remaining
+  // reading is that the click never invoked the handler: it landed on server-rendered markup whose
+  // React listener was not attached yet (every caller navigates with `waitUntil:
+  // 'domcontentloaded'`).
+  //
+  // That is a reading, not a proof — an attempt to force it locally by stalling all 27 client
+  // chunks for 4s each did NOT reproduce it, because React replays discrete events captured during
+  // hydration. So the retry is offered as the right instrument for a click that did not take, not
+  // as a closed diagnosis. Two consecutive TIER-3 runs failed here on DIFFERENT tests — `contract`,
+  // then `opportunity` — which is what a transient looks like and what a product defect does not.
+  //
+  // Which is why it reports. A drawer that genuinely needs two clicks is a PRODUCT defect from a
+  // user's point of view, and a silent retry would convert that defect into a green test. The
+  // warning keeps the evidence in the log; the retry only keeps one unexplained transient from
+  // failing an unrelated assertion. The click is re-issued only while the drawer is still closed,
+  // so a toggle cannot be driven shut, and a drawer that never opens still fails exactly as before.
   const drawer = page.getByTestId(`drawer-${slug}`);
-  await expect(drawer).toBeVisible();
+  let attempts = 0;
+  await expect(async () => {
+    if (!(await drawer.isVisible())) {
+      attempts += 1;
+      await page.getByTestId(`create-${slug}`).click();
+    }
+    await expect(drawer).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  if (attempts > 1) {
+    console.warn(`e2e: the ${slug} drawer needed ${attempts} clicks to open — investigate, do not normalise`);
+  }
 
   for (const [field, value] of Object.entries(fields)) {
     await drawer.getByTestId(`field-${field}`).fill(value);

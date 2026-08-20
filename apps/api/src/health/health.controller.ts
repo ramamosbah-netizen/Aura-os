@@ -1,10 +1,14 @@
 import type { ServerResponse } from 'node:http';
 import { Controller, Get, Res } from '@nestjs/common';
 import { MigrationGateService } from './migration-gate.service';
+import { EnvironmentMarkerService } from './environment-marker.service';
 
 @Controller('health')
 export class HealthController {
-  constructor(private readonly gate: MigrationGateService) {}
+  constructor(
+    private readonly gate: MigrationGateService,
+    private readonly environment: EnvironmentMarkerService,
+  ) {}
 
   @Get()
   check(@Res({ passthrough: true }) res: ServerResponse) {
@@ -15,6 +19,9 @@ export class HealthController {
     return {
       status: s.degraded ? 'degraded' : 'ok',
       service: 'aura-os-api',
+      // What the DATABASE says it is, not what the caller claims — null unless a provisioning
+      // step marked it. See EnvironmentMarkerService.
+      environment: this.environment.get(),
       time: new Date().toISOString(),
       schema: {
         upToDate: !s.degraded,

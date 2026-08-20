@@ -89,10 +89,16 @@ test('a direct message can be opened and used', async ({ page }) => {
   await page.getByRole('button', { name: /New/ }).click();
   const picker = page.getByRole('group', { name: 'Start a direct message' });
   await expect(picker).toBeVisible();
+  // Whoever the picker offers first is decided by the directory, not by this spec, and the
+  // directory grows as other specs register users. Which teammate is irrelevant to what this
+  // measures — but the conversation that opens must be with the one that was clicked, so the
+  // name is captured and asserted rather than left to chance.
   const first = picker.getByRole('button').first();
   await expect(first).toBeVisible();
+  const peerName = (await first.locator('strong').innerText()).trim();
   await first.click();
 
+  await expect(page.getByRole('heading', { name: peerName, level: 3 })).toBeVisible();
   await expect(page.getByTestId('chat-messages')).toBeVisible();
   const line = `c2-dm-proof-${Date.now()}`;
   await page.getByLabel('Message', { exact: true }).fill(line);

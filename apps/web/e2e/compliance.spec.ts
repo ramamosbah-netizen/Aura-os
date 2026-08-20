@@ -5,9 +5,13 @@
 // empty state a fresh install actually shows, registering an authority, opening a case, and
 // reading back the history that the append-only model exists to preserve.
 import { expect, test, type Page } from '@playwright/test';
+import { runId } from './fixtures';
 
-const UNIQUE = Date.now().toString().slice(-6);
-const CODE = `E2E${UNIQUE}`;
+const UNIQUE = runId();
+// Uppercased deliberately: the domain normalises an authority code on write
+// (modules/compliance/src/domain/authority.ts), so the canonical form is what the register renders
+// and what the assertions below must look for. The previous marker was all digits, which hid this.
+const CODE = `E2E${UNIQUE}`.toUpperCase();
 
 /** The page is a client component behind a suspense boundary; wait for it, never a fixed delay. */
 async function open(page: Page): Promise<void> {

@@ -618,11 +618,24 @@ jobs:
       - name: Grant the actors the suite needs
         run: |
           # u-admin gets its wildcard from the boot seeder, which persists grants when a database is
-          # configured. The SECOND actor must not: segregation of duties is only meaningful if the
-          # requester and the approver differ in authority, and u-approver is a wildcard admin by
-          # design — using it would make those specs pass for the wrong reason. u-e2e-checker gets
-          # the standard HSE role instead: enough to raise a permit, nothing else.
-          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_grants (user_id, role_id, scope_key, scope, updated_at) VALUES ('u-e2e-checker', 'hse', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()) ON CONFLICT (user_id, role_id, scope_key) DO NOTHING;"
+          # configured. The other two actors must NOT, or the specs that depend on them pass for the
+          # wrong reason. No shipped role carries these permissions, so the roles are seeded here
+          # rather than widening an ELV one; roles hydrate from aura_access_roles at boot.
+          #
+          #   u-e2e-checker  hse + e2e-chat-reader
+          #     Segregation of duties needs a requester who is not the approver. It also needs
+          #     comms.channel.read: without it PermissionsGuard refuses before any channel lookup,
+          #     so the DM privacy spec sees 403 for a real channel and an invented id alike — safe,
+          #     but it never reaches the 404-concealment path it exists to protect.
+          #
+          #   u-e2e-viewer   e2e-viewer (workspace.me.read only)
+          #     The restricted identity global-shell-home asserts: role "viewer", isAdmin false, one
+          #     suite, no Admin link, administration-governance forbidden. u-approver satisfies that
+          #     in TIER-2, but only because the workspace directory defaults unassigned users to
+          #     viewer while it separately holds a wildcard grant — an identity that reads as
+          #     restricted on one axis and unrestricted on another. This one is restricted on both.
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_roles (id, name, permissions, updated_at) VALUES ('e2e-chat-reader', 'E2E chat reader', '[\"comms.channel.read\"]'::jsonb, now()), ('e2e-viewer', 'E2E viewer', '[\"workspace.me.read\"]'::jsonb, now()) ON CONFLICT (id) DO UPDATE SET permissions = excluded.permissions, updated_at = now();"
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_grants (user_id, role_id, scope_key, scope, updated_at) VALUES ('u-e2e-checker', 'hse', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-checker', 'e2e-chat-reader', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-viewer', 'e2e-viewer', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()) ON CONFLICT (user_id, role_id, scope_key) DO NOTHING;"
 
       - name: Build workspace dependencies
         run: pnpm --filter @aura/web^... build
@@ -640,7 +653,7 @@ jobs:
           # Same auth posture as TIER-2, so the tiers differ in the backend rather than the config.
           RATE_LIMIT_MAX=100000 PORT=4000 AUTH_JWT_SECRET=e2e-only-not-a-real-secret \
             AUTH_DEV_PASSWORD=e2e-password \
-            AUTH_DEV_ADMIN_USER=u-admin,u-e2e-checker \
+            AUTH_DEV_ADMIN_USER=u-admin,u-e2e-checker,u-e2e-viewer \
             nohup node dist/main.js > api-pg.log 2>&1 &
           echo $! > api-pg.pid
           for i in $(seq 1 60); do
@@ -697,7 +710,17 @@ jobs:
           # refuses self-authorisation - not because the requester lacks the approver's rights.
           grants=$(psql "$OWNER_URL" -tAc "SELECT string_agg(role_id, ',' ORDER BY role_id) FROM public.aura_access_grants WHERE user_id = 'u-e2e-checker';" | tr -d '[:space:]')
           echo "grants held by u-e2e-checker: '$grants'"
-          test "$grants" = "hse" || { echo "::error::u-e2e-checker should hold exactly the hse role, holds '$grants'"; exit 1; }
+          test "$grants" = "e2e-chat-reader,hse" || { echo "::error::u-e2e-checker should hold exactly e2e-chat-reader + hse, holds '$grants'"; exit 1; }
+
+          viewer_grants=$(psql "$OWNER_URL" -tAc "SELECT string_agg(role_id, ',' ORDER BY role_id) FROM public.aura_access_grants WHERE user_id = 'u-e2e-viewer';" | tr -d '[:space:]')
+          echo "grants held by u-e2e-viewer: '$viewer_grants'"
+          test "$viewer_grants" = "e2e-viewer" || { echo "::error::u-e2e-viewer should hold exactly the e2e-viewer role, holds '$viewer_grants'"; exit 1; }
+
+          # Neither test identity may reach a wildcard, however it was granted. A role that quietly
+          # gains '*' would leave every one of these assertions technically true and meaningless.
+          wild=$(psql "$OWNER_URL" -tAc "SELECT count(*) FROM public.aura_access_grants g JOIN public.aura_access_roles r ON r.id = g.role_id WHERE g.user_id IN ('u-e2e-checker','u-e2e-viewer') AND r.permissions ? '*';" | tr -d '[:space:]')
+          echo "wildcard roles reachable by the limited actors: $wild"
+          test "$wild" = "0" || { echo "::error::a limited test actor can reach a wildcard role"; exit 1; }
 
           token=$(curl -s -X POST http://localhost:4000/api/v1/auth/login \
             -H 'content-type: application/json' \
@@ -726,6 +749,8 @@ jobs:
           E2E_PASSWORD: e2e-password
           # A deliberately LIMITED second actor (HSE only) - see the grant step above.
           E2E_ALT_USERNAME: u-e2e-checker
+          # The restricted identity global-shell-home measures - limited on BOTH axes.
+          E2E_VIEWER_USERNAME: u-e2e-viewer
           # Every assertion here sits behind SQL round-trips rather than a Map lookup.
           E2E_EXPECT_TIMEOUT: '30000'
           E2E_TEST_TIMEOUT: '120000'

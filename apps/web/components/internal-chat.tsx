@@ -183,9 +183,23 @@ export default function InternalChat({
       }
       const posted = (await res.json()) as ChatMessageView;
       setText('');
-      // Guard the append too: if the conversation changed while the POST was in flight, the
-      // message belongs to a list that is no longer on screen.
-      setMessages((prev) => (target === activeId ? [...(prev ?? []), posted] : prev));
+      // Append only if the list does not already hold it.
+      //
+      // The conversation refetches on a timer while a send is in flight, so the server's copy can
+      // arrive BEFORE this append runs: the poll reads a message that is already committed, then
+      // this adds it a second time and the same id renders twice. React says so out loud —
+      // "Encountered two children with the same key" — and the user simply sees their own message
+      // duplicated. Against the in-memory adapters the window between commit and append is about a
+      // millisecond and it effectively never happens; against PostgreSQL it is hundreds of
+      // milliseconds and it happens reliably.
+      //
+      // Identity is the message id, not position or content: two people can legitimately send the
+      // same text, and a resend is a different message.
+      setMessages((prev) => {
+        if (target !== activeId) return prev; // the view moved while this was in flight
+        const list = prev ?? [];
+        return list.some((message) => message.id === posted.id) ? list : [...list, posted];
+      });
       void refreshChannels();
     } catch {
       setSendError('Could not send — the API is unreachable.');

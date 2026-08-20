@@ -159,6 +159,57 @@ test('a message typed while a conversation is opening can never reach the previo
   await expect(page.getByTestId('chat-message').filter({ hasText: line })).toHaveCount(0);
 });
 
+/**
+ * The same message must never render twice, however the two copies arrive.
+ *
+ * The conversation refetches on a 4s timer. If that poll reads a message the server has already
+ * committed but whose POST response has not come back yet, the client then appends it a second
+ * time — the same id in the list twice. Against the in-memory adapters the gap between commit and
+ * append is about a millisecond, so it effectively never fires; against PostgreSQL it is hundreds
+ * of milliseconds and it fired on the first clean-database run.
+ *
+ * The assertion is on React's duplicate-key warning rather than on a rendered count, because the
+ * duplicate is TRANSIENT: the next poll replaces the list from the server and washes it away, so
+ * `toHaveCount(1)` merely waits for the cleanup and passes either way — verified, by removing the
+ * fix and watching a count-based version of this test still pass. The warning is emitted at the
+ * moment of the bad render and cannot be undone by a later one.
+ */
+test('a message the poll already fetched is not appended a second time', async ({ page }) => {
+  const duplicateKeys: string[] = [];
+  page.on('console', (message) => {
+    if (/two children with the same key/i.test(message.text())) duplicateKeys.push(message.text());
+  });
+
+  await openChat(page);
+  await openCompanyChannel(page);
+
+  const line = `c2-dedupe-proof-${Date.now()}`;
+
+  await page.route('**/api/comms/channels/*/messages', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    // Let the server finish — the message is committed and visible to the next poll — then sit on
+    // the response for longer than POLL_MS before handing it back to the client.
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 6_000));
+    await route.fulfill({ response });
+  });
+
+  await page.getByLabel('Message', { exact: true }).fill(line);
+  await page.getByRole('button', { name: 'Send message' }).click();
+
+  // Wait past the held response, so the append has definitely happened.
+  await expect(page.getByTestId('chat-message').filter({ hasText: line })).toHaveCount(1);
+  await page.waitForTimeout(8_000);
+
+  expect(duplicateKeys, 'the same message id was rendered twice').toEqual([]);
+  await expect(page.getByTestId('chat-message').filter({ hasText: line })).toHaveCount(1);
+
+  // And exactly one survives a reload, so nothing was written twice either.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('internal-chat')).toBeVisible();
+  await expect(page.getByTestId('chat-message').filter({ hasText: line })).toHaveCount(1);
+});
+
 test('the chat is usable on a phone', async ({ page }) => {
   // 8. Single column at 390px: the rail collapses above the conversation, and both stay usable.
   await page.setViewportSize({ width: 390, height: 844 });

@@ -615,6 +615,15 @@ jobs:
           # step. Same here, so the API connects as the role the policies actually constrain.
           psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "ALTER ROLE aura_app LOGIN PASSWORD 'aura_app_ci';"
 
+      - name: Mark this database disposable
+        run: |
+          # The suite refuses a database-backed API unless the DATABASE itself says it is a
+          # throwaway — an environment variable alone is only a claim by whoever typed the command,
+          # and would still be "true" beside the wrong DATABASE_URL. No migration creates this
+          # table, so every real database answers `unmarked` by default and is refused without
+          # anyone having to remember anything. This container was created seconds ago by this job.
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.aura_environment (marker text PRIMARY KEY); INSERT INTO public.aura_environment (marker) VALUES ('e2e-disposable') ON CONFLICT DO NOTHING; GRANT SELECT ON public.aura_environment TO aura_app;"
+
       - name: Grant the actors the suite needs
         run: |
           # u-admin gets its wildcard from the boot seeder, which persists grants when a database is
@@ -668,6 +677,11 @@ jobs:
           # this tier a slower copy of TIER-2 that silently proves nothing.
           echo "$health" | grep -q '"applied":null' \
             && { echo "::error::the API booted in-memory - TIER-3 must run against the database"; exit 1; }
+          # The suite refuses a database-backed API that does not identify itself as disposable,
+          # so a marker that failed to reach the API must fail HERE, with that reason, rather
+          # than later as a confusing global-setup refusal.
+          echo "$health" | grep -q '"environment":"e2e-disposable"' \
+            || { echo "::error::the API does not report this database as disposable - the suite would refuse to run"; exit 1; }
           curl -sf http://localhost:4000/api/v1/auth/status | grep -q '"enabled":true' \
             || { echo "::error::auth did not engage - the suite would run unauthenticated"; cat api-pg.log; exit 1; }
 
@@ -751,6 +765,8 @@ jobs:
           E2E_ALT_USERNAME: u-e2e-checker
           # The restricted identity global-shell-home measures - limited on BOTH axes.
           E2E_VIEWER_USERNAME: u-e2e-viewer
+          # Half of the disposable proof; the other half is the marker in the database itself.
+          E2E_DISPOSABLE_DB: '1'
           # Every assertion here sits behind SQL round-trips rather than a Map lookup.
           E2E_EXPECT_TIMEOUT: '30000'
           E2E_TEST_TIMEOUT: '120000'

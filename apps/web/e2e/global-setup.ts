@@ -177,14 +177,37 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
  * assertion timeout while every warm re-run passed — which shows up as a spec "failing" on a
  * product assertion that was never really exercised. Paying it here keeps the specs measuring the
  * product rather than the bundler, and costs nothing on the second run.
+ *
+ * Two things this got wrong, both visible in CI failures:
+ *
+ * 1. It warmed TEN routes while the suite drives about thirty. The three specs that flaked in
+ *    TIER-2 across separate runs — compliance, admin-control-center, admin-consolidation — are all
+ *    on routes that were never in this list.
+ *
+ * 2. `domcontentloaded` resolves when the HTML arrives, which is the SERVER render. The client
+ *    bundle can still be compiling behind it, so a warmed route could still hand a spec a page
+ *    whose buttons have no handlers yet. That is the shape of every one of these failures: the
+ *    click reports success and the thing it should have caused never appears — a create drawer in
+ *    TIER-3 (twice, on different tests), a dispute action in TIER-2. `load` waits for the scripts
+ *    themselves, which is the state the clicks actually need.
+ *
+ * Front-loading is all this does; the same compilation gets paid either way. The difference is
+ * that it is paid where nothing is being measured.
  */
 async function warmRoutes(page: import('@playwright/test').Page, baseURL: string): Promise<void> {
   const routes = [
-    '/crm/accounts', '/crm/leads', '/crm/quotations',
+    '/crm/accounts', '/crm/leads', '/crm/quotations', '/crm/my-day',
     '/contracts/contracts', '/projects/projects', '/finance/invoices',
     '/hse/permits', '/amc/work-orders', '/assets/register', '/fleet/fines',
+    '/compliance', '/quality/ncrs', '/engineering/drawings', '/doccontrol/register',
+    '/site/execution', '/site/daily-reports', '/commissioning', '/operations/overview',
+    '/my-work', '/my-work/approvals', '/my-work/communication', '/my-work/tasks',
+    '/my-work/my-day', '/my-work/favorites', '/admin', '/admin/users', '/suites',
   ];
   for (const route of routes) {
-    await page.goto(`${baseURL}${route}`, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
+    // `load`, not `domcontentloaded` — see above. Failures are swallowed on purpose: a route that
+    // will not warm is the specs' problem to report against their own assertions, with their own
+    // diagnostics, not something to fail the whole run from here.
+    await page.goto(`${baseURL}${route}`, { waitUntil: 'load', timeout: 60_000 }).catch(() => {});
   }
 }

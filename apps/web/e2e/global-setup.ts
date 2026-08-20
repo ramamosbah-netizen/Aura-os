@@ -203,6 +203,15 @@ async function warmRoutes(page: import('@playwright/test').Page, baseURL: string
     '/site/execution', '/site/daily-reports', '/commissioning', '/operations/overview',
     '/my-work', '/my-work/approvals', '/my-work/communication', '/my-work/tasks',
     '/my-work/my-day', '/my-work/favorites', '/admin', '/admin/users', '/suites',
+    // Dynamic segments are separate compilation units: Next compiles `/project/[projectId]/[area]`
+    // once, not once per project, so a placeholder id warms it for every real one. The page renders
+    // a refusal for an id that does not exist, which is irrelevant — compiling the route is the
+    // whole point. Omitting these is why `the system lens survives moving between areas` clicked a
+    // nav link and waited out 30s for a URL that never changed, on a route nothing had warmed.
+    '/project/warm-up-placeholder',
+    '/project/warm-up-placeholder/engineering',
+    '/project/warm-up-placeholder/controls',
+    '/project/warm-up-placeholder/team',
   ];
   for (const route of routes) {
     // `load`, not `domcontentloaded` — see above. Failures are swallowed on purpose: a route that

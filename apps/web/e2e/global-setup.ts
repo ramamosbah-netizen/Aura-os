@@ -90,6 +90,13 @@ async function assertRunnableEnvironment(): Promise<void> {
 
 export default async function globalSetup(config: FullConfig): Promise<void> {
   await assertRunnableEnvironment();
+
+  // Stamp this run. Workers inherit the runner's environment, so every spec can scope the records
+  // it creates to the run that created them — which keeps two runs against one database from
+  // colliding, and makes a row afterwards attributable to a test rather than to a person.
+  process.env.E2E_RUN_ID ??= `r${Date.now().toString(36).slice(-6)}`;
+  console.log(`e2e: run id ${process.env.E2E_RUN_ID}`);
+
   const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3100';
   mkdirSync(dirname(STORAGE_STATE), { recursive: true });
 

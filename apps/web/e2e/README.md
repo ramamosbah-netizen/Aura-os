@@ -79,5 +79,26 @@ Seed through the API and use the ids it returns (`fixtures.ts`), rather than inv
 - A locally generated UUID satisfies the column type while pointing at a project that does not
   exist.
 
-Do not assume a table is empty, that your record is the newest, or that it appears within the first
-N results. `slice(0, 8)` is why one spec failed for a reason that had nothing to do with its code.
+## Run isolation
+
+A disposable database is not the same as an empty one: the suite fills it as it runs, and it can be
+run twice. Three rules follow, each of which has already been broken.
+
+**Scope what you create to the run.** `runId()` is stamped once in global setup and inherited by
+every worker; `scoped('Daily Report')` gives a name unique to the run, and every record from one run
+carries the same token — which is also what makes a row attributable afterwards, when deciding
+whether it came from a test or from a person.
+
+**Own what you constrain.** `offline-sync` used to create a project only if the instance had none,
+and otherwise file its reports against whatever the picker listed first. Against a shared database
+that put test reports on somebody's real project; against any database the second run collided,
+because a project may hold only one daily report per day. A spec that writes something the parent
+record constrains must create its own parent — `createProject`, not `projectFixtureId`.
+
+**Never depend on position.** Do not assume a table is empty, that your record is the newest, or
+that it lands in the first N results. The Operations command centre renders `slice(0, 8)` of active
+projects sorted by title; with 29 accumulated, a spec's project sorted to position 9 and failed
+against a page that was working perfectly. Select by name or id, not by index — and where a capped
+list genuinely is the thing under test, check the precondition out loud (see
+`project-operations-workspace.spec.ts`) so the failure names the environment instead of implying a
+broken feature.

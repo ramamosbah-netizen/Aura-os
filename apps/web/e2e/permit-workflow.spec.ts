@@ -8,9 +8,9 @@
 // degrades gracefully, so there is nothing to drive).
 import { expect, test } from '@playwright/test';
 import { altApiAuthHeaders, authEnabled } from './api-auth';
-import { projectFixtureId } from './fixtures';
+import { projectFixtureId, runId } from './fixtures';
 
-const RUN = Date.now().toString().slice(-6);
+const RUN = runId();
 
 const openWindow = () => ({
   validFrom: new Date(Date.now() - 3600_000).toISOString(),

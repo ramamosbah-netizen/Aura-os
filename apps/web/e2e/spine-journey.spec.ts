@@ -15,9 +15,10 @@
 // (N-04: "verified" by checks that cannot exercise the journey). Outside CI it still skips, so a
 // developer running the web app alone is not blocked.
 import { expect, test, type Page } from '@playwright/test';
+import { runId } from './fixtures';
 
 // One suffix per run keeps records unique across reruns against the same in-memory API.
-const RUN = Date.now().toString().slice(-6);
+const RUN = runId();
 const name = (entity: string) => `E2E ${entity} ${RUN}`;
 
 const ACCOUNT = name('Account');

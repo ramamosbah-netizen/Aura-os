@@ -1,12 +1,17 @@
 import { expect, test } from '@playwright/test';
 
-const PROJECT_TITLE = `E2E Delivery Workspace ${Date.now().toString().slice(-6)}`;
+import { apiAuthHeaders } from './api-auth';
+import { runId, scoped } from './fixtures';
+
+const API_BASE = process.env.AURA_API_URL ?? 'http://localhost:4000';
+
+const PROJECT_TITLE = scoped('E2E Delivery Workspace');
 
 test('project and operations share one usable delivery context', async ({ page, browser }) => {
   const created = await page.request.post('/api/projects/projects', {
     data: {
       title: PROJECT_TITLE,
-      reference: `PX-${Date.now().toString().slice(-4)}`,
+      reference: `PXO-${runId()}`,
       status: 'active',
       value: 250_000,
     },
@@ -38,7 +43,9 @@ test('project and operations share one usable delivery context', async ({ page, 
   // now needs a registered identity with a real credential (S1), so the account is provisioned
   // through the admin API instead of relying on the old behaviour where any username plus the
   // shared dev password was accepted. It is deliberately given no grants.
-  const deniedUser = 'u-no-project-access';
+  // Run-scoped: registering a fixed username succeeds once and 409s on the second run against
+  // the same database, which would fail this spec on setup rather than on what it measures.
+  const deniedUser = `u-no-access-${runId()}`;
   const password = process.env.E2E_PASSWORD ?? 'e2e-password';
   const registered = await page.request.post('/api/admin/users', {
     data: { userId: deniedUser, displayName: 'No project access' },
@@ -105,6 +112,32 @@ test('project and operations share one usable delivery context', async ({ page, 
   await expect(page.getByRole('tablist', { name: 'Record sections' })).toBeVisible();
 
   await page.setViewportSize({ width: 1280, height: 900 });
+
+  // The command centre shows the TOP 8 active projects — at-risk first, then by title. That is a
+  // product decision, and a spec that asserts "my project is on this page" silently depends on it.
+  // It has already gone wrong once: suite runs had accumulated 29 active projects in a shared
+  // database, this project sorted to position 9, and a page that was working perfectly failed the
+  // spec. The afternoon spent looking for the defect is why the precondition is now checked out
+  // loud, against the same endpoint and the same ordering the page uses, before the assertions
+  // that depend on it.
+  //
+  // Read it from the API directly: the portfolio is a server-component read, and the BFF has no
+  // route for it — `/api/projects/projects/[id]` would take "portfolio" for an id.
+  const portfolio = await page.request.get(`${API_BASE}/api/v1/projects/projects/portfolio`, { headers: apiAuthHeaders() });
+  expect(portfolio.ok(), `the operations command centre reads the portfolio; ${API_BASE} answered ${portfolio.status()}`).toBe(true);
+  type PortfolioRow = { id: string; title: string; status?: string; atRisk?: boolean };
+  const visible = ((await portfolio.json()) as PortfolioRow[])
+    .filter((p) => p.status === 'active')
+    .sort((a, b) => Number(b.atRisk) - Number(a.atRisk) || a.title.localeCompare(b.title));
+  const position = visible.findIndex((p) => p.id === project.id) + 1;
+  expect(
+    position > 0 && position <= 8,
+    `this project sorts to position ${position} of ${visible.length} active projects, and the ` +
+      'command centre renders only the first 8 — so the assertions below would fail for a reason ' +
+      'that has nothing to do with the page. The database is not disposable, or this run created ' +
+      'more projects than it should have.',
+  ).toBe(true);
+
   await page.goto('/operations/overview', { waitUntil: 'domcontentloaded' });
   const operations = page.getByTestId('operations-command-center');
   await expect(operations).toBeVisible();

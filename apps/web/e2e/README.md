@@ -48,16 +48,21 @@ the refusal belongs to the suite that would do the writing.
 Against an in-memory API — the normal case, no flags needed:
 
 ```bash
-DATABASE_URL= MIGRATION_DATABASE_URL= AUTH_STATE_PERSISTENCE= \
-  AUTH_SEED_DEV_ADMIN=true AUTH_DEV_ADMIN_USER=u-admin,u-approver \
-  RATE_LIMIT_MAX=100000 node apps/api/dist/main.js
+DATABASE_URL= MIGRATION_DATABASE_URL= AUTH_STATE_PERSISTENCE= AUTH_DEV_PASSWORD_FILE= AUTH_JWT_SECRET_FILE= AUTH_SEED_DEV_ADMIN=true AUTH_DEV_ADMIN_USER=u-admin,u-approver AUTH_DEV_PASSWORD=e2e-password AUTH_JWT_SECRET=e2e-only-not-a-real-secret RATE_LIMIT_MAX=100000 PORT=4100 node apps/api/dist/main.js
 
-AURA_API_URL=http://localhost:4000 E2E_USERNAME=u-admin E2E_PASSWORD=... \
-  E2E_ALT_USERNAME=u-approver pnpm --filter @aura/web e2e
+AURA_API_URL=http://localhost:4100 E2E_USERNAME=u-admin E2E_PASSWORD=e2e-password E2E_ALT_USERNAME=u-approver pnpm --filter @aura/web e2e
 ```
 
 `AURA_API_URL` is required: without it the specs that call the API directly are never authenticated
 and fail as 401s that read like product bugs.
+
+Clearing the two `_FILE` variables is not decoration. `apps/api/.env.local` sets
+`AUTH_DEV_PASSWORD_FILE`, and `readSecret()` prefers `<NAME>_FILE` over `<NAME>` — so an inline
+`AUTH_DEV_PASSWORD` is silently ignored, the seeder uses the file's password, and global setup
+fails with `Invalid credentials` against an API that is working perfectly.
+
+Port 4100 rather than 4000 for the same reason the guard exists: 4000 is where the everyday API
+runs, and that one is pointed at Supabase.
 
 Against your own throwaway PostgreSQL, mark it first:
 

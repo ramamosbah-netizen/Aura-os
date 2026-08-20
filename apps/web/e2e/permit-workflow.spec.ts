@@ -8,6 +8,7 @@
 // degrades gracefully, so there is nothing to drive).
 import { expect, test } from '@playwright/test';
 import { altApiAuthHeaders, authEnabled } from './api-auth';
+import { projectFixtureId } from './fixtures';
 
 const RUN = Date.now().toString().slice(-6);
 
@@ -17,10 +18,11 @@ const openWindow = () => ({
 });
 
 test('permit register → 360 → approve → close, with the authorisation gates enforced (UI)', async ({ page, baseURL }) => {
+  const projectId = await projectFixtureId(page.request, baseURL);
   // ── Seed an APPROVED risk assessment: without one the permit can never be issued.
   const raRes = await page.request.post(`${baseURL}/api/hse/risk-assessments`, {
     data: {
-      projectId: 'e2e-hse-proj',
+      projectId,
       reference: `RA-E2E-${RUN}`,
       activity: 'Hot work on riser',
       hazards: [{ hazard: 'Fire', likelihood: 4, severity: 4, controls: 'Fire watch', residualLikelihood: 2, residualSeverity: 2 }],
@@ -35,7 +37,7 @@ test('permit register → 360 → approve → close, with the authorisation gate
   const bare = await (
     await page.request.post(`${baseURL}/api/hse/ptws`, {
       data: {
-        projectId: 'e2e-hse-proj',
+        projectId,
         permitType: 'confined_space',
         ...openWindow(),
         description: `E2E unassessed ${RUN}`,
@@ -57,7 +59,7 @@ test('permit register → 360 → approve → close, with the authorisation gate
         await page.request.post(`${apiBase}/api/v1/hse/ptws`, {
           headers: alt,
           data: {
-            projectId: 'e2e-hse-proj',
+            projectId,
             permitType: 'hot_work',
             ...openWindow(),
             description: `E2E welding ${RUN}`,
@@ -68,7 +70,7 @@ test('permit register → 360 → approve → close, with the authorisation gate
     : await (
         await page.request.post(`${baseURL}/api/hse/ptws`, {
           data: {
-            projectId: 'e2e-hse-proj',
+            projectId,
             permitType: 'hot_work',
             ...openWindow(),
             description: `E2E welding ${RUN}`,
@@ -110,9 +112,10 @@ test('permit register → 360 → approve → close, with the authorisation gate
 });
 
 test('a rejected permit carries its reason and re-opens for correction (UI)', async ({ page, baseURL }) => {
+  const projectId = await projectFixtureId(page.request, baseURL);
   const create = await page.request.post(`${baseURL}/api/hse/ptws`, {
     data: {
-      projectId: 'e2e-hse-proj',
+      projectId,
       permitType: 'height_work',
       ...openWindow(),
       description: `E2E facade ${RUN}`,
@@ -143,11 +146,12 @@ test('a rejected permit carries its reason and re-opens for correction (UI)', as
  * is refused by the service, not by the UI.
  */
 test('a permit cannot be approved by the person who requested it (UI)', async ({ page, baseURL }) => {
+  const projectId = await projectFixtureId(page.request, baseURL);
   test.skip(!authEnabled(), 'no verifier configured — the API records no requester, so SoD is inert');
 
   const raRes = await page.request.post(`${baseURL}/api/hse/risk-assessments`, {
     data: {
-      projectId: 'e2e-hse-proj',
+      projectId,
       reference: `RA-SOD-${RUN}`,
       activity: 'Self-approval attempt',
       hazards: [{ hazard: 'Fire', likelihood: 3, severity: 3, controls: 'Watch', residualLikelihood: 1, residualSeverity: 2 }],
@@ -161,7 +165,7 @@ test('a permit cannot be approved by the person who requested it (UI)', async ({
   const mine = await (
     await page.request.post(`${baseURL}/api/hse/ptws`, {
       data: {
-        projectId: 'e2e-hse-proj',
+        projectId,
         permitType: 'electrical',
         ...openWindow(),
         description: `E2E self-approval ${RUN}`,

@@ -93,6 +93,8 @@ export default function InternalChat({
   const [sendError, setSendError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [dmOpen, setDmOpen] = useState(false);
+  /** A conversation is being opened; the composer belongs to no settled conversation until it lands. */
+  const [opening, setOpening] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -133,19 +135,42 @@ export default function InternalChat({
   const select = useCallback((channelId: string) => {
     setActiveId(channelId);
     setMessages(null);
+    // Anything half-typed belonged to the conversation being left. Carrying it into the next one
+    // is how a note meant for one person ends up addressed to another.
+    setText('');
+    setSendError(null);
     if (!syncParam) return;
     const next = new URLSearchParams(params.toString());
     next.set(syncParam, channelId);
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   }, [params, pathname, router, syncParam]);
 
-  async function send(kind: 'text' | 'file' | 'voice', attachment: ChatAttachmentView | null = null) {
-    if (!activeId || sending) return;
+  /**
+   * Post to an EXPLICIT conversation, never to whatever `activeId` happens to hold.
+   *
+   * The composer used to read the open channel out of its closure at send time. Opening a
+   * conversation is a round trip, so between clicking a person and that conversation becoming
+   * active there is a window in which the box on screen belongs to the NEW conversation while
+   * `activeId` still names the OLD one — and a message typed in that window was posted to the old
+   * one. Against the in-memory adapters the window is about a millisecond and never lost a race;
+   * against PostgreSQL it is hundreds of milliseconds and lost it every time. Five runs of the DM
+   * spec put a line meant for a private conversation into the company-wide channel:
+   *
+   *     channel_id   sender    body
+   *     ch-company   u-admin   c2-dm-proof-1787132513438
+   *
+   * It looked delivered on screen because the optimistic append below writes into whatever list is
+   * being displayed. So: the target is passed in from the rendered composer, and a target that no
+   * longer matches the open conversation refuses to send rather than guessing.
+   */
+  async function send(kind: 'text' | 'file' | 'voice', attachment: ChatAttachmentView | null = null, target: string | null = activeId) {
+    if (!target || sending || opening) return;
+    if (target !== activeId) return; // the view moved while this was queued — never post to the old one
     if (kind === 'text' && !text.trim()) return;
     setSending(true);
     setSendError(null);
     try {
-      const res = await fetch(`/api/comms/channels/${encodeURIComponent(activeId)}/messages`, {
+      const res = await fetch(`/api/comms/channels/${encodeURIComponent(target)}/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ kind, text: kind === 'text' ? text : '', attachment }),
@@ -158,7 +183,23 @@ export default function InternalChat({
       }
       const posted = (await res.json()) as ChatMessageView;
       setText('');
-      setMessages((prev) => [...(prev ?? []), posted]);
+      // Append only if the list does not already hold it.
+      //
+      // The conversation refetches on a timer while a send is in flight, so the server's copy can
+      // arrive BEFORE this append runs: the poll reads a message that is already committed, then
+      // this adds it a second time and the same id renders twice. React says so out loud —
+      // "Encountered two children with the same key" — and the user simply sees their own message
+      // duplicated. Against the in-memory adapters the window between commit and append is about a
+      // millisecond and it effectively never happens; against PostgreSQL it is hundreds of
+      // milliseconds and it happens reliably.
+      //
+      // Identity is the message id, not position or content: two people can legitimately send the
+      // same text, and a resend is a different message.
+      setMessages((prev) => {
+        if (target !== activeId) return prev; // the view moved while this was in flight
+        const list = prev ?? [];
+        return list.some((message) => message.id === posted.id) ? list : [...list, posted];
+      });
       void refreshChannels();
     } catch {
       setSendError('Could not send — the API is unreachable.');
@@ -201,8 +242,17 @@ export default function InternalChat({
     }
   }
 
+  /**
+   * Open (or create) a direct message with someone.
+   *
+   * `opening` is set for the WHOLE round trip, not just around the fetch: until the new
+   * conversation is the active one, the composer is closed. A private line must not be typeable —
+   * let alone sendable — while the view still belongs to the previous conversation, however long
+   * the server takes to answer.
+   */
   async function openDm(peer: string) {
     setDmOpen(false);
+    setOpening(true);
     try {
       const res = await fetch('/api/comms/dm', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ peer }),
@@ -211,12 +261,12 @@ export default function InternalChat({
       const channel = (await res.json()) as ChatChannelView;
       // Switch the view BEFORE refreshing the rail, and never the other way round. Awaiting the
       // rail first left the previous conversation on screen with its composer live for the whole
-      // round trip, so a message typed in that window was posted to the channel the user had just
-      // navigated away from — a private note landing in All company. The rail is cosmetic here and
-      // can catch up on its own.
+      // round trip. The rail is cosmetic here and can catch up on its own.
       select(channel.id);
       void refreshChannels();
-    } catch { /* the rail is unchanged; the user can retry */ }
+    } catch { /* the rail is unchanged; the user can retry */ } finally {
+      setOpening(false);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -366,7 +416,7 @@ export default function InternalChat({
 
             <form
               className={styles.composer}
-              onSubmit={(event) => { event.preventDefault(); void send('text'); }}
+              onSubmit={(event) => { event.preventDefault(); void send('text', null, activeId); }}
             >
               <input
                 ref={fileRef}
@@ -375,12 +425,13 @@ export default function InternalChat({
                 onChange={(event) => { const file = event.target.files?.[0]; if (file) attachFile(file); event.target.value = ''; }}
                 aria-label="Attach a file"
               />
-              <button type="button" className={styles.iconButton} onClick={() => fileRef.current?.click()} aria-label="Attach a file">
+              <button type="button" className={styles.iconButton} disabled={opening} onClick={() => fileRef.current?.click()} aria-label="Attach a file">
                 <Paperclip aria-hidden />
               </button>
               <button
                 type="button"
                 className={`${styles.iconButton} ${recording ? styles.recording : ''}`}
+                disabled={opening}
                 onClick={() => void toggleRecording()}
                 aria-label={recording ? 'Stop recording' : 'Record a voice note'}
               >
@@ -392,9 +443,11 @@ export default function InternalChat({
                 onChange={(event) => setText(event.target.value)}
                 placeholder={recording ? 'Recording voice note…' : `Message ${channelLabel(active, me)}`}
                 aria-label="Message"
-                disabled={messageError === 'forbidden'}
+                // Closed while a conversation is opening: the box on screen belongs to the conversation
+                // being opened, but nothing can be addressed until that one is actually active.
+                disabled={opening || messageError === 'forbidden'}
               />
-              <button type="submit" className={styles.send} disabled={sending || !text.trim()} aria-label="Send message">
+              <button type="submit" className={styles.send} disabled={opening || sending || !text.trim()} aria-label="Send message">
                 <Send aria-hidden />
               </button>
             </form>

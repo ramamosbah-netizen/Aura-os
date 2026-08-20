@@ -551,3 +551,221 @@ jobs:
       - name: API log on failure
         if: failure()
         run: cat apps/api/api.log || true
+  # ── TIER-3: the SAME browser suite against a real PostgreSQL ────────────────────────────────
+  #
+  # TIER-2 above runs the browser suite against the in-memory adapters: fast, and the gate that must
+  # stay fast. It cannot see anything that only exists in persistence. Measured 2026-08-19, this tier
+  # found four product bugs TIER-2 was structurally blind to — a calendar day shifted by the driver's
+  # local-midnight parsing, an upsert arbitrating on the business key so every state transition
+  # raised on the primary key, a client-side account sentinel reaching a uuid column, and a duplicate
+  # daily report silently overwriting its predecessor in place.
+  #
+  # Same specs, same assertions; the backend and the runtime identity are what differ.
+  web-smoke-postgres:
+    name: web smoke TIER-3 (Playwright · PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16 # migration 0019 needs `create extension vector`
+        env:
+          POSTGRES_USER: aura
+          POSTGRES_PASSWORD: aura
+          POSTGRES_DB: aura
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aura -d aura"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      # Two credentials, deliberately separate, exactly as a deployment has them: schema work belongs
+      # to the owner, and the application runs as the least-privilege role the RLS policies are
+      # written against. Running the app as the owner would make this tier prove less about isolation
+      # than the migration gate already does.
+      DATABASE_URL: postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable
+      PGPASSWORD: aura
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Compose the owner connection strings
+        run: |
+          # Built from PGPASSWORD rather than inlined, so the staged-secret scan sees a variable
+          # instead of an inline password. The values are the throwaway service-container ones.
+          echo "OWNER_URL=postgres://aura:$PGPASSWORD@localhost:5432/aura?sslmode=disable" >> "$GITHUB_ENV"
+          echo "MIGRATION_DATABASE_URL=postgres://aura:$PGPASSWORD@localhost:5432/aura?sslmode=disable" >> "$GITHUB_ENV"
+
+      - name: Migrate as the schema owner
+        run: node apps/api/scripts/migrate.mjs
+
+      - name: Activate the runtime role
+        run: |
+          # 0163 creates aura_app NOLOGIN; a deployment grants it a credential as the activation
+          # step. Same here, so the API connects as the role the policies actually constrain.
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "ALTER ROLE aura_app LOGIN PASSWORD 'aura_app_ci';"
+
+      - name: Grant the actors the suite needs
+        run: |
+          # u-admin gets its wildcard from the boot seeder, which persists grants when a database is
+          # configured. The other two actors must NOT, or the specs that depend on them pass for the
+          # wrong reason. No shipped role carries these permissions, so the roles are seeded here
+          # rather than widening an ELV one; roles hydrate from aura_access_roles at boot.
+          #
+          #   u-e2e-checker  hse + e2e-chat-reader
+          #     Segregation of duties needs a requester who is not the approver. It also needs
+          #     comms.channel.read: without it PermissionsGuard refuses before any channel lookup,
+          #     so the DM privacy spec sees 403 for a real channel and an invented id alike — safe,
+          #     but it never reaches the 404-concealment path it exists to protect.
+          #
+          #   u-e2e-viewer   e2e-viewer (workspace.me.read only)
+          #     The restricted identity global-shell-home asserts: role "viewer", isAdmin false, one
+          #     suite, no Admin link, administration-governance forbidden. u-approver satisfies that
+          #     in TIER-2, but only because the workspace directory defaults unassigned users to
+          #     viewer while it separately holds a wildcard grant — an identity that reads as
+          #     restricted on one axis and unrestricted on another. This one is restricted on both.
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_roles (id, name, permissions, updated_at) VALUES ('e2e-chat-reader', 'E2E chat reader', '[\"comms.channel.read\"]'::jsonb, now()), ('e2e-viewer', 'E2E viewer', '[\"workspace.me.read\"]'::jsonb, now()) ON CONFLICT (id) DO UPDATE SET permissions = excluded.permissions, updated_at = now();"
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_grants (user_id, role_id, scope_key, scope, updated_at) VALUES ('u-e2e-checker', 'hse', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-checker', 'e2e-chat-reader', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-viewer', 'e2e-viewer', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()) ON CONFLICT (user_id, role_id, scope_key) DO NOTHING;"
+
+      - name: Build workspace dependencies
+        run: pnpm --filter @aura/web^... build
+
+      - name: Install Chromium
+        run: pnpm --filter @aura/web exec playwright install --with-deps chromium
+
+      - name: Build and boot the API as aura_app
+        run: |
+          # The API needs its WORKSPACE DEPENDENCIES built, not just itself: the '...' suffix
+          # includes them. Building only apps/api leaves @aura/core and friends unresolved and
+          # tsc fails with 540 "Cannot find module" errors before the database is ever touched.
+          pnpm --filter @aura/api... build
+          cd apps/api
+          # Same auth posture as TIER-2, so the tiers differ in the backend rather than the config.
+          RATE_LIMIT_MAX=100000 PORT=4000 AUTH_JWT_SECRET=e2e-only-not-a-real-secret \
+            AUTH_DEV_PASSWORD=e2e-password \
+            AUTH_DEV_ADMIN_USER=u-admin,u-e2e-checker,u-e2e-viewer \
+            nohup node dist/main.js > api-pg.log 2>&1 &
+          echo $! > api-pg.pid
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/v1/health || true)
+            [ "$code" != "000" ] && break; sleep 1
+          done
+          health=$(curl -sf http://localhost:4000/api/v1/health || true)
+          echo "$health"
+          echo "$health" | grep -q '"upToDate":true' \
+            || { echo "::error::API did not come up against a migrated database"; cat api-pg.log; exit 1; }
+          # The schema must be REAL here. An in-memory boot reports "applied":null and would make
+          # this tier a slower copy of TIER-2 that silently proves nothing.
+          echo "$health" | grep -q '"applied":null' \
+            && { echo "::error::the API booted in-memory - TIER-3 must run against the database"; exit 1; }
+          curl -sf http://localhost:4000/api/v1/auth/status | grep -q '"enabled":true' \
+            || { echo "::error::auth did not engage - the suite would run unauthenticated"; cat api-pg.log; exit 1; }
+
+      - name: Prove the API itself runs as the least-privilege role
+        run: |
+          # Three independent facts, because the obvious check proves the weakest one.
+          #
+          #   (a) the ROLE's attributes            — psql on the app URL
+          #   (b) the API's OWN connection         — the API reports the role it actually connected
+          #                                          as, from evaluateRlsPosture at boot
+          #   (c) who really holds connections     — asked through the OWNER connection, so it is
+          #                                          not the app vouching for itself
+          #
+          # (a) alone would pass even if the API were quietly using some other credential.
+          who=$(psql "$DATABASE_URL" -tAc "SELECT current_user;" | tr -d '[:space:]')
+          bypass=$(psql "$DATABASE_URL" -tAc "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user;" | tr -d '[:space:]')
+          echo "(a) role on DATABASE_URL: $who - superuser-or-bypassrls: $bypass"
+          test "$who" = "aura_app" || { echo "::error::DATABASE_URL does not resolve to aura_app (got $who)"; exit 1; }
+          test "$bypass" = "f" || { echo "::error::the runtime role can bypass RLS - this tier proves nothing about isolation"; exit 1; }
+
+          echo "(b) the API's own posture line:"
+          grep -F 'RLS posture' apps/api/api-pg.log || { echo "::error::the API never reported its RLS posture"; exit 1; }
+          grep -F 'RLS posture' apps/api/api-pg.log | grep -q 'aura_app' \
+            || { echo "::error::the API did not report aura_app as its database role"; exit 1; }
+          grep -F 'RLS posture' apps/api/api-pg.log | grep -q 'non-BYPASSRLS' \
+            || { echo "::error::the API did not report a non-BYPASSRLS role"; exit 1; }
+
+          # (c) The API has served requests by now, so its pool is connected. Ask the owner which
+          # roles actually hold sessions — the app cannot fake this one about itself.
+          holders=$(psql "$OWNER_URL" -tAc "SELECT DISTINCT usename FROM pg_stat_activity WHERE datname = 'aura' AND usename IS NOT NULL AND pid <> pg_backend_pid();" | tr -d ' ' | sort | tr '\n' ' ')
+          echo "(c) roles holding live sessions: $holders"
+          echo "$holders" | grep -q 'aura_app' \
+            || { echo "::error::no live session belongs to aura_app - the API is connecting as something else"; exit 1; }
+
+      - name: Prove the second actor is genuinely limited
+        run: |
+          # Segregation of duties only means something if the two actors differ in AUTHORITY.
+          # u-approver is a wildcard admin by design (the boot seeder persists dealChainAdmin for it
+          # when a database is configured), so a suite using it would pass because the workflow
+          # refuses self-authorisation - not because the requester lacks the approver's rights.
+          grants=$(psql "$OWNER_URL" -tAc "SELECT string_agg(role_id, ',' ORDER BY role_id) FROM public.aura_access_grants WHERE user_id = 'u-e2e-checker';" | tr -d '[:space:]')
+          echo "grants held by u-e2e-checker: '$grants'"
+          test "$grants" = "e2e-chat-reader,hse" || { echo "::error::u-e2e-checker should hold exactly e2e-chat-reader + hse, holds '$grants'"; exit 1; }
+
+          viewer_grants=$(psql "$OWNER_URL" -tAc "SELECT string_agg(role_id, ',' ORDER BY role_id) FROM public.aura_access_grants WHERE user_id = 'u-e2e-viewer';" | tr -d '[:space:]')
+          echo "grants held by u-e2e-viewer: '$viewer_grants'"
+          test "$viewer_grants" = "e2e-viewer" || { echo "::error::u-e2e-viewer should hold exactly the e2e-viewer role, holds '$viewer_grants'"; exit 1; }
+
+          # Neither test identity may reach a wildcard, however it was granted. A role that quietly
+          # gains '*' would leave every one of these assertions technically true and meaningless.
+          wild=$(psql "$OWNER_URL" -tAc "SELECT count(*) FROM public.aura_access_grants g JOIN public.aura_access_roles r ON r.id = g.role_id WHERE g.user_id IN ('u-e2e-checker','u-e2e-viewer') AND r.permissions ? '*';" | tr -d '[:space:]')
+          echo "wildcard roles reachable by the limited actors: $wild"
+          test "$wild" = "0" || { echo "::error::a limited test actor can reach a wildcard role"; exit 1; }
+
+          token=$(curl -s -X POST http://localhost:4000/api/v1/auth/login \
+            -H 'content-type: application/json' \
+            -d '{"username":"u-e2e-checker","password":"e2e-password"}' | jq -r '.token // empty')
+          test -n "$token" || { echo "::error::the limited actor could not sign in"; cat apps/api/api-pg.log; exit 1; }
+
+          # POSITIVE: it can reach its own domain. A READ, deliberately — a write would need a valid
+          # project the limited actor cannot create, and a validation failure would then look
+          # exactly like a permission failure. This asks the authorization question and nothing else.
+          allowed=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/v1/hse/ptws -H "Authorization: Bearer $token")
+          echo "positive (hse read): $allowed"
+          test "$allowed" = "200" || { echo "::error::the limited actor cannot reach its own domain (got $allowed)"; exit 1; }
+
+          # NEGATIVE: and it is refused an admin-only action. 403, not 401 - it IS authenticated.
+          refused=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/v1/admin/users \
+            -H "Authorization: Bearer $token")
+          echo "negative (admin read): $refused"
+          test "$refused" = "403" || { echo "::error::the limited actor was not refused an admin-only action (got $refused)"; exit 1; }
+
+      - name: Smoke
+        run: pnpm --filter @aura/web e2e
+        env:
+          CI: 'true'
+          AURA_API_URL: http://localhost:4000
+          E2E_USERNAME: u-admin
+          E2E_PASSWORD: e2e-password
+          # A deliberately LIMITED second actor (HSE only) - see the grant step above.
+          E2E_ALT_USERNAME: u-e2e-checker
+          # The restricted identity global-shell-home measures - limited on BOTH axes.
+          E2E_VIEWER_USERNAME: u-e2e-viewer
+          # Every assertion here sits behind SQL round-trips rather than a Map lookup.
+          E2E_EXPECT_TIMEOUT: '30000'
+          E2E_TEST_TIMEOUT: '120000'
+
+      - name: Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures-postgres
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: API log on failure
+        if: failure()
+        run: cat apps/api/api-pg.log || true

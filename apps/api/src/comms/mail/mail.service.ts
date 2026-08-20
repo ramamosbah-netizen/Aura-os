@@ -1,6 +1,8 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { newId } from '@aura/shared';
 import {
+  INTERNAL_ACCOUNT_ID,
+  isAccountIdShape,
   assertSendable,
   buildEnvelope,
   forwardSubject,
@@ -87,9 +89,36 @@ export class MailService {
     return mail;
   }
 
+/**
+   * Turn what the CLIENT sent into what the domain stores — at the shared boundary, so both
+   * backends behave identically and the in-memory store stops hiding type errors.
+   *
+   *   'aura-internal'      → null   (the logical key for the built-in path; there is no such row)
+   *   a uuid we know       → itself (a real connected account, looked up IN THIS TENANT)
+   *   a uuid we don't know → 400    (including another tenant's account — the lookup is scoped,
+   *                                  so a cross-tenant id is simply not found)
+   *   anything else        → 400    ("garbage" must be a domain refusal, not a Postgres error
+   *                                  surfacing as `invalid input syntax for type uuid`)
+   */
+  private async resolveAccountId(tenantId: string, accountId: string | null | undefined): Promise<string | null> {
+    if (accountId === undefined || accountId === null) return null;
+    const value = String(accountId).trim();
+    if (value === '' || value === INTERNAL_ACCOUNT_ID) return null;
+    if (!isAccountIdShape(value)) {
+      throw new BadRequestException(`Unknown sending account "${value}"`);
+    }
+    const accounts = await this.store.listAccounts(tenantId, 'email');
+    if (!accounts.some((account) => account.id === value)) {
+      throw new BadRequestException('Unknown sending account');
+    }
+    return value;
+  }
+
   async createDraft(caller: MailCaller, input: Omit<ComposeInput, 'tenantId' | 'fromUser'>): Promise<MailRecord> {
+    const accountId = await this.resolveAccountId(caller.tenantId, input.accountId);
     const draft = makeDraft({
       ...input,
+      accountId,
       tenantId: caller.tenantId,
       companyId: caller.companyId,
       fromUser: caller.userId,
@@ -102,8 +131,10 @@ export class MailService {
   async updateDraft(caller: MailCaller, mailId: string, patch: Partial<ComposeInput>): Promise<MailRecord> {
     const mail = await this.owned(caller, mailId);
     if (mail.state !== 'draft') throw new BadRequestException(`A ${mail.state} message cannot be edited`);
+    const accountId = patch.accountId !== undefined ? await this.resolveAccountId(caller.tenantId, patch.accountId) : mail.accountId;
     const next: MailRecord = {
       ...mail,
+      accountId,
       subject: patch.subject !== undefined ? patch.subject.trim() : mail.subject,
       body: patch.body !== undefined ? patch.body.trim() : mail.body,
       bodyHtml: patch.bodyHtml !== undefined ? patch.bodyHtml : mail.bodyHtml,

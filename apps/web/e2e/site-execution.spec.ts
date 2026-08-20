@@ -3,12 +3,13 @@
 // 360 UI: submit → review → reject → resubmit → approve, verifying the diary sections + an illegal
 // transition (409). Skips if the API is not running behind the web shell.
 import { expect, test } from '@playwright/test';
+import { projectFixtureId } from './fixtures';
 
 const date = `2026-08-${String(10 + (Date.now() % 18)).padStart(2, '0')}`;
 
 test('site execution: dashboard → 360 → submit → review → reject → approve (UI)', async ({ page, baseURL }) => {
   const create = await page.request.post(`${baseURL}/api/site/daily-reports`, {
-    data: { projectId: 'e2e-proj', date, workDescription: 'Second fix ELV — L2 west' },
+    data: { projectId: await projectFixtureId(page.request, baseURL), date, workDescription: 'Second fix ELV — L2 west' },
   });
   test.skip(create.status() === 502 || create.status() === 404, 'site API not running behind the web shell');
   expect(create.ok()).toBeTruthy();

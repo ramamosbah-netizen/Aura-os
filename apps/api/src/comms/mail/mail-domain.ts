@@ -114,6 +114,25 @@ export interface ComposeInput {
   bodyHtml?: string | null;
 }
 
+/**
+ * The built-in mail path, as the CLIENT sees it.
+ *
+ * It is a logical key, not an account id: there is no row for it, and `aura_comms_accounts.id` is a
+ * uuid. Its canonical persisted form is `account_id IS NULL`, which is what the dispatcher already
+ * means by "no account" when it falls back to the `aura-internal` provider. The name lives here so
+ * the boundary that emits it and the boundary that accepts it back cannot drift apart — they did,
+ * and PostgreSQL caught it as `invalid input syntax for type uuid: "aura-internal"` on every draft
+ * save and every send, while the in-memory store stored the string happily and hid it.
+ */
+export const INTERNAL_ACCOUNT_ID = 'aura-internal';
+
+/** Real accounts are uuids (`aura_comms_accounts.id`); anything else is not an id at all. */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isAccountIdShape(value: string): boolean {
+  return UUID_SHAPE.test(value);
+}
+
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Addresses are normalised once, here, so "A@X.com" and "a@x.com" are the same recipient. */

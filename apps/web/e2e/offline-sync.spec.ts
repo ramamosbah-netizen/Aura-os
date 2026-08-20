@@ -64,8 +64,15 @@ async function serverCount(page: Page, tag: string): Promise<number> {
  * `test.skip`. In CI — which ran the web server with no API behind it — that meant every test in
  * this file skipped itself and reported green. A test that cannot run is a gap, not a pass, so
  * every unmet precondition below now throws.
+ *
+ * Each scenario files against its OWN day. One daily report per project per date is a business
+ * rule the schema enforces, so every test using today's date meant the second one onwards was
+ * asking the server to break that rule — and this file is about offline sync, not about duplicate
+ * detection. The dates are derived from the scenario name rather than random, so a failure is
+ * reproducible: the same scenario always files on the same day.
  */
-async function fillReport(page: Page, description: string): Promise<void> {
+async function fillReport(page: Page, description: string, dayOffset = 0): Promise<void> {
+
   const work = page.getByPlaceholder('Containment 2nd fix, L3 east');
   await work.waitFor({ state: 'visible', timeout: 45_000 });
 
@@ -88,6 +95,12 @@ async function fillReport(page: Page, description: string): Promise<void> {
   }
 
   await work.fill(description);
+
+  // A distinct, deterministic day per scenario (see the note above).
+  const day = new Date(Date.UTC(2026, 6, 1) + dayOffset * 86_400_000).toISOString().slice(0, 10);
+  // The page carries two 'Date' fields — the daily report and the labour entry below it.
+  // This form is the first one; an unscoped lookup is ambiguous and Playwright refuses it.
+  await page.getByLabel('Date', { exact: true }).first().fill(day);
   await page.getByPlaceholder('0').first().fill('4');
 }
 
@@ -176,7 +189,7 @@ test.describe('offline field journey', () => {
 
   test('a report created with no network is queued locally rather than lost', async ({ page, context }) => {
     const desc = `${TAG} queued-while-offline`;
-    await fillReport(page, desc);
+    await fillReport(page, desc, 0);
 
     await context.setOffline(true);
     await page.getByRole('button', { name: /Add report/i }).click();
@@ -192,7 +205,7 @@ test.describe('offline field journey', () => {
 
   test('reconnecting drains the queue and the server ends up with exactly one', async ({ page, context }) => {
     const desc = `${TAG} drains-once`;
-    await fillReport(page, desc);
+    await fillReport(page, desc, 1);
 
     await context.setOffline(true);
     await page.getByRole('button', { name: /Add report/i }).click();
@@ -214,7 +227,7 @@ test.describe('offline field journey', () => {
 
   test('a browser killed mid-sync resumes on reopen and still lands exactly one', async ({ page, context }) => {
     const desc = `${TAG} crash-recovery`;
-    await fillReport(page, desc);
+    await fillReport(page, desc, 2);
 
     await context.setOffline(true);
     await page.getByRole('button', { name: /Add report/i }).click();

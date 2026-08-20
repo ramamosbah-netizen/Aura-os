@@ -2,12 +2,13 @@
 // Drives the corrective-action loop through the real UI: NCR 360 → Plan → Correct → Verify & close,
 // asserting the status badge advances and the verification record appears. Skips if the API is down.
 import { expect, test } from '@playwright/test';
+import { projectFixtureId } from './fixtures';
 
 const num = `NCR-E2E-${Date.now().toString().slice(-6)}`;
 
 test('NCR 360 → plan → correct → verify & close (UI)', async ({ page, baseURL }) => {
   const create = await page.request.post(`${baseURL}/api/quality/ncrs`, {
-    data: { projectId: 'e2e-proj', ncrNumber: num, description: 'Containment not bonded', severity: 'major' },
+    data: { projectId: await projectFixtureId(page.request, baseURL), ncrNumber: num, description: 'Containment not bonded', severity: 'major' },
   });
   test.skip(create.status() === 502 || create.status() === 404, 'quality API not running behind the web shell');
   expect(create.ok()).toBeTruthy();

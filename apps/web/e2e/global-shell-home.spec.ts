@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+/** The restricted actor: TIER-3 seeds a dedicated one; elsewhere u-approver already is a viewer. */
+const VIEWER = process.env.E2E_VIEWER_USERNAME ?? 'u-approver';
+
 test('global shell exposes Home, My Work, Projects and permission-aware suites', async ({ page, browser }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('aura-home-board')).toBeVisible();
@@ -84,13 +87,17 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
 
   const restricted = await browser.newContext({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, height: 900 } });
   const login = await restricted.request.post('/api/auth/login', {
-    data: { username: 'u-approver', password: process.env.E2E_PASSWORD ?? 'e2e-password' },
+    // The RESTRICTED identity this test is about — deliberately its own actor, not the suite's
+    // segregation-of-duties one. It must be a real viewer: a credential plus a grant that reaches
+    // workspace.me.read and nothing more. Falling back to u-approver keeps TIER-2 unchanged, where
+    // the seeder gives it a password and the workspace directory defaults it to viewer.
+    data: { username: VIEWER, password: process.env.E2E_PASSWORD ?? 'e2e-password' },
   });
   expect(login.ok()).toBe(true);
-  await expect(login.json()).resolves.toMatchObject({ user: { sub: 'u-approver' } });
+  await expect(login.json()).resolves.toMatchObject({ user: { sub: VIEWER } });
   const restrictedMe = await restricted.request.get('/api/workspace/me');
   expect(restrictedMe.ok()).toBe(true);
-  await expect(restrictedMe.json()).resolves.toMatchObject({ username: 'u-approver', role: 'viewer', isAdmin: false });
+  await expect(restrictedMe.json()).resolves.toMatchObject({ username: VIEWER, role: 'viewer', isAdmin: false });
   const restrictedPage = await restricted.newPage();
   await restrictedPage.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(restrictedPage.getByTestId('suite-launcher').getByRole('link')).toHaveCount(1);

@@ -5,6 +5,7 @@ import { OpportunityService } from './opportunity.service';
 import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
 import { quotationReadiness } from './domain/quotation-readiness';
 import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
+import { makePreAwardPackage, makeBasisRevision, approveBasis } from './domain/pre-award-package';
 
 /**
  * Phase 0 — Opportunity ⇄ Tender ownership. Proves the invariant at the SERVICE (not the dropdown):
@@ -102,8 +103,11 @@ describe('OpportunityService.governanceForOpportunity (Phase 2b read)', () => {
     const events = { append: vi.fn().mockResolvedValue(undefined), appendWithClient: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
     const access = { assert: vi.fn(), can: () => ({ allowed: true, reason: 'ok' }) } as unknown as AccessService;
     const pkgs = new InMemoryPreAwardPackageStore();
-    pkgs.set('t1', 'opp-1', { governed: true, packageId: 'p1', scopeApproved: true, estimateApproved: false, pricingFrozen: false });
+    const pkg = makePreAwardPackage({ tenantId: 't1', opportunityId: 'opp-1' });
+    await pkgs.savePackage(pkg);
+    await pkgs.saveBasis(approveBasis(makeBasisRevision({ tenantId: 't1', packageId: pkg.id, revisionNo: 1, sourceKind: 'scope', sourceId: 's1', lines: [] }), 'u1'));
     const svc = new OpportunityService(new InMemoryOpportunityStore(), events, new NullTxRunner(), access, {} as unknown as AiService, null, pkgs);
+    // scope approved; estimate not approved; pricing not frozen
     expect(await svc.governanceForOpportunity('t1', 'opp-1')).toMatchObject({ governed: true, scopeApproved: true, estimateApproved: false, pricingFrozen: false });
   });
 });

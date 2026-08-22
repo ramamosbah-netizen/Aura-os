@@ -40,6 +40,7 @@ export * from './domain/pre-award-package';
 export * from './pre-award-package-store';
 export * from './in-memory-pre-award-package-store';
 export * from './postgres-pre-award-package-store';
+export * from './pre-award-package.service';
 export * from './pre-award-store';
 export * from './in-memory-pre-award-store';
 export * from './postgres-pre-award-store';

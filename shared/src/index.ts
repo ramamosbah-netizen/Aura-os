@@ -37,6 +37,7 @@ export * from './domain/win-plan';
 export * from './domain/lead-qualification';
 export * from './domain/elv-context';
 export * from './domain/stage-gate';
+export * from './domain/estimation-core';
 export * from './domain/opportunity-risk';
 export * from './domain/document-requirement';
 export * from './domain/negotiation';

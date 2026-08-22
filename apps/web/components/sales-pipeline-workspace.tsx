@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import CrmPipelineClient, { type View } from './crm-pipeline-client';
 import LeadAttentionPanel, { type LeadCommand } from './lead-attention-panel';
 import SignalsRadar, { type RadarData } from './signals-radar';
@@ -41,7 +42,13 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
   leads: Lead[]; opportunities: Opportunity[]; accounts: Account[];
   leadCommand: LeadCommand | null; radar: RadarData | null;
 }) {
-  const [tab, setTab] = useState<PageTab>('overview');
+  // Deep-linkable from the Sales Home shortcuts (e.g. Analytics → /crm/leads?tab=analytics).
+  const params = useSearchParams();
+  const urlTab = params.get('tab');
+  const initialTab: PageTab = (['radar', 'overview', 'board', 'list', 'analytics'] as const).includes(urlTab as PageTab)
+    ? (urlTab as PageTab)
+    : 'overview';
+  const [tab, setTab] = useState<PageTab>(initialTab);
   const [sub, setSub] = useState<AnalyticsSub>('analytics');
 
   const openSignals = radar?.counts.open ?? 0;

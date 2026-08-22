@@ -7,16 +7,18 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('aura-home-board')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Where would you like to work/ })).toBeVisible();
-  for (const section of ['My Work', 'Project Command Center', 'Business', 'Management', 'AURA AI', 'Administration']) {
+  // The launcher is derived from AURA_SUITES; assert a representative set of suite cards (Sales
+  // included) and their Home destinations.
+  for (const section of ['My Work', 'Communication', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
     await expect(page.getByText(section, { exact: true })).toBeVisible();
   }
   const workspaceDestinations = {
     'my-work': '/my-work',
-    'project-command-center': '/suites/project-delivery',
-    business: '/suites/sales-pre-award',
-    management: '/suites/intelligence-reporting',
-    'aura-ai': '/ai',
-    administration: '/suites/administration-governance',
+    sales: '/crm/overview',
+    'pre-award': '/tendering',
+    'project-delivery': '/projects/dashboard',
+    finance: '/finance',
+    'administration-governance': '/admin',
   } as const;
   for (const [workspace, href] of Object.entries(workspaceDestinations)) {
     await expect(page.getByTestId(`workspace-card-${workspace}`)).toHaveAttribute('href', href);

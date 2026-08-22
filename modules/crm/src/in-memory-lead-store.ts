@@ -27,6 +27,12 @@ export class InMemoryLeadStore implements LeadStore {
     return l ? { ...l } : null;
   }
 
+  // No real row lock in memory (single-threaded, no transaction). Deterministic for unit tests, but
+  // production concurrency is a Postgres property — see PostgresLeadStore.getForUpdateWithClient.
+  async getForUpdateWithClient(_tx: TxHandle | null, id: Id): Promise<Lead | null> {
+    return this.get(id);
+  }
+
   async list(filter: LeadFilter = {}): Promise<Lead[]> {
     let out = [...this.leads.values()];
     if (filter.tenantId) out = out.filter((l) => l.tenantId === filter.tenantId);

@@ -7,7 +7,7 @@ import {
   type Lead, type LeadStatus, type LeadSource, type OpportunityStage, type LeadQualificationAssessment,
   type ElvSystem, type ElvSector, type ProjectStage,
 } from '@aura/shared';
-import { LeadService, LeadConversionService, type ConvertLeadResult, type ConvertPreview } from '@aura/crm';
+import { LeadService, LeadConversionService, type ConvertLeadResult, type ConvertPreview, type DraftDuplicatePreview } from '@aura/crm';
 
 /**
  * G4 — the ELV commercial context. Shared by create and update because context is captured
@@ -44,7 +44,8 @@ class UpdateLeadDto extends ElvContextDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() status?: LeadStatus;
   @IsOptional() @IsString() source?: LeadSource;
-  @IsOptional() @IsString() assignedTo?: string;
+  // `assignedTo` is intentionally NOT accepted here — ownership changes go through PATCH :id/assign
+  // (authorized), never the generic update. See LeadService.update / assign.
   @IsOptional() @IsString() firstRespondedAt?: string;
   @IsOptional() @IsInt() slaFirstResponseHours?: number;
   @IsOptional() @IsString() nextActivityDue?: string;
@@ -52,6 +53,8 @@ class UpdateLeadDto extends ElvContextDto {
 
 class AssignLeadDto {
   @IsString() assignedTo!: string;
+  /** Required by the domain only for a reassignment (moving off an existing owner); optional here. */
+  @IsOptional() @IsString() reason?: string;
 }
 
 class AssessLeadDto {
@@ -118,11 +121,21 @@ export class CrmLeadsController {
     return this.leads.update(id, dto, ctx.actorId);
   }
 
+  /**
+   * The users the caller may assign this lead to — backend-scoped (tenant + active + lead-capable,
+   * and self-only unless the caller holds the reassign-others capability). The UI renders only this;
+   * the assign write re-checks, so this list is a convenience, never the security boundary.
+   */
+  @Get(':id/assignable-users')
+  assignableUsers(@Param('id', ParseUuidOr404Pipe) id: string) {
+    return this.leads.assignableUsers(id, this.tenant.get().actorId);
+  }
+
   @Patch(':id/assign')
   assign(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AssignLeadDto): Promise<Lead> {
     if (!dto?.assignedTo?.trim()) throw new BadRequestException('assignedTo is required');
     const ctx = this.tenant.get();
-    return this.leads.assign(id, dto.assignedTo, ctx.actorId);
+    return this.leads.assign(id, dto.assignedTo, ctx.actorId, dto.reason);
   }
 
   /** G9 — the assignee acknowledges the lead ("I have it"). Retires ASSIGNMENT_NOT_ACCEPTED. */
@@ -167,6 +180,16 @@ export class CrmLeadsController {
     };
   }
 
+  /**
+   * The immutable qualification decision history — who qualified this lead, when, from which status,
+   * and the exact evidence at that moment. Read-only and tenant-scoped; there is deliberately no
+   * write/update/delete route (a decision is a historical fact, recorded by the qualify transition).
+   */
+  @Get(':id/qualification-decisions')
+  qualificationDecisions(@Param('id', ParseUuidOr404Pipe) id: string) {
+    return this.leads.qualificationDecisions(id);
+  }
+
   /** Dry run — which Account/Contact would convert link vs. create (possible-duplicate check). */
   @Get(':id/convert-preview')
   convertPreview(@Param('id', ParseUuidOr404Pipe) id: string): Promise<ConvertPreview> {
@@ -201,6 +224,21 @@ export class CrmLeadsController {
       { tenantId: this.tenant.get().tenantId, status },
       parsePageParams(limit, offset),
     );
+  }
+
+  /**
+   * Capture-time duplicate check for the "+ New Lead" quick-capture. Runs the same identity engine
+   * as convert (resolveIdentity) against Accounts, Contacts and Leads. Static path — declared before
+   * `:id` so it is not swallowed as a lead id.
+   */
+  @Get('duplicate-check')
+  duplicateCheck(
+    @Query('name') name?: string,
+    @Query('companyName') companyName?: string,
+    @Query('email') email?: string,
+    @Query('phone') phone?: string,
+  ): Promise<DraftDuplicatePreview> {
+    return this.conversion.previewDraft({ name, companyName, email, phone });
   }
 
   @Get(':id')

@@ -82,13 +82,12 @@ export class CrossModuleSubscriber implements OnModuleInit {
     if (!opp || opp.stage === 'won' || opp.stage === 'lost') return; // gone, or already closed
     const ref = tender.reference ?? tender.id;
     const reason = outcome === 'won' ? `Won on tender ${ref}` : `Lost on tender ${ref}`;
-    await this.opportunities.update(
+    // The tender OWNS this deal's outcome — the public update refuses manual won/lost, so the single
+    // sanctioned writer is the dedicated internal command. Idempotent (no-op if already closed).
+    await this.opportunities.applyTenderOutcome(
       tender.sourceOpportunityId,
-      outcome === 'won'
-        // The won gate needs the win explained AND a non-zero value — carry the tender's if the deal has none.
-        ? { stage: 'won', winReason: reason, ...(opp.value > 0 ? {} : { value: tender.value }) }
-        : { stage: 'lost', lossReason: reason },
-      null,
+      outcome,
+      { reason, value: tender.value },
     );
     this.logger.log(`⚡ tender.${outcome} → Opportunity "${opp.title}" (${opp.id}) closed ${outcome} (tender ${ref})`);
   }
@@ -144,15 +143,23 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // there — so we create ONE Opportunity (executionType 'tender') and back-link the tender to it,
     // which is what lets the Opportunity 360 compose the tender under the deal.
     //
-    // Tenders BORN from an opportunity ("Start Tender" / the deal-chain reactor) already carry
-    // sourceOpportunityId and are skipped. The guard reads the tender's LIVE link (not the event
-    // payload, which predates the back-link stamp), so an at-least-once redelivery never spawns a
-    // second opportunity. opportunity.create emits `opportunity.created`, never `stage_changed`, so
-    // this cannot loop back into the won→tender reactor above.
+    // Tenders BORN from an opportunity ("Start Tender") already carry sourceOpportunityId. For those
+    // we do NOT auto-create — but we DO guarantee the ownership stamp: `start-tender` stamps inline
+    // (fast path), and this reactor is the DURABLE COMPENSATION for a partial failure where the
+    // tender was created but the inline `markTenderOwned` did not land (the two live in different
+    // modules and cannot share one transaction). Both writes are idempotent, so they converge and the
+    // window in which the opportunity had a live tender but no `tenderId` (ownership guard off) is
+    // closed at-least-once by the outbox. The guard reads the tender's LIVE link, not the event
+    // payload, so redelivery never spawns a second opportunity.
     this.bus.subscribe('tendering.tender.created', async (e: DomainEvent) => {
       try {
         const tender = await this.tenders.get(e.aggregateId);
-        if (!tender || tender.sourceOpportunityId) return; // born from an opportunity, or already linked
+        if (!tender) return;
+        if (tender.sourceOpportunityId) {
+          // Born from an opportunity — compensate/confirm the ownership stamp (idempotent no-op if set).
+          await this.opportunities.markTenderOwned(tender.sourceOpportunityId, tender.id);
+          return;
+        }
         const opp = await this.opportunities.create({
           tenantId: e.tenantId,
           companyId: e.companyId,
@@ -165,6 +172,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
           actorId: null,
         });
         await this.tenders.linkOpportunity(tender.id, opp.id);
+        // Hand commercial ownership to the tender immediately — a directly-registered tender owns its
+        // deal's progression just like a Started one, so the opportunity is a projection from birth.
+        await this.opportunities.markTenderOwned(opp.id, tender.id);
         this.logger.log(
           `⚡ tender.created (direct) → auto-created Opportunity "${opp.title}" (${opp.id}) + back-linked tender ${tender.id}`,
         );

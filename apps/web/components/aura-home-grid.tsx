@@ -5,13 +5,20 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
   BarChart3,
-  Bot,
+  Boxes,
   BriefcaseBusiness,
   Building2,
+  ClipboardList,
+  Landmark,
+  MessagesSquare,
+  Scale,
   Settings2,
   UserRound,
+  Users,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
+import { AURA_SUITES } from '@/lib/suites';
 import styles from './aura-home-grid.module.css';
 
 interface HomeWorkspace {
@@ -26,69 +33,36 @@ interface HomeWorkspace {
   featured?: boolean;
 }
 
-const WORKSPACES: HomeWorkspace[] = [
-  {
-    id: 'my-work',
-    number: '01',
-    eyebrow: 'Personal workspace',
-    title: 'My Work',
-    description: 'Your priorities, decisions and collaboration in one focused view.',
-    href: '/my-work',
-    icon: UserRound,
-    tone: 'teal',
-  },
-  {
-    id: 'project-command-center',
-    number: '02',
-    eyebrow: 'Delivery workspace',
-    title: 'Project Command Center',
-    description: 'Run every project through one connected delivery context from engineering to handover.',
-    href: '/suites/project-delivery',
-    icon: Building2,
-    tone: 'blue',
-    featured: true,
-  },
-  {
-    id: 'business',
-    number: '03',
-    eyebrow: 'Commercial workspace',
-    title: 'Business',
-    description: 'Move opportunities from first contact through award and commercial execution.',
-    href: '/suites/sales-pre-award',
-    icon: BriefcaseBusiness,
-    tone: 'amber',
-  },
-  {
-    id: 'management',
-    number: '04',
-    eyebrow: 'Executive workspace',
-    title: 'Management',
-    description: 'See portfolio signals, performance and risk without losing operating context.',
-    href: '/suites/intelligence-reporting',
-    icon: BarChart3,
-    tone: 'green',
-  },
-  {
-    id: 'aura-ai',
-    number: '05',
-    eyebrow: 'Intelligence workspace',
-    title: 'AURA AI',
-    description: 'Use governed assistance, knowledge search and decision support across AURA.',
-    href: '/ai',
-    icon: Bot,
-    tone: 'violet',
-  },
-  {
-    id: 'administration',
-    number: '06',
-    eyebrow: 'Governance workspace',
-    title: 'Administration',
-    description: 'Control access, organization, policy, integration and platform configuration.',
-    href: '/suites/administration-governance',
-    icon: Settings2,
-    tone: 'slate',
-  },
-];
+// One icon per suite; the launcher is DERIVED from the same AURA_SUITES taxonomy the sidebar uses,
+// so a new/renamed suite appears here automatically and never drifts into a broken link.
+const SUITE_ICON: Record<string, LucideIcon> = {
+  'my-work': UserRound,
+  communication: MessagesSquare,
+  sales: BriefcaseBusiness,
+  'pre-award': ClipboardList,
+  'project-delivery': Building2,
+  commercial: Scale,
+  'supply-chain': Boxes,
+  finance: Landmark,
+  'assets-service': Wrench,
+  people: Users,
+  intelligence: BarChart3,
+  'administration-governance': Settings2,
+};
+const TONES: HomeWorkspace['tone'][] = ['teal', 'blue', 'amber', 'green', 'violet', 'slate'];
+const SECTION_EYEBROW: Record<string, string> = { work: 'Work center', business: 'Business suite', system: 'System' };
+
+const WORKSPACES: HomeWorkspace[] = AURA_SUITES.map((suite, i) => ({
+  id: suite.id,
+  number: String(i + 1).padStart(2, '0'),
+  eyebrow: SECTION_EYEBROW[suite.section] ?? 'Workspace',
+  title: suite.name,
+  description: suite.description,
+  href: suite.entryHref,
+  icon: SUITE_ICON[suite.id] ?? BriefcaseBusiness,
+  tone: TONES[i % TONES.length],
+  featured: suite.id === 'sales',
+}));
 
 export default function AuraHomeGrid({ userName }: { userName: string }) {
   const [now, setNow] = useState(() => new Date());

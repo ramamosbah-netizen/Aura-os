@@ -49,6 +49,8 @@ interface ContractRec { id: string; title: string; reference?: string | null; st
 interface ProjectRec { id: string; title: string; status: string; createdAt: string }
 interface ActivityRec { id: string; type: string; subject: string; status: string; dueDate: string | null; createdAt: string }
 interface TimelineEntry { at: string; kind: string; label: string; href: string | null }
+// Context-only view of DMS documents linked to this customer (aggregateType 'crm.account').
+interface DocRow { id: string; title: string; kind: string; currentVersion?: number; updatedAt?: string }
 
 interface Payload {
   account: Account;
@@ -75,7 +77,7 @@ interface Payload {
   timeline: TimelineEntry[];
 }
 
-type Tab = 'overview' | 'contacts' | 'opportunities' | 'tenders' | 'quotations' | 'contracts' | 'projects' | 'financials' | 'activity';
+type Tab = 'overview' | 'contacts' | 'opportunities' | 'tenders' | 'quotations' | 'contracts' | 'activity' | 'communication' | 'documents' | 'projects' | 'financials';
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 2 }).format(n);
 const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
@@ -115,6 +117,8 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   const [team, setTeam] = useState<TeamUser[]>([]);
   // Outcome Loop — capture what happened after acting so the relationship never goes quiet.
   const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
+  // Documents are read from the DMS on demand (context-only — no store lives in Sales).
+  const [docs, setDocs] = useState<DocRow[] | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/crm/accounts/${accountId}/summary`, { cache: 'no-store' });
@@ -128,6 +132,16 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Documents tab: read this customer's linked documents straight from the DMS (aggregateType
+  // 'crm.account'). Read-only — creating/editing documents stays in Document Control.
+  useEffect(() => {
+    if (tab !== 'documents' || docs !== null) return;
+    void fetch(`/api/documents?aggregateType=crm.account&aggregateId=${accountId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('dms'))))
+      .then((d: unknown) => setDocs(Array.isArray(d) ? (d as DocRow[]) : []))
+      .catch(() => setDocs([]));
+  }, [tab, docs, accountId]);
 
   // Who am I + the assignable team, loaded once. A manager/admin gets the full
   // picker (assign to anyone); everyone else just gets the "assign to me" shortcut.
@@ -292,9 +306,13 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     { id: 'tenders', label: 'Tenders', count: tenders.length },
     { id: 'quotations', label: 'Quotations', count: quotations.length },
     { id: 'contracts', label: 'Contracts', count: contracts.length },
+    { id: 'activity', label: 'Activity', count: activities.length },
+    // Context-only tabs — data owned by the Communication Center and the DMS; no count is shown
+    // because Sales does not own (and must not fake) those numbers.
+    { id: 'communication', label: 'Communication' },
+    { id: 'documents', label: 'Documents' },
     { id: 'projects', label: 'Projects', count: projects.length },
     { id: 'financials', label: 'Financials', count: receivables.invoiceCount },
-    { id: 'activity', label: 'Activity', count: activities.length },
   ];
 
   const chip = (label: string, count: number, target: Tab, value?: number) => (
@@ -730,6 +748,58 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>
               Receivables match customer invoices issued to “{a.name}”. Full ledger: <a href="/finance/ar" style={st.rowLink}>Accounts receivable →</a>
             </p>
+          </div>
+        )}
+
+        {tab === 'communication' && (() => {
+          const primary = contacts.find((c) => c.isPrimary) ?? contacts[0];
+          return (
+            <div>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 14px', maxWidth: 680 }}>
+                Communication with {a.name} lives in the <b>Communication Center</b> — AURA shows the channels here; mail, chat
+                and meetings are owned there, never duplicated inside Sales.
+              </p>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                <a href="/my-work/communication" style={st.actionBtn}>Open Communication Center →</a>
+                {primary?.email && <a href={`mailto:${primary.email}`} style={st.actionBtn}>✉ Email {primary.name}</a>}
+              </div>
+              <Table
+                cols={['Contact', 'Role', 'Email', 'Phone']}
+                rows={contacts.map((c) => [
+                  c.name,
+                  c.jobTitle ?? c.role ?? '—',
+                  c.email ? <a key="e" href={`mailto:${c.email}`} style={st.rowLink}>{c.email}</a> : '—',
+                  c.phone ? <a key="p" href={`tel:${c.phone}`} style={st.rowLink}>{c.phone}</a> : '—',
+                ])}
+                empty="No contacts yet — add the people you deal with to reach this customer."
+              />
+            </div>
+          );
+        })()}
+
+        {tab === 'documents' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, margin: '0 0 12px' }}>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0, maxWidth: 640 }}>
+                Documents linked to {a.name} in <b>Document Control</b> (the DMS). Read-only here — upload, versions and access
+                stay in Document Control; Sales does not keep its own file store.
+              </p>
+              <a href="/documents/control" style={{ ...st.actionBtn, flexShrink: 0 }}>Open Document Control →</a>
+            </div>
+            {docs === null ? (
+              <p style={{ color: 'var(--muted)', margin: 0, padding: 8 }}>Loading documents…</p>
+            ) : (
+              <Table
+                cols={['Title', 'Kind', 'Version', 'Updated']}
+                rows={docs.map((dc) => [
+                  dc.title,
+                  <span key="k" style={{ textTransform: 'capitalize', color: 'var(--muted)' }}>{dc.kind?.replace(/[._]/g, ' ')}</span>,
+                  dc.currentVersion != null ? `v${dc.currentVersion}` : '—',
+                  dc.updatedAt ? d(dc.updatedAt) : '—',
+                ])}
+                empty="No documents linked to this customer yet — attach them from Document Control."
+              />
+            )}
           </div>
         )}
       </section>

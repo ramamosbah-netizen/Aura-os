@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { findNavMatch } from './nav';
 import { RECORD_TITLE_EVENT } from './record-chrome';
 import { readProjectScope, toAIContext } from '@/lib/project-scope';
+import { UI_Z_INDEX } from '@/lib/ui-z-index';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -261,7 +262,7 @@ const s = {
     padding: '11px 20px',
     cursor: 'pointer',
     boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-    zIndex: 1000,
+    zIndex: UI_Z_INDEX.floatingAssistant,
   } as CSSProperties,
   fabKbd: {
     fontFamily: 'ui-monospace, monospace',
@@ -289,7 +290,7 @@ const s = {
     borderRadius: 16,
     boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
     overflow: 'hidden',
-    zIndex: 1000,
+    zIndex: UI_Z_INDEX.floatingAssistant,
   } as CSSProperties,
   header: {
     display: 'flex',

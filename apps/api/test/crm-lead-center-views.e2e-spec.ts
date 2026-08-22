@@ -55,7 +55,7 @@ describe('G7 Lead Center views (HTTP)', () => {
 
   it('counts split Converted and Disqualified out of Nurture, and sources report the funnel', async () => {
     // referral: 2 leads, 1 converted → 50% conversion
-    const r1 = await lead('Ref One', { source: 'referral' });
+    const r1 = await lead('Ref One', { source: 'referral', status: 'qualified' });
     await lead('Ref Two', { source: 'referral' });
     await http.post(`/api/v1/crm/leads/${r1.id}/convert`).send({}).expect(201);
 

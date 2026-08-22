@@ -106,6 +106,21 @@ export class OpportunityService {
 
     const isStageChange = updates.stage && updates.stage !== existing.stage;
 
+    // Tender ownership — enforced in the DOMAIN, not the dropdown. Once a tender owns this deal
+    // (`tenderId` set: Start Tender, or a tender registered directly and back-linked), the
+    // opportunity is a projection of the tender: its commercial stages and route are the tender's to
+    // drive. The PUBLIC update can NEVER move it — the ONLY writer of a tender deal's outcome is the
+    // dedicated internal `applyTenderOutcome`. This is the "no two owners of the deal" invariant.
+    if (existing.tenderId != null) {
+      const to = updates.stage;
+      if (isStageChange && (to === 'proposal' || to === 'negotiation' || to === 'won' || to === 'lost')) {
+        throw new Error(`only the linked tender can move this deal to ${to} — a tender-route deal's commercial progression is owned by its tender, not the opportunity`);
+      }
+      if (updates.executionType !== undefined && updates.executionType !== 'tender') {
+        throw new Error(`only after its tender is closed can this deal leave the tender route — it is owned by the linked tender`);
+      }
+    }
+
     // G5 — a commercial stage transition must carry its evidence (§40.6).
     //
     // The candidate carries the POST-patch FIELDS but the PRE-patch STAGE, and both halves matter:
@@ -151,6 +166,85 @@ export class OpportunityService {
     });
 
     this.logger.log(`Opportunity updated: ${updated.title} (${updated.id})`);
+    return updated;
+  }
+
+  /**
+   * Stamp the tender that OWNS this deal's commercial progression (Start Tender, or a tender
+   * registered directly and back-linked). From here the opportunity is a projection of the tender —
+   * the update() guard refuses any manual commercial stage/route change. Idempotent: re-stamping the
+   * same tender is a no-op; it never changes stage.
+   */
+  async markTenderOwned(id: Id, tenderId: Id): Promise<Opportunity> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
+    if (existing.tenderId === tenderId) return existing;
+    const updated: Opportunity = {
+      ...existing,
+      tenderId,
+      // A tender-owned deal is a tender route by definition — keep the pair honest.
+      executionType: 'tender',
+      requiresTender: true,
+      updatedAt: new Date().toISOString(),
+    };
+    const event = makeEvent({
+      type: CRM_EVENT.opportunityUpdated,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'crm.opportunity',
+      aggregateId: updated.id,
+      payload: { tenderId, changes: { tenderId, executionType: 'tender' } },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.update(updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Opportunity ${updated.id} now owned by tender ${tenderId} (commercial progression locked to the tender)`);
+    return updated;
+  }
+
+  /**
+   * The SINGLE sanctioned writer of a tender-route deal's outcome — called only by the tender
+   * award/loss reactor (crm.opportunity's public update refuses won/lost while `tenderId` is set).
+   * A no-op if the deal is already closed, so an at-least-once redelivery is idempotent. Supplies the
+   * reason (and, for a win, a value) the stage gate requires so the programmatic close passes the
+   * same evidence gate a human would.
+   */
+  async applyTenderOutcome(
+    id: Id,
+    outcome: 'won' | 'lost',
+    detail: { reason: string; value?: number },
+  ): Promise<Opportunity> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
+    if (existing.stage === 'won' || existing.stage === 'lost') return existing; // already closed
+    const now = new Date().toISOString();
+    const updated: Opportunity = {
+      ...existing,
+      stage: outcome,
+      ...(outcome === 'won'
+        ? { winReason: detail.reason, value: existing.value > 0 ? existing.value : (detail.value ?? existing.value) }
+        : { lossReason: detail.reason }),
+      updatedAt: now,
+    };
+    const event = makeEvent({
+      type: CRM_EVENT.opportunityStageChanged,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: null,
+      aggregateType: 'crm.opportunity',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title, stage: updated.stage, value: updated.value,
+        accountId: updated.accountId, accountName: updated.accountName,
+        requiresTender: updated.requiresTender, oldStage: existing.stage,
+        changes: { stage: outcome }, viaTender: existing.tenderId,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.update(updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Opportunity ${updated.id} closed ${outcome} by its tender ${existing.tenderId} (${detail.reason})`);
     return updated;
   }
 

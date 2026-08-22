@@ -3,7 +3,8 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { visibleNav, groupAllItems } from './nav';
+import { suiteSections, activeSuite, suiteFunctions } from '@/lib/suites';
+import { isFullFocusPath } from '@/lib/nav-chrome';
 import Breadcrumbs from './breadcrumbs';
 import CommandPalette from './command-palette';
 import TabBar from './tab-bar';
@@ -44,51 +45,23 @@ export default function AppShell({
       })
       .catch(() => undefined);
   }, []);
-  // Admins always see every suite; otherwise gate by the role's allowed suites.
   const keepItem = (i: { href: string }) => !disabledModules.has(i.href.split('/')[1] ?? '');
-  const groups = visibleNav(isAdmin || navSuites == null ? null : new Set(navSuites))
-    .map((g) =>
-      g.areas
-        ? { ...g, areas: g.areas.map((a) => ({ ...a, items: a.items.filter(keepItem) })).filter((a) => a.items.length > 0) }
-        : { ...g, items: g.items.filter(keepItem) },
-    )
-    .filter((g) => (g.areas ? g.areas.length > 0 : g.items.length > 0));
-  // ── Workspace model (Linear/VS Code): the sidebar SELECTS a workspace; the workspace owns its
-  // pages as a horizontal tab row. The sidebar itself hides with ☰ / Ctrl+B for more table space. ──
-  const activeGroup = useMemo(() => {
-    if (pathname === '/') return 'Home';
-    let best: { title: string; len: number } | null = null;
-    for (const g of groups) {
-      for (const it of groupAllItems(g)) {
-        if (it.href !== '/' && (pathname === it.href || pathname.startsWith(`${it.href}/`)) && (!best || it.href.length > best.len)) {
-          best = { title: g.title, len: it.href.length };
-        }
-      }
-    }
-    return best?.title ?? null;
-  }, [groups, pathname]);
-  // The tab row for the workspace you're in (null on Home / front-door pages).
-  const workspaceTabs = useMemo(() => {
-    if (!activeGroup || activeGroup === 'Home') return null;
-    return groups.find((g) => g.title === activeGroup) ?? null;
-  }, [groups, activeGroup]);
-  // Level 2 (large workspaces only): which DOMAIN you're in, and its pages.
-  const activeArea = useMemo(() => {
-    if (!workspaceTabs?.areas) return null;
-    let best: { title: string; len: number } | null = null;
-    for (const a of workspaceTabs.areas) {
-      for (const it of a.items) {
-        if ((pathname === it.href || pathname.startsWith(`${it.href}/`)) && (!best || it.href.length > best.len)) {
-          best = { title: a.title, len: it.href.length };
-        }
-      }
-    }
-    return best?.title ?? workspaceTabs.areas[0]?.title ?? null;
-  }, [workspaceTabs, pathname]);
-  const activeAreaItems = useMemo(
-    () => workspaceTabs?.areas?.find((a) => a.title === activeArea)?.items ?? null,
-    [workspaceTabs, activeArea],
-  );
+  // ── AURA IA: the sidebar SELECTS a suite (grouped My Work / Business Suites / System); the suite
+  // owns its pages as an in-suite tab row (Sidebar → Suite Home → Functions → Register → 360). The
+  // active suite stays highlighted even on a deep record page via suites.ts `owns()`. ──
+  const sections = useMemo(() => suiteSections(navSuites ?? null, isAdmin ?? false), [navSuites, isAdmin]);
+  const currentSuite = useMemo(() => activeSuite(pathname), [pathname]);
+  const suiteTabs = useMemo(() => {
+    if (!currentSuite) return null;
+    // Suite Home carries its own function shortcuts, so the in-suite tab row would just duplicate
+    // them — hide it there. Internal workspaces/records keep it (and may add contextual nav of
+    // their own, e.g. a Tender 360's tabs). Rule: Suite Home = no topbar; inside = nav as needed.
+    if (pathname === currentSuite.entryHref) return null;
+    // Full-focus workspaces and record 360s drop the suite tab row (see lib/nav-chrome).
+    if (isFullFocusPath(pathname)) return null;
+    const items = suiteFunctions(currentSuite).filter(keepItem);
+    return items.length > 1 ? { name: currentSuite.name, glyph: currentSuite.glyph, entryHref: currentSuite.entryHref, items } : null;
+  }, [currentSuite, pathname, disabledModules]);
   const [sidebarHidden, setSidebarHidden] = useState(false);
 
   useEffect(() => {
@@ -154,15 +127,6 @@ export default function AppShell({
 
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
 
-  const primaryNav = [
-    { label: 'Home', href: '/', glyph: '⌂', active: pathname === '/' },
-    { label: 'My Work', href: '/my-work', glyph: '◆', active: pathname === '/my-work' || pathname.startsWith('/workspace') || pathname.startsWith('/inbox') || pathname.startsWith('/notifications') || pathname.startsWith('/views') },
-    { label: 'Projects', href: '/projects/projects', glyph: '▥', active: pathname.startsWith('/project/') || pathname.startsWith('/projects/') },
-    { label: 'Suites', href: '/suites', glyph: '▦', active: pathname === '/suites' || pathname.startsWith('/suites/') },
-    { label: 'Reports', href: '/intelligence', glyph: '✶', active: pathname.startsWith('/intelligence') },
-    ...(isAdmin ? [{ label: 'Admin', href: '/admin', glyph: '🛠', active: pathname === '/admin' || pathname.startsWith('/admin/') }] : []),
-  ];
-
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const key = typeof e.key === 'string' ? e.key.toLowerCase() : '';
@@ -212,7 +176,7 @@ export default function AppShell({
       </a>
       {!sidebarHidden && !isHome && (
       <aside className="app-sidebar" style={s.sidebar} aria-label="Primary">
-        <div className="sidebar-brand" style={s.brand}>
+        <Link href="/" className="sidebar-brand" style={{ ...s.brand, textDecoration: 'none' }}>
           <div style={s.brandLogo} aria-hidden>
             ◆
           </div>
@@ -220,20 +184,28 @@ export default function AppShell({
             <div style={s.brandName}>AURA OS</div>
             <div style={s.brandSub}>ENTERPRISE ERP</div>
           </div>
-        </div>
+        </Link>
         <nav className="global-primary-nav" style={s.nav} aria-label="Main navigation">
-          {primaryNav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="sidebar-link"
-              title={item.label}
-              aria-current={item.active ? 'page' : undefined}
-              style={item.active ? { ...s.link, ...s.linkActive } : s.link}
-            >
-              <span aria-hidden style={item.active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>{item.glyph}</span>
-              <span className="sidebar-label">{item.label}</span>
-            </Link>
+          {sections.map((group) => (
+            <div key={group.section} style={s.group}>
+              <div style={s.groupTitle}>{group.title}</div>
+              {group.suites.map((suite) => {
+                const active = currentSuite?.id === suite.id;
+                return (
+                  <Link
+                    key={suite.id}
+                    href={suite.entryHref}
+                    className="sidebar-link"
+                    title={suite.description}
+                    aria-current={active ? 'page' : undefined}
+                    style={active ? { ...s.link, ...s.linkActive } : s.link}
+                  >
+                    <span aria-hidden style={active ? { ...s.linkGlyph, ...s.linkGlyphActive } : s.linkGlyph}>{suite.glyph}</span>
+                    <span className="sidebar-label">{suite.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
           ))}
         </nav>
         {user ? (
@@ -395,40 +367,15 @@ export default function AppShell({
 
           <ThemeToggle />
         </header>
-        {workspaceTabs && (
-          <nav style={s.wsTabbar} aria-label={`${workspaceTabs.title} navigation`}>
-            <span style={s.wsTabbarName}>{workspaceTabs.glyph} {workspaceTabs.title}</span>
+        {suiteTabs && (
+          <nav style={s.wsTabbar} aria-label={`${suiteTabs.name} navigation`}>
+            <Link href={suiteTabs.entryHref} style={{ ...s.wsTabbarName, textDecoration: 'none' }}>{suiteTabs.glyph} {suiteTabs.name}</Link>
             <div style={s.wsTabScroll}>
-              {workspaceTabs.areas
-                ? workspaceTabs.areas.map((area) => {
-                    const active = area.title === activeArea;
-                    return (
-                      <Link key={area.title} href={area.items[0]?.href ?? '/'} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
-                        <span style={{ opacity: 0.8, fontSize: 12 }}>{area.glyph}</span>
-                        {area.title}
-                      </Link>
-                    );
-                  })
-                : workspaceTabs.items.map((it) => {
-                    const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
-                    return (
-                      <Link key={it.href} href={it.href} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
-                        <span style={{ opacity: 0.8, fontSize: 12 }}>{it.glyph}</span>
-                        {it.label}
-                      </Link>
-                    );
-                  })}
-            </div>
-          </nav>
-        )}
-        {activeAreaItems && (
-          <nav style={s.wsSubTabbar} aria-label={`${activeArea} navigation`}>
-            <div style={s.wsTabScroll}>
-              {activeAreaItems.map((it) => {
+              {suiteTabs.items.map((it) => {
                 const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
                 return (
-                  <Link key={it.href} href={it.href} style={active ? { ...s.wsSubTab, ...s.wsSubTabActive } : s.wsSubTab}>
-                    <span style={{ opacity: 0.75, fontSize: 11.5 }}>{it.glyph}</span>
+                  <Link key={it.href} href={it.href} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
+                    <span style={{ opacity: 0.8, fontSize: 12 }}>{it.glyph}</span>
                     {it.label}
                   </Link>
                 );

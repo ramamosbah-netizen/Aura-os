@@ -53,6 +53,16 @@ export interface ConvertPreview {
   contact: IdentityResolution;
 }
 
+/** One resolved possible-duplicate, enriched with the record's display name for the capture UI. */
+export interface DraftDuplicateMatch { id: string; name: string; confidence: 'EXACT' | 'PROBABLE' | 'POSSIBLE'; reasons: string[] }
+export interface DraftDuplicateGroup { best: MatchConfidence; matches: DraftDuplicateMatch[] }
+export interface DraftDuplicatePreview {
+  account: DraftDuplicateGroup;
+  contact: DraftDuplicateGroup;
+  lead: DraftDuplicateGroup;
+}
+export interface LeadDraftInput { name?: string | null; companyName?: string | null; email?: string | null; phone?: string | null }
+
 /**
  * Lead → Opportunity **Qualify & Convert** — a controlled business operation, not a status edit.
  * Guarantees the S2 invariants:
@@ -101,6 +111,47 @@ export class LeadConversionService {
     };
   }
 
+  /**
+   * Capture-time duplicate preview for a NOT-yet-saved lead (drives the "+ New Lead" warning). Runs
+   * the SAME `resolveIdentity` engine as convert, so the heads-up at capture matches the resolution
+   * at conversion — one source of truth for identity, never a second matcher in React.
+   */
+  async previewDraft(input: LeadDraftInput): Promise<DraftDuplicatePreview> {
+    const tenantId = this.tenant?.boundTenantId();
+    if (!tenantId) throw new Error('tenant context is required for a duplicate check');
+    const [accounts, contacts, leads] = await Promise.all([
+      this.accounts.list({ tenantId, limit: 5000 }),
+      this.contacts.list({ tenantId, limit: 5000 }),
+      this.leads.list({ tenantId, limit: 5000 }),
+    ]);
+    const nameOf = new Map<string, string>([
+      ...accounts.map((a) => [a.id, a.name] as const),
+      ...contacts.map((c) => [c.id, c.name] as const),
+      ...leads.map((l) => [l.id, l.companyName ?? l.name] as const),
+    ]);
+    const enrich = (res: IdentityResolution): DraftDuplicateGroup => ({
+      best: res.best,
+      matches: res.matches.map((m) => ({ id: m.id, name: nameOf.get(m.id) ?? '', confidence: m.confidence, reasons: m.reasons })),
+    });
+    const companyName = input.companyName ?? input.name ?? '';
+    const person = input.name ?? '';
+    return {
+      account: enrich(resolveIdentity(
+        { name: companyName, email: input.email ?? null, phone: input.phone ?? null },
+        accounts.map((a) => ({ id: a.id, name: a.name, email: a.email, phone: a.phone })),
+      )),
+      contact: enrich(resolveIdentity(
+        { name: person, email: input.email ?? null, phone: input.phone ?? null },
+        contacts.map((c) => ({ id: c.id, name: c.name, email: c.email, phone: c.phone })),
+        { personMode: true },
+      )),
+      lead: enrich(resolveIdentity(
+        { name: companyName || person, email: input.email ?? null, phone: input.phone ?? null },
+        leads.map((l) => ({ id: l.id, name: l.companyName ?? l.name, email: l.email, phone: l.phone })),
+      )),
+    };
+  }
+
   async convert(leadId: Id, input: ConvertLeadInput = {}): Promise<ConvertLeadResult> {
     const lead = assertSameTenant(await this.leads.get(leadId), this.tenant?.boundTenantId(), 'Lead', leadId);
 
@@ -122,6 +173,13 @@ export class LeadConversionService {
         account: { action: 'linked', id: existing.accountId ?? '' },
         contact: null,
       };
+    }
+
+    // Eligibility: only a QUALIFIED lead may be converted. Enforced in the backend (not just the
+    // UI) so a direct POST /convert cannot skip the New → Contacted → Qualifying → Qualified
+    // lifecycle. State-transition guard → 409 via the error taxonomy.
+    if (lead.status !== 'qualified') {
+      throw new Error(`only a qualified lead can be converted (current status: ${lead.status})`);
     }
 
     // --- Resolve the Account (party) ---

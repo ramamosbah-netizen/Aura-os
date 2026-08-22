@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
-import { type Quotation, AccountService, ContactService, OpportunityService, QuotationService } from '@aura/crm';
+import { type Quotation, AccountService, ContactService, OpportunityService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
@@ -103,8 +103,7 @@ export class CrmOpportunitiesController {
     const ctx = this.tenant.get();
     const existing = (await this.tenders.list({ tenantId: ctx.tenantId, accountId: opp.accountId ?? undefined }))
       .find((t) => t.sourceOpportunityId === id);
-    if (existing) return existing;
-    return this.tenders.create(
+    const tender = existing ?? await this.tenders.create(
       {
         tenantId: ctx.tenantId,
         companyId: opp.companyId,
@@ -121,14 +120,25 @@ export class CrmOpportunitiesController {
       // same opportunity within one process (the persisted-link check above covers restarts).
       `tender-from-opportunity:${id}`,
     );
+    // Hand commercial ownership to the tender: from here the opportunity is a projection and its
+    // update() guard refuses any manual proposal/negotiation/won/lost or direct quotation. Idempotent.
+    await this.opportunities.markTenderOwned(id, tender.id);
+    return tender;
   }
 
-  /** One-click convert a won opportunity into a draft quotation (carries value + account). */
+  /**
+   * Raise a draft quotation from a DIRECT-sale deal (carries value + account). A quotation/proposal
+   * PRECEDES the win, so this is NOT gated on stage 'won' (that gate was backwards). It is gated by
+   * the quotation-readiness domain rule: a tender-route deal is quoted through its tender, and a lost
+   * deal cannot be quoted — extended in Phase 2 to require an approved Scope + Estimate + frozen
+   * Pricing. A refused gate returns the reason (409-style), never a silent pass.
+   */
   @Post(':id/convert-to-quotation')
   async convertToQuotation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Quotation> {
     const opp = await this.opportunities.get(id);
     if (!opp) throw new NotFoundException(`opportunity ${id} not found`);
-    if (opp.stage !== 'won') throw new BadRequestException(`opportunity must be 'won' to convert (is '${opp.stage}')`);
+    const readiness = quotationReadiness({ stage: opp.stage, executionType: opp.executionType, tenderId: opp.tenderId });
+    if (!readiness.ready) throw new BadRequestException(quotationReadinessMessage(readiness.gaps));
     const ctx = this.tenant.get();
     return this.quotations.create({
       tenantId: ctx.tenantId,

@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   Bell,
   CalendarDays,
   CheckCheck,
@@ -8,13 +7,14 @@ import {
   FileText,
   FolderOpen,
   MessageSquareText,
-  Sparkles,
   Star,
   UsersRound,
 } from 'lucide-react';
-import AuraTabLink from './aura-tab-link';
-import AuraTabAnchor from './aura-tab-anchor';
-import styles from './my-work-dashboard.module.css';
+import SuiteDashboardShell, {
+  type SuiteAttentionItem,
+  type SuiteMetric,
+  type SuiteShortcut,
+} from './suite-dashboard-shell';
 
 export interface MyWorkTask {
   id: string;
@@ -52,15 +52,7 @@ export interface MyWorkNotification {
   read: boolean;
 }
 
-interface Shortcut {
-  label: string;
-  description: string;
-  href: string;
-  icon: typeof CheckSquare2;
-  tone: string;
-}
-
-const SHORTCUTS: Shortcut[] = [
+const SHORTCUTS: SuiteShortcut[] = [
   { label: 'My Day', description: 'Today’s plan, meetings and priorities', href: '/my-work/my-day', icon: CalendarDays, tone: 'green' },
   { label: 'Tasks', description: 'Done, in progress and to do', href: '/my-work/tasks', icon: CheckSquare2, tone: 'teal' },
   { label: 'Approvals', description: 'Decisions and document reviews', href: '/my-work/approvals', icon: CheckCheck, tone: 'blue' },
@@ -79,10 +71,10 @@ function greeting(): string {
   return 'Good evening';
 }
 
-function taskTone(task: MyWorkTask): string {
-  if (task.when === 'OVERDUE') return styles.bad;
-  if (task.when === 'TODAY') return styles.warn;
-  return styles.good;
+function taskSignal(task: MyWorkTask): 'bad' | 'warn' | 'good' {
+  if (task.when === 'OVERDUE') return 'bad';
+  if (task.when === 'TODAY') return 'warn';
+  return 'good';
 }
 
 export default function MyWorkDashboard({
@@ -109,116 +101,73 @@ export default function MyWorkDashboard({
   const activeTaskCount = day ? day.counts.overdue + day.counts.today + day.counts.thisWeek : 0;
   const overdue = day?.counts.overdue ?? 0;
   const firstPriority = uniqueTasks.find((task) => task.when === 'OVERDUE') ?? uniqueTasks[0] ?? null;
-  const metrics = [
-    { label: 'Active tasks', value: day ? activeTaskCount : '—', href: '/my-work/tasks', icon: CheckSquare2, tone: styles.metricTeal },
-    { label: 'Approvals', value: decisions ? pendingDecisions : '—', href: '/my-work/approvals', icon: CheckCheck, tone: styles.metricBlue },
-    { label: 'Overdue', value: day ? overdue : '—', href: '/my-work/tasks', icon: Clock3, tone: overdue > 0 ? styles.metricRed : styles.metricGreen },
-    { label: mentions > 0 ? 'Mentions' : 'Unread', value: notifications ? (mentions || unread) : '—', href: '/my-work/communication', icon: Bell, tone: styles.metricAmber },
+
+  const metrics: SuiteMetric[] = [
+    { label: 'Active tasks', value: day ? String(activeTaskCount) : '—', sub: 'open across AURA', href: '/my-work/tasks', icon: CheckSquare2, tone: 'teal' },
+    { label: 'Approvals', value: decisions ? String(pendingDecisions) : '—', sub: 'accessible decisions', href: '/my-work/approvals', icon: CheckCheck, tone: 'blue' },
+    { label: 'Overdue', value: day ? String(overdue) : '—', sub: 'past due date', href: '/my-work/tasks', icon: Clock3, tone: overdue > 0 ? 'red' : 'green' },
+    { label: mentions > 0 ? 'Mentions' : 'Unread', value: notifications ? String(mentions || unread) : '—', sub: 'in communication', href: '/my-work/communication', icon: Bell, tone: 'amber' },
   ];
 
+  const attentionItems: SuiteAttentionItem[] | null = day === null ? null : today.map((task) => ({
+    id: task.id,
+    href: task.href ?? '/crm/activities',
+    tabTitle: task.subject,
+    tabType: task.type.replace(/_/g, ' '),
+    signal: taskSignal(task),
+    title: task.subject,
+    subtitle: task.type.replace(/_/g, ' '),
+    detailPrimary: task.relatedName ?? 'My Tasks',
+    trailing: task.dueDate ?? (task.when === 'UNDATED' ? 'No date' : task.when.replace('_', ' ')),
+  }));
+
+  const briefBody = day === null
+    ? 'Your personal work feed could not be loaded. I can still help you search AURA and prepare your next action.'
+    : overdue > 0
+      ? `You have ${overdue} overdue item${overdue === 1 ? '' : 's'}. ${firstPriority ? `“${firstPriority.subject}” is the first item to review.` : 'Open Tasks to prioritize the queue.'}`
+      : pendingDecisions > 0
+        ? `Your task queue has no overdue items. ${pendingDecisions} accessible decision${pendingDecisions === 1 ? ' is' : 's are'} waiting across the platform.`
+        : 'Your current attention queue is clear. Use Ask AURA to prepare the day or find information across your permitted records.';
+
   return (
-    <div className={styles.page} data-testid="my-work-dashboard">
-      <AuraTabAnchor href="/my-work" title="My Work" />
-      <header className={styles.hero}>
-        <div>
-          <p className={styles.eyebrow}>AURA OS / MY WORK</p>
-          <h1>{greeting()}, <span>{userName}</span></h1>
-          <p className={styles.lede}>Everything requiring your attention, composed from its source workspace.</p>
-        </div>
-        <AuraTabLink href="/ai" tabTitle="AURA AI" tabType="My Work" className={styles.askAura}><Sparkles aria-hidden />Ask AURA</AuraTabLink>
-      </header>
-
-      <section className={styles.metrics} aria-label="My work summary">
-        {metrics.map((metric) => {
-          const Icon = metric.icon;
-          return (
-            <AuraTabLink key={metric.label} href={metric.href} tabTitle={metric.label} tabType="My Work" className={`${styles.metric} ${metric.tone}`}>
-              <span className={styles.metricIcon} aria-hidden><Icon /></span>
-              <span><strong>{metric.value}</strong><small>{metric.label}</small></span>
-              <ArrowRight className={styles.metricArrow} aria-hidden />
-            </AuraTabLink>
-          );
-        })}
-      </section>
-
-      <div className={styles.bodyGrid}>
-        <section className={styles.todayPanel} aria-labelledby="today-title">
-          <div className={styles.sectionHead}>
-            <div><p className={styles.sectionKicker}>{day?.date ? `Latest plan · ${day.date}` : 'Latest plan'}</p><h2 id="today-title">Continue Today</h2></div>
-            <AuraTabLink href="/my-work/my-day" tabTitle="My Day" tabType="My Work">Open My Day <ArrowRight aria-hidden /></AuraTabLink>
-          </div>
-          {day === null ? (
-            <div className={styles.empty}>Your personal task feed is unavailable. Open Tasks to check the source workspace.</div>
-          ) : today.length === 0 ? (
-            <div className={styles.empty}>Your personal task queue is clear for today.</div>
-          ) : (
-            <ol className={styles.attentionList}>
-              {today.map((task) => (
-                <li key={task.id}>
-                  <AuraTabLink href={task.href ?? '/crm/activities'} tabTitle={task.subject} tabType={task.type.replace(/_/g, ' ')} className={styles.attentionRow} data-testid="today-attention-item">
-                    <i className={`${styles.signal} ${taskTone(task)}`} aria-hidden />
-                    <span className={styles.attentionMain}>
-                      <strong>{task.subject}</strong>
-                      <small>{task.type.replace(/_/g, ' ')}</small>
-                    </span>
-                    <span className={styles.attentionContext}>{task.relatedName ?? 'My Tasks'}</span>
-                    <span className={styles.attentionTime}>{task.dueDate ?? (task.when === 'UNDATED' ? 'No date' : task.when.replace('_', ' '))}</span>
-                    <ArrowRight aria-hidden />
-                  </AuraTabLink>
-                </li>
-              ))}
-            </ol>
-          )}
-          {decisions && decisions.length > 0 ? (
-            <div className={styles.decisionStrip}>
-              <span><CheckCheck aria-hidden />{decisions.length} accessible decision{decisions.length === 1 ? '' : 's'} waiting across AURA</span>
-              <AuraTabLink href={decisions[0]!.href} tabTitle={decisions[0]!.title} tabType={decisions[0]!.kind}>Review highest item <ArrowRight aria-hidden /></AuraTabLink>
-            </div>
-          ) : null}
-        </section>
-
-        <aside className={styles.aiBrief} aria-labelledby="aura-brief-title">
-          <span className={styles.aiMark} aria-hidden><Sparkles /></span>
-          <p className={styles.sectionKicker}>Live work signals</p>
-          <h2 id="aura-brief-title">AURA brief</h2>
-          <p>
-            {day === null
-              ? 'Your personal work feed could not be loaded. I can still help you search AURA and prepare your next action.'
-              : overdue > 0
-                ? `You have ${overdue} overdue item${overdue === 1 ? '' : 's'}. ${firstPriority ? `“${firstPriority.subject}” is the first item to review.` : 'Open Tasks to prioritize the queue.'}`
-                : pendingDecisions > 0
-                  ? `Your task queue has no overdue items. ${pendingDecisions} accessible decision${pendingDecisions === 1 ? ' is' : 's are'} waiting across the platform.`
-                  : 'Your current attention queue is clear. Use Ask AURA to prepare the day or find information across your permitted records.'}
-          </p>
-          <AuraTabLink href="/ai" tabTitle="AURA AI" tabType="My Work">Continue with AURA <ArrowRight aria-hidden /></AuraTabLink>
-        </aside>
-      </div>
-
-      <section className={styles.workspaces} aria-labelledby="my-work-tools">
-        <div className={styles.sectionHead}>
-          <div><p className={styles.sectionKicker}>Personal workspace</p><h2 id="my-work-tools">My Work</h2></div>
-          <span className={styles.toolCount}>7 shortcuts</span>
-        </div>
-        <div className={styles.shortcutGrid}>
-          {SHORTCUTS.map((shortcut) => {
-            const Icon = shortcut.icon;
-            const count = shortcut.label === 'Favorites' ? favoriteCount : null;
-            return (
-              <AuraTabLink key={shortcut.label} href={shortcut.href} tabTitle={shortcut.label} tabType="My Work" className={`${styles.shortcut} ${styles[shortcut.tone]}`} data-testid="my-work-shortcut">
-                <span className={styles.shortcutIcon} aria-hidden><Icon /></span>
-                <span className={styles.shortcutCopy}><strong>{shortcut.label}</strong><small>{shortcut.description}</small></span>
-                {count !== null ? <span className={styles.shortcutCount}>{count}</span> : null}
-                <ArrowRight className={styles.shortcutArrow} aria-hidden />
-              </AuraTabLink>
-            );
-          })}
-        </div>
-      </section>
-
-      <footer className={styles.ownership}>
-        <FileText aria-hidden />
-        <span><strong>My Work owns attention.</strong> Each record and workflow remains owned by its source workspace.</span>
-      </footer>
-    </div>
+    <SuiteDashboardShell
+      testId="my-work-dashboard"
+      anchor={{ href: '/my-work', title: 'My Work', type: 'My Work' }}
+      hero={{
+        eyebrow: 'AURA OS / MY WORK',
+        title: <>{greeting()}, <span>{userName}</span></>,
+        lede: 'Everything requiring your attention, composed from its source workspace.',
+      }}
+      askAura={{ tabType: 'My Work' }}
+      metrics={metrics}
+      attention={{
+        kicker: day?.date ? `Latest plan · ${day.date}` : 'Latest plan',
+        title: 'Continue Today',
+        headerLink: { href: '/my-work/my-day', label: 'Open My Day', tabTitle: 'My Day', tabType: 'My Work' },
+        items: attentionItems,
+        unavailableLabel: 'Your personal task feed is unavailable. Open Tasks to check the source workspace.',
+        emptyLabel: 'Your personal task queue is clear for today.',
+        itemTestId: 'today-attention-item',
+        strip: decisions && decisions.length > 0 ? {
+          icon: CheckCheck,
+          text: `${decisions.length} accessible decision${decisions.length === 1 ? '' : 's'} waiting across AURA`,
+          link: { href: decisions[0]!.href, label: 'Review highest item', tabTitle: decisions[0]!.title, tabType: decisions[0]!.kind },
+        } : null,
+      }}
+      brief={{
+        kicker: 'Live work signals',
+        title: 'AURA brief',
+        body: briefBody,
+        cta: { href: '/ai', label: 'Continue with AURA', tabTitle: 'AURA AI', tabType: 'My Work' },
+      }}
+      shortcuts={{
+        kicker: 'Personal workspace',
+        title: 'My Work',
+        countLabel: '7 shortcuts',
+        itemTestId: 'my-work-shortcut',
+        items: SHORTCUTS.map((shortcut) => shortcut.label === 'Favorites' ? { ...shortcut, count: favoriteCount } : shortcut),
+      }}
+      ownership={<><FileText aria-hidden /><span><strong>My Work owns attention.</strong> Each record and workflow remains owned by its source workspace.</span></>}
+    />
   );
 }

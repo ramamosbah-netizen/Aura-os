@@ -6,6 +6,8 @@ import { LEAD_QUALIFICATION_DIMENSIONS, LEAD_QUALIFICATION_LABELS, elvSystemLabe
 import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
 import Timeline from './timeline';
+import { requestQualifyAssist } from '@/lib/qualify-assist';
+import { buildOutreach, toE164Digits, mailtoHref, whatsappHref, requestOutreachDraft } from '@/lib/lead-outreach';
 import {
   RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
   RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordOutcome,
@@ -35,7 +37,15 @@ interface Assessment {
 }
 interface Qualification { dimensions: Record<string, number>; notes: string | null; assessment: Assessment }
 interface AccountLite { id: string; name: string }
-interface TeamUser { username: string; roleLabel?: string }
+// Backend-scoped assignable users — what THIS caller may assign the lead to (self-only unless they
+// hold the reassign-others capability). The UI renders only this; the assign write re-checks.
+interface AssignableUser { id: string; displayName: string; email: string | null; self: boolean }
+// Context-only DMS documents linked to this lead (aggregateType 'crm.lead').
+interface DocRow { id: string; title: string; kind: string; currentVersion?: number; updatedAt?: string }
+// Conversion readiness — read from the SAME resolveIdentity engine the backend converts with.
+interface IdMatch { id: string; confidence: string; reasons: string[] }
+interface IdRes { best: string; matches: IdMatch[] }
+interface ConvertPreview { alreadyConverted: boolean; account: IdRes; contact: IdRes }
 
 const STATUS_LABEL: Record<string, string> = {
   new: 'New', verified: 'Verified', assigned: 'Assigned', contacted: 'Contacted',
@@ -60,19 +70,25 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [me, setMe] = useState<TeamUser | null>(null);
   const [assessing, setAssessing] = useState(false);
   const [dims, setDims] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState(lead.qualificationNotes ?? '');
   // Outcome Loop — capture what happened after acting so no lead goes dead.
   const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      const r = await fetch('/api/workspace/me', { cache: 'no-store' }).catch(() => null);
-      if (r?.ok) { const m = await r.json().catch(() => null); if (m?.username) setMe(m); }
-    })();
-  }, []);
+  // Context tabs (lazy): DMS documents + the conversion-readiness preview.
+  const [docs, setDocs] = useState<DocRow[] | null>(null);
+  const [preview, setPreview] = useState<ConvertPreview | null>(null);
+  // AURA Qualification Assist — read-only AI advice (cannot mutate the lead).
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+  // Communication — an editable outreach draft, prefilled from the lead's facts.
+  const draft = useMemo(() => buildOutreach(lead), [lead]);
+  const [commSubject, setCommSubject] = useState(draft.subject);
+  const [commMsg, setCommMsg] = useState(draft.body);
+  const [suggBusy, setSuggBusy] = useState(false);
+  // WhatsApp only when the number normalises to E.164 safely — otherwise we show a hint, never guess.
+  const waDigits = toE164Digits(lead.phone);
 
   useEffect(() => {
     const seed: Record<string, string> = {};
@@ -86,6 +102,24 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   const converted = !!lead.convertedOpportunityId;
   const a = qualification?.assessment;
   const assessed = !!a && a.coverage.rated > 0;
+
+  // Documents tab: read this lead's linked documents from the DMS (read-only, no store in CRM).
+  useEffect(() => {
+    if (tab !== 'documents' || docs !== null) return;
+    void fetch(`/api/documents?aggregateType=crm.lead&aggregateId=${lead.id}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('dms'))))
+      .then((x: unknown) => setDocs(Array.isArray(x) ? (x as DocRow[]) : []))
+      .catch(() => setDocs([]));
+  }, [tab, docs, lead.id]);
+
+  // Convert tab: read the conversion-readiness preview (same resolveIdentity engine as convert).
+  useEffect(() => {
+    if (tab !== 'overview' || preview !== null || converted) return;
+    void fetch(`/api/crm/leads/${lead.id}/convert-preview`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('preview'))))
+      .then((p: ConvertPreview) => setPreview(p))
+      .catch(() => setPreview(null));
+  }, [tab, preview, converted, lead.id]);
 
   const patch = async (body: Record<string, unknown>, note?: string): Promise<void> => {
     setBusy(true); setErr(null); setMsg(null);
@@ -118,6 +152,34 @@ export default function Lead360Client({ lead, qualification, accounts }: {
     } catch { setErr('CRM API unreachable'); } finally { setBusy(false); }
   };
 
+  // AURA Qualification Assist — grounded on the lead's facts + assessment. READ-ONLY: it can only
+  // return advice (questions / missing evidence / checks / next actions); it never mutates the lead.
+  const askAura = async (): Promise<void> => {
+    setAiBusy(true); setAiErr(null); setAiText(null);
+    try {
+      const text = await requestQualifyAssist(
+        {
+          name: lead.name, companyName: lead.companyName, source: lead.source, status: lead.status,
+          requirement: lead.requirement, systems: lead.systems, sector: lead.sector, projectName: lead.projectName,
+          projectLocation: lead.projectLocation, consultant: lead.consultant, mainContractor: lead.mainContractor,
+          estimatedValue: lead.estimatedValue, expectedTimeline: lead.expectedTimeline,
+        },
+        a ? { score: a.score, recommendation: a.recommendation, coverage: a.coverage, gaps: a.gaps } : null,
+      );
+      setAiText(text);
+    } catch (e) { setAiErr((e as Error).message); } finally { setAiBusy(false); }
+  };
+
+  // Regenerate the outreach message with AURA (real /api/ai seam only — see lead-outreach). On any
+  // failure the current editable draft is KEPT (never wiped, never called "AI-generated").
+  const suggestMessage = async (): Promise<void> => {
+    setSuggBusy(true);
+    try {
+      const text = await requestOutreachDraft(lead);
+      if (text) setCommMsg(text);
+    } catch { /* keep the existing draft */ } finally { setSuggBusy(false); }
+  };
+
   const editFields = useMemo(() => [
     { name: 'name', label: 'Primary contact', kind: 'text' as const, required: true, span: 2 as const },
     { name: 'companyName', label: 'Company / account', kind: 'text' as const, span: 2 as const },
@@ -148,8 +210,12 @@ export default function Lead360Client({ lead, qualification, accounts }: {
       value: (
         <>
           {lead.assignedTo ?? <span style={{ color: 'var(--muted)' }}>Unassigned</span>}
-          {me && lead.assignedTo !== me.username && !converted && (
-            <button disabled={busy} onClick={() => void patch({ assignedTo: me.username }, 'Assigned to you.')} style={s.inlineBtn}>Assign to me</button>
+          {!converted && (
+            <LeadAssignControl
+              leadId={lead.id}
+              currentOwner={lead.assignedTo}
+              onDone={() => { setMsg('Assignment updated.'); router.refresh(); }}
+            />
           )}
         </>
       ),
@@ -161,7 +227,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
       {!converted && lead.status !== 'qualified' && (
         <ActionButton kind="primary" disabled={busy} onClick={() => void patch({ status: 'qualified' }, 'Lead marked qualified.')}>Mark qualified ✓</ActionButton>
       )}
-      {!converted && <LeadConvertDrawer lead={lead} accounts={accounts} onDone={() => { setMsg('Converted to an opportunity.'); router.refresh(); }} />}
+      {/* Convert is NOT a header shortcut — it lives in Overview with its readiness context. */}
       <CreateDrawer entity="Lead" mode="edit" buttonLabel="Edit" subtitle="Update this lead's details." endpoint={`/api/crm/leads/${lead.id}`} fields={editFields} initialValues={editInitial} onSaved={() => router.refresh()} />
       {!converted && lead.status !== 'disqualified' && (
         <ActionButton disabled={busy} onClick={() => void patch({ status: 'disqualified' }, 'Lead disqualified.')}>Disqualify</ActionButton>
@@ -196,7 +262,8 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'qualification', label: 'Qualification' },
-    { id: 'convert', label: converted ? 'Converted' : 'Convert' },
+    { id: 'communication', label: 'Communication' },
+    { id: 'documents', label: 'Documents' },
   ];
 
   // ── Insights rail (derived, honest — no black box) ─────────────────────────
@@ -282,29 +349,91 @@ export default function Lead360Client({ lead, qualification, accounts }: {
       footer={<RecordCard title="Activity timeline" span={2}><Timeline recordId={lead.id} /></RecordCard>}
     >
       {tab === 'overview' && (
-        <CardGrid>
-          <RecordCard title="Contact">
-            <InfoRow label="Email" value={lead.email ? <a href={`mailto:${lead.email}`} style={s.link}>{lead.email}</a> : '—'} />
-            <InfoRow label="Phone" value={lead.phone ? <a href={`tel:${lead.phone}`} style={s.link}>{lead.phone}</a> : '—'} />
-            <InfoRow label="Company" value={lead.companyName ?? '—'} />
-            <InfoRow label="First response" value={lead.firstRespondedAt ? d(lead.firstRespondedAt) : <span style={{ color: 'var(--warn, var(--warn))' }}>not yet</span>} />
-          </RecordCard>
-          <RecordCard title="The job (ELV context)">
-            <InfoRow label="Requirement" value={lead.requirement ?? '—'} />
-            <InfoRow label="Systems" value={lead.systems?.length ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>{lead.systems.map((x) => <span key={x} style={s.tag}>{elvSystemLabel(x as ElvSystem)}</span>)}</span> : '—'} />
-            <InfoRow label="Sector" value={lead.sector ?? '—'} />
-            <InfoRow label="Project" value={lead.projectName ?? '—'} />
-            <InfoRow label="Location" value={lead.projectLocation ?? '—'} />
-            <InfoRow label="Consultant" value={lead.consultant ?? '—'} />
-            <InfoRow label="Main contractor" value={lead.mainContractor ?? '—'} />
-            <InfoRow label="Est. value" value={lead.estimatedValue != null ? `AED ${aed(lead.estimatedValue)}` : '—'} />
-            <InfoRow label="Timeline" value={lead.expectedTimeline ?? '—'} />
-          </RecordCard>
-        </CardGrid>
+        <>
+          <CardGrid>
+            <RecordCard title="Contact">
+              <InfoRow label="Email" value={lead.email ? <a href={`mailto:${lead.email}`} style={s.link}>{lead.email}</a> : '—'} />
+              <InfoRow label="Phone" value={lead.phone ? <a href={`tel:${lead.phone}`} style={s.link}>{lead.phone}</a> : '—'} />
+              <InfoRow label="Company" value={lead.companyName ?? '—'} />
+              <InfoRow label="First response" value={lead.firstRespondedAt ? d(lead.firstRespondedAt) : <span style={{ color: 'var(--warn, var(--warn))' }}>not yet</span>} />
+            </RecordCard>
+            <RecordCard title="The job (ELV context)">
+              <InfoRow label="Requirement" value={lead.requirement ?? '—'} />
+              <InfoRow label="Systems" value={lead.systems?.length ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>{lead.systems.map((x) => <span key={x} style={s.tag}>{elvSystemLabel(x as ElvSystem)}</span>)}</span> : '—'} />
+              <InfoRow label="Sector" value={lead.sector ?? '—'} />
+              <InfoRow label="Project" value={lead.projectName ?? '—'} />
+              <InfoRow label="Location" value={lead.projectLocation ?? '—'} />
+              <InfoRow label="Consultant" value={lead.consultant ?? '—'} />
+              <InfoRow label="Main contractor" value={lead.mainContractor ?? '—'} />
+              <InfoRow label="Est. value" value={lead.estimatedValue != null ? `AED ${aed(lead.estimatedValue)}` : '—'} />
+              <InfoRow label="Timeline" value={lead.expectedTimeline ?? '—'} />
+            </RecordCard>
+          </CardGrid>
+          {/* Qualify & Convert lives WITH the Overview — the primary outcome of a lead, next to its
+              context. It shows conversion readiness (backend owns eligibility) and the convert action. */}
+          <div style={{ marginTop: 14 }}>
+            <RecordCard title={converted ? 'Conversion' : 'Qualify & Convert'}>
+              {converted ? (
+                <div>
+                  <p style={s.muted}>This lead was converted {d(lead.convertedAt)} — it is terminal and cannot convert again. Traceability is preserved: Lead → Opportunity → Quote/Tender → Won → Project.</p>
+                  <a href={`/crm/opportunities/${lead.convertedOpportunityId}`} style={{ ...s.link, fontWeight: 600 }}>Open Opportunity 360 →</a>
+                </div>
+              ) : (
+                <div>
+                  {/* Conversion readiness — the BACKEND owns eligibility; this only SHOWS the signals it
+                      will evaluate. On convert the API decides (qualified? already converted? identity
+                      match? allowed?) and, if it refuses, returns the reason. React never gates. */}
+                  <div style={s.readyBox}>
+                    <div style={s.readyTitle}>Conversion readiness</div>
+                    <ReadyRow label="Lifecycle status" ok={lead.status === 'qualified'} text={`${STATUS_LABEL[lead.status] ?? lead.status}${lead.status === 'qualified' ? ' — required to convert' : ' — must be Qualified to convert'}`} />
+                    <ReadyRow label="Qualification assessment" text={assessed ? `${a!.recommendation} · ${a!.coverage.rated}/${a!.coverage.total} dimensions rated` : 'Not assessed (advisory — does not block convert)'} />
+                    <ReadyRow label="Customer identity" text={idText(preview?.account.best)} />
+                    <ReadyRow label="Contact identity" text={idText(preview?.contact.best)} />
+                  </div>
+                  <p style={{ ...s.muted, margin: '8px 0 0', fontSize: 11.5 }}>The engine recommends; a human qualifies. Convert is gated by the lifecycle status (backend-enforced), not by the assessment.</p>
+
+                  {preview && (preview.account.matches.length > 0 || preview.contact.matches.length > 0) && (
+                    <div style={s.dupBox}>
+                      <div style={s.subhead}>Possible duplicate</div>
+                      {preview.account.matches.map((m) => (
+                        <div key={`a-${m.id}`} style={s.dupRow}>
+                          <span><b>{accounts.find((x) => x.id === m.id)?.name ?? 'Customer'}</b> <span style={s.dupType}>Account · {m.confidence}</span></span>
+                          <a href={`/crm/accounts/${m.id}`} style={s.link}>Open Customer →</a>
+                        </div>
+                      ))}
+                      {preview.contact.matches.map((m) => (
+                        <div key={`c-${m.id}`} style={s.dupRow}>
+                          <span><b>Contact match</b> <span style={s.dupType}>Contact · {m.confidence}</span></span>
+                          <a href={`/crm/contacts/${m.id}`} style={s.link}>Open Contact →</a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p style={{ ...s.muted, margin: '12px 0' }}>
+                    Converting links this lead to an <b style={{ color: 'var(--text)' }}>Account</b> and a <b style={{ color: 'var(--text)' }}>Primary Contact</b> (linking an existing match or creating fresh), then opens the <b style={{ color: 'var(--text)' }}>Opportunity</b> — one transactional step, lineage preserved. The backend decides eligibility; if it refuses, the reason shows above.
+                  </p>
+                  <LeadConvertDrawer lead={lead} accounts={accounts} onDone={() => { setMsg('Converted to an opportunity.'); router.refresh(); }} />
+                </div>
+              )}
+            </RecordCard>
+          </div>
+        </>
       )}
 
       {tab === 'qualification' && (
         <RecordCard title="Qualification" action={!converted ? <button style={s.linkBtn} onClick={() => setAssessing((v) => !v)}>{assessing ? 'Cancel' : assessed ? 'Update assessment' : 'Assess this lead'}</button> : undefined}>
+          <p style={s.pathNote}><b>Evidence → Assessment → Human decision → Lifecycle.</b> Each dimension is evidence you gather; the engine turns it into an <b>advisory</b> verdict (QUALIFY / REVIEW / DISQUALIFY) with coverage — it recommends, it never decides. <b>You</b> set the Lifecycle Status.</p>
+          <div style={s.qualSplit}>
+            <div style={s.qualCol}>
+              <div style={s.subhead}>Lifecycle status — your decision</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: lead.status === 'qualified' ? 'var(--good)' : lead.status === 'disqualified' ? 'var(--bad)' : 'var(--text)' }}>{STATUS_LABEL[lead.status] ?? lead.status}</div>
+            </div>
+            <div style={s.qualCol}>
+              <div style={s.subhead}>AURA assessment — advisory</div>
+              <div style={{ fontSize: 13 }}>{assessed ? <><b style={{ color: a!.recommendation === 'QUALIFY' ? 'var(--good)' : a!.recommendation === 'DISQUALIFY' ? 'var(--bad)' : 'var(--warn, #d99a42)' }}>{a!.recommendation}</b> · {a!.score}/100 · {a!.coverage.rated}/{a!.coverage.total} rated</> : <span style={s.muted}>Not assessed</span>}</div>
+            </div>
+          </div>
           {!assessed ? (
             !assessing && <p style={s.muted}>Not assessed yet — score the eight dimensions to get a QUALIFY / REVIEW / DISQUALIFY verdict.</p>
           ) : (
@@ -348,23 +477,78 @@ export default function Lead360Client({ lead, qualification, accounts }: {
               </div>
             </div>
           )}
+
+          <div style={s.assistBox}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <div style={s.subhead}>✦ AURA qualification assist</div>
+              <button type="button" style={s.linkBtn} onClick={() => void askAura()} disabled={aiBusy}>{aiBusy ? 'Thinking…' : aiText !== null || aiErr ? 'Ask again' : 'Ask AURA to help qualify'}</button>
+            </div>
+            <p style={{ ...s.muted, marginTop: 0 }}>Not sure this lead is worth pursuing? AURA reviews the facts and evidence and suggests questions to ask, missing evidence, checks to run and next actions. Advisory only — it cannot change the status or convert.</p>
+            {aiBusy && <p style={s.muted}>AURA is reviewing the lead facts and evidence…</p>}
+            {aiErr && <p style={{ color: 'var(--bad)', fontSize: 12.5, margin: 0 }}>{aiErr}</p>}
+            {!aiBusy && aiText !== null && (aiText.trim() ? <div style={s.assistText}>{aiText}</div> : <p style={s.muted}>AURA returned no suggestions for this lead.</p>)}
+          </div>
         </RecordCard>
       )}
 
-      {tab === 'convert' && (
-        <RecordCard title={converted ? 'Conversion' : 'Qualify & Convert'}>
-          {converted ? (
-            <div>
-              <p style={s.muted}>This lead was converted {d(lead.convertedAt)} — it is terminal and cannot convert again.</p>
-              <a href={`/crm/opportunities/${lead.convertedOpportunityId}`} style={{ ...s.link, fontWeight: 600 }}>Open the opportunity →</a>
-            </div>
+      {tab === 'communication' && (
+        <RecordCard title="Communication">
+          <p style={s.muted}>Reach this lead on their own channel with a ready draft, or open the internal <b style={{ color: 'var(--text)' }}>Communication Center</b> for team chat and mail.</p>
+
+          {!lead.email && !lead.phone ? (
+            <p style={{ ...s.muted, marginTop: 10 }}>No email or phone on file — add one with <b style={{ color: 'var(--text)' }}>Edit</b> to message this lead.</p>
           ) : (
-            <div>
-              <p style={{ ...s.muted, marginBottom: 12 }}>
-                Converting links this lead to an <b style={{ color: 'var(--text)' }}>Account</b> and a <b style={{ color: 'var(--text)' }}>Primary Contact</b> (linking an existing match or creating fresh), then opens the <b style={{ color: 'var(--text)' }}>Opportunity</b> — all in one transactional step, with lineage preserved.
-              </p>
-              <LeadConvertDrawer lead={lead} accounts={accounts} onDone={() => { setMsg('Converted to an opportunity.'); router.refresh(); }} />
+            <div style={s.commBox}>
+              <div style={s.commRow}>
+                <label style={s.commLabel}>Suggested message</label>
+                <button type="button" disabled={suggBusy} onClick={() => void suggestMessage()} style={s.inlineBtn}>
+                  {suggBusy ? 'Drafting…' : '✨ Suggest with AURA'}
+                </button>
+              </div>
+              <input
+                value={commSubject}
+                onChange={(e) => setCommSubject(e.target.value)}
+                placeholder="Subject (email)"
+                style={s.commInput}
+              />
+              <textarea value={commMsg} onChange={(e) => setCommMsg(e.target.value)} style={s.notes} rows={6} />
+              <div style={s.commActions}>
+                {lead.email && (
+                  <a href={mailtoHref(lead.email, commSubject, commMsg)} style={s.commSend}>✉ Open in Email →</a>
+                )}
+                {waDigits && (
+                  <a href={whatsappHref(waDigits, commMsg)} target="_blank" rel="noreferrer" style={s.commSendAlt}>WhatsApp →</a>
+                )}
+              </div>
+              {lead.phone && !waDigits && (
+                <p style={s.commHint}>WhatsApp needs an international number (e.g. +9715…). Add a country code in <b style={{ color: 'var(--text)' }}>Edit</b> to enable it.</p>
+              )}
+              <p style={s.commHint}>Opens your own mail app / WhatsApp with the recipient and this message prefilled — edit before sending. AURA prepares the message; it does not send it.</p>
             </div>
+          )}
+
+          <div style={{ margin: '14px 0 4px' }}>
+            <ActionButton href="/my-work/communication">Open Communication Center →</ActionButton>
+          </div>
+          <InfoRow label="Email" value={lead.email ?? '—'} />
+          <InfoRow label="Phone" value={lead.phone ?? '—'} />
+        </RecordCard>
+      )}
+
+      {tab === 'documents' && (
+        <RecordCard title="Documents">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
+            <p style={{ ...s.muted, maxWidth: 520 }}>Documents linked to this lead in <b style={{ color: 'var(--text)' }}>Document Control</b> (the DMS). Read-only here — upload and versions live there.</p>
+            <ActionButton href="/documents/control">Open Document Control →</ActionButton>
+          </div>
+          {docs === null ? (
+            <p style={s.muted}>Loading documents…</p>
+          ) : docs.length === 0 ? (
+            <p style={s.muted}>No documents linked to this lead yet — attach them from Document Control.</p>
+          ) : (
+            docs.map((dc) => (
+              <InfoRow key={dc.id} label={dc.title} value={<span style={s.muted}>{dc.kind?.replace(/[._]/g, ' ')}{dc.currentVersion != null ? ` · v${dc.currentVersion}` : ''}{dc.updatedAt ? ` · ${d(dc.updatedAt)}` : ''}</span>} />
+            ))
           )}
         </RecordCard>
       )}
@@ -381,8 +565,39 @@ function Chip({ label, value, tone }: { label: string; value: number | null; ton
   );
 }
 
+function ReadyRow({ label, ok, text }: { label: string; ok?: boolean; text: string }) {
+  const icon = ok === undefined ? '' : ok ? '✓ ' : '⚠ ';
+  const color = ok === undefined ? 'var(--text)' : ok ? 'var(--good)' : 'var(--warn, #d99a42)';
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '5px 0', fontSize: 13, borderTop: '1px solid var(--border)' }}>
+      <span style={{ color: 'var(--muted)' }}>{label}</span>
+      <span style={{ color, fontWeight: 600 }}>{icon}{text}</span>
+    </div>
+  );
+}
+
+const idText = (best?: string): string => {
+  switch (best) {
+    case 'EXACT': return '✓ Exact match';
+    case 'PROBABLE': return '⚠ Probable match';
+    case 'POSSIBLE': return '⚠ Possible match';
+    case 'NONE': return 'No match — will create new';
+    default: return 'Checking…';
+  }
+};
+
 const s: Record<string, CSSProperties> = {
   inlineBtn: { marginLeft: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' },
+  readyBox: { border: '1px solid var(--border)', borderRadius: 10, padding: '4px 12px 8px', background: 'var(--panel-2, var(--panel))' },
+  readyTitle: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', fontWeight: 800, padding: '8px 0 4px' },
+  dupBox: { marginTop: 12, border: '1px solid #d99a42', borderRadius: 10, background: 'color-mix(in srgb, #d99a42 8%, var(--panel))', padding: 12 },
+  dupRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '5px 0', fontSize: 12.5, borderTop: '1px solid var(--border)' },
+  dupType: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 6px' },
+  pathNote: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.55 },
+  qualSplit: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 },
+  qualCol: { border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--panel-2, var(--panel))' },
+  assistBox: { marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' },
+  assistText: { marginTop: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--panel-2, var(--panel))', fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' },
   muted: { color: 'var(--muted)', fontSize: 12.5 },
   link: { color: 'var(--accent)', textDecoration: 'none' },
   linkBtn: { background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 12.5, cursor: 'pointer', fontWeight: 600 },
@@ -392,4 +607,93 @@ const s: Record<string, CSSProperties> = {
   dimRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   dimInput: { width: 80, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '5px 8px', fontSize: 12.5, outline: 'none' },
   notes: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', fontSize: 13, minHeight: 54, outline: 'none', resize: 'vertical' },
+  commBox: { display: 'flex', flexDirection: 'column', gap: 8, margin: '12px 0', border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--panel-2, var(--panel))' },
+  commRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  commLabel: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', fontWeight: 800 },
+  commInput: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', fontSize: 13, outline: 'none' },
+  commActions: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 },
+  commSend: { border: '1px solid var(--accent)', background: 'var(--accent-grad, var(--accent))', color: 'var(--accent-ink, #fff)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700, textDecoration: 'none' },
+  commSendAlt: { border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700, textDecoration: 'none' },
+  commHint: { color: 'var(--muted)', fontSize: 11.5, margin: 0 },
+  assignSelect: { marginLeft: 8, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '2px 6px', fontSize: 12, outline: 'none' },
+  assignReason: { marginLeft: 6, width: 150, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '2px 8px', fontSize: 12, outline: 'none' },
 };
+
+/**
+ * Assignment control — renders ONLY what the backend says this caller may do. It reads
+ * `GET :id/assignable-users` (self-only for a rep; the eligible tenant members for a manager) and
+ * writes through `PATCH :id/assign`, which re-authorizes and re-validates. The generic lead PATCH
+ * can no longer change ownership, so this is the single UI path for it. A reassignment (moving off an
+ * existing owner) requires a reason — enforced here and again on the server.
+ */
+function LeadAssignControl({ leadId, currentOwner, onDone }: {
+  leadId: string;
+  currentOwner: string | null;
+  onDone: () => void;
+}) {
+  const [list, setList] = useState<AssignableUser[] | null>(null);
+  const [sel, setSel] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch(`/api/crm/leads/${leadId}/assignable-users`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('assignable'))))
+      .then((x: unknown) => setList(Array.isArray(x) ? (x as AssignableUser[]) : []))
+      .catch(() => setList([]));
+  }, [leadId]);
+
+  const submit = async (assignedTo: string, why?: string): Promise<void> => {
+    if (!assignedTo) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/crm/leads/${leadId}/assign`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ assignedTo, reason: why?.trim() || undefined }),
+      });
+      const dj = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(dj.message ?? dj.error ?? 'Assignment failed'); return; }
+      setSel(''); setReason(''); onDone();
+    } catch { setErr('CRM API unreachable'); } finally { setBusy(false); }
+  };
+
+  if (list === null || list.length === 0) return null; // loading, or the caller may not assign
+
+  // Self-claim only (a rep): a single button, no reason (first assignment / claiming).
+  if (list.length === 1 && list[0].self) {
+    const meId = list[0].id;
+    if (currentOwner === meId) return null; // already mine
+    return (
+      <>
+        <button disabled={busy} onClick={() => void submit(meId)} style={s.inlineBtn}>Assign to me</button>
+        {err && <span style={{ color: 'var(--bad)', fontSize: 12, marginLeft: 6 }}>{err}</span>}
+      </>
+    );
+  }
+
+  // Manager: pick any eligible member. A reassignment (off an existing owner) requires a reason.
+  const isReassign = !!currentOwner && !!sel && sel !== currentOwner;
+  return (
+    <>
+      <select value={sel} onChange={(e) => setSel(e.target.value)} style={s.assignSelect} aria-label="Assign lead to">
+        <option value="">Assign to…</option>
+        {list.map((u) => <option key={u.id} value={u.id}>{u.displayName}{u.self ? ' (me)' : ''}</option>)}
+      </select>
+      {isReassign && (
+        <input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Reason (required)"
+          style={s.assignReason}
+        />
+      )}
+      <button
+        disabled={busy || !sel || sel === currentOwner || (isReassign && !reason.trim())}
+        onClick={() => void submit(sel, reason)}
+        style={s.inlineBtn}
+      >Assign</button>
+      {err && <span style={{ color: 'var(--bad)', fontSize: 12, marginLeft: 6 }}>{err}</span>}
+    </>
+  );
+}

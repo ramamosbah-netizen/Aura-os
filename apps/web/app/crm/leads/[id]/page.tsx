@@ -43,7 +43,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 }
 
 const st = {
-  container: { maxWidth: 1180, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  // Full-focus 360: no width cap — the record uses the whole available screen (the suite topbar is
+  // suppressed for this route in the app shell).
+  container: { maxWidth: 'none', margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
   h1: { fontSize: 24, margin: '0 0 10px', color: 'var(--accent)' } as CSSProperties,
   navRow: { marginBottom: 14 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 500 } as CSSProperties,

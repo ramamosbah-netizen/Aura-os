@@ -1,69 +1,27 @@
-import { type Id, newId, moneyNumber } from '@aura/shared';
+import { type Id, newId, moneyNumber, computeBuildUp, COST_TYPES, type CostType, type CostComponent } from '@aura/shared';
 import type { BOQItem } from './boq';
 
-// Tendering domain — framework-free. A RateBuildUp is the estimator's cost build-up
-// behind a BOQ item's rate: direct-cost components (material, labour, plant,
-// subcontract) per unit, plus the four named layers of §2.2 — indirect (preliminaries),
-// overhead, risk (contingency) and profit — producing the selling rate. The bid price is
-// this governed roll-up, never a hand figure. ONE build-up per BOQ item (unique — enforced
-// by the service's replace-on-rebuild AND the DB unique index); the tender estimate folds
-// build-ups over the BOQ.
+// Tendering estimate — the TENDER-SPECIFIC layer over the shared estimation core. A RateBuildUp is the
+// estimator's cost build-up behind a BOQ item's rate, anchored to a tender + BOQ item; the tender
+// estimate folds build-ups over the BOQ. The cost MATH (components → figures, resource-sheet
+// compilation) now lives in @aura/shared (one engine, no copy) and is re-exported here so existing
+// `@aura/tendering` consumers keep importing it from this module unchanged.
 
-export type CostType = 'material' | 'labour' | 'plant' | 'subcontract' | 'other';
+export {
+  COST_TYPES,
+  computeBuildUp,
+  compileResourceBreakdown,
+  normalizeResourceBreakdown,
+} from '@aura/shared';
+export type {
+  CostType,
+  CostComponent,
+  ManpowerBlock,
+  ResourceBreakdown,
+  BuildUpFigures,
+} from '@aura/shared';
 
-export const COST_TYPES: readonly CostType[] = ['material', 'labour', 'plant', 'subcontract', 'other'];
-
-export interface CostComponent {
-  /** Stable id so a component can be sourced from a supplier quote (R5). Assigned by
-   *  `makeRateBuildUp`; optional because build-ups persisted before R5 predate it. */
-  id?: Id;
-  costType: CostType;
-  description: string;
-  /** Resource quantity consumed per unit of the BOQ item. */
-  quantity: number;
-  unitCost: number;
-  /** Derived: quantity × unitCost (per unit of the BOQ item). */
-  amount: number;
-}
-
-/**
- * A manpower block from the company's internal "Cost & Resource Breakdown" sheet:
- * how many people × how many hours at what hourly rate — PER BOQ LINE (the way
- * estimators actually plan: "2 techs for 16 hours"), not per unit.
- */
-export interface ManpowerBlock {
-  count: number;
-  hours: number;
-  /** AED per hour. */
-  rate: number;
-}
-
-/**
- * The structured internal pricing sheet for ONE BOQ item (mirrors the company's
- * Cost & Resource Breakdown sheet). All money figures are AED per LINE except
- * `supplyUnitPrice` (per BOQ unit); `compileResourceBreakdown` converts the sheet
- * into per-unit cost components so the existing rate engine and tender estimate
- * roll-ups work unchanged.
- */
-export interface ResourceBreakdown {
-  /** Material unit supply price (per BOQ unit). */
-  supplyUnitPrice: number;
-  technician: ManpowerBlock;
-  engineer: ManpowerBlock;
-  projectManager: ManpowerBlock;
-  /** Transport for this line, AED. */
-  transport: number;
-  /** Wastage as % of material supply. */
-  wastagePercent: number;
-  /** Accessories/consumables for this line, AED lump. */
-  accessories: number;
-  /** Subcontracted works for this line, AED. */
-  subcontract: number;
-  /** Equipment/plant rental for this line, AED. */
-  equipmentRent: number;
-  /** Any other direct cost for this line, AED lump. */
-  otherDirect: number;
-}
+const r2 = (n: number): number => moneyNumber(n);
 
 export interface RateBuildUp {
   id: Id;
@@ -73,7 +31,7 @@ export interface RateBuildUp {
   boqItemId: Id;
   components: CostComponent[];
   /** The structured sheet the components were compiled from (null when entered as raw components). */
-  resources: ResourceBreakdown | null;
+  resources: import('@aura/shared').ResourceBreakdown | null;
   /** Σ component amounts — direct cost per unit. */
   directCost: number;
   /** Indirect/preliminaries % on direct cost (mobilization, supervision, site setup). */
@@ -82,13 +40,9 @@ export interface RateBuildUp {
   /** Risk/contingency % on the full cost base (T3) — priced exposure, not padding hidden in rates. */
   riskPercent: number;
   profitPercent: number;
-  /** directCost × indirectPercent. */
   indirectAmount: number;
-  /** directCost × overheadPercent. */
   overheadAmount: number;
-  /** (directCost + indirect + overhead) × riskPercent — contingency over the whole cost base. */
   riskAmount: number;
-  /** (directCost + indirect + overhead + risk) × profitPercent — profit is marked up on total cost. */
   profitAmount: number;
   /** directCost + indirect + overhead + risk + profit — the rate the BOQ item should carry. */
   sellingRate: number;
@@ -103,134 +57,13 @@ export interface NewRateBuildUp {
   tenderId: Id;
   boqItemId: Id;
   components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
-  /** When the build-up came from the structured pricing sheet, keep it for redisplay. */
-  resources?: ResourceBreakdown | null;
+  resources?: import('@aura/shared').ResourceBreakdown | null;
   indirectPercent?: number;
   overheadPercent?: number;
   riskPercent?: number;
   profitPercent?: number;
   notes?: string | null;
   createdBy?: Id | null;
-}
-
-const r2 = (n: number): number => moneyNumber(n);
-const r4 = (n: number): number => moneyNumber(n, 4);
-
-const nn = (v: unknown): number => {
-  const n = Number(v) || 0;
-  if (n < 0) throw new Error('resource figures cannot be negative');
-  return n;
-};
-
-const manpower = (b: Partial<ManpowerBlock> | undefined): ManpowerBlock => ({
-  count: nn(b?.count),
-  hours: nn(b?.hours),
-  rate: nn(b?.rate),
-});
-
-/** Normalize a raw sheet payload (all figures ≥ 0, numbers coerced). */
-export function normalizeResourceBreakdown(input: Partial<ResourceBreakdown>): ResourceBreakdown {
-  return {
-    supplyUnitPrice: nn(input.supplyUnitPrice),
-    technician: manpower(input.technician),
-    engineer: manpower(input.engineer),
-    projectManager: manpower(input.projectManager),
-    transport: nn(input.transport),
-    wastagePercent: nn(input.wastagePercent),
-    accessories: nn(input.accessories),
-    subcontract: nn(input.subcontract),
-    equipmentRent: nn(input.equipmentRent),
-    otherDirect: nn(input.otherDirect),
-  };
-}
-
-/**
- * Compile the internal pricing sheet into per-unit cost components for the rate
- * engine. Per-line figures (manpower/transport/accessories/subcontract) divide by
- * the BOQ quantity; zero-amount blocks are omitted. Pure.
- */
-export function compileResourceBreakdown(
-  input: Partial<ResourceBreakdown>,
-  quantity: number,
-): { resources: ResourceBreakdown; components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>> } {
-  const qty = Number(quantity);
-  if (!Number.isFinite(qty) || qty <= 0) throw new Error('BOQ quantity must be > 0 to compile a resource breakdown');
-  const r = normalizeResourceBreakdown(input);
-
-  const components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>> = [];
-  if (r.supplyUnitPrice > 0) {
-    components.push({ costType: 'material', description: 'Material supply', quantity: 1, unitCost: r.supplyUnitPrice });
-  }
-  if (r.supplyUnitPrice > 0 && r.wastagePercent > 0) {
-    components.push({
-      costType: 'material',
-      description: `Wastage ${r.wastagePercent}%`,
-      quantity: 1,
-      unitCost: r4(r.supplyUnitPrice * (r.wastagePercent / 100)),
-    });
-  }
-  if (r.accessories > 0) {
-    components.push({ costType: 'material', description: 'Accessories & consumables', quantity: 1, unitCost: r4(r.accessories / qty) });
-  }
-  const roles: Array<[string, ManpowerBlock]> = [
-    ['Technician', r.technician],
-    ['Engineer', r.engineer],
-    ['Project manager', r.projectManager],
-  ];
-  for (const [label, b] of roles) {
-    const manHours = b.count * b.hours;
-    if (manHours > 0 && b.rate > 0) {
-      components.push({
-        costType: 'labour',
-        description: `${label} — ${b.count} × ${b.hours}h @ ${b.rate}/h`,
-        quantity: r4(manHours / qty),
-        unitCost: b.rate,
-      });
-    }
-  }
-  if (r.transport > 0) {
-    components.push({ costType: 'plant', description: 'Transport', quantity: 1, unitCost: r4(r.transport / qty) });
-  }
-  if (r.equipmentRent > 0) {
-    components.push({ costType: 'plant', description: 'Equipment rent', quantity: 1, unitCost: r4(r.equipmentRent / qty) });
-  }
-  if (r.subcontract > 0) {
-    components.push({ costType: 'subcontract', description: 'Subcontracted works', quantity: 1, unitCost: r4(r.subcontract / qty) });
-  }
-  if (r.otherDirect > 0) {
-    components.push({ costType: 'other', description: 'Other direct cost', quantity: 1, unitCost: r4(r.otherDirect / qty) });
-  }
-  if (components.length === 0) throw new Error('the resource breakdown has no cost — at least one filled block is required');
-  return { resources: r, components };
-}
-
-/**
- * Pure engine: components + percentages → per-unit cost figures.
- * direct → + indirect % (preliminaries) → + overhead % → + risk % (contingency, on the whole
- * cost base) → + profit % on the total cost including risk. With riskPercent 0 the figures are
- * exactly the pre-T3 ones, so existing build-ups re-derive unchanged.
- */
-export function computeBuildUp(
-  components: CostComponent[],
-  overheadPercent: number,
-  profitPercent: number,
-  indirectPercent = 0,
-  riskPercent = 0,
-): Pick<RateBuildUp, 'directCost' | 'indirectAmount' | 'overheadAmount' | 'riskAmount' | 'profitAmount' | 'sellingRate'> {
-  const directCost = r2(components.reduce((s, c) => s + c.amount, 0));
-  const indirectAmount = r2(directCost * (indirectPercent / 100));
-  const overheadAmount = r2(directCost * (overheadPercent / 100));
-  const costBase = directCost + indirectAmount + overheadAmount;
-  const riskAmount = r2(costBase * (riskPercent / 100));
-  const profitAmount = r2((costBase + riskAmount) * (profitPercent / 100));
-  return {
-    directCost,
-    indirectAmount,
-    overheadAmount,
-    riskAmount,
-    profitAmount,
-    sellingRate: r2(costBase + riskAmount + profitAmount),
-  };
 }
 
 export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
@@ -279,9 +112,8 @@ export function makeRateBuildUp(input: NewRateBuildUp): RateBuildUp {
 
 /**
  * Bid-time sourcing (R5): set ONE component's unit cost from a supplier quote and re-derive the
- * build-up (component amount → direct cost → indirect/overhead/profit → selling rate). Pure — the
- * caller persists the returned build-up and records the source-link separately. Throws if the
- * component id isn't in this build-up (e.g. a build-up rebuilt since it was sourced).
+ * build-up. Pure — the caller persists the returned build-up and records the source-link separately.
+ * Throws if the component id isn't in this build-up (e.g. a build-up rebuilt since it was sourced).
  */
 export function withComponentUnitCost(buildUp: RateBuildUp, componentId: Id, unitCost: number): RateBuildUp {
   const uc = Number(unitCost);
@@ -308,10 +140,8 @@ export interface TenderEstimate {
   /** Direct cost by resource type, extended by BOQ quantities. */
   directCostByType: Record<CostType, number>;
   totalDirectCost: number;
-  /** Σ indirect/preliminaries (mobilization, supervision, site setup) over estimated items. */
   totalIndirect: number;
   totalOverhead: number;
-  /** Σ risk/contingency over estimated items — the tender's priced exposure (T3). */
   totalRisk: number;
   totalProfit: number;
   /** Σ sellingRate × quantity over estimated items. */

@@ -85,13 +85,13 @@ describe('G4 ELV lead context (HTTP)', () => {
   });
 
   it('conversion carries the estimate into the opportunity value', async () => {
-    const lead = (await http.post('/api/v1/crm/leads').send({ name: 'Estimate', companyName: 'Emaar', estimatedValue: 450000 }).expect(201)).body;
+    const lead = (await http.post('/api/v1/crm/leads').send({ name: 'Estimate', companyName: 'Emaar', estimatedValue: 450000, status: 'qualified' }).expect(201)).body;
     const res = (await http.post(`/api/v1/crm/leads/${lead.id}/convert`).send({ createNewAccount: true }).expect(201)).body;
     expect(res.opportunity.value).toBe(450000);
   });
 
   it('an explicit value at conversion beats the lead estimate — a decision is not overridden', async () => {
-    const lead = (await http.post('/api/v1/crm/leads').send({ name: 'Override', companyName: 'Nakheel', estimatedValue: 450000 }).expect(201)).body;
+    const lead = (await http.post('/api/v1/crm/leads').send({ name: 'Override', companyName: 'Nakheel', estimatedValue: 450000, status: 'qualified' }).expect(201)).body;
     // The convert payload is FLAT (title/value/stage); the controller nests it into `opportunity`
     // internally. Sending a nested object here would be silently stripped by whitelist validation.
     const res = (await http.post(`/api/v1/crm/leads/${lead.id}/convert`).send({ createNewAccount: true, value: 600000 }).expect(201)).body;
@@ -101,7 +101,7 @@ describe('G4 ELV lead context (HTTP)', () => {
   it('a lead that names its project titles the opportunity after the JOB, not the caller', async () => {
     const lead = (
       await http.post('/api/v1/crm/leads').send({
-        name: 'Sara', companyName: 'Meraas', projectName: 'Bluewaters Tower 2', systems: ['cctv', 'access_control'],
+        name: 'Sara', companyName: 'Meraas', projectName: 'Bluewaters Tower 2', systems: ['cctv', 'access_control'], status: 'qualified',
       }).expect(201)
     ).body;
     const res = (await http.post(`/api/v1/crm/leads/${lead.id}/convert`).send({ createNewAccount: true }).expect(201)).body;
@@ -109,8 +109,21 @@ describe('G4 ELV lead context (HTTP)', () => {
   });
 
   it('falls back to the caller when there is no project name (nothing regressed)', async () => {
-    const lead = (await http.post('/api/v1/crm/leads').send({ name: 'Anon', companyName: 'DAMAC' }).expect(201)).body;
+    const lead = (await http.post('/api/v1/crm/leads').send({ name: 'Anon', companyName: 'DAMAC', status: 'qualified' }).expect(201)).body;
     const res = (await http.post(`/api/v1/crm/leads/${lead.id}/convert`).send({ createNewAccount: true }).expect(201)).body;
     expect(res.opportunity.title).toBe('DAMAC — Anon');
+  });
+
+  it('duplicate-check flags an existing customer before a new lead is saved (same engine as convert)', async () => {
+    // Seed a customer by qualifying + converting a lead (creates the account).
+    const seed = (await http.post('/api/v1/crm/leads').send({ name: 'Seed', companyName: 'Duplicorp', email: 'info@duplicorp.com', status: 'qualified' }).expect(201)).body;
+    await http.post(`/api/v1/crm/leads/${seed.id}/convert`).send({ createNewAccount: true }).expect(201);
+    // A + New Lead for the same company/email must be flagged as a possible duplicate (not blocked).
+    const dup = (await http.get('/api/v1/crm/leads/duplicate-check?companyName=Duplicorp&email=info@duplicorp.com').expect(200)).body;
+    expect(dup.account.best).toBe('EXACT');
+    expect(dup.account.matches.length).toBeGreaterThan(0);
+    // A clearly-new company returns nothing to warn about.
+    const clean = (await http.get('/api/v1/crm/leads/duplicate-check?companyName=Zzz-Nonexistent-Co').expect(200)).body;
+    expect(clean.account.best).toBe('NONE');
   });
 });

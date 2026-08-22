@@ -10,6 +10,13 @@ import { CRM_LEAD_STORE } from './lead-store';
 import { InMemoryLeadStore } from './in-memory-lead-store';
 import { PostgresLeadStore } from './postgres-lead-store';
 import { LeadService } from './lead.service';
+import { CRM_QUALIFICATION_DECISION_STORE } from './qualification-decision-store';
+import { InMemoryQualificationDecisionStore } from './in-memory-qualification-decision-store';
+import { PostgresQualificationDecisionStore } from './postgres-qualification-decision-store';
+import { CRM_PRE_AWARD_PACKAGE_STORE } from './pre-award-package-store';
+import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
+import { PostgresPreAwardPackageStore } from './postgres-pre-award-package-store';
+import { PreAwardPackageService } from './pre-award-package.service';
 
 import { CRM_OPPORTUNITY_STORE } from './opportunity-store';
 import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
@@ -102,6 +109,18 @@ import { LeadConversionService } from './lead-conversion.service';
         pool ? new PostgresLeadStore(pool) : new InMemoryLeadStore(),
     },
     {
+      provide: CRM_QUALIFICATION_DECISION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresQualificationDecisionStore(pool) : new InMemoryQualificationDecisionStore(),
+    },
+    {
+      provide: CRM_PRE_AWARD_PACKAGE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPreAwardPackageStore(pool) : new InMemoryPreAwardPackageStore(),
+    },
+    {
       provide: CRM_OPPORTUNITY_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -186,8 +205,9 @@ import { LeadConversionService } from './lead-conversion.service';
     OpportunityDepthService,
     ForecastSnapshotService,
     PreAwardService,
+    PreAwardPackageService,
     LeadConversionService,
   ],
-  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, LeadConversionService],
+  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, LeadConversionService],
 })
 export class CrmModule {}

@@ -1,9 +1,11 @@
+/* Shared design language for every AURA suite dashboard (My Work, Sales, Project Delivery, …).
+   ONE source of truth: each suite composes this shell with its own real data — no per-suite CSS. */
 .page { max-width: 1240px; margin: 0 auto; padding: clamp(26px,4vw,54px) clamp(18px,4vw,48px) 72px; }
 .hero { display:flex; align-items:flex-end; justify-content:space-between; gap:28px; padding-bottom:28px; }
 .eyebrow,.sectionKicker { margin:0 0 8px; color:var(--accent); font-size:9px; font-weight:850; letter-spacing:.18em; text-transform:uppercase; }
 .hero h1 { margin:0; color:var(--text); font-size:clamp(32px,4vw,52px); font-weight:750; line-height:1; letter-spacing:-.05em; }
 .hero h1 span { color:var(--accent); }
-.lede { max-width:620px; margin:13px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
+.lede { max-width:640px; margin:13px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
 .askAura { min-height:42px; display:inline-flex; align-items:center; gap:9px; padding:0 16px; border-radius:11px; color:var(--accent-ink); background:var(--accent-grad); box-shadow:0 8px 28px var(--accent-soft); font-size:12px; font-weight:800; text-decoration:none; white-space:nowrap; }
 .askAura svg { width:16px; height:16px; }
 .askAura:focus-visible,.metric:focus-visible,.attentionRow:focus-visible,.shortcut:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
@@ -16,8 +18,34 @@
 .metricIcon svg { width:18px; height:18px; }
 .metric span:nth-child(2) { min-width:0; display:flex; flex-direction:column; }
 .metric strong { font-size:23px; line-height:1; font-variant-numeric:tabular-nums; }
-.metric small { margin-top:5px; color:var(--muted); font-size:10px; font-weight:750; letter-spacing:.05em; text-transform:uppercase; }
+.metric small { margin-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:10px; font-weight:750; letter-spacing:.05em; text-transform:uppercase; }
 .metricArrow { width:15px; height:15px; margin-left:auto; color:var(--muted); }
+
+.continueSection { margin:0 0 12px; }
+.continueCard { display:flex; align-items:center; gap:15px; padding:16px 18px; border:1px solid var(--border); border-radius:16px; background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 7%,var(--panel)),var(--panel) 55%); text-decoration:none; color:var(--text); transition:border-color .16s ease,transform .16s ease; }
+.continueCard:hover { border-color:var(--accent); transform:translateY(-2px); }
+.continueCard:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
+.continueIcon { width:42px; height:42px; flex:0 0 auto; display:grid; place-items:center; border-radius:11px; color:var(--accent); background:var(--accent-soft); }
+.continueIcon svg { width:19px; height:19px; }
+.continueBody { flex:1; min-width:0; display:flex; flex-direction:column; }
+.continueBody strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:15px; }
+.continueBody small { margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:11.5px; }
+.continueBody small b { color:var(--accent); font-weight:750; }
+.continueCta { flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; color:var(--accent); font-size:12px; font-weight:800; }
+.continueCta svg { width:14px; height:14px; }
+
+.band { margin:0 0 12px; border:1px solid var(--border); border-radius:16px; background:var(--panel); padding:16px 18px; }
+.bandHead { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:12px; }
+.bandHead h2 { margin:0; color:var(--text); font-size:15px; letter-spacing:-.01em; }
+.bandHead a { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; font-weight:700; text-decoration:none; }
+.bandHead a:hover { color:var(--accent); } .bandHead a svg { width:13px; height:13px; }
+.bandStages { display:grid; grid-template-columns:repeat(var(--stage-count,5),minmax(0,1fr)); gap:8px; }
+.bandStage { position:relative; min-width:0; display:flex; flex-direction:column; gap:3px; padding:12px; border-radius:11px; background:var(--panel-2); text-decoration:none; color:var(--text); border:1px solid transparent; transition:border-color .16s ease,transform .16s ease; }
+.bandStage:hover { border-color:var(--accent); transform:translateY(-2px); }
+.bandStage small { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bandStage b { font-size:22px; line-height:1; font-variant-numeric:tabular-nums; }
+.bandStage span { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bandStage i { position:absolute; left:0; bottom:0; height:3px; border-radius:0 0 11px 11px; background:var(--accent); }
 
 .bodyGrid { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:12px; align-items:stretch; }
 .todayPanel,.aiBrief,.workspaces { border:1px solid var(--border); border-radius:16px; background:var(--panel); }
@@ -27,16 +55,19 @@
 .sectionHead>a { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; font-weight:700; text-decoration:none; }
 .sectionHead>a:hover { color:var(--accent); } .sectionHead>a svg { width:13px; height:13px; }
 .attentionList { margin:0; padding:0; list-style:none; } .attentionList li { border-top:1px solid var(--border); }
-.attentionRow { display:grid; grid-template-columns:8px minmax(0,1fr) minmax(100px,170px) auto 16px; align-items:center; gap:12px; min-height:58px; padding:8px 4px; color:var(--text); text-decoration:none; }
+.attentionRow { display:grid; grid-template-columns:8px minmax(0,1fr) minmax(100px,190px) auto 16px; align-items:center; gap:12px; min-height:62px; padding:9px 4px; color:var(--text); text-decoration:none; }
 .attentionRow:hover .attentionMain strong { color:var(--accent); } .attentionRow>svg { width:14px; height:14px; color:var(--muted); }
 .signal { width:7px; height:7px; border-radius:50%; box-shadow:0 0 0 4px color-mix(in srgb,currentColor 10%,transparent); }
 .bad { color:var(--bad); background:var(--bad); } .warn { color:#d99a42; background:#d99a42; } .good { color:var(--good); background:var(--good); }
 .attentionMain { min-width:0; display:flex; flex-direction:column; }
 .attentionMain strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; transition:color .15s ease; }
-.attentionMain small { margin-top:3px; color:var(--muted); font-size:9px; font-weight:750; letter-spacing:.07em; text-transform:uppercase; }
-.attentionContext,.attentionTime { color:var(--muted); font-size:11px; }
-.attentionContext { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.attentionTime { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.attentionMain small { margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:9px; font-weight:750; letter-spacing:.07em; text-transform:uppercase; }
+.attentionDetail { min-width:0; display:flex; flex-direction:column; }
+.attentionDetail strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:11px; font-weight:650; }
+.attentionDetail small { margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:10px; }
+.attentionDetailMuted { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:11px; }
+.attentionTime { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--muted); font-size:11px; }
+.attentionTimeStrong { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:700; font-size:13px; }
 .empty { min-height:94px; display:grid; place-items:center; padding:18px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; text-align:center; }
 .decisionStrip { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:12px; padding:10px 12px; border-radius:9px; color:var(--muted); background:var(--panel-2); font-size:10.5px; }
 .decisionStrip span,.decisionStrip a { display:inline-flex; align-items:center; gap:7px; } .decisionStrip svg { width:13px; height:13px; }
@@ -67,5 +98,5 @@
 
 @media (prefers-reduced-motion:reduce) { .metric,.shortcut { transition:none; } }
 @media (max-width:1050px) { .bodyGrid { grid-template-columns:1fr; } .aiBrief { min-height:240px; } .aiMark { margin-bottom:22px; } .shortcutGrid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@media (max-width:760px) { .page { padding:24px 14px 92px; } .hero { align-items:flex-start; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .shortcutGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } .attentionRow { grid-template-columns:8px minmax(0,1fr) auto 14px; } .attentionContext { grid-column:2; } .attentionTime { grid-column:3; grid-row:1 / span 2; } .attentionRow>svg { grid-column:4; grid-row:1 / span 2; } .decisionStrip { align-items:flex-start; flex-direction:column; } }
+@media (max-width:760px) { .page { padding:24px 14px 92px; } .hero { align-items:flex-start; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .shortcutGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } .attentionRow { grid-template-columns:8px minmax(0,1fr) auto 14px; } .attentionDetail,.attentionDetailMuted { grid-column:2; } .attentionTime,.attentionTimeStrong { grid-column:3; grid-row:1 / span 2; } .attentionRow>svg { grid-column:4; grid-row:1 / span 2; } .decisionStrip { align-items:flex-start; flex-direction:column; } }
 @media (max-width:480px) { .hero { flex-direction:column; } .hero h1 { font-size:36px; } .askAura { width:100%; justify-content:center; } .metrics { gap:7px; } .metric { min-height:80px; padding:11px; } .metricIcon { width:32px; height:32px; } .metric strong { font-size:20px; } .metricArrow { display:none; } .todayPanel,.workspaces { padding:16px; } .shortcutGrid { grid-template-columns:1fr 1fr; gap:7px; } .shortcut { min-height:108px; padding:12px; } .shortcutCopy small { display:none; } .ownership { align-items:flex-start; text-align:left; } }

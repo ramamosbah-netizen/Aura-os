@@ -15,6 +15,7 @@ import {
   type HealthState, type NextBestAction, type WorkflowGateView,
 } from './crm/record-shell';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -27,12 +28,14 @@ interface Opportunity {
   budgetConfirmed: boolean; authorityConfirmed: boolean; needConfirmed: boolean; timelineConfirmed: boolean;
   competitors: string | null; source: string | null; lossReason: string | null; createdAt: string;
 }
-interface Stakeholder { id: string; name: string; jobTitle: string | null; stakeholderRole: string | null; relationshipStrength: string | null; isPrimary: boolean }
+interface Stakeholder { id: string; name: string; jobTitle: string | null; stakeholderRole: string | null; relationshipStrength: string | null; isPrimary: boolean; email: string | null; phone: string | null }
 interface Step { key: string; label: string; reached: boolean; count: number; value: number | null; href: string | null }
 interface ActivityRec { id: string; type: string; subject: string; status: string; dueDate: string | null; createdAt: string }
 
 interface QuotationLite { id: string; quoteNumber: string; status: string; total: number }
 interface TenderLite { id: string; reference: string | null; title: string; status: string; value: number }
+// Context-only view of DMS documents linked to this deal (aggregateType 'crm.opportunity').
+interface DocRow { id: string; title: string; kind: string; currentVersion?: number; updatedAt?: string }
 
 interface Payload {
   opportunity: Opportunity;
@@ -80,6 +83,13 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const [closing, setClosing] = useState<{ stage: 'won' | 'lost'; reason: string } | null>(null);
   // Outcome Loop — after acting on the Next Best Action, capture what happened so no deal goes dead.
   const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
+  // Documents are read from the DMS on demand (context-only — Sales keeps no file store).
+  const [docs, setDocs] = useState<DocRow[] | null>(null);
+  // Communication — a shared, editable deal-grounded outreach draft (greeting added per stakeholder).
+  const [dealSubject, setDealSubject] = useState('');
+  const [dealBody, setDealBody] = useState('');
+  const [dealDrafted, setDealDrafted] = useState(false);
+  const [suggBusy, setSuggBusy] = useState(false);
   // setBusy is async; a fast double-click can land before the re-render. The ref rejects it.
   const busyRef = useRef(false);
 
@@ -90,6 +100,28 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   }, [opportunityId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Seed the outreach draft once from the loaded deal (edits are preserved thereafter).
+  useEffect(() => {
+    if (!data || dealDrafted) return;
+    const dr = buildDealOutreach({
+      title: data.opportunity.title,
+      accountName: data.account?.name ?? data.opportunity.accountName ?? null,
+      value: data.opportunity.value,
+      stage: data.opportunity.stage,
+    });
+    setDealSubject(dr.subject); setDealBody(dr.body); setDealDrafted(true);
+  }, [data, dealDrafted]);
+
+  // Documents tab: read this deal's linked documents straight from the DMS. Read-only — creating
+  // and revising documents stays in Document Control.
+  useEffect(() => {
+    if (tab !== 'documents' || docs !== null) return;
+    void fetch(`/api/documents?aggregateType=crm.opportunity&aggregateId=${opportunityId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('dms'))))
+      .then((d: unknown) => setDocs(Array.isArray(d) ? (d as DocRow[]) : []))
+      .catch(() => setDocs([]));
+  }, [tab, docs, opportunityId]);
 
   // Generating a quotation was written inline in three places, none of which set `busy` —
   // so even the button that reads `disabled={busy}` never actually disabled for this action.
@@ -234,6 +266,15 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     } finally { setBusy(false); }
   };
 
+  // Regenerate the outreach body with AURA (real /api/ai only). Failure keeps the current draft.
+  const suggestDealMessage = async (): Promise<void> => {
+    setSuggBusy(true);
+    try {
+      const text = await requestDealOutreachDraft({ title: o.title, accountName: account?.name ?? o.accountName ?? null, value: o.value, stage: o.stage });
+      if (text) setDealBody(text);
+    } catch { /* keep the existing draft */ } finally { setSuggBusy(false); }
+  };
+
   const meta: MetaItem[] = [
     ...(account ? [{ label: 'for', value: <a href={`/crm/accounts/${account.id}`} style={st.link}>{account.name}</a> }] as MetaItem[]
       : o.accountName ? [{ label: 'for', value: o.accountName }] as MetaItem[] : []),
@@ -297,16 +338,21 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     { label: 'Contracted', value: `AED ${aed(outcome.contractedValue)}`, tone: outcome.contractedValue > 0 ? 'good' : 'neutral' },
   ];
 
+  const pendingApprovals = quotations.filter((q) => q.status === 'internal_review');
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'qualification', label: 'Qualification' },
     { id: 'scope', label: 'Scope' },
-    { id: 'stakeholders', label: 'Stakeholders', count: stakeholders.length },
-    { id: 'quotation', label: 'Commercial', count: quotations.length },
+    { id: 'stakeholders', label: 'Contacts', count: stakeholders.length },
+    { id: 'quotation', label: 'Quotation', count: quotations.length },
     { id: 'journey', label: 'Journey' },
     { id: 'winplan', label: 'Win Plan' },
     { id: 'depth', label: 'Deal Depth' },
-    { id: 'activity', label: 'Activity' },
+    { id: 'activity', label: 'Activities', count: activities.length },
+    { id: 'communication', label: 'Communication' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'approvals', label: 'Approvals', count: pendingApprovals.length || undefined },
+    { id: 'history', label: 'History' },
   ];
 
   const insights: Insight[] = [];
@@ -450,9 +496,131 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       )}
 
       {tab === 'activity' && (
-        <RecordCard title="Activity timeline">
+        <RecordCard title="Activities">
+          {activities.length === 0 ? (
+            <p style={st.muted}>No activities logged yet — <a href="/crm/activities" style={st.link}>log the next step →</a></p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={st.qTable}>
+                <thead><tr>{['Type', 'Subject', 'Status', 'Due'].map((h) => <th key={h} style={{ ...st.qTh, textAlign: 'left' }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {activities.map((x) => (
+                    <tr key={x.id}>
+                      <td style={{ ...st.qTd, textTransform: 'capitalize' }}>{x.type}</td>
+                      <td style={st.qTd}>{x.subject}</td>
+                      <td style={st.qTd}><span style={st.statusPill}>{x.status.replace(/_/g, ' ')}</span></td>
+                      <td style={st.qTd}>{x.dueDate ? d(x.dueDate) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </RecordCard>
+      )}
+
+      {tab === 'communication' && (
+        <RecordCard title="Communication">
+          <p style={{ ...st.muted, marginTop: 0 }}>
+            Reach a stakeholder on their own channel with a ready draft, or open the internal <b>Communication Center</b> for team chat and mail. AURA prepares the message; it does not send it.
+          </p>
+
+          <div style={st.commBox}>
+            <div style={st.commRow}>
+              <span style={st.commLabel}>Suggested message</span>
+              <button type="button" disabled={suggBusy} onClick={() => void suggestDealMessage()} style={st.actionBtn}>
+                {suggBusy ? 'Drafting…' : '✨ Suggest with AURA'}
+              </button>
+            </div>
+            <input value={dealSubject} onChange={(e) => setDealSubject(e.target.value)} placeholder="Subject (email)" style={st.commInput} />
+            <textarea value={dealBody} onChange={(e) => setDealBody(e.target.value)} rows={5} style={st.commTextarea} />
+            <p style={st.muted}>A greeting (“Hi &lt;name&gt;,”) is added automatically for each stakeholder.</p>
+          </div>
+
+          {stakeholders.length === 0 ? (
+            <p style={st.muted}>No stakeholders mapped — <a href="/crm/contacts" style={st.link}>add the people behind this deal →</a></p>
+          ) : (
+            stakeholders.map((s) => {
+              const wa = toE164Digits(s.phone);
+              const msg = personalise(dealBody, s.name);
+              return (
+                <div key={s.id} style={st.stkRow}>
+                  {s.isPrimary && <span style={{ color: 'var(--accent)' }}>★</span>}
+                  <a href={`/crm/contacts/${s.id}`} style={st.link}>{s.name}</a>
+                  {s.jobTitle && <span style={st.muted}>· {s.jobTitle}</span>}
+                  <span style={{ flex: 1 }} />
+                  {s.email && <a href={mailtoHref(s.email, dealSubject, msg)} style={st.chBtn}>✉ Email</a>}
+                  {wa && <a href={whatsappHref(wa, msg)} target="_blank" rel="noreferrer" style={st.chBtn}>WhatsApp</a>}
+                  {!s.email && !wa && <span style={{ ...st.muted, fontSize: 11.5 }}>{s.phone ? 'phone needs +country code' : 'no email/phone'}</span>}
+                </div>
+              );
+            })
+          )}
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '14px 0 0' }}>
+            <a href="/my-work/communication" style={st.actionBtn}>Open Communication Center →</a>
+            {account && <a href={`/crm/accounts/${account.id}`} style={st.actionBtn}>Customer 360 →</a>}
+          </div>
+        </RecordCard>
+      )}
+
+      {tab === 'documents' && (
+        <RecordCard title="Documents">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+            <p style={{ ...st.muted, marginTop: 0, maxWidth: 560 }}>
+              Documents linked to this deal in <b>Document Control</b> (the DMS). Read-only here — upload, versions and access stay there.
+            </p>
+            <a href="/documents/control" style={{ ...st.actionBtn, flexShrink: 0 }}>Open Document Control →</a>
+          </div>
+          {docs === null ? (
+            <p style={st.muted}>Loading documents…</p>
+          ) : docs.length === 0 ? (
+            <p style={st.muted}>No documents linked to this deal yet — attach them from Document Control.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={st.qTable}>
+                <thead><tr>{['Title', 'Kind', 'Version', 'Updated'].map((h) => <th key={h} style={{ ...st.qTh, textAlign: 'left' }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {docs.map((dc) => (
+                    <tr key={dc.id}>
+                      <td style={st.qTd}>{dc.title}</td>
+                      <td style={{ ...st.qTd, textTransform: 'capitalize', color: 'var(--muted)' }}>{dc.kind?.replace(/[._]/g, ' ')}</td>
+                      <td style={st.qTd}>{dc.currentVersion != null ? `v${dc.currentVersion}` : '—'}</td>
+                      <td style={st.qTd}>{dc.updatedAt ? d(dc.updatedAt) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </RecordCard>
+      )}
+
+      {tab === 'approvals' && (
+        <RecordCard title="Approvals">
+          <p style={{ ...st.muted, marginTop: 0 }}>
+            Approvals are actioned in <b>My Work → Approvals</b>; Sales shows only the status here. Nothing is approved inside the deal.
+          </p>
+          <div style={{ margin: '10px 0 14px' }}>
+            <a href="/my-work/approvals" style={st.actionBtn}>Open My Work → Approvals →</a>
+          </div>
+          {pendingApprovals.length === 0 ? (
+            <p style={st.muted}>No approvals pending for this deal.</p>
+          ) : (
+            pendingApprovals.map((q) => (
+              <div key={q.id} style={st.stkRow}>
+                <span style={st.statusPill}>Awaiting approval</span>
+                <a href={`/crm/quotations/${q.id}`} style={st.link}>{q.quoteNumber}</a>
+                <span style={st.muted}>· AED {aed(q.total)}</span>
+              </div>
+            ))
+          )}
+        </RecordCard>
+      )}
+
+      {tab === 'history' && (
+        <RecordCard title="Deal history">
           <Timeline recordId={o.id} />
-          {activities.length === 0 && <p style={st.muted}>No activities logged yet — <a href="/crm/activities" style={st.link}>log the next step →</a></p>}
         </RecordCard>
       )}
     </RecordShell>
@@ -491,6 +659,12 @@ const st = {
   blockTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--muted)', fontWeight: 800, marginBottom: 8 } as CSSProperties,
   checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   competitorChip: { fontSize: 12, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px', background: 'var(--panel-2, var(--panel))' } as CSSProperties,
+  commBox: { display: 'flex', flexDirection: 'column', gap: 8, margin: '10px 0 14px', border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--panel-2, var(--panel))' } as CSSProperties,
+  commRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } as CSSProperties,
+  commLabel: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', fontWeight: 800 } as CSSProperties,
+  commInput: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', fontSize: 13, outline: 'none' } as CSSProperties,
+  commTextarea: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', fontSize: 13, outline: 'none', resize: 'vertical' } as CSSProperties,
+  chBtn: { border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', borderRadius: 7, padding: '3px 10px', fontSize: 11.5, fontWeight: 700, textDecoration: 'none' } as CSSProperties,
   input: { width: '100%', boxSizing: 'border-box', background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '6px 10px', fontSize: 12.5 } as CSSProperties,
   stkRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13 } as CSSProperties,
   rolePill: { fontSize: 10.5, border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', color: 'var(--text)' } as CSSProperties,

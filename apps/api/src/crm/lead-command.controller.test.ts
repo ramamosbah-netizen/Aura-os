@@ -5,6 +5,7 @@ import {
   LeadService,
   InMemoryLeadStore,
   InMemoryActivityStore,
+  InMemoryQualificationDecisionStore,
 } from '@aura/crm';
 import { LeadCommandController } from './lead-command.controller';
 
@@ -19,10 +20,10 @@ function harness() {
     append: vi.fn().mockResolvedValue(undefined),
     appendWithClient: vi.fn().mockResolvedValue(undefined),
   } as unknown as EventStore;
-  const access = { assert: vi.fn() } as unknown as AccessService;
+  const access = { assert: vi.fn(), can: () => ({ allowed: true, reason: 'ok' }) } as unknown as AccessService;
   const leadStore = new InMemoryLeadStore();
   const activityStore = new InMemoryActivityStore();
-  const leads = new LeadService(leadStore, events, new NullTxRunner(), access);
+  const leads = new LeadService(leadStore, new InMemoryQualificationDecisionStore(), events, new NullTxRunner(), access);
   const activities = new ActivityService(activityStore, events);
   const tenant = { get: () => ({ tenantId: 't1', companyId: null, actorId: 'u1' }) } as unknown as TenantContext;
   const controller = new LeadCommandController(leads, activities, tenant);
@@ -50,7 +51,7 @@ describe('LeadCommandController — surface then clear', () => {
     expect(before.counts.needsAttention).toBeGreaterThanOrEqual(1);
 
     // 2) Work it: assign to me, log a completed call (first response + touch), schedule a future follow-up.
-    await leads.assign(lead.id, 'u1');
+    await leads.assign(lead.id, 'u1', 'u1'); // self-claim by the authenticated actor u1
     await activities.create({
       tenantId: 't1', type: 'call', subject: 'Intro call', status: 'completed',
       relatedType: 'lead', relatedId: lead.id, completedAt: new Date().toISOString(),

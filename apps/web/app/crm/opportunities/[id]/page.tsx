@@ -20,7 +20,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     return (
       <div style={st.container}>
         <h1 style={st.h1}>Opportunity Not Found</h1>
-        <a href="/crm/leads" style={st.link}>← Back to Sales Pipeline</a>
+        <a href="/crm/pipeline" style={st.link}>← Back to Pipeline</a>
       </div>
     );
   }
@@ -29,7 +29,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     <div style={st.container}>
       <RecordChrome type="Opportunity" title={opp.title} />
       <div style={st.navRow}>
-        <a href="/crm/leads" style={st.link}>← Back to Sales Pipeline</a>
+        <a href="/crm/pipeline" style={st.link}>← Back to Pipeline</a>
       </div>
       <Opportunity360Client opportunityId={opp.id} />
     </div>
@@ -37,7 +37,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 }
 
 const st = {
-  container: { maxWidth: 1180, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  // Full-focus 360: no width cap — the record uses the whole screen (suite topbar suppressed for this
+  // route in the app shell), consistent with Lead 360.
+  container: { maxWidth: 'none', margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
   h1: { fontSize: 24, margin: '0 0 10px', color: 'var(--accent)' } as CSSProperties,
   navRow: { marginBottom: 14 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 500 } as CSSProperties,

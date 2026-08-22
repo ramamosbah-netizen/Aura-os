@@ -162,6 +162,14 @@ export interface Opportunity {
   /** §14 — the deal STRATEGY (need, criteria, differentiation, win strategy, …). All optional;
    * coverage is derived per read against deal size (winPlanCoverage), never stored or gated. */
   winPlan: import('./win-plan').WinPlan | null;
+  /**
+   * The linked tender that OWNS this deal's commercial progression, once one exists (Start Tender,
+   * or a tender registered directly and back-linked). While set, the opportunity is a projection of
+   * the tender: its commercial stages (proposal/negotiation/won/lost) and direct quoting are the
+   * tender's to drive, never the opportunity's — enforced in the service, not just the UI. The
+   * tender's award/loss syncs the outcome back. Null for a direct-sale deal.
+   */
+  tenderId: Id | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -445,6 +453,7 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     pursuitDecidedAt: null,
     pursuitDimensions: null,
     winPlan: null,
+    tenderId: null,
     createdAt: now,
     updatedAt: now,
   };

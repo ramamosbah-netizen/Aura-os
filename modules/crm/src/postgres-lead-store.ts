@@ -171,6 +171,17 @@ export class PostgresLeadStore implements LeadStore {
     return res.rows.length ? rowToLead(res.rows[0]) : null;
   }
 
+  async getForUpdateWithClient(tx: TxHandle | null, id: Id): Promise<Lead | null> {
+    if (tx === null) return this.get(id);
+    // FOR UPDATE: hold a row lock for the life of the transaction so a concurrent qualify blocks
+    // here until we commit, then reads the already-qualified row (and records no second decision).
+    const res = await (tx as PoolClient).query<LeadRow>(
+      `SELECT ${COLS} FROM public.aura_crm_leads WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    return res.rows.length ? rowToLead(res.rows[0]) : null;
+  }
+
   private buildWhere(filter: LeadFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];

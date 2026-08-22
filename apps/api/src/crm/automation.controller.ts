@@ -100,10 +100,11 @@ export class CrmAutomationController {
 
     for (const a of detected.assignments) {
       try {
-        // Goes through the normal assign path, so it emits crm.lead.assigned, resets the
-        // first-response clock and is audited exactly like a human assignment. Automation gets no
-        // private door into the domain.
-        await this.leads.assign(a.leadId, a.assigneeId, ctx.actorId);
+        // System routing: the automation RULE is the authority (not the user who ran the sweep), so
+        // it uses the sanctioned internal `autoAssign` path — which still validates the assignee and
+        // emits the same audited crm.lead.assigned event + resets the first-response clock. The
+        // public `assign` command stays strict (a human actor is required there).
+        await this.leads.autoAssign(a.leadId, a.assigneeId, a.reason);
         applied.assignments += 1;
         this.logger.log(`Routed lead ${a.leadName} → ${a.assigneeId} (${a.reason})`);
       } catch (err) {

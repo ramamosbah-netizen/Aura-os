@@ -4,6 +4,7 @@ import { makeOpportunity } from '@aura/shared';
 import { OpportunityService } from './opportunity.service';
 import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
 import { quotationReadiness } from './domain/quotation-readiness';
+import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
 
 /**
  * Phase 0 — Opportunity ⇄ Tender ownership. Proves the invariant at the SERVICE (not the dropdown):
@@ -88,6 +89,22 @@ describe('quotation readiness — a Direct deal does NOT need Won; a Tender deal
   });
   it('a lost deal is NOT ready', () => {
     expect(quotationReadiness({ stage: 'lost', executionType: 'direct_sale', tenderId: null }).ready).toBe(false);
+  });
+});
+
+describe('OpportunityService.governanceForOpportunity (Phase 2b read)', () => {
+  it('ungoverned when no package store is wired', async () => {
+    const { svc } = harness(); // harness builds the service without a package store
+    expect((await svc.governanceForOpportunity('t1', 'opp-x')).governed).toBe(false);
+  });
+
+  it('returns the package store facts when governed', async () => {
+    const events = { append: vi.fn().mockResolvedValue(undefined), appendWithClient: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
+    const access = { assert: vi.fn(), can: () => ({ allowed: true, reason: 'ok' }) } as unknown as AccessService;
+    const pkgs = new InMemoryPreAwardPackageStore();
+    pkgs.set('t1', 'opp-1', { governed: true, packageId: 'p1', scopeApproved: true, estimateApproved: false, pricingFrozen: false });
+    const svc = new OpportunityService(new InMemoryOpportunityStore(), events, new NullTxRunner(), access, {} as unknown as AiService, null, pkgs);
+    expect(await svc.governanceForOpportunity('t1', 'opp-1')).toMatchObject({ governed: true, scopeApproved: true, estimateApproved: false, pricingFrozen: false });
   });
 });
 

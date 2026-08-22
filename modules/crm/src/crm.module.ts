@@ -13,6 +13,9 @@ import { LeadService } from './lead.service';
 import { CRM_QUALIFICATION_DECISION_STORE } from './qualification-decision-store';
 import { InMemoryQualificationDecisionStore } from './in-memory-qualification-decision-store';
 import { PostgresQualificationDecisionStore } from './postgres-qualification-decision-store';
+import { CRM_PRE_AWARD_PACKAGE_STORE } from './pre-award-package-store';
+import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
+import { PostgresPreAwardPackageStore } from './postgres-pre-award-package-store';
 
 import { CRM_OPPORTUNITY_STORE } from './opportunity-store';
 import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
@@ -109,6 +112,12 @@ import { LeadConversionService } from './lead-conversion.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresQualificationDecisionStore(pool) : new InMemoryQualificationDecisionStore(),
+    },
+    {
+      provide: CRM_PRE_AWARD_PACKAGE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPreAwardPackageStore(pool) : new InMemoryPreAwardPackageStore(),
     },
     {
       provide: CRM_OPPORTUNITY_STORE,

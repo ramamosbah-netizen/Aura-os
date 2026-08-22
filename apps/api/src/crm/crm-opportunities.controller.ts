@@ -137,7 +137,13 @@ export class CrmOpportunitiesController {
   async convertToQuotation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Quotation> {
     const opp = await this.opportunities.get(id);
     if (!opp) throw new NotFoundException(`opportunity ${id} not found`);
-    const readiness = quotationReadiness({ stage: opp.stage, executionType: opp.executionType, tenderId: opp.tenderId });
+    // Governance facts (Phase 2b): once a Pre-Award package backs the deal, the quotation gate also
+    // requires the approved Scope + Estimate + frozen Pricing chain; legacy deals stay grandfathered.
+    const gov = await this.opportunities.governanceForOpportunity(this.tenant.get().tenantId, id);
+    const readiness = quotationReadiness(
+      { stage: opp.stage, executionType: opp.executionType, tenderId: opp.tenderId },
+      { governed: gov.governed, scopeApproved: gov.scopeApproved, estimateApproved: gov.estimateApproved, pricingFrozen: gov.pricingFrozen },
+    );
     if (!readiness.ready) throw new BadRequestException(quotationReadinessMessage(readiness.gaps));
     const ctx = this.tenant.get();
     return this.quotations.create({

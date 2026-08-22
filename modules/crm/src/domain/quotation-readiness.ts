@@ -3,11 +3,14 @@ import type { ExecutionType, OpportunityStage } from '@aura/shared';
 /**
  * Quotation readiness gate — the domain rule for "can a direct quotation be raised from this deal?".
  *
- * Phase 0 proves ONLY what the domain supports today: a quotation is NOT gated on the deal being Won
- * (a proposal precedes the win), a tender-route deal is quoted through its tender (not directly), and
- * a lost deal cannot be quoted. It deliberately carries no speculative future codes — Phase 2 will
- * add the evidence chain (approved Scope + approved Estimate + frozen Pricing) when those checks
- * actually exist, so the gate never claims a guarantee the domain cannot yet keep.
+ * Ownership rules (always): a tender-route deal is quoted through its tender, and a lost deal cannot
+ * be quoted. Won is deliberately NOT required — a proposal precedes the win.
+ *
+ * Evidence chain (Phase 2): once a deal is GOVERNED — i.e. a Pre-Award package with revisions backs
+ * it — a quotation additionally requires an approved Scope revision + approved Estimate revision +
+ * frozen Pricing revision (the Q→P→E→B chain). This is applied ONLY when `facts.governed` is true, so
+ * deals created before the Pre-Award flow existed are grandfathered onto the ownership-only rules and
+ * nothing breaks; enforcement turns on for a deal exactly when it gains a governed package.
  */
 export interface QuotationReadinessCandidate {
   stage: OpportunityStage;
@@ -16,7 +19,20 @@ export interface QuotationReadinessCandidate {
   tenderId: string | null;
 }
 
-export type QuotationReadinessGapCode = 'TENDER_OWNED' | 'DEAL_LOST';
+export interface QuotationReadinessFacts {
+  /** True once a Pre-Award package with revisions backs this deal. False ⇒ grandfathered (legacy). */
+  governed?: boolean;
+  scopeApproved?: boolean;
+  estimateApproved?: boolean;
+  pricingFrozen?: boolean;
+}
+
+export type QuotationReadinessGapCode =
+  | 'TENDER_OWNED'
+  | 'DEAL_LOST'
+  | 'SCOPE_NOT_APPROVED'
+  | 'ESTIMATE_NOT_APPROVED'
+  | 'PRICING_NOT_FROZEN';
 
 export interface QuotationReadinessGap {
   code: QuotationReadinessGapCode;
@@ -30,16 +46,27 @@ export interface QuotationReadiness {
 
 const gap = (code: QuotationReadinessGapCode, message: string): QuotationReadinessGap => ({ code, message });
 
-export function quotationReadiness(opp: QuotationReadinessCandidate): QuotationReadiness {
+export function quotationReadiness(
+  opp: QuotationReadinessCandidate,
+  facts: QuotationReadinessFacts = {},
+): QuotationReadiness {
   const gaps: QuotationReadinessGap[] = [];
-  // Ownership: a tender-route deal is quoted through its tender's pricing, never a direct quotation.
+
+  // Ownership (always enforced).
   if (opp.tenderId || opp.executionType === 'tender') {
     gaps.push(gap('TENDER_OWNED', 'this is a tender-route deal — quote it through its tender, not a direct quotation'));
   }
-  // A lost deal cannot be quoted. (Won is deliberately NOT required — a proposal precedes the win.)
   if (opp.stage === 'lost') {
     gaps.push(gap('DEAL_LOST', 'a lost deal cannot be quoted'));
   }
+
+  // Evidence chain — only once the deal is governed by a Pre-Award package (grandfather otherwise).
+  if (facts.governed) {
+    if (!facts.scopeApproved) gaps.push(gap('SCOPE_NOT_APPROVED', 'approve the scope revision before quoting'));
+    if (!facts.estimateApproved) gaps.push(gap('ESTIMATE_NOT_APPROVED', 'complete and approve the estimate revision before quoting'));
+    if (!facts.pricingFrozen) gaps.push(gap('PRICING_NOT_FROZEN', 'freeze the pricing revision before quoting'));
+  }
+
   return { ready: gaps.length === 0, gaps };
 }
 

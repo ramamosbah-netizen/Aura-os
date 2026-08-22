@@ -90,3 +90,34 @@ describe('quotation readiness — a Direct deal does NOT need Won; a Tender deal
     expect(quotationReadiness({ stage: 'lost', executionType: 'direct_sale', tenderId: null }).ready).toBe(false);
   });
 });
+
+describe('quotation readiness — Phase 2 evidence chain (governed only; legacy grandfathered)', () => {
+  const direct = { stage: 'proposal' as const, executionType: 'direct_sale' as const, tenderId: null };
+
+  it('UNGOVERNED (legacy) deal is ready on ownership rules alone — chain NOT required', () => {
+    expect(quotationReadiness(direct, {}).ready).toBe(true);
+    expect(quotationReadiness(direct, { governed: false, scopeApproved: false }).ready).toBe(true);
+  });
+
+  it('GOVERNED deal requires approved scope + approved estimate + frozen pricing', () => {
+    const r = quotationReadiness(direct, { governed: true });
+    expect(r.ready).toBe(false);
+    expect(r.gaps.map((g) => g.code).sort()).toEqual(['ESTIMATE_NOT_APPROVED', 'PRICING_NOT_FROZEN', 'SCOPE_NOT_APPROVED']);
+  });
+
+  it('GOVERNED deal with the full chain is ready', () => {
+    expect(quotationReadiness(direct, { governed: true, scopeApproved: true, estimateApproved: true, pricingFrozen: true }).ready).toBe(true);
+  });
+
+  it('GOVERNED deal missing just one link is not ready', () => {
+    const r = quotationReadiness(direct, { governed: true, scopeApproved: true, estimateApproved: true, pricingFrozen: false });
+    expect(r.ready).toBe(false);
+    expect(r.gaps.map((g) => g.code)).toEqual(['PRICING_NOT_FROZEN']);
+  });
+
+  it('ownership still wins even when governed+complete (tender-route never direct-quotes)', () => {
+    const r = quotationReadiness({ stage: 'proposal', executionType: 'tender', tenderId: 'tnd-1' }, { governed: true, scopeApproved: true, estimateApproved: true, pricingFrozen: true });
+    expect(r.ready).toBe(false);
+    expect(r.gaps.map((g) => g.code)).toContain('TENDER_OWNED');
+  });
+});

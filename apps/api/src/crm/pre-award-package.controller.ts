@@ -1,14 +1,32 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { OpportunityService, PreAwardPackageService, QuotationService } from '@aura/crm';
+import { type BasisLine, OpportunityService, PreAwardPackageService, QuotationService } from '@aura/crm';
 
 class ScopeLineDto {
   @IsString() lineId!: string;
   @IsString() description!: string;
   @IsString() unit!: string;
-  @IsNumber() quantity!: number;
+  /** Null = the quantity is genuinely UNKNOWN. It is not zero, and it blocks approval downstream. */
+  @IsOptional() @IsNumber() quantity?: number | null;
   @IsString() sourceLineId!: string;
+}
+class EditScopeLinesDto {
+  @IsArray() lines!: ScopeLineDto[];
+}
+
+/**
+ * DTO → domain. An omitted quantity means UNKNOWN (null) — never 0. Keeping this in one place is what
+ * stops a caller from re-introducing the silent zero the estimate then prices at nothing.
+ */
+function toBasisLines(lines: ScopeLineDto[] = []): BasisLine[] {
+  return lines.map((l) => ({
+    lineId: l.lineId,
+    description: l.description,
+    unit: l.unit,
+    quantity: l.quantity === undefined ? null : l.quantity,
+    sourceLineId: l.sourceLineId,
+  }));
 }
 class AddScopeDto {
   @IsString() sourceId!: string;
@@ -88,7 +106,7 @@ export class CrmPreAwardPackageController {
   async addScope(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AddScopeDto) {
     if (!dto?.sourceId?.trim()) throw new BadRequestException('sourceId is required');
     const { tenantId, companyId, packageId } = await this.ensurePackage(id);
-    let basis = await this.packages.addScopeBasis({ tenantId, companyId, packageId, sourceId: dto.sourceId, sourceRevRef: dto.sourceRevRef ?? null, lines: dto.lines ?? [], createdBy: this.tenant.get().actorId });
+    let basis = await this.packages.addScopeBasis({ tenantId, companyId, packageId, sourceId: dto.sourceId, sourceRevRef: dto.sourceRevRef ?? null, lines: toBasisLines(dto.lines), createdBy: this.tenant.get().actorId });
     if (dto.approve) basis = await this.packages.approveScopeBasis(basis, this.tenant.get().actorId);
     return basis;
   }
@@ -100,10 +118,26 @@ export class CrmPreAwardPackageController {
     const ctx = this.tenant.get();
     const pkg = await this.packages.openDirect({ tenantId, companyId, opportunityId: id, createdBy: ctx.actorId });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const built = await this.packages.addEstimate({ tenantId, companyId, packageId: pkg.id, basisRevisionId: dto.basisRevisionId, lines: dto.lines ?? [], buildUps: (dto.buildUps ?? []) as any, createdBy: ctx.actorId });
+    const built = await this.packages.addEstimate({ tenantId, companyId, packageId: pkg.id, basisRevisionId: dto.basisRevisionId, lines: toBasisLines(dto.lines), buildUps: (dto.buildUps ?? []) as any, createdBy: ctx.actorId });
     let estimate = built.estimate;
     if (dto.approve) { estimate = await this.packages.freezeEstimateRevision(estimate, ctx.actorId); estimate = await this.packages.approveEstimateRevision(estimate, ctx.actorId); }
     return { estimate, buildUps: built.buildUps };
+  }
+
+  /**
+   * Edit a DRAFT scope basis — the human half of Accept ≠ Approve. Add, remove or change lines
+   * (description, unit, quantity) before approving. Provenance on surviving lines is preserved by the
+   * domain, and each changed line is stamped as human-edited. Approved/superseded revisions refuse.
+   */
+  @Patch(':id/pre-award-package/scope/:basisId/lines')
+  async editScopeLines(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('basisId', ParseUuidOr404Pipe) basisId: string,
+    @Body() dto: EditScopeLinesDto,
+  ) {
+    if (!Array.isArray(dto?.lines)) throw new BadRequestException('lines is required');
+    const { tenantId, packageId } = await this.ensurePackage(id);
+    return this.packages.updateBasisLinesById(tenantId, packageId, basisId, toBasisLines(dto.lines), this.tenant.get().actorId);
   }
 
   @Post(':id/pre-award-package/scope/:basisId/approve')

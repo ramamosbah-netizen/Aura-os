@@ -56,9 +56,46 @@ export interface BasisLine {
   lineId: Id;
   description: string;
   unit: string;
-  quantity: number;
+  /**
+   * The quantity — or NULL when the source does not state one. **Unknown is not zero.** A null is
+   * carried honestly through the chain and BLOCKS approval, estimation and pricing (see
+   * `basisCompleteness`) rather than silently costing the line at nothing. The type is nullable on
+   * purpose: it makes "unknown" unrepresentable as a number, so no consumer can do arithmetic on it
+   * without the compiler forcing a decision.
+   */
+  quantity: number | null;
   /** The ScopeLine/BOQItem this line was projected from (provenance). */
   sourceLineId: Id;
+  /**
+   * Stamped when a human edits a line on the draft. The provenance above is NEVER rewritten — an
+   * edited line still points at the evidence it came from, it just stops claiming to be verbatim.
+   */
+  editedBy?: Id | null;
+  editedAt?: string | null;
+}
+
+/**
+ * Which lines still lack a quantity. The estimation chain multiplies by quantity, so an unknown one
+ * cannot be priced — the gates below refuse to advance until every line carries a real number.
+ */
+export interface BasisCompleteness {
+  complete: boolean;
+  incompleteLineIds: Id[];
+}
+
+export function basisCompleteness(lines: BasisLine[]): BasisCompleteness {
+  const incompleteLineIds = lines.filter((l) => l.quantity === null || l.quantity === undefined).map((l) => l.lineId);
+  return { complete: incompleteLineIds.length === 0, incompleteLineIds };
+}
+
+/** Shared refusal so the approve / estimate / pricing gates all speak with one voice. */
+export function assertBasisQuantitiesKnown(rev: EstimationBasisRevision, action: string): void {
+  const gaps = basisCompleteness(rev.lines);
+  if (!gaps.complete) {
+    throw new Error(
+      `cannot ${action}: ${gaps.incompleteLineIds.length} line(s) still have an unknown quantity — supply a quantity for every line first (unknown is not zero)`,
+    );
+  }
 }
 
 export interface EstimationBasisRevision {
@@ -94,8 +131,45 @@ export function makeBasisRevision(input: {
   };
 }
 
+/**
+ * Human edit of a DRAFT basis — the "editable scope draft" half of Accept ≠ Approve. Replaces the
+ * line set (add / remove / change description, unit, quantity) while preserving each surviving line's
+ * `sourceLineId`, so a human edit refines the evidence trail instead of erasing it. Only a draft can
+ * be edited: once approved, the revision is the frozen thing the estimate was built on.
+ */
+export function updateBasisLines(rev: EstimationBasisRevision, lines: BasisLine[], editedBy: Id | null): EstimationBasisRevision {
+  if (rev.status !== 'draft') {
+    throw new Error(`only a draft basis revision can be edited — B-${String(rev.revisionNo).padStart(3, '0')} is already ${rev.status}`);
+  }
+  if (lines.length === 0) throw new Error('a basis revision needs at least one line');
+  const priorById = new Map(rev.lines.map((l) => [l.lineId, l]));
+  const now = new Date().toISOString();
+  const next = lines.map((l) => {
+    const prior = priorById.get(l.lineId);
+    // Provenance is owned by the original projection, never by the editor's payload.
+    const sourceLineId = prior ? prior.sourceLineId : l.sourceLineId;
+    const changed =
+      !prior || prior.description !== l.description || prior.unit !== l.unit || prior.quantity !== l.quantity;
+    return {
+      lineId: l.lineId,
+      description: l.description,
+      unit: l.unit,
+      quantity: l.quantity,
+      sourceLineId,
+      editedBy: changed ? editedBy : (prior?.editedBy ?? null),
+      editedAt: changed ? now : (prior?.editedAt ?? null),
+    };
+  });
+  return { ...rev, lines: next };
+}
+
 export function approveBasis(rev: EstimationBasisRevision, approvedBy: Id | null): EstimationBasisRevision {
   if (rev.status === 'superseded') throw new Error('cannot approve a superseded basis revision');
+  // An approval is an audit record, not a toggle: re-approving must never re-stamp who/when.
+  if (rev.status === 'approved') {
+    throw new Error(`only a draft basis revision can be approved — B-${String(rev.revisionNo).padStart(3, '0')} is already approved`);
+  }
+  assertBasisQuantitiesKnown(rev, 'approve this scope basis');
   return { ...rev, status: 'approved', approvedBy, approvedAt: new Date().toISOString() };
 }
 

@@ -120,6 +120,48 @@ export function freezeSheet(sheet: PricingSheet, actorId: Id | null, now = new D
   return { ...sheet, status: 'frozen', frozenAt: now.toISOString(), frozenBy: actorId };
 }
 
+// ── Quotation generation — the sheet IS the quote's numbers ─────────────────────────
+//
+// A quotation raised off a Pre-Award package must carry the FROZEN sheet's own money. Re-deriving it
+// from anywhere else (an opportunity's headline `value`, say) would make the governed chain a
+// permission check with no hold over the number the customer actually receives.
+
+export interface QuotationLineDraft {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  vatRate: number;
+}
+
+/**
+ * Project a FROZEN sheet into quotation lines. Each pricing line becomes one quotation line priced at
+ * its own computed sell — so `sum(lineNet)` reproduces `sheet.totals.totalSell` exactly.
+ */
+export function quotationLinesFromSheet(sheet: PricingSheet, vatRate = 5): QuotationLineDraft[] {
+  if (sheet.status !== 'frozen') {
+    throw new Error(`only a frozen pricing sheet can be quoted — ${sheet.name} v${sheet.version} is ${sheet.status}`);
+  }
+  if (sheet.lines.length === 0) throw new Error('an empty pricing sheet has no lines to quote');
+  return sheet.lines.map((line) => {
+    const sellPrice = estimateLine(line).sellPrice;
+    const quantity = Math.max(0, Number(line.quantity) || 0);
+    // Unit price is derived so quantity × unitPrice === the line's committed sell price.
+    const unitPrice = quantity > 0 ? round2(sellPrice / quantity) : round2(sellPrice);
+    return { description: line.description, quantity: quantity > 0 ? quantity : 1, unitPrice, vatRate };
+  });
+}
+
+/**
+ * Record the quotation this sheet produced. Allowed on a FROZEN sheet on purpose: the link is an
+ * OUTPUT of the committed price, not a change to it — lines and totals stay exactly as frozen.
+ */
+export function linkQuotation(sheet: PricingSheet, quotationId: Id): PricingSheet {
+  if (sheet.quotationId && sheet.quotationId !== quotationId) {
+    throw new Error(`only one quotation can be generated from a pricing sheet — ${sheet.name} v${sheet.version} is already linked to quotation ${sheet.quotationId}`);
+  }
+  return { ...sheet, quotationId };
+}
+
 // ── Version comparison — what changed between two prices, line by line ──────────────
 //
 // The reason the sheet is an aggregate with a version chain: "v2 is 8% cheaper" is useless to an

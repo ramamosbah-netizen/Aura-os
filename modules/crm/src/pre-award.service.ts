@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
-  type Requirement, type NewRequirement, makeRequirement,
+  type Requirement, type NewRequirement, type RequirementPriority, type RequirementStatus, makeRequirement,
   type SolutionScope, type NewScopeLine, makeSolutionScope, makeScopeLine,
   computeScopeTotal, approveScope, scopeLinesToQuotationLines, PREAWARD_EVENT,
 } from './domain/solution-scope';
@@ -41,6 +41,32 @@ export class PreAwardService {
   }
   listRequirements(tenantId: Id, opportunityId: Id): Promise<Requirement[]> {
     return this.store.listRequirements(tenantId, opportunityId);
+  }
+
+  /**
+   * Correct or retire a captured requirement. "Delete" is the existing `dropped` status rather than a
+   * row removal — the evidence a scope was grounded on stays readable, and Scope Assist already skips
+   * dropped requirements, so retiring one changes the evidence fingerprint and marks live proposals
+   * stale instead of silently rewriting history.
+   */
+  async updateRequirement(input: {
+    tenantId: Id; opportunityId: Id; requirementId: Id;
+    title?: string; detail?: string | null; priority?: RequirementPriority; status?: RequirementStatus;
+    actorId?: Id | null;
+  }): Promise<Requirement> {
+    const existing = (await this.store.listRequirements(input.tenantId, input.opportunityId)).find((r) => r.id === input.requirementId);
+    if (!existing) throw new Error(`requirement ${input.requirementId} not found`);
+    if (input.title !== undefined && !input.title.trim()) throw new Error('requirement title is required');
+    const updated: Requirement = {
+      ...existing,
+      title: input.title?.trim() ?? existing.title,
+      detail: input.detail === undefined ? existing.detail : (input.detail?.trim() || null),
+      priority: input.priority ?? existing.priority,
+      status: input.status ?? existing.status,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.store.saveRequirement(updated);
+    return updated;
   }
 
   // ── Solution scopes ──

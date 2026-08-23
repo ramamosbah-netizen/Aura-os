@@ -2,11 +2,11 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, newId, moneyNumber, computeBuildUp, type CostComponent, type EstimationLineInput, emptyEstimationInput } from '@aura/shared';
 import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetStore } from './pricing-sheet-store';
-import { type PricingSheet, makePricingSheet, freezeSheet } from './domain/pricing-sheet';
+import { type PricingSheet, makePricingSheet, freezeSheet, linkQuotation } from './domain/pricing-sheet';
 import {
   type PreAwardPackage, type EstimationBasisRevision, type EstimateRevision, type EstimateBuildUp, type BasisLine,
-  makePreAwardPackage, makeBasisRevision, approveBasis, makeEstimateRevision, freezeEstimate, approveEstimate,
-  packageGovernance,
+  makePreAwardPackage, makeBasisRevision, approveBasis, updateBasisLines, assertBasisQuantitiesKnown,
+  makeEstimateRevision, freezeEstimate, approveEstimate, packageGovernance,
 } from './domain/pre-award-package';
 
 type BuildUpInput = {
@@ -54,9 +54,27 @@ export class PreAwardPackageService {
     return approved;
   }
 
+  /**
+   * Edit the lines of a DRAFT basis revision — the human half of Accept ≠ Approve. Provenance on each
+   * surviving line is preserved by the domain; only a draft is editable.
+   */
+  async updateBasisLinesById(tenantId: Id, packageId: Id, basisId: Id, lines: BasisLine[], editedBy: Id | null): Promise<EstimationBasisRevision> {
+    const basis = (await this.store.listBasis(tenantId, packageId)).find((b) => b.id === basisId);
+    if (!basis) throw new Error(`scope basis ${basisId} not found`);
+    const edited = updateBasisLines(basis, lines, editedBy);
+    await this.store.saveBasis(edited);
+    return edited;
+  }
+
   /** Build an estimate revision (draft) on a basis, computing each line via the shared rate engine. */
   async addEstimate(input: { tenantId: Id; companyId?: Id | null; packageId: Id; basisRevisionId: Id; lines: BasisLine[]; buildUps: BuildUpInput[]; createdBy?: Id | null }): Promise<{ estimate: EstimateRevision; buildUps: EstimateBuildUp[] }> {
-    const qtyByLine = new Map(input.lines.map((l) => [l.lineId, l.quantity]));
+    // An estimate multiplies rate × quantity: an unknown quantity cannot be estimated, and must never
+    // be silently treated as zero (which would produce a confident AED 0 estimate).
+    const unknown = input.lines.filter((l) => l.quantity === null || l.quantity === undefined).map((l) => l.lineId);
+    if (unknown.length > 0) {
+      throw new Error(`cannot build an estimate: ${unknown.length} basis line(s) still have an unknown quantity — supply a quantity for every line first (unknown is not zero)`);
+    }
+    const qtyByLine = new Map(input.lines.map((l) => [l.lineId, l.quantity ?? 0]));
     const buildUps: EstimateBuildUp[] = input.buildUps.map((b) => {
       const components: CostComponent[] = b.components.map((c) => ({ id: newId(), costType: c.costType, description: c.description, quantity: Number(c.quantity) || 0, unitCost: Number(c.unitCost) || 0, amount: moneyNumber((Number(c.quantity) || 0) * (Number(c.unitCost) || 0)) }));
       const f = computeBuildUp(components, Number(b.overheadPercent) || 0, Number(b.profitPercent) || 0, Number(b.indirectPercent) || 0, Number(b.riskPercent) || 0);
@@ -119,6 +137,11 @@ export class PreAwardPackageService {
     const approved = [...estimates].reverse().find((e) => e.status === 'approved');
     if (!approved) throw new Error('an approved estimate revision is required before pricing can be frozen');
 
+    // The sheet is the money the quotation will carry, so the basis under it must be complete: a line
+    // with an unknown quantity would freeze a price that silently costs that scope at nothing.
+    const basis = (await this.store.listBasis(input.tenantId, pkg.id)).find((b) => b.id === approved.basisRevisionId);
+    if (basis) assertBasisQuantitiesKnown(basis, 'freeze pricing');
+
     const totals = (approved.totals ?? {}) as { totalDirectCost?: number; totalSellingValue?: number; lineCount?: number };
     const totalDirectCost = Number(totals.totalDirectCost) || 0;
     const totalSellingValue = Number(totals.totalSellingValue) || 0;
@@ -150,6 +173,24 @@ export class PreAwardPackageService {
     await this.pricing.save(sheet);
     this.logger.log(`Pricing frozen for package ${pkg.id} (sheet ${sheet.id}, estimate ${approved.id})`);
     return sheet;
+  }
+
+  /**
+   * The FROZEN pricing sheet a direct deal's quotation must be generated from. The governed chain owns
+   * the quote's numbers, not just the permission to raise one.
+   */
+  async frozenPricingFor(tenantId: Id, opportunityId: Id): Promise<PricingSheet | null> {
+    const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
+    if (!pkg) return null;
+    const [sheet] = await this.pricing.list({ tenantId, packageId: pkg.id, status: 'frozen', limit: 1 });
+    return sheet ?? null;
+  }
+
+  /** Record the quotation a frozen sheet produced — closing the P→Q link. */
+  async linkQuotationToPricing(sheet: PricingSheet, quotationId: Id): Promise<PricingSheet> {
+    const linked = linkQuotation(sheet, quotationId);
+    await this.pricing.save(linked);
+    return linked;
   }
 
   /**

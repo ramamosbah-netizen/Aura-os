@@ -199,7 +199,10 @@ export class ScopeAssistService {
       lineId: it.id,
       description: it.description,
       unit: it.unit,
-      quantity: it.quantity ?? 0,
+      // Unknown stays UNKNOWN. Coercing it to 0 here would hand the estimator a line that prices at
+      // nothing and reads as a decision; null instead blocks approval until a human supplies the real
+      // quantity — which is the whole point of accepting into an EDITABLE draft.
+      quantity: it.quantity,
       sourceLineId: it.provenance[0]?.sourceId ?? it.id,
     }));
     const basis = await this.packages.addScopeBasis({

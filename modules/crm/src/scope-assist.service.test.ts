@@ -102,13 +102,26 @@ describe('ScopeAssistService — accept ≠ approve', () => {
     expect(proposal.acceptedBasisRevisionId).toBe(basis.id);
     expect(basis.status).toBe('draft'); // editable — NOT approved
 
+    // A requirement states no quantity, so the accepted line carries UNKNOWN — never a silent zero.
+    expect(basis.lines[0].quantity).toBeNull();
+
     // Governance: scope NOT yet approved (accept did not approve).
     let g = await packages.governance('t1', 'o1');
     expect(g.governed).toBe(true);
     expect(g.scopeApproved).toBe(false);
 
-    // Approval is the independent human command (keyed by package + basis id).
+    // And it CANNOT be approved while a quantity is unknown — the human must complete the draft.
     const pkgId = (await packages.readAggregate('t1', 'o1')).package!.id;
+    await expect(packages.approveScopeBasisById('t1', pkgId, basis.id, 'u2')).rejects.toThrow(/unknown quantity/i);
+
+    // The human edits the draft (the "editable" in "editable draft basis"), then approves.
+    const edited = await packages.updateBasisLinesById('t1', pkgId, basis.id,
+      basis.lines.map((l) => ({ ...l, quantity: 12 })), 'u2');
+    expect(edited.lines[0].quantity).toBe(12);
+    expect(edited.lines[0].editedBy).toBe('u2');           // human edit is recorded…
+    expect(edited.lines[0].sourceLineId).toBe(basis.lines[0].sourceLineId); // …provenance survives it
+
+    // Approval is the independent human command (keyed by package + basis id).
     await packages.approveScopeBasisById('t1', pkgId, basis.id, 'u2');
     g = await packages.governance('t1', 'o1');
     expect(g.scopeApproved).toBe(true);

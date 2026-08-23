@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import ScopeAssistCard from './scope-assist-card';
+import ScopeEvidenceCard from './scope-evidence-card';
 
 // Commercial (Pre-Award) — the ONE UI over a direct deal's Pre-Award package aggregate:
 //   Scope basis → Estimate revision → Pricing sheet → Quotation.
@@ -11,7 +12,8 @@ import ScopeAssistCard from './scope-assist-card';
 
 interface Governance { governed: boolean; packageId: string | null; scopeApproved: boolean; estimateApproved: boolean; pricingFrozen: boolean }
 interface Pkg { id: string; route: string; status: string }
-interface BasisLine { lineId: string; description: string; unit: string; quantity: number; sourceLineId: string }
+interface BasisLine { lineId: string; description: string; unit: string; quantity: number | null; sourceLineId: string; editedBy?: string | null; editedAt?: string | null }
+interface EditableLine { lineId: string; description: string; unit: string; quantity: string; sourceLineId: string }
 interface Basis { id: string; revisionNo: number; status: string; sourceId: string; lines: BasisLine[]; approvedAt: string | null }
 interface EstimateTotals { totalDirectCost?: number; totalSellingValue?: number; marginPercent?: number; lineCount?: number }
 interface Estimate { id: string; revisionNo: number; status: string; basisRevisionId: string; totals: EstimateTotals; frozenAt: string | null; approvedAt: string | null }
@@ -26,20 +28,44 @@ interface BuildUpForm { unitCost: string; overheadPercent: string; profitPercent
 const aed = (n: number | undefined): string => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const blankScopeLine = (): ScopeLineForm => ({ description: '', unit: 'no', quantity: '' });
 
+/**
+ * Load is a STATE MACHINE, not a nullable value. Collapsing "failed" into "no data yet" is what let a
+ * 404 render as "Loading commercial workspace…" forever — the panel looked like it was working while
+ * every request was failing, which is exactly the blindness that hid the missing BFF routes.
+ */
+type LoadState =
+  | { state: 'loading' }
+  | { state: 'error'; message: string }
+  | { state: 'loaded'; aggregate: Aggregate };
+
 export default function CommercialPanel({ opportunityId }: { opportunityId: string }) {
-  const [agg, setAgg] = useState<Aggregate | null>(null);
+  const [load, setLoad] = useState<LoadState>({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [scopeLines, setScopeLines] = useState<ScopeLineForm[]>([blankScopeLine()]);
   const [buildUps, setBuildUps] = useState<Record<string, BuildUpForm>>({});
+  const [editing, setEditing] = useState<{ basisId: string; lines: EditableLine[] } | null>(null);
+  // Bumped whenever evidence changes, so the Scope Assist card re-reads and its staleness flag refreshes.
+  const [evidenceVersion, setEvidenceVersion] = useState(0);
 
   const base = `/api/crm/opportunities/${opportunityId}`;
-  const load = useCallback(async () => {
-    const res = await fetch(`${base}/pre-award-package`, { cache: 'no-store' });
-    if (res.ok) setAgg(await res.json());
-    else setAgg(null);
+  const reload = useCallback(async () => {
+    try {
+      const res = await fetch(`${base}/pre-award-package`, { cache: 'no-store' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const detail = typeof j?.message === 'string' ? j.message : `HTTP ${res.status}`;
+        setLoad({ state: 'error', message: `Could not load the commercial workspace — ${detail}` });
+        return;
+      }
+      setLoad({ state: 'loaded', aggregate: await res.json() });
+    } catch {
+      setLoad({ state: 'error', message: 'The CRM API is unreachable from the web app.' });
+    }
   }, [base]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void reload(); }, [reload]);
+  const load_ = reload; // stable alias used by the command helper below
+  const agg = load.state === 'loaded' ? load.aggregate : null;
 
   // Every command posts, then RE-READS the aggregate — the UI never advances its own state on success.
   const cmd = useCallback(async (path: string, body?: unknown): Promise<boolean> => {
@@ -54,10 +80,39 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
         setErr(typeof j?.message === 'string' ? j.message : (Array.isArray(j?.message) ? j.message.join(', ') : `Request failed (${res.status})`));
         return false;
       }
-      await load();
+      await load_();
       return true;
     } finally { setBusy(false); }
-  }, [base, load]);
+  }, [base, load_]);
+
+  /** PATCH the draft basis lines — the human half of Accept ≠ Approve. */
+  const saveEdit = useCallback(async (basisId: string, lines: EditableLine[]): Promise<boolean> => {
+    setBusy(true); setErr(null);
+    try {
+      const payload = lines
+        .filter((l) => l.description.trim())
+        .map((l) => ({
+          lineId: l.lineId,
+          description: l.description.trim(),
+          unit: l.unit.trim() || 'no',
+          // Blank means the quantity is still UNKNOWN — send null, never 0.
+          quantity: l.quantity.trim() === '' ? null : Number(l.quantity),
+          sourceLineId: l.sourceLineId,
+        }));
+      if (payload.length === 0) { setErr('a scope basis needs at least one line'); return false; }
+      const res = await fetch(`${base}/pre-award-package/scope/${basisId}/lines`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lines: payload }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr(typeof j?.message === 'string' ? j.message : `Request failed (${res.status})`);
+        return false;
+      }
+      await load_();
+      setEditing(null);
+      return true;
+    } finally { setBusy(false); }
+  }, [base, load_]);
 
   const g = agg?.governance;
   const approvedBasis = useMemo(() => agg?.basis.find((b) => b.status === 'approved') ?? null, [agg]);
@@ -85,7 +140,18 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
     if (await cmd('/pre-award-package/estimate', { basisRevisionId: approvedBasis.id, lines, buildUps: ups })) setBuildUps({});
   };
 
-  if (!agg) return <section style={st.panel}><p style={st.empty}>Loading commercial workspace…</p></section>;
+  // Four distinct states. A failure is never dressed up as "still loading".
+  if (load.state === 'loading') return <section style={st.panel}><p style={st.empty}>Loading commercial workspace…</p></section>;
+  if (load.state === 'error') {
+    return (
+      <section style={st.panel}>
+        <h2 style={st.h2}>Commercial — Pre-Award</h2>
+        <p style={st.err}>{load.message}</p>
+        <button style={st.btn} onClick={() => { setLoad({ state: 'loading' }); void reload(); }}>Retry</button>
+      </section>
+    );
+  }
+  if (!agg) return null;
 
   // Tender-route deals are quoted through their tender, not a direct package.
   if (agg.deal.tenderId || agg.deal.executionType === 'tender') {
@@ -119,10 +185,14 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
 
       {err && <p style={st.err}>{err}</p>}
 
+      {/* Evidence FIRST, then the suggestion built on it. Capturing a requirement changes the evidence
+          fingerprint, so any live proposal is marked stale on the next read. */}
+      <ScopeEvidenceCard opportunityId={opportunityId} onChanged={() => setEvidenceVersion((v) => v + 1)} />
+
       {/* AURA Scope Assist — a grounded suggestion over this deal's OWN evidence. Accept spins the
           suggestion off into an EDITABLE draft basis (opening the package if needed); approving that
           basis stays the separate human step in the chain below. */}
-      <ScopeAssistCard opportunityId={opportunityId} onAccepted={() => void load()} />
+      <ScopeAssistCard key={evidenceVersion} opportunityId={opportunityId} onAccepted={() => void reload()} />
 
       {!g?.governed && (
         <div style={st.block}>
@@ -136,19 +206,69 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
           {/* ── Scope ── */}
           <div style={st.block}>
             <h3 style={st.h3}>1 · Scope basis {g.scopeApproved && <span style={st.done}>approved ✓</span>}</h3>
-            {agg.basis.map((b) => (
+            {agg.basis.map((b) => {
+              const isEditing = editing?.basisId === b.id;
+              const unknownCount = b.lines.filter((l) => l.quantity === null || l.quantity === undefined).length;
+              return (
               <div key={b.id} style={st.card}>
                 <div style={st.cardHead}>
                   <span style={st.name}>Basis B-{String(b.revisionNo).padStart(3, '0')}</span>
                   <StatusTag status={b.status} />
                   <span style={st.meta}>{b.lines.length} line(s)</span>
-                  {b.status === 'draft' && <button style={st.btn} disabled={busy} onClick={() => void cmd(`/pre-award-package/scope/${b.id}/approve`)}>Approve scope ✓</button>}
+                  {b.status === 'draft' && !isEditing && (
+                    <button style={st.btnGhost} disabled={busy}
+                      onClick={() => setEditing({ basisId: b.id, lines: b.lines.map((l) => ({ ...l, quantity: l.quantity === null || l.quantity === undefined ? '' : String(l.quantity) })) })}>
+                      Edit lines
+                    </button>
+                  )}
+                  {b.status === 'draft' && !isEditing && (
+                    <button style={st.btn} disabled={busy || unknownCount > 0}
+                      title={unknownCount > 0 ? `${unknownCount} line(s) still have an unknown quantity — edit the draft to supply them` : undefined}
+                      onClick={() => void cmd(`/pre-award-package/scope/${b.id}/approve`)}>Approve scope ✓</button>
+                  )}
                 </div>
-                {b.lines.length > 0 && (
-                  <ul style={st.lineList}>{b.lines.map((l) => (<li key={l.lineId} style={st.lineRow}><span>{l.description}</span><span style={st.meta}>{l.quantity} {l.unit}</span></li>))}</ul>
+
+                {/* Unknown ≠ zero: the draft says so plainly, and approval stays blocked until it's resolved. */}
+                {b.status === 'draft' && unknownCount > 0 && !isEditing && (
+                  <p style={st.warnLine}>{unknownCount} line(s) have an <b>unknown</b> quantity. Edit the draft to supply them — an unknown quantity is not zero, so it cannot be estimated or priced.</p>
+                )}
+
+                {!isEditing && b.lines.length > 0 && (
+                  <ul style={st.lineList}>{b.lines.map((l) => (
+                    <li key={l.lineId} style={st.lineRow}>
+                      <span>{l.description}{l.editedBy && <span style={st.editedTag} title={`Edited by ${l.editedBy}`}>human-edited</span>}</span>
+                      <span style={st.meta}>{l.quantity === null || l.quantity === undefined ? <span style={st.unknown}>quantity unknown</span> : `${l.quantity} ${l.unit}`}</span>
+                    </li>
+                  ))}</ul>
+                )}
+
+                {/* The EDITABLE draft — change description/unit/quantity, add or remove lines, then save.
+                    Provenance is preserved server-side; a changed line is stamped as human-edited. */}
+                {isEditing && (
+                  <div style={st.editBox}>
+                    {editing.lines.map((l, i) => (
+                      <div key={l.lineId} style={st.editRow}>
+                        <input style={st.inputWide} value={l.description} placeholder="Scope item"
+                          onChange={(e) => setEditing({ ...editing, lines: editing.lines.map((x, j) => j === i ? { ...x, description: e.target.value } : x) })} />
+                        <input style={st.inputQty} value={l.quantity} placeholder="Qty (blank = unknown)" inputMode="decimal"
+                          onChange={(e) => setEditing({ ...editing, lines: editing.lines.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x) })} />
+                        <input style={st.inputUnit} value={l.unit} placeholder="Unit"
+                          onChange={(e) => setEditing({ ...editing, lines: editing.lines.map((x, j) => j === i ? { ...x, unit: e.target.value } : x) })} />
+                        <button style={st.linkBtn} disabled={busy}
+                          onClick={() => setEditing({ ...editing, lines: editing.lines.filter((_, j) => j !== i) })}>remove</button>
+                      </div>
+                    ))}
+                    <div style={st.editActions}>
+                      <button style={st.btnGhost} disabled={busy}
+                        onClick={() => setEditing({ ...editing, lines: [...editing.lines, { lineId: `L-${Date.now()}`, description: '', unit: 'no', quantity: '', sourceLineId: `manual-${Date.now()}` }] })}>+ line</button>
+                      <button style={st.btnAccent} disabled={busy} onClick={() => void saveEdit(b.id, editing.lines)}>Save draft</button>
+                      <button style={st.linkBtn} disabled={busy} onClick={() => setEditing(null)}>cancel</button>
+                      <span style={st.meta}>Leave a quantity blank to keep it unknown — it will block approval until supplied.</span>
+                    </div>
+                  </div>
                 )}
               </div>
-            ))}
+            );})}
             {/* A draft (or the very first) basis can be authored. Once approved it's immutable — a new
                 basis becomes the next revision. */}
             <div style={st.builder}>
@@ -290,6 +410,17 @@ const st = {
   btn: { fontSize: 12, padding: '5px 11px', borderRadius: 6, border: '1px solid var(--text)', background: 'var(--text)', color: 'var(--panel)', cursor: 'pointer' } as CSSProperties,
   btnAccent: { fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--accent)', color: '#fff', cursor: 'pointer', alignSelf: 'flex-start' } as CSSProperties,
   btnGhost: { fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', cursor: 'pointer' } as CSSProperties,
+  // Editable draft basis (D1) + unknown-quantity surfacing (D2/D3).
+  warnLine: { fontSize: 12, color: 'var(--warn)', margin: '6px 0 0' } as CSSProperties,
+  unknown: { color: 'var(--warn)', fontWeight: 600 } as CSSProperties,
+  editedTag: { fontSize: 10, marginLeft: 6, color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 4, padding: '0 4px' } as CSSProperties,
+  editBox: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
+  editRow: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } as CSSProperties,
+  editActions: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 } as CSSProperties,
+  inputWide: { flex: '1 1 220px', minWidth: 160, fontSize: 12.5, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)' } as CSSProperties,
+  inputQty: { width: 150, fontSize: 12.5, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)' } as CSSProperties,
+  inputUnit: { width: 70, fontSize: 12.5, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)' } as CSSProperties,
+  linkBtn: { background: 'none', border: 'none', padding: 0, color: 'var(--muted)', fontSize: 11.5, textDecoration: 'underline', cursor: 'pointer' } as CSSProperties,
   quoteLink: { color: 'var(--accent)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600, marginLeft: 'auto' } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 12.5, margin: '10px 0 0', padding: '8px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--bad) 40%, var(--border))', background: 'color-mix(in srgb, var(--bad) 8%, transparent)' } as CSSProperties,
   empty: { color: 'var(--muted)', fontSize: 13, margin: '0 0 8px' } as CSSProperties,

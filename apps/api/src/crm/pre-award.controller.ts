@@ -1,15 +1,21 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
-import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
   PreAwardService, type Requirement, type SolutionScope,
-  type RequirementPriority, type NewScopeLine, type Quotation,
+  type RequirementPriority, type RequirementStatus, type NewScopeLine, type Quotation,
 } from '@aura/crm';
 
 class RequirementDto {
   @IsString() title!: string;
   @IsOptional() @IsString() detail?: string;
   @IsOptional() @IsString() priority?: RequirementPriority;
+}
+class UpdateRequirementDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() detail?: string;
+  @IsOptional() @IsString() priority?: RequirementPriority;
+  @IsOptional() @IsIn(['open', 'met', 'dropped']) status?: RequirementStatus;
 }
 class ScopeLineDto {
   @IsOptional() @IsString() discipline?: string;
@@ -49,6 +55,20 @@ export class PreAwardController {
   @Get(':id/requirements')
   listRequirements(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Requirement[]> {
     return this.preAward.listRequirements(this.tenant.get().tenantId, id);
+  }
+  /**
+   * Correct a captured requirement, or retire it with `status: 'dropped'` — the existing semantics,
+   * not a row deletion. Scope Assist skips dropped requirements, so retiring one changes the evidence
+   * fingerprint and marks live proposals stale rather than rewriting what a scope was grounded on.
+   */
+  @Patch(':id/requirements/:reqId')
+  updateRequirement(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('reqId', ParseUuidOr404Pipe) reqId: string,
+    @Body() dto: UpdateRequirementDto,
+  ): Promise<Requirement> {
+    const ctx = this.tenant.get();
+    return this.preAward.updateRequirement({ tenantId: ctx.tenantId, opportunityId: id, requirementId: reqId, actorId: ctx.actorId, ...dto });
   }
 
   // ── Solution scopes ──

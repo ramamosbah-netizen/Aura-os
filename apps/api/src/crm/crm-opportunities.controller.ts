@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
-import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
+import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, QuotationService, quotationLinesFromSheet, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
@@ -147,7 +147,17 @@ export class CrmOpportunitiesController {
     );
     if (!readiness.ready) throw new BadRequestException(quotationReadinessMessage(readiness.gaps));
     const ctx = this.tenant.get();
-    return this.quotations.create({
+
+    // The governed chain owns the NUMBER, not just the permission. When a Pre-Award package backs the
+    // deal, the quote's lines are projected from the FROZEN pricing sheet that earned it — so the
+    // customer receives Scope → Estimate → Pricing, never the opportunity's headline `value`. Legacy
+    // ungoverned deals keep the old headline behaviour (there is no sheet to quote from).
+    const sheet = gov.governed ? await this.packages.frozenPricingFor(ctx.tenantId, id) : null;
+    const lines = sheet
+      ? quotationLinesFromSheet(sheet)
+      : [{ description: opp.title, quantity: 1, unitPrice: opp.value, vatRate: 5 }];
+
+    const quotation = await this.quotations.create({
       tenantId: ctx.tenantId,
       companyId: opp.companyId,
       quoteNumber: `QT-OPP-${opp.id.slice(0, 8)}`,
@@ -156,9 +166,12 @@ export class CrmOpportunitiesController {
       sourceOpportunityId: opp.id,
       ownerId: opp.ownerId ?? null,
       issueDate: new Date().toISOString().slice(0, 10),
-      lines: [{ description: opp.title, quantity: 1, unitPrice: opp.value, vatRate: 5 }],
+      lines,
       createdBy: ctx.actorId,
     });
+    // Close the P→Q link so the sheet names the quotation it produced (traceability both ways).
+    if (sheet) await this.packages.linkQuotationToPricing(sheet, quotation.id);
+    return quotation;
   }
 
   @Post()

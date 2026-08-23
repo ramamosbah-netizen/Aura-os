@@ -14,11 +14,17 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
       [p.id, p.tenantId, p.companyId, p.opportunityId, p.tenderId, p.route, p.status, p.createdBy]);
   }
 
+  /**
+   * The conflict clause updates `lines` because a DRAFT basis is editable (the human half of
+   * Accept ≠ Approve). Only drafts ever reach here with changed lines — the domain refuses to edit an
+   * approved or superseded revision — so the frozen projection an estimate was built on cannot move.
+   * Leaving `lines` out of the update is what made an edit return 200 and then vanish on re-read.
+   */
   async saveBasis(b: EstimationBasisRevision): Promise<void> {
     await this.pool.query(
       `insert into public.aura_crm_estimation_basis_revisions (id,tenant_id,company_id,package_id,revision_no,source_kind,source_id,source_rev_ref,status,lines,created_by,approved_by,approved_at)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-       on conflict (id) do update set status=excluded.status, approved_by=excluded.approved_by, approved_at=excluded.approved_at`,
+       on conflict (id) do update set status=excluded.status, lines=excluded.lines, approved_by=excluded.approved_by, approved_at=excluded.approved_at`,
       [b.id, b.tenantId, b.companyId, b.packageId, b.revisionNo, b.sourceKind, b.sourceId, b.sourceRevRef, b.status, JSON.stringify(b.lines), b.createdBy, b.approvedBy, b.approvedAt]);
   }
 

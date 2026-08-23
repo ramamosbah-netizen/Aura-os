@@ -145,11 +145,136 @@ export function compileResourceBreakdown(
   return { resources: r, components };
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE BOUNDARY (Slice 6A)
+//
+//   Estimation = what will it cost us?      Pricing = what will we sell it for?
+//
+// Layer 1 `computeCostBuildUp` answers the first question and stops. Layer 2
+// `computeCommercialPricing` answers the second, and is the ONLY place a selling number is decided.
+// `computeBuildUp` below is now a COMPOSITION of the two, kept byte-for-byte compatible because
+// Tendering depends on its selling output structurally (the submission gate defines "priced" as
+// sellingRate > 0). See docs/reports/2026-08-24-estimation-pricing-domain-audit.md.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Cost-side loadings. Every one of these is money the company actually expects to spend. */
+export interface CostLoadings {
+  /** Preliminaries: mobilization, supervision, site setup. */
+  indirectPercent?: number;
+  /**
+   * DELIVERY overhead only — site supervision, temporary facilities, project/site overhead
+   * allocation. **Not** commercial overhead recovery: an uplift charged to recover corporate
+   * overhead is a pricing decision and belongs to Layer 2, or the same overhead gets loaded twice.
+   */
+  overheadPercent?: number;
+  /** Risk / contingency / warranty provision — priced exposure, not margin. */
+  riskPercent?: number;
+}
+
+/** What an Estimate commits to. `estimatedCost` is its canonical output — never a selling price. */
+export interface CostEstimateFigures {
+  directCost: number;
+  indirectAmount: number;
+  overheadAmount: number;
+  riskAmount: number;
+  /** direct + indirect + overhead + risk — the number Pricing starts from. */
+  estimatedCost: number;
+}
+
 /**
- * Pure engine: components + percentages → per-unit cost figures.
- * direct → + indirect % (preliminaries) → + overhead % → + risk % (contingency, on the whole cost
- * base) → + profit % on the total cost including risk. With riskPercent 0 the figures are exactly the
- * pre-T3 ones, so existing build-ups re-derive unchanged.
+ * Layer 1 — cost only. Rounds at exactly the points the pre-split engine rounded at, so composing
+ * it with Layer 2 reproduces historical figures to the cent (pinned by the characterization tests).
+ */
+export function computeCostBuildUp(components: CostComponent[], loadings: CostLoadings = {}): CostEstimateFigures {
+  const directCost = r2(components.reduce((s, c) => s + c.amount, 0));
+  const indirectAmount = r2(directCost * ((loadings.indirectPercent ?? 0) / 100));
+  const overheadAmount = r2(directCost * ((loadings.overheadPercent ?? 0) / 100));
+  const costBase = directCost + indirectAmount + overheadAmount;
+  const riskAmount = r2(costBase * ((loadings.riskPercent ?? 0) / 100));
+  return { directCost, indirectAmount, overheadAmount, riskAmount, estimatedCost: r2(costBase + riskAmount) };
+}
+
+/**
+ * How the selling price is decided. A discriminated union on purpose: a shape that could carry both
+ * percentages, or neither, would store a bare number nobody can interpret later.
+ */
+export type PricingPolicy =
+  | { method: 'target_margin'; percent: number }
+  | { method: 'markup'; percent: number };
+
+/** Commercial discount. Percentage or fixed amount — real discounts are often "AED 5,000". */
+export type PricingDiscount =
+  | { kind: 'percent'; value: number }
+  | { kind: 'amount'; value: number };
+
+/**
+ * The commercial position, stated BOTH ways whichever way it was entered — so a stored figure can
+ * always be read back unambiguously. 15% markup on 100 is a 13.0435% margin; the two are never the
+ * same number, and the UI must never show a bare "%".
+ */
+export interface SellingFigures {
+  estimatedCost: number;
+  pricingMethod: PricingPolicy['method'];
+  /** The percentage the user actually entered, in the method they chose. */
+  inputPercent: number;
+  markupPercent: number;
+  marginPercent: number;
+  grossProfit: number;
+  preDiscountSell: number;
+  discount: number;
+  sellingPrice: number;
+}
+
+/** Margin is capped just below 100% — at 100% the sell price is undefined (divide by zero). */
+const MAX_MARGIN_PERCENT = 99.9;
+
+/**
+ * Layer 2 — the commercial decision. AURA's canonical convention for Direct Pre-Award is
+ * TARGET MARGIN on the selling price; markup is supported as an alternative INPUT and converted
+ * explicitly. `markupPercent` and `marginPercent` always describe the REALISED position (after any
+ * discount), so they never claim a margin the business is not actually getting.
+ */
+export function computeCommercialPricing(
+  estimatedCost: number,
+  policy: PricingPolicy,
+  discount?: PricingDiscount,
+): SellingFigures {
+  const cost = r2(Math.max(0, Number(estimatedCost) || 0));
+  const inputPercent = Math.max(0, Number(policy.percent) || 0);
+
+  const preDiscountSell = policy.method === 'markup'
+    ? r2(cost * (1 + inputPercent / 100))
+    : r2(cost / (1 - Math.min(inputPercent, MAX_MARGIN_PERCENT) / 100));
+
+  const discountAmount = !discount
+    ? 0
+    : discount.kind === 'percent'
+      ? r2(preDiscountSell * (Math.min(Math.max(0, Number(discount.value) || 0), 100) / 100))
+      : r2(Math.min(Math.max(0, Number(discount.value) || 0), preDiscountSell));
+
+  const sellingPrice = r2(preDiscountSell - discountAmount);
+  const grossProfit = r2(sellingPrice - cost);
+
+  return {
+    estimatedCost: cost,
+    pricingMethod: policy.method,
+    inputPercent,
+    // 4dp: 15% markup ⇒ 13.0435% margin. Rounding these to 2dp would hide the conversion.
+    markupPercent: cost > 0 ? r4((grossProfit / cost) * 100) : 0,
+    marginPercent: sellingPrice > 0 ? r4((grossProfit / sellingPrice) * 100) : 0,
+    grossProfit,
+    preDiscountSell,
+    discount: discountAmount,
+    sellingPrice,
+  };
+}
+
+/**
+ * LEGACY ADAPTER — the pre-split signature, preserved for Tendering.
+ *
+ * It composes the two layers and returns the historical `BuildUpFigures`. `profitPercent` here is a
+ * MARKUP on the estimated cost, which is what this engine has always computed. Direct Pre-Award no
+ * longer calls this: it uses `computeCostBuildUp` and leaves the selling decision to Pricing.
  */
 export function computeBuildUp(
   components: CostComponent[],
@@ -158,18 +283,14 @@ export function computeBuildUp(
   indirectPercent = 0,
   riskPercent = 0,
 ): BuildUpFigures {
-  const directCost = r2(components.reduce((s, c) => s + c.amount, 0));
-  const indirectAmount = r2(directCost * (indirectPercent / 100));
-  const overheadAmount = r2(directCost * (overheadPercent / 100));
-  const costBase = directCost + indirectAmount + overheadAmount;
-  const riskAmount = r2(costBase * (riskPercent / 100));
-  const profitAmount = r2((costBase + riskAmount) * (profitPercent / 100));
+  const cost = computeCostBuildUp(components, { indirectPercent, overheadPercent, riskPercent });
+  const commercial = computeCommercialPricing(cost.estimatedCost, { method: 'markup', percent: profitPercent });
   return {
-    directCost,
-    indirectAmount,
-    overheadAmount,
-    riskAmount,
-    profitAmount,
-    sellingRate: r2(costBase + riskAmount + profitAmount),
+    directCost: cost.directCost,
+    indirectAmount: cost.indirectAmount,
+    overheadAmount: cost.overheadAmount,
+    riskAmount: cost.riskAmount,
+    profitAmount: commercial.grossProfit,
+    sellingRate: commercial.sellingPrice,
   };
 }

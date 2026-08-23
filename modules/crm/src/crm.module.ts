@@ -38,6 +38,10 @@ import { CRM_PRE_AWARD_STORE } from './pre-award-store';
 import { InMemoryPreAwardStore } from './in-memory-pre-award-store';
 import { PostgresPreAwardStore } from './postgres-pre-award-store';
 import { PreAwardService } from './pre-award.service';
+import { CRM_SCOPE_ASSIST_STORE } from './scope-assist-store';
+import { InMemoryScopeAssistStore } from './in-memory-scope-assist-store';
+import { PostgresScopeAssistStore } from './postgres-scope-assist-store';
+import { ScopeAssistService } from './scope-assist.service';
 
 import { CRM_CONTACT_STORE } from './contact-store';
 import { InMemoryContactStore } from './in-memory-contact-store';
@@ -145,6 +149,12 @@ import { LeadConversionService } from './lead-conversion.service';
         pool ? new PostgresQuotationStore(pool) : new InMemoryQuotationStore(),
     },
     {
+      provide: CRM_SCOPE_ASSIST_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresScopeAssistStore(pool) : new InMemoryScopeAssistStore(),
+    },
+    {
       provide: CRM_CONTACT_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -206,8 +216,9 @@ import { LeadConversionService } from './lead-conversion.service';
     ForecastSnapshotService,
     PreAwardService,
     PreAwardPackageService,
+    ScopeAssistService,
     LeadConversionService,
   ],
-  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, LeadConversionService],
+  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, ScopeAssistService, LeadConversionService],
 })
 export class CrmModule {}

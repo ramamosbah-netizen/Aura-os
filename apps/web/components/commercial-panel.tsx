@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import ScopeAssistCard from './scope-assist-card';
 
 // Commercial (Pre-Award) — the ONE UI over a direct deal's Pre-Award package aggregate:
 //   Scope basis → Estimate revision → Pricing sheet → Quotation.
@@ -117,6 +118,11 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
       </div>
 
       {err && <p style={st.err}>{err}</p>}
+
+      {/* AURA Scope Assist — a grounded suggestion over this deal's OWN evidence. Accept spins the
+          suggestion off into an EDITABLE draft basis (opening the package if needed); approving that
+          basis stays the separate human step in the chain below. */}
+      <ScopeAssistCard opportunityId={opportunityId} onAccepted={() => void load()} />
 
       {!g?.governed && (
         <div style={st.block}>

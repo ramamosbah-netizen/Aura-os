@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
@@ -8,6 +8,7 @@ import {
 } from './domain/solution-scope';
 import { CRM_PRE_AWARD_STORE, type PreAwardStore } from './pre-award-store';
 import { QuotationService } from './quotation.service';
+import { PreAwardPackageService } from './pre-award-package.service';
 import type { Quotation } from './domain/quotation';
 
 /**
@@ -23,6 +24,8 @@ export class PreAwardService {
     @Inject(CRM_PRE_AWARD_STORE) private readonly store: PreAwardStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly quotations: QuotationService,
+    // Pre-Award package governance. Optional so no-DB/unit boots degrade to ungoverned (legacy path).
+    @Optional() private readonly packages: PreAwardPackageService | null = null,
   ) {}
 
   // ── Requirements ──
@@ -86,6 +89,18 @@ export class PreAwardService {
     const s = await this.store.getScope(id);
     if (!s) throw new Error(`scope ${id} not found`);
     if (s.status !== 'approved') throw new Error(`scope must be approved to generate a quotation (is '${s.status}')`);
+
+    // Governance gate — the same rule convert-to-quotation enforces: once a Pre-Award package backs this
+    // deal, a quotation can only be raised through the approved Scope + Estimate + frozen Pricing chain.
+    // This closes the old discovery bypass (approved SolutionScope → quote) for governed deals; legacy
+    // deals with no package stay grandfathered.
+    if (this.packages) {
+      const gov = await this.packages.governance(s.tenantId, s.opportunityId);
+      if (gov.governed && !(gov.scopeApproved && gov.estimateApproved && gov.pricingFrozen)) {
+        throw new Error('only a deal with an approved Scope, approved Estimate and frozen Pricing can be quoted — complete the Pre-Award chain first');
+      }
+    }
+
     if (s.generatedQuotationId) {
       const existing = await this.quotations.get(s.generatedQuotationId);
       if (existing) return existing; // idempotent — one quote per scope

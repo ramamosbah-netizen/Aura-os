@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 import Timeline from './timeline';
-import PreAwardPanel from './pre-award-panel';
+import CommercialPanel from './commercial-panel';
 import BuyingJourneyPanel from './buying-journey-panel';
 import WinPlanPanel from './win-plan-panel';
 import DealDepthPanel from './deal-depth-panel';
@@ -342,7 +342,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'qualification', label: 'Qualification' },
-    { id: 'scope', label: 'Scope' },
+    { id: 'commercial', label: 'Commercial' },
     { id: 'stakeholders', label: 'Contacts', count: stakeholders.length },
     { id: 'quotation', label: 'Quotation', count: quotations.length },
     { id: 'journey', label: 'Journey' },
@@ -445,7 +445,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </RecordCard>
       )}
 
-      {tab === 'scope' && <PreAwardPanel opportunityId={o.id} />}
+      {tab === 'commercial' && <CommercialPanel opportunityId={o.id} />}
       {tab === 'journey' && <BuyingJourneyPanel opportunityId={o.id} />}
       {tab === 'winplan' && <WinPlanPanel opportunityId={o.id} />}
       {tab === 'depth' && <DealDepthPanel opportunityId={o.id} />}

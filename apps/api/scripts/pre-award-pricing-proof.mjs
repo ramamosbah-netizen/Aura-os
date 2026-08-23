@@ -88,6 +88,28 @@ async function main() {
     console.log('governance after pricing freeze ', JSON.stringify(gAfter));
     assert(gAfter.pricingFrozen === true, 'pricingFrozen is TRUE — derived from the real frozen sheet');
 
+    // ── Closing-gate guarantees the Commercial UI depends on ──
+    // (1) "Reload preserves state from PG": re-reading the aggregate returns the persisted chain.
+    const agg = await svc.readAggregate(tenantId, fixtureOppId);
+    assert(agg.package && agg.package.id === pkg.id, 'readAggregate returns the persisted package (reload)');
+    assert(agg.basis.some((b) => b.status === 'approved'), 'reload: an approved scope basis is present');
+    assert(agg.estimates.some((e) => e.status === 'approved'), 'reload: an approved estimate revision is present');
+    assert(agg.pricing.some((p) => p.status === 'frozen'), 'reload: a frozen pricing sheet is present');
+    assert(agg.governance.pricingFrozen === true && agg.governance.scopeApproved === true && agg.governance.estimateApproved === true,
+      'reload: governance is derived from the persisted rows (not client state)');
+
+    // (2) "Frozen-revision edit refused": the approved estimate cannot be re-frozen.
+    let refused = false;
+    try { await svc.freezeEstimateById(tenantId, pkg.id, approvedEstimate.id, 'pricing-proof'); }
+    catch { refused = true; }
+    assert(refused, 'a frozen/approved estimate revision cannot be edited (re-freeze refused)');
+
+    // (3) "New revision works": a second estimate revision (E-002) can be raised on the approved basis.
+    const approvedBasis = agg.basis.find((b) => b.status === 'approved');
+    const e2 = await svc.addEstimate({ tenantId, companyId, packageId: pkg.id, basisRevisionId: approvedBasis.id, lines,
+      buildUps: [{ basisLineId: 'L1', components: [{ costType: 'material', description: 'Camera', quantity: 1, unitCost: 900 }], overheadPercent: 10, profitPercent: 15 }], createdBy: 'pricing-proof' });
+    assert(e2.estimate.revisionNo === 2 && e2.estimate.status === 'draft', 'a new estimate revision E-002 (draft) can be created');
+
     // Idempotent: a second freeze returns the same sheet, no duplicate.
     const again = await svc.freezePricing({ tenantId, companyId, opportunityId: fixtureOppId, actorId: 'pricing-proof' });
     assert(again.id === sheet.id, 'freezePricing is idempotent (same sheet id)');

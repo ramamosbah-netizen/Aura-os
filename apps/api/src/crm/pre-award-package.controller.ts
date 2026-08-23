@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
 import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { OpportunityService, PreAwardPackageService } from '@aura/crm';
+import { OpportunityService, PreAwardPackageService, QuotationService } from '@aura/crm';
 
 class ScopeLineDto {
   @IsString() lineId!: string;
@@ -48,6 +48,7 @@ export class CrmPreAwardPackageController {
   constructor(
     private readonly packages: PreAwardPackageService,
     private readonly opportunities: OpportunityService,
+    private readonly quotations: QuotationService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -73,8 +74,14 @@ export class CrmPreAwardPackageController {
     const ctx = this.tenant.get();
     const opp = await this.opportunities.get(id);
     if (!opp) throw new NotFoundException(`opportunity ${id} not found`);
-    const governance = await this.packages.governance(ctx.tenantId, id);
-    return { governance };
+    const [aggregate, quotations] = await Promise.all([
+      this.packages.readAggregate(ctx.tenantId, id),
+      this.quotations.list({ tenantId: ctx.tenantId, sourceOpportunityId: id }),
+    ]);
+    // The deal shape the UI needs to know whether the package chain even applies (tender-route deals
+    // are quoted through their tender, not a direct package).
+    const deal = { executionType: opp.executionType, tenderId: opp.tenderId, stage: opp.stage };
+    return { ...aggregate, quotations, deal };
   }
 
   @Post(':id/pre-award-package/scope')
@@ -97,6 +104,24 @@ export class CrmPreAwardPackageController {
     let estimate = built.estimate;
     if (dto.approve) { estimate = await this.packages.freezeEstimateRevision(estimate, ctx.actorId); estimate = await this.packages.approveEstimateRevision(estimate, ctx.actorId); }
     return { estimate, buildUps: built.buildUps };
+  }
+
+  @Post(':id/pre-award-package/scope/:basisId/approve')
+  async approveScope(@Param('id', ParseUuidOr404Pipe) id: string, @Param('basisId', ParseUuidOr404Pipe) basisId: string) {
+    const { tenantId, packageId } = await this.ensurePackage(id);
+    return this.packages.approveScopeBasisById(tenantId, packageId, basisId, this.tenant.get().actorId);
+  }
+
+  @Post(':id/pre-award-package/estimate/:estimateId/freeze')
+  async freezeEstimate(@Param('id', ParseUuidOr404Pipe) id: string, @Param('estimateId', ParseUuidOr404Pipe) estimateId: string) {
+    const { tenantId, packageId } = await this.ensurePackage(id);
+    return this.packages.freezeEstimateById(tenantId, packageId, estimateId, this.tenant.get().actorId);
+  }
+
+  @Post(':id/pre-award-package/estimate/:estimateId/approve')
+  async approveEstimate(@Param('id', ParseUuidOr404Pipe) id: string, @Param('estimateId', ParseUuidOr404Pipe) estimateId: string) {
+    const { tenantId, packageId } = await this.ensurePackage(id);
+    return this.packages.approveEstimateById(tenantId, packageId, estimateId, this.tenant.get().actorId);
   }
 
   @Post(':id/pre-award-package/pricing/freeze')

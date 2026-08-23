@@ -73,6 +73,23 @@ export class PreAwardPackageService {
     return { estimate, buildUps };
   }
 
+  // ── id-keyed transitions (the Commercial UI acts on existing revisions by id) ──
+  async approveScopeBasisById(tenantId: Id, packageId: Id, basisId: Id, by: Id | null): Promise<EstimationBasisRevision> {
+    const basis = (await this.store.listBasis(tenantId, packageId)).find((b) => b.id === basisId);
+    if (!basis) throw new Error(`scope basis ${basisId} not found`);
+    return this.approveScopeBasis(basis, by);
+  }
+  async freezeEstimateById(tenantId: Id, packageId: Id, estimateId: Id, by: Id | null): Promise<EstimateRevision> {
+    const est = (await this.store.listEstimates(tenantId, packageId)).find((e) => e.id === estimateId);
+    if (!est) throw new Error(`estimate revision ${estimateId} not found`);
+    return this.freezeEstimateRevision(est, by);
+  }
+  async approveEstimateById(tenantId: Id, packageId: Id, estimateId: Id, by: Id | null): Promise<EstimateRevision> {
+    const est = (await this.store.listEstimates(tenantId, packageId)).find((e) => e.id === estimateId);
+    if (!est) throw new Error(`estimate revision ${estimateId} not found`);
+    return this.approveEstimateRevision(est, by);
+  }
+
   async freezeEstimateRevision(estimate: EstimateRevision, by: Id | null): Promise<EstimateRevision> {
     const frozen = freezeEstimate(estimate, by);
     await this.store.saveEstimate(frozen);
@@ -150,4 +167,29 @@ export class PreAwardPackageService {
     ]);
     return packageGovernance(pkg.id, basis, estimates, frozenSheets.length > 0);
   }
+
+  /**
+   * The whole Pre-Award aggregate for one deal — package + its scope-basis revisions, estimate
+   * revisions, and pricing sheets, plus the derived governance. This is the single read the Commercial
+   * UI renders; the UI holds NO readiness state of its own — every gate comes from `governance` here.
+   */
+  async readAggregate(tenantId: Id, opportunityId: Id): Promise<PreAwardAggregate> {
+    const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
+    if (!pkg) return { package: null, basis: [], estimates: [], pricing: [], governance: UNGOVERNED };
+    const [basis, estimates, pricing] = await Promise.all([
+      this.store.listBasis(tenantId, pkg.id),
+      this.store.listEstimates(tenantId, pkg.id),
+      this.pricing.list({ tenantId, packageId: pkg.id, limit: 50 }),
+    ]);
+    const governance = packageGovernance(pkg.id, basis, estimates, pricing.some((s) => s.status === 'frozen'));
+    return { package: pkg, basis, estimates, pricing, governance };
+  }
+}
+
+export interface PreAwardAggregate {
+  package: PreAwardPackage | null;
+  basis: EstimationBasisRevision[];
+  estimates: EstimateRevision[];
+  pricing: PricingSheet[];
+  governance: PreAwardGovernance;
 }

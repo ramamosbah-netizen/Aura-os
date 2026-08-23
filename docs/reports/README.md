@@ -1,6 +1,6 @@
 # AURA OS — Report Index
 
-92 reports, newest first within each section. **Index last reviewed: 2026-08-14.**
+93 reports, newest first within each section. **Index last reviewed: 2026-08-14.**
 
 > **The current authority on platform state is [`docs/aura-audit/`](../aura-audit/README.md)** (24 documents, revision 2.6, 2026-08-13) — not this folder. It supersedes the readiness figure below and carries its own gap register (G-01…G-20). Reports here remain useful as dated records and for the journey scores, which the audit does not measure.
 
@@ -86,6 +86,7 @@ The audit's **dimension** scores (architecture, security, ERP functionality and 
 
 | Date | Report | Status |
 |---|---|:--:|
+| 2026-08-24 | [**Estimation vs Pricing — domain audit**](2026-08-24-estimation-pricing-domain-audit.md) — settles the Estimation/Pricing money boundary before the Estimation Workspace is built. Finds **two estimation engines**, not one, with different risk semantics and markup-vs-margin conventions; and that the Direct pricing sheet does not price — it back-solves a margin that reproduces the estimate. Field-by-field classification + a two-layer split that leaves Tender untouched | 🟢 |
 | 2026-07-23 | [Revenue Lifecycle Blueprint](2026-07-23-revenue-lifecycle-blueprint.md) | 🟢 |
 | 2026-07-16 | [CRM Feature Freeze](2026-07-16-crm-feature-freeze.md) · [Completion Plan](2026-07-16-crm-completion-plan.md) | 🗄️ |
 | 2026-07-15 | [CRM Vision Gap Audit](2026-07-15-crm-vision-gap-audit.md) · [Directive Check](2026-07-15-crm-directive-check.md) | 🗄️ |

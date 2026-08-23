@@ -37,9 +37,6 @@ class AddEstimateDto {
   @IsArray() buildUps!: BuildUpDto[];
   @IsOptional() @IsBoolean() approve?: boolean;
 }
-class FreezePricingDto {
-  @IsOptional() @IsBoolean() frozen?: boolean;
-}
 
 /**
  * Direct Pre-Award PACKAGE lifecycle (Phase 3) — open a package for an opportunity, then drive the
@@ -103,9 +100,10 @@ export class CrmPreAwardPackageController {
   }
 
   @Post(':id/pre-award-package/pricing/freeze')
-  async freezePricing(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: FreezePricingDto) {
-    const { tenantId, packageId } = await this.ensurePackage(id);
-    await this.packages.markPricingFrozen(tenantId, packageId, dto?.frozen ?? true);
-    return { governance: await this.packages.governance(tenantId, id) };
+  async freezePricing(@Param('id', ParseUuidOr404Pipe) id: string) {
+    const { tenantId, companyId } = await this.ensurePackage(id);
+    const ctx = this.tenant.get();
+    const sheet = await this.packages.freezePricing({ tenantId, companyId, opportunityId: id, actorId: ctx.actorId });
+    return { pricingSheetId: sheet.id, governance: await this.packages.governance(tenantId, id) };
   }
 }

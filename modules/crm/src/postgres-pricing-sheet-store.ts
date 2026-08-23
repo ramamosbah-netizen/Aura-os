@@ -9,6 +9,8 @@ interface Row {
   company_id: string | null;
   name: string;
   opportunity_id: string | null;
+  package_id: string | null;
+  estimate_revision_id: string | null;
   quotation_id: string | null;
   version: number | string;
   parent_sheet_id: string | null;
@@ -32,6 +34,8 @@ function rowTo(r: Row): PricingSheet {
     companyId: r.company_id,
     name: r.name,
     opportunityId: r.opportunity_id,
+    packageId: r.package_id,
+    estimateRevisionId: r.estimate_revision_id,
     quotationId: r.quotation_id,
     version: Number(r.version),
     parentSheetId: r.parent_sheet_id,
@@ -50,7 +54,7 @@ function rowTo(r: Row): PricingSheet {
 }
 
 const COLS =
-  'id, tenant_id, company_id, name, opportunity_id, quotation_id, version, parent_sheet_id, status, lines, total_cost, total_sell, margin_percent, frozen_at, frozen_by, created_at, created_by';
+  'id, tenant_id, company_id, name, opportunity_id, quotation_id, version, parent_sheet_id, status, lines, total_cost, total_sell, margin_percent, frozen_at, frozen_by, created_at, created_by, package_id, estimate_revision_id';
 
 export class PostgresPricingSheetStore implements PricingSheetStore {
   constructor(private readonly pool: Pool) {}
@@ -58,15 +62,16 @@ export class PostgresPricingSheetStore implements PricingSheetStore {
   async save(s: PricingSheet): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_crm_pricing_sheets (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, opportunity_id = EXCLUDED.opportunity_id, quotation_id = EXCLUDED.quotation_id,
          status = EXCLUDED.status, lines = EXCLUDED.lines,
          total_cost = EXCLUDED.total_cost, total_sell = EXCLUDED.total_sell, margin_percent = EXCLUDED.margin_percent,
-         frozen_at = EXCLUDED.frozen_at, frozen_by = EXCLUDED.frozen_by`,
+         frozen_at = EXCLUDED.frozen_at, frozen_by = EXCLUDED.frozen_by,
+         package_id = EXCLUDED.package_id, estimate_revision_id = EXCLUDED.estimate_revision_id`,
       [s.id, s.tenantId, s.companyId, s.name, s.opportunityId, s.quotationId, s.version, s.parentSheetId,
        s.status, JSON.stringify(s.lines), s.totals.totalCost, s.totals.totalSell, s.totals.marginPercent,
-       s.frozenAt, s.frozenBy, s.createdAt, s.createdBy],
+       s.frozenAt, s.frozenBy, s.createdAt, s.createdBy, s.packageId, s.estimateRevisionId],
     );
   }
 
@@ -79,6 +84,8 @@ export class PostgresPricingSheetStore implements PricingSheetStore {
     const params: unknown[] = [filter.tenantId];
     let sql = `SELECT ${COLS} FROM public.aura_crm_pricing_sheets WHERE tenant_id = $1`;
     if (filter.opportunityId) { params.push(filter.opportunityId); sql += ` AND opportunity_id = $${params.length}`; }
+    if (filter.packageId) { params.push(filter.packageId); sql += ` AND package_id = $${params.length}::uuid`; }
+    if (filter.status) { params.push(filter.status); sql += ` AND status = $${params.length}`; }
     if (filter.quotationId) { params.push(filter.quotationId); sql += ` AND quotation_id = $${params.length}`; }
     params.push(filter.limit ?? 50);
     sql += ` ORDER BY created_at DESC LIMIT $${params.length}`;

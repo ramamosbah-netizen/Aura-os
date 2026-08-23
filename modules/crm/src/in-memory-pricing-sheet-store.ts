@@ -19,6 +19,8 @@ export class InMemoryPricingSheetStore implements PricingSheetStore {
     return [...this.rows.values()]
       .filter((r) => r.tenantId === filter.tenantId)
       .filter((r) => !filter.opportunityId || r.opportunityId === filter.opportunityId)
+      .filter((r) => !filter.packageId || r.packageId === filter.packageId)
+      .filter((r) => !filter.status || r.status === filter.status)
       .filter((r) => !filter.quotationId || r.quotationId === filter.quotationId)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .slice(0, filter.limit ?? 50)

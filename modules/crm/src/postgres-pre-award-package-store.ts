@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import type { Id } from '@aura/shared';
-import { type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
+import type { PreAwardPackageStore } from './pre-award-package-store';
 import type { PreAwardPackage, EstimationBasisRevision, EstimateRevision, EstimateBuildUp } from './domain/pre-award-package';
 
 export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
@@ -42,9 +42,6 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
     }
   }
 
-  // Postgres derives pricing-frozen from the pricing sheet's own status in governance — no-op here.
-  async markPricingFrozen(): Promise<void> { /* derived in SQL */ }
-
   async getByOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardPackage | null> {
     const r = await this.pool.query<{ id: string; tenant_id: string; company_id: string | null; opportunity_id: string | null; tender_id: string | null; route: string; status: string; created_by: string | null; created_at: Date; updated_at: Date }>(
       'select id,tenant_id,company_id,opportunity_id,tender_id,route,status,created_by,created_at,updated_at from public.aura_crm_pre_award_packages where tenant_id=$1 and opportunity_id=$2::uuid limit 1',
@@ -62,19 +59,5 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
   async listEstimates(tenantId: Id, packageId: Id): Promise<EstimateRevision[]> {
     const r = await this.pool.query('select * from public.aura_crm_estimate_revisions where tenant_id=$1 and package_id=$2 order by revision_no', [tenantId, packageId]);
     return r.rows.map((e) => ({ id: e.id, tenantId: e.tenant_id, companyId: e.company_id, packageId: e.package_id, basisRevisionId: e.basis_revision_id, revisionNo: e.revision_no, status: e.status, totals: e.totals ?? {}, createdBy: e.created_by, createdAt: e.created_at.toISOString(), frozenBy: e.frozen_by, frozenAt: e.frozen_at ? e.frozen_at.toISOString() : null, approvedBy: e.approved_by, approvedAt: e.approved_at ? e.approved_at.toISOString() : null }));
-  }
-
-  async governanceForOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardGovernance> {
-    const res = await this.pool.query<{ id: string; scope_approved: boolean; estimate_approved: boolean; pricing_frozen: boolean }>(
-      `select p.id,
-         exists(select 1 from public.aura_crm_estimation_basis_revisions b where b.package_id=p.id and b.status='approved') as scope_approved,
-         exists(select 1 from public.aura_crm_estimate_revisions e where e.package_id=p.id and e.status='approved') as estimate_approved,
-         exists(select 1 from public.aura_crm_pricing_sheets s where s.package_id=p.id and s.status='frozen') as pricing_frozen
-       from public.aura_crm_pre_award_packages p
-       where p.tenant_id=$1 and p.opportunity_id=$2::uuid limit 1`,
-      [tenantId, opportunityId]);
-    const r = res.rows[0];
-    if (!r) return UNGOVERNED;
-    return { governed: true, packageId: r.id, scopeApproved: r.scope_approved, estimateApproved: r.estimate_approved, pricingFrozen: r.pricing_frozen };
   }
 }

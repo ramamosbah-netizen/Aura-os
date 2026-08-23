@@ -5,6 +5,8 @@ import { OpportunityService } from './opportunity.service';
 import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
 import { quotationReadiness } from './domain/quotation-readiness';
 import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
+import { InMemoryPricingSheetStore } from './in-memory-pricing-sheet-store';
+import { PreAwardPackageService } from './pre-award-package.service';
 import { makePreAwardPackage, makeBasisRevision, approveBasis } from './domain/pre-award-package';
 
 /**
@@ -93,22 +95,20 @@ describe('quotation readiness — a Direct deal does NOT need Won; a Tender deal
   });
 });
 
-describe('OpportunityService.governanceForOpportunity (Phase 2b read)', () => {
-  it('ungoverned when no package store is wired', async () => {
-    const { svc } = harness(); // harness builds the service without a package store
-    expect((await svc.governanceForOpportunity('t1', 'opp-x')).governed).toBe(false);
+describe('PreAwardPackageService.governance (Phase 2b read, composed from package + pricing stores)', () => {
+  it('ungoverned when no package exists for the opportunity', async () => {
+    const svc = new PreAwardPackageService(new InMemoryPreAwardPackageStore(), new InMemoryPricingSheetStore());
+    expect((await svc.governance('t1', 'opp-x')).governed).toBe(false);
   });
 
-  it('returns the package store facts when governed', async () => {
-    const events = { append: vi.fn().mockResolvedValue(undefined), appendWithClient: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
-    const access = { assert: vi.fn(), can: () => ({ allowed: true, reason: 'ok' }) } as unknown as AccessService;
+  it('returns the package facts when governed (scope approved, estimate/pricing not yet)', async () => {
     const pkgs = new InMemoryPreAwardPackageStore();
     const pkg = makePreAwardPackage({ tenantId: 't1', opportunityId: 'opp-1' });
     await pkgs.savePackage(pkg);
     await pkgs.saveBasis(approveBasis(makeBasisRevision({ tenantId: 't1', packageId: pkg.id, revisionNo: 1, sourceKind: 'scope', sourceId: 's1', lines: [] }), 'u1'));
-    const svc = new OpportunityService(new InMemoryOpportunityStore(), events, new NullTxRunner(), access, {} as unknown as AiService, null, pkgs);
-    // scope approved; estimate not approved; pricing not frozen
-    expect(await svc.governanceForOpportunity('t1', 'opp-1')).toMatchObject({ governed: true, scopeApproved: true, estimateApproved: false, pricingFrozen: false });
+    const svc = new PreAwardPackageService(pkgs, new InMemoryPricingSheetStore());
+    // scope approved; estimate not approved; pricing not frozen (no frozen pricing sheet)
+    expect(await svc.governance('t1', 'opp-1')).toMatchObject({ governed: true, scopeApproved: true, estimateApproved: false, pricingFrozen: false });
   });
 });
 

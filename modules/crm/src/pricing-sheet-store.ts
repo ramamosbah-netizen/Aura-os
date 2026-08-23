@@ -7,6 +7,8 @@ export const CRM_PRICING_SHEET_STORE = Symbol('CRM_PRICING_SHEET_STORE');
 export interface PricingSheetFilter {
   tenantId: Id;
   opportunityId?: Id;
+  packageId?: Id;
+  status?: import('./domain/pricing-sheet').PricingSheetStatus;
   quotationId?: Id;
   limit?: number;
 }

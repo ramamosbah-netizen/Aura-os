@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
+import { InMemoryPricingSheetStore } from './in-memory-pricing-sheet-store';
 import { PreAwardPackageService } from './pre-award-package.service';
 import { quotationReadiness } from './domain/quotation-readiness';
 
 function svc() {
   const store = new InMemoryPreAwardPackageStore();
-  return { store, service: new PreAwardPackageService(store) };
+  const pricing = new InMemoryPricingSheetStore();
+  return { store, pricing, service: new PreAwardPackageService(store, pricing) };
 }
 const lines = [{ lineId: 'L1', description: 'IP camera', unit: 'no', quantity: 10, sourceLineId: 'S1' }];
 const buildUps = [{ basisLineId: 'L1', components: [{ costType: 'material' as const, description: 'Camera', quantity: 1, unitCost: 800 }], overheadPercent: 10, profitPercent: 15 }];
@@ -50,9 +52,31 @@ describe('Direct Pre-Award — governance loop closes', () => {
     // still missing pricing freeze
     expect((await gateFor(service, 'opp-1')).gaps.map((x) => x.code)).toEqual(['PRICING_NOT_FROZEN']);
 
-    await service.markPricingFrozen('t1', pkg.id, true);
+    // Freezing pricing creates a REAL frozen pricing sheet linked to the package + approved estimate.
+    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-1', actorId: 'u1' });
+    expect(sheet.status).toBe('frozen');
+    expect(sheet.packageId).toBe(pkg.id);
+    expect(sheet.estimateRevisionId).toBe(frozen.id);
+    expect(sheet.totals.totalSell).toBe(10120); // reproduces the approved estimate's selling value
+
     const g = await service.governance('t1', 'opp-1');
     expect(g).toMatchObject({ governed: true, scopeApproved: true, estimateApproved: true, pricingFrozen: true });
     expect((await gateFor(service, 'opp-1')).ready).toBe(true);
+  });
+
+  it('freezePricing refuses when no approved estimate exists, and is idempotent once frozen', async () => {
+    const { service } = svc();
+    const pkg = await service.openDirect({ tenantId: 't1', opportunityId: 'opp-2' });
+    const basis = await service.addScopeBasis({ tenantId: 't1', packageId: pkg.id, sourceId: 'scope-1', lines });
+    await service.approveScopeBasis(basis, 'u1');
+    await expect(service.freezePricing({ tenantId: 't1', opportunityId: 'opp-2' })).rejects.toThrow(/approved estimate/i);
+
+    const { estimate } = await service.addEstimate({ tenantId: 't1', packageId: pkg.id, basisRevisionId: basis.id, lines, buildUps });
+    const fe = await service.freezeEstimateRevision(estimate, 'u1');
+    await service.approveEstimateRevision(fe, 'u2');
+
+    const first = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-2' });
+    const second = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-2' });
+    expect(second.id).toBe(first.id); // no second frozen sheet
   });
 });

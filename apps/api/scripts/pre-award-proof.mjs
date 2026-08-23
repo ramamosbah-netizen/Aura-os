@@ -45,4 +45,4 @@ async function main() {
   console.log('estimate totals', JSON.stringify(estimate.totals));
   await pool.end();
 }
-main().catch(async (e) => { console.error(e); try { await pool.end(); } catch {} process.exit(1); });
+main().catch(async (e) => { console.error(e); try { await pool.end(); } catch { /* ignore */ } process.exit(1); });

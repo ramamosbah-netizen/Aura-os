@@ -7,7 +7,6 @@ import {
   checkStageTransition, stageGateMessage, type StageEvidence,
 } from '@aura/shared';
 import { CRM_OPPORTUNITY_STORE, type OpportunityFilter, type OpportunityStore } from './opportunity-store';
-import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardPackageStore, type PreAwardGovernance, UNGOVERNED } from './pre-award-package-store';
 
 @Injectable()
 export class OpportunityService {
@@ -22,14 +21,7 @@ export class OpportunityService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
-    // Pre-Award governance read (Phase 2b). Optional so no-DB/unit boots degrade to ungoverned.
-    @Optional() @Inject(CRM_PRE_AWARD_PACKAGE_STORE) private readonly packages: PreAwardPackageStore | null = null,
   ) {}
-
-  /** Pre-Award governance facts for a deal — feeds the quotation gate. Ungoverned when no package. */
-  async governanceForOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardGovernance> {
-    return this.packages ? this.packages.governanceForOpportunity(tenantId, opportunityId) : UNGOVERNED;
-  }
 
   async create(input: NewOpportunity & { actorId?: Id | null }): Promise<Opportunity> {
     if (input.actorId) {

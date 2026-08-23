@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
-import { type Quotation, AccountService, ContactService, OpportunityService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
+import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
@@ -79,6 +79,7 @@ export class CrmOpportunitiesController {
     private readonly contacts: ContactService,
     private readonly accounts: AccountService,
     private readonly tenders: TenderService,
+    private readonly packages: PreAwardPackageService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -139,7 +140,7 @@ export class CrmOpportunitiesController {
     if (!opp) throw new NotFoundException(`opportunity ${id} not found`);
     // Governance facts (Phase 2b): once a Pre-Award package backs the deal, the quotation gate also
     // requires the approved Scope + Estimate + frozen Pricing chain; legacy deals stay grandfathered.
-    const gov = await this.opportunities.governanceForOpportunity(this.tenant.get().tenantId, id);
+    const gov = await this.packages.governance(this.tenant.get().tenantId, id);
     const readiness = quotationReadiness(
       { stage: opp.stage, executionType: opp.executionType, tenderId: opp.tenderId },
       { governed: gov.governed, scopeApproved: gov.scopeApproved, estimateApproved: gov.estimateApproved, pricingFrozen: gov.pricingFrozen },

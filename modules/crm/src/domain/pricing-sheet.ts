@@ -34,6 +34,10 @@ export interface PricingSheet {
   name: string;
   /** The deal it prices. Optional — a sheet can be drafted before the deal exists. */
   opportunityId: Id | null;
+  /** The Pre-Award package this sheet prices (the governance owner). Null for legacy sheets. */
+  packageId: Id | null;
+  /** The approved estimate revision this pricing was built on (the P→E link in Q→P→E→B). */
+  estimateRevisionId: Id | null;
   /** The quotation generated FROM this sheet, once one has been. Output, not owner. */
   quotationId: Id | null;
   /** Version within its chain — compare v1 vs v2 of the same pricing. */
@@ -56,6 +60,8 @@ export interface NewPricingSheet {
   companyId?: Id | null;
   name: string;
   opportunityId?: Id | null;
+  packageId?: Id | null;
+  estimateRevisionId?: Id | null;
   quotationId?: Id | null;
   version?: number;
   parentSheetId?: Id | null;
@@ -82,6 +88,8 @@ export function makePricingSheet(input: NewPricingSheet, now = new Date()): Pric
     companyId: input.companyId ?? null,
     name: input.name.trim(),
     opportunityId: input.opportunityId ?? null,
+    packageId: input.packageId ?? null,
+    estimateRevisionId: input.estimateRevisionId ?? null,
     quotationId: input.quotationId ?? null,
     version: Number.isInteger(input.version) && input.version! >= 1 ? input.version! : 1,
     parentSheetId: input.parentSheetId ?? null,

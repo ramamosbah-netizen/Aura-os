@@ -27,14 +27,10 @@ export interface PreAwardPackageStore {
   saveBasis(b: EstimationBasisRevision): Promise<void>;
   saveEstimate(e: EstimateRevision): Promise<void>;
   saveBuildUps(tenantId: Id, companyId: Id | null, estimateRevisionId: Id, buildUps: EstimateBuildUp[]): Promise<void>;
-  /** Record that this package's pricing is frozen (in-memory tracks it; postgres derives from the
-   *  pricing sheet's own status, so its impl is a no-op). */
-  markPricingFrozen(tenantId: Id, packageId: Id, frozen: boolean): Promise<void>;
 
-  // ── reads ──
+  // ── reads (governance is composed by PreAwardPackageService from these + the pricing store, so
+  //    pricingFrozen always reflects a real frozen pricing sheet, never a toggle) ──
   getByOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardPackage | null>;
   listBasis(tenantId: Id, packageId: Id): Promise<EstimationBasisRevision[]>;
   listEstimates(tenantId: Id, packageId: Id): Promise<EstimateRevision[]>;
-  /** Governance facts for a DIRECT deal, keyed by its opportunity. Ungoverned when no package. */
-  governanceForOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardGovernance>;
 }

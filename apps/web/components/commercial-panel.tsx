@@ -15,7 +15,7 @@ interface Pkg { id: string; route: string; status: string }
 interface BasisLine { lineId: string; description: string; unit: string; quantity: number | null; sourceLineId: string; editedBy?: string | null; editedAt?: string | null }
 interface EditableLine { lineId: string; description: string; unit: string; quantity: string; sourceLineId: string }
 interface Basis { id: string; revisionNo: number; status: string; sourceId: string; lines: BasisLine[]; approvedAt: string | null }
-interface EstimateTotals { totalDirectCost?: number; totalSellingValue?: number; marginPercent?: number; lineCount?: number }
+interface EstimateTotals { totalDirectCost?: number; estimatedCost?: number; totalSellingValue?: number; marginPercent?: number; lineCount?: number }
 interface Estimate { id: string; revisionNo: number; status: string; basisRevisionId: string; totals: EstimateTotals; frozenAt: string | null; approvedAt: string | null }
 interface PricingSheet { id: string; version: number; status: string; estimateRevisionId: string | null; totals: { totalCost: number; totalSell: number; marginPercent: number }; frozenAt: string | null; quotationId: string | null }
 interface QuotationLite { id: string; quoteNumber: string; status: string; total: number }
@@ -23,7 +23,6 @@ interface Deal { executionType: string; tenderId: string | null; stage: string }
 interface Aggregate { package: Pkg | null; basis: Basis[]; estimates: Estimate[]; pricing: PricingSheet[]; governance: Governance; quotations: QuotationLite[]; deal: Deal }
 
 interface ScopeLineForm { description: string; unit: string; quantity: string }
-interface BuildUpForm { unitCost: string; overheadPercent: string; profitPercent: string }
 
 const aed = (n: number | undefined): string => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const blankScopeLine = (): ScopeLineForm => ({ description: '', unit: 'no', quantity: '' });
@@ -43,7 +42,6 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [scopeLines, setScopeLines] = useState<ScopeLineForm[]>([blankScopeLine()]);
-  const [buildUps, setBuildUps] = useState<Record<string, BuildUpForm>>({});
   const [editing, setEditing] = useState<{ basisId: string; lines: EditableLine[] } | null>(null);
   // Bumped whenever evidence changes, so the Scope Assist card re-reads and its staleness flag refreshes.
   const [evidenceVersion, setEvidenceVersion] = useState(0);
@@ -125,19 +123,30 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
     if (await cmd('/pre-award-package/scope', { sourceId: `scope-${Date.now()}`, lines })) setScopeLines([blankScopeLine()]);
   };
 
-  const createEstimate = async () => {
+  /**
+   * Open the Estimation Workspace (Slice 6B) in a new tab. Creates a fresh cost-only estimate revision
+   * from the approved basis (seeded with a zero-cost row per line), then opens its dedicated page — so
+   * a long estimating session keeps the Opportunity context here. No costs or pricing are entered here.
+   */
+  const openEstimation = async () => {
     if (!approvedBasis) return;
-    const lines = approvedBasis.lines.map((l) => ({ lineId: l.lineId, description: l.description, unit: l.unit, quantity: l.quantity, sourceLineId: l.sourceLineId }));
-    const ups = approvedBasis.lines.map((l) => {
-      const f = buildUps[l.lineId] ?? { unitCost: '', overheadPercent: '', profitPercent: '' };
-      return {
-        basisLineId: l.lineId,
-        components: [{ costType: 'material', description: l.description, quantity: 1, unitCost: Number(f.unitCost) || 0 }],
-        overheadPercent: Number(f.overheadPercent) || 0,
-        profitPercent: Number(f.profitPercent) || 0,
-      };
-    });
-    if (await cmd('/pre-award-package/estimate', { basisRevisionId: approvedBasis.id, lines, buildUps: ups })) setBuildUps({});
+    setBusy(true); setErr(null);
+    try {
+      const lines = approvedBasis.lines.map((l) => ({ lineId: l.lineId, description: l.description, unit: l.unit, quantity: l.quantity, sourceLineId: l.sourceLineId }));
+      const res = await fetch(`${base}/pre-award-package/estimate`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ basisRevisionId: approvedBasis.id, lines, buildUps: [] }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr(typeof j?.message === 'string' ? j.message : `Could not open estimation (${res.status})`);
+        return;
+      }
+      const j = await res.json();
+      const estId = j?.estimate?.id as string | undefined;
+      await load_();
+      if (estId) window.open(`/crm/opportunities/${opportunityId}/pre-award/estimate/${estId}`, '_blank', 'noreferrer');
+    } finally { setBusy(false); }
   };
 
   // Four distinct states. A failure is never dressed up as "still loading".
@@ -287,7 +296,7 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
             </div>
           </div>
 
-          {/* ── Estimate ── */}
+          {/* ── Estimate — a SUMMARY here; the detail lives in the Estimation Workspace (Slice 6B). ── */}
           <div style={st.block}>
             <h3 style={st.h3}>2 · Estimate {g.estimateApproved && <span style={st.done}>approved ✓</span>}</h3>
             {agg.estimates.map((e) => (
@@ -295,31 +304,20 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
                 <div style={st.cardHead}>
                   <span style={st.name}>Estimate E-{String(e.revisionNo).padStart(3, '0')}</span>
                   <StatusTag status={e.status} />
-                  <span style={st.meta}>{e.totals.lineCount ?? 0} line(s) · cost AED {aed(e.totals.totalDirectCost)} · sell AED {aed(e.totals.totalSellingValue)} · {Number(e.totals.marginPercent) || 0}%</span>
-                  {e.status === 'draft' && <button style={st.btn} disabled={busy} onClick={() => void cmd(`/pre-award-package/estimate/${e.id}/freeze`)}>Freeze</button>}
-                  {e.status === 'frozen' && <button style={st.btn} disabled={busy} onClick={() => void cmd(`/pre-award-package/estimate/${e.id}/approve`)}>Approve ✓</button>}
+                  {/* Cost only — no sell/margin here; those are Pricing. estimatedCost (falls back to
+                      direct cost for legacy rows that predate the boundary). */}
+                  <span style={st.meta}>{e.totals.lineCount ?? 0} line(s) · estimated cost AED {aed(e.totals.estimatedCost ?? e.totals.totalDirectCost)}</span>
+                  <a style={st.btn} href={`/crm/opportunities/${opportunityId}/pre-award/estimate/${e.id}`} target="_blank" rel="noreferrer">Open Estimation ↗</a>
                 </div>
               </div>
             ))}
             {!g.scopeApproved && <p style={st.empty}>Approve a scope basis first — the estimate is built on it.</p>}
             {g.scopeApproved && approvedBasis && (
-              <div style={st.builder}>
-                <div style={st.builderTitle}>New estimate revision (E-{String(agg.estimates.length + 1).padStart(3, '0')}) on B-{String(approvedBasis.revisionNo).padStart(3, '0')}</div>
-                {approvedBasis.lines.map((l) => {
-                  const f = buildUps[l.lineId] ?? { unitCost: '', overheadPercent: '', profitPercent: '' };
-                  const set = (patch: Partial<BuildUpForm>) => setBuildUps({ ...buildUps, [l.lineId]: { ...f, ...patch } });
-                  return (
-                    <div key={l.lineId} style={st.lineForm}>
-                      <span style={{ ...st.name, flex: '1 1 160px' }}>{l.description} <span style={st.meta}>× {l.quantity} {l.unit}</span></span>
-                      <input style={st.qtyIn} type="number" placeholder="Unit cost" value={f.unitCost} onChange={(e) => set({ unitCost: e.target.value })} />
-                      <input style={st.qtyIn} type="number" placeholder="OH %" value={f.overheadPercent} onChange={(e) => set({ overheadPercent: e.target.value })} />
-                      <input style={st.qtyIn} type="number" placeholder="Profit %" value={f.profitPercent} onChange={(e) => set({ profitPercent: e.target.value })} />
-                    </div>
-                  );
-                })}
-                <div style={st.form}>
-                  <button style={st.btn} disabled={busy} onClick={() => void createEstimate()}>Create estimate revision (draft)</button>
-                </div>
+              <div style={st.form}>
+                <button style={st.btnAccent} disabled={busy} onClick={() => void openEstimation()}>
+                  {agg.estimates.length === 0 ? 'Open Estimation Workspace →' : 'New estimate revision →'}
+                </button>
+                <span style={st.meta}>Enter Materials, Labour, Plant &amp; Subcontract per line in a dedicated tab. Cost only — pricing comes after.</span>
               </div>
             )}
           </div>

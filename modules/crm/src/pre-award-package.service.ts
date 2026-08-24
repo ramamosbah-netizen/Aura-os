@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
-  type Id, newId, moneyNumber, computeCostBuildUp, computeCommercialPricing,
-  type CostComponent, type PricingPolicy, type EstimationLineInput, emptyEstimationInput,
+  type Id, newId, moneyNumber, computeCostBuildUp, computeCommercialPricing, compileResourceBreakdown,
+  type CostComponent, type ResourceBreakdown, type PricingPolicy, type EstimationLineInput, emptyEstimationInput,
 } from '@aura/shared';
 import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetStore } from './pricing-sheet-store';
@@ -19,10 +19,12 @@ import {
  */
 type BuildUpInput = {
   basisLineId: Id;
-  components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
+  /** Raw components — used only when no structured `resources` sheet is given. */
+  components?: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
+  /** Structured Materials/Labour/Plant/Subcontract/Other sheet; the engine compiles it to components. */
+  resources?: Partial<ResourceBreakdown>;
   indirectPercent?: number; overheadPercent?: number; riskPercent?: number;
   profitPercent?: number; // accepted, ignored — an estimate makes no selling decision
-  resources?: unknown;    // reserved for Slice 6B resource wiring
   notes?: string | null;
 };
 
@@ -77,45 +79,105 @@ export class PreAwardPackageService {
   }
 
   /**
-   * Build an estimate revision (draft) on a basis — COST ONLY (Slice 6A). Each line is costed with
-   * `computeCostBuildUp`; no profit, margin or selling number is decided here. The estimate's canonical
-   * financial output is `totals.estimatedCost`. The selling decision is made later, once, in
-   * `freezePricing` — so the estimate can never quietly bake a price nobody chose.
+   * Cost one line — from a structured ResourceBreakdown when given (Materials/Labour/Plant/… entered
+   * in the Estimation Workspace), else from raw components. Either way the ENGINE computes the money;
+   * the UI never sends a total. `compileResourceBreakdown` needs the line quantity because per-line
+   * resource figures (man-hours, transport…) are line totals it divides down to a per-unit rate.
    */
-  async addEstimate(input: { tenantId: Id; companyId?: Id | null; packageId: Id; basisRevisionId: Id; lines: BasisLine[]; buildUps: BuildUpInput[]; createdBy?: Id | null }): Promise<{ estimate: EstimateRevision; buildUps: EstimateBuildUp[] }> {
-    // An estimate multiplies rate × quantity: an unknown quantity cannot be estimated, and must never
-    // be silently treated as zero (which would produce a confident AED 0 estimate).
-    const unknown = input.lines.filter((l) => l.quantity === null || l.quantity === undefined).map((l) => l.lineId);
+  private buildCostLine(b: BuildUpInput, qty: number): EstimateBuildUp {
+    let resources: EstimateBuildUp['resources'] = null;
+    let rawComponents: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
+    if (b.resources) {
+      const compiled = compileResourceBreakdown(b.resources, qty);
+      resources = compiled.resources;
+      rawComponents = compiled.components;
+    } else {
+      rawComponents = b.components ?? [];
+    }
+    const components: CostComponent[] = rawComponents.map((c) => ({ id: newId(), costType: c.costType, description: c.description, quantity: Number(c.quantity) || 0, unitCost: Number(c.unitCost) || 0, amount: moneyNumber((Number(c.quantity) || 0) * (Number(c.unitCost) || 0)) }));
+    const cost = computeCostBuildUp(components, { indirectPercent: Number(b.indirectPercent) || 0, overheadPercent: Number(b.overheadPercent) || 0, riskPercent: Number(b.riskPercent) || 0 });
+    return {
+      id: newId(), basisLineId: b.basisLineId, components, resources,
+      indirectPercent: Number(b.indirectPercent) || 0, overheadPercent: Number(b.overheadPercent) || 0, riskPercent: Number(b.riskPercent) || 0,
+      // No commercial decision at estimate time: profit is zero, and the "rate" a cost-only line
+      // carries is its per-unit ESTIMATED COST — never a selling price.
+      profitPercent: 0, profitAmount: 0,
+      directCost: cost.directCost, indirectAmount: cost.indirectAmount, overheadAmount: cost.overheadAmount, riskAmount: cost.riskAmount,
+      sellingRate: cost.estimatedCost,
+      notes: b.notes ?? null,
+    };
+  }
+
+  /**
+   * The estimate's totals — DERIVED from the saved build-ups, never taken from the caller.
+   * `estimatedCost` is the sum of each line's per-unit (direct + indirect + overhead + risk) × qty, so
+   * the headline figure is always reproducible from the resource data underneath it, never a typed-in
+   * number sitting on top of an un-auditable UI.
+   */
+  private estimateTotals(buildUps: EstimateBuildUp[], qtyByLine: Map<Id, number>): { totalDirectCost: number; estimatedCost: number; lineCount: number } {
+    const perUnitEstimatedCost = (b: EstimateBuildUp) => b.directCost + b.indirectAmount + b.overheadAmount + b.riskAmount;
+    const totalDirectCost = moneyNumber(buildUps.reduce((s, b) => s + b.directCost * (qtyByLine.get(b.basisLineId) ?? 0), 0));
+    const estimatedCost = moneyNumber(buildUps.reduce((s, b) => s + perUnitEstimatedCost(b) * (qtyByLine.get(b.basisLineId) ?? 0), 0));
+    return { totalDirectCost, estimatedCost, lineCount: buildUps.length };
+  }
+
+  /** Every basis line must carry a real quantity before it can be costed (unknown is not zero). */
+  private assertLinesCostable(lines: BasisLine[]): Map<Id, number> {
+    const unknown = lines.filter((l) => l.quantity === null || l.quantity === undefined).map((l) => l.lineId);
     if (unknown.length > 0) {
       throw new Error(`cannot build an estimate: ${unknown.length} basis line(s) still have an unknown quantity — supply a quantity for every line first (unknown is not zero)`);
     }
-    const qtyByLine = new Map(input.lines.map((l) => [l.lineId, l.quantity ?? 0]));
-    const buildUps: EstimateBuildUp[] = input.buildUps.map((b) => {
-      const components: CostComponent[] = b.components.map((c) => ({ id: newId(), costType: c.costType, description: c.description, quantity: Number(c.quantity) || 0, unitCost: Number(c.unitCost) || 0, amount: moneyNumber((Number(c.quantity) || 0) * (Number(c.unitCost) || 0)) }));
-      const cost = computeCostBuildUp(components, { indirectPercent: Number(b.indirectPercent) || 0, overheadPercent: Number(b.overheadPercent) || 0, riskPercent: Number(b.riskPercent) || 0 });
-      return {
-        id: newId(), basisLineId: b.basisLineId, components, resources: null,
-        indirectPercent: Number(b.indirectPercent) || 0, overheadPercent: Number(b.overheadPercent) || 0, riskPercent: Number(b.riskPercent) || 0,
-        // No commercial decision at estimate time: profit is zero, and the "rate" a cost-only line
-        // carries is its per-unit ESTIMATED COST — never a selling price.
-        profitPercent: 0, profitAmount: 0,
-        directCost: cost.directCost, indirectAmount: cost.indirectAmount, overheadAmount: cost.overheadAmount, riskAmount: cost.riskAmount,
-        sellingRate: cost.estimatedCost,
-        notes: b.notes ?? null,
-      };
-    });
-    const perUnitEstimatedCost = new Map(buildUps.map((b) => [b.basisLineId, b.directCost + b.indirectAmount + b.overheadAmount + b.riskAmount]));
-    const totalDirectCost = moneyNumber(buildUps.reduce((s, b) => s + b.directCost * (qtyByLine.get(b.basisLineId) ?? 0), 0));
-    const estimatedCost = moneyNumber(buildUps.reduce((s, b) => s + (perUnitEstimatedCost.get(b.basisLineId) ?? 0) * (qtyByLine.get(b.basisLineId) ?? 0), 0));
-    // `estimatedCost` present ⇒ a cost-only (post-6A) estimate. Its absence is how freezePricing
-    // recognises a legacy estimate that still carries its own selling decision.
-    const totals = { totalDirectCost, estimatedCost, lineCount: buildUps.length };
+    return new Map(lines.map((l) => [l.lineId, l.quantity ?? 0]));
+  }
+
+  /**
+   * Build an estimate revision (draft) on a basis — COST ONLY (Slice 6A/6B). Each line is costed from a
+   * structured resource breakdown (or raw components) by the engine; no profit, margin or selling number
+   * is decided here. `totals.estimatedCost` is the canonical output. When no build-ups are supplied the
+   * revision is SEEDED with one zero-cost line per basis line, so the Estimation Workspace opens with the
+   * approved scope laid out and ready to fill. The selling decision is made later, in `freezePricing`.
+   */
+  async addEstimate(input: { tenantId: Id; companyId?: Id | null; packageId: Id; basisRevisionId: Id; lines: BasisLine[]; buildUps: BuildUpInput[]; createdBy?: Id | null }): Promise<{ estimate: EstimateRevision; buildUps: EstimateBuildUp[] }> {
+    const qtyByLine = this.assertLinesCostable(input.lines);
+    // Open Estimation with no build-ups yet ⇒ seed a zero-cost row per basis line, preserving basisLineId.
+    const seed: BuildUpInput[] = input.buildUps.length > 0
+      ? input.buildUps
+      : input.lines.map((l) => ({ basisLineId: l.lineId, components: [] }));
+    const buildUps = seed.map((b) => this.buildCostLine(b, qtyByLine.get(b.basisLineId) ?? 0));
+    const totals = this.estimateTotals(buildUps, qtyByLine);
 
     const revisionNo = (await this.store.listEstimates(input.tenantId, input.packageId)).length + 1;
     const estimate = makeEstimateRevision({ tenantId: input.tenantId, companyId: input.companyId ?? null, packageId: input.packageId, basisRevisionId: input.basisRevisionId, revisionNo, totals, createdBy: input.createdBy ?? null });
     await this.store.saveEstimate(estimate);
     await this.store.saveBuildUps(input.tenantId, input.companyId ?? null, estimate.id, buildUps);
     return { estimate, buildUps };
+  }
+
+  /**
+   * Edit the per-line resource build-ups of a DRAFT estimate — the "edit freely" half of the estimate
+   * lifecycle. Only a draft may change: once frozen or approved the revision is the immutable thing a
+   * price was (or will be) committed against, and a change must create the next revision. Totals are
+   * recomputed from the saved build-ups, so `estimatedCost` can never drift from the resource data.
+   */
+  async updateEstimateBuildUps(input: { tenantId: Id; companyId?: Id | null; packageId: Id; estimateId: Id; buildUps: BuildUpInput[]; actorId?: Id | null }): Promise<{ estimate: EstimateRevision; buildUps: EstimateBuildUp[] }> {
+    const estimate = (await this.store.listEstimates(input.tenantId, input.packageId)).find((e) => e.id === input.estimateId);
+    if (!estimate) throw new Error(`estimate revision ${input.estimateId} not found`);
+    if (estimate.status !== 'draft') {
+      throw new Error(`only a draft estimate revision can be edited — E-${String(estimate.revisionNo).padStart(3, '0')} is already ${estimate.status}`);
+    }
+    const basis = (await this.store.listBasis(input.tenantId, input.packageId)).find((b) => b.id === estimate.basisRevisionId);
+    const qtyByLine = this.assertLinesCostable(basis?.lines ?? []);
+    // A build-up may only cost a line that exists in the approved basis — no smuggling scope in here.
+    const allowed = new Set((basis?.lines ?? []).map((l) => l.lineId));
+    const foreign = input.buildUps.filter((b) => !allowed.has(b.basisLineId)).map((b) => b.basisLineId);
+    if (foreign.length > 0) throw new Error(`cannot cost lines that are not in the approved basis: ${foreign.join(', ')}`);
+
+    const buildUps = input.buildUps.map((b) => this.buildCostLine(b, qtyByLine.get(b.basisLineId) ?? 0));
+    const totals = this.estimateTotals(buildUps, qtyByLine);
+    const updated: EstimateRevision = { ...estimate, totals };
+    await this.store.saveEstimate(updated);
+    await this.store.saveBuildUps(input.tenantId, input.companyId ?? estimate.companyId ?? null, estimate.id, buildUps);
+    return { estimate: updated, buildUps };
   }
 
   // ── id-keyed transitions (the Commercial UI acts on existing revisions by id) ──
@@ -289,6 +351,23 @@ export class PreAwardPackageService {
    * revisions, and pricing sheets, plus the derived governance. This is the single read the Commercial
    * UI renders; the UI holds NO readiness state of its own — every gate comes from `governance` here.
    */
+  /**
+   * The Estimation Workspace read: one estimate revision, its per-line build-ups, and the basis lines
+   * they cost (with quantity + provenance). Everything the workspace lays out, in one call.
+   */
+  async readEstimateWorkspace(tenantId: Id, opportunityId: Id, estimateId: Id): Promise<EstimateWorkspaceView | null> {
+    const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
+    if (!pkg) return null;
+    const estimate = (await this.store.listEstimates(tenantId, pkg.id)).find((e) => e.id === estimateId);
+    if (!estimate) return null;
+    const [buildUps, basisList] = await Promise.all([
+      this.store.listBuildUps(tenantId, estimateId),
+      this.store.listBasis(tenantId, pkg.id),
+    ]);
+    const basis = basisList.find((b) => b.id === estimate.basisRevisionId) ?? null;
+    return { packageId: pkg.id, estimate, buildUps, basisLines: basis?.lines ?? [], editable: estimate.status === 'draft' };
+  }
+
   async readAggregate(tenantId: Id, opportunityId: Id): Promise<PreAwardAggregate> {
     const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
     if (!pkg) return { package: null, basis: [], estimates: [], pricing: [], governance: UNGOVERNED };
@@ -308,4 +387,13 @@ export interface PreAwardAggregate {
   estimates: EstimateRevision[];
   pricing: PricingSheet[];
   governance: PreAwardGovernance;
+}
+
+export interface EstimateWorkspaceView {
+  packageId: Id;
+  estimate: EstimateRevision;
+  buildUps: EstimateBuildUp[];
+  basisLines: BasisLine[];
+  /** True only while the estimate is a draft — the workspace is read-only otherwise. */
+  editable: boolean;
 }

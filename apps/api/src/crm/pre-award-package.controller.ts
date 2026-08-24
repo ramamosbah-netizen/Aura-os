@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
-import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type BasisLine, OpportunityService, PreAwardPackageService, QuotationService } from '@aura/crm';
 import type { PricingPolicy } from '@aura/shared';
@@ -41,14 +42,37 @@ class BuildUpComponentDto {
   @IsNumber() quantity!: number;
   @IsNumber() unitCost!: number;
 }
+/** A manpower block — count × hours at an hourly rate, entered as line totals (the engine divides). */
+class ManpowerBlockDto {
+  @IsOptional() @IsNumber() count?: number;
+  @IsOptional() @IsNumber() hours?: number;
+  @IsOptional() @IsNumber() rate?: number;
+}
+/** Structured Materials/Labour/Plant/Subcontract/Other sheet for one line. The engine costs it. */
+class ResourceBreakdownDto {
+  @IsOptional() @IsNumber() supplyUnitPrice?: number;
+  @IsOptional() @IsNumber() wastagePercent?: number;
+  @IsOptional() @IsNumber() accessories?: number;
+  @IsOptional() @ValidateNested() @Type(() => ManpowerBlockDto) technician?: ManpowerBlockDto;
+  @IsOptional() @ValidateNested() @Type(() => ManpowerBlockDto) engineer?: ManpowerBlockDto;
+  @IsOptional() @ValidateNested() @Type(() => ManpowerBlockDto) projectManager?: ManpowerBlockDto;
+  @IsOptional() @IsNumber() transport?: number;
+  @IsOptional() @IsNumber() equipmentRent?: number;
+  @IsOptional() @IsNumber() subcontract?: number;
+  @IsOptional() @IsNumber() otherDirect?: number;
+}
 class BuildUpDto {
   @IsString() basisLineId!: string;
-  @IsArray() components!: BuildUpComponentDto[];
+  @IsOptional() @IsArray() components?: BuildUpComponentDto[];
+  @IsOptional() @ValidateNested() @Type(() => ResourceBreakdownDto) resources?: ResourceBreakdownDto;
   @IsOptional() @IsNumber() indirectPercent?: number;
   @IsOptional() @IsNumber() overheadPercent?: number;
   @IsOptional() @IsNumber() riskPercent?: number;
-  @IsOptional() @IsNumber() profitPercent?: number;
+  @IsOptional() @IsNumber() profitPercent?: number; // accepted, ignored — an estimate makes no selling decision
   @IsOptional() @IsString() notes?: string;
+}
+class UpdateBuildUpsDto {
+  @IsArray() buildUps!: BuildUpDto[];
 }
 class AddEstimateDto {
   @IsString() basisRevisionId!: string;
@@ -150,6 +174,32 @@ export class CrmPreAwardPackageController {
   async approveScope(@Param('id', ParseUuidOr404Pipe) id: string, @Param('basisId', ParseUuidOr404Pipe) basisId: string) {
     const { tenantId, packageId } = await this.ensurePackage(id);
     return this.packages.approveScopeBasisById(tenantId, packageId, basisId, this.tenant.get().actorId);
+  }
+
+  /** The Estimation Workspace read — one estimate + its per-line build-ups + the basis lines they cost. */
+  @Get(':id/pre-award-package/estimate/:estimateId')
+  async readEstimate(@Param('id', ParseUuidOr404Pipe) id: string, @Param('estimateId', ParseUuidOr404Pipe) estimateId: string) {
+    const ctx = this.tenant.get();
+    const view = await this.packages.readEstimateWorkspace(ctx.tenantId, id, estimateId);
+    if (!view) throw new NotFoundException(`estimate revision ${estimateId} not found`);
+    return view;
+  }
+
+  /**
+   * Edit a DRAFT estimate's per-line resource build-ups (Estimation Workspace). Only a draft may
+   * change; the engine recomputes estimatedCost from the resources, so the total is never a typed-in
+   * number. Nothing commercial here — profit/margin/selling live in Pricing (Slice 7).
+   */
+  @Patch(':id/pre-award-package/estimate/:estimateId/build-ups')
+  async updateEstimateBuildUps(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('estimateId', ParseUuidOr404Pipe) estimateId: string,
+    @Body() dto: UpdateBuildUpsDto,
+  ) {
+    if (!Array.isArray(dto?.buildUps)) throw new BadRequestException('buildUps is required');
+    const { tenantId, companyId, packageId } = await this.ensurePackage(id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.packages.updateEstimateBuildUps({ tenantId, companyId, packageId, estimateId, buildUps: dto.buildUps as any, actorId: this.tenant.get().actorId });
   }
 
   @Post(':id/pre-award-package/estimate/:estimateId/freeze')

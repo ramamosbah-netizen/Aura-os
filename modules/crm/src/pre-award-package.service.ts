@@ -1,11 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type Id, newId, moneyNumber, computeCostBuildUp, computeCommercialPricing, compileResourceBreakdown,
-  type CostComponent, type ResourceBreakdown, type PricingPolicy, type EstimationLineInput, emptyEstimationInput,
+  type CostComponent, type ResourceBreakdown, type PricingPolicy, type PricingDiscount, type SellingFigures,
+  type EstimationLineInput, emptyEstimationInput,
 } from '@aura/shared';
 import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetStore } from './pricing-sheet-store';
-import { type PricingSheet, makePricingSheet, freezeSheet, linkQuotation } from './domain/pricing-sheet';
+import {
+  type PricingSheet, makePricingSheet, freezeSheet, linkQuotation,
+  openCommercialPricing, applyPricingPolicy, previewCommercialPricing,
+} from './domain/pricing-sheet';
 import {
   type PreAwardPackage, type EstimationBasisRevision, type EstimateRevision, type EstimateBuildUp, type BasisLine,
   makePreAwardPackage, makeBasisRevision, approveBasis, updateBasisLines, assertBasisQuantitiesKnown,
@@ -330,6 +334,98 @@ export class PreAwardPackageService {
     return linked;
   }
 
+  // ══ Pricing Workspace (Slice 7) — the commercial decision, as a draft→frozen lifecycle ═══════════
+  //
+  //   Approved Estimate (cost, read-only) → open draft → set policy → freeze → quotation
+  //
+  // The cost baseline is the approved estimate's estimatedCost, snapshotted at open. The only decision
+  // here is the selling price; it is computed by computeCommercialPricing (one engine), never by the UI.
+
+  /** The approved estimate's cost baseline for a deal — the read-only starting point of pricing. */
+  private async pricingBaseline(tenantId: Id, opportunityId: Id): Promise<{ pkg: { id: Id; companyId: Id | null }; estimateId: Id; baselineCost: number }> {
+    const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
+    if (!pkg) throw new Error('a pre-award package is required before pricing can start');
+    const estimates = await this.store.listEstimates(tenantId, pkg.id);
+    const approved = [...estimates].reverse().find((e) => e.status === 'approved');
+    if (!approved) throw new Error('an approved estimate revision is required before pricing can start');
+    const basis = (await this.store.listBasis(tenantId, pkg.id)).find((b) => b.id === approved.basisRevisionId);
+    if (basis) assertBasisQuantitiesKnown(basis, 'start pricing');
+    const totals = (approved.totals ?? {}) as { estimatedCost?: number };
+    const baselineCost = totals.estimatedCost !== undefined
+      ? moneyNumber(Number(totals.estimatedCost) || 0)
+      : await this.legacyEstimatedCost(tenantId, pkg.id, approved);
+    return { pkg: { id: pkg.id, companyId: pkg.companyId }, estimateId: approved.id, baselineCost };
+  }
+
+  /**
+   * Open the Pricing Workspace for a deal. Returns the sheet to work on: an existing draft if one is
+   * open, else the current frozen sheet (read-only — the UI offers a new revision), else a fresh v1
+   * draft on the approved estimate's cost. Never creates a second draft.
+   */
+  async openPricing(input: { tenantId: Id; companyId?: Id | null; opportunityId: Id; actorId?: Id | null }): Promise<PricingSheet> {
+    const { pkg, estimateId, baselineCost } = await this.pricingBaseline(input.tenantId, input.opportunityId);
+    const sheets = await this.pricing.list({ tenantId: input.tenantId, packageId: pkg.id, limit: 50 });
+    const draft = sheets.find((s) => s.status === 'draft');
+    if (draft) return draft;
+    const frozen = sheets.find((s) => s.status === 'frozen');
+    if (frozen) return frozen; // read-only current price; caller may open a new revision explicitly
+    const sheet = openCommercialPricing({
+      tenantId: input.tenantId, companyId: input.companyId ?? pkg.companyId, name: `Pre-Award pricing — package ${pkg.id.slice(0, 8)}`,
+      opportunityId: input.opportunityId, packageId: pkg.id, estimateRevisionId: estimateId, baselineCost, createdBy: input.actorId,
+    });
+    await this.pricing.save(sheet);
+    this.logger.log(`Pricing draft P-${String(sheet.version).padStart(3, '0')} opened for opportunity ${input.opportunityId} (baseline ${baselineCost})`);
+    return sheet;
+  }
+
+  /** Explicitly open the NEXT pricing revision from the current frozen sheet (re-pricing). */
+  async openPricingRevision(input: { tenantId: Id; companyId?: Id | null; opportunityId: Id; actorId?: Id | null }): Promise<PricingSheet> {
+    const { pkg, estimateId, baselineCost } = await this.pricingBaseline(input.tenantId, input.opportunityId);
+    const sheets = await this.pricing.list({ tenantId: input.tenantId, packageId: pkg.id, limit: 50 });
+    if (sheets.some((s) => s.status === 'draft')) throw new Error('a pricing draft is already open — freeze or edit it before opening a new revision');
+    const frozen = [...sheets].sort((a, b) => b.version - a.version)[0];
+    if (!frozen || frozen.status !== 'frozen') throw new Error('cannot open a pricing revision: there is no frozen pricing yet');
+    const sheet = openCommercialPricing({
+      tenantId: input.tenantId, companyId: input.companyId ?? pkg.companyId, name: frozen.name,
+      opportunityId: input.opportunityId, packageId: pkg.id, estimateRevisionId: estimateId, baselineCost,
+      version: frozen.version + 1, parentSheetId: frozen.id, createdBy: input.actorId,
+    });
+    await this.pricing.save(sheet);
+    return sheet;
+  }
+
+  /** Live preview — the selling figures for a policy on the current cost baseline. Pure, no persistence. */
+  async previewPricing(input: { tenantId: Id; opportunityId: Id; policy: PricingPolicy; discount?: PricingDiscount | null }): Promise<{ baselineCost: number; figures: SellingFigures }> {
+    const { baselineCost } = await this.pricingBaseline(input.tenantId, input.opportunityId);
+    return { baselineCost, figures: previewCommercialPricing(baselineCost, input.policy, input.discount ?? null) };
+  }
+
+  /** Set the commercial policy on a DRAFT pricing sheet. The engine recomputes; the UI sends no total. */
+  async setPricingPolicy(input: { tenantId: Id; opportunityId: Id; sheetId: Id; policy: PricingPolicy; discount?: PricingDiscount | null }): Promise<PricingSheet> {
+    const sheet = await this.pricing.get(input.sheetId);
+    if (!sheet || sheet.tenantId !== input.tenantId) throw new Error(`pricing sheet ${input.sheetId} not found`);
+    const priced = applyPricingPolicy(sheet, input.policy, input.discount ?? null);
+    await this.pricing.save(priced);
+    return priced;
+  }
+
+  /** Freeze a DRAFT pricing sheet — the commercial commitment. Refuses without a policy. */
+  async freezePricingSheetById(input: { tenantId: Id; opportunityId: Id; sheetId: Id; actorId?: Id | null }): Promise<PricingSheet> {
+    const sheet = await this.pricing.get(input.sheetId);
+    if (!sheet || sheet.tenantId !== input.tenantId) throw new Error(`pricing sheet ${input.sheetId} not found`);
+    const frozen = freezeSheet(sheet, input.actorId ?? null);
+    await this.pricing.save(frozen);
+    this.logger.log(`Pricing P-${String(frozen.version).padStart(3, '0')} frozen for opportunity ${input.opportunityId} (sell ${frozen.totals.totalSell})`);
+    return frozen;
+  }
+
+  /** The Pricing Workspace read — the sheet + its cost baseline + whether it is still editable. */
+  async readPricingWorkspace(tenantId: Id, opportunityId: Id, sheetId: Id): Promise<PricingWorkspaceView | null> {
+    const sheet = await this.pricing.get(sheetId);
+    if (!sheet || sheet.tenantId !== tenantId) return null;
+    return { sheet, baselineCost: sheet.commercial?.baselineCost ?? sheet.totals.totalCost, editable: sheet.status === 'draft' };
+  }
+
   /**
    * Governance for a direct deal, composed from the package's revisions + its pricing sheets. Keeping
    * this in the service (not the store) is what lets pricingFrozen reflect a real frozen pricing sheet
@@ -395,5 +491,13 @@ export interface EstimateWorkspaceView {
   buildUps: EstimateBuildUp[];
   basisLines: BasisLine[];
   /** True only while the estimate is a draft — the workspace is read-only otherwise. */
+  editable: boolean;
+}
+
+export interface PricingWorkspaceView {
+  sheet: PricingSheet;
+  /** The approved estimate's cost — the read-only baseline the selling price is built on. */
+  baselineCost: number;
+  /** True only while the sheet is a draft. */
   editable: boolean;
 }

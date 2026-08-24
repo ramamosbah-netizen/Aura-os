@@ -1,4 +1,7 @@
-import { type Id, type EstimationLineInput, estimateLine, newId, moneyNumber as round2 } from '@aura/shared';
+import {
+  type Id, type EstimationLineInput, estimateLine, newId, moneyNumber as round2,
+  type PricingPolicy, type PricingDiscount, type SellingFigures, computeCommercialPricing, emptyEstimationInput,
+} from '@aura/shared';
 
 // The PricingSheet — pricing as its OWN aggregate, not a JSON pocket inside a quotation.
 //
@@ -26,6 +29,26 @@ export interface PricingSheetTotals {
   marginPercent: number;
 }
 
+/**
+ * The COMMERCIAL DECISION on a package pricing sheet (Slice 7) — the editable draft state the
+ * Pricing Workspace owns. The estimator's cost is fixed upstream and read-only here; this is the only
+ * place the selling price is chosen. `figures` is always recomputed by the domain (never sent by the
+ * UI) so markup% and margin% are shown together and can't be confused. Null on the older per-line
+ * pricing flow (quotation/tender sheets), which prices through `lines` instead.
+ */
+export interface CommercialDecision {
+  /** The approved estimate's estimatedCost, snapshotted when the pricing draft was opened. Read-only. */
+  baselineCost: number;
+  /** Provenance: which approved estimate revision this price is built on. */
+  estimateRevisionId: Id;
+  /** The chosen method + percent. Null on a fresh draft, before any decision. */
+  policy: PricingPolicy | null;
+  /** Optional commercial discount / adjustment. */
+  discount: PricingDiscount | null;
+  /** computeCommercialPricing(baselineCost, policy, discount). Null until a policy is set. */
+  figures: SellingFigures | null;
+}
+
 export interface PricingSheet {
   id: Id;
   tenantId: Id;
@@ -49,6 +72,8 @@ export interface PricingSheet {
   lines: EstimationLineInput[];
   /** Computed rollup, refreshed on every save — cached so lists don't re-run the engine. */
   totals: PricingSheetTotals;
+  /** The commercial decision (Slice 7). Null for the older per-line pricing flow. */
+  commercial: CommercialDecision | null;
   frozenAt: string | null;
   frozenBy: Id | null;
   createdAt: string;
@@ -66,6 +91,7 @@ export interface NewPricingSheet {
   version?: number;
   parentSheetId?: Id | null;
   lines?: EstimationLineInput[];
+  commercial?: CommercialDecision | null;
   createdBy?: Id | null;
 }
 
@@ -96,11 +122,74 @@ export function makePricingSheet(input: NewPricingSheet, now = new Date()): Pric
     status: 'draft',
     lines,
     totals: computeSheetTotals(lines),
+    commercial: input.commercial ?? null,
     frozenAt: null,
     frozenBy: null,
     createdAt: now.toISOString(),
     createdBy: input.createdBy ?? null,
   };
+}
+
+// ── Package pricing (Slice 7) — the commercial decision on a cost baseline ────────────────────────
+//
+//   Approved Estimate → Pricing Draft → set policy → Freeze → Quotation
+//
+// The workspace never touches cost: `baselineCost` is the approved estimate's estimatedCost,
+// snapshotted at open. The only decision here is the selling price, computed by the ONE engine
+// (computeCommercialPricing) so markup and margin are always shown together and never confused.
+
+/** Open a DRAFT package pricing sheet on a cost baseline — no policy decided yet. */
+export function openCommercialPricing(input: {
+  tenantId: Id; companyId?: Id | null; name: string; opportunityId: Id; packageId: Id;
+  estimateRevisionId: Id; baselineCost: number; version?: number; parentSheetId?: Id | null; createdBy?: Id | null;
+}, now = new Date()): PricingSheet {
+  const commercial: CommercialDecision = {
+    baselineCost: round2(Math.max(0, Number(input.baselineCost) || 0)),
+    estimateRevisionId: input.estimateRevisionId,
+    policy: null, discount: null, figures: null,
+  };
+  const sheet = makePricingSheet({
+    tenantId: input.tenantId, companyId: input.companyId ?? null, name: input.name,
+    opportunityId: input.opportunityId, packageId: input.packageId, estimateRevisionId: input.estimateRevisionId,
+    version: input.version, parentSheetId: input.parentSheetId ?? null, lines: [], commercial, createdBy: input.createdBy ?? null,
+  }, now);
+  // Cost is known; sell is undecided until a policy is set.
+  return { ...sheet, totals: { totalCost: commercial.baselineCost, totalSell: 0, marginPercent: 0 } };
+}
+
+/**
+ * Preview the selling figures for a baseline + policy — PURE, no persistence. The Pricing Workspace
+ * calls this to show the live "Estimated cost → margin/markup → gross → discount → final" breakdown
+ * as the user types, so the number on screen always comes from the engine, never from React.
+ */
+export function previewCommercialPricing(baselineCost: number, policy: PricingPolicy, discount?: PricingDiscount | null): SellingFigures {
+  return computeCommercialPricing(baselineCost, policy, discount ?? undefined);
+}
+
+/**
+ * Apply a commercial policy to a DRAFT sheet — the editable decision. Recomputes figures via the
+ * engine and builds the single carrier line forward so a quotation projected from a frozen sheet
+ * reproduces exactly this selling price (no back-solving). Only a draft may change.
+ */
+export function applyPricingPolicy(sheet: PricingSheet, policy: PricingPolicy, discount: PricingDiscount | null): PricingSheet {
+  if (sheet.status !== 'draft') {
+    throw new Error(`only a draft pricing sheet can be priced — ${sheet.name} v${sheet.version} is ${sheet.status}. Raise a new version.`);
+  }
+  if (!sheet.commercial) throw new Error('cannot price a sheet with no cost baseline');
+  const baselineCost = sheet.commercial.baselineCost;
+  const figures = computeCommercialPricing(baselineCost, policy, discount ?? undefined);
+  // Carrier line: cost = baselineCost, margin chosen so estimateLine reproduces figures.sellingPrice.
+  const marginToReproduce = figures.sellingPrice > 0 ? (1 - baselineCost / figures.sellingPrice) * 100 : 0;
+  const line: EstimationLineInput = {
+    ...emptyEstimationInput(),
+    description: `Selling price — ${policy.method === 'markup' ? `${policy.percent}% markup` : `${policy.percent}% target margin`}${discount ? ` less ${discount.kind === 'percent' ? `${discount.value}%` : `AED ${discount.value}`}` : ''}`,
+    quantity: 1,
+    subcontractUnitCost: baselineCost,
+    targetMarginPercent: marginToReproduce,
+  };
+  const commercial: CommercialDecision = { ...sheet.commercial, policy, discount: discount ?? null, figures };
+  const totals: PricingSheetTotals = { totalCost: baselineCost, totalSell: figures.sellingPrice, marginPercent: figures.marginPercent };
+  return { ...sheet, lines: [line], commercial, totals };
 }
 
 /** Replace the sheet's lines. Only a draft can change — a frozen build-up is what was committed to. */
@@ -115,6 +204,12 @@ export function withSheetLines(sheet: PricingSheet, lines: EstimationLineInput[]
 export function freezeSheet(sheet: PricingSheet, actorId: Id | null, now = new Date()): PricingSheet {
   if (sheet.status !== 'draft') {
     throw new Error(`only a draft pricing sheet can be frozen — ${sheet.name} v${sheet.version} is already ${sheet.status}`);
+  }
+  // A package pricing sheet must carry an explicit commercial decision before it can be frozen —
+  // freezing is where the selling price is committed, and it is never a default (Slice 7). Checked
+  // before the empty-lines guard so a package draft gets the real reason, not "nothing to freeze".
+  if (sheet.commercial && !sheet.commercial.policy) {
+    throw new Error('cannot freeze pricing without a policy — choose a target margin or markup first (pricing is a decision, not a default)');
   }
   if (sheet.lines.length === 0) throw new Error('an empty pricing sheet has nothing to freeze');
   return { ...sheet, status: 'frozen', frozenAt: now.toISOString(), frozenBy: actorId };

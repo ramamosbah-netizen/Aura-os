@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import type { Id, EstimationLineInput } from '@aura/shared';
-import type { PricingSheet, PricingSheetStatus } from './domain/pricing-sheet';
+import type { PricingSheet, PricingSheetStatus, CommercialDecision } from './domain/pricing-sheet';
 import type { PricingSheetFilter, PricingSheetStore } from './pricing-sheet-store';
 
 interface Row {
@@ -23,6 +23,7 @@ interface Row {
   frozen_by: string | null;
   created_at: Date | string;
   created_by: string | null;
+  commercial_decision: CommercialDecision | string | null;
 }
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : new Date(v).toISOString());
@@ -46,6 +47,9 @@ function rowTo(r: Row): PricingSheet {
       totalSell: Number(r.total_sell),
       marginPercent: Number(r.margin_percent),
     },
+    commercial: r.commercial_decision == null
+      ? null
+      : (typeof r.commercial_decision === 'string' ? (JSON.parse(r.commercial_decision) as CommercialDecision) : r.commercial_decision),
     frozenAt: r.frozen_at ? iso(r.frozen_at) : null,
     frozenBy: r.frozen_by,
     createdAt: iso(r.created_at),
@@ -54,7 +58,7 @@ function rowTo(r: Row): PricingSheet {
 }
 
 const COLS =
-  'id, tenant_id, company_id, name, opportunity_id, quotation_id, version, parent_sheet_id, status, lines, total_cost, total_sell, margin_percent, frozen_at, frozen_by, created_at, created_by, package_id, estimate_revision_id';
+  'id, tenant_id, company_id, name, opportunity_id, quotation_id, version, parent_sheet_id, status, lines, total_cost, total_sell, margin_percent, frozen_at, frozen_by, created_at, created_by, package_id, estimate_revision_id, commercial_decision';
 
 export class PostgresPricingSheetStore implements PricingSheetStore {
   constructor(private readonly pool: Pool) {}
@@ -62,16 +66,18 @@ export class PostgresPricingSheetStore implements PricingSheetStore {
   async save(s: PricingSheet): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_crm_pricing_sheets (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, opportunity_id = EXCLUDED.opportunity_id, quotation_id = EXCLUDED.quotation_id,
          status = EXCLUDED.status, lines = EXCLUDED.lines,
          total_cost = EXCLUDED.total_cost, total_sell = EXCLUDED.total_sell, margin_percent = EXCLUDED.margin_percent,
          frozen_at = EXCLUDED.frozen_at, frozen_by = EXCLUDED.frozen_by,
-         package_id = EXCLUDED.package_id, estimate_revision_id = EXCLUDED.estimate_revision_id`,
+         package_id = EXCLUDED.package_id, estimate_revision_id = EXCLUDED.estimate_revision_id,
+         commercial_decision = EXCLUDED.commercial_decision`,
       [s.id, s.tenantId, s.companyId, s.name, s.opportunityId, s.quotationId, s.version, s.parentSheetId,
        s.status, JSON.stringify(s.lines), s.totals.totalCost, s.totals.totalSell, s.totals.marginPercent,
-       s.frozenAt, s.frozenBy, s.createdAt, s.createdBy, s.packageId, s.estimateRevisionId],
+       s.frozenAt, s.frozenBy, s.createdAt, s.createdBy, s.packageId, s.estimateRevisionId,
+       s.commercial ? JSON.stringify(s.commercial) : null],
     );
   }
 

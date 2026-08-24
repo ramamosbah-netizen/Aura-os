@@ -3,7 +3,7 @@ import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, ValidateNeste
 import { Type } from 'class-transformer';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type BasisLine, OpportunityService, PreAwardPackageService, QuotationService } from '@aura/crm';
-import type { PricingPolicy } from '@aura/shared';
+import type { PricingPolicy, PricingDiscount } from '@aura/shared';
 
 class ScopeLineDto {
   @IsString() lineId!: string;
@@ -84,6 +84,17 @@ class AddEstimateDto {
 class FreezePricingDto {
   @IsOptional() @IsIn(['target_margin', 'markup']) method?: 'target_margin' | 'markup';
   @IsOptional() @IsNumber() percent?: number;
+}
+/** A commercial policy (+ optional discount) for the Pricing Workspace. */
+class PricingPolicyDto {
+  @IsOptional() @IsIn(['target_margin', 'markup']) method?: 'target_margin' | 'markup';
+  @IsOptional() @IsNumber() percent?: number;
+  @IsOptional() @IsIn(['percent', 'amount']) discountKind?: 'percent' | 'amount';
+  @IsOptional() @IsNumber() discountValue?: number;
+}
+/** DTO → domain discount, or null when none is given. */
+function toDiscount(dto: PricingPolicyDto): PricingDiscount | null {
+  return dto?.discountKind ? { kind: dto.discountKind, value: Number(dto.discountValue) || 0 } : null;
 }
 
 /**
@@ -226,5 +237,54 @@ export class CrmPreAwardPackageController {
     const policy = dto?.method ? { method: dto.method, percent: Number(dto.percent) || 0 } as PricingPolicy : undefined;
     const sheet = await this.packages.freezePricing({ tenantId, companyId, opportunityId: id, policy, actorId: ctx.actorId });
     return { pricingSheetId: sheet.id, governance: await this.packages.governance(tenantId, id) };
+  }
+
+  // ── Pricing Workspace (Slice 7) — draft → set policy → freeze → quotation ──
+
+  /** Open the Pricing Workspace: the open draft, else the current frozen sheet, else a fresh v1 draft. */
+  @Post(':id/pre-award-package/pricing/open')
+  async openPricing(@Param('id', ParseUuidOr404Pipe) id: string) {
+    const { tenantId, companyId } = await this.ensurePackage(id);
+    return this.packages.openPricing({ tenantId, companyId, opportunityId: id, actorId: this.tenant.get().actorId });
+  }
+
+  /** Open the NEXT pricing revision (P-002…) from the current frozen sheet — explicit re-pricing. */
+  @Post(':id/pre-award-package/pricing/revision')
+  async openPricingRevision(@Param('id', ParseUuidOr404Pipe) id: string) {
+    const { tenantId, companyId } = await this.ensurePackage(id);
+    return this.packages.openPricingRevision({ tenantId, companyId, opportunityId: id, actorId: this.tenant.get().actorId });
+  }
+
+  /** Live preview — the selling figures for a policy on the current cost baseline. Pure, no write. */
+  @Post(':id/pre-award-package/pricing/preview')
+  async previewPricing(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: PricingPolicyDto) {
+    if (!dto?.method) throw new BadRequestException('a pricing method (target_margin | markup) is required');
+    const { tenantId } = await this.ensurePackage(id);
+    return this.packages.previewPricing({ tenantId, opportunityId: id, policy: { method: dto.method, percent: Number(dto.percent) || 0 }, discount: toDiscount(dto) });
+  }
+
+  /** The Pricing Workspace read — the sheet + its read-only cost baseline + editable flag. */
+  @Get(':id/pre-award-package/pricing/:sheetId')
+  async readPricing(@Param('id', ParseUuidOr404Pipe) id: string, @Param('sheetId', ParseUuidOr404Pipe) sheetId: string) {
+    const ctx = this.tenant.get();
+    const view = await this.packages.readPricingWorkspace(ctx.tenantId, id, sheetId);
+    if (!view) throw new NotFoundException(`pricing sheet ${sheetId} not found`);
+    return view;
+  }
+
+  /** Set the commercial policy on a DRAFT pricing sheet. The engine computes; the UI sends no total. */
+  @Patch(':id/pre-award-package/pricing/:sheetId/policy')
+  async setPricingPolicy(@Param('id', ParseUuidOr404Pipe) id: string, @Param('sheetId', ParseUuidOr404Pipe) sheetId: string, @Body() dto: PricingPolicyDto) {
+    if (!dto?.method) throw new BadRequestException('a pricing method (target_margin | markup) is required');
+    const { tenantId } = await this.ensurePackage(id);
+    return this.packages.setPricingPolicy({ tenantId, opportunityId: id, sheetId, policy: { method: dto.method, percent: Number(dto.percent) || 0 }, discount: toDiscount(dto) });
+  }
+
+  /** Freeze a DRAFT pricing sheet — the commercial commitment. Refuses without a policy. */
+  @Post(':id/pre-award-package/pricing/:sheetId/freeze')
+  async freezePricingSheet(@Param('id', ParseUuidOr404Pipe) id: string, @Param('sheetId', ParseUuidOr404Pipe) sheetId: string) {
+    const { tenantId } = await this.ensurePackage(id);
+    const sheet = await this.packages.freezePricingSheetById({ tenantId, opportunityId: id, sheetId, actorId: this.tenant.get().actorId });
+    return { pricingSheetId: sheet.id, status: sheet.status, governance: await this.packages.governance(tenantId, id) };
   }
 }

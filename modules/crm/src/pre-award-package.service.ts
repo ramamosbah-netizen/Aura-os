@@ -1,5 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, newId, moneyNumber, computeBuildUp, type CostComponent, type EstimationLineInput, emptyEstimationInput } from '@aura/shared';
+import {
+  type Id, newId, moneyNumber, computeCostBuildUp, computeCommercialPricing,
+  type CostComponent, type PricingPolicy, type EstimationLineInput, emptyEstimationInput,
+} from '@aura/shared';
 import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetStore } from './pricing-sheet-store';
 import { type PricingSheet, makePricingSheet, freezeSheet, linkQuotation } from './domain/pricing-sheet';
@@ -9,10 +12,17 @@ import {
   makeEstimateRevision, freezeEstimate, approveEstimate, packageGovernance,
 } from './domain/pre-award-package';
 
+/**
+ * One line's cost build-up. Note there is NO profit/margin here: a Direct estimate answers "what will
+ * it cost us?" and stops. The commercial decision is made once, later, in freezePricing (Slice 6A).
+ * `profitPercent` is accepted-and-ignored so the transitional UI's request shape does not break.
+ */
 type BuildUpInput = {
   basisLineId: Id;
   components: Array<Pick<CostComponent, 'costType' | 'description' | 'quantity' | 'unitCost'>>;
-  indirectPercent?: number; overheadPercent?: number; riskPercent?: number; profitPercent?: number;
+  indirectPercent?: number; overheadPercent?: number; riskPercent?: number;
+  profitPercent?: number; // accepted, ignored — an estimate makes no selling decision
+  resources?: unknown;    // reserved for Slice 6B resource wiring
   notes?: string | null;
 };
 
@@ -66,7 +76,12 @@ export class PreAwardPackageService {
     return edited;
   }
 
-  /** Build an estimate revision (draft) on a basis, computing each line via the shared rate engine. */
+  /**
+   * Build an estimate revision (draft) on a basis — COST ONLY (Slice 6A). Each line is costed with
+   * `computeCostBuildUp`; no profit, margin or selling number is decided here. The estimate's canonical
+   * financial output is `totals.estimatedCost`. The selling decision is made later, once, in
+   * `freezePricing` — so the estimate can never quietly bake a price nobody chose.
+   */
   async addEstimate(input: { tenantId: Id; companyId?: Id | null; packageId: Id; basisRevisionId: Id; lines: BasisLine[]; buildUps: BuildUpInput[]; createdBy?: Id | null }): Promise<{ estimate: EstimateRevision; buildUps: EstimateBuildUp[] }> {
     // An estimate multiplies rate × quantity: an unknown quantity cannot be estimated, and must never
     // be silently treated as zero (which would produce a confident AED 0 estimate).
@@ -77,12 +92,24 @@ export class PreAwardPackageService {
     const qtyByLine = new Map(input.lines.map((l) => [l.lineId, l.quantity ?? 0]));
     const buildUps: EstimateBuildUp[] = input.buildUps.map((b) => {
       const components: CostComponent[] = b.components.map((c) => ({ id: newId(), costType: c.costType, description: c.description, quantity: Number(c.quantity) || 0, unitCost: Number(c.unitCost) || 0, amount: moneyNumber((Number(c.quantity) || 0) * (Number(c.unitCost) || 0)) }));
-      const f = computeBuildUp(components, Number(b.overheadPercent) || 0, Number(b.profitPercent) || 0, Number(b.indirectPercent) || 0, Number(b.riskPercent) || 0);
-      return { id: newId(), basisLineId: b.basisLineId, components, resources: null, indirectPercent: Number(b.indirectPercent) || 0, overheadPercent: Number(b.overheadPercent) || 0, riskPercent: Number(b.riskPercent) || 0, profitPercent: Number(b.profitPercent) || 0, ...f, notes: b.notes ?? null };
+      const cost = computeCostBuildUp(components, { indirectPercent: Number(b.indirectPercent) || 0, overheadPercent: Number(b.overheadPercent) || 0, riskPercent: Number(b.riskPercent) || 0 });
+      return {
+        id: newId(), basisLineId: b.basisLineId, components, resources: null,
+        indirectPercent: Number(b.indirectPercent) || 0, overheadPercent: Number(b.overheadPercent) || 0, riskPercent: Number(b.riskPercent) || 0,
+        // No commercial decision at estimate time: profit is zero, and the "rate" a cost-only line
+        // carries is its per-unit ESTIMATED COST — never a selling price.
+        profitPercent: 0, profitAmount: 0,
+        directCost: cost.directCost, indirectAmount: cost.indirectAmount, overheadAmount: cost.overheadAmount, riskAmount: cost.riskAmount,
+        sellingRate: cost.estimatedCost,
+        notes: b.notes ?? null,
+      };
     });
-    const totalSellingValue = moneyNumber(buildUps.reduce((s, b) => s + b.sellingRate * (qtyByLine.get(b.basisLineId) ?? 0), 0));
+    const perUnitEstimatedCost = new Map(buildUps.map((b) => [b.basisLineId, b.directCost + b.indirectAmount + b.overheadAmount + b.riskAmount]));
     const totalDirectCost = moneyNumber(buildUps.reduce((s, b) => s + b.directCost * (qtyByLine.get(b.basisLineId) ?? 0), 0));
-    const totals = { totalDirectCost, totalSellingValue, marginPercent: totalSellingValue > 0 ? moneyNumber(((totalSellingValue - totalDirectCost) / totalSellingValue) * 100) : 0, lineCount: buildUps.length };
+    const estimatedCost = moneyNumber(buildUps.reduce((s, b) => s + (perUnitEstimatedCost.get(b.basisLineId) ?? 0) * (qtyByLine.get(b.basisLineId) ?? 0), 0));
+    // `estimatedCost` present ⇒ a cost-only (post-6A) estimate. Its absence is how freezePricing
+    // recognises a legacy estimate that still carries its own selling decision.
+    const totals = { totalDirectCost, estimatedCost, lineCount: buildUps.length };
 
     const revisionNo = (await this.store.listEstimates(input.tenantId, input.packageId)).length + 1;
     const estimate = makeEstimateRevision({ tenantId: input.tenantId, companyId: input.companyId ?? null, packageId: input.packageId, basisRevisionId: input.basisRevisionId, revisionNo, totals, createdBy: input.createdBy ?? null });
@@ -121,12 +148,30 @@ export class PreAwardPackageService {
   }
 
   /**
-   * Freeze pricing for a package by creating a REAL frozen pricing_sheets row linked to the package
-   * and its approved estimate revision. `pricingFrozen` in governance is derived from that row, so it
-   * can never be a bare toggle — a frozen sheet must exist, built from the approved estimate's numbers.
-   * Idempotent: a package that already has a frozen sheet returns it.
+   * Recompute a legacy estimate's `estimatedCost` from its build-up rows — the cost base a pre-6A
+   * estimate never stored separately. Used only by the legacy freeze path.
    */
-  async freezePricing(input: { tenantId: Id; companyId?: Id | null; opportunityId: Id; actorId?: Id | null }): Promise<PricingSheet> {
+  private async legacyEstimatedCost(tenantId: Id, packageId: Id, estimate: EstimateRevision): Promise<number> {
+    const buildUps = await this.store.listBuildUps(tenantId, estimate.id);
+    const basis = (await this.store.listBasis(tenantId, packageId)).find((b) => b.id === estimate.basisRevisionId);
+    const qtyByLine = new Map((basis?.lines ?? []).map((l) => [l.lineId, l.quantity ?? 0]));
+    return moneyNumber(buildUps.reduce(
+      (s, b) => s + (b.directCost + b.indirectAmount + b.overheadAmount + b.riskAmount) * (qtyByLine.get(b.basisLineId) ?? 0), 0));
+  }
+
+  /**
+   * Freeze pricing — the ONE place a Direct deal's selling price is decided (Slice 6A).
+   *
+   * The estimate is cost-only, so a NEW estimate REQUIRES an explicit PricingPolicy (target margin or
+   * markup): there is no silent default, because a 0% default would quote at cost. A LEGACY estimate
+   * (created before the boundary, still carrying its own selling decision) is honoured by a tagged
+   * compatibility policy that reproduces its historical selling value to the cent — never silently
+   * re-priced. The selling price is computed FORWARD from the policy; the sheet then carries that
+   * number by construction, so nothing is reverse-engineered.
+   *
+   * Idempotent: a package that already has a frozen sheet returns it (the policy is not re-applied).
+   */
+  async freezePricing(input: { tenantId: Id; companyId?: Id | null; opportunityId: Id; policy?: PricingPolicy; actorId?: Id | null }): Promise<PricingSheet> {
     const pkg = await this.store.getByOpportunity(input.tenantId, input.opportunityId);
     if (!pkg) throw new Error('a pre-award package is required before pricing can be frozen');
 
@@ -142,21 +187,46 @@ export class PreAwardPackageService {
     const basis = (await this.store.listBasis(input.tenantId, pkg.id)).find((b) => b.id === approved.basisRevisionId);
     if (basis) assertBasisQuantitiesKnown(basis, 'freeze pricing');
 
-    const totals = (approved.totals ?? {}) as { totalDirectCost?: number; totalSellingValue?: number; lineCount?: number };
-    const totalDirectCost = Number(totals.totalDirectCost) || 0;
-    const totalSellingValue = Number(totals.totalSellingValue) || 0;
+    const totals = (approved.totals ?? {}) as { totalDirectCost?: number; estimatedCost?: number; totalSellingValue?: number; lineCount?: number };
     const lineCount = Number(totals.lineCount) || 0;
-    // Margin computed from cost + sell (not the rounded totals.marginPercent) so the engine reproduces
-    // the approved estimate's selling value exactly rather than drifting through a rounded percentage.
-    const marginPercent = totalSellingValue > 0 ? (1 - totalDirectCost / totalSellingValue) * 100 : 0;
-    // One pricing line carrying the approved estimate's own numbers — cost as an all-in figure, margin
-    // reproducing its selling value. The sheet's frozen truth is the approved estimate, by construction.
+    const isCostOnly = totals.estimatedCost !== undefined; // post-6A estimate
+
+    // ── decide estimatedCost, selling price and how it was decided ──
+    let estimatedCost: number;
+    let sellingPrice: number;
+    let policySource: 'explicit' | 'legacy_estimate_profit';
+    let policyLabel: string;
+
+    if (input.policy) {
+      // NEW path — forward from an explicit commercial decision. Works for legacy too if the caller
+      // chooses to re-price it deliberately.
+      estimatedCost = isCostOnly ? Number(totals.estimatedCost) : await this.legacyEstimatedCost(input.tenantId, pkg.id, approved);
+      const s = computeCommercialPricing(estimatedCost, input.policy);
+      sellingPrice = s.sellingPrice;
+      policySource = 'explicit';
+      policyLabel = input.policy.method === 'markup' ? `${input.policy.percent}% markup` : `${input.policy.percent}% target margin`;
+    } else if (!isCostOnly) {
+      // LEGACY compatibility — no policy given, but the estimate already made the decision. Reproduce
+      // its historical selling value EXACTLY; the price is not recomputed, only re-homed onto a sheet.
+      sellingPrice = moneyNumber(Number(totals.totalSellingValue) || 0);
+      estimatedCost = await this.legacyEstimatedCost(input.tenantId, pkg.id, approved);
+      policySource = 'legacy_estimate_profit';
+      const impliedMarkup = estimatedCost > 0 ? moneyNumber(((sellingPrice - estimatedCost) / estimatedCost) * 100, 4) : 0;
+      policyLabel = `legacy estimate profit (~${impliedMarkup}% markup)`;
+    } else {
+      // NEW estimate, NO policy — the explicit, honest failure. Pricing is a decision, not a default.
+      throw new Error('a pricing policy is required to freeze pricing — choose a target margin or markup for this cost-only estimate (pricing is a decision, not a default)');
+    }
+
+    // Build the sheet's line FORWARD: it carries the estimated cost, and a margin chosen so the sheet's
+    // own engine reproduces exactly the selling price decided above — no back-solving from a target.
+    const marginToReproduce = sellingPrice > 0 ? (1 - estimatedCost / sellingPrice) * 100 : 0;
     const line: EstimationLineInput = {
       ...emptyEstimationInput(),
-      description: `Estimate E-${String(approved.revisionNo).padStart(3, '0')} — ${lineCount} line(s)`,
+      description: `Estimate E-${String(approved.revisionNo).padStart(3, '0')} — estimated cost ${estimatedCost} (${lineCount} line(s), ${policyLabel})`,
       quantity: 1,
-      subcontractUnitCost: totalDirectCost,
-      targetMarginPercent: marginPercent,
+      subcontractUnitCost: estimatedCost,
+      targetMarginPercent: marginToReproduce,
     };
     let sheet = makePricingSheet({
       tenantId: input.tenantId,
@@ -168,10 +238,15 @@ export class PreAwardPackageService {
       lines: [line],
       createdBy: input.actorId ?? null,
     });
+    // Guard: the sheet must carry exactly the decided price. If the two engines disagree by a cent,
+    // stop — do not freeze a number nobody chose.
+    if (sheet.totals.totalSell !== sellingPrice) {
+      throw new Error(`pricing sheet total ${sheet.totals.totalSell} does not reproduce the decided selling price ${sellingPrice}`);
+    }
     await this.pricing.save(sheet);
     sheet = freezeSheet(sheet, input.actorId ?? null);
     await this.pricing.save(sheet);
-    this.logger.log(`Pricing frozen for package ${pkg.id} (sheet ${sheet.id}, estimate ${approved.id})`);
+    this.logger.log(`Pricing frozen for package ${pkg.id} (sheet ${sheet.id}, estimate ${approved.id}, ${policySource}: ${policyLabel}, cost ${estimatedCost} → sell ${sellingPrice})`);
     return sheet;
   }
 

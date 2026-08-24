@@ -1,7 +1,8 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
-import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type BasisLine, OpportunityService, PreAwardPackageService, QuotationService } from '@aura/crm';
+import type { PricingPolicy } from '@aura/shared';
 
 class ScopeLineDto {
   @IsString() lineId!: string;
@@ -54,6 +55,11 @@ class AddEstimateDto {
   @IsArray() lines!: ScopeLineDto[];
   @IsArray() buildUps!: BuildUpDto[];
   @IsOptional() @IsBoolean() approve?: boolean;
+}
+/** The commercial decision at freeze time. Absent = legacy reproduce; present = explicit policy. */
+class FreezePricingDto {
+  @IsOptional() @IsIn(['target_margin', 'markup']) method?: 'target_margin' | 'markup';
+  @IsOptional() @IsNumber() percent?: number;
 }
 
 /**
@@ -158,11 +164,17 @@ export class CrmPreAwardPackageController {
     return this.packages.approveEstimateById(tenantId, packageId, estimateId, this.tenant.get().actorId);
   }
 
+  /**
+   * Freeze pricing. A cost-only (post-6A) estimate REQUIRES a pricing policy — target margin or markup;
+   * a legacy estimate that still carries its own selling decision may be frozen with no policy and is
+   * reproduced exactly. The full Pricing Workspace (Target Margin / Markup / Discount) lands in Slice 7.
+   */
   @Post(':id/pre-award-package/pricing/freeze')
-  async freezePricing(@Param('id', ParseUuidOr404Pipe) id: string) {
+  async freezePricing(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: FreezePricingDto) {
     const { tenantId, companyId } = await this.ensurePackage(id);
     const ctx = this.tenant.get();
-    const sheet = await this.packages.freezePricing({ tenantId, companyId, opportunityId: id, actorId: ctx.actorId });
+    const policy = dto?.method ? { method: dto.method, percent: Number(dto.percent) || 0 } as PricingPolicy : undefined;
+    const sheet = await this.packages.freezePricing({ tenantId, companyId, opportunityId: id, policy, actorId: ctx.actorId });
     return { pricingSheetId: sheet.id, governance: await this.packages.governance(tenantId, id) };
   }
 }

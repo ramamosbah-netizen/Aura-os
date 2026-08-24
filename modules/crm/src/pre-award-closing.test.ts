@@ -3,7 +3,7 @@ import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-stor
 import { InMemoryPricingSheetStore } from './in-memory-pricing-sheet-store';
 import { PreAwardPackageService } from './pre-award-package.service';
 import { quotationLinesFromSheet, linkQuotation } from './domain/pricing-sheet';
-import { basisCompleteness } from './domain/pre-award-package';
+import { basisCompleteness, makeEstimateRevision, approveEstimate, type EstimateBuildUp } from './domain/pre-award-package';
 
 // Slice 5 closing patch — the guarantees the first browser click-through proved were MISSING:
 //   D1  a draft basis is genuinely editable, and a human edit never erases provenance
@@ -128,12 +128,16 @@ describe('D4 — the quotation carries the FROZEN pricing sheet, not the opportu
       lines: [{ lineId: 'L1', description: 'IP camera', unit: 'no', quantity: 2, sourceLineId: 'S1' }],
       buildUps,
     });
-    expect(estimate.totals.totalSellingValue).toBeGreaterThan(0); // a real quantity → real money
+    // Slice 6A: the estimate is cost-only. direct 1000 + 10% overhead = 1100/unit × 2 = 2200.
+    expect(estimate.totals.estimatedCost).toBe(2200);
+    expect('totalSellingValue' in estimate.totals).toBe(false);
     await service.freezeEstimateRevision(estimate, 'u1');
     await service.approveEstimateRevision({ ...estimate, status: 'frozen' }, 'u1');
 
-    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-1', actorId: 'u1' });
+    // The selling decision is made at freeze, explicitly: 20% markup on 2200 = 2640.
+    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-1', policy: { method: 'markup', percent: 20 }, actorId: 'u1' });
     expect(sheet.status).toBe('frozen');
+    expect(sheet.totals.totalSell).toBe(2640);
     const sheetTotal = sheet.totals.totalSell;
     expect(sheetTotal).toBeGreaterThan(0);
 
@@ -162,7 +166,7 @@ describe('D4 — the quotation carries the FROZEN pricing sheet, not the opportu
     });
     await service.freezeEstimateRevision(estimate, 'u1');
     await service.approveEstimateRevision({ ...estimate, status: 'frozen' }, 'u1');
-    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-1', actorId: 'u1' });
+    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-1', policy: { method: 'markup', percent: 20 }, actorId: 'u1' });
 
     const draft = { ...sheet, status: 'draft' as const };
     expect(() => quotationLinesFromSheet(draft)).toThrow(/only a frozen pricing sheet can be quoted/i);
@@ -174,5 +178,50 @@ describe('D4 — the quotation carries the FROZEN pricing sheet, not the opportu
 
     // A frozen sheet produces ONE quotation — a second, different one is refused.
     expect(() => linkQuotation(linked, 'quote-2')).toThrow(/only one quotation can be generated/i);
+  });
+});
+
+describe('Slice 6A — legacy estimates are reproduced to the cent, new ones require a policy', () => {
+  /**
+   * A pre-6A estimate carries its own selling decision (profitPercent, totalSellingValue) and NO
+   * `estimatedCost`. Freezing it with no policy must reproduce its historical selling value exactly —
+   * old deals must not move a cent — while a new cost-only estimate refuses without a policy.
+   */
+  it('a LEGACY estimate freezes with no policy and reproduces its historical selling value exactly', async () => {
+    const { store, service } = harness();
+    const pkg = await service.openDirect({ tenantId: 't1', opportunityId: 'legacy-1' });
+    // A known basis (qty 2), approved.
+    const basis = await service.addScopeBasis({
+      tenantId: 't1', packageId: pkg.id, sourceId: 's',
+      lines: [{ lineId: 'L1', description: 'IP camera', unit: 'no', quantity: 2, sourceLineId: 'S1' }],
+    });
+    await service.approveScopeBasisById('t1', pkg.id, basis.id, 'm1');
+
+    // Hand-build a LEGACY estimate: profit lives on the build-up, totals carry totalSellingValue and
+    // NO estimatedCost — exactly the pre-6A shape.
+    const legacyBuildUp: EstimateBuildUp = {
+      id: 'bu-legacy', basisLineId: 'L1', components: [{ id: 'c1', costType: 'material', description: 'cam', quantity: 1, unitCost: 1000, amount: 1000 }],
+      resources: null, indirectPercent: 0, overheadPercent: 10, riskPercent: 0, profitPercent: 20,
+      directCost: 1000, indirectAmount: 0, overheadAmount: 100, riskAmount: 0,
+      profitAmount: 220, sellingRate: 1320, // (1000+100)×1.2 = 1320 per unit
+      notes: null,
+    };
+    const legacyTotalSelling = 2640; // 1320 × 2 — the historical number
+    const legacy = makeEstimateRevision({
+      tenantId: 't1', packageId: pkg.id, basisRevisionId: basis.id, revisionNo: 1,
+      totals: { totalDirectCost: 2000, totalSellingValue: legacyTotalSelling, marginPercent: 24.24, lineCount: 1 },
+      createdBy: 'u1',
+    });
+    await store.saveEstimate(approveEstimate(legacy, 'u1'));
+    await store.saveBuildUps('t1', null, legacy.id, [legacyBuildUp]);
+
+    // No policy — the legacy compatibility path reproduces the historical selling value to the cent.
+    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'legacy-1', actorId: 'u1' });
+    expect(sheet.status).toBe('frozen');
+    expect(sheet.totals.totalSell).toBe(legacyTotalSelling);
+
+    // And the quotation projected from it carries that exact number, not a recomputed one.
+    const quotedNet = quotationLinesFromSheet(sheet).reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+    expect(Math.round(quotedNet * 100) / 100).toBe(legacyTotalSelling);
   });
 });

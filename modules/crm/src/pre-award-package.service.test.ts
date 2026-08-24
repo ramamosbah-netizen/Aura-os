@@ -43,21 +43,25 @@ describe('Direct Pre-Award — governance loop closes', () => {
     await service.approveScopeBasis(basis, 'u1');
 
     const { estimate, buildUps: bus } = await service.addEstimate({ tenantId: 't1', packageId: pkg.id, basisRevisionId: basis.id, lines, buildUps });
-    // shared computeBuildUp: direct 800 → +10% overhead → +15% profit on (800+80) = 880*1.15 = 1012
-    expect(bus[0].sellingRate).toBe(1012);
-    expect((estimate.totals as { totalSellingValue: number }).totalSellingValue).toBe(10120); // ×10 qty
+    // Slice 6A: the estimate is COST-ONLY. direct 800 → +10% delivery overhead = 880 estimated cost
+    // per unit; profitPercent is ignored here (no selling decision at estimate time).
+    expect(bus[0].sellingRate).toBe(880);          // per-unit ESTIMATED COST, not a price
+    expect(bus[0].profitAmount).toBe(0);
+    expect((estimate.totals as { estimatedCost: number }).estimatedCost).toBe(8800); // ×10 qty
+    expect('totalSellingValue' in estimate.totals).toBe(false); // no selling number on the estimate
     const frozen = await service.freezeEstimateRevision(estimate, 'u1');
     await service.approveEstimateRevision(frozen, 'u2');
 
     // still missing pricing freeze
     expect((await gateFor(service, 'opp-1')).gaps.map((x) => x.code)).toEqual(['PRICING_NOT_FROZEN']);
 
-    // Freezing pricing creates a REAL frozen pricing sheet linked to the package + approved estimate.
-    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-1', actorId: 'u1' });
+    // The selling decision is made HERE, once, with an explicit policy. 15% markup on 8800 = 10120 —
+    // the same number the old estimate-baked 15% produced, proving the boundary is faithful.
+    const sheet = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-1', policy: { method: 'markup', percent: 15 }, actorId: 'u1' });
     expect(sheet.status).toBe('frozen');
     expect(sheet.packageId).toBe(pkg.id);
     expect(sheet.estimateRevisionId).toBe(frozen.id);
-    expect(sheet.totals.totalSell).toBe(10120); // reproduces the approved estimate's selling value
+    expect(sheet.totals.totalSell).toBe(10120); // forward from the policy, not reverse-engineered
 
     const g = await service.governance('t1', 'opp-1');
     expect(g).toMatchObject({ governed: true, scopeApproved: true, estimateApproved: true, pricingFrozen: true });
@@ -75,8 +79,38 @@ describe('Direct Pre-Award — governance loop closes', () => {
     const fe = await service.freezeEstimateRevision(estimate, 'u1');
     await service.approveEstimateRevision(fe, 'u2');
 
-    const first = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-2' });
-    const second = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-2' });
-    expect(second.id).toBe(first.id); // no second frozen sheet
+    const policy = { method: 'markup' as const, percent: 15 };
+    const first = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-2', policy });
+    const second = await service.freezePricing({ tenantId: 't1', opportunityId: 'opp-2', policy });
+    expect(second.id).toBe(first.id); // no second frozen sheet; the policy is not re-applied
+  });
+
+  it('freezePricing REFUSES a cost-only estimate with no pricing policy — pricing is a decision', async () => {
+    const { service } = svc();
+    const pkg = await service.openDirect({ tenantId: 't1', opportunityId: 'opp-3' });
+    const basis = await service.addScopeBasis({ tenantId: 't1', packageId: pkg.id, sourceId: 'scope-1', lines });
+    await service.approveScopeBasis(basis, 'u1');
+    const { estimate } = await service.addEstimate({ tenantId: 't1', packageId: pkg.id, basisRevisionId: basis.id, lines, buildUps });
+    const fe = await service.freezeEstimateRevision(estimate, 'u1');
+    await service.approveEstimateRevision(fe, 'u2');
+    await expect(service.freezePricing({ tenantId: 't1', opportunityId: 'opp-3' })).rejects.toThrow(/pricing policy is required/i);
+  });
+
+  it('target-margin and markup policies produce different, forward-computed prices', async () => {
+    const setup = async (oppId: string) => {
+      const { service } = svc();
+      const pkg = await service.openDirect({ tenantId: 't1', opportunityId: oppId });
+      const basis = await service.addScopeBasis({ tenantId: 't1', packageId: pkg.id, sourceId: 's', lines });
+      await service.approveScopeBasis(basis, 'u1');
+      const { estimate } = await service.addEstimate({ tenantId: 't1', packageId: pkg.id, basisRevisionId: basis.id, lines, buildUps });
+      await service.approveEstimateRevision(await service.freezeEstimateRevision(estimate, 'u1'), 'u2');
+      return service;
+    };
+    // estimatedCost = 8800.
+    const a = await (await setup('opp-tm')).freezePricing({ tenantId: 't1', opportunityId: 'opp-tm', policy: { method: 'target_margin', percent: 20 } });
+    const b = await (await setup('opp-mu')).freezePricing({ tenantId: 't1', opportunityId: 'opp-mu', policy: { method: 'markup', percent: 20 } });
+    expect(a.totals.totalSell).toBe(11000);   // 8800 / (1 - 0.20)
+    expect(b.totals.totalSell).toBe(10560);   // 8800 × 1.20
+    expect(a.totals.totalSell).not.toBe(b.totals.totalSell);
   });
 });

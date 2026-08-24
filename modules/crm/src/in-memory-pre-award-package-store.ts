@@ -27,4 +27,7 @@ export class InMemoryPreAwardPackageStore implements PreAwardPackageStore {
   async listEstimates(tenantId: Id, packageId: Id): Promise<EstimateRevision[]> {
     return [...this.estimates.values()].filter((e) => e.tenantId === tenantId && e.packageId === packageId).map((e) => this.clone(e));
   }
+  async listBuildUps(_tenantId: Id, estimateRevisionId: Id): Promise<EstimateBuildUp[]> {
+    return (this.buildUps.get(estimateRevisionId) ?? []).map((b) => this.clone(b));
+  }
 }

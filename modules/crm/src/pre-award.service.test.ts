@@ -85,7 +85,7 @@ describe('Pre-Award lifecycle (integration) — the package chain gates every qu
       buildUps: [{ basisLineId: 'L1', components: [{ costType: 'material', description: 'cam', quantity: 1, unitCost: 700 }], overheadPercent: 10, profitPercent: 15 }] });
     const fe = await packages.freezeEstimateRevision(estimate, 'u-eng');
     await packages.approveEstimateRevision(fe, 'u-mgr');
-    await packages.freezePricing({ tenantId: 't1', opportunityId: oppId, actorId: 'u-mgr' });
+    await packages.freezePricing({ tenantId: 't1', opportunityId: oppId, policy: { method: 'markup', percent: 15 }, actorId: 'u-mgr' });
     return pkg;
   }
 

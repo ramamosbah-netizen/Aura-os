@@ -33,4 +33,6 @@ export interface PreAwardPackageStore {
   getByOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardPackage | null>;
   listBasis(tenantId: Id, packageId: Id): Promise<EstimationBasisRevision[]>;
   listEstimates(tenantId: Id, packageId: Id): Promise<EstimateRevision[]>;
+  /** The per-line build-ups of one estimate revision — the material/labour/plant detail. */
+  listBuildUps(tenantId: Id, estimateRevisionId: Id): Promise<EstimateBuildUp[]>;
 }

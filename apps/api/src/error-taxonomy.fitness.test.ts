@@ -22,6 +22,7 @@ const INTERNAL_ALLOWLIST: RegExp[] = [
   /^poison: simulated handler failure$/, // poison-queue test subscriber — intentional failure
   /^migration X failed: X$/, // boot-time auto-migrate error — caught in onModuleInit, never reaches a request
   /^X — the app role holds no DDL rights/, // same boot-time path: the DDL-privilege hint the gate logs, never a response
+  /^pricing sheet total X does not reproduce the decided selling price X$/, // internal invariant: the two estimation engines must agree; a mismatch is a bug, not client input
 ];
 
 function tsFiles(dir: string): string[] {

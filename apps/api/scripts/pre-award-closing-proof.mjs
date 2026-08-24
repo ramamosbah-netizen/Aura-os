@@ -105,12 +105,22 @@ async function main() {
       buildUps: [{ basisLineId: 'L1', components: [{ costType: 'material', description: 'Camera', quantity: 1, unitCost: 1000 }], overheadPercent: 10, profitPercent: 20 }],
       createdBy: 'closing-proof',
     });
-    assert(estimate.totals.totalSellingValue > 0, `estimate on a REAL quantity produces real money (${estimate.totals.totalSellingValue})`);
+    // Slice 6A: the estimate is COST-ONLY — its canonical output is estimatedCost, with no selling
+    // decision. direct 1000 + 10% overhead = 1100/unit × 2 = 2200.
+    assert(estimate.totals.estimatedCost === 2200, `6A: the estimate commits to a COST, not a price (estimatedCost=${estimate.totals.estimatedCost})`);
+    assert(!('totalSellingValue' in estimate.totals), '6A: a cost-only estimate carries NO selling value');
     const frozenEst = await packages.freezeEstimateRevision(estimate, 'u1');
     await packages.approveEstimateRevision(frozenEst, 'u1');
 
-    const sheet = await packages.freezePricing({ tenantId, companyId: src.company_id, opportunityId: oppId, actorId: 'u1' });
-    assert(sheet.status === 'frozen' && sheet.totals.totalSell > 0, `pricing frozen at ${sheet.totals.totalSell} (not 0)`);
+    // 6A: freezing a cost-only estimate with NO policy is refused — pricing is a decision, not a default.
+    let noPolicyRefused = false;
+    try { await packages.freezePricing({ tenantId, companyId: src.company_id, opportunityId: oppId, actorId: 'u1' }); }
+    catch { noPolicyRefused = true; }
+    assert(noPolicyRefused, '6A: freezing a cost-only estimate with NO pricing policy is REFUSED');
+
+    // The selling decision is made HERE, once, explicitly: 20% markup on 2200 = 2640.
+    const sheet = await packages.freezePricing({ tenantId, companyId: src.company_id, opportunityId: oppId, policy: { method: 'markup', percent: 20 }, actorId: 'u1' });
+    assert(sheet.status === 'frozen' && sheet.totals.totalSell === 2640, `pricing frozen forward from the policy at ${sheet.totals.totalSell} (2200 × 1.20)`);
 
     // ── D4 — THE DECISIVE TEST ────────────────────────────────────────────────────────────
     // The opportunity's headline value is wildly different from the frozen sheet. The quotation must

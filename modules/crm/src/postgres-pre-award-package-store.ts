@@ -66,4 +66,15 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
     const r = await this.pool.query('select * from public.aura_crm_estimate_revisions where tenant_id=$1 and package_id=$2 order by revision_no', [tenantId, packageId]);
     return r.rows.map((e) => ({ id: e.id, tenantId: e.tenant_id, companyId: e.company_id, packageId: e.package_id, basisRevisionId: e.basis_revision_id, revisionNo: e.revision_no, status: e.status, totals: e.totals ?? {}, createdBy: e.created_by, createdAt: e.created_at.toISOString(), frozenBy: e.frozen_by, frozenAt: e.frozen_at ? e.frozen_at.toISOString() : null, approvedBy: e.approved_by, approvedAt: e.approved_at ? e.approved_at.toISOString() : null }));
   }
+
+  async listBuildUps(tenantId: Id, estimateRevisionId: Id): Promise<EstimateBuildUp[]> {
+    const r = await this.pool.query('select * from public.aura_crm_estimate_build_ups where tenant_id=$1 and estimate_revision_id=$2', [tenantId, estimateRevisionId]);
+    return r.rows.map((b) => ({
+      id: b.id, basisLineId: b.basis_line_id,
+      components: b.components ?? [], resources: b.resources ?? null,
+      indirectPercent: Number(b.indirect_percent), overheadPercent: Number(b.overhead_percent), riskPercent: Number(b.risk_percent), profitPercent: Number(b.profit_percent),
+      directCost: Number(b.direct_cost), indirectAmount: Number(b.indirect_amount), overheadAmount: Number(b.overhead_amount), riskAmount: Number(b.risk_amount), profitAmount: Number(b.profit_amount), sellingRate: Number(b.selling_rate),
+      notes: b.notes ?? null,
+    }));
+  }
 }

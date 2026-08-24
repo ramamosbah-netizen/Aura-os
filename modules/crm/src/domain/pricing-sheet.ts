@@ -76,6 +76,18 @@ export interface PricingSheet {
   commercial: CommercialDecision | null;
   frozenAt: string | null;
   frozenBy: Id | null;
+  /**
+   * Effectivity (Slice 8). A frozen sheet is the CURRENT price until a newer frozen revision
+   * supersedes it. Modelled ORTHOGONALLY to `status` on purpose: `status` stays the permanent
+   * lifecycle fact ("this revision was frozen"), so superseding NEVER erases the committed history —
+   * `frozenAt`, `frozenBy`, `commercial`, `quotationId`, `lines` and `totals` all remain readable on
+   * a historical revision. `supersededAt === null` on a frozen sheet means it is currently effective;
+   * a value means it was replaced (audit-preserved), by the revision named in `supersededByPricingId`.
+   */
+  supersededAt: string | null;
+  supersededBy: Id | null;
+  /** The frozen revision that replaced this one (its successor in the version chain). */
+  supersededByPricingId: Id | null;
   createdAt: string;
   createdBy: Id | null;
 }
@@ -125,9 +137,50 @@ export function makePricingSheet(input: NewPricingSheet, now = new Date()): Pric
     commercial: input.commercial ?? null,
     frozenAt: null,
     frozenBy: null,
+    supersededAt: null,
+    supersededBy: null,
+    supersededByPricingId: null,
     createdAt: now.toISOString(),
     createdBy: input.createdBy ?? null,
   };
+}
+
+// ── Effectivity (Slice 8) — "currently effective" vs "historically frozen" ─────────────────────────
+//
+// A pricing revision, once frozen, is a permanent commercial record: it may have produced a quotation
+// and it carries the audit we will need later to know exactly which price the customer saw. Re-pricing
+// must NOT destroy it. So a newer frozen revision does not overwrite the old one's status — it marks
+// the old one SUPERSEDED (historical), leaving every committed fact intact. Exactly one frozen sheet
+// per effectivity scope is `supersededAt === null` at a time: the current price.
+
+/** True when this frozen sheet is the CURRENT effective price (frozen and not yet superseded). */
+export function isCurrentlyEffective(sheet: Pick<PricingSheet, 'status' | 'supersededAt'>): boolean {
+  return sheet.status === 'frozen' && sheet.supersededAt === null;
+}
+
+/** True when this sheet WAS frozen but a later revision has replaced it — historical, still auditable. */
+export function isHistoricallyFrozen(sheet: Pick<PricingSheet, 'status' | 'supersededAt'>): boolean {
+  return sheet.status === 'frozen' && sheet.supersededAt !== null;
+}
+
+/**
+ * Mark a currently-effective frozen sheet as HISTORICAL, replaced by the frozen revision `by.pricingId`.
+ * Preserves every committed fact (`frozenAt`, `frozenBy`, `commercial`, `quotationId`, `lines`,
+ * `totals`) — supersession is an effectivity change, never a rewrite of what was frozen. Idempotent:
+ * re-superseding an already-historical sheet returns it unchanged. Only a frozen sheet can be
+ * superseded, and a sheet can never supersede itself.
+ */
+export function supersedeSheet(
+  sheet: PricingSheet,
+  by: { pricingId: Id; actorId: Id | null },
+  now = new Date(),
+): PricingSheet {
+  if (sheet.status !== 'frozen') {
+    throw new Error(`only a frozen pricing sheet can be superseded — ${sheet.name} v${sheet.version} is ${sheet.status}`);
+  }
+  if (by.pricingId === sheet.id) throw new Error('a pricing sheet cannot supersede itself');
+  if (sheet.supersededAt) return sheet; // already historical — idempotent
+  return { ...sheet, supersededAt: now.toISOString(), supersededBy: by.actorId, supersededByPricingId: by.pricingId };
 }
 
 // ── Package pricing (Slice 7) — the commercial decision on a cost baseline ────────────────────────

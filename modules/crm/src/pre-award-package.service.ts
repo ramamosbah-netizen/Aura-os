@@ -323,7 +323,9 @@ export class PreAwardPackageService {
   async frozenPricingFor(tenantId: Id, opportunityId: Id): Promise<PricingSheet | null> {
     const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
     if (!pkg) return null;
-    const [sheet] = await this.pricing.list({ tenantId, packageId: pkg.id, status: 'frozen', limit: 1 });
+    // Effectivity (Slice 8): the CURRENT frozen sheet — never a superseded historical revision. With
+    // one current frozen per package this is deterministic; `limit:1` no longer picks arbitrarily.
+    const [sheet] = await this.pricing.list({ tenantId, packageId: pkg.id, status: 'frozen', currentOnly: true, limit: 1 });
     return sheet ?? null;
   }
 
@@ -437,7 +439,8 @@ export class PreAwardPackageService {
     const [basis, estimates, frozenSheets] = await Promise.all([
       this.store.listBasis(tenantId, pkg.id),
       this.store.listEstimates(tenantId, pkg.id),
-      this.pricing.list({ tenantId, packageId: pkg.id, status: 'frozen', limit: 1 }),
+      // pricingFrozen means a CURRENT committed price exists — a superseded historical revision does not count.
+      this.pricing.list({ tenantId, packageId: pkg.id, status: 'frozen', currentOnly: true, limit: 1 }),
     ]);
     return packageGovernance(pkg.id, basis, estimates, frozenSheets.length > 0);
   }

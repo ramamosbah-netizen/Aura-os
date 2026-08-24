@@ -22,6 +22,7 @@ export class InMemoryPricingSheetStore implements PricingSheetStore {
       .filter((r) => !filter.packageId || r.packageId === filter.packageId)
       .filter((r) => !filter.status || r.status === filter.status)
       .filter((r) => !filter.quotationId || r.quotationId === filter.quotationId)
+      .filter((r) => !filter.currentOnly || r.supersededAt === null)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .slice(0, filter.limit ?? 50)
       .map((r) => structuredClone(r));

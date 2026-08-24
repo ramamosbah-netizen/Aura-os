@@ -10,6 +10,12 @@ export interface PricingSheetFilter {
   packageId?: Id;
   status?: import('./domain/pricing-sheet').PricingSheetStatus;
   quotationId?: Id;
+  /**
+   * Effectivity (Slice 8): when true, return only sheets that are NOT superseded (`supersededAt IS
+   * NULL`). Combined with `status: 'frozen'` this is the deterministic "current price" read — at most
+   * one per effectivity scope. Historical reads omit this and get every revision.
+   */
+  currentOnly?: boolean;
   limit?: number;
 }
 

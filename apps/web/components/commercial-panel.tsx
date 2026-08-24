@@ -149,6 +149,28 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
     } finally { setBusy(false); }
   };
 
+  /**
+   * Open the Pricing Workspace (Slice 7) in a new tab. Opens the current draft/frozen sheet, or a fresh
+   * one on the approved estimate's cost; if pricing is already frozen, opens the next revision instead.
+   * The commercial decision (margin / markup / discount → selling price) is made only there.
+   */
+  const openPricing = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const path = agg?.governance.pricingFrozen ? '/pre-award-package/pricing/revision' : '/pre-award-package/pricing/open';
+      const res = await fetch(`${base}${path}`, { method: 'POST' });
+      if (!res.ok) {
+        const jr = await res.json().catch(() => ({}));
+        setErr(typeof jr?.message === 'string' ? jr.message : `Could not open pricing (${res.status})`);
+        return;
+      }
+      const sheet = await res.json();
+      const sheetId = sheet?.id as string | undefined;
+      await load_();
+      if (sheetId) window.open(`/crm/opportunities/${opportunityId}/pre-award/pricing/${sheetId}`, '_blank', 'noreferrer');
+    } finally { setBusy(false); }
+  };
+
   // Four distinct states. A failure is never dressed up as "still loading".
   if (load.state === 'loading') return <section style={st.panel}><p style={st.empty}>Loading commercial workspace…</p></section>;
   if (load.state === 'error') {
@@ -322,23 +344,27 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
             )}
           </div>
 
-          {/* ── Pricing ── */}
+          {/* ── Pricing — a SUMMARY here; the commercial decision is the Pricing Workspace (Slice 7). ── */}
           <div style={st.block}>
             <h3 style={st.h3}>3 · Pricing {g.pricingFrozen && <span style={st.done}>frozen ✓</span>}</h3>
             {agg.pricing.map((p) => (
               <div key={p.id} style={st.card}>
                 <div style={st.cardHead}>
-                  <span style={st.name}>Pricing v{p.version}</span>
+                  <span style={st.name}>Pricing P-{String(p.version).padStart(3, '0')}</span>
                   <StatusTag status={p.status} />
                   <span style={st.meta}>cost AED {aed(p.totals.totalCost)} · sell AED {aed(p.totals.totalSell)} · {p.totals.marginPercent}%</span>
+                  <a style={st.btn} href={`/crm/opportunities/${opportunityId}/pre-award/pricing/${p.id}`} target="_blank" rel="noreferrer">Open Pricing ↗</a>
                 </div>
               </div>
             ))}
-            {!g.pricingFrozen && (
-              g.estimateApproved
-                ? <button style={st.btnAccent} disabled={busy} onClick={() => void cmd('/pre-award-package/pricing/freeze')}>Freeze pricing (from approved estimate)</button>
-                : <p style={st.empty}>Approve an estimate first — pricing is frozen from it.</p>
-            )}
+            {g.estimateApproved
+              ? <div style={st.form}>
+                  <button style={st.btnAccent} disabled={busy} onClick={() => void openPricing()}>
+                    {agg.pricing.length === 0 ? 'Open Pricing Workspace →' : (g.pricingFrozen ? 'New pricing revision →' : 'Open Pricing →')}
+                  </button>
+                  <span style={st.meta}>Decide the selling price — target margin / markup / discount — in a dedicated tab. The estimated cost is read-only there.</span>
+                </div>
+              : <p style={st.empty}>Approve an estimate first — pricing is built on its cost.</p>}
           </div>
 
           {/* ── Quotation ── */}

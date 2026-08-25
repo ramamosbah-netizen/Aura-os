@@ -206,6 +206,10 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
         linkedContracts.push({ quotationId: qid, contractId });
       },
     } as any,
+    // PreAwardPackageService (CRM) — the Slice 9 accept→Won reactor reads the current frozen pricing
+    // sheet for its lineage guard. These tender-chain tests never emit quotation.accepted, so a null
+    // (no governed package) is enough.
+    { frozenPricingFor: async () => null } as any,
     customerInvoices,
     mockSupplierInvoices, // InvoiceService (AP)
     mockFinanceAccounts, // AccountService (Finance) — GL account resolver

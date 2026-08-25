@@ -18,6 +18,10 @@ export class InMemoryOpportunityStore implements OpportunityStore {
     this.opportunities.set(opportunity.id, { ...opportunity, updatedAt: new Date().toISOString() });
   }
 
+  async updateWithClient(_tx: TxHandle | null, opportunity: Opportunity): Promise<void> {
+    return this.update(opportunity);
+  }
+
   async get(id: Id): Promise<Opportunity | null> {
     const o = this.opportunities.get(id);
     return o ? { ...o } : null;

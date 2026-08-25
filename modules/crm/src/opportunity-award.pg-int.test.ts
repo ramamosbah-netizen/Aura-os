@@ -1,0 +1,148 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Pool } from 'pg';
+import { PostgresTxRunner, PostgresEventStore, TenantContext, AccessService } from '@aura/core';
+import { makeOpportunity, newId, type Opportunity } from '@aura/shared';
+import { PostgresOpportunityStore } from './postgres-opportunity-store';
+import { PostgresQuotationStore } from './postgres-quotation-store';
+import { PostgresPricingSheetStore } from './postgres-pricing-sheet-store';
+import { PostgresPreAwardPackageStore } from './postgres-pre-award-package-store';
+import { PostgresCommercialBaselineStore } from './postgres-commercial-baseline-store';
+import { OpportunityService } from './opportunity.service';
+import { QuotationService } from './quotation.service';
+import { PreAwardPackageService } from './pre-award-package.service';
+import { PricingQuotationService } from './pricing-quotation.service';
+import { openCommercialPricing, applyPricingPolicy } from './domain/pricing-sheet';
+
+/**
+ * Slice 9 PR-1 — REAL Postgres proof of the accept→Won award: authoritative value, provenance,
+ * transactional atomicity, and identity conflict — verified from a fresh connection.
+ * Gated on CRM_PG_TEST_URL (migrations incl. 0248/0249/0250 applied).
+ */
+const URL = process.env.CRM_PG_TEST_URL;
+const TENANT = `award-int-${Date.now()}`;
+const run = URL ? describe : describe.skip;
+
+run('opportunity award — Postgres persistence + atomicity', () => {
+  let pool: Pool;
+  let tenant: TenantContext;
+  let tx: PostgresTxRunner;
+  let events: PostgresEventStore;
+  let opps: PostgresOpportunityStore;
+  let quoteStore: PostgresQuotationStore;
+  let pricing: PostgresPricingSheetStore;
+  let opportunities: OpportunityService;
+  let quotations: QuotationService;
+  let packages: PreAwardPackageService;
+  let materialiser: PricingQuotationService;
+
+  const info = { tenantId: TENANT, companyId: null, actorId: null, correlationId: null };
+  const withTenant = <T>(fn: () => Promise<T>): Promise<T> => tenant.run(info, fn);
+
+  beforeAll(() => {
+    pool = new Pool({ connectionString: URL });
+    pool.on('connect', (c) => { c.query("SELECT set_config('app.current_tenant_id', $1, false)", [TENANT]).catch(() => undefined); });
+    tenant = new TenantContext();
+    tx = new PostgresTxRunner(pool, tenant);
+    events = new PostgresEventStore(pool, tenant);
+    opps = new PostgresOpportunityStore(pool);
+    quoteStore = new PostgresQuotationStore(pool);
+    pricing = new PostgresPricingSheetStore(pool);
+    const access = new AccessService();
+    opportunities = new OpportunityService(opps, events, tx, access, { complete: async () => ({ text: '' }) } as never, tenant);
+    quotations = new QuotationService(quoteStore, new PostgresCommercialBaselineStore(pool), events, access, tenant);
+    packages = new PreAwardPackageService(new PostgresPreAwardPackageStore(pool), pricing, tx);
+    materialiser = new PricingQuotationService(pricing, quoteStore, events, packages, tx);
+  });
+
+  afterAll(async () => {
+    for (const t of ['aura_crm_quotations', 'aura_crm_commercial_baselines', 'aura_crm_pricing_sheets', 'aura_crm_pre_award_packages', 'aura_crm_opportunities', 'aura_events']) {
+      await pool?.query(`DELETE FROM public.${t} WHERE tenant_id = $1`, [TENANT]).catch(() => undefined);
+    }
+    await pool?.end().catch(() => undefined);
+  });
+
+  async function seedOpp(over: Partial<Opportunity> = {}): Promise<string> {
+    const o: Opportunity = { ...makeOpportunity({ tenantId: TENANT, title: 'PG award deal', value: 999, executionType: 'direct_sale' }), ...over };
+    await tx.run((t) => opps.createWithClient(t, o));
+    return o.id;
+  }
+
+  /** Governed deal → frozen P-001 → materialise Q → approve (locks baseline) → send. Returns the quote + baseline subtotal. */
+  async function toSent(oppId: string): Promise<{ quoteId: string; awardedValue: number }> {
+    const pkg = await packages.openDirect({ tenantId: TENANT, opportunityId: oppId });
+    const draft = openCommercialPricing({ tenantId: TENANT, name: 'P', opportunityId: oppId, packageId: pkg.id, estimateRevisionId: null as unknown as string, baselineCost: 1000, version: 1, parentSheetId: null, createdBy: 'u1' });
+    await pricing.save(applyPricingPolicy(draft, { method: 'markup', percent: 20 }, null));
+    await packages.freezePricingSheetById({ tenantId: TENANT, opportunityId: oppId, sheetId: draft.id, actorId: 'u1' });
+    const q = await materialiser.materialise({ tenantId: TENANT, opportunityId: oppId, customerName: 'Emaar', actorId: 'u1' });
+    await quotations.changeStatus(q.id, 'approve', null);
+    await quotations.changeStatus(q.id, 'send', null);
+    const baseline = await quotations.getBaseline(TENANT, q.id);
+    return { quoteId: q.id, awardedValue: baseline!.subtotal };
+  }
+
+  /** Fresh-connection read of the opportunity award columns. */
+  async function readAward(oppId: string) {
+    const fresh = new Pool({ connectionString: URL });
+    fresh.on('connect', (c) => { c.query("SELECT set_config('app.current_tenant_id', $1, false)", [TENANT]).catch(() => undefined); });
+    try {
+      const r = (await fresh.query('select stage, value::text, contracted_value::text, awarded_quotation_id::text, award_source, awarded_at from public.aura_crm_opportunities where id=$1', [oppId])).rows[0];
+      return r;
+    } finally { await fresh.end(); }
+  }
+
+  it('accept → Won with authoritative value + provenance, persisted (fresh connection), no contract, idempotent', async () => {
+    await withTenant(async () => {
+      const oppId = await seedOpp();
+      const { quoteId, awardedValue } = await toSent(oppId);
+      await quotations.changeStatus(quoteId, 'accept', null);
+
+      // resolve exactly as the reactor does, then run the sanctioned command
+      const r = await opportunities.applyAwardOutcome(oppId, { awardedQuotationId: quoteId, contractedValue: awardedValue, valueSource: 'commercial_baseline', reason: 'accepted', source: 'quotation_accepted' });
+      expect(r.outcome).toBe('won');
+
+      const a = await readAward(oppId);
+      expect(a.stage).toBe('won');
+      expect(Number(a.contracted_value)).toBe(awardedValue);   // baseline subtotal
+      expect(Number(a.value)).toBe(999);                        // headline untouched
+      expect(a.awarded_quotation_id).toBe(quoteId);
+      expect(a.award_source).toBe('quotation_accepted');
+      expect(a.awarded_at).toBeTruthy();
+
+      // no contract was created by the award
+      const contracts = await pool.query("select count(*)::int as n from public.aura_contracts where tenant_id=$1", [TENANT]).catch(() => ({ rows: [{ n: 0 }] }));
+      expect(contracts.rows[0].n).toBe(0);
+
+      // idempotent replay of the SAME award
+      expect((await opportunities.applyAwardOutcome(oppId, { awardedQuotationId: quoteId, contractedValue: awardedValue, valueSource: 'commercial_baseline', reason: 'accepted', source: 'quotation_accepted' })).outcome).toBe('noop_same_award');
+    });
+  });
+
+  it('a failed event append inside the award tx rolls the WHOLE close back (fresh-connection read)', async () => {
+    await withTenant(async () => {
+      const oppId = await seedOpp();
+      // an OpportunityService whose event append throws inside the tx
+      const faultyEvents = Object.create(events);
+      faultyEvents.appendWithClient = async () => { throw new Error('boom-award-event'); };
+      const faultySvc = new OpportunityService(opps, faultyEvents, tx, new AccessService(), { complete: async () => ({ text: '' }) } as never, tenant);
+      await expect(faultySvc.applyAwardOutcome(oppId, { awardedQuotationId: newId(), contractedValue: 1200, valueSource: 'commercial_baseline', reason: 'x', source: 'quotation_accepted' })).rejects.toThrow(/boom-award-event/);
+      const a = await readAward(oppId);
+      expect(a.stage).not.toBe('won');           // the close rolled back with the failed event
+      expect(a.awarded_quotation_id).toBeNull();
+    });
+  });
+
+  it('a DIFFERENT quotation award on an already-won deal is a conflict — never overwrites (fresh read)', async () => {
+    await withTenant(async () => {
+      const oppId = await seedOpp();
+      const q2 = newId(), q3 = newId();
+      await opportunities.applyAwardOutcome(oppId, { awardedQuotationId: q2, contractedValue: 85767, valueSource: 'commercial_baseline', reason: 'a', source: 'quotation_accepted' });
+      const r = await opportunities.applyAwardOutcome(oppId, { awardedQuotationId: q3, contractedValue: 91500, valueSource: 'commercial_baseline', reason: 'b', source: 'quotation_accepted' });
+      expect(r.outcome).toBe('award_conflict');
+      const a = await readAward(oppId);
+      expect(a.awarded_quotation_id).toBe(q2);                 // NOT overwritten
+      expect(Number(a.contracted_value)).toBe(85767);
+      const conflicts = await pool.query("select count(*)::int as n from public.aura_events where tenant_id=$1 and type='crm.opportunity.award_conflict'", [TENANT]);
+      expect(conflicts.rows[0].n).toBe(1);
+    });
+  });
+});

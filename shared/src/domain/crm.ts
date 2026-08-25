@@ -170,9 +170,23 @@ export interface Opportunity {
    * tender's award/loss syncs the outcome back. Null for a direct-sale deal.
    */
   tenderId: Id | null;
+  /**
+   * Award provenance (Slice 9). When a deal is Won, these record WHY — from an authoritative record,
+   * not a fragile reconstruction across tables. `awardedQuotationId` is the exact accepted quotation
+   * revision the customer awarded; `contractedValue` is the committed selling value resolved from that
+   * quotation's Commercial Baseline (never `value`, the salesperson's headline); `awardSource` says
+   * which sanctioned path closed it; `awardedAt` is when. All null until the deal is awarded.
+   */
+  awardedQuotationId: Id | null;
+  contractedValue: number | null;
+  awardSource: AwardSource | null;
+  awardedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/** How a Won deal was awarded — the sanctioned close paths. */
+export type AwardSource = 'quotation_accepted' | 'tender_award' | 'manual_override';
 
 export interface NewLead {
   tenantId: Id;
@@ -454,6 +468,10 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     pursuitDimensions: null,
     winPlan: null,
     tenderId: null,
+    awardedQuotationId: null,
+    contractedValue: null,
+    awardSource: null,
+    awardedAt: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -561,4 +579,10 @@ export const CRM_EVENT = {
   opportunityCreated: 'crm.opportunity.created',
   opportunityUpdated: 'crm.opportunity.updated',
   opportunityStageChanged: 'crm.opportunity.stage_changed',
+  /**
+   * Slice 9 — a SECOND, different quotation's acceptance arrived for a deal already awarded from
+   * another quotation. The award is NOT overwritten; this records the anomaly so a later award never
+   * silently rewrites the history of an earlier one.
+   */
+  opportunityAwardConflict: 'crm.opportunity.award_conflict',
 } as const;

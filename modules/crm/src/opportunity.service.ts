@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
 import { AccessService, AiService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
-import { CRM_EVENT, type Opportunity, type OpportunityStage, type NewOpportunity, makeOpportunity, mergeWinPlan, winPlanCoverage, type WinPlan, type WinPlanCoverage } from '@aura/shared';
+import { CRM_EVENT, type Opportunity, type OpportunityStage, type AwardSource, type NewOpportunity, makeOpportunity, mergeWinPlan, winPlanCoverage, type WinPlan, type WinPlanCoverage } from '@aura/shared';
 import {
   type PursuitDecision, type PursuitDimensions, scorePursuit, CRM_JOURNEY_EVENT,
   checkStageTransition, stageGateMessage, type StageEvidence,
@@ -161,7 +161,7 @@ export class OpportunityService {
     });
 
     await this.tx.run(async (handle) => {
-      await this.store.update(updated);
+      await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
 
@@ -196,7 +196,7 @@ export class OpportunityService {
       payload: { tenderId, changes: { tenderId, executionType: 'tender' } },
     });
     await this.tx.run(async (handle) => {
-      await this.store.update(updated);
+      await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
     this.logger.log(`Opportunity ${updated.id} now owned by tender ${tenderId} (commercial progression locked to the tender)`);
@@ -241,11 +241,75 @@ export class OpportunityService {
       },
     });
     await this.tx.run(async (handle) => {
-      await this.store.update(updated);
+      await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
     this.logger.log(`Opportunity ${updated.id} closed ${outcome} by its tender ${existing.tenderId} (${detail.reason})`);
     return updated;
+  }
+
+  /**
+   * Slice 9 — the sanctioned writer that closes a DIRECT deal Won from a verified customer AWARD
+   * (an accepted quotation). Distinct from the manual UI close: its evidence is the award itself —
+   * a verified quotation, an authoritative baseline value, and the P↔Q lineage the caller checked —
+   * so it does NOT run the human stage gate or fabricate a `winReason` to slip through a UI rule.
+   *
+   * Idempotency is IDENTITY-based, not merely state-based:
+   *  - open deal                              → close Won, stamp award provenance.
+   *  - already Won from the SAME quotation     → no-op (a safe event replay).
+   *  - already Won from a DIFFERENT quotation  → CONFLICT: never overwrite; emit an anomaly event so a
+   *                                              later award can never silently rewrite an earlier one.
+   *  - already Lost, or tender-owned           → left untouched.
+   */
+  async applyAwardOutcome(
+    id: Id,
+    award: { awardedQuotationId: Id; contractedValue: number; valueSource: 'commercial_baseline' | 'legacy_quotation_total'; reason: string; source: AwardSource },
+  ): Promise<{ opportunity: Opportunity; outcome: 'won' | 'noop_same_award' | 'award_conflict' | 'skipped_closed' | 'skipped_tender' }> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
+
+    // A tender-owned deal is closed by its tender, never by a quotation acceptance.
+    if (existing.tenderId) return { opportunity: existing, outcome: 'skipped_tender' };
+
+    if (existing.stage === 'won') {
+      if (existing.awardedQuotationId === award.awardedQuotationId) return { opportunity: existing, outcome: 'noop_same_award' };
+      // A DIFFERENT quotation's award arrived for an already-won deal — record the anomaly, do NOT overwrite.
+      await this.events.append([makeEvent({
+        type: CRM_EVENT.opportunityAwardConflict, tenantId: existing.tenantId, companyId: existing.companyId, actorId: null,
+        aggregateType: 'crm.opportunity', aggregateId: existing.id,
+        payload: { existingAwardedQuotationId: existing.awardedQuotationId, incomingQuotationId: award.awardedQuotationId, existingContractedValue: existing.contractedValue, incomingContractedValue: award.contractedValue },
+      })]);
+      this.logger.warn(`Award conflict on opportunity ${existing.id}: already awarded from ${existing.awardedQuotationId}; refused ${award.awardedQuotationId} — award NOT overwritten`);
+      return { opportunity: existing, outcome: 'award_conflict' };
+    }
+    if (existing.stage === 'lost') return { opportunity: existing, outcome: 'skipped_closed' };
+
+    const now = new Date().toISOString();
+    const updated: Opportunity = {
+      ...existing,
+      stage: 'won',
+      winReason: award.reason,
+      contractedValue: award.contractedValue,
+      awardedQuotationId: award.awardedQuotationId,
+      awardSource: award.source,
+      awardedAt: now,
+      updatedAt: now,
+    };
+    const event = makeEvent({
+      type: CRM_EVENT.opportunityStageChanged,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId: null,
+      aggregateType: 'crm.opportunity', aggregateId: updated.id,
+      payload: {
+        title: updated.title, stage: 'won', value: updated.value, contractedValue: updated.contractedValue,
+        accountId: updated.accountId, accountName: updated.accountName, requiresTender: updated.requiresTender, oldStage: existing.stage,
+        changes: { stage: 'won' }, awardedQuotationId: award.awardedQuotationId, awardSource: award.source, valueSource: award.valueSource,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Opportunity ${updated.id} WON from quotation ${award.awardedQuotationId} (contractedValue ${award.contractedValue}, ${award.valueSource})`);
+    return { opportunity: updated, outcome: 'won' };
   }
 
   /** Record a Pursue / No-Pursue decision — computes the score from the assessment dimensions and
@@ -285,7 +349,7 @@ export class OpportunityService {
     });
 
     await this.tx.run(async (handle) => {
-      await this.store.update(updated);
+      await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
 

@@ -4,7 +4,7 @@ import { ContractService } from '@aura/contracts';
 import { ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService } from '@aura/tendering';
-import { AccountService, OpportunityService, QuotationService, SignalService, isQuotationCommitted } from '@aura/crm';
+import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { AmcService } from '@aura/amc';
@@ -54,6 +54,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly opportunities: OpportunityService,
     private readonly signals: SignalService,
     private readonly quotations: QuotationService,
+    private readonly preAwardPackages: PreAwardPackageService,
     private readonly customerInvoices: CustomerInvoiceService,
     private readonly supplierInvoices: InvoiceService,
     private readonly financeAccounts: FinanceAccountService,
@@ -127,6 +128,58 @@ export class CrossModuleSubscriber implements OnModuleInit {
       this.logger.warn(`Baseline lookup for tender ${tenderId} failed (${(err as Error).message}) — contract will use the tender value.`);
       return null;
     }
+  }
+
+  /**
+   * Slice 9 — a customer accepting a quotation IS the award of the direct deal behind it. Closes that
+   * opportunity Won with the AUTHORITATIVE value (the accepted quotation's Commercial Baseline, never
+   * the salesperson's headline `value`) and the award provenance. Guards, in order:
+   *  - the quote must still be `accepted` (re-read live, not the event payload);
+   *  - it must be a DIRECT-sale quote (sourceOpportunityId, not a tender-sourced one);
+   *  - the deal must not be tender-owned (the tender path closes those);
+   *  - LINEAGE (Slice 8): for a governed deal the accepted quote must be the CURRENT authoritative one
+   *    — the quote the current frozen pricing sheet points to — so a superseded / stray quote can never
+   *    close the deal.
+   * The sanctioned `applyAwardOutcome` command then makes it idempotent by IDENTITY: the same award
+   * replayed is a no-op; a different quotation's award on an already-won deal is a recorded conflict,
+   * never a silent overwrite.
+   */
+  private async awardOnQuotationAccepted(quotationId: string): Promise<void> {
+    const q = await this.quotations.get(quotationId);
+    if (!q || q.status !== 'accepted') return;
+    const oppId = q.sourceOpportunityId;
+    if (!oppId) return; // tender-sourced quote — the tender path owns that deal's outcome
+    const opp = await this.opportunities.get(oppId);
+    if (!opp || opp.tenderId) return; // gone, or tender-owned (closed by its tender, not a quote)
+
+    // Lineage guard: for a governed deal, only the quote the CURRENT frozen pricing sheet points to is
+    // authoritative. A superseded revision or a stray legacy quote sharing the opportunity is refused.
+    const currentSheet = await this.preAwardPackages.frozenPricingFor(q.tenantId, oppId);
+    if (currentSheet && currentSheet.quotationId !== q.id) {
+      this.logger.warn(
+        `quotation.accepted ${q.id} is not the current authoritative quote for opportunity ${oppId} ` +
+          `(current pricing points to ${currentSheet.quotationId ?? 'none'}) — not closing Won`,
+      );
+      return;
+    }
+
+    // Resolve the ONE authoritative value + its provenance. Baseline (approved-price snapshot) first;
+    // a legacy quote with no baseline falls back to its own selling value — recorded, never invisible.
+    const baseline = await this.quotations.getBaseline(q.tenantId, q.id);
+    const awardedValue = baseline ? baseline.subtotal : q.subtotal;
+    const valueSource = baseline ? 'commercial_baseline' : 'legacy_quotation_total';
+
+    const result = await this.opportunities.applyAwardOutcome(oppId, {
+      awardedQuotationId: q.id,
+      contractedValue: awardedValue,
+      valueSource,
+      reason: `Customer accepted quotation ${q.quoteNumber} Rev ${q.revision}`,
+      source: 'quotation_accepted',
+    });
+    this.logger.log(
+      `⚡ quotation.accepted → Opportunity "${opp.title}" (${oppId}) ${result.outcome}` +
+        (result.outcome === 'won' ? ` (contractedValue ${awardedValue}, ${valueSource}, from ${q.quoteNumber} Rev ${q.revision})` : ''),
+    );
   }
 
   onModuleInit(): void {
@@ -355,6 +408,17 @@ export class CrossModuleSubscriber implements OnModuleInit {
         await this.closeSourceOpportunity(e.aggregateId, 'lost');
       } catch (err) {
         this.logger.error(`Failed to close opportunity Lost from tender.lost: ${err}`);
+      }
+    });
+
+    // ── Deal chain CLOSE (Slice 9): customer accepted a quotation → close the DIRECT deal Won ──
+    // The direct-sale sibling of tender.awarded → won: the accepted quotation IS the award. Authoritative
+    // value from the accepted quotation's baseline, lineage-checked, idempotent by award identity.
+    this.bus.subscribe('crm.quotation.accepted', async (e: DomainEvent) => {
+      try {
+        await this.awardOnQuotationAccepted(e.aggregateId);
+      } catch (err) {
+        this.logger.error(`Failed to award opportunity Won from quotation.accepted: ${err}`);
       }
     });
 

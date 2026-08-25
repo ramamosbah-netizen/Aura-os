@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { TX_RUNNER, type TxRunner, NullTxRunner } from '@aura/core';
 import {
   type Id, newId, moneyNumber, computeCostBuildUp, computeCommercialPricing, compileResourceBreakdown,
   type CostComponent, type ResourceBreakdown, type PricingPolicy, type PricingDiscount, type SellingFigures,
@@ -7,7 +8,7 @@ import {
 import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetStore } from './pricing-sheet-store';
 import {
-  type PricingSheet, makePricingSheet, freezeSheet, linkQuotation,
+  type PricingSheet, makePricingSheet, freezeSheet, linkQuotation, supersedeSheet,
   openCommercialPricing, applyPricingPolicy, previewCommercialPricing,
 } from './domain/pricing-sheet';
 import {
@@ -44,6 +45,10 @@ export class PreAwardPackageService {
   constructor(
     @Inject(CRM_PRE_AWARD_PACKAGE_STORE) private readonly store: PreAwardPackageStore,
     @Inject(CRM_PRICING_SHEET_STORE) private readonly pricing: PricingSheetStore,
+    // Slice 8 PR-2: freezing a new pricing revision and superseding the prior one is ONE atomic
+    // write. @Optional with a NullTxRunner default so no-DB boots and unit tests degrade to
+    // sequential (non-atomic) writes exactly as before.
+    @Optional() @Inject(TX_RUNNER) private readonly tx: TxRunner = new NullTxRunner(),
   ) {}
 
   /** Idempotent: one direct package per opportunity. */
@@ -411,13 +416,37 @@ export class PreAwardPackageService {
     return priced;
   }
 
-  /** Freeze a DRAFT pricing sheet — the commercial commitment. Refuses without a policy. */
+  /**
+   * Freeze a DRAFT pricing sheet — the commercial commitment. Refuses without a policy.
+   *
+   * Effectivity (Slice 8 PR-2): freezing a new revision and marking the PRIOR current frozen sheet
+   * historical is ONE atomic write. `freezeSheet` is pure and throws BEFORE any persistence, so a
+   * draft that cannot be frozen never disturbs the current price. Once it succeeds, the freeze of
+   * P-002 and the supersession of P-001 (superseded_by_pricing_id = P-002.id) commit or roll back
+   * together on the same client — there is no window where two frozen sheets are both current, and a
+   * failed supersession rolls the freeze back so P-001 stays current.
+   */
   async freezePricingSheetById(input: { tenantId: Id; opportunityId: Id; sheetId: Id; actorId?: Id | null }): Promise<PricingSheet> {
     const sheet = await this.pricing.get(input.sheetId);
     if (!sheet || sheet.tenantId !== input.tenantId) throw new Error(`pricing sheet ${input.sheetId} not found`);
-    const frozen = freezeSheet(sheet, input.actorId ?? null);
-    await this.pricing.save(frozen);
-    this.logger.log(`Pricing P-${String(frozen.version).padStart(3, '0')} frozen for opportunity ${input.opportunityId} (sell ${frozen.totals.totalSell})`);
+    const frozen = freezeSheet(sheet, input.actorId ?? null); // pure — throws here, before any write
+
+    // The prior current frozen sheet(s) for this package — everything except the one being frozen.
+    const priors = sheet.packageId
+      ? (await this.pricing.list({ tenantId: input.tenantId, packageId: sheet.packageId, status: 'frozen', currentOnly: true, limit: 50 }))
+          .filter((s) => s.id !== frozen.id)
+      : [];
+
+    await this.tx.run(async (tx) => {
+      await this.pricing.saveWithClient(tx, frozen);
+      for (const prior of priors) {
+        await this.pricing.saveWithClient(tx, supersedeSheet(prior, { pricingId: frozen.id, actorId: input.actorId ?? null }));
+      }
+    });
+    this.logger.log(
+      `Pricing P-${String(frozen.version).padStart(3, '0')} frozen for opportunity ${input.opportunityId} (sell ${frozen.totals.totalSell})` +
+        (priors.length ? ` — superseded ${priors.map((p) => `P-${String(p.version).padStart(3, '0')}`).join(', ')}` : ''),
+    );
     return frozen;
   }
 

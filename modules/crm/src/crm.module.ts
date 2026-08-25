@@ -17,6 +17,7 @@ import { CRM_PRE_AWARD_PACKAGE_STORE } from './pre-award-package-store';
 import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
 import { PostgresPreAwardPackageStore } from './postgres-pre-award-package-store';
 import { PreAwardPackageService } from './pre-award-package.service';
+import { PricingQuotationService } from './pricing-quotation.service';
 
 import { CRM_OPPORTUNITY_STORE } from './opportunity-store';
 import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
@@ -216,9 +217,10 @@ import { LeadConversionService } from './lead-conversion.service';
     ForecastSnapshotService,
     PreAwardService,
     PreAwardPackageService,
+    PricingQuotationService,
     ScopeAssistService,
     LeadConversionService,
   ],
-  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, ScopeAssistService, LeadConversionService],
+  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, PricingQuotationService, ScopeAssistService, LeadConversionService],
 })
 export class CrmModule {}

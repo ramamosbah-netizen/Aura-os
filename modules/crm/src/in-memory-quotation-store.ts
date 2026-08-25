@@ -1,5 +1,6 @@
 import type { Id, Page, PageParams } from '@aura/shared';
 import { paginate } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Quotation } from './domain/quotation';
 import type { QuotationFilter, QuotationStore } from './quotation-store';
 
@@ -8,6 +9,11 @@ export class InMemoryQuotationStore implements QuotationStore {
 
   async save(q: Quotation): Promise<void> {
     this.data.set(q.id, { ...q, lines: q.lines.map((l) => ({ ...l })) });
+  }
+
+  /** No real transaction in-memory — writes are sequential (the NullTxRunner passes tx=null). */
+  async saveWithClient(_tx: TxHandle | null, q: Quotation): Promise<void> {
+    return this.save(q);
   }
 
   async get(id: Id): Promise<Quotation | null> {

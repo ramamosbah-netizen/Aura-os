@@ -1,6 +1,7 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id, Page, PageParams, EstimationLineInput } from '@aura/shared';
 import { makePage } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Quotation, QuotationLine } from './domain/quotation';
 import type { QuotationPricingInput } from './domain/quotation-pricing';
 import type { QuotationFilter, QuotationStore } from './quotation-store';
@@ -82,7 +83,16 @@ export class PostgresQuotationStore implements QuotationStore {
   constructor(private readonly pool: Pool) {}
 
   async save(q: Quotation): Promise<void> {
-    await this.pool.query(
+    await this.upsert(this.pool, q);
+  }
+
+  /** Save on a caller-supplied transaction client (Slice 8 PR-2); `null` degrades to a pooled save. */
+  async saveWithClient(tx: TxHandle | null, q: Quotation): Promise<void> {
+    await this.upsert((tx as PoolClient | null) ?? this.pool, q);
+  }
+
+  private async upsert(executor: Pool | PoolClient, q: Quotation): Promise<void> {
+    await executor.query(
       `INSERT INTO public.aura_crm_quotations
         (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, exclusions, payment_conditions, delivery_terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, pricing, status, created_by, created_at, subject, estimation)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)

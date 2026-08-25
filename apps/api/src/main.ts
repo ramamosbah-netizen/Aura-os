@@ -7,7 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import crypto from 'node:crypto';
 import helmet from 'helmet';
-import { AuthService, BODY_LIMIT, EdgeRateLimitGuard, OtlpMetricsPusher, PG_POOL, TenantContext, cspFor, evaluateAuthPosture, evaluateRlsPosture, metrics, resolveCors } from '@aura/core';
+import { AuthService, BODY_LIMIT, EdgeRateLimitGuard, OtlpMetricsPusher, PG_POOL, TenantContext, TX_RUNNER, PostgresTxRunner, cspFor, evaluateAuthPosture, evaluateRlsPosture, evaluateTxPosture, metrics, resolveCors } from '@aura/core';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { MigrationGateService } from './health/migration-gate.service';
@@ -92,6 +92,17 @@ async function bootstrap(): Promise<void> {
   // a small public allowlist — the lockdown.
   const auth = app.get(AuthService);
   const tenant = app.get(TenantContext);
+
+  // Transaction posture (Slice 8): governed financial workflows (freeze→supersede pricing, materialise
+  // a quotation revision + its pricing link) commit as ONE transaction — real only behind a
+  // PostgresTxRunner. Fail closed if a database is configured but DI resolved the NullTxRunner
+  // fallback, rather than run those money flows non-atomically. Pure decision (tx-posture.ts),
+  // symmetric with the auth and RLS posture gates. No DATABASE_URL (tests / in-memory) → allowed.
+  const txPosture = evaluateTxPosture({
+    databaseConfigured: Boolean(process.env.DATABASE_URL),
+    runnerIsTransactional: app.get(TX_RUNNER) instanceof PostgresTxRunner,
+  });
+  if (!txPosture.ok) throw new Error(`config: ${txPosture.reason}`);
   // Fail-closed (P0-1): production MUST run with a verifier configured. Refuse to boot "open"
   // rather than silently serving every tenant's data unauthenticated. A loud, explicit
   // ALLOW_INSECURE_NO_AUTH=true override remains for deployments fronted by an external gateway.

@@ -3,6 +3,7 @@ export * from './core.module';
 export * from './events/event-bus';
 export * from './events/event-store';
 export * from './events/tx';
+export * from './events/tx-posture';
 export * from './events/in-memory-event-store';
 export * from './events/postgres-event-store';
 export * from './events/outbox-relay';

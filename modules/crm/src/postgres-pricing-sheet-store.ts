@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id, EstimationLineInput } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { PricingSheet, PricingSheetStatus, CommercialDecision } from './domain/pricing-sheet';
 import type { PricingSheetFilter, PricingSheetStore } from './pricing-sheet-store';
 
@@ -70,7 +71,16 @@ export class PostgresPricingSheetStore implements PricingSheetStore {
   constructor(private readonly pool: Pool) {}
 
   async save(s: PricingSheet): Promise<void> {
-    await this.pool.query(
+    await this.upsert(this.pool, s);
+  }
+
+  /** Save on a caller-supplied transaction client (Slice 8 PR-2); `null` degrades to a pooled save. */
+  async saveWithClient(tx: TxHandle | null, s: PricingSheet): Promise<void> {
+    await this.upsert((tx as PoolClient | null) ?? this.pool, s);
+  }
+
+  private async upsert(executor: Pool | PoolClient, s: PricingSheet): Promise<void> {
+    await executor.query(
       `INSERT INTO public.aura_crm_pricing_sheets (${COLS})
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        ON CONFLICT (id) DO UPDATE SET

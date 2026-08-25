@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { PricingSheet } from './domain/pricing-sheet';
 import type { PricingSheetFilter, PricingSheetStore } from './pricing-sheet-store';
 
@@ -8,6 +9,11 @@ export class InMemoryPricingSheetStore implements PricingSheetStore {
 
   async save(sheet: PricingSheet): Promise<void> {
     this.rows.set(sheet.id, structuredClone(sheet));
+  }
+
+  /** No real transaction in-memory — writes are sequential (the NullTxRunner passes tx=null). */
+  async saveWithClient(_tx: TxHandle | null, sheet: PricingSheet): Promise<void> {
+    return this.save(sheet);
   }
 
   async get(id: Id): Promise<PricingSheet | null> {

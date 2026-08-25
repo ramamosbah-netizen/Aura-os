@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
-import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, QuotationService, quotationLinesFromSheet, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
+import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, PricingQuotationService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
@@ -80,6 +80,7 @@ export class CrmOpportunitiesController {
     private readonly accounts: AccountService,
     private readonly tenders: TenderService,
     private readonly packages: PreAwardPackageService,
+    private readonly pricingQuotations: PricingQuotationService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -148,16 +149,23 @@ export class CrmOpportunitiesController {
     if (!readiness.ready) throw new BadRequestException(quotationReadinessMessage(readiness.gaps));
     const ctx = this.tenant.get();
 
-    // The governed chain owns the NUMBER, not just the permission. When a Pre-Award package backs the
-    // deal, the quote's lines are projected from the FROZEN pricing sheet that earned it — so the
-    // customer receives Scope → Estimate → Pricing, never the opportunity's headline `value`. Legacy
-    // ungoverned deals keep the old headline behaviour (there is no sheet to quote from).
-    const sheet = gov.governed ? await this.packages.frozenPricingFor(ctx.tenantId, id) : null;
-    const lines = sheet
-      ? quotationLinesFromSheet(sheet)
-      : [{ description: opp.title, quantity: 1, unitPrice: opp.value, vatRate: 5 }];
+    // GOVERNED deal (Slice 8 PR-2): the current frozen pricing revision owns the quote's numbers, and
+    // re-pricing produces a REVISION, not a new quote. Materialisation is idempotent by pricing-revision
+    // identity (re-generating returns the same quotation) and atomic (no orphan / partial link). The
+    // customer receives Scope → Estimate → Pricing, never the opportunity's headline `value`.
+    if (gov.governed) {
+      return this.pricingQuotations.materialise({
+        tenantId: ctx.tenantId,
+        opportunityId: id,
+        customerName: opp.accountName ?? 'Client',
+        accountId: opp.accountId,
+        actorId: ctx.actorId,
+      });
+    }
 
-    const quotation = await this.quotations.create({
+    // LEGACY ungoverned deal — there is no pricing sheet to quote from, so keep the old headline
+    // behaviour: a single line at the opportunity's value.
+    return this.quotations.create({
       tenantId: ctx.tenantId,
       companyId: opp.companyId,
       quoteNumber: `QT-OPP-${opp.id.slice(0, 8)}`,
@@ -166,12 +174,9 @@ export class CrmOpportunitiesController {
       sourceOpportunityId: opp.id,
       ownerId: opp.ownerId ?? null,
       issueDate: new Date().toISOString().slice(0, 10),
-      lines,
+      lines: [{ description: opp.title, quantity: 1, unitPrice: opp.value, vatRate: 5 }],
       createdBy: ctx.actorId,
     });
-    // Close the P→Q link so the sheet names the quotation it produced (traceability both ways).
-    if (sheet) await this.packages.linkQuotationToPricing(sheet, quotation.id);
-    return quotation;
   }
 
   @Post()

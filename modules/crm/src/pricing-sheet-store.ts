@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { PricingSheet } from './domain/pricing-sheet';
 
 /** DI token for the pricing-sheet store. */
@@ -21,6 +22,12 @@ export interface PricingSheetFilter {
 
 export interface PricingSheetStore {
   save(sheet: PricingSheet): Promise<void>;
+  /**
+   * Save inside a caller-provided transaction (Slice 8 PR-2). `tx === null` degrades to a plain
+   * `save`. This is what lets a freeze + its supersession — and a quotation link + its sheet — commit
+   * or roll back as ONE unit, on the SAME Postgres client the TxRunner opened.
+   */
+  saveWithClient(tx: TxHandle | null, sheet: PricingSheet): Promise<void>;
   get(id: Id): Promise<PricingSheet | null>;
   /** Newest first — the version being worked on tops the list. */
   list(filter: PricingSheetFilter): Promise<PricingSheet[]>;

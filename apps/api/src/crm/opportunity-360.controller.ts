@@ -25,6 +25,7 @@ import {
 import { TenderService, type Tender } from '@aura/tendering';
 import { ContractService, type Contract } from '@aura/contracts';
 import { ProjectService, type Project } from '@aura/projects';
+import { resolveContractedValue } from './opportunity-360-outcome';
 
 // Opportunity 360 — the deal command center. An opportunity is one pursuit for one
 // account. This composes its qualification, the stakeholders behind it, the
@@ -53,7 +54,7 @@ interface Opportunity360Payload {
   qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number };
   route: 'tender' | 'direct';
   progression: ProgressionStep[];
-  outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number };
+  outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number | null; awardSource: Opportunity['awardSource'] };
   /**
    * G2 — the next action RESOLVED server-side from the activity stream (the columns are only the
    * fallback). Exposed so the UI renders the same next action the invariant judged the deal on,
@@ -131,7 +132,12 @@ export class Opportunity360Controller {
     };
 
     const route: 'tender' | 'direct' = opp.requiresTender ? 'tender' : 'direct';
-    const contractedValue = r2(contracts.filter((c) => c.status !== 'cancelled').reduce((s, c) => s + c.value, 0));
+    // Downstream Contract-entity sum (mutable later via amendments/variations) — the Contract
+    // progression node uses THIS. The deal's authoritative contracted value at Won comes from award
+    // provenance (accepted quotation → Commercial Baseline subtotal → opportunity.contractedValue),
+    // resolved separately; the two are different measures and must not be conflated.
+    const contractSum = r2(contracts.filter((c) => c.status !== 'cancelled').reduce((s, c) => s + c.value, 0));
+    const contractedValue = resolveContractedValue(opp, contractSum);
 
     const progression: ProgressionStep[] = [
       { key: 'opportunity', label: 'Opportunity', reached: true, count: 1, value: opp.value, href: null },
@@ -139,7 +145,7 @@ export class Opportunity360Controller {
         ? [{ key: 'tender' as const, label: 'Tender', reached: tenders.length > 0, count: tenders.length, value: r2(tenders.reduce((s, t) => s + t.value, 0)), href: tenders[0] ? `/tendering/tenders/${tenders[0].id}` : '/tendering/tenders' }]
         : []),
       { key: 'quotation', label: 'Quotation', reached: quotations.length > 0, count: quotations.length, value: r2(quotations.reduce((s, q) => s + q.total, 0)), href: '/crm/quotations' },
-      { key: 'contract', label: 'Contract', reached: contracts.length > 0, count: contracts.length, value: contractedValue, href: contracts[0] ? `/contracts/contracts/${contracts[0].id}` : null },
+      { key: 'contract', label: 'Contract', reached: contracts.length > 0, count: contracts.length, value: contractSum, href: contracts[0] ? `/contracts/contracts/${contracts[0].id}` : null },
       { key: 'project', label: 'Project', reached: projects.length > 0, count: projects.length, value: null, href: projects[0] ? `/projects/projects/${projects[0].id}` : null },
     ];
 
@@ -183,7 +189,7 @@ export class Opportunity360Controller {
       qualification,
       route,
       progression,
-      outcome: { status, lossReason: opp.lossReason, contractedValue },
+      outcome: { status, lossReason: opp.lossReason, contractedValue, awardSource: opp.awardSource },
       nextAction: resolveNextAction(opp, facts),
       attention: opportunityAttention(opp, facts),
       stageGate,

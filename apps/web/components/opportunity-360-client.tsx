@@ -16,6 +16,7 @@ import {
 } from './crm/record-shell';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
+import { shouldPromptQuoteOnWon } from './opportunity-360-insights';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -47,7 +48,7 @@ interface Payload {
   qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number };
   route: 'tender' | 'direct';
   progression: Step[];
-  outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number };
+  outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number; awardSource: string | null };
   /** G2 — resolved server-side from the activity stream; render this, never re-derive the rule. */
   nextAction: { subject: string | null; dueDate: string | null; ownerId: string | null; fromActivity: boolean };
   attention: { active: boolean; gaps: string[]; needsAttention: boolean };
@@ -56,6 +57,9 @@ interface Payload {
 }
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
+// The contracted value is a PRECISE commercial figure (the accepted Commercial Baseline subtotal),
+// so it is shown to the fils — unlike rounded pipeline/headline amounts.
+const aed2 = (n: number): string => new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 const STAGE_OPTIONS = ['qualification', 'proposal', 'negotiation', 'won', 'lost'];
@@ -335,7 +339,9 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     { label: 'Qualification', value: `${qualification.score}/4`, tone: outcome.status === 'open' && qualification.score < 2 ? 'warn' : 'neutral' },
     { label: 'Expected close', value: o.closeDate ? d(o.closeDate) : '—' },
     { label: 'Owner', value: o.ownerId ?? 'Unassigned' },
-    { label: 'Contracted', value: `AED ${aed(outcome.contractedValue)}`, tone: outcome.contractedValue > 0 ? 'good' : 'neutral' },
+    // null = award provenance without a resolved contracted value (a real inconsistency) — show it
+    // as such, never as "AED 0". 0 with no award is a legitimate legacy/uncontracted zero.
+    { label: 'Contracted', value: outcome.contractedValue == null ? 'AED — (award value missing)' : `AED ${aed2(outcome.contractedValue)}`, tone: outcome.contractedValue == null ? 'warn' : outcome.contractedValue > 0 ? 'good' : 'neutral' },
   ];
 
   const pendingApprovals = quotations.filter((q) => q.status === 'internal_review');
@@ -359,7 +365,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   if (attention?.gaps?.length) insights.push({ tone: 'warn', title: 'Needs attention', detail: attention.gaps.join(', ') });
   if (nextAction.subject) insights.push({ tone: 'accent', title: 'Next action', detail: `${nextAction.subject}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}` });
   if (outcome.status === 'open' && qualification.score < 2) insights.push({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${qualification.score}/4 — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('qualification') } });
-  if (outcome.status === 'won' && outcome.contractedValue === 0) insights.push({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } });
+  if (shouldPromptQuoteOnWon(outcome)) insights.push({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } });
   if (outcome.status === 'open') insights.push({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' });
   if (competitors.length) insights.push({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${competitors.join(', ')}` });
 
@@ -411,7 +417,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
           <RecordCard title="Win / Loss intelligence">
             <div style={{ fontSize: 14, fontWeight: 700, color: OUTCOME.color, marginBottom: 6 }}>● {OUTCOME.label}</div>
-            {outcome.status === 'won' && <p style={st.muted}>Contracted value AED {aed(outcome.contractedValue)}{o.competitors ? ` · beat: ${o.competitors}` : ''}.</p>}
+            {outcome.status === 'won' && <p style={st.muted}>Contracted value {outcome.contractedValue == null ? '— (award value missing)' : `AED ${aed2(outcome.contractedValue)}`}{o.competitors ? ` · beat: ${o.competitors}` : ''}.</p>}
             {outcome.status === 'lost' && (
               <>
                 <p style={{ ...st.muted, marginTop: 0 }}>Reason we lost:</p>

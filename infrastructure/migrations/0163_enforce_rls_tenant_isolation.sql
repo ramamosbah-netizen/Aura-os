@@ -34,7 +34,20 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aura_app') THEN
     CREATE ROLE aura_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOLOGIN;
   ELSE
-    ALTER ROLE aura_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+    -- Role already exists (a schema DROP/rebuild leaves it: roles are cluster-level and survive
+    -- `DROP SCHEMA public`). Re-asserting NOBYPASSRLS via ALTER ROLE requires SUPERUSER, which a
+    -- locked-down managed-Postgres owner (e.g. Supabase `postgres`, rolsuper=false) does NOT have.
+    -- When the role is already in the required least-privilege posture the ALTER is a redundant
+    -- no-op, so skip it — this is what makes a from-zero rebuild repeatable without a manual patch.
+    -- Only when the role is actually mis-set (carries a privilege it must not) do we ALTER, which
+    -- then correctly needs the elevated privilege to fix it.
+    IF EXISTS (
+      SELECT 1 FROM pg_roles
+      WHERE rolname = 'aura_app'
+        AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole)
+    ) THEN
+      ALTER ROLE aura_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+    END IF;
   END IF;
 END $$;
 

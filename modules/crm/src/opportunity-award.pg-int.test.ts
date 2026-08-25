@@ -194,4 +194,41 @@ run('opportunity award — Postgres persistence + atomicity', () => {
       expect(r.stage).toBe('won');
     });
   });
+
+  // Slice 9 fix — the conflict is SYMMETRIC and REPLAY-SAFE, proven on real Postgres.
+  it('quotation award then manual override → rejected, award kept, durable conflict recorded ONCE (fresh read)', async () => {
+    await withTenant(async () => {
+      const oppId = await seedOpp();
+      const q = newId();
+      await opportunities.applyAwardOutcome(oppId, { awardedQuotationId: q, contractedValue: 85767, valueSource: 'commercial_baseline', reason: 'accepted', source: 'quotation_accepted' });
+      // Retry the override three times — each rejects, and only ONE conflict is ever recorded.
+      for (let i = 0; i < 3; i++) {
+        await expect(opportunities.overrideAwardOutcome(oppId, { reason: 'boss said so', actorId: 'u-mgr' })).rejects.toThrow(/already won from an authoritative award/i);
+      }
+      const a = await readAward(oppId);
+      expect(a.award_source).toBe('quotation_accepted');   // override never overwrote the award
+      expect(a.awarded_quotation_id).toBe(q);
+      const c = await pool.query("select payload from public.aura_events where tenant_id=$1 and aggregate_id=$2 and type='crm.opportunity.award_conflict' order by occurred_at", [TENANT, oppId]);
+      expect(c.rows).toHaveLength(1);                        // durable + deduped by actor
+      expect(c.rows[0].payload).toMatchObject({ attemptedSource: 'manual_override', existingAwardSource: 'quotation_accepted' });
+    });
+  });
+
+  it('manual override then a redelivered conflicting award → one conflict, override kept (fresh read)', async () => {
+    await withTenant(async () => {
+      const oppId = await seedOpp();
+      await opportunities.overrideAwardOutcome(oppId, { reason: 'offline PO', contractedValue: 50000, actorId: 'u-mgr' });
+      const q = newId();
+      for (let i = 0; i < 3; i++) {
+        const r = await opportunities.applyAwardOutcome(oppId, { awardedQuotationId: q, contractedValue: 85767, valueSource: 'commercial_baseline', reason: 'accepted', source: 'quotation_accepted' });
+        expect(r.outcome).toBe('award_conflict');
+      }
+      const a = await readAward(oppId);
+      expect(a.award_source).toBe('manual_override');       // override stands
+      expect(Number(a.contracted_value)).toBe(50000);
+      const c = await pool.query("select payload from public.aura_events where tenant_id=$1 and aggregate_id=$2 and type='crm.opportunity.award_conflict' order by occurred_at", [TENANT, oppId]);
+      expect(c.rows).toHaveLength(1);                        // deduped by incoming quotation identity
+      expect(c.rows[0].payload).toMatchObject({ attemptedSource: 'quotation_accepted', incomingQuotationId: q });
+    });
+  });
 });

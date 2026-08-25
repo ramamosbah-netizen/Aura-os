@@ -270,6 +270,40 @@ export class OpportunityService {
   }
 
   /**
+   * Record an award-conflict anomaly ONCE per distinct conflict identity, and never overwrite the
+   * standing award. The event log is the durable dedup record: the accepted-quotation reactor is
+   * at-least-once and a manual override can be retried, so before emitting we check whether this exact
+   * conflict (`dedupKey`) is already logged for the aggregate. Both conflict directions — a second
+   * quotation's award, and a manual override of an authoritatively-awarded deal — flow through here, so
+   * the anomaly log is symmetric and replay-safe.
+   */
+  private async recordAwardConflict(
+    existing: Opportunity,
+    c: { attemptedSource: AwardSource; incomingQuotationId: Id | null; incomingContractedValue?: number | null; attemptReason?: string | null; attemptedBy?: Id | null; dedupKey: string },
+  ): Promise<void> {
+    const prior = await this.events.list({ tenantId: existing.tenantId, type: CRM_EVENT.opportunityAwardConflict, aggregateId: existing.id, limit: 200 });
+    if (prior.some((e) => (e.payload as { dedupKey?: string } | undefined)?.dedupKey === c.dedupKey)) return;
+    await this.events.append([makeEvent({
+      type: CRM_EVENT.opportunityAwardConflict, tenantId: existing.tenantId, companyId: existing.companyId, actorId: c.attemptedBy ?? null,
+      aggregateType: 'crm.opportunity', aggregateId: existing.id,
+      payload: {
+        dedupKey: c.dedupKey,
+        attemptedSource: c.attemptedSource,
+        existingAwardSource: existing.awardSource,
+        existingAwardedQuotationId: existing.awardedQuotationId,
+        existingContractedValue: existing.contractedValue,
+        incomingQuotationId: c.incomingQuotationId,
+        incomingContractedValue: c.incomingContractedValue ?? null,
+        attemptReason: c.attemptReason ?? null,
+      },
+    })]);
+    this.logger.warn(
+      `Award conflict on opportunity ${existing.id}: already awarded (${existing.awardSource}${existing.awardedQuotationId ? ` from ${existing.awardedQuotationId}` : ''}); ` +
+        `refused ${c.attemptedSource}${c.incomingQuotationId ? ` ${c.incomingQuotationId}` : ''} — award NOT overwritten [${c.dedupKey}]`,
+    );
+  }
+
+  /**
    * Slice 9 — the sanctioned writer that closes a DIRECT deal Won from a verified customer AWARD
    * (an accepted quotation). Distinct from the manual UI close: its evidence is the award itself —
    * a verified quotation, an authoritative baseline value, and the P↔Q lineage the caller checked —
@@ -293,13 +327,16 @@ export class OpportunityService {
 
     if (existing.stage === 'won') {
       if (existing.awardedQuotationId === award.awardedQuotationId) return { opportunity: existing, outcome: 'noop_same_award' };
-      // A DIFFERENT quotation's award arrived for an already-won deal — record the anomaly, do NOT overwrite.
-      await this.events.append([makeEvent({
-        type: CRM_EVENT.opportunityAwardConflict, tenantId: existing.tenantId, companyId: existing.companyId, actorId: null,
-        aggregateType: 'crm.opportunity', aggregateId: existing.id,
-        payload: { existingAwardedQuotationId: existing.awardedQuotationId, incomingQuotationId: award.awardedQuotationId, existingContractedValue: existing.contractedValue, incomingContractedValue: award.contractedValue },
-      })]);
-      this.logger.warn(`Award conflict on opportunity ${existing.id}: already awarded from ${existing.awardedQuotationId}; refused ${award.awardedQuotationId} — award NOT overwritten`);
+      // A DIFFERENT quotation's award arrived for an already-won deal — record the anomaly, do NOT
+      // overwrite. Idempotent by the INCOMING award identity: the reactor is at-least-once, so a
+      // redelivered conflicting acceptance must NOT re-emit — one conflict record per distinct
+      // incoming quotation (the event log is the durable dedup record).
+      await this.recordAwardConflict(existing, {
+        attemptedSource: 'quotation_accepted',
+        incomingQuotationId: award.awardedQuotationId,
+        incomingContractedValue: award.contractedValue,
+        dedupKey: `quotation:${award.awardedQuotationId}`,
+      });
       return { opportunity: existing, outcome: 'award_conflict' };
     }
     if (existing.stage === 'lost') return { opportunity: existing, outcome: 'skipped_closed' };
@@ -357,7 +394,20 @@ export class OpportunityService {
     }
     if (existing.stage === 'won') {
       if (existing.awardSource === 'manual_override') return existing; // idempotent replay of the override
-      throw new Error(`opportunity ${id} is already won — a manual override cannot rewrite an existing award`);
+      // Already won by an AUTHORITATIVE award (an accepted quotation, or a tender). Symmetric with the
+      // reverse direction: never overwrite, and persist a durable conflict record of the refused
+      // attempt — idempotent per actor, so a retried override does not spam the anomaly log — THEN
+      // reject. Recording before the throw is intentional: the audit trail must outlive the 4xx.
+      await this.recordAwardConflict(existing, {
+        attemptedSource: 'manual_override',
+        incomingQuotationId: null,
+        attemptReason: override.reason?.trim() || null,
+        attemptedBy: override.actorId ?? null,
+        dedupKey: `override:${override.actorId ?? 'unknown'}`,
+      });
+      throw new Error(
+        `opportunity ${id} is already won from an authoritative award (${existing.awardSource}) — a manual override cannot rewrite it; the attempt has been recorded`,
+      );
     }
     if (existing.stage === 'lost') throw new Error(`opportunity ${id} is already lost`);
     if (!override.reason?.trim()) throw new Error('a manual override requires a reason');

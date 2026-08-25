@@ -8,6 +8,7 @@ import { PostgresPricingSheetStore } from './postgres-pricing-sheet-store';
 import { PostgresPreAwardPackageStore } from './postgres-pre-award-package-store';
 import { PostgresCommercialBaselineStore } from './postgres-commercial-baseline-store';
 import { OpportunityService } from './opportunity.service';
+import { PreAwardGovernanceResolver } from './opportunity-governance';
 import { QuotationService } from './quotation.service';
 import { PreAwardPackageService } from './pre-award-package.service';
 import { PricingQuotationService } from './pricing-quotation.service';
@@ -31,6 +32,7 @@ run('opportunity award — Postgres persistence + atomicity', () => {
   let quoteStore: PostgresQuotationStore;
   let pricing: PostgresPricingSheetStore;
   let opportunities: OpportunityService;
+  let govOpportunities: OpportunityService; // wired with the REAL PreAwardGovernanceResolver
   let quotations: QuotationService;
   let packages: PreAwardPackageService;
   let materialiser: PricingQuotationService;
@@ -48,7 +50,8 @@ run('opportunity award — Postgres persistence + atomicity', () => {
     quoteStore = new PostgresQuotationStore(pool);
     pricing = new PostgresPricingSheetStore(pool);
     const access = new AccessService();
-    opportunities = new OpportunityService(opps, events, tx, access, { complete: async () => ({ text: '' }) } as never, tenant);
+    opportunities = new OpportunityService(opps, events, tx, access, { complete: async () => ({ text: '' }) } as never, { classify: async () => 'direct_legacy' as const }, tenant);
+    govOpportunities = new OpportunityService(opps, events, tx, access, { complete: async () => ({ text: '' }) } as never, new PreAwardGovernanceResolver(new PostgresPreAwardPackageStore(pool)), tenant);
     quotations = new QuotationService(quoteStore, new PostgresCommercialBaselineStore(pool), events, access, tenant);
     packages = new PreAwardPackageService(new PostgresPreAwardPackageStore(pool), pricing, tx);
     materialiser = new PricingQuotationService(pricing, quoteStore, events, packages, tx);
@@ -123,7 +126,7 @@ run('opportunity award — Postgres persistence + atomicity', () => {
       // an OpportunityService whose event append throws inside the tx
       const faultyEvents = Object.create(events);
       faultyEvents.appendWithClient = async () => { throw new Error('boom-award-event'); };
-      const faultySvc = new OpportunityService(opps, faultyEvents, tx, new AccessService(), { complete: async () => ({ text: '' }) } as never, tenant);
+      const faultySvc = new OpportunityService(opps, faultyEvents, tx, new AccessService(), { complete: async () => ({ text: '' }) } as never, { classify: async () => 'direct_legacy' as const }, tenant);
       await expect(faultySvc.applyAwardOutcome(oppId, { awardedQuotationId: newId(), contractedValue: 1200, valueSource: 'commercial_baseline', reason: 'x', source: 'quotation_accepted' })).rejects.toThrow(/boom-award-event/);
       const a = await readAward(oppId);
       expect(a.stage).not.toBe('won');           // the close rolled back with the failed event
@@ -143,6 +146,52 @@ run('opportunity award — Postgres persistence + atomicity', () => {
       expect(Number(a.contracted_value)).toBe(85767);
       const conflicts = await pool.query("select count(*)::int as n from public.aura_events where tenant_id=$1 and type='crm.opportunity.award_conflict'", [TENANT]);
       expect(conflicts.rows[0].n).toBe(1);
+    });
+  });
+
+  it('manual override → Won atomically, persisted (fresh read), with audit + warning; value not promoted', async () => {
+    await withTenant(async () => {
+      const oppId = await seedOpp(); // value 999
+      const r = await opportunities.overrideAwardOutcome(oppId, { reason: 'PO received by email', contractedValue: 50000, evidenceReference: 'PO-4471', actorId: 'u-mgr' });
+      expect(r.stage).toBe('won');
+      const a = await readAward(oppId);
+      expect(a.award_source).toBe('manual_override');
+      expect(Number(a.contracted_value)).toBe(50000);   // exactly entered
+      expect(Number(a.value)).toBe(999);                 // forecast NOT promoted
+      expect(a.awarded_quotation_id).toBeNull();         // no authoritative quotation
+      const audit = await pool.query("select payload from public.aura_events where tenant_id=$1 and type='crm.opportunity.award_override'", [TENANT]);
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0].payload).toMatchObject({ warning: 'No authoritative accepted quotation', evidenceReference: 'PO-4471', contractedValue: 50000 });
+    });
+  });
+
+  it('a failed audit append inside the override tx rolls the WHOLE override back — BEFORE===AFTER (fresh read)', async () => {
+    await withTenant(async () => {
+      const oppId = await seedOpp();
+      const eventsBefore = (await events.list({ tenantId: TENANT, aggregateId: oppId })).length;
+      const faultyEvents = Object.create(events);
+      faultyEvents.appendWithClient = async () => { throw new Error('boom-override-audit'); };
+      const faultySvc = new OpportunityService(opps, faultyEvents, tx, new AccessService(), { complete: async () => ({ text: '' }) } as never, { classify: async () => 'direct_legacy' as const }, tenant);
+      await expect(faultySvc.overrideAwardOutcome(oppId, { reason: 'x', contractedValue: 1, actorId: 'u-mgr' })).rejects.toThrow(/boom-override-audit/);
+      const a = await readAward(oppId);
+      expect(a.stage).not.toBe('won');       // opportunity rolled back
+      expect(a.award_source).toBeNull();
+      // no stage_changed and no award_override event survived — the whole unit rolled back together
+      expect((await events.list({ tenantId: TENANT, aggregateId: oppId })).length).toBe(eventsBefore);
+    });
+  });
+
+  // #3 — the REAL governance relation, on real Postgres: package present ⇒ generic Won refused.
+  it('real resolver (PG): package ⇒ direct_governed ⇒ generic Won rejected; no package ⇒ direct_legacy ⇒ allowed', async () => {
+    await withTenant(async () => {
+      const governed = await seedOpp();
+      await packages.openDirect({ tenantId: TENANT, opportunityId: governed }); // the authoritative relation
+      await expect(govOpportunities.update(governed, { stage: 'won', winReason: 'x' }, null)).rejects.toThrow(/governed/i);
+      expect((await readAward(governed)).stage).not.toBe('won');
+
+      const legacy = await seedOpp(); // no package
+      const r = await govOpportunities.update(legacy, { stage: 'won', winReason: 'legacy win' }, null);
+      expect(r.stage).toBe('won');
     });
   });
 });

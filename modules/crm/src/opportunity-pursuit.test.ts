@@ -10,7 +10,7 @@ function harness() {
   const access = { assert: vi.fn() } as unknown as AccessService;
   const ai = {} as unknown as AiService;
   const store = new InMemoryOpportunityStore();
-  const svc = new OpportunityService(store, events, new NullTxRunner(), access, ai);
+  const svc = new OpportunityService(store, events, new NullTxRunner(), access, ai, { classify: async () => 'direct_legacy' as const });
   return { svc, store };
 }
 

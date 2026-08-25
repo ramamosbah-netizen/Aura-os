@@ -13,7 +13,8 @@ import { LeadService } from './lead.service';
 import { CRM_QUALIFICATION_DECISION_STORE } from './qualification-decision-store';
 import { InMemoryQualificationDecisionStore } from './in-memory-qualification-decision-store';
 import { PostgresQualificationDecisionStore } from './postgres-qualification-decision-store';
-import { CRM_PRE_AWARD_PACKAGE_STORE } from './pre-award-package-store';
+import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardPackageStore } from './pre-award-package-store';
+import { OPPORTUNITY_GOVERNANCE_RESOLVER, PreAwardGovernanceResolver } from './opportunity-governance';
 import { InMemoryPreAwardPackageStore } from './in-memory-pre-award-package-store';
 import { PostgresPreAwardPackageStore } from './postgres-pre-award-package-store';
 import { PreAwardPackageService } from './pre-award-package.service';
@@ -130,6 +131,13 @@ import { LeadConversionService } from './lead-conversion.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresOpportunityStore(pool) : new InMemoryOpportunityStore(),
+    },
+    {
+      // Slice 9 PR-2 — the narrow governance classifier OpportunityService enforces the governed-Won
+      // invariant with. Reads the authoritative package→opportunity relation; no duplicated flag.
+      provide: OPPORTUNITY_GOVERNANCE_RESOLVER,
+      inject: [CRM_PRE_AWARD_PACKAGE_STORE],
+      useFactory: (packages: PreAwardPackageStore) => new PreAwardGovernanceResolver(packages),
     },
     {
       provide: CRM_COMMERCIAL_BASELINE_STORE,

@@ -33,7 +33,7 @@ function harness() {
   const pricingStore = new InMemoryPricingSheetStore();
   const pkgStore = new InMemoryPreAwardPackageStore();
 
-  const opportunities = new OpportunityService(oppStore, events, tx, access, aiStub);
+  const opportunities = new OpportunityService(oppStore, events, tx, access, aiStub, { classify: async () => 'direct_legacy' as const });
   const quotations = new QuotationService(quoteStore, new InMemoryCommercialBaselineStore(), events, access);
   const packages = new PreAwardPackageService(pkgStore, pricingStore);
   const materialiser = new PricingQuotationService(pricingStore, quoteStore, events, packages);

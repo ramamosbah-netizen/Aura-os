@@ -68,6 +68,8 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
     access,
     // AiService isn't constructed here; opportunity.update never calls the model.
     { complete: async () => ({ text: '' }) } as any,
+    // Governance resolver — the tender-chain reactors close via applyTenderOutcome, not the Won-block.
+    { classify: async () => 'direct_legacy' as const },
   );
 
   // Deal-chain services (each registers its create command on the shared bus).

@@ -65,6 +65,10 @@ export const ELV_ROLE_MATRIX: ElvRole[] = [
       'crm.*.update',
       'crm.*.approve',
       'crm.*.send',
+      // Slice 9 PR-2 — the authority to close a deal by an explicit manual OVERRIDE when the win
+      // happened outside AURA. A distinct action (not covered by crm.*.update): a plain salesperson
+      // cannot bypass the authoritative award path by flipping the stage dropdown.
+      'crm.opportunity.override',
       readOnly('tendering'),
       readOnly('contracts'),
       readOnly('projects'),

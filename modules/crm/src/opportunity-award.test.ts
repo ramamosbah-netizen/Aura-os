@@ -13,7 +13,7 @@ const aiStub = { complete: async () => ({ text: '' }) } as never;
 function build() {
   const store = new InMemoryOpportunityStore();
   const events = new InMemoryEventStore(new EventBus());
-  const svc = new OpportunityService(store, events, new NullTxRunner(), new AccessService(), aiStub);
+  const svc = new OpportunityService(store, events, new NullTxRunner(), new AccessService(), aiStub, { classify: async () => 'direct_legacy' as const });
   return { store, events, svc };
 }
 
@@ -90,5 +90,36 @@ describe('applyAwardOutcome', () => {
     await svc.applyAwardOutcome(opp.id, award({ valueSource: 'legacy_quotation_total' }));
     const ev = (await events.list({ tenantId: 't1', type: CRM_EVENT.opportunityStageChanged })).at(-1);
     expect(ev!.payload).toMatchObject({ valueSource: 'legacy_quotation_total' });
+  });
+});
+
+describe('cross-source award conflict — two truths must never overwrite each other', () => {
+  let store: InMemoryOpportunityStore, events: InMemoryEventStore, svc: OpportunityService;
+  beforeEach(() => { ({ store, events, svc } = build()); });
+
+  // #8 — authoritative award first, then a manual override must NOT replace it.
+  it('a manual override cannot overwrite an existing AUTHORITATIVE award (Q-002 → Won, override rejected)', async () => {
+    const opp = await seedDirect(store);
+    await svc.applyAwardOutcome(opp.id, award({ awardedQuotationId: 'Q-002', contractedValue: 85767 }));
+    await expect(svc.overrideAwardOutcome(opp.id, { reason: 'ignore me', contractedValue: 1, actorId: 'u-mgr' })).rejects.toThrow(/already won/i);
+    const stored = await store.get(opp.id);
+    expect(stored!.awardedQuotationId).toBe('Q-002');        // unchanged
+    expect(stored!.contractedValue).toBe(85767);             // unchanged
+    expect(stored!.awardSource).toBe('quotation_accepted');  // unchanged
+  });
+
+  // #9 — reverse ordering: manual override first, then a later accepted quotation → conflict, no overwrite.
+  it('a later authoritative acceptance after a manual-override Won is a CONFLICT, never a silent overwrite', async () => {
+    const opp = await seedDirect(store);
+    await svc.overrideAwardOutcome(opp.id, { reason: 'awarded verbally', contractedValue: 40000, actorId: 'u-mgr' });
+    const beforeAward = await store.get(opp.id);
+    const r = await svc.applyAwardOutcome(opp.id, award({ awardedQuotationId: 'Q-777', contractedValue: 90000 }));
+    expect(r.outcome).toBe('award_conflict');
+    const stored = await store.get(opp.id);
+    expect(stored!.awardSource).toBe('manual_override');     // the original stands
+    expect(stored!.contractedValue).toBe(40000);             // NOT overwritten
+    expect(stored!.awardedQuotationId).toBe(beforeAward!.awardedQuotationId); // still null
+    const conflict = await events.list({ tenantId: 't1', type: CRM_EVENT.opportunityAwardConflict });
+    expect(conflict).toHaveLength(1);
   });
 });

@@ -7,6 +7,7 @@ import {
   checkStageTransition, stageGateMessage, type StageEvidence,
 } from '@aura/shared';
 import { CRM_OPPORTUNITY_STORE, type OpportunityFilter, type OpportunityStore } from './opportunity-store';
+import { OPPORTUNITY_GOVERNANCE_RESOLVER, type OpportunityGovernanceResolver } from './opportunity-governance';
 
 @Injectable()
 export class OpportunityService {
@@ -18,6 +19,9 @@ export class OpportunityService {
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
     private readonly ai: AiService,
+    // Slice 9 PR-2 — MANDATORY (never @Optional): the governed-Won invariant is enforced here, so the
+    // classifier must always be present. If it cannot classify, a manual close fails (fail-closed).
+    @Inject(OPPORTUNITY_GOVERNANCE_RESOLVER) private readonly governance: OpportunityGovernanceResolver,
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
@@ -119,6 +123,23 @@ export class OpportunityService {
       if (updates.executionType !== undefined && updates.executionType !== 'tender') {
         throw new Error(`only after its tender is closed can this deal leave the tender route — it is owned by the linked tender`);
       }
+    }
+
+    // Slice 9 PR-2 — a GOVERNED deal cannot be Won from the generic dropdown. The invariant lives in
+    // the SERVICE (not the controller/UI), so a direct API call or any other internal caller is bound
+    // by it too. Classification is resolved through a narrow, MANDATORY, fail-closed port: if
+    // governance cannot be determined, the manual close FAILS rather than assuming legacy. Winning a
+    // governed deal is the customer accepting its quotation (the authoritative `applyAwardOutcome`
+    // reactor) or an authorized explicit override (`overrideAwardOutcome`) — never this path.
+    if (isStageChange && updates.stage === 'won') {
+      const classification = await this.governance.classify({ id: existing.id, tenantId: existing.tenantId, tenderId: existing.tenderId });
+      if (classification === 'tender_owned') {
+        throw new Error(`only the linked tender can move this deal to won — a tender-route deal's outcome is owned by its tender, not the opportunity`);
+      }
+      if (classification === 'direct_governed') {
+        throw new Error(`only the customer accepting its quotation can win a governed deal — record the acceptance, or use the governed manual override with a reason`);
+      }
+      // 'direct_legacy' — no Pre-Award chain to protect; the legacy manual close is temporarily allowed.
     }
 
     // G5 — a commercial stage transition must carry its evidence (§40.6).
@@ -310,6 +331,74 @@ export class OpportunityService {
     });
     this.logger.log(`Opportunity ${updated.id} WON from quotation ${award.awardedQuotationId} (contractedValue ${award.contractedValue}, ${award.valueSource})`);
     return { opportunity: updated, outcome: 'won' };
+  }
+
+  /**
+   * Slice 9 PR-2 — the EXPLICIT manual override: close a deal Won out-of-band (a real award that
+   * happened outside AURA), authorized in the controller by `crm.opportunity.override`. This is NOT
+   * the generic dropdown — it is a distinct, audited action. The invariant is re-checked HERE (not
+   * only the controller): a tender-owned deal can never be overridden (its tender owns the outcome).
+   *
+   * Money: `contractedValue` is ONLY what the authorized user entered explicitly (or null) — the
+   * forecast `opportunity.value` is NEVER promoted to a contracted value. `valueSource` is
+   * `manual_override`, and an audit event records the reason, evidence reference and the warning that
+   * no authoritative accepted quotation backs it. Idempotent: replaying the same override is a no-op.
+   */
+  async overrideAwardOutcome(
+    id: Id,
+    override: { reason: string; contractedValue?: number | null; evidenceReference?: string | null; actorId: Id | null },
+  ): Promise<Opportunity> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
+
+    // Re-classify the invariant in the SERVICE — the controller did authorization, but ownership is ours.
+    const classification = await this.governance.classify({ id: existing.id, tenantId: existing.tenantId, tenderId: existing.tenderId });
+    if (classification === 'tender_owned') {
+      throw new Error(`only the linked tender can close this deal — a tender-route deal's outcome cannot be manually overridden`);
+    }
+    if (existing.stage === 'won') {
+      if (existing.awardSource === 'manual_override') return existing; // idempotent replay of the override
+      throw new Error(`opportunity ${id} is already won — a manual override cannot rewrite an existing award`);
+    }
+    if (existing.stage === 'lost') throw new Error(`opportunity ${id} is already lost`);
+    if (!override.reason?.trim()) throw new Error('a manual override requires a reason');
+
+    const now = new Date().toISOString();
+    const contractedValue = override.contractedValue ?? null; // explicit only — never opportunity.value
+    const updated: Opportunity = {
+      ...existing,
+      stage: 'won',
+      winReason: override.reason.trim(),
+      contractedValue,
+      awardSource: 'manual_override',
+      awardedAt: now,
+      updatedAt: now,
+    };
+    const stageEvent = makeEvent({
+      type: CRM_EVENT.opportunityStageChanged,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId: override.actorId ?? null,
+      aggregateType: 'crm.opportunity', aggregateId: updated.id,
+      payload: {
+        title: updated.title, stage: 'won', value: updated.value, contractedValue,
+        accountId: updated.accountId, accountName: updated.accountName, requiresTender: updated.requiresTender, oldStage: existing.stage,
+        changes: { stage: 'won' }, awardSource: 'manual_override', valueSource: 'manual_override',
+      },
+    });
+    const auditEvent = makeEvent({
+      type: CRM_EVENT.opportunityAwardOverride,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId: override.actorId ?? null,
+      aggregateType: 'crm.opportunity', aggregateId: updated.id,
+      payload: {
+        opportunityId: id, actorId: override.actorId ?? null, reason: override.reason.trim(),
+        evidenceReference: override.evidenceReference?.trim() || null, contractedValue,
+        previousStage: existing.stage, warning: 'No authoritative accepted quotation',
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [stageEvent, auditEvent]);
+    });
+    this.logger.warn(`Opportunity ${id} WON by MANUAL OVERRIDE (no accepted-quotation evidence) by ${override.actorId ?? 'unknown'} — ${override.reason.trim()}`);
+    return updated;
   }
 
   /** Record a Pursue / No-Pursue decision — computes the score from the assessment dimensions and

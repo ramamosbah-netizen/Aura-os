@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe, AccessService } from '@aura/core';
 import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
 import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, PricingQuotationService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
@@ -71,6 +71,14 @@ class PursuitDto {
   @IsOptional() @IsString() rationale?: string;
 }
 
+/** Slice 9 PR-2 — the explicit manual-override close (distinct from the generic PATCH). */
+class OverrideOutcomeDto {
+  @IsString() reason!: string;
+  /** The contracted value the authorized user is asserting — never derived from the forecast value. */
+  @IsOptional() @IsNumber() contractedValue?: number | null;
+  @IsOptional() @IsString() evidenceReference?: string | null;
+}
+
 @Controller('crm/opportunities')
 export class CrmOpportunitiesController {
   constructor(
@@ -81,6 +89,7 @@ export class CrmOpportunitiesController {
     private readonly tenders: TenderService,
     private readonly packages: PreAwardPackageService,
     private readonly pricingQuotations: PricingQuotationService,
+    private readonly access: AccessService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -259,6 +268,29 @@ export class CrmOpportunitiesController {
       evidence = await this.stageEvidence(current, ctx.tenantId);
     }
     return this.opportunities.update(id, patch as Parameters<typeof this.opportunities.update>[1], ctx.actorId, evidence);
+  }
+
+  /**
+   * Slice 9 PR-2 — the EXPLICIT, authorized manual override. A governed deal cannot be Won from the
+   * generic PATCH; a real win that happened outside AURA is recorded here, gated by
+   * `crm.opportunity.override` (Sales lacks it; Sales Manager / Admin hold it). The controller owns
+   * authorization; the service re-checks the ownership invariant and writes the audit trail.
+   */
+  @Post(':id/outcome/override')
+  async overrideOutcome(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: OverrideOutcomeDto): Promise<Opportunity> {
+    const ctx = this.tenant.get();
+    if (!dto?.reason?.trim()) throw new BadRequestException('a manual override requires a reason');
+    if (ctx.actorId) {
+      const orgPath: Array<{ level: 'tenant' | 'company'; id: string }> = [{ level: 'tenant', id: ctx.tenantId }];
+      if (ctx.companyId) orgPath.push({ level: 'company', id: ctx.companyId });
+      this.access.assert(ctx.actorId, { permission: 'crm.opportunity.override', orgPath });
+    }
+    return this.opportunities.overrideAwardOutcome(id, {
+      reason: dto.reason,
+      contractedValue: dto.contractedValue ?? null,
+      evidenceReference: dto.evidenceReference ?? null,
+      actorId: ctx.actorId,
+    });
   }
 
   /** §14 — merge Win Plan fields (unknown keys dropped, whitespace → null); returns derived,

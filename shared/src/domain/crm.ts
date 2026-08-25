@@ -585,4 +585,10 @@ export const CRM_EVENT = {
    * silently rewrites the history of an earlier one.
    */
   opportunityAwardConflict: 'crm.opportunity.award_conflict',
+  /**
+   * Slice 9 PR-2 — a deal was closed by an authorized MANUAL OVERRIDE rather than the authoritative
+   * award path (accepted quotation). Recorded with its reason, evidence reference and a warning when
+   * no authoritative accepted quotation backs it — so an out-of-band close is always auditable.
+   */
+  opportunityAwardOverride: 'crm.opportunity.award_override',
 } as const;

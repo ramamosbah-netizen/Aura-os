@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { makeOpportunity, type Opportunity } from './crm';
+import { resolveDealOutcome } from './opportunity-outcome';
 import { buildDealFacts, type DealFactsInput, type DealFacts } from './deal-facts';
-import { missingFacts, nextBestAction, shouldPromptQuoteOnWon, resolveDealValue, dealValueInputsOf } from './deal-rules';
+import { missingFacts, nextBestAction, shouldPromptQuoteOnWon, resolveDealValue, dealValueInputsOf, resolveEffectiveWinProbability } from './deal-rules';
 
 // Deterministic rules over DealFacts. Two kinds of test are kept deliberately separate:
 //   CHARACTERIZATION — the previous behaviour is intentionally PRESERVED
@@ -179,5 +180,51 @@ describe('resolveDealValue — lifecycle-aware, NOT a blanket field swap', () =>
 
   it('reads straight off DealFacts via the adapter', () => {
     expect(resolveDealValue(dealValueInputsOf(facts({ opportunity: governedWon })))).toEqual({ amount: 33986.67, basis: 'AWARD' });
+  });
+});
+
+describe('resolveEffectiveWinProbability — stored, effective and forecast are different facts', () => {
+  const outcomeOf = (o: Opportunity) => resolveDealOutcome(o);
+  const P = (o: Opportunity, storedProbability: number) =>
+    resolveEffectiveWinProbability({ outcome: outcomeOf(o), storedProbability });
+  const open = opp({ stage: 'proposal' });
+
+  it('GOVERNED_WON + any stored number -> 100 / WON_OUTCOME', () => {
+    expect(P(governedWon, 60)).toEqual({ value: 100, basis: 'WON_OUTCOME' });
+  });
+
+  it('LEGACY_WON + any stored number -> 100 / WON_OUTCOME (provenance does not change certainty)', () => {
+    expect(P(legacyWon, 20)).toEqual({ value: 100, basis: 'WON_OUTCOME' });
+  });
+
+  it('LOST + any stored number -> 0 / LOST_OUTCOME', () => {
+    expect(P(opp({ stage: 'lost' }), 80)).toEqual({ value: 0, basis: 'LOST_OUTCOME' });
+  });
+
+  it('OPEN + 0 -> 0 / STORED_PROBABILITY (a real stored 0)', () => {
+    expect(P(open, 0)).toEqual({ value: 0, basis: 'STORED_PROBABILITY' });
+  });
+
+  it('OPEN + 65 -> 65 / STORED_PROBABILITY', () => {
+    expect(P(open, 65)).toEqual({ value: 65, basis: 'STORED_PROBABILITY' });
+  });
+
+  it('THE POINT OF THE BASIS: open-at-100 and won-at-100 are the same number, different facts', () => {
+    expect(P(open, 100)).toEqual({ value: 100, basis: 'STORED_PROBABILITY' });
+    expect(P(governedWon, 100)).toEqual({ value: 100, basis: 'WON_OUTCOME' });
+  });
+
+  it('OPEN + 150 -> passed through visibly (characterization of representable bad data)', () => {
+    expect(P(open, 150)).toEqual({ value: 150, basis: 'STORED_PROBABILITY' });
+  });
+
+  it('OPEN + -10 -> passed through visibly (NOT validation approval)', () => {
+    expect(P(open, -10)).toEqual({ value: -10, basis: 'STORED_PROBABILITY' });
+  });
+
+  it('the rule never rewrites the stored value', () => {
+    const input = { outcome: outcomeOf(governedWon), storedProbability: 60 };
+    resolveEffectiveWinProbability(input);
+    expect(input.storedProbability).toBe(60);
   });
 });

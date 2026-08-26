@@ -1,5 +1,6 @@
 import { opportunityAttention } from './crm';
 import { attentionFactsOf, type DealFacts } from './deal-facts';
+import type { DealOutcome } from './opportunity-outcome';
 import type { Finding } from './deal-findings';
 import type { AssessmentCoverageInputs } from './deal-assessment';
 
@@ -204,4 +205,48 @@ export function evaluateDealRules(facts: DealFacts, now: Date = new Date()): {
   }
 
   return { findings, coverage: { terminal: facts.outcome.terminal, attentionActive: attention.active } };
+}
+
+// ── Effective win probability ─────────────────────────────────────────────────────────────────
+
+/** Where a displayed win probability came from. The basis travels WITH the number. */
+export type WinProbabilityBasis = 'WON_OUTCOME' | 'LOST_OUTCOME' | 'STORED_PROBABILITY';
+
+export interface EffectiveWinProbability {
+  value: number;
+  basis: WinProbabilityBasis;
+}
+
+export interface WinProbabilityInputs {
+  /** The CANONICAL outcome. Raw `stage` is never re-checked here. */
+  outcome: Pick<DealOutcome, 'won' | 'state'>;
+  /**
+   * The PERSISTED salesperson estimate. Non-nullable by contract: the column is
+   * `NUMERIC(5,2) NOT NULL DEFAULT 20.0`, the domain field is `number`, and the DTO is numeric.
+   * Never rewritten by this rule.
+   */
+  storedProbability: number;
+}
+
+/**
+ * The probability a closed deal is DISPLAYED with — an outcome is certain, so a won deal shows 100%
+ * and a lost one 0%.
+ *
+ * THIS DOES NOT REINTERPRET THE PERSISTED VALUE. Stored, effective and forecast probability are
+ * three different facts and must not overwrite one another: a deal estimated at 60% that then won
+ * is `stored 60 · effective 100 · outcome Won`, and all three matter — the first is exactly what a
+ * calibration analysis needs later. Nothing here writes, and the forecast engines
+ * (forecast-category, forecast-snapshot, the pipeline weighting) deliberately keep reading the
+ * STORED number, because weighting a pipeline by a certainty you already have is meaningless. For
+ * the same reason a stored 60% on a Won deal in Account 360 or an export is NOT a bug — it is a
+ * different fact being shown.
+ *
+ * No clamping. There is no range rule on any write path, so an out-of-range stored value is
+ * representable and is passed through VISIBLY rather than quietly corrected into a plausible
+ * number. That is characterization of what the storage permits, not approval of it.
+ */
+export function resolveEffectiveWinProbability({ outcome, storedProbability }: WinProbabilityInputs): EffectiveWinProbability {
+  if (outcome.won) return { value: 100, basis: 'WON_OUTCOME' };
+  if (outcome.state === 'LOST') return { value: 0, basis: 'LOST_OUTCOME' };
+  return { value: storedProbability, basis: 'STORED_PROBABILITY' };
 }

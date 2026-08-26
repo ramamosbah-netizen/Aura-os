@@ -17,7 +17,7 @@ import {
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { qualificationBadge } from '@/lib/qualification-badge';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
-import { describeQualification, missingFacts, nextBestAction, evaluateDealRules, assessDeal, qualificationCoverageLow, type QualificationView, type DealFacts, type MissingFactKey, type Finding } from '@aura/shared';
+import { describeQualification, missingFacts, nextBestAction, resolveEffectiveWinProbability, evaluateDealRules, assessDeal, qualificationCoverageLow, type QualificationView, type DealFacts, type MissingFactKey, type Finding } from '@aura/shared';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -225,7 +225,11 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   });
 
   const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-  const winPct = outcome.status === 'won' ? 100 : outcome.status === 'lost' ? 0 : o.winProbability;
+  // Effective (displayed) probability — an outcome is certain. The PERSISTED estimate is never
+  // rewritten: stored / effective / forecast are three different facts (see deal-rules).
+  const winProb = resolveEffectiveWinProbability({ outcome: facts.outcome, storedProbability: o.winProbability });
+  const winPctText = `${winProb.value}%`;
+  const winPct = winProb.value;
   const situationText = `${cap(o.stage)} · ${winPct}% win · AED ${aed(o.value)}${o.closeDate ? ` · close ${d(o.closeDate)}` : ''}`;
 
   const gapLabel = (g: string): string => (({
@@ -355,7 +359,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   const kpis: KpiItem[] = [
     { label: 'Value', value: `AED ${aed(o.value)}`, tone: 'accent' },
-    { label: 'Win probability', value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, tone: outcome.status === 'won' ? 'good' : 'neutral' },
+    { label: 'Win probability', value: winPctText, tone: outcome.status === 'won' ? 'good' : 'neutral' },
     { label: 'Qualification', value: `${qualification.score}/4`, tone: weakQualification ? 'warn' : 'neutral' },
     { label: 'Expected close', value: o.closeDate ? d(o.closeDate) : '—' },
     { label: 'Owner', value: o.ownerId ?? 'Unassigned' },
@@ -400,7 +404,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   return (
     <RecordShell
-      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, label: 'Win prob', badge: bantBadge.label, badgeTone: bantBadge.tone }} actions={actions} />}
+      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: winPctText, label: 'Win prob', badge: bantBadge.label, badgeTone: bantBadge.tone }} actions={actions} />}
       kpis={kpis}
       situation={
         <RecordBand tone={health.tone}>

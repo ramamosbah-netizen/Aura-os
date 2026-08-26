@@ -15,6 +15,7 @@ import {
   type HealthState, type NextBestAction, type WorkflowGateView,
 } from './crm/record-shell';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { qualificationBadge } from '@/lib/qualification-badge';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
 import { describeQualification, missingFacts, nextBestAction, evaluateDealRules, assessDeal, qualificationCoverageLow, type QualificationView, type DealFacts, type MissingFactKey, type Finding } from '@aura/shared';
 
@@ -214,6 +215,14 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   // The qualification threshold has ONE owner now (shared/deal-assessment). The UI only maps the
   // resolved boolean to a tone.
   const weakQualification = qualificationCoverageLow(facts);
+  // A closed deal's qualification is historical evidence, so the badge states it without praising
+  // or alarming — see lib/qualification-badge.
+  const bantBadge = qualificationBadge({
+    confirmed: facts.qualification.confirmed,
+    total: facts.qualification.dimensions.length,
+    terminal: facts.outcome.terminal,
+    weak: weakQualification,
+  });
 
   const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
   const winPct = outcome.status === 'won' ? 100 : outcome.status === 'lost' ? 0 : o.winProbability;
@@ -391,7 +400,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   return (
     <RecordShell
-      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: weakQualification ? 'warn' : 'good' }} actions={actions} />}
+      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, label: 'Win prob', badge: bantBadge.label, badgeTone: bantBadge.tone }} actions={actions} />}
       kpis={kpis}
       situation={
         <RecordBand tone={health.tone}>

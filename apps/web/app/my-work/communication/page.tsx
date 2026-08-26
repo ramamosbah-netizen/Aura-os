@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarClock,
-  ContactRound,
   History,
   LayoutDashboard,
   Mail,
@@ -42,16 +41,15 @@ interface RecentCommunication {
  * working capability elsewhere links to it, and one with no implementation says so rather than
  * offering a button that does nothing.
  */
-type ViewId = 'overview' | 'email' | 'chat' | 'meetings' | 'whatsapp' | 'files' | 'contacts';
+type ViewId = 'overview' | 'email' | 'chat' | 'meetings' | 'whatsapp' | 'files';
 
 const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mail }> = [
   { id: 'overview', label: 'Overview', status: 'Live', icon: LayoutDashboard },
   { id: 'email', label: 'Email', status: 'Internal only', icon: Mail },
-  { id: 'chat', label: 'Internal Chat', status: 'Live', icon: MessageSquareText },
+  { id: 'chat', label: 'Chat', status: 'Live', icon: MessageSquareText },
   { id: 'meetings', label: 'Meetings', status: 'Not implemented', icon: CalendarClock },
   { id: 'whatsapp', label: 'WhatsApp', status: 'Not connected', icon: MessageCircleMore },
   { id: 'files', label: 'Shared Files', status: 'Live', icon: Share2 },
-  { id: 'contacts', label: 'Contacts', status: 'Live', icon: ContactRound },
 ];
 
 export default async function MyCommunicationPage({
@@ -86,7 +84,7 @@ export default async function MyCommunicationPage({
     })),
     ...(mailbox?.inbox ?? []).map((mail) => ({
       id: `mail-${mail.id}`, title: mail.subject || '(No subject)', detail: `From ${mail.from}`,
-      date: mail.sentAt, href: '/workspace?tab=mail', kind: 'Mail' as const,
+      date: mail.sentAt, href: '/my-work/communication?view=email', kind: 'Mail' as const,
     })),
   ].sort((left, right) => right.date.localeCompare(left.date)).slice(0, 10);
 
@@ -117,7 +115,7 @@ export default async function MyCommunicationPage({
           <h1>Communication</h1>
           <p>Company, team and direct conversations, with document sharing and contact history alongside.</p>
         </div>
-        <AuraTabLink href="/workspace?tab=chat" tabTitle="Communication Hub" tabType="My Work" className={styles.heroAction}>Open communication hub <ArrowRight aria-hidden /></AuraTabLink>
+        <AuraTabLink href="/my-work/communication?view=chat" tabTitle="Chat" tabType="My Work" className={styles.heroAction}>Open chat <ArrowRight aria-hidden /></AuraTabLink>
       </header>
 
       <nav className={styles.channelGrid} aria-label="Communication sections">
@@ -144,7 +142,7 @@ export default async function MyCommunicationPage({
         <section className={styles.section} aria-labelledby="internal-chat-title">
           <header className={styles.sectionHead}>
             <div>
-              <h2 id="internal-chat-title">Internal Chat</h2>
+              <h2 id="internal-chat-title">Chat</h2>
               <p>Company, team and direct conversations. Messages are stored and survive a restart.</p>
             </div>
           </header>
@@ -224,18 +222,6 @@ export default async function MyCommunicationPage({
         </section>
       ) : null}
 
-      {view === 'contacts' ? (
-        <section className={styles.section} aria-labelledby="comm-contacts-title">
-          <header className={styles.sectionHead}>
-            <div><h2 id="comm-contacts-title">Contacts</h2><p>People and organizations stay in CRM — this links to the canonical record.</p></div>
-          </header>
-          <AuraTabLink href="/crm/contacts" tabTitle="Contacts" tabType="Communication" className={styles.decision}>
-            <span className={styles.verb}>Contacts</span>
-            <span className={styles.decisionMain}><strong>Open CRM Contacts</strong><small>Find a person or organization</small></span>
-            <ArrowRight aria-hidden />
-          </AuraTabLink>
-        </section>
-      ) : null}
     </main>
   );
 }

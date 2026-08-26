@@ -250,6 +250,7 @@ export default function EmailWorkspace({ me, accounts, initialMailId = null }: {
           <Composer
             me={me}
             accounts={accounts}
+            onCancel={() => setComposing(false)}
             onDone={async (message, mailId) => {
               setComposing(false);
               setNotice(message);
@@ -422,8 +423,10 @@ function MessageReader({ mail, thread, accounts, onChanged }: {
   );
 }
 
-function Composer({ me, accounts, onDone }: {
+function Composer({ me, accounts, onDone, onCancel }: {
   me: string; accounts: MailAccountView[]; onDone: (message: string, mailId: string) => Promise<void>;
+  /** Abandon the message. A composer you cannot back out of traps the user in it. */
+  onCancel: () => void;
 }) {
   const sendable = useMemo(
     () => accounts.filter((account) => account.status === 'connected' && account.capabilities.includes('send')),
@@ -443,6 +446,8 @@ function Composer({ me, accounts, onDone }: {
   const [when, setWhen] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Discarding typed content is destructive and unrecoverable, so a dirty composer asks once.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // The user's own zone, so "08:00" means 08:00 where they are. The API converts to UTC and keeps
   // the chosen zone beside it, which is what lets the choice be shown back to them afterwards.
@@ -494,7 +499,7 @@ function Composer({ me, accounts, onDone }: {
   }
 
   return (
-    <form className={styles.composer} data-testid="mail-composer" onSubmit={(event) => { event.preventDefault(); void submit(false); }}>
+    <form className={styles.composer} data-testid="mail-composer" onInput={() => setConfirmDiscard(false)} onSubmit={(event) => { event.preventDefault(); void submit(false); }}>
       <h3>New message</h3>
 
       <label>
@@ -525,6 +530,18 @@ function Composer({ me, accounts, onDone }: {
       {error ? <p className={styles.failed} role="alert">{error}</p> : null}
 
       <div className={styles.composerActions}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            const dirty = [to, cc, bcc, subject, body].some((v) => v.trim().length > 0);
+            if (!dirty || confirmDiscard) { onCancel(); return; }
+            setConfirmDiscard(true);
+          }}
+          data-testid="mail-cancel-compose"
+        >
+          {confirmDiscard ? 'Discard message?' : 'Cancel'}
+        </button>
         <button type="button" disabled={busy} onClick={() => void saveDraft()} data-testid="mail-save-draft">Save draft</button>
         <button type="submit" disabled={busy || !to.trim()} data-testid="mail-send-now">Send now</button>
         {canSchedule ? (

@@ -1,15 +1,13 @@
 import type { ReactNode } from 'react';
-import CrmAdvisor from '../../components/crm-advisor';
 
-// Shared layout for every CRM page. Renders the page plus the ambient Relationship
-// Advisor side panel, so the "act on this now" signals ride along wherever you are
-// in the CRM. The layout keeps CrmAdvisor mounted across CRM page navigations
-// (so a hide sticks while you move around) and re-opens it on a full page load.
+/**
+ * Shared layout for every CRM page.
+ *
+ * The ambient Relationship Advisor side panel was removed: AURA already has ONE assistant surface
+ * (the deal brief / copilot), and a second always-on advisor rail competed with it — two engines
+ * offering "act on this now" signals, with no shared definition of what needs attention. Keeping a
+ * single intelligence surface is also what the Opportunity 360 programme depends on.
+ */
 export default function CrmLayout({ children }: { children: ReactNode }) {
-  return (
-    <>
-      {children}
-      <CrmAdvisor />
-    </>
-  );
+  return <>{children}</>;
 }

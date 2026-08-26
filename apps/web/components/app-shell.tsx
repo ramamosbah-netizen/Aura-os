@@ -3,8 +3,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { suiteSections, activeSuite, suiteFunctions } from '@/lib/suites';
-import { isFullFocusPath } from '@/lib/nav-chrome';
+import { suiteSections, activeSuite } from '@/lib/suites';
 import Breadcrumbs from './breadcrumbs';
 import CommandPalette from './command-palette';
 import TabBar from './tab-bar';
@@ -45,23 +44,11 @@ export default function AppShell({
       })
       .catch(() => undefined);
   }, []);
-  const keepItem = (i: { href: string }) => !disabledModules.has(i.href.split('/')[1] ?? '');
   // ── AURA IA: the sidebar SELECTS a suite (grouped My Work / Business Suites / System); the suite
   // owns its pages as an in-suite tab row (Sidebar → Suite Home → Functions → Register → 360). The
   // active suite stays highlighted even on a deep record page via suites.ts `owns()`. ──
   const sections = useMemo(() => suiteSections(navSuites ?? null, isAdmin ?? false), [navSuites, isAdmin]);
   const currentSuite = useMemo(() => activeSuite(pathname), [pathname]);
-  const suiteTabs = useMemo(() => {
-    if (!currentSuite) return null;
-    // Suite Home carries its own function shortcuts, so the in-suite tab row would just duplicate
-    // them — hide it there. Internal workspaces/records keep it (and may add contextual nav of
-    // their own, e.g. a Tender 360's tabs). Rule: Suite Home = no topbar; inside = nav as needed.
-    if (pathname === currentSuite.entryHref) return null;
-    // Full-focus workspaces and record 360s drop the suite tab row (see lib/nav-chrome).
-    if (isFullFocusPath(pathname)) return null;
-    const items = suiteFunctions(currentSuite).filter(keepItem);
-    return items.length > 1 ? { name: currentSuite.name, glyph: currentSuite.glyph, entryHref: currentSuite.entryHref, items } : null;
-  }, [currentSuite, pathname, disabledModules]);
   const [sidebarHidden, setSidebarHidden] = useState(false);
 
   useEffect(() => {
@@ -189,7 +176,9 @@ export default function AppShell({
           {sections.map((group) => (
             <div key={group.section} style={s.group}>
               <div style={s.groupTitle}>{group.title}</div>
-              {group.suites.map((suite) => {
+              {group.suites
+                .filter((suite) => !disabledModules.has(suite.entryHref.split('/')[1] ?? ''))
+                .map((suite) => {
                 const active = currentSuite?.id === suite.id;
                 return (
                   <Link
@@ -367,22 +356,6 @@ export default function AppShell({
 
           <ThemeToggle />
         </header>
-        {suiteTabs && (
-          <nav style={s.wsTabbar} aria-label={`${suiteTabs.name} navigation`}>
-            <Link href={suiteTabs.entryHref} style={{ ...s.wsTabbarName, textDecoration: 'none' }}>{suiteTabs.glyph} {suiteTabs.name}</Link>
-            <div style={s.wsTabScroll}>
-              {suiteTabs.items.map((it) => {
-                const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
-                return (
-                  <Link key={it.href} href={it.href} style={active ? { ...s.wsTab, ...s.wsTabActive } : s.wsTab}>
-                    <span style={{ opacity: 0.8, fontSize: 12 }}>{it.glyph}</span>
-                    {it.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
-        )}
         <TabBar />
         <main id="main-content" style={s.main} tabIndex={-1}>
           {children}

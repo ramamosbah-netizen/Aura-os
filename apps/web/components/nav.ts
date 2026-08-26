@@ -43,7 +43,6 @@ export const NAV: NavGroup[] = [
       // Home became a suite launcher, so the role-aware Command Center (the `perspective.*`
       // CEO/CFO/PM views) needs its own href or the capability is configurable but unreachable.
       { label: 'Command Center', href: '/my-work/command-center', glyph: '✦', desc: 'Role perspectives: CEO, CFO and PM dashboards over live data' },
-      { label: 'My Workspace', href: '/workspace', glyph: '◉', desc: 'Chat, mail, approvals inbox, notifications, saved views & search — one page' },
       { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
       { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },
       // Reachability fix (audit wave 1). These three pages existed and were built, but had NO
@@ -336,3 +335,16 @@ export const CREATE_ACTIONS: PaletteAction[] = [
   { label: 'Create Subcontract', href: '/subcontracts/subcontracts', desc: 'New subcontractor agreement' },
   { label: 'Open Inbox', href: '/inbox', desc: 'All pending approvals' },
 ];
+
+/**
+ * Where a WORKSPACE crumb should navigate. The breadcrumb's first segment names the workspace
+ * ("Home", "Sales"), and it was rendered as inert text — so the one crumb a user reaches for to get
+ * back out of a record led nowhere. Resolves to the page that shares the workspace's name (Home →
+ * '/'), else its first page; null when the workspace has no pages.
+ */
+export function groupLandingHref(title: string): string | null {
+  const g = NAV.find((x) => x.title === title);
+  if (!g) return null;
+  const items = g.items?.length ? g.items : (g.areas ?? []).flatMap((a) => a.items);
+  return items.find((i) => i.label === title)?.href ?? items[0]?.href ?? null;
+}

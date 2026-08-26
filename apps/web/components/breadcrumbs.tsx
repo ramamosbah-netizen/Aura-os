@@ -3,7 +3,7 @@
 import { type CSSProperties, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { findNavMatch } from './nav';
+import { findNavMatch, groupLandingHref } from './nav';
 import { RECORD_TITLE_EVENT } from './record-chrome';
 
 interface Crumb {
@@ -39,7 +39,7 @@ export default function Breadcrumbs() {
   if (!match) return null;
 
   const crumbs: Crumb[] = [
-    { label: match.group, href: null },
+    { label: match.group, href: groupLandingHref(match.group) },
     { label: match.label, href: pathname === match.href ? null : match.href },
   ];
   if (pathname !== match.href && recordTitle) crumbs.push({ label: recordTitle, href: null });

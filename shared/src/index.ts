@@ -49,6 +49,7 @@ export * from './domain/assessment-state';
 export * from './domain/opportunity-outcome';
 export * from './domain/qualification-state';
 export * from './domain/deal-facts';
+export * from './domain/deal-rules';
 export * from './domain/forecast-snapshot';
 export * from './domain/account-growth';
 export * from './domain/crm';

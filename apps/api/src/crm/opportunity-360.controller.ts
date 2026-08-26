@@ -17,6 +17,7 @@ import {
   resolveNextAction,
   resolveDealOutcome,
   qualificationFromFlags,
+  buildDealFacts,
   checkStageTransition,
   type Opportunity,
   type OpportunityAttention,
@@ -24,6 +25,7 @@ import {
   type ResolvedNextAction,
   type DealOutcome,
   type QualificationView,
+  type DealFacts,
   moneyNumber as r2,
 } from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
@@ -69,6 +71,11 @@ interface Opportunity360Payload {
    * award backs the win, so every surface reads provenance from here rather than re-deriving it.
    */
   lifecycle: DealOutcome;
+  /**
+   * Phase 0 — the factual snapshot the deterministic rules read. The client consumes RULES over
+   * this, instead of re-deriving thresholds from raw fields.
+   */
+  facts: DealFacts;
   /**
    * G2 — the next action RESOLVED server-side from the activity stream (the columns are only the
    * fallback). Exposed so the UI renders the same next action the invariant judged the deal on,
@@ -207,6 +214,16 @@ export class Opportunity360Controller {
       progression,
       outcome: { status, lossReason: opp.lossReason, contractedValue, awardSource: opp.awardSource },
       lifecycle,
+      facts: buildDealFacts({
+        opportunity: opp,
+        stakeholders,
+        quotations,
+        contracts,
+        projects,
+        // requirements / governance / activity counts are not loaded by this endpoint — left null
+        // rather than defaulted, so "not loaded" never reads as "none".
+        engagement: next ? { nextOpenActivity: { subject: next.subject, dueDate: next.dueIso, assigneeId: next.assigneeId } } : null,
+      }),
       nextAction: resolveNextAction(opp, facts),
       attention: opportunityAttention(opp, facts),
       stageGate,

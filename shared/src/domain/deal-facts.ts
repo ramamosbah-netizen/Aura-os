@@ -68,7 +68,6 @@ export interface StakeholderFact {
 }
 
 export interface NextOpenActivityFact {
-  id: Id;
   subject: string;
   /** `null` = scheduled with no date. Not "overdue" — that judgement belongs to a rule. */
   dueDate: string | null;
@@ -80,7 +79,15 @@ export interface DealFacts {
     id: Id;
     title: string;
     stage: string;
+    /**
+     * DERIVED: the execution path actually taken (a linked tender, or executionType 'tender').
+     * NOTE — this is NOT the same notion as `requiresTender` below, which is the raw intent flag.
+     * The 360 controller derives `route` from `requiresTender` while this derives it from the
+     * tender link; the two can disagree, and reconciling them is deliberately out of this slice.
+     */
     route: 'tender' | 'direct';
+    /** RAW persisted intent flag (`aura_crm_opportunities.requires_tender`). */
+    requiresTender: boolean;
     tenderId: Id | null;
     ownerId: Id | null;
     expectedCloseDate: string | null;
@@ -112,7 +119,8 @@ export interface DealFacts {
   commercial: {
     /** The salesperson's forecast figure. Deliberately NOT called `value`, and it feeds nothing. */
     headlineValue: number | null;
-    requirementCount: number;
+    /** `null` = this caller did not load requirements. NOT the same as "there are none". */
+    requirementCount: number | null;
     scopeApprovedAt: string | null;
     estimateApprovedAt: string | null;
     pricingFrozenAt: string | null;
@@ -129,7 +137,8 @@ export interface DealFacts {
   };
   engagement: {
     lastActivityAt: string | null;
-    openActivityCount: number;
+    /** `null` = this caller did not count activities. NOT "there are none open". */
+    openActivityCount: number | null;
     nextOpenActivity: NextOpenActivityFact | null;
   };
   /** What can be PROVEN about the award, as opposed to what the deal claims. */
@@ -155,7 +164,7 @@ export interface StakeholderRowFact {
 
 export interface DealFactsInput {
   opportunity: Opportunity;
-  requirementCount: number;
+  requirementCount?: number | null;
   stakeholders: readonly StakeholderRowFact[];
   /** Already filtered to this deal's provenance by the caller. */
   quotations: readonly QuotationRowFact[];
@@ -197,6 +206,7 @@ export function buildDealFacts(input: DealFactsInput): DealFacts {
       title: o.title,
       stage: o.stage,
       route: o.tenderId || o.executionType === 'tender' ? 'tender' : 'direct',
+      requiresTender: o.requiresTender === true,
       tenderId: o.tenderId ?? null,
       ownerId: o.ownerId ?? null,
       expectedCloseDate: o.closeDate ?? null,
@@ -235,7 +245,7 @@ export function buildDealFacts(input: DealFactsInput): DealFacts {
     },
     commercial: {
       headlineValue: o.value ?? null,
-      requirementCount: input.requirementCount,
+      requirementCount: input.requirementCount ?? null,
       scopeApprovedAt: input.governance?.scopeApprovedAt ?? null,
       estimateApprovedAt: input.governance?.estimateApprovedAt ?? null,
       pricingFrozenAt: input.governance?.pricingFrozenAt ?? null,
@@ -249,7 +259,7 @@ export function buildDealFacts(input: DealFactsInput): DealFacts {
     },
     engagement: {
       lastActivityAt: input.engagement?.lastActivityAt ?? null,
-      openActivityCount: input.engagement?.openActivityCount ?? 0,
+      openActivityCount: input.engagement?.openActivityCount ?? null,
       nextOpenActivity: input.engagement?.nextOpenActivity ?? null,
     },
     awardEvidence: {

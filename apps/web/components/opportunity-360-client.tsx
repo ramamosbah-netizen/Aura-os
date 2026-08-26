@@ -16,8 +16,7 @@ import {
 } from './crm/record-shell';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
-import { shouldPromptQuoteOnWon } from './opportunity-360-insights';
-import { describeQualification, type QualificationView } from '@aura/shared';
+import { describeQualification, missingFacts, nextBestAction, shouldPromptQuoteOnWon, type QualificationView, type DealFacts, type MissingFactKey } from '@aura/shared';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -55,6 +54,8 @@ interface Payload {
   attention: { active: boolean; gaps: string[]; needsAttention: boolean };
   /** Phase 0 — lifecycle/outcome. `stage = 'won'` alone does not say whether an award evidences it. */
   lifecycle: { state: 'OPEN' | 'GOVERNED_WON' | 'LEGACY_WON' | 'LOST'; terminal: boolean; won: boolean; awardDocumented: boolean; awardValue: number | null; awardSource: string | null; awardedQuotationId: string | null };
+  /** The factual snapshot the deterministic rules read. The client never re-derives from raw fields. */
+  facts: DealFacts;
   /** G5 — the next-stage gate, resolved server-side. Rendered as-is; the client never re-derives it. */
   stageGate: WorkflowGateView | null;
 }
@@ -199,7 +200,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate, lifecycle } = data;
+  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate, lifecycle, facts } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)', tone: 'accent' as Tone },
     won: { label: 'Won', color: 'var(--good)', tone: 'good' as Tone },
@@ -227,28 +228,27 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   else if (qualification.score < 2) health = { label: 'Early', tone: 'warn', reasons: ['weak qualification'] };
   else health = { label: 'On track', tone: 'good' };
 
-  // Missing Information — the specific facts blocking progress (the ERP differentiator).
-  const missing: string[] = [];
-  if (outcome.status === 'open') {
-    if (!o.budgetConfirmed) missing.push('Budget');
-    if (!o.authorityConfirmed) missing.push('Decision maker');
-    if (!o.needConfirmed) missing.push('Need');
-    if (!o.timelineConfirmed) missing.push('Timeline');
-    if (stakeholders.length === 0) missing.push('Stakeholders mapped');
-    if (!nextAction.subject) missing.push('Next action');
-    if (!o.closeDate) missing.push('Close date');
-  }
+  // Missing Information — WHICH facts are missing is a domain rule (shared/deal-rules); this maps
+  // the returned codes to words. The client no longer reads the raw BANT booleans.
+  const MISSING_LABEL: Record<MissingFactKey, string> = {
+    BUDGET: 'Budget', AUTHORITY: 'Decision maker', NEED: 'Need', TIMELINE: 'Timeline',
+    STAKEHOLDERS: 'Stakeholders mapped', NEXT_ACTION: 'Next action', CLOSE_DATE: 'Close date',
+  };
+  const missing: string[] = missingFacts(facts).map((k) => MISSING_LABEL[k]);
 
-  // The ONE next best action — pick the single most valuable move given the current state.
-  let nba: NextBestAction | undefined;
-  if (outcome.status === 'open') {
-    if (nextAction.subject) nba = { label: 'Work the next step', hint: `${nextAction.subject}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}`, onClick: () => setTab('activity') };
-    else if (qualification.score < 2) nba = { label: 'Qualify (BANT)', hint: `Only ${qualification.score}/4 confirmed`, onClick: () => setTab('qualification') };
-    else if (stakeholders.length === 0) nba = { label: 'Map the decision maker', hint: 'No stakeholders mapped yet', onClick: () => setTab('stakeholders') };
-    else nba = { label: 'Log the next step', hint: 'Keep the deal moving', onClick: () => setTab('activity') };
-  } else if (outcome.status === 'won' && !o.requiresTender) {
-    nba = { label: '→ Generate quotation', hint: 'Won — turn it into a quote', onClick: () => { void generateQuotation(); } };
-  }
+  // The ONE next best action — WHICH action is a domain rule (shared/deal-rules); the label, hint
+  // and handler are presentation and stay here. Notably a governed win is no longer asked to
+  // generate a quotation it already has.
+  const NBA: Record<string, NextBestAction | undefined> = {
+    WORK_NEXT_STEP: { label: 'Work the next step', hint: `${nextAction.subject ?? ''}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}`, onClick: () => setTab('activity') },
+    QUALIFY: { label: 'Qualify (BANT)', hint: `Only ${qualification.score}/4 confirmed`, onClick: () => setTab('qualification') },
+    MAP_DECISION_MAKER: { label: 'Map the decision maker', hint: 'No stakeholders mapped yet', onClick: () => setTab('stakeholders') },
+    LOG_NEXT_STEP: { label: 'Log the next step', hint: 'Keep the deal moving', onClick: () => setTab('activity') },
+    GENERATE_QUOTATION: { label: '→ Generate quotation', hint: 'Won — turn it into a quote', onClick: () => { void generateQuotation(); } },
+    CONVERT_TO_CONTRACT: { label: '→ Convert to contract', hint: 'Award accepted — turn it into a contract', onClick: () => setTab('quotation') },
+    NONE: undefined,
+  };
+  const nba: NextBestAction | undefined = NBA[nextBestAction(facts)];
 
   // Outcome Loop — writes a real activity linked to this opportunity (reuses the §17 activity stream).
   const logOutcome = async (choiceId: string): Promise<void> => {
@@ -368,7 +368,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   if (attention?.gaps?.length) insights.push({ tone: 'warn', title: 'Needs attention', detail: attention.gaps.join(', ') });
   if (nextAction.subject) insights.push({ tone: 'accent', title: 'Next action', detail: `${nextAction.subject}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}` });
   if (outcome.status === 'open' && qualification.score < 2) insights.push({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${qualification.score}/4 — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('qualification') } });
-  if (shouldPromptQuoteOnWon(outcome)) insights.push({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } });
+  if (shouldPromptQuoteOnWon(facts)) insights.push({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } });
   if (outcome.status === 'open') insights.push({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' });
   if (competitors.length) insights.push({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${competitors.join(', ')}` });
   if (lifecycle.state === 'LEGACY_WON') insights.push({ tone: 'warn', title: 'Won — award not evidenced', detail: 'No accepted quotation or tender award backs this win, so the contracted value has no provenance.' });

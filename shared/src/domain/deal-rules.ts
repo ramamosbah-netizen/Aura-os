@@ -97,3 +97,44 @@ export function nextBestAction(facts: DealFacts): NextBestActionKey {
 export function shouldPromptQuoteOnWon(facts: DealFacts): boolean {
   return facts.outcome.won && !facts.outcome.awardDocumented && facts.downstream.contract.value === null;
 }
+
+/** Which figure a deal's value came from. The basis travels with the number, never separately. */
+export type DealValueBasis = 'AWARD' | 'HEADLINE' | 'NONE';
+export interface ResolvedDealValue {
+  /** `null` = no figure exists. NOT zero — a real 0 is reported as 0 with its basis. */
+  amount: number | null;
+  basis: DealValueBasis;
+}
+
+/** The minimal facts the value rule needs. Named explicitly so a caller cannot pass a raw record. */
+export interface DealValueInputs {
+  awardDocumented: boolean;
+  awardValue: number | null;
+  headlineValue: number | null;
+}
+
+export const dealValueInputsOf = (facts: DealFacts): DealValueInputs => ({
+  awardDocumented: facts.outcome.awardDocumented,
+  awardValue: facts.commercial.awardValue,
+  headlineValue: facts.commercial.headlineValue,
+});
+
+/**
+ * WHICH figure is this deal's value — lifecycle-aware, and deliberately not a blanket swap of one
+ * field for another.
+ *
+ *   documented award -> the AWARD value (excl. VAT), fixed at the moment of award
+ *   anything else    -> the HEADLINE forecast, which is all that exists before an award
+ *
+ * A win with no provenance keeps the headline: there is no authoritative figure to promote, and
+ * inventing one would repeat the mistake this whole phase exists to remove. Contract value is NOT
+ * consulted here — it is a separate, later-mutable measure and merging it would recreate exactly the
+ * conflation that made `contractedValue` read 0.
+ *
+ * The basis is returned WITH the amount so a consumer can say where the number came from instead of
+ * presenting three different measures as one anonymous "value".
+ */
+export function resolveDealValue(input: DealValueInputs): ResolvedDealValue {
+  if (input.awardDocumented) return { amount: input.awardValue, basis: input.awardValue == null ? 'NONE' : 'AWARD' };
+  return input.headlineValue == null ? { amount: null, basis: 'NONE' } : { amount: input.headlineValue, basis: 'HEADLINE' };
+}

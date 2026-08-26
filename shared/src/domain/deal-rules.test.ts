@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeOpportunity, type Opportunity } from './crm';
 import { buildDealFacts, type DealFactsInput, type DealFacts } from './deal-facts';
-import { missingFacts, nextBestAction, shouldPromptQuoteOnWon } from './deal-rules';
+import { missingFacts, nextBestAction, shouldPromptQuoteOnWon, resolveDealValue, dealValueInputsOf } from './deal-rules';
 
 // Deterministic rules over DealFacts. Two kinds of test are kept deliberately separate:
 //   CHARACTERIZATION — the previous behaviour is intentionally PRESERVED
@@ -138,5 +138,46 @@ describe('rule purity — conclusions carry no UI', () => {
     const f = facts({ opportunity: governedWon });
     expect(typeof nextBestAction(f)).toBe('string');
     expect(JSON.stringify(missingFacts(f))).not.toMatch(/href|onClick|var\(--|Generate the|please/i);
+  });
+});
+
+describe('resolveDealValue — lifecycle-aware, NOT a blanket field swap', () => {
+  const V = (over = {}) => resolveDealValue({ awardDocumented: false, awardValue: null, headlineValue: null, ...over });
+
+  it('SEMANTIC CORRECTION: a documented award speaks with the AWARD value, not the headline', () => {
+    // The live defect: Deal Depth fed opp.value (0) into the health engine's `value <= 0` check,
+    // so a deal awarded at 33,986.67 was scored as "no deal value recorded".
+    expect(V({ awardDocumented: true, awardValue: 33986.67, headlineValue: 0 })).toEqual({ amount: 33986.67, basis: 'AWARD' });
+  });
+
+  it('CHARACTERIZED: before an award the headline forecast is still the value', () => {
+    expect(V({ headlineValue: 250000 })).toEqual({ amount: 250000, basis: 'HEADLINE' });
+  });
+
+  it('CHARACTERIZED: a win with NO provenance keeps the headline — nothing authoritative to promote', () => {
+    expect(V({ awardDocumented: false, awardValue: null, headlineValue: 120000 })).toEqual({ amount: 120000, basis: 'HEADLINE' });
+  });
+
+  it('a stale contractedValue on an unevidenced win is never promoted (it is not even an input)', () => {
+    expect(V({ awardDocumented: false, awardValue: 999999, headlineValue: 10 })).toEqual({ amount: 10, basis: 'HEADLINE' });
+  });
+
+  it('INCONSISTENT: award documented but no value -> NONE, never 0 and never the headline', () => {
+    expect(V({ awardDocumented: true, awardValue: null, headlineValue: 250000 })).toEqual({ amount: null, basis: 'NONE' });
+  });
+
+  it('THE ZERO RULE holds: a real 0 keeps its basis; only true absence is NONE', () => {
+    expect(V({ headlineValue: 0 })).toEqual({ amount: 0, basis: 'HEADLINE' });
+    expect(V({ awardDocumented: true, awardValue: 0, headlineValue: 5 })).toEqual({ amount: 0, basis: 'AWARD' });
+    expect(V({})).toEqual({ amount: null, basis: 'NONE' });
+  });
+
+  it('contract value is not an input — the two measures never merge', () => {
+    expect(Object.keys(dealValueInputsOf(facts({ opportunity: governedWon, contracts: [{ id: 'c-1', status: 'active', value: 99999 }] }))).sort())
+      .toEqual(['awardDocumented', 'awardValue', 'headlineValue']);
+  });
+
+  it('reads straight off DealFacts via the adapter', () => {
+    expect(resolveDealValue(dealValueInputsOf(facts({ opportunity: governedWon })))).toEqual({ amount: 33986.67, basis: 'AWARD' });
   });
 });

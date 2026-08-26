@@ -9,6 +9,7 @@ import type {
   StakeholderRole, InfluenceLevel, Sentiment, DealTeamRole, CommitmentDirection,
   RegisterKind, RegisterStatus, RiskType, RiskLikelihood, RiskImpact, RiskStatus,
 } from '@aura/shared';
+import { resolveDealValue, resolveDealOutcome } from '@aura/shared';
 
 class StakeholderDto {
   @IsOptional() @IsString() contactId?: string;
@@ -103,6 +104,12 @@ export class OpportunityDepthController {
       this.opportunities.get(id),
       this.activities.list({ tenantId, relatedType: 'opportunity', relatedId: id, limit: 500 }),
     ]);
+    const outcome = opp ? resolveDealOutcome(opp) : null;
+    const dealValue = resolveDealValue({
+      awardDocumented: outcome?.awardDocumented ?? false,
+      awardValue: outcome?.awardValue ?? null,
+      headlineValue: opp?.value ?? null,
+    });
     const facts = opp && opp.tenantId === tenantId
       ? {
           stage: opp.stage,
@@ -110,7 +117,12 @@ export class OpportunityDepthController {
           ownerId: opp.ownerId,
           nextAction: opp.nextAction,
           nextActionDueDate: opp.nextActionDueDate,
-          value: opp.value,
+          // Lifecycle-aware: once an award is DOCUMENTED the deal's value is the award figure, not
+          // the salesperson's headline. Feeding raw `opp.value` here is why a deal awarded at
+          // 33,986.67 with a 0 headline was scored "no deal value recorded". The health engine's
+          // scoring is deliberately untouched — only WHICH fact it reads changes. A win with no
+          // provenance keeps the headline, and contract value is never merged in.
+          value: dealValue.amount ?? 0,
           closeDate: opp.closeDate,
           competitors: opp.competitors,
         }

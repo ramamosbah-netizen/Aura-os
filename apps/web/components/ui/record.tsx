@@ -2,6 +2,7 @@
 
 import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { RelatedRecords, ActivityTimeline, type RelatedGroup, type ActivityEvent } from './related-records';
+import { resolveAssessment, describeAssessment, ASSESSMENT_LABEL, isReassuring, type AssessmentInput } from '@aura/shared';
 
 // Re-export the connectivity primitives so a 360 imports its whole toolkit from one module.
 export { RelatedRecords, ActivityTimeline } from './related-records';
@@ -150,14 +151,39 @@ export function CardGrid({ children }: { children: ReactNode }) {
 
 // ── Insights / AI rail (always present) ─────────────────────────────────────────────
 export interface Insight { tone?: Tone; title: string; detail?: string; action?: { label: string; onClick?: () => void; href?: string } }
-export function InsightsPanel({ title = 'Insights & next actions', insights }: { title?: string; insights: Insight[] }) {
+/**
+ * The insights rail.
+ *
+ * `assessment` is REQUIRED: a caller must declare which checks the record was supposed to run and
+ * which actually ran. An empty list is therefore never rendered as reassurance — it resolves to
+ * "not assessed" / "not applicable" / "unable to verify" unless coverage was genuinely complete.
+ * That collapse ("nothing to show" ⇒ "you're on top of this one") is the defect this fixes; see
+ * shared/src/domain/assessment-state.ts.
+ */
+export function InsightsPanel({ title = 'Insights & next actions', insights, assessment, context }: {
+  title?: string;
+  insights: Insight[];
+  assessment: AssessmentInput;
+  /** How the record is named in the copy, e.g. "this deal". */
+  context?: string;
+}) {
+  const verdict = resolveAssessment(assessment);
+  const sentence = describeAssessment(verdict, context);
+  // Partial coverage is disclosed even when there ARE findings — otherwise a listed item implies
+  // the rest was checked and clean, which is the same false-confidence bug one level up.
+  const incomplete = verdict.state === 'NOT_ASSESSED' || verdict.state === 'UNABLE_TO_VERIFY';
   return (
     <aside style={rs.aside}>
       <div style={rs.asideHead}>
         <span style={rs.aiDot} /> {title}
+        {!isReassuring(verdict.state) && insights.length === 0 && (
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+            {ASSESSMENT_LABEL[verdict.state]}
+          </span>
+        )}
       </div>
       {insights.length === 0 ? (
-        <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: 0 }}>Nothing needs attention — you're on top of this one.</p>
+        <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: 0 }}>{sentence}</p>
       ) : (
         insights.map((n, i) => (
           <div key={i} style={{ ...rs.insight, borderLeftColor: toneColor(n.tone ?? 'accent') }}>
@@ -168,6 +194,9 @@ export function InsightsPanel({ title = 'Insights & next actions', insights }: {
               : <button type="button" onClick={n.action.onClick} style={rs.insightAction}>{n.action.label} →</button>)}
           </div>
         ))
+      )}
+      {insights.length > 0 && incomplete && (
+        <p style={{ color: 'var(--muted)', fontSize: 11.5, margin: '8px 0 0', borderTop: '1px solid var(--border)', paddingTop: 8 }}>{sentence}</p>
       )}
     </aside>
   );

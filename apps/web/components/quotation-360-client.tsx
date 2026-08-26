@@ -185,6 +185,18 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
     insights.push({ tone: 'warn', title: 'Not dead yet — revise', detail: `Supersede Rev ${q.revision} and draft Rev ${q.revision + 1} with updated commercials.`, action: { label: 'Revise ↺', onClick: () => void revise() } });
   }
 
+  // Coverage of this rail. A quote with no validity date or no cost breakdown has NOT been checked
+  // on those fronts — the rail must say so rather than fall silent and look clean.
+  const insightsAssessment = {
+    attentionCount: insights.filter((i) => i.tone === 'warn' || i.tone === 'bad').length,
+    required: ['the approval workflow', 'validity dates', 'pricing margin'],
+    assessed: [
+      'the approval workflow',
+      ...(q.validUntil ? ['validity dates'] : []),
+      ...(pricing ? ['pricing margin'] : []),
+    ],
+  };
+
   // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
   const WAITING: Record<string, string> = {
     draft: 'needs approval', internal_review: 'in review', approved: 'ready to send',
@@ -287,7 +299,7 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
       tabs={tabs}
       activeTab={tab}
       onTab={setTab}
-      aside={<InsightsPanel insights={insights} />}
+      aside={<InsightsPanel insights={insights} assessment={insightsAssessment} context="this quotation" />}
       footer={<RecordCard title="Timeline"><Timeline recordId={q.id} /></RecordCard>}
     >
       {(err || msg) && (

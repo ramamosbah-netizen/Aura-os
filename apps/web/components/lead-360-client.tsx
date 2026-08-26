@@ -279,6 +279,16 @@ export default function Lead360Client({ lead, qualification, accounts }: {
     if (lead.assignedTo && !lead.firstRespondedAt) insights.push({ tone: 'warn', title: 'Respond — SLA running', detail: 'Assigned but no first response logged.' });
   }
 
+  // Coverage of this rail: a CONVERTED lead is history, so the working rules no longer govern it.
+  // Otherwise the rail may only claim "all clear" once the assessment actually ran — an unscored
+  // lead is "not assessed", never "fine".
+  const insightsAssessment = {
+    attentionCount: insights.filter((i) => i.tone === 'warn' || i.tone === 'bad').length,
+    applicable: !converted,
+    required: ['the qualification assessment', 'a contact channel', ...(lead.assignedTo ? ['first-response SLA'] : [])],
+    assessed: [...(assessed ? ['the qualification assessment'] : []), 'a contact channel', ...(lead.assignedTo ? ['first-response SLA'] : [])],
+  };
+
   // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
   const situationText = `${STATUS_LABEL[lead.status] ?? lead.status} · ${daysSince(lead.createdAt)}d old${lead.estimatedValue != null ? ` · AED ${aed(lead.estimatedValue)}` : ''}`;
 
@@ -345,7 +355,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
       tabs={tabs}
       activeTab={tab}
       onTab={setTab}
-      aside={<InsightsPanel insights={insights} />}
+      aside={<InsightsPanel insights={insights} assessment={insightsAssessment} context="a converted lead" />}
       footer={<RecordCard title="Activity timeline" span={2}><Timeline recordId={lead.id} /></RecordCard>}
     >
       {tab === 'overview' && (

@@ -369,6 +369,20 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   if (outcome.status === 'open') insights.push({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' });
   if (competitors.length) insights.push({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${competitors.join(', ')}` });
 
+  // What this rail is actually able to judge. An open deal is covered by the pursuit rules; a CLOSED
+  // deal is not — the post-award questions (customer PO/LOA, contract, handover) have no rules yet,
+  // so the rail must say "not assessed" rather than congratulate the user. Silence is not health.
+  const openDeal = outcome.status === 'open';
+  const insightsAssessment = {
+    attentionCount: insights.filter((i) => i.tone === 'warn' || i.tone === 'bad').length,
+    required: openDeal
+      ? ['qualification', 'the next action', 'deal attention']
+      : ['customer award evidence (PO/LOA)', 'contract handover'],
+    assessed: openDeal
+      ? ['qualification', 'the next action', ...(attention?.active ? ['deal attention'] : [])]
+      : [],
+  };
+
   return (
     <RecordShell
       header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: outcome.status === 'open' && qualification.score < 2 ? 'warn' : 'good' }} actions={actions} />}
@@ -386,7 +400,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       tabs={tabs}
       activeTab={tab}
       onTab={setTab}
-      aside={<InsightsPanel insights={insights} />}
+      aside={<InsightsPanel insights={insights} assessment={insightsAssessment} context="this deal" />}
       footer={
         <RecordCard title={`Deal progression — ${route === 'tender' ? 'via Tender' : 'Direct'}`} span={2}>
           <div style={st.chainRow}>

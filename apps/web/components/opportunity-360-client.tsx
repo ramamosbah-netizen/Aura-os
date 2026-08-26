@@ -17,6 +17,7 @@ import {
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
 import { shouldPromptQuoteOnWon } from './opportunity-360-insights';
+import { describeQualification, type QualificationView } from '@aura/shared';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -45,7 +46,7 @@ interface Payload {
   tenders: TenderLite[];
   quotations: QuotationLite[];
   activities: ActivityRec[];
-  qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number };
+  qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number; view: QualificationView };
   route: 'tender' | 'direct';
   progression: Step[];
   outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number | null; awardSource: string | null };
@@ -464,7 +465,12 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
               </label>
             ))}
           </div>
-          <p style={{ ...st.muted, marginTop: 8 }}>Score {qualification.score}/4 — {qualification.score >= 3 ? 'well qualified' : qualification.score === 2 ? 'partially qualified' : 'early / unqualified'}.</p>
+          <p style={{ ...st.muted, marginTop: 8 }}>{describeQualification(qualification.view)}</p>
+          {qualification.view.unevidenced > 0 && (
+            <p style={{ ...st.muted, marginTop: 4 }}>
+              {qualification.view.unevidenced} confirmed without recorded evidence — a tick nobody can audit.
+            </p>
+          )}
         </RecordCard>
       )}
 

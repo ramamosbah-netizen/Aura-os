@@ -16,12 +16,14 @@ import {
   opportunityAttention,
   resolveNextAction,
   resolveDealOutcome,
+  qualificationFromFlags,
   checkStageTransition,
   type Opportunity,
   type OpportunityAttention,
   type OpportunityStage,
   type ResolvedNextAction,
   type DealOutcome,
+  type QualificationView,
   moneyNumber as r2,
 } from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
@@ -53,7 +55,12 @@ interface Opportunity360Payload {
   contracts: Contract[];
   projects: Project[];
   activities: Activity[];
-  qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number };
+  /**
+   * The booleans and `score` are kept (the checkbox still binds to them); `view` is the semantic
+   * layer — four states with evidence, so the client stops inventing its own thresholds and can
+   * never again call an unasked question "unqualified".
+   */
+  qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number; view: QualificationView };
   route: 'tender' | 'direct';
   progression: ProgressionStep[];
   outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number | null; awardSource: Opportunity['awardSource'] };
@@ -136,6 +143,7 @@ export class Opportunity360Controller {
       need: opp.needConfirmed,
       timeline: opp.timelineConfirmed,
       score: [opp.budgetConfirmed, opp.authorityConfirmed, opp.needConfirmed, opp.timelineConfirmed].filter(Boolean).length,
+      view: qualificationFromFlags(opp),
     };
 
     const route: 'tender' | 'direct' = opp.requiresTender ? 'tender' : 'direct';

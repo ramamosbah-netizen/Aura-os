@@ -20,8 +20,20 @@ describe('qualificationBadge — a closed deal is stated, not judged', () => {
     expect(qualificationBadge({ confirmed: 4, total: 4, terminal: true, weak: false }).tone).toBe('neutral');
   });
 
-  it('the label marks a closed deal as a record of what was known at award', () => {
-    expect(qualificationBadge({ confirmed: 3, total: 4, terminal: true, weak: false }).label).toBe('3/4 BANT at award');
+  it('the label reports the CURRENT record, not a moment in time', () => {
+    expect(qualificationBadge({ confirmed: 3, total: 4, terminal: true, weak: false }).label).toBe('Qualification record · 3/4 confirmed');
+  });
+
+  it('NO TEMPORAL OVERCLAIM: terminal presentation must never say "at award"', () => {
+    // The four booleans remain MUTABLE after a deal closes — one was observed changing on an
+    // already-Won record hours after its award. AURA has no immutable qualification-at-award
+    // snapshot or event, so no wording may imply the figure was captured at award time.
+    // This assertion may only be relaxed once such a snapshot exists.
+    for (const confirmed of [0, 1, 2, 3, 4]) {
+      const label = qualificationBadge({ confirmed, total: 4, terminal: true, weak: false }).label;
+      expect(label.toLowerCase()).not.toContain('at award');
+      expect(label.toLowerCase()).not.toMatch(/at close|when won|snapshot/);
+    }
   });
 
   it('CHARACTERIZED: an OPEN deal is unchanged — thin coverage warns, good coverage reassures', () => {
@@ -29,7 +41,7 @@ describe('qualificationBadge — a closed deal is stated, not judged', () => {
     expect(qualificationBadge({ confirmed: 3, total: 4, terminal: false, weak: false })).toEqual({ label: '3/4 BANT', tone: 'good' });
   });
 
-  it('an open deal never carries the "at award" wording', () => {
-    expect(qualificationBadge({ confirmed: 2, total: 4, terminal: false, weak: false }).label).not.toContain('at award');
+  it('an open deal is unchanged and carries no record wording', () => {
+    expect(qualificationBadge({ confirmed: 2, total: 4, terminal: false, weak: false }).label).toBe('2/4 BANT');
   });
 });

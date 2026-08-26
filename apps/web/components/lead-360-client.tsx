@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LEAD_QUALIFICATION_DIMENSIONS, LEAD_QUALIFICATION_LABELS, elvSystemLabel, type ElvSystem } from '@aura/shared';
+import { LEAD_QUALIFICATION_DIMENSIONS, LEAD_QUALIFICATION_LABELS, elvSystemLabel, type ElvSystem, type AssessmentInput } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
 import Timeline from './timeline';
@@ -282,11 +282,11 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   // Coverage of this rail: a CONVERTED lead is history, so the working rules no longer govern it.
   // Otherwise the rail may only claim "all clear" once the assessment actually ran — an unscored
   // lead is "not assessed", never "fine".
-  const insightsAssessment = {
+  const insightsAssessment: AssessmentInput = {
     attentionCount: insights.filter((i) => i.tone === 'warn' || i.tone === 'bad').length,
     applicable: !converted,
-    required: ['the qualification assessment', 'a contact channel', ...(lead.assignedTo ? ['first-response SLA'] : [])],
-    assessed: [...(assessed ? ['the qualification assessment'] : []), 'a contact channel', ...(lead.assignedTo ? ['first-response SLA'] : [])],
+    required: ['LEAD_QUALIFICATION', 'CONTACT_CHANNEL', ...(lead.assignedTo ? (['FIRST_RESPONSE_SLA'] as const) : [])],
+    assessed: [...(assessed ? (['LEAD_QUALIFICATION'] as const) : []), 'CONTACT_CHANNEL', ...(lead.assignedTo ? (['FIRST_RESPONSE_SLA'] as const) : [])],
   };
 
   // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──

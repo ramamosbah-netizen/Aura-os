@@ -16,7 +16,7 @@ import {
 } from './crm/record-shell';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
-import { describeQualification, missingFacts, nextBestAction, shouldPromptQuoteOnWon, type QualificationView, type DealFacts, type MissingFactKey } from '@aura/shared';
+import { describeQualification, missingFacts, nextBestAction, evaluateDealRules, assessDeal, qualificationCoverageLow, type QualificationView, type DealFacts, type MissingFactKey, type Finding } from '@aura/shared';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -200,7 +200,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate, lifecycle, facts } = data;
+  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate, facts } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)', tone: 'accent' as Tone },
     won: { label: 'Won', color: 'var(--good)', tone: 'good' as Tone },
@@ -211,6 +211,10 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   // ── Universal Object Shell — Situation / Business Health / Missing Info / Next Best Action ──
   // Composed from facts the server already resolved (attention, qualification, nextAction) — the
   // band never re-derives a rule, it only renders what the domain owns.
+  // The qualification threshold has ONE owner now (shared/deal-assessment). The UI only maps the
+  // resolved boolean to a tone.
+  const weakQualification = qualificationCoverageLow(facts);
+
   const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
   const winPct = outcome.status === 'won' ? 100 : outcome.status === 'lost' ? 0 : o.winProbability;
   const situationText = `${cap(o.stage)} · ${winPct}% win · AED ${aed(o.value)}${o.closeDate ? ` · close ${d(o.closeDate)}` : ''}`;
@@ -221,6 +225,10 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     NO_NEXT_ACTIVITY: 'nothing scheduled',
   } as Record<string, string>)[g] ?? g.replace(/[-_]/g, ' ').toLowerCase());
 
+  // LEGACY presentation derivation (decision B): this band conflates Lifecycle (Won/Lost), Health
+  // (At risk/On track) and Qualification coverage (Early) into one chip. That is not a coherent
+  // domain concept, so it is deliberately NOT promoted into shared semantics. Left as-is until we
+  // decide what the shell should actually show.
   let health: HealthState;
   if (outcome.status === 'won') health = { label: 'Won', tone: 'good' };
   else if (outcome.status === 'lost') health = { label: 'Lost', tone: 'neutral' };
@@ -339,7 +347,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const kpis: KpiItem[] = [
     { label: 'Value', value: `AED ${aed(o.value)}`, tone: 'accent' },
     { label: 'Win probability', value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, tone: outcome.status === 'won' ? 'good' : 'neutral' },
-    { label: 'Qualification', value: `${qualification.score}/4`, tone: outcome.status === 'open' && qualification.score < 2 ? 'warn' : 'neutral' },
+    { label: 'Qualification', value: `${qualification.score}/4`, tone: weakQualification ? 'warn' : 'neutral' },
     { label: 'Expected close', value: o.closeDate ? d(o.closeDate) : '—' },
     { label: 'Owner', value: o.ownerId ?? 'Unassigned' },
     // null = award provenance without a resolved contracted value (a real inconsistency) — show it
@@ -364,32 +372,26 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     { id: 'history', label: 'History' },
   ];
 
-  const insights: Insight[] = [];
-  if (attention?.gaps?.length) insights.push({ tone: 'warn', title: 'Needs attention', detail: attention.gaps.join(', ') });
-  if (nextAction.subject) insights.push({ tone: 'accent', title: 'Next action', detail: `${nextAction.subject}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}` });
-  if (outcome.status === 'open' && qualification.score < 2) insights.push({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${qualification.score}/4 — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('qualification') } });
-  if (shouldPromptQuoteOnWon(facts)) insights.push({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } });
-  if (outcome.status === 'open') insights.push({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' });
-  if (competitors.length) insights.push({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${competitors.join(', ')}` });
-  if (lifecycle.state === 'LEGACY_WON') insights.push({ tone: 'warn', title: 'Won — award not evidenced', detail: 'No accepted quotation or tender award backs this win, so the contracted value has no provenance.' });
-
-  // What this rail is actually able to judge. An open deal is covered by the pursuit rules; a CLOSED
-  // deal is not — the post-award questions (customer PO/LOA, contract, handover) have no rules yet,
-  // so the rail must say "not assessed" rather than congratulate the user. Silence is not health.
-  const openDeal = outcome.status === 'open';
-  const insightsAssessment = {
-    attentionCount: insights.filter((i) => i.tone === 'warn' || i.tone === 'bad').length,
-    required: openDeal
-      ? ['qualification', 'the next action', 'deal attention']
-      : ['customer award evidence (PO/LOA)', 'contract handover'],
-    assessed: openDeal
-      ? ['qualification', 'the next action', ...(attention?.active ? ['deal attention'] : [])]
-      : [],
+  // The assessment layer decides WHAT was found and WHAT was checked (shared/deal-assessment).
+  // This maps its codes to words and handlers — the client decides no business question here.
+  // The pipeline, explicit: facts -> rules -> findings -> assessment. The client runs no rule and
+  // decides no business question; it maps codes to words and handlers.
+  const { findings, coverage } = evaluateDealRules(facts);
+  const assessment = assessDeal(findings, coverage);
+  const FINDING_UI: Record<Finding['code'], (p: Finding['data']) => Insight> = {
+    ATTENTION_GAPS: (p) => ({ tone: 'warn', title: 'Needs attention', detail: ((p?.gaps as string[]) ?? []).map(gapLabel).join(', ') }),
+    NEXT_ACTION_SCHEDULED: (p) => ({ tone: 'accent', title: 'Next action', detail: `${String(p?.subject ?? '')}${p?.dueDate ? ` · due ${d(String(p.dueDate))}` : ''}` }),
+    QUALIFICATION_COVERAGE_LOW: (p) => ({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${p?.confirmed}/${p?.total} — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('qualification') } }),
+    AWARD_NOT_EVIDENCED: () => ({ tone: 'warn', title: 'Won — award not evidenced', detail: 'No accepted quotation or tender award backs this win, so the contracted value has no provenance.' }),
+    WON_NOT_QUOTED: () => ({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } }),
+    OUTCOME_OPEN: () => ({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' }),
+    COMPETITIVE_DEAL: (p) => ({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${((p?.competitors as string[]) ?? []).join(', ')}` }),
   };
+  const insights: Insight[] = assessment.findings.map((f) => FINDING_UI[f.code](f.data));
 
   return (
     <RecordShell
-      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: outcome.status === 'open' && qualification.score < 2 ? 'warn' : 'good' }} actions={actions} />}
+      header={<RecordHeader title={o.title} status={OUTCOME.label} statusTone={OUTCOME.tone} meta={meta} score={{ value: outcome.status === 'won' ? '100%' : outcome.status === 'lost' ? '0%' : `${o.winProbability}%`, label: 'Win prob', badge: `${qualification.score}/4 BANT`, badgeTone: weakQualification ? 'warn' : 'good' }} actions={actions} />}
       kpis={kpis}
       situation={
         <RecordBand tone={health.tone}>
@@ -404,7 +406,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       tabs={tabs}
       activeTab={tab}
       onTab={setTab}
-      aside={<InsightsPanel insights={insights} assessment={insightsAssessment} context="this deal" />}
+      aside={<InsightsPanel insights={insights} assessment={assessment.coverage} context="this deal" />}
       footer={
         <RecordCard title={`Deal progression — ${route === 'tender' ? 'via Tender' : 'Direct'}`} span={2}>
           <div style={st.chainRow}>

@@ -2,7 +2,8 @@
 
 import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { RelatedRecords, ActivityTimeline, type RelatedGroup, type ActivityEvent } from './related-records';
-import { resolveAssessment, describeAssessment, ASSESSMENT_LABEL, isReassuring, type AssessmentInput } from '@aura/shared';
+import { resolveAssessment, isReassuring, type AssessmentInput } from '@aura/shared';
+import { describeAssessment, ASSESSMENT_LABEL } from '@/lib/assessment-copy';
 
 // Re-export the connectivity primitives so a 360 imports its whole toolkit from one module.
 export { RelatedRecords, ActivityTimeline } from './related-records';

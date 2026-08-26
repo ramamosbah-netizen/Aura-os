@@ -3,6 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Timeline from './timeline';
+import type { AssessmentInput } from '@aura/shared';
 import {
   RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
   RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordOutcome,
@@ -187,13 +188,13 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
 
   // Coverage of this rail. A quote with no validity date or no cost breakdown has NOT been checked
   // on those fronts — the rail must say so rather than fall silent and look clean.
-  const insightsAssessment = {
+  const insightsAssessment: AssessmentInput = {
     attentionCount: insights.filter((i) => i.tone === 'warn' || i.tone === 'bad').length,
-    required: ['the approval workflow', 'validity dates', 'pricing margin'],
+    required: ['APPROVAL_WORKFLOW', 'VALIDITY_DATES', 'PRICING_MARGIN'],
     assessed: [
-      'the approval workflow',
-      ...(q.validUntil ? ['validity dates'] : []),
-      ...(pricing ? ['pricing margin'] : []),
+      'APPROVAL_WORKFLOW' as const,
+      ...(q.validUntil ? (['VALIDITY_DATES'] as const) : []),
+      ...(pricing ? (['PRICING_MARGIN'] as const) : []),
     ],
   };
 

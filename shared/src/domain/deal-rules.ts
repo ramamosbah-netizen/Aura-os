@@ -1,4 +1,7 @@
-import type { DealFacts } from './deal-facts';
+import { opportunityAttention } from './crm';
+import { attentionFactsOf, type DealFacts } from './deal-facts';
+import type { Finding } from './deal-findings';
+import type { AssessmentCoverageInputs } from './deal-assessment';
 
 /**
  * Deterministic rules over DealFacts.
@@ -137,4 +140,68 @@ export const dealValueInputsOf = (facts: DealFacts): DealValueInputs => ({
 export function resolveDealValue(input: DealValueInputs): ResolvedDealValue {
   if (input.awardDocumented) return { amount: input.awardValue, basis: input.awardValue == null ? 'NONE' : 'AWARD' };
   return input.headlineValue == null ? { amount: null, basis: 'NONE' } : { amount: input.headlineValue, basis: 'HEADLINE' };
+}
+
+// ── Finding-emitting rules ────────────────────────────────────────────────────────────────────
+// Each rule owns ONE conclusion and emits it as a coded Finding with its provenance. The assessment
+// layer only aggregates what these return; it can no longer conclude anything itself.
+
+/** The one place this threshold lives. It used to be re-derived in four separate UI expressions. */
+export const QUALIFICATION_MIN_CONFIRMED = 2;
+
+/**
+ * Whether qualification coverage is too thin to rely on. A closed deal is exempt — its unanswered
+ * questions are history, not work.
+ */
+export const qualificationCoverageLow = (facts: DealFacts): boolean =>
+  !facts.outcome.terminal && facts.qualification.confirmed < QUALIFICATION_MIN_CONFIRMED;
+
+/**
+ * Run every deal rule and return the findings plus the two facts coverage needs.
+ *
+ * This is the ONLY place DealFacts is turned into conclusions. Returning the coverage inputs here
+ * (rather than letting the aggregator read facts) is what keeps the pipeline one-way.
+ */
+export function evaluateDealRules(facts: DealFacts, now: Date = new Date()): {
+  findings: Finding[];
+  coverage: AssessmentCoverageInputs;
+} {
+  const attention = opportunityAttention(attentionFactsOf(facts), now);
+  const findings: Finding[] = [];
+  const open = !facts.outcome.terminal;
+
+  if (attention.gaps.length > 0) {
+    findings.push({ code: 'ATTENTION_GAPS', severity: 'ATTENTION', source: 'nextActionInvariant', data: { gaps: [...attention.gaps] } });
+  }
+  const next = facts.engagement.nextOpenActivity;
+  if (next) {
+    findings.push({
+      code: 'NEXT_ACTION_SCHEDULED', severity: 'INFO', source: 'nextOpenActivity',
+      data: { subject: next.subject, ...(next.dueDate ? { dueDate: next.dueDate } : {}) },
+    });
+  }
+  if (qualificationCoverageLow(facts)) {
+    findings.push({
+      code: 'QUALIFICATION_COVERAGE_LOW', severity: 'ATTENTION', source: 'qualificationCoverage',
+      data: { confirmed: facts.qualification.confirmed, total: facts.qualification.dimensions.length },
+    });
+  }
+  // A win nobody can evidence is a real gap — and is not the same thing as a governed win.
+  if (facts.outcome.state === 'LEGACY_WON') {
+    findings.push({ code: 'AWARD_NOT_EVIDENCED', severity: 'ATTENTION', source: 'awardEvidence', data: { state: facts.outcome.state } });
+  }
+  if (shouldPromptQuoteOnWon(facts)) {
+    findings.push({ code: 'WON_NOT_QUOTED', severity: 'INFO', source: 'quoteOnWon' });
+  }
+  if (open) {
+    findings.push({ code: 'OUTCOME_OPEN', severity: 'INFO', source: 'outcomeState' });
+  }
+  if (facts.strategy.competitors.state === 'KNOWN_PRESENT') {
+    findings.push({
+      code: 'COMPETITIVE_DEAL', severity: 'INFO', source: 'competitorKnowledge',
+      data: { competitors: facts.strategy.competitors.items },
+    });
+  }
+
+  return { findings, coverage: { terminal: facts.outcome.terminal, attentionActive: attention.active } };
 }

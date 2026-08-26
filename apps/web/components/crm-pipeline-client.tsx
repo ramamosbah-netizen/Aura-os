@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { opportunityAttention } from '@aura/shared';
+import { opportunityAttention, attentionFactsOfOpportunity } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
@@ -867,7 +867,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               {col.kind === 'opp' && col.opps!.map((o) => {
                 const stageIdx = OPP_STAGES.indexOf(o.stage as (typeof OPP_STAGES)[number]);
                 const direct = o.requiresTender === false;
-                const att = opportunityAttention(o);
+                const att = opportunityAttention(attentionFactsOfOpportunity(o));
                 return (
                   <div
                     key={o.id}

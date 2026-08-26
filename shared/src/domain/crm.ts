@@ -533,15 +533,55 @@ export interface ResolvedNextAction {
  * the fallback for records with no scheduled activity yet. One place decides, so the predicate and
  * every read model agree on what the next action IS.
  */
-export function resolveNextAction(opp: NextActionCandidate, facts: OpportunityActivityFacts = {}): ResolvedNextAction {
-  const fromActivity = Boolean(facts.nextActionSubject ?? facts.nextActionDueIso);
+/**
+ * The facts the Next-Action Invariant reads — ONE input contract for every caller.
+ *
+ * Callers used to hand this rule a raw opportunity, so the rule's input differed by call site and
+ * the same question could be answered from different shapes. This is the single shape; a caller
+ * holding a DealFacts uses `attentionFactsOf`, and a caller holding an opportunity row uses
+ * `attentionFactsOfOpportunity`. Both are ADAPTERS onto one algorithm, not second implementations.
+ */
+export interface AttentionFacts {
+  stage: string;
+  ownerId?: Id | null;
+  /** The next OPEN activity. Wins over the legacy columns. */
+  activitySubject?: string | null;
+  activityDueDate?: string | null;
+  activityOwnerId?: Id | null;
+  /** The opportunity's own next-action columns — the fallback when nothing is scheduled. */
+  plannedSubject?: string | null;
+  plannedDueDate?: string | null;
+}
+
+/** Opportunity row + activity facts -> the one input contract. */
+export const attentionFactsOfOpportunity = (
+  opp: NextActionCandidate,
+  facts: OpportunityActivityFacts = {},
+): AttentionFacts => ({
+  stage: opp.stage,
+  ownerId: opp.ownerId ?? null,
+  activitySubject: facts.nextActionSubject ?? null,
+  activityDueDate: facts.nextActionDueIso ?? null,
+  activityOwnerId: facts.nextActionOwnerId ?? null,
+  plannedSubject: opp.nextAction ?? null,
+  plannedDueDate: opp.nextActionDueDate ?? null,
+});
+
+/** THE single resolution algorithm. Activity first, legacy columns as the fallback. */
+export function resolveNextActionFrom(f: AttentionFacts): ResolvedNextAction {
+  const fromActivity = Boolean(f.activitySubject ?? f.activityDueDate);
   return {
-    subject: facts.nextActionSubject ?? opp.nextAction ?? null,
-    dueDate: facts.nextActionDueIso ?? opp.nextActionDueDate ?? null,
+    subject: f.activitySubject ?? f.plannedSubject ?? null,
+    dueDate: f.activityDueDate ?? f.plannedDueDate ?? null,
     // The activity's assignee owns the work; fall back to the deal owner.
-    ownerId: facts.nextActionOwnerId ?? opp.ownerId ?? null,
+    ownerId: f.activityOwnerId ?? f.ownerId ?? null,
     fromActivity,
   };
+}
+
+/** Adapter for callers still holding a raw opportunity. Delegates — it re-derives nothing. */
+export function resolveNextAction(opp: NextActionCandidate, facts: OpportunityActivityFacts = {}): ResolvedNextAction {
+  return resolveNextActionFrom(attentionFactsOfOpportunity(opp, facts));
 }
 
 /**
@@ -555,17 +595,16 @@ export function resolveNextAction(opp: NextActionCandidate, facts: OpportunityAc
  * own `ownerId` for the no-owner gap — a deal with unassigned work is still an unowned deal.
  */
 export function opportunityAttention(
-  opp: NextActionCandidate,
-  facts: OpportunityActivityFacts = {},
+  facts: AttentionFacts,
   now: Date = new Date(),
 ): OpportunityAttention {
-  const active = (OPPORTUNITY_ACTIVE_STAGES as readonly string[]).includes(opp.stage);
+  const active = (OPPORTUNITY_ACTIVE_STAGES as readonly string[]).includes(facts.stage);
   if (!active) return { active, gaps: [], needsAttention: false };
   const today = now.toISOString().slice(0, 10);
-  const next = resolveNextAction(opp, facts);
+  const next = resolveNextActionFrom(facts);
   const gaps: NextActionGap[] = [];
   if (!next.subject || !next.subject.trim()) gaps.push('no-next-action');
-  if (!opp.ownerId) gaps.push('no-owner');
+  if (!facts.ownerId) gaps.push('no-owner');
   if (!next.dueDate) gaps.push('no-due-date');
   else if (next.dueDate.slice(0, 10) < today) gaps.push('overdue');
   return { active, gaps, needsAttention: gaps.length > 0 };

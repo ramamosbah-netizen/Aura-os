@@ -15,6 +15,7 @@
 import {
   leadAttention,
   opportunityAttention,
+  attentionFactsOfOpportunity,
   resolveNextAction,
   type Lead,
   type LeadAttentionSeverity,
@@ -230,7 +231,7 @@ export function buildMyDay(input: MyDayInput, now: Date = new Date(), timeZone =
       nextActionDueIso: next?.dueIso ?? null,
       nextActionOwnerId: next?.assigneeId ?? null,
     };
-    const attention = opportunityAttention(opp, facts, now);
+    const attention = opportunityAttention(attentionFactsOfOpportunity(opp, facts), now);
     if (!attention.needsAttention) continue;
     const resolved = resolveNextAction(opp, facts);
     opportunities.push({

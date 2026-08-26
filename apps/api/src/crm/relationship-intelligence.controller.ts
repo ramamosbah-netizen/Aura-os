@@ -5,7 +5,7 @@ import {
   ATTENTION_THRESHOLDS, lastActivityByRecord, nextOpenActivityByRecord, daysSince, isQuiet,
 } from '@aura/crm';
 import { CustomerInvoiceService, balanceOf } from '@aura/finance';
-import { opportunityAttention, resolveNextAction } from '@aura/shared';
+import { opportunityAttention, resolveNextAction, attentionFactsOfOpportunity } from '@aura/shared';
 
 // Relationship Intelligence — the CRM alert engine. It turns the data we already
 // hold into a single ranked list of "act on this now" signals: deals with no
@@ -92,7 +92,7 @@ export class RelationshipIntelligenceController {
       const facts = next
         ? { nextActionSubject: next.subject, nextActionDueIso: next.dueIso, nextActionOwnerId: next.assigneeId }
         : {};
-      const att = opportunityAttention(o, facts, now);
+      const att = opportunityAttention(attentionFactsOfOpportunity(o, facts), now);
       if (att.needsAttention) {
         const resolved = resolveNextAction(o, facts);
         alerts.push({

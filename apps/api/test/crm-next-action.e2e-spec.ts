@@ -6,7 +6,7 @@ import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { TenantContext } from '@aura/core';
-import { opportunityAttention, type Opportunity } from '@aura/shared';
+import { opportunityAttention, attentionFactsOfOpportunity, type Opportunity } from '@aura/shared';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -43,7 +43,7 @@ describe('Next-Action Invariant e2e (HTTP)', () => {
       await http.post('/api/v1/crm/opportunities').send({ title: 'Bare deal', value: 100_000 }).expect(201)
     ).body as Opportunity;
 
-    const att = opportunityAttention(await get(opp.id));
+    const att = opportunityAttention(attentionFactsOfOpportunity(await get(opp.id)));
     expect(att.active).toBe(true);
     expect(att.needsAttention).toBe(true);
     expect(att.gaps.sort()).toEqual(['no-due-date', 'no-next-action', 'no-owner']);
@@ -59,7 +59,7 @@ describe('Next-Action Invariant e2e (HTTP)', () => {
       .send({ nextAction: 'Send revised BOQ', ownerId: 'user-42', nextActionDueDate: isoDate(7) })
       .expect(200);
 
-    const att = opportunityAttention(await get(opp.id));
+    const att = opportunityAttention(attentionFactsOfOpportunity(await get(opp.id)));
     expect(att.needsAttention).toBe(false);
     expect(att.gaps).toEqual([]);
   });
@@ -74,7 +74,7 @@ describe('Next-Action Invariant e2e (HTTP)', () => {
       .send({ nextAction: 'Chase PO', ownerId: 'user-7', nextActionDueDate: isoDate(-3) })
       .expect(200);
 
-    const att = opportunityAttention(await get(opp.id));
+    const att = opportunityAttention(attentionFactsOfOpportunity(await get(opp.id)));
     expect(att.gaps).toContain('overdue');
     expect(att.needsAttention).toBe(true);
   });
@@ -89,7 +89,7 @@ describe('Next-Action Invariant e2e (HTTP)', () => {
     // G5: the win gate needs the winning context; the deal is still 'bare' of a NEXT ACTION,
     // which is what this test is actually about.
     await http.patch(`/api/v1/crm/opportunities/${opp.id}`).send({ stage: 'won', winReason: 'Incumbent advantage' }).expect(200);
-    const won = opportunityAttention(await get(opp.id));
+    const won = opportunityAttention(attentionFactsOfOpportunity(await get(opp.id)));
     expect(won.active).toBe(false);
     expect(won.needsAttention).toBe(false);
   });

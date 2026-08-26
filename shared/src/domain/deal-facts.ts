@@ -1,4 +1,4 @@
-import type { Opportunity, AwardSource } from './crm';
+import type { Opportunity, AwardSource, AttentionFacts } from './crm';
 import type { BuyingStage } from './buying-journey';
 import type { Id } from './id';
 import { resolveDealOutcome, type DealOutcomeState } from './opportunity-outcome';
@@ -140,6 +140,13 @@ export interface DealFacts {
     /** `null` = this caller did not count activities. NOT "there are none open". */
     openActivityCount: number | null;
     nextOpenActivity: NextOpenActivityFact | null;
+    /**
+     * The opportunity's own next-action COLUMNS — the fallback the Next-Action Invariant uses when
+     * nothing is scheduled. Raw persisted: `aura_crm_opportunities.next_action` (mig 0145) and
+     * `next_action_due_date` (mig 0155). `null` = the column is empty, a real absence.
+     */
+    plannedNextActionSubject: string | null;
+    plannedNextActionDueDate: string | null;
   };
   /** What can be PROVEN about the award, as opposed to what the deal claims. */
   awardEvidence: {
@@ -261,6 +268,8 @@ export function buildDealFacts(input: DealFactsInput): DealFacts {
       lastActivityAt: input.engagement?.lastActivityAt ?? null,
       openActivityCount: input.engagement?.openActivityCount ?? null,
       nextOpenActivity: input.engagement?.nextOpenActivity ?? null,
+      plannedNextActionSubject: o.nextAction ?? null,
+      plannedNextActionDueDate: o.nextActionDueDate ?? null,
     },
     awardEvidence: {
       // Not a lookup that came back empty — there is nowhere in AURA to record this today.
@@ -276,3 +285,17 @@ export function buildDealFacts(input: DealFactsInput): DealFacts {
     },
   };
 }
+
+/**
+ * DealFacts -> the Next-Action Invariant's input contract. An ADAPTER, not a second derivation:
+ * the rule itself lives in crm.ts and is the only implementation.
+ */
+export const attentionFactsOf = (facts: DealFacts): AttentionFacts => ({
+  stage: facts.lifecycle.stage,
+  ownerId: facts.lifecycle.ownerId,
+  activitySubject: facts.engagement.nextOpenActivity?.subject ?? null,
+  activityDueDate: facts.engagement.nextOpenActivity?.dueDate ?? null,
+  activityOwnerId: facts.engagement.nextOpenActivity?.assigneeId ?? null,
+  plannedSubject: facts.engagement.plannedNextActionSubject,
+  plannedDueDate: facts.engagement.plannedNextActionDueDate,
+});

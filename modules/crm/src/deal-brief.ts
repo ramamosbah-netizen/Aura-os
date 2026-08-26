@@ -21,6 +21,7 @@ import {
   LEAD_ATTENTION,
   daysSince,
   opportunityAttention,
+  attentionFactsOfOpportunity,
   resolveNextAction,
   winPlanCoverage,
   type Opportunity,
@@ -122,8 +123,10 @@ export function buildDealFacts(input: DealBriefInput, now: Date = new Date()): D
   // Attention gaps stay the shared judge's verdict — a deal cannot be at risk on the pipeline and
   // healthy in its own brief.
   const attention = opportunityAttention(
-    o,
-    { nextActionSubject: input.nextAction?.subject ?? null, nextActionDueIso: input.nextAction?.dueIso ?? null },
+    attentionFactsOfOpportunity(o, {
+      nextActionSubject: input.nextAction?.subject ?? null,
+      nextActionDueIso: input.nextAction?.dueIso ?? null,
+    }),
     now,
   );
 

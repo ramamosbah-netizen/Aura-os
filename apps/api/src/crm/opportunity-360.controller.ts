@@ -18,6 +18,7 @@ import {
   resolveDealOutcome,
   qualificationFromFlags,
   buildDealFacts,
+  attentionFactsOf,
   checkStageTransition,
   type Opportunity,
   type OpportunityAttention,
@@ -181,6 +182,17 @@ export class Opportunity360Controller {
       ? { nextActionSubject: next.subject, nextActionDueIso: next.dueIso, nextActionOwnerId: next.assigneeId }
       : {};
 
+    const dealFacts = buildDealFacts({
+      opportunity: opp,
+      stakeholders,
+      quotations,
+      contracts,
+      projects,
+      // requirements / governance / activity counts are not loaded by this endpoint — left null
+      // rather than defaulted, so "not loaded" never reads as "none".
+      engagement: next ? { nextOpenActivity: { subject: next.subject, dueDate: next.dueIso, assigneeId: next.assigneeId } } : null,
+    });
+
     // G5 stage gate — the SAME rule + evidence the PATCH enforces, resolved here so the client only
     // renders the verdict. Only previewed while the deal is open and has a gated forward stage.
     const nextStage = status === 'open' ? NEXT_FORWARD_STAGE[opp.stage] : undefined;
@@ -214,18 +226,10 @@ export class Opportunity360Controller {
       progression,
       outcome: { status, lossReason: opp.lossReason, contractedValue, awardSource: opp.awardSource },
       lifecycle,
-      facts: buildDealFacts({
-        opportunity: opp,
-        stakeholders,
-        quotations,
-        contracts,
-        projects,
-        // requirements / governance / activity counts are not loaded by this endpoint — left null
-        // rather than defaulted, so "not loaded" never reads as "none".
-        engagement: next ? { nextOpenActivity: { subject: next.subject, dueDate: next.dueIso, assigneeId: next.assigneeId } } : null,
-      }),
+      facts: dealFacts,
       nextAction: resolveNextAction(opp, facts),
-      attention: opportunityAttention(opp, facts),
+      // The invariant now reads the SAME factual snapshot the rules do.
+      attention: opportunityAttention(attentionFactsOf(dealFacts)),
       stageGate,
     };
   }

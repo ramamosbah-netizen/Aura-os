@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { RelatedRecords, ActivityTimeline, type RelatedGroup, type ActivityEvent } from './related-records';
 import { resolveAssessment, isReassuring, type AssessmentInput } from '@aura/shared';
 import { describeAssessment, ASSESSMENT_LABEL } from '@/lib/assessment-copy';
@@ -387,6 +387,29 @@ export function RecordShell({
 // Small helper so pages don't each re-declare tab state.
 export function useTab(initial: string): [string, (id: string) => void] {
   const [tab, setTab] = useState(initial);
+  return [tab, setTab];
+}
+
+/**
+ * Like `useTab`, but the selection is addressable in the URL (`?area=commercial`), so a section can
+ * be linked, bookmarked and reloaded into.
+ *
+ * The URL is read AFTER mount, never during render: the server has no query string in this
+ * component tree, so reading it inline would hydrate a different subtree than it rendered. Uses
+ * `replaceState` rather than the router so selecting a section does not stack history entries.
+ */
+export function useUrlTab(param: string, initial: string): [string, (id: string) => void] {
+  const [tab, setTabState] = useState(initial);
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get(param);
+    if (fromUrl) setTabState(fromUrl);
+  }, [param]);
+  const setTab = (id: string): void => {
+    setTabState(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set(param, id);
+    window.history.replaceState(null, '', url.toString());
+  };
   return [tab, setTab];
 }
 

@@ -9,7 +9,7 @@ import BuyingJourneyPanel from './buying-journey-panel';
 import WinPlanPanel from './win-plan-panel';
 import DealDepthPanel from './deal-depth-panel';
 import {
-  RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, useTab,
+  RecordShell, RecordHeader, RecordCard, CardGrid, InsightsPanel, useUrlTab,
   RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordWorkflowGate, RecordOutcome,
   type Tone, type KpiItem, type MetaItem, type TabDef, type Insight,
   type HealthState, type NextBestAction, type WorkflowGateView,
@@ -87,7 +87,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const [data, setData] = useState<Payload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useTab('overview');
+  const [tab, setTab] = useUrlTab('area', 'overview');
   // Closing a deal needs its reason in the SAME patch (§40.3/40.4 stage gate) — capture it inline.
   const [closing, setClosing] = useState<{ stage: 'won' | 'lost'; reason: string } | null>(null);
   // Outcome Loop — after acting on the Next Best Action, capture what happened so no deal goes dead.
@@ -261,12 +261,12 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   // and handler are presentation and stay here. Notably a governed win is no longer asked to
   // generate a quotation it already has.
   const NBA: Record<string, NextBestAction | undefined> = {
-    WORK_NEXT_STEP: { label: 'Work the next step', hint: `${nextAction.subject ?? ''}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}`, onClick: () => setTab('activity') },
-    QUALIFY: { label: 'Qualify (BANT)', hint: `Only ${qualification.score}/4 confirmed`, onClick: () => setTab('qualification') },
-    MAP_DECISION_MAKER: { label: 'Map the decision maker', hint: 'No stakeholders mapped yet', onClick: () => setTab('stakeholders') },
-    LOG_NEXT_STEP: { label: 'Log the next step', hint: 'Keep the deal moving', onClick: () => setTab('activity') },
+    WORK_NEXT_STEP: { label: 'Work the next step', hint: `${nextAction.subject ?? ''}${nextAction.dueDate ? ` · due ${d(nextAction.dueDate)}` : ''}`, onClick: () => setTab('engagement') },
+    QUALIFY: { label: 'Qualify (BANT)', hint: `Only ${qualification.score}/4 confirmed`, onClick: () => setTab('overview') },
+    MAP_DECISION_MAKER: { label: 'Map the decision maker', hint: 'No stakeholders mapped yet', onClick: () => setTab('strategy') },
+    LOG_NEXT_STEP: { label: 'Log the next step', hint: 'Keep the deal moving', onClick: () => setTab('engagement') },
     GENERATE_QUOTATION: { label: '→ Generate quotation', hint: 'Won — turn it into a quote', onClick: () => { void generateQuotation(); } },
-    CONVERT_TO_CONTRACT: { label: '→ Convert to contract', hint: 'Award accepted — turn it into a contract', onClick: () => setTab('quotation') },
+    CONVERT_TO_CONTRACT: { label: '→ Convert to contract', hint: 'Award accepted — turn it into a contract', onClick: () => setTab('commercial') },
     NONE: undefined,
   };
   const nba: NextBestAction | undefined = NBA[nextBestAction(facts)];
@@ -369,21 +369,17 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   ];
 
   const pendingApprovals = quotations.filter((q) => q.status === 'internal_review');
+  // AURA IA: six AREAS, one row, each stacking its sections vertically. Sub-tabs were rejected —
+  // 13 tabs becoming 6 tabs with sub-tabs is the same problem wearing a different shape.
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'qualification', label: 'Qualification' },
-    { id: 'commercial', label: 'Commercial' },
-    { id: 'stakeholders', label: 'Contacts', count: stakeholders.length },
-    { id: 'quotation', label: 'Quotation', count: quotations.length },
-    { id: 'journey', label: 'Journey' },
-    { id: 'winplan', label: 'Win Plan' },
-    { id: 'depth', label: 'Deal Depth' },
-    { id: 'activity', label: 'Activities', count: activities.length },
-    { id: 'communication', label: 'Communication' },
-    { id: 'documents', label: 'Documents' },
-    { id: 'approvals', label: 'Approvals', count: pendingApprovals.length || undefined },
+    { id: 'strategy', label: 'Strategy' },
+    { id: 'commercial', label: 'Commercial', count: quotations.length || undefined },
+    { id: 'engagement', label: 'Engagement', count: activities.length || undefined },
+    { id: 'governance', label: 'Governance', count: pendingApprovals.length || undefined },
     { id: 'history', label: 'History' },
   ];
+
 
   // The assessment layer decides WHAT was found and WHAT was checked (shared/deal-assessment).
   // This maps its codes to words and handlers — the client decides no business question here.
@@ -394,9 +390,9 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   const FINDING_UI: Record<Finding['code'], (p: Finding['data']) => Insight> = {
     ATTENTION_GAPS: (p) => ({ tone: 'warn', title: 'Needs attention', detail: ((p?.gaps as string[]) ?? []).map(gapLabel).join(', ') }),
     NEXT_ACTION_SCHEDULED: (p) => ({ tone: 'accent', title: 'Next action', detail: `${String(p?.subject ?? '')}${p?.dueDate ? ` · due ${d(String(p.dueDate))}` : ''}` }),
-    QUALIFICATION_COVERAGE_LOW: (p) => ({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${p?.confirmed}/${p?.total} — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('qualification') } }),
+    QUALIFICATION_COVERAGE_LOW: (p) => ({ tone: 'warn', title: 'Weakly qualified', detail: `BANT ${p?.confirmed}/${p?.total} — confirm budget, authority, need, timing.`, action: { label: 'Qualify', onClick: () => setTab('overview') } }),
     AWARD_NOT_EVIDENCED: () => ({ tone: 'warn', title: 'Won — award not evidenced', detail: 'No accepted quotation or tender award backs this win, so the contracted value has no provenance.' }),
-    WON_NOT_QUOTED: () => ({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } }),
+    WON_NOT_QUOTED: () => ({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('commercial') } }),
     OUTCOME_OPEN: () => ({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' }),
     COMPETITIVE_DEAL: (p) => ({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${((p?.competitors as string[]) ?? []).join(', ')}` }),
   };
@@ -470,7 +466,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </CardGrid>
       )}
 
-      {tab === 'qualification' && (
+      {tab === 'overview' && (
         <RecordCard title="Qualification (BANT)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {BANT.map((b) => (
@@ -490,11 +486,9 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       )}
 
       {tab === 'commercial' && <CommercialPanel opportunityId={o.id} />}
-      {tab === 'journey' && <BuyingJourneyPanel opportunityId={o.id} />}
-      {tab === 'winplan' && <WinPlanPanel opportunityId={o.id} />}
-      {tab === 'depth' && <DealDepthPanel opportunityId={o.id} />}
+      {tab === 'strategy' && <BuyingJourneyPanel opportunityId={o.id} />}
 
-      {tab === 'stakeholders' && (
+      {tab === 'strategy' && (
         <RecordCard title={`Stakeholders ${account ? `at ${account.name}` : ''}`}>
           {stakeholders.length === 0 ? (
             <p style={st.muted}>No stakeholders mapped — <a href="/crm/contacts" style={st.link}>add the people behind this deal →</a></p>
@@ -511,7 +505,10 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </RecordCard>
       )}
 
-      {tab === 'quotation' && (
+      {tab === 'strategy' && <WinPlanPanel opportunityId={o.id} />}
+      {tab === 'strategy' && <DealDepthPanel opportunityId={o.id} />}
+
+      {tab === 'commercial' && (
         <RecordCard title="Quotations for this deal">
           {quotations.length === 0 ? (
             <p style={st.muted}>
@@ -539,7 +536,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </RecordCard>
       )}
 
-      {tab === 'activity' && (
+      {tab === 'engagement' && (
         <RecordCard title="Activities">
           {activities.length === 0 ? (
             <p style={st.muted}>No activities logged yet — <a href="/crm/activities" style={st.link}>log the next step →</a></p>
@@ -563,7 +560,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </RecordCard>
       )}
 
-      {tab === 'communication' && (
+      {tab === 'engagement' && (
         <RecordCard title="Communication">
           <p style={{ ...st.muted, marginTop: 0 }}>
             Reach a stakeholder on their own channel with a ready draft, or open the internal <b>Communication Center</b> for team chat and mail. AURA prepares the message; it does not send it.
@@ -608,7 +605,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </RecordCard>
       )}
 
-      {tab === 'documents' && (
+      {tab === 'governance' && (
         <RecordCard title="Documents">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
             <p style={{ ...st.muted, marginTop: 0, maxWidth: 560 }}>
@@ -640,7 +637,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
         </RecordCard>
       )}
 
-      {tab === 'approvals' && (
+      {tab === 'governance' && (
         <RecordCard title="Approvals">
           <p style={{ ...st.muted, marginTop: 0 }}>
             Approvals are actioned in <b>My Work → Approvals</b>; Sales shows only the status here. Nothing is approved inside the deal.

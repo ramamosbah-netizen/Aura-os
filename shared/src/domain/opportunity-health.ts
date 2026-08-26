@@ -25,7 +25,13 @@ export type DealHealthBand = 'HEALTHY' | 'AT_RISK' | 'CRITICAL'; // 🟢 🟠 �
  * "what KIND of trouble" — a stale deal and a blocked deal both score poorly but demand opposite
  * responses (chase vs. escalate), so collapsing them into one colour loses the instruction.
  */
-export type DealHealthState = 'ON_TRACK' | 'NEEDS_ATTENTION' | 'AT_RISK' | 'BLOCKED' | 'STALE';
+/**
+ * The verdict. `CLOSED` exists because a finished pursuit is not "on track" — its health is not
+ * applicable, and reporting the healthiest label beside a low score produced the contradiction
+ * "🟢 On Track · 18/100". The SCORE is deliberately untouched: it may be arithmetically right; the
+ * bug was the word next to it.
+ */
+export type DealHealthState = 'ON_TRACK' | 'NEEDS_ATTENTION' | 'AT_RISK' | 'BLOCKED' | 'STALE' | 'CLOSED';
 
 export type DealHealthDimensionKey = 'execution' | 'relationship' | 'commercial' | 'competitive' | 'decision';
 
@@ -228,7 +234,11 @@ export function assessOpportunityHealth(input: DealHealthInputs): OpportunityHea
   const noFutureAction = !e.nextActionDueIso || e.nextActionDueIso < now.toISOString();
   const isStale = !terminal && noFutureAction && (e.lastActivityIso === null || staleDays! > STALE_AFTER_DAYS);
   if (terminal) {
-    state = 'ON_TRACK'; // closed deals are history, not work
+    // Closed deals are history, not work — but "no work outstanding" is NOT "healthy". Saying
+    // ON_TRACK here collapsed not-applicable into good, the same conflation the assessment
+    // vocabulary exists to prevent. needsAttention stays false (unchanged), and so does the score.
+    state = 'CLOSED';
+    stateReason = input.stage === 'won' ? 'closed won — the pursuit is over' : 'closed lost — the pursuit is over';
   } else if (blockerUnmanaged || unmitigatedCritical) {
     state = 'BLOCKED';
     stateReason = blockerUnmanaged ? 'an unmanaged blocker sits in the buying committee' : `unmitigated critical risk — ${unmitigatedCritical!.title}`;

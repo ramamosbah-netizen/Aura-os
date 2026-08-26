@@ -167,8 +167,35 @@ describe('assessOpportunityHealth — the five states', () => {
       stage: 'won',
       execution: { hasOwner: false, hasNextAction: false, nextActionDueIso: null, lastActivityIso: null },
     }));
+    // CHARACTERIZATION — unchanged: execution is not judged, and nothing is asked of a closed deal.
     expect(h.dimensions.find((d) => d.key === 'execution')!.applicable).toBe(false);
-    expect(h.state).toBe('ON_TRACK');
     expect(h.needsAttention).toBe(false);
+    // SEMANTIC CORRECTION — this test previously asserted ON_TRACK. A finished pursuit is not
+    // "on track"; reporting the healthiest label beside a low score is what produced
+    // "🟢 On Track · 18/100". Changed deliberately, not as a refactor.
+    expect(h.state).toBe('CLOSED');
+    expect(h.stateReason).toBe('closed won — the pursuit is over');
+  });
+
+  it('SEMANTIC: a lost deal is CLOSED too, and says which kind', () => {
+    const h = assessOpportunityHealth(inputs({ stage: 'lost' }));
+    expect(h.state).toBe('CLOSED');
+    expect(h.stateReason).toBe('closed lost — the pursuit is over');
+    expect(h.needsAttention).toBe(false);
+  });
+
+  it('THE SCORE IS UNTOUCHED: a closed deal keeps its low score — only the label changed', () => {
+    // This is the "🟢 On Track · 18/100" case. The arithmetic was never the bug: a closed deal with
+    // poor commercial facts SHOULD score low. What was wrong was calling it the healthiest state.
+    // (Note: terminal deals already skip the "close date has passed" penalty — pre-existing and
+    // deliberate, since a finished pursuit cannot be late.)
+    const h = assessOpportunityHealth(inputs({
+      stage: 'won',
+      commercial: { value: 0, closeDateIso: '2020-01-01' },
+    }));
+    expect(h.score).toBeLessThan(100);                    // the penalty still applies
+    expect(h.dimensions.find((d) => d.key === 'commercial')!.reasons).toContain('no deal value recorded');
+    expect(h.state).toBe('CLOSED');                       // ...but it is not called "on track"
+    expect(h.needsAttention).toBe(false);                 // and nothing is asked of it
   });
 });

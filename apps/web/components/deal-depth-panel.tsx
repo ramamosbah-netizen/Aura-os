@@ -37,6 +37,9 @@ const STATE_META: Record<string, { dot: string; label: string; color: string }> 
   AT_RISK: { dot: '🔴', label: 'At risk', color: 'var(--bad)' },
   BLOCKED: { dot: '⛔', label: 'Blocked', color: 'var(--bad)' },
   STALE: { dot: '💤', label: 'Stale', color: 'var(--muted)' },
+  // A finished pursuit is not "on track" — it is over. Distinct label, neutral colour: neither a
+  // congratulation nor an alarm.
+  CLOSED: { dot: '🏁', label: 'Closed', color: 'var(--muted)' },
 };
 const isOverdue = (c: Commitment): boolean => c.status === 'OPEN' && !!c.dueAt && c.dueAt.slice(0, 10) < new Date().toISOString().slice(0, 10);
 

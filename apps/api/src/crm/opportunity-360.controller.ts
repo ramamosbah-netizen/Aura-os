@@ -15,11 +15,13 @@ import {
 import {
   opportunityAttention,
   resolveNextAction,
+  resolveDealOutcome,
   checkStageTransition,
   type Opportunity,
   type OpportunityAttention,
   type OpportunityStage,
   type ResolvedNextAction,
+  type DealOutcome,
   moneyNumber as r2,
 } from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
@@ -55,6 +57,11 @@ interface Opportunity360Payload {
   route: 'tender' | 'direct';
   progression: ProgressionStep[];
   outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number | null; awardSource: Opportunity['awardSource'] };
+  /**
+   * Phase 0 — the lifecycle/outcome state. `stage = 'won'` alone does not say whether a documented
+   * award backs the win, so every surface reads provenance from here rather than re-deriving it.
+   */
+  lifecycle: DealOutcome;
   /**
    * G2 — the next action RESOLVED server-side from the activity stream (the columns are only the
    * fallback). Exposed so the UI renders the same next action the invariant judged the deal on,
@@ -137,7 +144,8 @@ export class Opportunity360Controller {
     // provenance (accepted quotation → Commercial Baseline subtotal → opportunity.contractedValue),
     // resolved separately; the two are different measures and must not be conflated.
     const contractSum = r2(contracts.filter((c) => c.status !== 'cancelled').reduce((s, c) => s + c.value, 0));
-    const contractedValue = resolveContractedValue(opp, contractSum);
+    const lifecycle = resolveDealOutcome(opp);
+    const contractedValue = resolveContractedValue(lifecycle, contractSum);
 
     const progression: ProgressionStep[] = [
       { key: 'opportunity', label: 'Opportunity', reached: true, count: 1, value: opp.value, href: null },
@@ -190,6 +198,7 @@ export class Opportunity360Controller {
       route,
       progression,
       outcome: { status, lossReason: opp.lossReason, contractedValue, awardSource: opp.awardSource },
+      lifecycle,
       nextAction: resolveNextAction(opp, facts),
       attention: opportunityAttention(opp, facts),
       stageGate,

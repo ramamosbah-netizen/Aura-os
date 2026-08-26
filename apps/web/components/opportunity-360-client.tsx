@@ -48,10 +48,12 @@ interface Payload {
   qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number };
   route: 'tender' | 'direct';
   progression: Step[];
-  outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number; awardSource: string | null };
+  outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number | null; awardSource: string | null };
   /** G2 — resolved server-side from the activity stream; render this, never re-derive the rule. */
   nextAction: { subject: string | null; dueDate: string | null; ownerId: string | null; fromActivity: boolean };
   attention: { active: boolean; gaps: string[]; needsAttention: boolean };
+  /** Phase 0 — lifecycle/outcome. `stage = 'won'` alone does not say whether an award evidences it. */
+  lifecycle: { state: 'OPEN' | 'GOVERNED_WON' | 'LEGACY_WON' | 'LOST'; terminal: boolean; won: boolean; awardDocumented: boolean; awardValue: number | null; awardSource: string | null; awardedQuotationId: string | null };
   /** G5 — the next-stage gate, resolved server-side. Rendered as-is; the client never re-derives it. */
   stageGate: WorkflowGateView | null;
 }
@@ -196,7 +198,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate } = data;
+  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate, lifecycle } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)', tone: 'accent' as Tone },
     won: { label: 'Won', color: 'var(--good)', tone: 'good' as Tone },
@@ -368,6 +370,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   if (shouldPromptQuoteOnWon(outcome)) insights.push({ tone: 'accent', title: 'Won — convert to a quote', detail: 'This deal is won but not yet quoted/contracted.', action: { label: 'Generate quotation', onClick: () => setTab('quotation') } });
   if (outcome.status === 'open') insights.push({ tone: 'neutral', title: 'Outcome open', detail: 'Move the stage to Won or Lost to capture the result.' });
   if (competitors.length) insights.push({ tone: 'neutral', title: 'Competitive deal', detail: `Against: ${competitors.join(', ')}` });
+  if (lifecycle.state === 'LEGACY_WON') insights.push({ tone: 'warn', title: 'Won — award not evidenced', detail: 'No accepted quotation or tender award backs this win, so the contracted value has no provenance.' });
 
   // What this rail is actually able to judge. An open deal is covered by the pursuit rules; a CLOSED
   // deal is not — the post-award questions (customer PO/LOA, contract, handover) have no rules yet,

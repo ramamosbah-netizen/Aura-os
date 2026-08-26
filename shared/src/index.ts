@@ -46,6 +46,7 @@ export * from './domain/bid-scoring';
 export * from './domain/sheet-advice';
 export * from './domain/opportunity-health';
 export * from './domain/assessment-state';
+export * from './domain/opportunity-outcome';
 export * from './domain/forecast-snapshot';
 export * from './domain/account-growth';
 export * from './domain/crm';

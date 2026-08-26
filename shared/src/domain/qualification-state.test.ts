@@ -110,3 +110,39 @@ describe('negative control', () => {
     expect(describeQualification(qualificationFromFlags({ ...none, needConfirmed: true }))).not.toContain('unqualified');
   });
 });
+
+describe('audit conclusion — the two ways a false can arise are indistinguishable, and both mean Unknown', () => {
+  it('NEVER TOUCHED (column default) → Unknown', () => {
+    // Storage is `boolean NOT NULL DEFAULT false`, so a brand-new opportunity is all-false before
+    // any human sees it. That false cannot mean "the customer said no".
+    const born = qualificationFromFlags(none);
+    expect(born.dimensions.every((d) => d.status === 'UNKNOWN')).toBe(true);
+    expect(born.unknown).toBe(4);
+  });
+
+  it('RETRACTED (human unticks a confirmed box, true → false) → Unknown, not a negative', () => {
+    // The only BANT write in the live event log is exactly this: {"needConfirmed": false}.
+    // A checkbox has two states, so unticking withdraws a confirmation; it cannot assert "no need".
+    const before = qualificationFromFlags({ ...none, needConfirmed: true });
+    const after = qualificationFromFlags(none); // the same record after the un-tick
+    expect(before.dimensions.find((d) => d.key === 'need')!.status).toBe('CONFIRMED');
+    expect(after.dimensions.find((d) => d.key === 'need')!.status).toBe('UNKNOWN');
+    // Crucially it does NOT become CONCERN/BLOCKER/"No" — retraction is absence, not rejection.
+    expect(after.concerns + after.blockers).toBe(0);
+  });
+
+  it('default-false and retracted-false are INDISTINGUISHABLE — which is why neither may imply "No"', () => {
+    const neverTouched = qualificationFromFlags(none);
+    const retracted = qualificationFromFlags({ ...none });
+    expect(retracted).toEqual(neverTouched);
+  });
+
+  it('no explicit-negative semantics are lost: the adapter has no output that means "the answer was No"', () => {
+    // Audited every consumer: stage-gate raises NEED_NOT_CONFIRMED ("mark Need confirmed"),
+    // deal-brief and pipeline-command count only the trues, the 360 lists falses under "missing",
+    // and the health engine does not read BANT at all (no scoring penalty). Nothing anywhere
+    // encodes a negative, so there is nothing for this mapping to discard.
+    const statuses = new Set([...qualificationFromFlags(none).dimensions, ...qualificationFromFlags(all).dimensions].map((d) => d.status));
+    expect([...statuses].sort()).toEqual(['CONFIRMED', 'UNKNOWN']);
+  });
+});

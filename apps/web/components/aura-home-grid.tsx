@@ -65,17 +65,22 @@ const WORKSPACES: HomeWorkspace[] = AURA_SUITES.map((suite, i) => ({
 }));
 
 export default function AuraHomeGrid({ userName }: { userName: string }) {
-  const [now, setNow] = useState(() => new Date());
+  // The clock is CLIENT-ONLY on purpose. Seeding `now` from `new Date()` would run on the server at
+  // SSR time and again in the browser at hydration time — a few minutes apart — so the two renders
+  // disagree and React throws a hydration mismatch on the clock text. Start null (identical on server
+  // and first client render → a stable placeholder), then fill in the live time after mount.
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
-  const clock = useMemo(() => new Intl.DateTimeFormat('en-GB', {
+  const clock = useMemo(() => (now ? new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Dubai',
-  }).format(now), [now]);
-  const date = useMemo(() => new Intl.DateTimeFormat('en-GB', {
+  }).format(now) : '––:––'), [now]);
+  const date = useMemo(() => (now ? new Intl.DateTimeFormat('en-GB', {
     weekday: 'short', day: '2-digit', month: 'short', timeZone: 'Asia/Dubai',
-  }).format(now), [now]);
+  }).format(now) : '––'), [now]);
 
   return (
     <div className={styles.page} data-testid="aura-home-board">

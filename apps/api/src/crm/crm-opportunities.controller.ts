@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsIn, IsNumber, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsNumber, IsObject, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TenantContext, ParseUuidOr404Pipe, AccessService } from '@aura/core';
 import { FORECAST_CATEGORIES, EXECUTION_TYPES, QUALIFICATION_KEYS, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence, type QualificationKey, type QualificationPatch, type QualificationStatus, type QualificationSource, type QualificationView } from '@aura/shared';
 import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, PricingQuotationService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
@@ -100,10 +101,16 @@ class QualificationDimensionDto {
 }
 
 class UpdateQualificationDto {
-  @IsOptional() @IsObject() budget?: QualificationDimensionDto;
-  @IsOptional() @IsObject() authority?: QualificationDimensionDto;
-  @IsOptional() @IsObject() need?: QualificationDimensionDto;
-  @IsOptional() @IsObject() timeline?: QualificationDimensionDto;
+  // `@ValidateNested()` + `@Type()` are LOAD-BEARING, not decoration. With `@IsObject()` alone,
+  // class-validator treats each dimension as an opaque object and the `@IsIn` checks above never
+  // run — an e2e caught `status: 'PROBABLY'` being accepted and merged into the canonical record.
+  // That is worse than a bad request: an unknown status would be frozen into the award snapshot,
+  // and `readQualificationAtAward` rejects what it cannot parse, so the deal's history would read
+  // "Not captured" forever. The write boundary is the last place this can be stopped.
+  @IsOptional() @ValidateNested() @Type(() => QualificationDimensionDto) budget?: QualificationDimensionDto;
+  @IsOptional() @ValidateNested() @Type(() => QualificationDimensionDto) authority?: QualificationDimensionDto;
+  @IsOptional() @ValidateNested() @Type(() => QualificationDimensionDto) need?: QualificationDimensionDto;
+  @IsOptional() @ValidateNested() @Type(() => QualificationDimensionDto) timeline?: QualificationDimensionDto;
 }
 
 @Controller('crm/opportunities')

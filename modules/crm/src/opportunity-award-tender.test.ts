@@ -24,10 +24,20 @@ import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
 
 const aiStub = { complete: async () => ({ text: '' }) } as never;
 
+/**
+ * `updateQualification` is authorized (`crm.opportunity.update`, ADR-0020), so the actor these specs
+ * name needs a real grant. The guard is satisfied, not bypassed — its own refusal cases live in
+ * opportunity-qualification-snapshot.test.ts.
+ */
+const ACTOR = 'u-admin';
+
 function build() {
   const store = new InMemoryOpportunityStore();
   const events = new InMemoryEventStore(new EventBus());
-  const svc = new OpportunityService(store, events, new NullTxRunner(), new AccessService(), aiStub, { classify: async () => 'tender_owned' as const });
+  const access = new AccessService();
+  access.seedStandardRoles();
+  access.grant({ userId: ACTOR, roleId: 'r-sales', scope: { kind: 'org', level: 'tenant', id: 't1' } });
+  const svc = new OpportunityService(store, events, new NullTxRunner(), access, aiStub, { classify: async () => 'tender_owned' as const });
   return { store, events, svc };
 }
 
@@ -133,7 +143,7 @@ describe('applyTenderOutcome — award provenance', () => {
 
   it('captures the qualification-at-award snapshot BY CONSTRUCTION — provenance is the only gate', async () => {
     const opp = await seedTenderDeal(store);
-    await svc.updateQualification(opp.id, { budget: { status: 'CONFIRMED', evidence: 'Client budget letter' } }, 'u-admin');
+    await svc.updateQualification(opp.id, { budget: { status: 'CONFIRMED', evidence: 'Client budget letter' } }, ACTOR);
 
     const won = await svc.applyTenderOutcome(opp.id, 'won', { reason: 'Won', award: provenance() });
 
@@ -151,11 +161,11 @@ describe('applyTenderOutcome — award provenance', () => {
 
   it('the snapshot is HISTORY: editing qualification after the award cannot move it', async () => {
     const opp = await seedTenderDeal(store);
-    await svc.updateQualification(opp.id, { need: { status: 'CONFIRMED', evidence: 'Scope signed off' } }, 'u-admin');
+    await svc.updateQualification(opp.id, { need: { status: 'CONFIRMED', evidence: 'Scope signed off' } }, ACTOR);
     await svc.applyTenderOutcome(opp.id, 'won', { reason: 'Won', award: provenance() });
 
     // The exact 2026-08-26 defect, on the tender route: un-tick a dimension AFTER the award.
-    await svc.updateQualification(opp.id, { need: { status: 'UNKNOWN' } }, 'u-admin');
+    await svc.updateQualification(opp.id, { need: { status: 'UNKNOWN' } }, ACTOR);
 
     const stored = (await store.get(opp.id))!;
     expect(stored.qualification!.need.status).toBe('UNKNOWN');            // current record moved…
@@ -255,7 +265,7 @@ describe('money surfaces read the tender award through the one definition', () =
   it('DealFacts reports the award value + the at-award snapshot for a governed tender win', async () => {
     const { store, svc } = build();
     const opp = await seedTenderDeal(store, { value: 1_250_000 });
-    await svc.updateQualification(opp.id, { authority: { status: 'CONFIRMED', evidence: 'Signed by the CFO' } }, 'u-admin');
+    await svc.updateQualification(opp.id, { authority: { status: 'CONFIRMED', evidence: 'Signed by the CFO' } }, ACTOR);
     await svc.applyTenderOutcome(opp.id, 'won', { reason: 'Won', award: provenance() });
 
     const facts = buildDealFacts({ opportunity: (await store.get(opp.id))!, contracts: [], quotations: [], projects: [], stakeholders: [] });

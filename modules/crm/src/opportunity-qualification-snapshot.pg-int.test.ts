@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Pool } from 'pg';
 import { PostgresTxRunner, PostgresEventStore, TenantContext, AccessService } from '@aura/core';
 import { captureQualificationAtAward, makeOpportunity, newId, qualificationRecordFromFlags, type Opportunity } from '@aura/shared';
@@ -25,6 +25,12 @@ import { OpportunityService } from './opportunity.service';
  * would fail these tests on authorization long before any snapshot invariant was reached.
  * Authorization is proven at the API layer; what is under test here is the database.
  */
+// Every assertion here is a real round trip, and several read back through a FRESH connection on
+// purpose (never the pool the write went through), so a remote test database costs seconds per test
+// where the default 5s budget is written for in-process work. Raised deliberately and only here —
+// the alternative is a suite that reports network latency as a broken invariant.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
 const URL = process.env.CRM_PG_TEST_URL;
 const TENANT = `qual-snap-int-${Date.now()}`;
 const run = URL ? describe : describe.skip;
@@ -175,6 +181,35 @@ run('qualification-at-award — Postgres immutability + atomicity', () => {
       await expect(opps.stampQualificationAtAward(null, oppId, snapshot))
         .rejects.toThrow(/qualification_at_award_needs_provenance/i);
       expect((await readRaw(oppId)).qualification_at_award).toBeNull();
+    });
+  });
+
+  it('THE OTHER DIRECTION: a failing SNAPSHOT write rolls the AWARD back', async () => {
+    await withTenant(async () => {
+      // The event-append test above proves the award rolls back when something LATER in the
+      // transaction fails. It does not prove the claim "the snapshot is captured in the award's own
+      // transaction" — for that, the CAPTURE itself must be the thing that fails, and the award must
+      // not survive it. If capture were outside the transaction (or best-effort, or swallowed), the
+      // deal would still be Won here, with no history and nothing saying any was missing.
+      const oppId = await seedOpp({ needConfirmed: true, budgetConfirmed: true });
+
+      const faultyStore = Object.create(opps) as PostgresOpportunityStore;
+      faultyStore.stampQualificationAtAward = async () => { throw new Error('boom-snapshot-write'); };
+      const faultySvc = new OpportunityService(faultyStore, events, tx, new AccessService(), aiStub, { classify: async () => 'direct_legacy' as const }, tenant);
+
+      await expect(faultySvc.applyAwardOutcome(oppId, award(newId()))).rejects.toThrow(/boom-snapshot-write/);
+
+      const a = await readRaw(oppId);
+      expect(a.stage).not.toBe('won');          // the WIN itself was rolled back…
+      expect(a.award_source).toBeNull();        // …along with its provenance…
+      expect(a.awarded_at).toBeNull();
+      expect(a.qualification_at_award).toBeNull();
+      // …and no stage_changed event survived either: an award nobody can evidence never happened.
+      const evs = await pool.query(
+        "select count(*)::int as n from public.aura_events where tenant_id=$1 and aggregate_id=$2 and type='crm.opportunity.stage_changed'",
+        [TENANT, oppId],
+      );
+      expect(evs.rows[0].n).toBe(0);
     });
   });
 

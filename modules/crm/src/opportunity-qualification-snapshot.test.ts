@@ -18,11 +18,21 @@ import { InMemoryOpportunityStore } from './in-memory-opportunity-store';
 
 const aiStub = { complete: async () => ({ text: '' }) } as never;
 
+/**
+ * The qualification writer is authorized (`crm.opportunity.update`), so a test that names an actor
+ * must GRANT that actor a role. The guard is satisfied, never bypassed — an ungranted actor is
+ * asserted to be refused in the authorization block at the bottom of this file.
+ */
+const ACTOR = 'u-admin';
+
 function build(classification: 'direct_legacy' | 'direct_governed' = 'direct_governed') {
   const store = new InMemoryOpportunityStore();
   const events = new InMemoryEventStore(new EventBus());
-  const svc = new OpportunityService(store, events, new NullTxRunner(), new AccessService(), aiStub, { classify: async () => classification });
-  return { store, events, svc };
+  const access = new AccessService();
+  access.seedStandardRoles(); // roles are not registered by the constructor
+  access.grant({ userId: ACTOR, roleId: 'r-sales', scope: { kind: 'org', level: 'tenant', id: 't1' } });
+  const svc = new OpportunityService(store, events, new NullTxRunner(), access, aiStub, { classify: async () => classification });
+  return { store, events, svc, access };
 }
 
 async function seedDirect(store: InMemoryOpportunityStore, over: Partial<Opportunity> = {}): Promise<Opportunity> {
@@ -104,7 +114,7 @@ describe('2 · changing qualification AFTER the award never touches the snapshot
     const opp = await seedDirect(store, { budgetConfirmed: true, authorityConfirmed: true });
     await svc.applyAwardOutcome(opp.id, acceptedAward());
 
-    await svc.updateQualification(opp.id, { budget: { status: 'BLOCKER', evidence: 'funding pulled' }, authority: { status: 'UNKNOWN' } }, 'u-admin');
+    await svc.updateQualification(opp.id, { budget: { status: 'BLOCKER', evidence: 'funding pulled' }, authority: { status: 'UNKNOWN' } }, ACTOR);
 
     const after = (await store.get(opp.id))!;
     expect(qualificationView(after.qualification!).confirmed).toBe(0);
@@ -115,14 +125,14 @@ describe('2 · changing qualification AFTER the award never touches the snapshot
     const { store: s2, events: e2, svc: v2 } = build();
     const opp = await seedDirect(s2, { needConfirmed: true });
     await v2.applyAwardOutcome(opp.id, acceptedAward());
-    await v2.updateQualification(opp.id, { need: { status: 'UNKNOWN' } }, 'u-admin');
+    await v2.updateQualification(opp.id, { need: { status: 'UNKNOWN' } }, ACTOR);
 
     const [changed] = await e2.list({ tenantId: 't1', type: CRM_EVENT.opportunityQualificationChanged, aggregateId: opp.id });
     const payload = changed.payload as { before: Record<string, string>; after: Record<string, string>; afterClose: boolean };
     expect(payload.before.need).toBe('CONFIRMED');
     expect(payload.after.need).toBe('UNKNOWN');
     expect(payload.afterClose).toBe(true);
-    expect(changed.actorId).toBe('u-admin');
+    expect(changed.actorId).toBe(ACTOR);
   });
 });
 
@@ -282,6 +292,50 @@ describe('7 · no provenance ⇒ no snapshot (stage = "won" is NOT the trigger)'
   });
 });
 
+describe('7b · the qualification writer is AUTHORIZED, not merely authenticated', () => {
+  it('an actor with no grant is refused — this is a business-authoritative write', async () => {
+    // What this writes is what an award freezes permanently, so "logged in" was never a sufficient
+    // answer to who may set a BLOCKER or attach evidence.
+    const store = new InMemoryOpportunityStore();
+    const events = new InMemoryEventStore(new EventBus());
+    const svc = new OpportunityService(store, events, new NullTxRunner(), new AccessService(), aiStub, { classify: async () => 'direct_governed' });
+    const opp = await seedDirect(store);
+
+    await expect(svc.updateQualification(opp.id, { budget: { status: 'BLOCKER' } }, 'u-nobody'))
+      .rejects.toThrow(/crm\.opportunity\.update/);
+    // …and the refusal wrote nothing.
+    expect((await store.get(opp.id))!.qualification).toBeNull();
+  });
+
+  it('a DELIVERY role cannot write qualification — it holds read only', async () => {
+    const store = new InMemoryOpportunityStore();
+    const events = new InMemoryEventStore(new EventBus());
+    const access = new AccessService();
+    access.seedStandardRoles();
+    access.grant({ userId: 'u-pm', roleId: 'r-pm', scope: { kind: 'org', level: 'tenant', id: 't1' } });
+    const svc = new OpportunityService(store, events, new NullTxRunner(), access, aiStub, { classify: async () => 'direct_governed' });
+    const opp = await seedDirect(store);
+
+    await expect(svc.updateQualification(opp.id, { need: { status: 'CONFIRMED' } }, 'u-pm')).rejects.toThrow(/Access denied/);
+  });
+
+  it('Sales CAN write it — recording what we learned is core sales work, not an escalation', async () => {
+    const { store, svc } = build();
+    const opp = await seedDirect(store);
+    await svc.updateQualification(opp.id, { need: { status: 'CONFIRMED', evidence: 'client confirmed scope' } }, ACTOR);
+    expect((await store.get(opp.id))!.qualification!.need.status).toBe('CONFIRMED');
+  });
+
+  it('a trusted internal caller (no actor) is still allowed — the guard keys on an actor being named', async () => {
+    // Same shape as `update()`: reactors pass no actor. Kept explicit so this is a decision on the
+    // record rather than an accident of the `if (actorId)` idiom.
+    const { store, svc } = build();
+    const opp = await seedDirect(store);
+    await svc.updateQualification(opp.id, { budget: { status: 'CONCERN' } }, null);
+    expect((await store.get(opp.id))!.qualification!.budget.status).toBe('CONCERN');
+  });
+});
+
 describe('8 · the record and the snapshot stay separately readable', () => {
   it('a deal that never used the rich model still snapshots what the booleans said', async () => {
     const { store, svc } = build();
@@ -297,11 +351,11 @@ describe('8 · the record and the snapshot stay separately readable', () => {
   it('the compatibility booleans keep tracking the canonical record', async () => {
     const { store, svc } = build();
     const opp = await seedDirect(store);
-    await svc.updateQualification(opp.id, { budget: { status: 'CONFIRMED', evidence: 'signed budget', source: 'document' }, authority: { status: 'BLOCKER' } }, 'u-rep');
+    await svc.updateQualification(opp.id, { budget: { status: 'CONFIRMED', evidence: 'signed budget', source: 'document' }, authority: { status: 'BLOCKER' } }, ACTOR);
 
     const after = (await store.get(opp.id))!;
     expect(after.budgetConfirmed).toBe(true);
     expect(after.authorityConfirmed).toBe(false); // a BLOCKER is not a confirmation
-    expect(after.qualification!.budget.confirmedBy).toBe('u-rep');
+    expect(after.qualification!.budget.confirmedBy).toBe(ACTOR);
   });
 });

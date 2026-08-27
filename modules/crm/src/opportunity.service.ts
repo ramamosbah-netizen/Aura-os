@@ -479,6 +479,15 @@ export class OpportunityService {
    * somewhere unaudited. What must not change is HISTORY, and that is guaranteed elsewhere: the
    * snapshot is write-once in the store and immutable in the database, so this method cannot reach
    * it however it is called.
+   *
+   * AUTHORIZATION — `crm.opportunity.update`, asserted HERE and not only in the controller, so a
+   * reactor or any other internal caller is bound by the same rule. This is a business-authoritative
+   * write, not a note: what it records is what an award will freeze permanently, so "authenticated"
+   * was never a sufficient answer to who may set a BLOCKER or attach evidence. Held by Sales and
+   * Sales Manager through `crm.*.update` (and Admin); NOT by delivery roles, which hold only
+   * `crm.*.read`. It is deliberately the ordinary update permission rather than a new escalated one:
+   * recording what we learned about a deal is core sales work. Closing a deal out-of-band remains
+   * separately gated by `crm.opportunity.override`.
    */
   async updateQualification(
     id: Id,
@@ -486,6 +495,11 @@ export class OpportunityService {
     actorId?: Id | null,
   ): Promise<{ opportunity: Opportunity; view: QualificationView }> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
+      this.access.assert(actorId, { permission: 'crm.opportunity.update', orgPath });
+    }
     const now = new Date().toISOString();
     const before = resolveQualificationRecord(existing);
     const record = mergeQualificationRecord(before, patch, { actorId: actorId ?? null, at: now });

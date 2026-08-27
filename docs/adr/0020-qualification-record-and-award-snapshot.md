@@ -102,6 +102,39 @@ same transaction. Invariant 6 is what made the two changes compose instead of co
 The negative control survives both: a tender close with no provenance supplied — the legacy path —
 still captures nothing, and a test pins that.
 
+## Authorization
+
+Writing qualification is **`crm.opportunity.update`**, asserted in `OpportunityService.updateQualification`
+— in the service, not only the controller, so a reactor or any other internal caller is bound by the
+same rule.
+
+This was a gap on first implementation: the writer was authenticated but not authorized, so any
+CRM user in the tenant could set a `BLOCKER` or attach evidence. That is not a note-taking field —
+what it holds is what an award freezes permanently — so "logged in" was never a sufficient answer.
+
+Who holds it: **Sales** and **Sales Manager** (via `crm.*.update`), and Admin. Delivery roles
+(Project Manager, Site Engineer, …) hold only `crm.*.read` and are refused.
+
+It is deliberately the ORDINARY update permission rather than a new escalated one: recording what we
+learned about a deal is core sales work, and gating it higher would push the edit somewhere
+unaudited. The escalated actions stay separate — closing a deal out-of-band remains
+`crm.opportunity.override`. A trusted internal caller passing no actor is still allowed, matching
+`update()`; that is a decision on the record, not an accident of the `if (actorId)` idiom.
+
+Two refusal cases are asserted (ungranted actor; delivery role), plus a 403 over real HTTP, and the
+guard was negative-controlled by removing the assert and watching the e2e go back to 200.
+
+## Write-boundary validation
+
+The route's nested dimension DTO needs `@ValidateNested()` + `@Type()`. With `@IsObject()` alone,
+class-validator treats each dimension as opaque and the `@IsIn` status/source checks never run — an
+e2e caught `status: 'PROBABLY'` being accepted and merged into the canonical record.
+
+That is worse than a sloppy 200: an unknown status would be frozen into the award snapshot, and
+`readQualificationAtAward` refuses what it cannot parse, so that deal's history would read
+"Not captured" **forever**. The write boundary is the last place it can be stopped, because the
+snapshot is immutable by design.
+
 ## Consequence for the badge guard
 
 `apps/web/lib/qualification-badge.test.ts` forbids temporal wording in terminal presentation. That

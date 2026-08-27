@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CalendarClock,
   History,
+  Inbox,
   LayoutDashboard,
   Mail,
   MessageCircleMore,
@@ -38,6 +39,16 @@ interface CommunicationFileView {
   sentAt: string;
 }
 
+interface UnreadCommunicationView {
+  id: string;
+  source: 'chat' | 'mail';
+  title: string;
+  detail: string;
+  date: string;
+  channelId: string | null;
+  mailId: string | null;
+}
+
 interface RecentCommunication {
   id: string;
   title: string;
@@ -59,7 +70,7 @@ function fileSize(bytes: number): string {
  * working capability elsewhere links to it, and one with no implementation says so rather than
  * offering a button that does nothing.
  */
-type ViewId = 'overview' | 'email' | 'chat' | 'meetings' | 'whatsapp' | 'files';
+type ViewId = 'overview' | 'email' | 'chat' | 'meetings' | 'whatsapp' | 'files' | 'unread';
 
 const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mail }> = [
   { id: 'overview', label: 'Overview', status: 'Live', icon: LayoutDashboard },
@@ -68,6 +79,7 @@ const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mai
   { id: 'meetings', label: 'Meetings', status: 'Not implemented', icon: CalendarClock },
   { id: 'whatsapp', label: 'WhatsApp', status: 'Not connected', icon: MessageCircleMore },
   { id: 'files', label: 'Shared Files', status: 'Live', icon: Share2 },
+  { id: 'unread', label: 'Unread', status: 'Live', icon: Inbox },
 ];
 
 export default async function MyCommunicationPage({
@@ -82,16 +94,18 @@ export default async function MyCommunicationPage({
 
   // Channels use fetchJson so a refusal is distinguishable from an empty list. C1 conceals
   // channels a user may not see, and rendering "no conversations" for a 403 would misreport it.
-  const [channelResult, mailbox, me, users, accounts, fileResult] = await Promise.all([
+  const [channelResult, mailbox, me, users, accounts, fileResult, unreadResult] = await Promise.all([
     fetchJson<ChatChannelView[]>('/api/comms/channels'),
     getJson<Mailbox>('/api/comms/mail'),
     getJson<WorkspaceMe>('/api/workspace/me'),
     getJson<WorkspaceUser[]>('/api/comms/people'),
     getJson<MailAccountView[]>('/api/comms/mailbox/accounts'),
     fetchJson<CommunicationFileView[]>('/api/comms/files'),
+    fetchJson<UnreadCommunicationView[]>('/api/comms/unread/items'),
   ]);
   const channels = channelResult.ok ? channelResult.data : null;
   const files = fileResult.ok ? fileResult.data : null;
+  const unreadItems = unreadResult.ok ? unreadResult.data : null;
 
   const recent: RecentCommunication[] = [
     ...(channels ?? []).filter((channel) => channel.lastMessageAt).map((channel) => ({
@@ -255,6 +269,35 @@ export default async function MyCommunicationPage({
             <span className={styles.decisionMain}><strong>Open Document Control</strong><small>Shared documents, versions and permissions</small></span>
             <ArrowRight aria-hidden />
           </AuraTabLink>
+        </section>
+      ) : null}
+
+      {view === 'unread' ? (
+        <section className={styles.section} aria-labelledby="comm-unread-title">
+          <header className={styles.sectionHead}>
+            <div><h2 id="comm-unread-title">Unread</h2><p>One actionable list from the chat and mail systems you already belong to.</p></div>
+          </header>
+          {unreadItems === null ? (
+            <p className={styles.truth}><ShieldCheck aria-hidden /><span>Unread communication is currently unavailable. Open Chat or Email directly to retry.</span></p>
+          ) : unreadItems.length === 0 ? (
+            <p className={styles.empty}>You are all caught up.</p>
+          ) : (
+            <div className={styles.list}>
+              {unreadItems.map((item) => {
+                const href = item.source === 'chat' && item.channelId
+                  ? `/my-work/communication?view=chat&channel=${encodeURIComponent(item.channelId)}`
+                  : `/my-work/communication?view=email&mail=${encodeURIComponent(item.mailId ?? '')}`;
+                return (
+                  <AuraTabLink key={item.id} href={href} tabTitle={item.title} tabType="Communication" className={styles.decision}>
+                    <span className={styles.verb}>{item.source === 'chat' ? 'Chat' : 'Mail'}</span>
+                    <span className={styles.decisionMain}><strong>{item.title}</strong><small>{item.detail}</small></span>
+                    <span className={styles.module}>{new Intl.DateTimeFormat(DISPLAY_LOCALE, { day: '2-digit', month: 'short', timeZone: DISPLAY_TIME_ZONE }).format(new Date(item.date))}</span>
+                    <ArrowRight aria-hidden />
+                  </AuraTabLink>
+                );
+              })}
+            </div>
+          )}
         </section>
       ) : null}
 

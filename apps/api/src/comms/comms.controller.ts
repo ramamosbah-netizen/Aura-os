@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Permissions, TenantContext } from '@aura/core';
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage, Mailbox } from '@aura/shared';
-import { CommsService, type ChannelSummary, type ChatPerson, type CommunicationFile } from './comms.service';
+import { CommsService, type ChannelSummary, type ChatPerson, type CommunicationFile, type UnreadCommunication } from './comms.service';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
 
 /** Dev fallback identity when auth enforcement is off (mirrors WorkspaceController). */
@@ -47,6 +47,13 @@ export class CommsController {
   async files(): Promise<CommunicationFile[]> {
     const { tenantId, companyId, username, isAdmin } = await this.caller();
     return this.comms.files(tenantId, username, isAdmin, companyId);
+  }
+
+  @Get('unread/items')
+  @Permissions('comms.channel.read')
+  async unreadItems(): Promise<UnreadCommunication[]> {
+    const { tenantId, companyId, username, isAdmin } = await this.caller();
+    return this.comms.unreadItems(tenantId, username, isAdmin, companyId);
   }
 
   @Post('dm')

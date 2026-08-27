@@ -267,6 +267,22 @@ describe('Attachments inherit their parent authorization', () => {
     expect((await service.files(TENANT_A, BOB, false)).map((file) => file.name)).toHaveLength(2);
     expect((await service.files(TENANT_A, MALLORY, false)).map((file) => file.name)).toEqual(['shared.pdf']);
   });
+
+  it('projects unread chat and mail into one caller-owned worklist', async () => {
+    const { service } = makeService();
+    const dm = await service.openDm(TENANT_A, ALICE, BOB);
+    await service.post(TENANT_A, { channelId: dm.id, sender: ALICE, kind: 'text', text: 'please review' });
+    await service.sendMail(TENANT_A, { from: ALICE, to: [BOB], subject: 'Review', body: 'Please review' });
+
+    const items = await service.unreadItems(TENANT_A, BOB, false);
+    expect(items.map((item) => item.source)).toEqual(expect.arrayContaining(['chat', 'mail']));
+    expect(items.find((item) => item.source === 'chat')).toMatchObject({ channelId: dm.id, mailId: null });
+    expect(items.find((item) => item.source === 'mail')).toMatchObject({ channelId: null });
+
+    await service.messages(TENANT_A, BOB, dm.id);
+    const afterChatRead = await service.unreadItems(TENANT_A, BOB, false);
+    expect(afterChatRead.every((item) => item.source !== 'chat')).toBe(true);
+  });
 });
 
 describe('Ordinary non-admin roles keep working (positive regression)', () => {
@@ -300,6 +316,7 @@ describe('Route permissions', () => {
     ['channels', 'comms.channel.read'],
     ['people', 'comms.channel.read'],
     ['files', 'comms.channel.read'],
+    ['unreadItems', 'comms.channel.read'],
     ['openDm', 'comms.dm.create'],
     ['messages', 'comms.channel.read'],
     ['post', 'comms.channel.send'],

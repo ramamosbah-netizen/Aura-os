@@ -118,6 +118,17 @@ export interface CommunicationFile {
   sentAt: string;
 }
 
+/** One actionable row in the Communication unread view. */
+export interface UnreadCommunication {
+  id: string;
+  source: 'chat' | 'mail';
+  title: string;
+  detail: string;
+  date: string;
+  channelId: string | null;
+  mailId: string | null;
+}
+
 interface DirectoryPerson extends ChatPerson {
   active: boolean;
 }
@@ -276,6 +287,48 @@ export class CommsService {
       }
     }
     return files.sort((a, b) => b.sentAt.localeCompare(a.sentAt)).slice(0, 200);
+  }
+
+  /**
+   * Build the user's unread worklist from the owning chat and mail stores. This is a projection,
+   * not a new inbox: opening the linked chat or mail applies the authoritative read transition.
+   */
+  async unreadItems(
+    tenantId: string, username: string, isAdmin: boolean, companyId: string | null = null,
+  ): Promise<UnreadCommunication[]> {
+    const items: UnreadCommunication[] = [];
+    const channels = (await this.channelsFor(tenantId))
+      .filter((channel) => canAccessChannel(channel, username, isAdmin, companyId));
+    for (const channel of channels) {
+      const messages = await this.store.listMessages(tenantId, channel.id);
+      const lastRead = await this.store.getLastRead(tenantId, channel.id, username);
+      const unread = messages.filter((message) => message.sender !== username && (!lastRead || message.sentAt > lastRead));
+      const last = unread[unread.length - 1];
+      if (last) {
+        items.push({
+          id: `chat:${channel.id}:${last.id}`,
+          source: 'chat',
+          title: channel.name,
+          detail: `${displayName(last.sender)}: ${this.preview(last)}`,
+          date: last.sentAt,
+          channelId: channel.id,
+          mailId: null,
+        });
+      }
+    }
+    const mailbox = await this.mailbox(tenantId, username);
+    for (const mail of mailbox.inbox.filter((message) => !message.readBy.includes(username))) {
+      items.push({
+        id: `mail:${mail.id}`,
+        source: 'mail',
+        title: mail.subject,
+        detail: `From ${displayName(mail.from)}`,
+        date: mail.sentAt,
+        channelId: null,
+        mailId: mail.id,
+      });
+    }
+    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
   }
 
   /** Open (or create) the DM channel between two users. */

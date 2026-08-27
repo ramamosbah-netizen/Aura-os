@@ -205,6 +205,11 @@ async function warmRoutes(page: import('@playwright/test').Page, baseURL: string
     '/site/execution', '/site/daily-reports', '/commissioning', '/operations/overview',
     '/my-work', '/my-work/approvals', '/my-work/communication', '/my-work/tasks',
     '/my-work/my-day', '/my-work/favorites', '/admin', '/admin/users', '/suites',
+    // `global-shell-home` used to die on its sixth assertion, so everything it drives after that
+    // point had never been warmed — nor even reached. Now that it runs to the end it compiles
+    // `/crm/overview` and the `/suites/[suiteId]` unit mid-suite, on the same dev server every
+    // other spec is waiting on. One id warms the dynamic segment for all of them.
+    '/crm/overview', '/suites/project-delivery',
     // Dynamic segments are separate compilation units: Next compiles `/project/[projectId]/[area]`
     // once, not once per project, so a placeholder id warms it for every real one. The page renders
     // a refusal for an id that does not exist, which is irrelevant — compiling the route is the

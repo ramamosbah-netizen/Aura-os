@@ -36,6 +36,8 @@ export interface ChatMessage {
   text: string;
   attachment: ChatAttachment | null;
   sentAt: string;
+  /** Response-only projection: when the other DM participant has read this message. */
+  readByOtherAt?: string | null;
 }
 
 /** Attachment cap (data-URL length ≈ 4/3 × bytes) — keeps the dev store sane. */

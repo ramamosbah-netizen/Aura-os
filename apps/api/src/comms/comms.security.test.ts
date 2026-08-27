@@ -63,6 +63,19 @@ describe('Communication authorization', () => {
     expect(readsAfterPolling).toHaveLength(reads.length);
   });
 
+  it('projects private DM read state only to the message sender', async () => {
+    const { service } = makeService();
+    const dm = await service.openDm(TENANT_A, ALICE, BOB);
+    await service.post(TENANT_A, { channelId: dm.id, sender: ALICE, kind: 'text', text: 'receipt state' });
+
+    const before = await service.messages(TENANT_A, ALICE, dm.id);
+    expect(before[0]?.readByOtherAt).toBeNull();
+    await service.messages(TENANT_A, BOB, dm.id);
+
+    const after = await service.messages(TENANT_A, ALICE, dm.id);
+    expect(after[0]?.readByOtherAt).toEqual(expect.any(String));
+  });
+
   it('refuses a third party the DM between two other users', async () => {
     const { service } = makeService();
     const dm = await seedDm(service);

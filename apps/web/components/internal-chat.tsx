@@ -41,6 +41,7 @@ interface ChatMessageView {
   text: string;
   attachment: ChatAttachmentView | null;
   sentAt: string;
+  readByOtherAt?: string | null;
 }
 
 /** Poll cadence for the open conversation. Matches the hub's existing 4s rhythm. */
@@ -411,7 +412,10 @@ export default function InternalChat({
                         ) : (
                           <p className={styles.body}>{message.text}</p>
                         )}
-                        <time className={styles.time} dateTime={message.sentAt}>{stamp(message.sentAt)}</time>
+                        <time className={styles.time} dateTime={message.sentAt}>
+                          {stamp(message.sentAt)}
+                          {mine && active.kind === 'dm' ? <span aria-label={message.readByOtherAt ? 'Read' : 'Sent'}> {message.readByOtherAt ? '✓✓' : '✓'}</span> : null}
+                        </time>
                       </article>
                     </div>
                   );

@@ -385,8 +385,8 @@ export class CommsService {
     // A read receipt is a notification to the sender, but only for private DMs. Broadcasting
     // "Alice read your message" for a company room would create noise and disclose presence to an
     // audience that did not ask for receipts. The watermark makes this idempotent across polling.
-    if (channel.kind === 'dm') {
-      const peer = dmPeer(channel.id, username);
+    const peer = channel.kind === 'dm' ? dmPeer(channel.id, username) : null;
+    if (peer) {
       const newlyRead = msgs.filter((message) => message.sender !== username && (!previousRead || message.sentAt > previousRead));
       if (peer && newlyRead.length > 0) {
         const count = newlyRead.length;
@@ -401,7 +401,13 @@ export class CommsService {
         });
       }
     }
-    return msgs;
+    const peerReadAt = peer ? await this.store.getLastRead(tenantId, channelId, peer) : null;
+    return msgs.map((message) => ({
+      ...message,
+      readByOtherAt: peer && message.sender === username && peerReadAt && message.sentAt <= peerReadAt
+        ? peerReadAt
+        : null,
+    }));
   }
 
   /** Post a message; notifies the DM peer (chat notifications stay lightweight). */

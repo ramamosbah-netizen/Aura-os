@@ -389,6 +389,39 @@ export class CrossModuleSubscriber implements OnModuleInit {
       try {
         const p = e.payload as Record<string, unknown>;
         const account = p.account as { id: string; name: string } | null;
+
+        // WHY THIS READS THE PAYLOAD WHILE ITS SIBLING RE-READS THE AGGREGATE.
+        //
+        // `closeSourceOpportunity`, on this same event, deliberately re-reads the live Tender. This
+        // reactor deliberately does not. The asymmetry is a rule, not an oversight:
+        //
+        //   RE-READ what is IMMUTABLE.  TRUST THE PAYLOAD for what is MUTABLE and must be pinned
+        //   to the moment of the event.
+        //
+        // The opportunity side needs `awardEvidence`, which migration 0253 makes immutable at the
+        // database — a trigger refuses to rewrite or clear it. There, live and award-time are the
+        // same value by construction, so re-reading costs nothing and gets the authoritative record.
+        //
+        // This side needs `title` and `account`, which are NOT immutable: `TenderService.update()`
+        // has no status guard, so a won tender's title, value and account snapshot can all be edited
+        // afterwards. And delivery is genuinely delayed — the OutboxRelay polls every ~1s, retries up
+        // to OUTBOX_MAX_ATTEMPTS, and if the API is down the gap is unbounded. So for these fields
+        // live truth and award-time truth really can differ.
+        //
+        // A contract exists BECAUSE of an award. It must record the facts that were authoritative
+        // when the customer awarded it, not whatever the tender was edited to say before this
+        // handler happened to run. The payload is written inside the award transaction and never
+        // changes again, which makes it the historically correct basis — the better source here, not
+        // the lazier one.
+        //
+        // KNOWN LIMIT, and it is NOT solved by either choice: the commercial basis below is selected
+        // at DELIVERY time. `findTenderBaseline` ranks the tender's quotations (accepted > approved >
+        // sent) and takes the latest locked baseline, so a quotation accepted between the award and
+        // this handler can change which baseline the contract inherits. The individual baseline ROW
+        // is immutable, but WHICH baseline applies was never pinned to the award. Recording an
+        // award-time commercial reference is the real fix and is tracked separately; re-reading the
+        // tender here would not have addressed it.
+        //
         // R3 parity (gap register G-50). The DIRECT path locks an immutable Commercial Baseline when
         // the quotation is approved, and the contract inherits it — value and all — so the contract
         // is provably tied to what was approved rather than re-invented. The tender path used to
@@ -406,8 +439,16 @@ export class CrossModuleSubscriber implements OnModuleInit {
             tenderTitle: (p.title as string) ?? null,
             accountId: account?.id ?? null,
             accountName: account?.name ?? null,
-            // The bid the customer accepted beats the internal estimate. Falls back to the tender
-            // value when the tender was awarded without a priced quotation (a legitimate path).
+            // Contract Value is the approved commercial basis — `baseline.total`, VAT-inclusive, a
+            // DIFFERENT measure from the deal's Award Value (`awardEvidence.awardedValue`, excl.
+            // VAT) and from the tender estimate. ADR-0021 separates these three deliberately; none
+            // of them substitutes for another.
+            //
+            // The `p.value` fallback is the weakest link here: `Tender.value` is OUR estimate, and
+            // an estimate becoming a Contract Value is the conflation the money vocabulary forbids.
+            // It stands only because of the explicit prior decision recorded on findTenderBaseline —
+            // an award that produces NO contract was judged worse than one carrying an unbaselined
+            // draft value. That trade-off is a business call, flagged for review, not endorsed here.
             value: priced?.value ?? (p.value as number) ?? 0,
             commercialBaselineId: priced?.baselineId ?? null,
             status: 'draft',

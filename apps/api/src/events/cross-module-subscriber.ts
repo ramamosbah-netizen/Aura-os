@@ -1237,9 +1237,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // CostTransaction (source 'labour_timesheet'), with man-hours as the signed quantity — seeding
     // both the Cost Ledger and the Quantity Ledger (man-hours). Unrated/uncoded logs post nothing.
     this.bus.subscribe('site.labour.logged', (e: DomainEvent) =>
-      // BEST-EFFORT: `ledger.post` appends unconditionally, so a retry would double-count labour cost.
-      // Accepted here, never retried.
-      this.bestEffort('post labour cost txn from site.labour.logged', e, 'ledger.post is not idempotent; a retry would double-count labour cost', async () => {
+      // RETRYABLE (mig 0254): `ledger.post` is now idempotent on `dedupeKey` — a replay of this event
+      // returns the first transaction and does NOT move the CBS balance again. Sole subscriber on the
+      // event, so nothing else is re-run. Failures now reach the outbox instead of being swallowed.
+      this.retryable('post labour cost txn from site.labour.logged', e, async () => {
         const p = e.payload as Record<string, unknown>;
         const cbsNodeId = p.cbsNodeId as string | null;
         const projectId = p.projectId as string | null;
@@ -1251,6 +1252,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           cbsNodeId, type: 'actual', amount: labourCost, quantity: manHours, source: 'labour_timesheet',
           sourceRef: `${(p.trade as string) ?? 'Labour'} — ${manHours}mh`,
           dimensions: { labourId: e.aggregateId, trade: (p.trade as string) ?? '' },
+          dedupeKey: `labour:${e.aggregateId}`,
         });
         this.logger.log(`⚡ labour logged → posted actual ${labourCost} (${manHours}mh) on CBS ${cbsNodeId}`);
       }),
@@ -1261,9 +1263,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // CostTransaction (source 'plant_usage'), with hours as the signed quantity — seeding both the
     // Cost Ledger and the Quantity Ledger (plant-hours). Unrated/uncoded records post nothing.
     this.bus.subscribe('site.plant.logged', (e: DomainEvent) =>
-      // BEST-EFFORT: `ledger.post` appends unconditionally, so a retry would double-count plant cost.
-      // Accepted here, never retried.
-      this.bestEffort('post plant cost txn from site.plant.logged', e, 'ledger.post is not idempotent; a retry would double-count plant cost', async () => {
+      // RETRYABLE (mig 0254): `ledger.post` is now idempotent on `dedupeKey`, so a replay does not
+      // double-count plant cost or re-move the CBS balance. Sole subscriber on the event.
+      this.retryable('post plant cost txn from site.plant.logged', e, async () => {
         const p = e.payload as Record<string, unknown>;
         const cbsNodeId = p.cbsNodeId as string | null;
         const projectId = p.projectId as string | null;
@@ -1275,6 +1277,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           cbsNodeId, type: 'actual', amount: cost, quantity: hours, source: 'plant_usage',
           sourceRef: `${(p.equipment as string) ?? 'Plant'} — ${hours}h`,
           dimensions: { plantId: e.aggregateId, equipment: (p.equipment as string) ?? '' },
+          dedupeKey: `plant:${e.aggregateId}`,
         });
         this.logger.log(`⚡ plant logged → posted actual ${cost} (${hours}h) on CBS ${cbsNodeId}`);
       }),

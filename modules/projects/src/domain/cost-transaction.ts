@@ -42,6 +42,10 @@ export interface CostTransaction {
   sourceRef: string | null;
   /** Free-form slicing keys (costCode, location, supplier, drawing, boqItem, activity…). */
   dimensions: Record<string, string> | null;
+  /** Durable idempotency key. When set, a second post with the same (tenant, key) is a no-op that
+   * returns the first transaction — so a reactor whose event the outbox replays cannot double-post.
+   * null = unkeyed (legacy behaviour: every post appends). */
+  dedupeKey: string | null;
   occurredAt: string;
   createdAt: string;
   createdBy: Id | null;
@@ -59,6 +63,8 @@ export interface NewCostTransaction {
   source: CostTxnSource;
   sourceRef?: string | null;
   dimensions?: Record<string, string> | null;
+  /** Durable idempotency key — see CostTransaction.dedupeKey. Omit for unkeyed (always-append) posts. */
+  dedupeKey?: string | null;
   occurredAt?: string;
   createdBy?: Id | null;
 }
@@ -78,6 +84,7 @@ export function makeCostTransaction(input: NewCostTransaction): CostTransaction 
     source: input.source,
     sourceRef: input.sourceRef?.trim() || null,
     dimensions: input.dimensions && Object.keys(input.dimensions).length > 0 ? input.dimensions : null,
+    dedupeKey: input.dedupeKey?.trim() || null,
     occurredAt: input.occurredAt ?? now,
     createdAt: now,
     createdBy: input.createdBy ?? null,

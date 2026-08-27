@@ -1,11 +1,16 @@
 import type { CostTransaction } from './domain/cost-transaction';
-import type { CostLedgerFilter, CostLedgerStore } from './cost-ledger-store';
+import type { AppendResult, CostLedgerFilter, CostLedgerStore } from './cost-ledger-store';
 
 export class InMemoryCostLedgerStore implements CostLedgerStore {
   private readonly rows: CostTransaction[] = [];
 
-  async append(txn: CostTransaction): Promise<void> {
+  async append(txn: CostTransaction): Promise<AppendResult> {
+    if (txn.dedupeKey) {
+      const existing = this.rows.find((r) => r.tenantId === txn.tenantId && r.dedupeKey === txn.dedupeKey);
+      if (existing) return { txn: { ...existing }, inserted: false };
+    }
     this.rows.push({ ...txn });
+    return { txn: { ...txn }, inserted: true };
   }
 
   async list(filter: CostLedgerFilter): Promise<CostTransaction[]> {

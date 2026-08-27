@@ -18,22 +18,29 @@ export class CostLedgerService {
     private readonly cbs: CbsService,
   ) {}
 
-  /** Post a transaction: append to the ledger, then move the CBS cost line's cached balance. */
+  /** Post a transaction: append to the ledger, then move the CBS cost line's cached balance.
+   * Idempotent when `input.dedupeKey` is set — a replayed post returns the first transaction and
+   * moves the CBS balance ONCE, so an event the outbox re-delivers cannot double-count cost. */
   async post(input: NewCostTransaction): Promise<CostTransaction> {
     const txn = makeCostTransaction(input);
-    await this.store.append(txn);
-    if (txn.cbsNodeId && txn.amount !== 0) {
+    const { txn: stored, inserted } = await this.store.append(txn);
+    if (!inserted) {
+      // Dedupe hit: the transaction (and its CBS effect) already landed on the first delivery.
+      this.logger.log(`↩ cost txn dedupe [${stored.dedupeKey}] — already posted (${stored.id}), CBS unchanged`);
+      return stored;
+    }
+    if (stored.cbsNodeId && stored.amount !== 0) {
       try {
-        if (txn.type === 'committed') await this.cbs.recordCommittedCost(txn.cbsNodeId, txn.amount);
-        else if (txn.type === 'budget') await this.cbs.recordBudget(txn.cbsNodeId, txn.amount);
-        else await this.cbs.recordActualCost(txn.cbsNodeId, txn.amount);
+        if (stored.type === 'committed') await this.cbs.recordCommittedCost(stored.cbsNodeId, stored.amount);
+        else if (stored.type === 'budget') await this.cbs.recordBudget(stored.cbsNodeId, stored.amount);
+        else await this.cbs.recordActualCost(stored.cbsNodeId, stored.amount);
       } catch (err) {
         // The ledger entry stands regardless — the CBS cache can be rebuilt from it.
-        this.logger.error(`Posted txn ${txn.id} but failed to update CBS node ${txn.cbsNodeId}: ${err}`);
+        this.logger.error(`Posted txn ${stored.id} but failed to update CBS node ${stored.cbsNodeId}: ${err}`);
       }
     }
-    this.logger.log(`📒 ${txn.type} ${txn.amount} → CBS ${txn.cbsNodeId ?? '(uncoded)'} [${txn.source} ${txn.sourceRef ?? ''}]`);
-    return txn;
+    this.logger.log(`📒 ${stored.type} ${stored.amount} → CBS ${stored.cbsNodeId ?? '(uncoded)'} [${stored.source} ${stored.sourceRef ?? ''}]`);
+    return stored;
   }
 
   /** The ledger for a project or a single cost line — the audit trail behind every number. */

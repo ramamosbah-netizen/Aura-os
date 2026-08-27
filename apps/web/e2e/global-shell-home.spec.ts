@@ -52,8 +52,8 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   // exact: role-name matching is substring and case-insensitive, so a bare 'My Work' also
   // matches the "My work summary" metrics region and counts its links too.
   const myWorkTools = page.getByRole('region', { name: 'My Work', exact: true });
-  await expect(myWorkTools.getByRole('link')).toHaveCount(7);
-  for (const tool of ['My Day', 'Tasks', 'Approvals', 'Communication', 'Contacts', 'Files', 'Favorites']) {
+  await expect(myWorkTools.getByRole('link')).toHaveCount(4);
+  for (const tool of ['My Day', 'Tasks', 'Approvals', 'Favorites']) {
     await expect(myWorkTools.getByRole('link', { name: new RegExp(`^${tool}`) })).toBeVisible();
   }
 
@@ -80,15 +80,16 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   // 404s — and NO suite populates `featured`, so the rail never renders for any id. The block was
   // asserting a surface that had been deleted out from under it.
   //
-  // Its real subject was honest capability reporting: a suite home must admit what is NOT built
-  // rather than list everything as available. Communication still says so — WhatsApp is
-  // NOT IMPLEMENTED — so the intent is kept, against a suite that exists.
+  // Its real subject is honest capability reporting: the Communication suite exposes the
+  // implemented Cloud API seam while the runtime screen still explains when configuration is
+  // missing.
   await page.goto('/suites/communication', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suite-home')).toBeVisible();
   // `<aside aria-labelledby>` — role complementary, not region.
   const capabilities = page.getByRole('complementary', { name: 'Capability truth' });
-  await expect(capabilities.getByText('WhatsApp', { exact: true })).toBeVisible();
-  await expect(capabilities.getByText('NOT IMPLEMENTED', { exact: true })).toBeVisible();
+  const whatsappCapability = capabilities.locator('li').filter({ hasText: 'WhatsApp Business Cloud' });
+  await expect(whatsappCapability).toBeVisible();
+  await expect(whatsappCapability.getByText('IMPLEMENTED', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open suite' })).toHaveAttribute('href', '/my-work/communication');
 
   await page.setViewportSize({ width: 390, height: 844 });

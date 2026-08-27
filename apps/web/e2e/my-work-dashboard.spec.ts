@@ -38,7 +38,7 @@ test('My Work aggregates attention and keeps domain records at their source', as
   }
   // …and Communication is still REACHABLE, from the sidebar rather than from here. Removing a
   // duplicate must not remove the only route to a page.
-  await expect(page.getByRole('link', { name: 'Communication' })).toHaveAttribute('href', '/my-work/communication');
+  await expect(page.getByRole('link', { name: 'Communication', exact: true })).toHaveAttribute('href', '/my-work/communication');
   await expect(shortcuts.filter({ hasText: 'AURA' })).toHaveCount(0);
 
   const attentionItems = page.getByTestId('today-attention-item');
@@ -62,7 +62,9 @@ test('My Work aggregates attention and keeps domain records at their source', as
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/my-work', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('my-work-dashboard')).toBeVisible();
-  await expect(page.getByTestId('my-work-shortcut')).toHaveCount(7);
+  // The personal execution center keeps the same four owned shortcuts on mobile; responsive
+  // layout changes presentation, not information architecture.
+  await expect(page.getByTestId('my-work-shortcut')).toHaveCount(4);
 });
 
 test('My Work centers expose real sources and keep actions inside AURA tabs', async ({ page }) => {

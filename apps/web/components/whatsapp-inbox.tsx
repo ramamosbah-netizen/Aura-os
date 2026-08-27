@@ -2,10 +2,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCheck, MessageCircleMore, Send } from 'lucide-react';
 import styles from './my-work-center.module.css';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 type Thread = { id: string; displayName: string; phone: string; unread: number; lastMessageAt: string | null; lastPreview: string | null; contactId: string | null; accountId: string | null };
 type Message = { id: string; body: string; direction: 'inbound' | 'outbound'; status: string; occurredAt: string; sender: string };
-const time = (v: string) => new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(v));
+const time = (v: string) => new Intl.DateTimeFormat(DISPLAY_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE }).format(new Date(v));
 
 export default function WhatsAppInbox({ initialThreads, initialThreadId = null }: { initialThreads: Thread[] | null; initialThreadId?: string | null }) {
   const [threads, setThreads] = useState(initialThreads ?? []); const [active, setActive] = useState<string | null>(initialThreadId ?? initialThreads?.[0]?.id ?? null); const [messages, setMessages] = useState<Message[]>([]); const [text, setText] = useState(''); const [configured, setConfigured] = useState<boolean | null>(null); const [error, setError] = useState<string | null>(null);

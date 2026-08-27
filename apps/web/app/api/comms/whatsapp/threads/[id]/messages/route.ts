@@ -1,0 +1,2 @@
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> { try { const { id } = await params; const r = await apiFetch(`${apiBase()}/api/v1/whatsapp/threads/${encodeURIComponent(id)}/messages`, { headers: await authHeader(), cache: 'no-store' }); return Response.json(await r.json().catch(() => []), { status: r.status }); } catch { return Response.json({ error: 'WhatsApp API unreachable' }, { status: 502 }); } }

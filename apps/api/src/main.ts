@@ -49,7 +49,9 @@ async function bootstrap(): Promise<void> {
     res.setHeader('Content-Security-Policy', cspFor(req.originalUrl ?? req.url));
     next();
   });
-  app.useBodyParser('json', { limit: BODY_LIMIT });
+  app.useBodyParser('json', { limit: BODY_LIMIT, verify: (req: IncomingMessage & { rawBody?: Buffer }, _res: ServerResponse, buf: Buffer) => {
+    if ((req.url ?? '').split('?')[0].endsWith('/whatsapp/webhook')) req.rawBody = Buffer.from(buf);
+  } });
   app.useBodyParser('urlencoded', { limit: BODY_LIMIT, extended: true });
 
   const cors = resolveCors({ allowedOrigins: process.env.CORS_ALLOWED_ORIGINS, isProduction: isProd });
@@ -165,7 +167,7 @@ async function bootstrap(): Promise<void> {
   // `/auth/refresh` is UNAUTHENTICATED by design (S2): it presents an opaque refresh token in the
   // body, not an access token, so — like login — it must be reachable without an Authorization
   // header, or the AUTH_REQUIRED gate rejects it with 401 before rotation ever runs.
-  const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status', '/api/v1/auth/refresh'];
+  const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status', '/api/v1/auth/refresh', '/api/v1/whatsapp/webhook'];
   // Spine create endpoints where an Idempotency-Key may be *required* (not just honored).
   const requireIdem = process.env.IDEMPOTENCY_REQUIRED === 'true';
   const SPINE_CREATES = [

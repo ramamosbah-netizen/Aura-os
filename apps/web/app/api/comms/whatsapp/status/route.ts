@@ -1,0 +1,2 @@
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
+export async function GET(): Promise<Response> { try { const r = await apiFetch(`${apiBase()}/api/v1/whatsapp/status`, { headers: await authHeader(), cache: 'no-store' }); return Response.json(await r.json().catch(() => ({ configured: false })), { status: r.status }); } catch { return Response.json({ configured: false }, { status: 502 }); } }

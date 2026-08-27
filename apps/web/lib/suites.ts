@@ -50,7 +50,7 @@ export const AURA_SUITES: AuraSuite[] = [
     description: 'The shared communication center — internal chat, mail, meetings and file sharing for every suite.',
     // Same destination as My Work → Communication, so the two never diverge.
     entryHref: '/my-work/communication', gate: null,
-    capabilities: [{ label: 'Internal chat', status: 'IMPLEMENTED' }, { label: 'Mail', status: 'PARTIALLY IMPLEMENTED' }, { label: 'WhatsApp', status: 'NOT IMPLEMENTED' }, { label: 'Meetings', status: 'PARTIALLY IMPLEMENTED' }],
+    capabilities: [{ label: 'Internal chat', status: 'IMPLEMENTED' }, { label: 'Mail', status: 'PARTIALLY IMPLEMENTED' }, { label: 'WhatsApp Business Cloud', status: 'IMPLEMENTED (CONFIG REQUIRED)' }, { label: 'Meetings', status: 'PARTIALLY IMPLEMENTED' }],
     owns: (href) => href === '/my-work/communication' || starts('/workspace')(href),
   },
 

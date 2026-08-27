@@ -17,6 +17,7 @@ import AuraTabLink from '@/components/aura-tab-link';
 import AuraTabAnchor from '@/components/aura-tab-anchor';
 import InternalChat, { type ChatChannelView, type ChatUserView } from '@/components/internal-chat';
 import EmailWorkspace, { type MailAccountView } from '@/components/email-workspace';
+import WhatsAppInbox from '@/components/whatsapp-inbox';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from '@/components/my-work-center.module.css';
 
@@ -41,13 +42,14 @@ interface CommunicationFileView {
 
 interface UnreadCommunicationView {
   id: string;
-  source: 'chat' | 'mail';
+  source: 'chat' | 'mail' | 'whatsapp';
   title: string;
   detail: string;
   date: string;
   channelId: string | null;
   mailId: string | null;
 }
+interface WhatsAppThreadView { id: string; displayName: string; phone: string; unread: number; lastMessageAt: string | null; lastPreview: string | null; contactId: string | null; accountId: string | null }
 
 interface RecentCommunication {
   id: string;
@@ -85,16 +87,16 @@ const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mai
 export default async function MyCommunicationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; channel?: string; mail?: string }>;
+  searchParams: Promise<{ view?: string; channel?: string; mail?: string; thread?: string }>;
 }) {
-  const { view: requestedView, channel: deepLinkedChannel, mail: deepLinkedMail } = await searchParams;
+  const { view: requestedView, channel: deepLinkedChannel, mail: deepLinkedMail, thread: deepLinkedThread } = await searchParams;
   // A bare ?channel= link means "open this conversation", so it implies the chat view.
   const view: ViewId = (VIEWS.find((entry) => entry.id === requestedView)?.id
     ?? (deepLinkedChannel ? 'chat' : deepLinkedMail ? 'email' : 'overview'));
 
   // Channels use fetchJson so a refusal is distinguishable from an empty list. C1 conceals
   // channels a user may not see, and rendering "no conversations" for a 403 would misreport it.
-  const [channelResult, mailbox, me, users, accounts, fileResult, unreadResult] = await Promise.all([
+  const [channelResult, mailbox, me, users, accounts, fileResult, unreadResult, whatsappResult] = await Promise.all([
     fetchJson<ChatChannelView[]>('/api/comms/channels'),
     getJson<Mailbox>('/api/comms/mail'),
     getJson<WorkspaceMe>('/api/workspace/me'),
@@ -102,10 +104,22 @@ export default async function MyCommunicationPage({
     getJson<MailAccountView[]>('/api/comms/mailbox/accounts'),
     fetchJson<CommunicationFileView[]>('/api/comms/files'),
     fetchJson<UnreadCommunicationView[]>('/api/comms/unread/items'),
+    fetchJson<WhatsAppThreadView[]>('/api/comms/whatsapp/threads'),
   ]);
   const channels = channelResult.ok ? channelResult.data : null;
   const files = fileResult.ok ? fileResult.data : null;
   const unreadItems = unreadResult.ok ? unreadResult.data : null;
+  const whatsappThreads = whatsappResult.ok ? whatsappResult.data : null;
+  const allUnreadItems: UnreadCommunicationView[] | null = unreadItems === null
+    ? null
+    : [
+      ...unreadItems,
+      ...(whatsappThreads ?? []).filter((thread) => thread.unread > 0).map((thread) => ({
+        id: `whatsapp-${thread.id}`, source: 'whatsapp' as const, title: thread.displayName,
+        detail: thread.lastPreview ?? thread.phone, date: thread.lastMessageAt ?? new Date().toISOString(),
+        channelId: null, mailId: null,
+      })),
+    ];
 
   const recent: RecentCommunication[] = [
     ...(channels ?? []).filter((channel) => channel.lastMessageAt).map((channel) => ({
@@ -120,9 +134,13 @@ export default async function MyCommunicationPage({
       id: `mail-${mail.id}`, title: mail.subject || '(No subject)', detail: `From ${mail.from}`,
       date: mail.sentAt, href: '/my-work/communication?view=email', kind: 'Mail' as const,
     })),
+    ...(whatsappThreads ?? []).filter((thread) => thread.lastMessageAt).map((thread) => ({
+      id: `whatsapp-${thread.id}`, title: thread.displayName, detail: thread.lastPreview ?? thread.phone,
+      date: thread.lastMessageAt!, href: `/my-work/communication?view=whatsapp&thread=${encodeURIComponent(thread.id)}`, kind: 'Chat' as const,
+    })),
   ].sort((left, right) => right.date.localeCompare(left.date)).slice(0, 10);
 
-  const channelsAvailable = channels !== null;
+  const channelsAvailable = channels !== null || whatsappThreads !== null;
   const mailboxAvailable = mailbox !== null;
 
   const historyList = !channelsAvailable && !mailboxAvailable
@@ -197,9 +215,9 @@ export default async function MyCommunicationPage({
             <div><h2 id="comm-overview-title">Where your communication stands</h2><p>Counts come from the live sources — nothing here is estimated.</p></div>
           </header>
           <div className={styles.stats}>
-            <span className={styles.stat}><strong>{channels ? channels.reduce((sum, c) => sum + c.unread, 0) : '—'}</strong><small>Unread messages</small></span>
+            <span className={styles.stat}><strong>{channels || whatsappThreads ? (channels?.reduce((sum, c) => sum + c.unread, 0) ?? 0) + (whatsappThreads?.reduce((sum, t) => sum + t.unread, 0) ?? 0) : '—'}</strong><small>Unread messages</small></span>
             <span className={styles.stat}><strong>{mailbox ? mailbox.unread : '—'}</strong><small>Unread mail</small></span>
-            <span className={styles.stat}><strong>{channels ? channels.length : '—'}</strong><small>Conversations you belong to</small></span>
+            <span className={styles.stat}><strong>{channels || whatsappThreads ? (channels?.length ?? 0) + (whatsappThreads?.length ?? 0) : '—'}</strong><small>Conversations you belong to</small></span>
           </div>
           <header className={styles.sectionHead}>
             <div>
@@ -237,9 +255,9 @@ export default async function MyCommunicationPage({
       {view === 'whatsapp' ? (
         <section className={styles.section} aria-labelledby="comm-whatsapp-title">
           <header className={styles.sectionHead}>
-            <div><h2 id="comm-whatsapp-title">WhatsApp</h2><p>Not connected.</p></div>
+            <div><h2 id="comm-whatsapp-title">WhatsApp</h2><p>Official WhatsApp Business conversations, inside the unified inbox.</p></div>
           </header>
-          <p className={styles.truth}><ShieldCheck aria-hidden /><span>WhatsApp remains a target capability only. It is intentionally disabled until an approved provider, consent model, retention policy and audit trail are connected.</span></p>
+          <WhatsAppInbox initialThreads={whatsappThreads} initialThreadId={deepLinkedThread} />
         </section>
       ) : null}
 
@@ -277,19 +295,21 @@ export default async function MyCommunicationPage({
           <header className={styles.sectionHead}>
             <div><h2 id="comm-unread-title">Unread</h2><p>One actionable list from the chat and mail systems you already belong to.</p></div>
           </header>
-          {unreadItems === null ? (
+          {allUnreadItems === null ? (
             <p className={styles.truth}><ShieldCheck aria-hidden /><span>Unread communication is currently unavailable. Open Chat or Email directly to retry.</span></p>
-          ) : unreadItems.length === 0 ? (
+          ) : allUnreadItems.length === 0 ? (
             <p className={styles.empty}>You are all caught up.</p>
           ) : (
             <div className={styles.list}>
-              {unreadItems.map((item) => {
+              {allUnreadItems.map((item) => {
                 const href = item.source === 'chat' && item.channelId
                   ? `/my-work/communication?view=chat&channel=${encodeURIComponent(item.channelId)}`
+                  : item.source === 'whatsapp'
+                    ? `/my-work/communication?view=whatsapp&thread=${encodeURIComponent(item.id.replace(/^whatsapp-/, ''))}`
                   : `/my-work/communication?view=email&mail=${encodeURIComponent(item.mailId ?? '')}`;
                 return (
                   <AuraTabLink key={item.id} href={href} tabTitle={item.title} tabType="Communication" className={styles.decision}>
-                    <span className={styles.verb}>{item.source === 'chat' ? 'Chat' : 'Mail'}</span>
+                    <span className={styles.verb}>{item.source === 'chat' ? 'Chat' : item.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}</span>
                     <span className={styles.decisionMain}><strong>{item.title}</strong><small>{item.detail}</small></span>
                     <span className={styles.module}>{new Intl.DateTimeFormat(DISPLAY_LOCALE, { day: '2-digit', month: 'short', timeZone: DISPLAY_TIME_ZONE }).format(new Date(item.date))}</span>
                     <ArrowRight aria-hidden />

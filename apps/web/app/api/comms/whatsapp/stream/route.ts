@@ -1,0 +1,2 @@
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
+export async function GET(): Promise<Response> { try { const r = await apiFetch(`${apiBase()}/api/v1/whatsapp/stream`, { headers: { ...(await authHeader()), accept: 'text/event-stream' }, cache: 'no-store' }, 120_000); return new Response(r.body, { status: r.status, headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' } }); } catch { return new Response('event: error\ndata: {}\n\n', { status: 502, headers: { 'content-type': 'text/event-stream' } }); } }

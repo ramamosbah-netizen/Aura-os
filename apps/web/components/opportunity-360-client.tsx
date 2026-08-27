@@ -232,7 +232,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
-  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate, facts } = data;
+  const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, lifecycle, nextAction, attention, stageGate, facts } = data;
   const OUTCOME = {
     open: { label: 'Open', color: 'var(--accent)', tone: 'accent' as Tone },
     won: { label: 'Won', color: 'var(--good)', tone: 'good' as Tone },

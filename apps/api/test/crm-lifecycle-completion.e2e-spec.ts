@@ -8,13 +8,16 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { TenantContext, AccessService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 
 describe('C1 lifecycle completion (HTTP)', () => {
+  const TENANT = 'c1-tenant';
+  const ACTOR = 'u-e2e-sales-manager';
+
   let app: INestApplication;
   let http: ReturnType<typeof request>;
 
@@ -23,9 +26,34 @@ describe('C1 lifecycle completion (HTTP)', () => {
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
     app.useGlobalFilters(new AllExceptionsFilter());
+    // `LeadService.assign` requires an authenticated actor AND actor authorization — assigning a
+    // lead is an accountable act, and `autoAssign` is the named path for trusted internal routing
+    // without an actor. So the spec supplies a real identity rather than weakening the guard.
+    //
+    // The actor is PER-REQUEST, via a header. Turning it on globally would switch AccessService on
+    // for every other call in this spec — lead create asserts `crm.account.create` — which is
+    // exactly the trap that turned six passing tender e2e tests into 403s.
+    const access = app.get(AccessService);
+    // Assigning to SOMEONE ELSE needs `crm.lead-assignment.others`. Note the hyphen: it is spelled
+    // that way precisely so `crm.lead.*` does NOT swallow it, so the sales-rep role cannot inherit
+    // it — only `r-sales-manager` (`crm.*`) carries it.
+    access.grant({ userId: ACTOR, roleId: 'r-sales-manager', scope: { kind: 'org', level: 'tenant', id: TENANT } });
+    // …and an assignee must itself be lead-capable (`crm.lead.read`), which `r-sales` provides.
+    for (const rep of ['rep-1', 'rep-2']) {
+      access.grant({ userId: rep, roleId: 'r-sales', scope: { kind: 'org', level: 'tenant', id: TENANT } });
+    }
+
     const tenant = app.get(TenantContext);
     app.use((_req: unknown, _res: unknown, next: () => void) =>
-      tenant.run({ tenantId: 'c1-tenant', companyId: null, actorId: null, correlationId: 'e2e-c1' }, () => next()),
+      tenant.run(
+        {
+          tenantId: TENANT,
+          companyId: null,
+          actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? null,
+          correlationId: 'e2e-c1',
+        },
+        () => next(),
+      ),
     );
     await app.init();
     http = request(app.getHttpServer());
@@ -51,7 +79,7 @@ describe('C1 lifecycle completion (HTTP)', () => {
     const lead = (await http.post('/api/v1/crm/leads').send({ name: 'Accept Lead' }).expect(201)).body;
     await http.post(`/api/v1/crm/leads/${lead.id}/accept`).expect(400); // not assigned yet
 
-    await http.patch(`/api/v1/crm/leads/${lead.id}/assign`).send({ assignedTo: 'rep-1' }).expect(200);
+    await http.patch(`/api/v1/crm/leads/${lead.id}/assign`).set('x-e2e-actor', ACTOR).send({ assignedTo: 'rep-1' }).expect(200);
     const accepted = (await http.post(`/api/v1/crm/leads/${lead.id}/accept`).expect(201)).body;
     expect(accepted.acceptedAt).toBeTruthy();
 
@@ -60,7 +88,9 @@ describe('C1 lifecycle completion (HTTP)', () => {
     expect(again.acceptedAt).toBe(accepted.acceptedAt);
 
     // Reassignment resets the acknowledgement — a fresh owner must accept for themselves.
-    const reassigned = (await http.patch(`/api/v1/crm/leads/${lead.id}/assign`).send({ assignedTo: 'rep-2' }).expect(200)).body;
+    // A reassignment (rep-1 → rep-2) additionally requires a stated reason — the service refuses
+    // to move a lead off an existing owner silently.
+    const reassigned = (await http.patch(`/api/v1/crm/leads/${lead.id}/assign`).set('x-e2e-actor', ACTOR).send({ assignedTo: 'rep-2', reason: 'territory change' }).expect(200)).body;
     expect(reassigned.acceptedAt).toBeNull();
   });
 

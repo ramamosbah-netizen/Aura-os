@@ -785,9 +785,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // appends it to the ledger (source of truth + audit trail) and moves the CBS node's balance.
     // Committed cost is tracked only where the PO is coded (cbsNodeId) — never guessed.
     this.bus.subscribe('procurement.po.created', (e: DomainEvent) =>
-      // BEST-EFFORT: `ledger.post` appends unconditionally (no guard/key), so a retry would double-count
-      // the committed cost and move the CBS balance twice. The failure is accepted here, never retried.
-      this.bestEffort('post committed cost txn from po.created', e, 'ledger.post is not idempotent; a retry would double-count committed cost', async () => {
+      // RETRYABLE (mig 0254): keyed `po-committed:<poId>` — a replay returns the first transaction and
+      // does not re-move the CBS balance. The other subscriber on po.created (ordered quantity) is now
+      // keyed too, so replaying the whole event is safe.
+      this.retryable('post committed cost txn from po.created', e, async () => {
         const p = e.payload as Record<string, unknown>;
         const cbsNodeId = p.cbsNodeId as string | null;
         const project = p.project as { id: string; name: string } | null;
@@ -797,6 +798,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
             tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
             cbsNodeId, type: 'committed', amount: value, source: 'po', sourceRef: (p.title as string) ?? null,
             dimensions: { poId: e.aggregateId },
+            dedupeKey: `po-committed:${e.aggregateId}`,
           });
         }
       }),
@@ -833,9 +835,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // The physical twin of the committed-cost reactor above. A PO coded to a BOQ item (boqItemId +
     // orderedQuantity) accrues the ordered quantity so the item's Ordered position = SUM(this).
     this.bus.subscribe('procurement.po.created', (e: DomainEvent) =>
-      // BEST-EFFORT: `quantityLedger.post` appends unconditionally, so a retry would double-count the
-      // ordered position. Accepted here, never retried.
-      this.bestEffort('post ordered quantity from po.created', e, 'quantityLedger.post is not idempotent; a retry would double-count the ordered position', async () => {
+      // RETRYABLE (mig 0255): keyed `po-ordered:<poId>` — a replay returns the first transaction and
+      // does not re-count the ordered position. Its sibling (committed cost) is keyed too.
+      this.retryable('post ordered quantity from po.created', e, async () => {
         const p = e.payload as Record<string, unknown>;
         const boqItemId = p.boqItemId as string | null;
         const project = p.project as { id: string; name: string } | null;
@@ -846,6 +848,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
           type: 'ordered', quantity: qty, unit: (p.unit as string | null) ?? null,
           source: 'po', sourceRef: (p.title as string) ?? null, dimensions: { poId: e.aggregateId },
+          dedupeKey: `po-ordered:${e.aggregateId}`,
         });
         this.logger.log(`📏 po.created → posted ordered ${qty} on BOQ ${boqItemId} (PO ${e.aggregateId})`);
       }),
@@ -1161,9 +1164,11 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // position = SUM(this). The gap Issued − Installed is wastage/WIP; Installed − Approved is the
     // inspection backlog. (This same signal feeds the Phase-3 Progress Engine → WBS %.)
     this.bus.subscribe('site.installation.recorded', (e: DomainEvent) =>
-      // BEST-EFFORT: `quantityLedger.post` appends unconditionally, so a retry would double-count the
-      // installed position (and re-run the progress sync on a doubled base). Accepted here, never retried.
-      this.bestEffort('post installed quantity from site.installation.recorded', e, 'quantityLedger.post is not idempotent; a retry would double-count the installed position', async () => {
+      // RETRYABLE (mig 0255): keyed `installed:<installationId>` — a replay returns the first
+      // transaction and does not re-count the installed position. The follow-on
+      // `wbs.syncProgressFromQuantity` RECOMPUTES progress from the (now-idempotent) ledger sum, so it
+      // converges to the same value on replay. Sole subscriber on the event.
+      this.retryable('post installed quantity from site.installation.recorded', e, async () => {
         const p = e.payload as Record<string, unknown>;
         const boqItemId = p.boqItemId as string | null;
         const projectId = p.projectId as string | null;
@@ -1175,6 +1180,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           type: 'installed', quantity, unit: (p.unit as string | null) ?? null,
           source: 'installation', sourceRef: (p.description as string) ?? null,
           dimensions: { installationId: e.aggregateId },
+          dedupeKey: `installed:${e.aggregateId}`,
         });
         this.logger.log(`📏 installation → posted installed ${quantity} on BOQ ${boqItemId}`);
         // Progress Engine (Phase 3): installed quantity is physical progress — sync any WBS work
@@ -1187,9 +1193,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // Quality-accepted work. The item's Approved position = SUM(this). The gap Installed − Approved is
     // the inspection backlog; Approved − Invoiced is what is billable but not yet certified.
     this.bus.subscribe('quality.ir.approved', (e: DomainEvent) =>
-      // BEST-EFFORT: `quantityLedger.post` appends unconditionally, so a retry would double-count the
-      // approved position. Accepted here, never retried.
-      this.bestEffort('post approved quantity from quality.ir.approved', e, 'quantityLedger.post is not idempotent; a retry would double-count the approved position', async () => {
+      // RETRYABLE (mig 0255): keyed `ir-approved:<irId>` — a replay returns the first transaction and
+      // does not re-count the approved position. Sole subscriber on the event.
+      this.retryable('post approved quantity from quality.ir.approved', e, async () => {
         const p = e.payload as Record<string, unknown>;
         const boqItemId = p.boqItemId as string | null;
         const projectId = p.projectId as string | null;
@@ -1200,6 +1206,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           boqItemId, type: 'approved', quantity: qty, unit: (p.unit as string | null) ?? null,
           source: 'inspection', sourceRef: `IR ${(p.irNumber as string) ?? ''}`.trim(),
           dimensions: { irId: e.aggregateId },
+          dedupeKey: `ir-approved:${e.aggregateId}`,
         });
         this.logger.log(`📏 ir.approved → posted approved ${qty} on BOQ ${boqItemId} (IR ${e.aggregateId})`);
       }),

@@ -21,12 +21,18 @@ export class QuantityLedgerService {
 
   constructor(@Inject(QUANTITY_LEDGER_STORE) private readonly store: QuantityLedgerStore) {}
 
-  /** Post a quantity transaction to a BOQ item's ledger. */
+  /** Post a quantity transaction to a BOQ item's ledger. Idempotent when `input.dedupeKey` is set —
+   * a replayed post returns the first transaction and writes nothing, so an event the outbox
+   * re-delivers cannot double-count the position. */
   async post(input: NewQuantityTransaction): Promise<QuantityTransaction> {
     const txn = makeQuantityTransaction(input);
-    await this.store.append(txn);
-    this.logger.log(`📏 ${txn.type} ${txn.quantity}${txn.unit ? ' ' + txn.unit : ''} → BOQ ${txn.boqItemId} [${txn.source} ${txn.sourceRef ?? ''}]`);
-    return txn;
+    const { txn: stored, inserted } = await this.store.append(txn);
+    if (!inserted) {
+      this.logger.log(`↩ qty txn dedupe [${stored.dedupeKey}] — already posted (${stored.id}), position unchanged`);
+      return stored;
+    }
+    this.logger.log(`📏 ${stored.type} ${stored.quantity}${stored.unit ? ' ' + stored.unit : ''} → BOQ ${stored.boqItemId} [${stored.source} ${stored.sourceRef ?? ''}]`);
+    return stored;
   }
 
   /** Set/adjust a BOQ item's target quantity — the baseline the position is measured against. */

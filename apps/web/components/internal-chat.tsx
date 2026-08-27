@@ -95,6 +95,10 @@ export default function InternalChat({
   const [query, setQuery] = useState('');
   const [dmOpen, setDmOpen] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
+  const [teamOpen, setTeamOpen] = useState(false);
+  const [teamName, setTeamName] = useState('');
+  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  const [teamError, setTeamError] = useState<string | null>(null);
   /** A conversation is being opened; the composer belongs to no settled conversation until it lands. */
   const [opening, setOpening] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -275,6 +279,32 @@ export default function InternalChat({
     }
   }
 
+  async function openTeam() {
+    setTeamError(null);
+    if (!teamName.trim()) { setTeamError('Give the team a name.'); return; }
+    if (teamMembers.length === 0) { setTeamError('Select at least one colleague.'); return; }
+    setOpening(true);
+    try {
+      const res = await fetch('/api/comms/team', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: teamName, members: teamMembers }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data?.id !== 'string') {
+        setTeamError(res.status === 404 ? 'One or more colleagues are not in your active company.' : data?.message ?? data?.error ?? 'Could not create the team conversation.');
+        return;
+      }
+      setTeamOpen(false);
+      setTeamName('');
+      setTeamMembers([]);
+      select(data.id);
+      void refreshChannels();
+    } catch { setTeamError('Could not create the team conversation. Check your connection and retry.'); } finally {
+      setOpening(false);
+    }
+  }
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return channels;
@@ -311,7 +341,25 @@ export default function InternalChat({
         </label>
 
         <div className={styles.railGroup}>
-          <p className={styles.railHead}><Hash aria-hidden />Channels</p>
+          <p className={styles.railHead}>
+            <Hash aria-hidden />Channels
+            <button type="button" className={styles.newDm} onClick={() => { setTeamOpen((open) => !open); setTeamError(null); }} aria-expanded={teamOpen}>
+              <Plus aria-hidden />Team
+            </button>
+          </p>
+          {teamOpen && (
+            <div className={styles.dmPicker} role="group" aria-label="Create a team conversation">
+              <input className={styles.teamName} value={teamName} onChange={(event) => setTeamName(event.target.value)} placeholder="Team name" aria-label="Team name" maxLength={80} />
+              {users.length === 0 ? <p className={styles.railEmpty}>No active colleagues are available in your company.</p> : users.map((user) => (
+                <label key={user.username} className={styles.dmPickerRow}>
+                  <span className={styles.teamMember}><input type="checkbox" checked={teamMembers.includes(user.username)} onChange={() => setTeamMembers((current) => current.includes(user.username) ? current.filter((item) => item !== user.username) : [...current, user.username])} /> <strong>{displayName(user.username)}</strong></span>
+                  {user.roleLabel ? <small>{user.roleLabel}</small> : null}
+                </label>
+              ))}
+              <button type="button" className={styles.createTeam} onClick={() => void openTeam()} disabled={opening}>Create team</button>
+              {teamError ? <p className={styles.sendError} role="alert">{teamError}</p> : null}
+            </div>
+          )}
           {rooms.length === 0 ? (
             <p className={styles.railEmpty}>{query ? 'No channel matches that search.' : 'No channels yet.'}</p>
           ) : rooms.map((channel) => (

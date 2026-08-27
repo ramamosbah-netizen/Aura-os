@@ -264,6 +264,15 @@ describe('Company isolation', () => {
     grants.splice(0, grants.length);
     await expect(service.messages(TENANT_A, ALICE, channel.id, false, COMPANY_A)).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('creates a named same-company team conversation and rejects unknown peers', async () => {
+    const { service } = makeService();
+    const channel = await service.openTeam(TENANT_A, ALICE, 'Bid review', [BOB]);
+    expect(channel).toMatchObject({ kind: 'team', name: 'Bid review', members: [ALICE, BOB] });
+    await expect(service.openTeam(TENANT_A, ALICE, 'Bad group', [MALLORY, 'u-unknown']))
+      .rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.openTeam(TENANT_A, ALICE, 'Bid review', [BOB])).resolves.toMatchObject({ id: channel.id });
+  });
 });
 
 describe('Attachments inherit their parent authorization', () => {
@@ -361,6 +370,7 @@ describe('Route permissions', () => {
     ['unreadItems', 'comms.channel.read'],
     ['openDm', 'comms.dm.create'],
     ['openProject', 'comms.channel.read'],
+    ['openTeam', 'comms.team.create'],
     ['messages', 'comms.channel.read'],
     ['post', 'comms.channel.send'],
     ['mailbox', 'comms.mail.read'],

@@ -7,7 +7,7 @@ import type { WorkspaceRoleId } from '../workspace';
 
 // ---------------------------------------------------------------- chat model
 
-export type ChannelKind = 'company' | 'department' | 'project' | 'dm';
+export type ChannelKind = 'company' | 'department' | 'project' | 'team' | 'dm';
 
 export interface ChatChannel {
   id: string;

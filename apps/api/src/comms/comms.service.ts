@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { AccessService, NotificationService, UsersService } from '@aura/core';
 import { ProjectService } from '@aura/projects';
 import {
@@ -417,6 +417,35 @@ export class CommsService {
       members: [...members].sort(),
     };
     await this.store.ensureChannels(tenantId, [channel], username, project.companyId);
+    return channel;
+  }
+
+  /** Create a named internal team conversation from active same-company colleagues. */
+  async openTeam(
+    tenantId: string, username: string, name: string, requestedMembers: string[], companyId: string | null = null,
+  ): Promise<ChatChannel> {
+    const title = name.trim();
+    if (!title) throw new BadRequestException('team name is required');
+    if (title.length > 80) throw new BadRequestException('team name must be 80 characters or fewer');
+    const members = [...new Set([username, ...(Array.isArray(requestedMembers) ? requestedMembers : [])
+      .map((member) => member.trim()).filter(Boolean)])];
+    if (members.length < 2) throw new BadRequestException('select at least one colleague');
+    if (members.length > 50) throw new BadRequestException('team conversations support up to 50 members');
+
+    const people = await this.directoryPeople(tenantId);
+    const effective = await this.effectiveCompany(tenantId, username, companyId);
+    const registryKnown = (this.users?.list(tenantId).length ?? 0) > 0;
+    for (const member of members) {
+      if (member === username) continue;
+      const person = people.find((candidate) => candidate.username === member);
+      if (!person || !person.active || ((this.users || effective || registryKnown) && effective && person.companyId !== effective)) {
+        throw new NotFoundException('person not found');
+      }
+    }
+    const existing = (await this.store.listChannels(tenantId)).find((channel) => channel.kind === 'team' && channel.name === title);
+    if (existing) return existing;
+    const channel: ChatChannel = { id: `team:${newId()}`, kind: 'team', name: title, members: members.sort() };
+    await this.store.ensureChannels(tenantId, [channel], username, effective);
     return channel;
   }
 

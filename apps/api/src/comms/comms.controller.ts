@@ -71,6 +71,13 @@ export class CommsController {
     return this.comms.openProject(tenantId, username, projectId, isAdmin, companyId);
   }
 
+  @Post('team')
+  @Permissions('comms.team.create')
+  async openTeam(@Body() body: { name?: string; members?: string[] }): Promise<ChatChannel> {
+    const { tenantId, companyId, username } = await this.caller();
+    return this.comms.openTeam(tenantId, username, body?.name ?? '', body?.members ?? [], companyId);
+  }
+
   @Get('channels/:id/messages')
   @Permissions('comms.channel.read')
   async messages(@Param('id') id: string): Promise<ChatMessage[]> {

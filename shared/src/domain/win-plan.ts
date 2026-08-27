@@ -57,14 +57,70 @@ export function mergeWinPlan(current: WinPlan | null, patch: Partial<Record<keyo
   return base;
 }
 
-/** §14's configurable methodology depth: which fields THIS deal's size expects. */
+// §14's configurable methodology depth, NAMED. The deal's SIZE selects one of three tiers, and the
+// tier — not a bare threshold repeated at each call site — is the single source of which fields the
+// plan expects and of the sentence explaining WHY. A tier is a rule (a size band), never AI, never a
+// gate: a Light deal with its two fields reads just as complete as a Strategic deal with all ten.
+export type WinPlanTier = 'light' | 'standard' | 'strategic';
+
+export interface WinPlanTierSpec {
+  tier: WinPlanTier;
+  label: string;
+  /** Deal value (AED) at/above which this tier applies. Bands are [min, next.min). */
+  minValue: number;
+  /** One line the UI shows so the expected depth is explained, not just imposed. */
+  rationale: string;
+  /** The fields this depth expects captured; coverage is judged against exactly these. */
+  expects: ReadonlyArray<keyof WinPlan>;
+}
+
+/** The three methodology depths, ascending. Ordered so `winPlanTier` can scan high → low. */
+export const WIN_PLAN_TIERS: readonly WinPlanTierSpec[] = [
+  {
+    tier: 'strategic',
+    label: 'Strategic',
+    minValue: 500_000,
+    rationale: 'Strategic deal — the full plan is expected: need, decision, competition, procurement and success.',
+    expects: WIN_PLAN_FIELDS.map((f) => f.key), // the full plan
+  },
+  {
+    tier: 'standard',
+    label: 'Standard',
+    minValue: 100_000,
+    rationale: 'Mid-size deal — capture how they decide, why us, and how the money moves.',
+    expects: ['customerNeed', 'decisionCriteria', 'differentiation', 'winStrategy', 'procurementPath'],
+  },
+  {
+    tier: 'light',
+    label: 'Light',
+    minValue: 0,
+    rationale: 'Small deal — know the need and know the play; the full essay is not required.',
+    expects: ['customerNeed', 'winStrategy'],
+  },
+] as const;
+
+/** Which named methodology depth THIS deal's size selects. */
+export function winPlanTierSpec(value: number): WinPlanTierSpec {
+  // Scan high → low and take the first band the value clears; `light` (minValue 0) always matches.
+  return WIN_PLAN_TIERS.find((t) => value >= t.minValue) ?? WIN_PLAN_TIERS[WIN_PLAN_TIERS.length - 1];
+}
+
+/** The tier name alone — for callers that only need to branch, not render. */
+export function winPlanTier(value: number): WinPlanTier {
+  return winPlanTierSpec(value).tier;
+}
+
+/** §14's configurable methodology depth: which fields THIS deal's size expects. Derived from the
+ * named tier so the size bands live in exactly one place. */
 export function expectedWinPlanFields(value: number): ReadonlyArray<keyof WinPlan> {
-  if (value >= 500_000) return WIN_PLAN_FIELDS.map((f) => f.key); // strategic — the full plan
-  if (value >= 100_000) return ['customerNeed', 'decisionCriteria', 'differentiation', 'winStrategy', 'procurementPath'];
-  return ['customerNeed', 'winStrategy']; // small deal — know the need, know the play
+  return winPlanTierSpec(value).expects;
 }
 
 export interface WinPlanCoverage {
+  /** The named methodology depth this deal's SIZE selects — so the UI explains the bar, not imposes it. */
+  tier: WinPlanTier;
+  tierLabel: string;
+  tierRationale: string;
   filled: number;
   total: number;
   /** Expected-for-this-size fields still empty — the honest to-do, not a score. */
@@ -75,12 +131,16 @@ export interface WinPlanCoverage {
 
 /** Derived on every read, never stored (same law as every CRM score). */
 export function winPlanCoverage(plan: WinPlan | null, dealValue: number): WinPlanCoverage {
-  const expected = expectedWinPlanFields(dealValue);
+  const spec = winPlanTierSpec(dealValue);
+  const expected = spec.expects;
   const has = (k: keyof WinPlan): boolean => !!plan?.[k]?.trim();
   const filled = WIN_PLAN_FIELDS.filter(({ key }) => has(key)).length;
   const gaps = WIN_PLAN_FIELDS.filter(({ key }) => expected.includes(key) && !has(key));
   const expectedFilled = expected.filter((k) => has(k)).length;
   return {
+    tier: spec.tier,
+    tierLabel: spec.label,
+    tierRationale: spec.rationale,
     filled,
     total: WIN_PLAN_FIELDS.length,
     gaps,

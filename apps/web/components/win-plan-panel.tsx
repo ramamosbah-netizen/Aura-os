@@ -19,7 +19,15 @@ const FIELDS: Array<{ key: string; label: string; hint: string }> = [
   { key: 'successConditions', label: 'Success conditions', hint: 'What "done well" means to them' },
 ];
 
-interface Coverage { filled: number; total: number; coverage: number; gaps: Array<{ key: string; label: string }> }
+interface Coverage {
+  tier: 'light' | 'standard' | 'strategic';
+  tierLabel: string;
+  tierRationale: string;
+  filled: number;
+  total: number;
+  coverage: number;
+  gaps: Array<{ key: string; label: string }>;
+}
 interface Opp { id: string; value: number; winPlan: Record<string, string | null> | null }
 
 export default function WinPlanPanel({ opportunityId }: { opportunityId: string }) {
@@ -66,14 +74,22 @@ export default function WinPlanPanel({ opportunityId }: { opportunityId: string 
   return (
     <section style={st.panel}>
       <div style={st.head}>
-        <h2 style={st.h2}>Win Plan</h2>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <h2 style={st.h2}>Win Plan</h2>
+          {coverage && (
+            <span style={st.tier} title={coverage.tierRationale}>
+              {coverage.tierLabel} depth
+            </span>
+          )}
+        </div>
         {coverage && (
           <span style={{ ...st.cov, color: coverage.coverage >= 100 ? 'var(--good)' : coverage.coverage >= 50 ? 'var(--warn)' : 'var(--bad)' }}
-            title={coverage.gaps.length ? `Expected for this deal size and still empty: ${coverage.gaps.map((g) => g.label).join(', ')}` : 'Complete for this deal size'}>
-            {coverage.coverage}% for this deal size · {coverage.filled}/{coverage.total} fields
+            title={coverage.gaps.length ? `Expected for a ${coverage.tierLabel} deal and still empty: ${coverage.gaps.map((g) => g.label).join(', ')}` : `Complete for a ${coverage.tierLabel} deal`}>
+            {coverage.coverage}% for a {coverage.tierLabel} deal · {coverage.filled}/{coverage.total} fields
           </span>
         )}
       </div>
+      {coverage && <p style={st.rationale}>{coverage.tierRationale}</p>}
       <div style={st.grid}>
         {FIELDS.map((f) => {
           const value = plan[f.key]?.trim() || null;
@@ -107,6 +123,8 @@ const st = {
   panel: { border: '1px solid var(--border)', borderRadius: 10, background: 'var(--panel)', padding: 16, marginBottom: 22 } as CSSProperties,
   head: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 } as CSSProperties,
   h2: { fontSize: 16, margin: 0, letterSpacing: -0.3 } as CSSProperties,
+  tier: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '1px 8px', cursor: 'help' } as CSSProperties,
+  rationale: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.45 } as CSSProperties,
   cov: { fontSize: 12.5, fontWeight: 700, cursor: 'help' } as CSSProperties,
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel-2)', padding: '8px 10px' } as CSSProperties,

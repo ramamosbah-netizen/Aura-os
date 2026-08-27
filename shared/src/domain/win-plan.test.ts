@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_WIN_PLAN, expectedWinPlanFields, mergeWinPlan, winPlanCoverage } from './win-plan';
+import {
+  EMPTY_WIN_PLAN,
+  expectedWinPlanFields,
+  mergeWinPlan,
+  winPlanCoverage,
+  winPlanTier,
+  winPlanTierSpec,
+  WIN_PLAN_TIERS,
+} from './win-plan';
 
 describe('mergeWinPlan (§14)', () => {
   it('merges known keys, trims whitespace to null, and drops unknown keys', () => {
@@ -46,5 +54,51 @@ describe('winPlanCoverage — size-aware, never a gate', () => {
     expect(cov.coverage).toBe(0);
     expect(cov.gaps).toHaveLength(expectedWinPlanFields(150_000).length);
     expect(winPlanCoverage(EMPTY_WIN_PLAN, 150_000).coverage).toBe(0);
+  });
+});
+
+// SEMANTIC ADDITION (Phase 3) — the size band is now a NAMED tier, not three bare thresholds. These
+// assert the naming; the size→fields behaviour above is unchanged and its tests still stand.
+describe('winPlanTier — the named methodology depth (Phase 3)', () => {
+  it('maps deal size to Light / Standard / Strategic on the same bands as the field expectations', () => {
+    expect(winPlanTier(0)).toBe('light');
+    expect(winPlanTier(20_000)).toBe('light');
+    expect(winPlanTier(99_999)).toBe('light');
+    expect(winPlanTier(100_000)).toBe('standard'); // band edge is inclusive at the lower bound
+    expect(winPlanTier(499_999)).toBe('standard');
+    expect(winPlanTier(500_000)).toBe('strategic');
+    expect(winPlanTier(5_000_000)).toBe('strategic');
+  });
+
+  it('is the single source of the expected fields — the tier spec IS what expectedWinPlanFields returns', () => {
+    for (const value of [20_000, 150_000, 750_000]) {
+      expect(expectedWinPlanFields(value)).toEqual(winPlanTierSpec(value).expects);
+    }
+  });
+
+  it('a negative or absent value never throws — it falls to the Light tier', () => {
+    expect(winPlanTier(-1)).toBe('light');
+    expect(winPlanTier(Number.NaN)).toBe('light'); // NaN >= anything is false → the 0-floor tier
+  });
+
+  it('every tier carries a human label and a rationale sentence for the UI to show', () => {
+    for (const spec of WIN_PLAN_TIERS) {
+      expect(spec.label).toMatch(/\w/);
+      expect(spec.rationale.length).toBeGreaterThan(10);
+      expect(spec.expects.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('winPlanCoverage — now names the tier it judged against', () => {
+  it('carries the tier, its label and rationale alongside the numbers', () => {
+    const strategic = winPlanCoverage(null, 750_000);
+    expect(strategic.tier).toBe('strategic');
+    expect(strategic.tierLabel).toBe('Strategic');
+    expect(strategic.tierRationale).toMatch(/full plan/i);
+
+    const light = winPlanCoverage(mergeWinPlan(null, { customerNeed: 'AMC', winStrategy: 'Renew' }), 20_000);
+    expect(light.tier).toBe('light');
+    expect(light.coverage).toBe(100); // and still complete for its size
   });
 });

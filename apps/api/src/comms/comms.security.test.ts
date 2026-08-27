@@ -243,6 +243,30 @@ describe('Attachments inherit their parent authorization', () => {
     const forBob = await service.messages(TENANT_A, BOB, dm.id);
     expect(forBob[0]?.attachment?.name).toBe('payslip.pdf');
   });
+
+  it('aggregates only attachments from conversations visible to the caller', async () => {
+    const { service } = makeService();
+    const privateDm = await service.openDm(TENANT_A, ALICE, BOB);
+    const company = (await service.channels(TENANT_A, ALICE, false)).find((c) => c.kind === 'company');
+    expect(company).toBeTruthy();
+
+    await service.post(TENANT_A, {
+      channelId: privateDm.id,
+      sender: ALICE,
+      kind: 'file',
+      attachment: { name: 'private.pdf', mime: 'application/pdf', size: 12, dataUrl: 'data:application/pdf;base64,PRIVATE' },
+    });
+    await service.post(TENANT_A, {
+      channelId: company!.id,
+      sender: ALICE,
+      kind: 'file',
+      attachment: { name: 'shared.pdf', mime: 'application/pdf', size: 12, dataUrl: 'data:application/pdf;base64,SHARED' },
+    });
+
+    expect((await service.files(TENANT_A, BOB, false)).map((file) => file.name)).toEqual(expect.arrayContaining(['shared.pdf', 'private.pdf']));
+    expect((await service.files(TENANT_A, BOB, false)).map((file) => file.name)).toHaveLength(2);
+    expect((await service.files(TENANT_A, MALLORY, false)).map((file) => file.name)).toEqual(['shared.pdf']);
+  });
 });
 
 describe('Ordinary non-admin roles keep working (positive regression)', () => {
@@ -275,6 +299,7 @@ describe('Route permissions', () => {
   it.each([
     ['channels', 'comms.channel.read'],
     ['people', 'comms.channel.read'],
+    ['files', 'comms.channel.read'],
     ['openDm', 'comms.dm.create'],
     ['messages', 'comms.channel.read'],
     ['post', 'comms.channel.send'],

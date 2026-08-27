@@ -845,6 +845,11 @@ export class AuraSdk {
     return this.http.request('GET', `/comms/people`, undefined, undefined, opts);
   }
 
+  /** GET /api/v1/comms/files */
+  commsFiles(opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('GET', `/comms/files`, undefined, undefined, opts);
+  }
+
   /** GET /api/v1/comms/channels/{id}/messages */
   commsMessages(id: string, opts?: RequestOptions): Promise<unknown> {
     return this.http.request('GET', `/comms/channels/${encodeURIComponent(id)}/messages`, undefined, undefined, opts);

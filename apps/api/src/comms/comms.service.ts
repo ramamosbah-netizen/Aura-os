@@ -104,6 +104,20 @@ export interface ChatPerson {
   companyId: string | null;
 }
 
+/** A read-only projection of attachments shared in conversations the caller may access. */
+export interface CommunicationFile {
+  id: string;
+  channelId: string;
+  channelName: string;
+  sender: string;
+  kind: 'file' | 'voice';
+  name: string;
+  mime: string;
+  size: number;
+  dataUrl: string;
+  sentAt: string;
+}
+
 interface DirectoryPerson extends ChatPerson {
   active: boolean;
 }
@@ -230,6 +244,38 @@ export class CommsService {
         lastPreview: last ? this.preview(last) : null,
       };
     }));
+  }
+
+  /**
+   * Aggregate chat attachments without creating a second file store. Authorization is applied
+   * before messages are read, so private DM attachments cannot leak through this listing.
+   * Controlled documents remain owned by Document Control; these are inline chat attachments.
+   */
+  async files(
+    tenantId: string, username: string, isAdmin: boolean, companyId: string | null = null,
+  ): Promise<CommunicationFile[]> {
+    const channels = (await this.channelsFor(tenantId))
+      .filter((channel) => canAccessChannel(channel, username, isAdmin, companyId));
+    const files: CommunicationFile[] = [];
+    for (const channel of channels) {
+      const messages = await this.store.listMessages(tenantId, channel.id);
+      for (const message of messages) {
+        if ((message.kind !== 'file' && message.kind !== 'voice') || !message.attachment) continue;
+        files.push({
+          id: message.id,
+          channelId: channel.id,
+          channelName: channel.name,
+          sender: message.sender,
+          kind: message.kind,
+          name: message.attachment.name,
+          mime: message.attachment.mime,
+          size: message.attachment.size,
+          dataUrl: message.attachment.dataUrl,
+          sentAt: message.sentAt,
+        });
+      }
+    }
+    return files.sort((a, b) => b.sentAt.localeCompare(a.sentAt)).slice(0, 200);
   }
 
   /** Open (or create) the DM channel between two users. */

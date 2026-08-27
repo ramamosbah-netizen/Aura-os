@@ -25,6 +25,18 @@ interface MailItem { id: string; from: string; to: string[]; subject: string; se
 interface Mailbox { inbox: MailItem[]; sent: MailItem[]; unread: number }
 interface WorkspaceMe { username: string }
 interface WorkspaceUser { username: string; roleLabel: string }
+interface CommunicationFileView {
+  id: string;
+  channelId: string;
+  channelName: string;
+  sender: string;
+  kind: 'file' | 'voice';
+  name: string;
+  mime: string;
+  size: number;
+  dataUrl: string;
+  sentAt: string;
+}
 
 interface RecentCommunication {
   id: string;
@@ -33,6 +45,12 @@ interface RecentCommunication {
   date: string;
   href: string;
   kind: 'Chat' | 'Mail';
+}
+
+function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -64,14 +82,16 @@ export default async function MyCommunicationPage({
 
   // Channels use fetchJson so a refusal is distinguishable from an empty list. C1 conceals
   // channels a user may not see, and rendering "no conversations" for a 403 would misreport it.
-  const [channelResult, mailbox, me, users, accounts] = await Promise.all([
+  const [channelResult, mailbox, me, users, accounts, fileResult] = await Promise.all([
     fetchJson<ChatChannelView[]>('/api/comms/channels'),
     getJson<Mailbox>('/api/comms/mail'),
     getJson<WorkspaceMe>('/api/workspace/me'),
     getJson<WorkspaceUser[]>('/api/comms/people'),
     getJson<MailAccountView[]>('/api/comms/mailbox/accounts'),
+    fetchJson<CommunicationFileView[]>('/api/comms/files'),
   ]);
   const channels = channelResult.ok ? channelResult.data : null;
+  const files = fileResult.ok ? fileResult.data : null;
 
   const recent: RecentCommunication[] = [
     ...(channels ?? []).filter((channel) => channel.lastMessageAt).map((channel) => ({
@@ -212,8 +232,24 @@ export default async function MyCommunicationPage({
       {view === 'files' ? (
         <section className={styles.section} aria-labelledby="comm-files-title">
           <header className={styles.sectionHead}>
-            <div><h2 id="comm-files-title">Shared Files</h2><p>Files stay in Document Control — Communication points at them rather than storing a second copy.</p></div>
+            <div><h2 id="comm-files-title">Shared Files</h2><p>Chat attachments are searchable here; controlled documents still live in Document Control.</p></div>
           </header>
+          {files === null ? (
+            <p className={styles.truth}><ShieldCheck aria-hidden /><span>Chat files are currently unavailable. Document Control remains available for controlled documents.</span></p>
+          ) : files.length === 0 ? (
+            <p className={styles.empty}>No files have been shared in your conversations yet.</p>
+          ) : (
+            <div className={styles.list}>
+              {files.map((file) => (
+                <a key={file.id} href={file.dataUrl} download={file.name} className={styles.decision}>
+                  <span className={styles.verb}>{file.kind === 'voice' ? 'Voice' : 'Chat'}</span>
+                  <span className={styles.decisionMain}><strong>{file.name}</strong><small>{file.channelName} · {file.sender} · {fileSize(file.size)}</small></span>
+                  <span className={styles.module}>{new Intl.DateTimeFormat(DISPLAY_LOCALE, { day: '2-digit', month: 'short', timeZone: DISPLAY_TIME_ZONE }).format(new Date(file.sentAt))}</span>
+                  <ArrowRight aria-hidden />
+                </a>
+              ))}
+            </div>
+          )}
           <AuraTabLink href="/documents/control" tabTitle="Document Control" tabType="Communication" className={styles.decision}>
             <span className={styles.verb}>Files</span>
             <span className={styles.decisionMain}><strong>Open Document Control</strong><small>Shared documents, versions and permissions</small></span>

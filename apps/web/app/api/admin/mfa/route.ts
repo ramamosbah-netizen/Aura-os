@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: admin MFA reset — remove a user's TOTP enrolment (device loss / offboarding).
 export async function DELETE(request: Request): Promise<Response> {
   const account = new URL(request.url).searchParams.get('account') ?? '';
   try {
-    const res = await fetch(`${apiBase()}/api/v1/auth/mfa?account=${encodeURIComponent(account)}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/auth/mfa?account=${encodeURIComponent(account)}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

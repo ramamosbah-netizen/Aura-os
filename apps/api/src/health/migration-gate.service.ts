@@ -25,17 +25,14 @@ export function shouldAutoMigrate(env: NodeJS.ProcessEnv = process.env): boolean
 }
 
 export interface MigrationGateStatus {
-  /** True when the DB schema is BEHIND the code (migration files exist that aren't applied). */
+  /** True when migration history differs in either direction and business traffic must be gated. */
   degraded: boolean;
   /** Migration filenames present on disk but not recorded in public.aura_migrations. */
   pending: string[];
   /**
    * Filenames recorded APPLIED that no longer exist on disk — schema history drift (gap register
-   * **G-09**). Not degrading: the schema is ahead of the code, not behind, and the app runs fine.
-   * It matters because it is the fingerprint of a migration that was **renamed or renumbered after
-   * it had already been applied** — and an applied migration never re-runs, so edits to it silently
-   * never reach a long-lived database while CI, which builds a fresh schema every time, stays green.
-   * That is exactly how the P0-2 RLS `FORCE` clauses went missing in production while CI passed.
+   * **G-09**). This is degraded: a node whose immutable migration history does not match the
+   * database cannot prove that its schema is the one the code was tested against.
    */
   appliedButAbsent: string[];
   /** Total migration files shipped with this build (null when the dir couldn't be located). */
@@ -81,7 +78,7 @@ export class MigrationGateService implements OnModuleInit {
     // First-run repair (dev only): rather than serve a dead 503 app, apply the pending migrations
     // and re-check. Production keeps the strict gate (see shouldAutoMigrate). A failure here leaves
     // the app degraded exactly as before — auto-migrate can only improve on the 503, never brick it.
-    if (this.status.degraded && this.pool && shouldAutoMigrate()) {
+    if (this.status.pending.length > 0 && this.pool && shouldAutoMigrate()) {
       const dir = resolveMigrationsDir();
       if (dir) {
         this.logger.warn(
@@ -97,24 +94,22 @@ export class MigrationGateService implements OnModuleInit {
       }
     }
 
-    if (this.status.degraded) {
+    if (this.status.pending.length > 0) {
       this.logger.error(
         `SCHEMA BEHIND CODE — ${this.status.pending.length} pending migration(s): ${this.status.pending.join(', ')}. ` +
           'Business routes are refused (503) until migrations are applied. Run `pnpm --filter @aura/api db:migrate`.',
       );
-    } else {
+    } else if (this.status.appliedButAbsent.length === 0) {
       this.logger.log(`Schema up to date (${this.status.reason}).`);
     }
 
-    // Drift in the other direction (G-09). Deliberately separate from `degraded`: the app is
-    // healthy and refusing traffic would be wrong. But "up to date" alone is a misleading thing to
-    // log at a database whose history no longer matches the code that built it, so say it out loud.
+    // Drift in the other direction (G-09) is also fail-closed. A database whose immutable history
+    // differs from the build cannot prove schema compatibility, even when no forward file is pending.
     if (this.status.appliedButAbsent.length > 0) {
-      this.logger.warn(
+      this.logger.error(
         `MIGRATION HISTORY DRIFT — ${this.status.appliedButAbsent.length} applied migration(s) no longer exist on disk: ` +
           `${this.status.appliedButAbsent.join(', ')}. Usually a rename/renumber AFTER the file was applied. ` +
-          'Harmless today, but an applied migration never re-runs — so later edits to it will never reach this ' +
-          'database while CI (fresh schema every run) stays green. Never renumber a migration that has shipped.',
+          'Business routes are refused (503) until the ledger and shipped history are reconciled.',
       );
     }
   }
@@ -156,6 +151,7 @@ export class MigrationGateService implements OnModuleInit {
           `${message} — the app role holds no DDL rights (G-03 runs the API as NOBYPASSRLS aura_app). ` +
             'Set MIGRATION_DATABASE_URL to the schema-owning credential so auto-migrate uses it, or run ' +
             '`pnpm --filter @aura/api db:migrate` and restart.',
+          { cause: err },
         );
       }
       throw err;
@@ -185,7 +181,7 @@ export class MigrationGateService implements OnModuleInit {
         this.logger.log(`✓ auto-applied ${file}`);
       } catch (err) {
         await client.query('ROLLBACK').catch(() => undefined);
-        throw new Error(`migration ${file} failed: ${(err as Error).message}`);
+        throw new Error(`migration ${file} failed: ${(err as Error).message}`, { cause: err });
       }
     }
   }
@@ -238,16 +234,22 @@ export class MigrationGateService implements OnModuleInit {
     }
 
     const pending = onDisk.filter((f) => !applied.has(f));
-    // The other direction: applied rows with no file. Reported, never degrading — see the field doc.
+    // The other direction: applied rows with no file. This is immutable-history drift and must gate.
     const onDiskSet = new Set(onDisk);
     const appliedButAbsent = [...applied].filter((f) => !onDiskSet.has(f)).sort();
+    const degraded = pending.length > 0 || appliedButAbsent.length > 0;
     return {
-      degraded: pending.length > 0,
+      degraded,
       pending,
       appliedButAbsent,
       onDisk: onDisk.length,
       applied: applied.size,
-      reason: pending.length > 0 ? `${pending.length} migration(s) pending` : 'all migrations applied',
+      reason:
+        pending.length > 0
+          ? `${pending.length} migration(s) pending`
+          : appliedButAbsent.length > 0
+            ? `${appliedButAbsent.length} applied migration(s) absent from disk`
+            : 'all migrations applied',
     };
   }
 }

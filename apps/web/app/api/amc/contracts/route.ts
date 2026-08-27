@@ -1,9 +1,9 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(request: Request): Promise<Response> {
   const { searchParams } = new URL(request.url);
   try {
-    const res = await fetch(`${apiBase()}/api/v1/amc/contracts?${searchParams.toString()}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/amc/contracts?${searchParams.toString()}`, {
       method: 'GET',
       headers: await authHeader(),
       cache: 'no-store',
@@ -18,7 +18,7 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = await request.json().catch(() => ({}));
-    const res = await fetch(`${apiBase()}/api/v1/amc/contracts`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/amc/contracts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

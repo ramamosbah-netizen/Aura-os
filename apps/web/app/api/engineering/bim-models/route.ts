@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Client-side register proxy for BIM models. GET (list) is fetched server-side in the
 // Engineering page via getJson; this handler forwards the register from the client component.
@@ -21,7 +21,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/engineering/bim-models`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/engineering/bim-models`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

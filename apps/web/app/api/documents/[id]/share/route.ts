@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: grant a share on a document. The kernel enforces that the caller holds SHARE *and* may
 // delegate the level being granted (grantedPermissions ⊆ delegable(actor)); this proxy relays the
@@ -8,7 +8,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/documents/${id}/share`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/documents/${id}/share`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

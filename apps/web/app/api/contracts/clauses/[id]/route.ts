@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: revise a clause (bumps its revision) or retire/restore it.
 
@@ -9,7 +9,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (typeof body.tags === 'string') {
       body.tags = body.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
     }
-    const res = await fetch(`${apiBase()}/api/v1/contracts/clauses/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/contracts/clauses/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

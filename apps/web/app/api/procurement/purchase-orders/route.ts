@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward PO creation to the Nest Procurement API server-side (with identity).
 export async function POST(request: Request): Promise<Response> {
@@ -15,7 +15,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'title required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/procurement/purchase-orders`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/procurement/purchase-orders`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

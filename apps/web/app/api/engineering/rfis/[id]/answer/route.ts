@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PUT(
   request: Request,
@@ -12,7 +12,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/engineering/rfis/${id}/answer`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/engineering/rfis/${id}/answer`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

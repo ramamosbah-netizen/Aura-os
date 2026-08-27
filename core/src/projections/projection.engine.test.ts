@@ -5,6 +5,7 @@ import { EventBus } from '../events/event-bus';
 import { InMemoryEventStore } from '../events/in-memory-event-store';
 import { Projection } from './projection.types';
 import type { DomainEvent } from '@aura/shared';
+import type { Pool } from 'pg';
 
 describe('Projection & Snapshot Engine', () => {
   it('registers projection, reacts to live events, and handles replay rebuild', async () => {
@@ -74,5 +75,32 @@ describe('Projection & Snapshot Engine', () => {
     expect(snapshot).toBeNull();
 
     await expect(snapshotEngine.saveSnapshot('t1', 'agg', 'id1', 5, { data: 'test' })).resolves.not.toThrow();
+  });
+
+  it('reports a failed startup alignment as not ready', async () => {
+    const eventBus = new EventBus();
+    const eventStore = new InMemoryEventStore(eventBus);
+    const pool = {
+      query: vi.fn().mockRejectedValue(new Error('projection table unavailable')),
+    } as unknown as Pool;
+    const projectionEngine = new ProjectionEngine(pool, eventStore, eventBus);
+
+    projectionEngine.register({
+      name: 'broken-projection',
+      version: 1,
+      handle: vi.fn(),
+    });
+
+    expect(projectionEngine.getReadinessStatus()).toMatchObject({
+      ready: false,
+      pending: ['broken-projection'],
+    });
+    await vi.waitFor(() => {
+      expect(projectionEngine.getReadinessStatus()).toEqual({
+        ready: false,
+        pending: [],
+        failed: ['broken-projection'],
+      });
+    });
   });
 });

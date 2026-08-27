@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // NCR workflow-command forwarder. The backend enforces the state transition; this whitelists the
 // verb and forwards the body.
@@ -14,7 +14,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/quality/ncrs/${id}/${command}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/quality/ncrs/${id}/${command}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

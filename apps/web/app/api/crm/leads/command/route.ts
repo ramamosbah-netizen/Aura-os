@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: Lead Command — attention-scored leads + view counts (All / Mine / Needs Attention / Nurture).
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/leads/command`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/leads/command`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

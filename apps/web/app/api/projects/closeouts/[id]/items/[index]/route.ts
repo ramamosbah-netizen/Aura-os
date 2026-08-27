@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: toggle one closeout checklist item.
 
@@ -6,7 +6,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id, index } = await params;
   try {
     const body = await req.json().catch(() => ({}));
-    const res = await fetch(`${apiBase()}/api/v1/projects/closeouts/${id}/items/${index}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/closeouts/${id}/items/${index}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // T4 — answer a clarification / acknowledge an addendum.
 export async function PATCH(
@@ -8,7 +8,7 @@ export async function PATCH(
   const { id, clarificationId } = await params;
   try {
     const body = await request.json();
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/clarifications/${clarificationId}/answer`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/${id}/clarifications/${clarificationId}/answer`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

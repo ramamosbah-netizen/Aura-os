@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: Pricing Workspace (Slice 7) — revision.
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}/pre-award-package/pricing/revision`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/opportunities/${id}/pre-award-package/pricing/revision`, {
       method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(await request.json().catch(() => ({}))), cache: 'no-store',
     });

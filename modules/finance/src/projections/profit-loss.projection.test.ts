@@ -4,6 +4,18 @@ import type { DomainEvent } from '@aura/shared';
 import type { PoolClient } from 'pg';
 
 describe('ProfitLossProjection', () => {
+  it('resets through the least-privilege database function', async () => {
+    const projection = new ProfitLossProjection();
+    const querySpy = vi.fn();
+    const mockClient = { query: querySpy } as unknown as PoolClient;
+
+    expect(projection.version).toBe(2);
+    await projection.reset(mockClient);
+
+    expect(querySpy).toHaveBeenCalledOnce();
+    expect(querySpy).toHaveBeenCalledWith('SELECT public.reset_finance_pl_projection()');
+  });
+
   it('correctly routes and inserts revenue vs expense depending on supplier presence', async () => {
     const projection = new ProfitLossProjection();
     const querySpy = vi.fn();

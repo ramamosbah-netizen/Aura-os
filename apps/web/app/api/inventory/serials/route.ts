@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Register a serialised unit. List is server-fetched via getJson.
 export async function POST(request: Request): Promise<Response> {
@@ -9,7 +9,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'serialNumber, itemCode and itemName required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/inventory/serials`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/inventory/serials`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(request: NextRequest): Promise<Response> {
   const { searchParams } = request.nextUrl;
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (projectId) query.append('projectId', projectId);
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/procurement/purchase-requests?${query.toString()}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/procurement/purchase-requests?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -35,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!title) return Response.json({ error: 'title is required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/procurement/purchase-requests`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/procurement/purchase-requests`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

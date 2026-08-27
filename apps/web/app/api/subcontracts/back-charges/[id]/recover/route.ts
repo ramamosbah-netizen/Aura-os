@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PATCH(
   request: Request,
@@ -10,7 +10,7 @@ export async function PATCH(
   if (!(amount > 0)) return Response.json({ error: 'amount must be positive' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/subcontracts/back-charges/${id}/recover`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/subcontracts/back-charges/${id}/recover`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ amount }),

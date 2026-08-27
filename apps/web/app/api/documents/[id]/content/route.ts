@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: stream a document's bytes. The kernel checks DOWNLOAD against the document before it hands
 // over a single byte — the content is not reachable by holding a storage key — so this proxy
@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (url.searchParams.get('inline') === 'true') upstreamQuery.set('inline', 'true');
   const query = upstreamQuery.size ? `?${upstreamQuery.toString()}` : '';
   try {
-    const res = await fetch(`${apiBase()}/api/v1/documents/${id}/content${query}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/documents/${id}/content${query}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

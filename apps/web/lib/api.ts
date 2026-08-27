@@ -7,6 +7,31 @@ export function apiBase(): string {
   return process.env.AURA_API_URL ?? 'http://localhost:4000';
 }
 
+const DEFAULT_API_TIMEOUT_MS = 30_000;
+
+/**
+ * Fetch an upstream service with a bounded wait.
+ *
+ * Every BFF route uses this seam so a stalled API cannot leave a browser mutation or server
+ * render waiting indefinitely. A caller-supplied abort signal is preserved and combined with the
+ * deadline. `AURA_API_TIMEOUT_MS` is intentionally clamped: a typo must not disable the bound.
+ */
+export async function apiFetch(
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1] = {},
+  timeoutMs = configuredApiTimeoutMs(),
+): Promise<Response> {
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const signal = init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
+  return fetch(input, { ...init, signal });
+}
+
+function configuredApiTimeoutMs(): number {
+  const configured = Number(process.env.AURA_API_TIMEOUT_MS);
+  if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_API_TIMEOUT_MS;
+  return Math.min(Math.max(Math.trunc(configured), 1_000), 120_000);
+}
+
 /** The current session token from the httpOnly cookie, or null. */
 export async function sessionToken(): Promise<string | null> {
   const store = await cookies();
@@ -70,7 +95,7 @@ function versioned(path: string): string {
  */
 export async function fetchJson<T>(path: string): Promise<DataResult<T>> {
   try {
-    const res = await fetch(`${apiBase()}${versioned(path)}`, { cache: 'no-store', headers: await authHeader() });
+    const res = await apiFetch(`${apiBase()}${versioned(path)}`, { cache: 'no-store', headers: await authHeader() });
     if (!res.ok) return { ok: false, error: { kind: classifyStatus(res.status), status: res.status } };
     return { ok: true, data: (await res.json()) as T };
   } catch {

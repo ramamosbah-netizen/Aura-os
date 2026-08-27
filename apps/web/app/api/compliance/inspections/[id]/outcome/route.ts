@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: record an authority inspection's outcome.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   const body = await req.text();
   try {
-    const res = await fetch(`${apiBase()}/api/v1/compliance/inspections/${id}/outcome`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/compliance/inspections/${id}/outcome`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body,

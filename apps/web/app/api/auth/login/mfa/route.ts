@@ -1,4 +1,4 @@
-import { apiBase } from '@/lib/api';
+import { apiFetch, apiBase } from '@/lib/api';
 import { storeSession } from '@/lib/auth-session';
 
 // BFF: answer an `mfa` challenge with the authenticator code. Same contract as the password
@@ -6,7 +6,7 @@ import { storeSession } from '@/lib/auth-session';
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as { challengeId?: unknown; code?: unknown };
   try {
-    const res = await fetch(`${apiBase()}/api/v1/auth/login/mfa`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/auth/login/mfa`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

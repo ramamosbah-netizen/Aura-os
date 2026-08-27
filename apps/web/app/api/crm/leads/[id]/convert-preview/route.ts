@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: convert dry-run — possible-duplicate Account/Contact matches before converting.
 
@@ -8,7 +8,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/leads/${id}/convert-preview`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/leads/${id}/convert-preview`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

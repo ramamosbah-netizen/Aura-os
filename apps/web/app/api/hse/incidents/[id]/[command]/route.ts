@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Incident investigation-command forwarder (0229). `close` keeps its own static route because it
 // carries the mandatory root cause; these are the rest of the lifecycle.
@@ -14,7 +14,7 @@ export async function PUT(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/hse/incidents/${id}/${command}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/hse/incidents/${id}/${command}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

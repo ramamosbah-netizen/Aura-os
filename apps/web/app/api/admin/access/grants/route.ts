@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: grant a role to a user.
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/admin/access/grants`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/admin/access/grants`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),
@@ -24,7 +24,7 @@ export async function DELETE(request: Request): Promise<Response> {
     roleId: url.searchParams.get('roleId') ?? '',
   });
   try {
-    const res = await fetch(`${apiBase()}/api/v1/admin/access/grants?${qs.toString()}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/admin/access/grants?${qs.toString()}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

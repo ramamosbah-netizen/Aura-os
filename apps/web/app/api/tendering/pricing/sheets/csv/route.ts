@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: stream the all-sheets summary CSV as a file download.
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/pricing/sheets.csv`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/pricing/sheets.csv`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

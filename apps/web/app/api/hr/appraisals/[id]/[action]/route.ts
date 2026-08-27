@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: appraisal lifecycle — submit / acknowledge.
 
@@ -8,7 +8,7 @@ export async function PUT(_request: Request, { params }: { params: Promise<{ id:
   const { id, action } = await params;
   if (!ALLOWED.has(action)) return Response.json({ error: 'unknown action' }, { status: 400 });
   try {
-    const res = await fetch(`${apiBase()}/api/v1/hr/appraisals/${id}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/hr/appraisals/${id}/${action}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       cache: 'no-store',

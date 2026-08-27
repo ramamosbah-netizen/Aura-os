@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: Qualify & Convert — Lead → Opportunity (transactional, idempotent, dedupe-protected).
 
@@ -9,7 +9,7 @@ export async function POST(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/leads/${id}/convert`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/leads/${id}/convert`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

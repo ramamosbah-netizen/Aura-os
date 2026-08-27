@@ -1,9 +1,9 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: the REAL autonomy proposal queue for the AI workspace (no fabricated data).
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/admin/platform/ai/autonomy/proposals`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/admin/platform/ai/autonomy/proposals`, {
       headers: { ...(await authHeader()) },
       cache: 'no-store',
     });

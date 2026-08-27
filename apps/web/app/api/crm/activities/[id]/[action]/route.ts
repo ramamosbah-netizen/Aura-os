@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: activity workflow actions — complete / cancel / reopen.
 
@@ -10,7 +10,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // complete carries an optional { outcome, followUp } body — forward it through.
   const body = await req.json().catch(() => null);
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/activities/${id}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/activities/${id}/${action}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       ...(body ? { body: JSON.stringify(body) } : {}),

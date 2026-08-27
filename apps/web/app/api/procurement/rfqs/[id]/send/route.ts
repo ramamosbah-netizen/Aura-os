@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: send an RFQ to vendors (status -> sent).
 export async function PATCH(
@@ -7,7 +7,7 @@ export async function PATCH(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/procurement/rfqs/${id}/send`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/procurement/rfqs/${id}/send`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       cache: 'no-store',

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: documents other people have shared with the caller. Static segment so Next matches it
 // before the dynamic `[id]` route — otherwise "shared-with-me" would be read as a document id.
@@ -6,7 +6,7 @@ import { apiBase, authHeader } from '@/lib/api';
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/documents/shared-with-me`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/documents/shared-with-me`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

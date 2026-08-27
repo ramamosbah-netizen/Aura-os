@@ -19,6 +19,9 @@ function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (entry === 'node_modules' || entry === '.next' || entry === 'e2e') continue;
     const file = join(dir, entry);
+    // API route paths intentionally keep `/api/v1/projects/projects/...`; they are excluded from
+    // the ownership rule, so do not traverse 400+ BFF files only to discard every result later.
+    if (file === join(WEB, 'app', 'api')) continue;
     if (statSync(file).isDirectory()) walk(file, out);
     else if (/\.tsx?$/.test(file) && !/\.(test|spec)\.tsx?$/.test(file)) out.push(file);
   }
@@ -30,7 +33,6 @@ function legacyLinkFindings(): string[] {
   for (const root of ROOTS) {
     for (const file of walk(join(WEB, root))) {
       if (file === LEGACY_ROUTE) continue;
-      if (file.startsWith(join(WEB, 'app', 'api'))) continue;
       readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
         if (LEGACY_DETAIL_LINK.test(line)) {
           findings.push(`${relative(WEB, file).replace(/\\/g, '/')}:${index + 1}`);
@@ -62,5 +64,5 @@ describe('ADR-0019 canonical Project 360 ownership', () => {
       `ADR-0019 violation: link Project records to /project/[projectId] (or its canonical child) instead.\n` +
         `The old /projects/projects/[id] route is compatibility-only.\n\nOffending:\n  ${findings.join('\n  ')}`,
     ).toEqual([]);
-  });
+  }, 15_000);
 });

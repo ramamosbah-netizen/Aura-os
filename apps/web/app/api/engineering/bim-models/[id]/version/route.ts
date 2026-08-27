@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Uploads a new version of a BIM model — bumps version + revision, keeping the registry row.
 export async function PUT(
@@ -19,7 +19,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/engineering/bim-models/${id}/version`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/engineering/bim-models/${id}/version`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

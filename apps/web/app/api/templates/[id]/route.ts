@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(
   request: NextRequest,
@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/templates/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/templates/${id}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -31,7 +31,7 @@ export async function PUT(
   };
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/templates/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/templates/${id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({
@@ -55,7 +55,7 @@ export async function DELETE(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/templates/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/templates/${id}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

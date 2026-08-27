@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // The distribution/revision history of a register entry (which transmittals conveyed each rev).
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/doccontrol/register/${id}/history`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/doccontrol/register/${id}/history`, {
       headers: { ...(await authHeader()) },
       cache: 'no-store',
     });

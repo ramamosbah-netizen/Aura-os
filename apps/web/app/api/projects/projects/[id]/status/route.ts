@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: project execution lifecycle — completing the project completes the source contract.
 
@@ -6,7 +6,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   try {
     const body = await req.json().catch(() => ({}));
-    const res = await fetch(`${apiBase()}/api/v1/projects/projects/${id}/status`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/projects/${id}/status`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

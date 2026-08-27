@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { apiBase } from '@/lib/api';
+import { apiFetch, apiBase } from '@/lib/api';
 import { SESSION_COOKIE } from '@/lib/session';
 
 // Revoke the API token first, then clear the browser cookie even if the API is unavailable.
@@ -8,7 +8,7 @@ export async function POST(): Promise<Response> {
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) {
     try {
-      await fetch(`${apiBase()}/api/v1/auth/logout`, {
+      await apiFetch(`${apiBase()}/api/v1/auth/logout`, {
         method: 'POST',
         headers: { authorization: `Bearer ${token}` },
         cache: 'no-store',

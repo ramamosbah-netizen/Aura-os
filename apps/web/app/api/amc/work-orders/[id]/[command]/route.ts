@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Work-order command forwarder (G-08 residue). `assign` and `complete` keep their own static
 // routes; these are the lifecycle verbs added alongside migration 0230. The API enforces the
@@ -15,7 +15,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/amc/work-orders/${id}/${command}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/amc/work-orders/${id}/${command}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

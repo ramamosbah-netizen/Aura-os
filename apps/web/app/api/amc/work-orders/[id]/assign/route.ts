@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Assign a work order to a technician (open → assigned).
 export async function POST(
@@ -11,7 +11,7 @@ export async function POST(
     return Response.json({ error: 'technicianId required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/amc/work-orders/${id}/assign`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/amc/work-orders/${id}/assign`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -4,7 +4,9 @@ import type { PoolClient } from 'pg';
 
 export class ProfitLossProjection implements Projection {
   readonly name = 'finance.profit-loss';
-  readonly version = 1;
+  // V2 replaces the owner-only TRUNCATE reset with the fixed, least-privilege rebuild function
+  // introduced by migration 0257. Advancing the version forces one clean rebuild after deploy.
+  readonly version = 2;
 
   async handle(event: DomainEvent, client: PoolClient | null): Promise<void> {
     if (!client) return;
@@ -42,6 +44,6 @@ export class ProfitLossProjection implements Projection {
 
   async reset(client: PoolClient | null): Promise<void> {
     if (!client) return;
-    await client.query('TRUNCATE public.aura_finance_pl_projection CASCADE');
+    await client.query('SELECT public.reset_finance_pl_projection()');
   }
 }

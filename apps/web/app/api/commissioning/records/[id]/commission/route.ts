@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Commission (witnessed sign-off) a record — the event that unlocks handover.
 export async function PUT(
@@ -16,7 +16,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/commissioning/records/${id}/commission`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/commissioning/records/${id}/commission`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

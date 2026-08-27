@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(
   request: Request,
@@ -6,7 +6,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/quality/audits/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/quality/audits/${id}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

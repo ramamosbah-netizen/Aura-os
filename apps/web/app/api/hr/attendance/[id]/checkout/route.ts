@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: record a check-out on an attendance record (recomputes worked hours).
 export async function PUT(
@@ -8,7 +8,7 @@ export async function PUT(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/hr/attendance/${id}/checkout`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/hr/attendance/${id}/checkout`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

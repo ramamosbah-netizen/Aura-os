@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: advance a signal through triage (NEW → REVIEWING → RESEARCHING).
 
@@ -9,7 +9,7 @@ export async function PATCH(
   const { id } = await params;
   try {
     const body = await request.text();
-    const res = await fetch(`${apiBase()}/api/v1/crm/signals/${id}/advance`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/signals/${id}/advance`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body,

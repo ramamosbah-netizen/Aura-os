@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 /**
  * BFF passthrough for the mail workspace.
@@ -20,7 +20,7 @@ async function forward(request: Request, path: string[], method: string): Promis
     ? undefined
     : JSON.stringify(await request.json().catch(() => ({})));
   try {
-    const res = await fetch(target, {
+    const res = await apiFetch(target, {
       method,
       headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(await authHeader()) },
       body,

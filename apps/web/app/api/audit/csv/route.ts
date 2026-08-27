@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: stream the filtered audit-log CSV export (gap #10).
 export async function GET(request: Request): Promise<Response> {
   const { searchParams } = new URL(request.url);
   const qs = searchParams.toString();
   try {
-    const res = await fetch(`${apiBase()}/api/v1/audit/export.csv${qs ? `?${qs}` : ''}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/audit/export.csv${qs ? `?${qs}` : ''}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

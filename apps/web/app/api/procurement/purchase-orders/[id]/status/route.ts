@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PATCH(
   request: Request,
@@ -12,7 +12,7 @@ export async function PATCH(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/procurement/purchase-orders/${id}/status`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/procurement/purchase-orders/${id}/status`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

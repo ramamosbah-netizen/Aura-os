@@ -1,4 +1,4 @@
-import { apiBase } from '@/lib/api';
+import { apiFetch, apiBase } from '@/lib/api';
 
 // Is the API asking for credentials? Reports whether a JWT verifier is configured, so the browser
 // side can tell "auth is off in this environment" apart from "you are signed out" — the E2E global
@@ -6,7 +6,7 @@ import { apiBase } from '@/lib/api';
 // Deliberately unauthenticated: it exposes a boolean about configuration, never about a session.
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/auth/status`, { cache: 'no-store' });
+    const res = await apiFetch(`${apiBase()}/api/v1/auth/status`, { cache: 'no-store' });
     const data = (await res.json().catch(() => ({}))) as { enabled?: boolean };
     return Response.json({ enabled: data.enabled ?? false }, { status: res.ok ? 200 : res.status });
   } catch {

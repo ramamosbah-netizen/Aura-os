@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function POST(
   request: Request,
@@ -8,7 +8,7 @@ export async function POST(
   try {
     const formData = await request.formData();
     
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/boq/upload`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/${id}/boq/upload`, {
       method: 'POST',
       headers: {
         ...(await authHeader()),

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: Opportunity execution depth — stakeholders + coverage, deal team, commitments + summary.
 
@@ -8,7 +8,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}/depth`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/opportunities/${id}/depth`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

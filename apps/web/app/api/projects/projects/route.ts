@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward project queries and creation to the Nest Projects API server-side.
 
@@ -14,7 +14,7 @@ export async function GET(request: Request): Promise<Response> {
   if (contractId) queryParams.set('contractId', contractId);
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/projects/projects?${queryParams.toString()}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/projects?${queryParams.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -41,7 +41,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'title required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/projects/projects`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/projects`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

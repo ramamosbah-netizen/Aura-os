@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: C5 / G15 — Source → Wins → Contract Value → Actual Margin.
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/source-funnel`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/source-funnel`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

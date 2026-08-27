@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Create a handover package. GET (list) is server-fetched in the Handover page via getJson.
 export async function POST(request: Request): Promise<Response> {
@@ -14,7 +14,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/commissioning/handovers`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/commissioning/handovers`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

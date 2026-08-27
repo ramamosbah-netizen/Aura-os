@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Records the consultant's response to a Technical Query (moves open → responded).
 export async function PUT(
@@ -13,7 +13,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/engineering/technical-queries/${id}/respond`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/engineering/technical-queries/${id}/respond`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

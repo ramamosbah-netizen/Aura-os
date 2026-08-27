@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward tender creation to the Nest Tendering API server-side.
 export async function POST(request: Request): Promise<Response> {
@@ -15,7 +15,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'title required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

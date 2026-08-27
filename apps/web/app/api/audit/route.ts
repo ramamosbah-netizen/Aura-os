@@ -1,9 +1,9 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(request: Request): Promise<Response> {
   const { searchParams } = new URL(request.url);
   try {
-    const res = await fetch(`${apiBase()}/api/v1/audit?${searchParams.toString()}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/audit?${searchParams.toString()}`, {
       method: 'GET',
       headers: await authHeader(),
       cache: 'no-store',

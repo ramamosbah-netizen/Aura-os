@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // One proxy for the serial-unit transitions: issue · install · return · fault.
 const ALLOWED = new Set(['issue', 'install', 'return', 'fault']);
@@ -13,7 +13,7 @@ export async function PUT(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/inventory/serials/${id}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/inventory/serials/${id}/${action}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: promote a signal to a lead (transactional, idempotent, lineage-preserving).
 
@@ -8,7 +8,7 @@ export async function POST(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/signals/${id}/promote`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/signals/${id}/promote`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       cache: 'no-store',

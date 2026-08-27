@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 const ALLOWED = new Set(['acknowledge', 'close']);
 
@@ -6,7 +6,7 @@ export async function PUT(_req: Request, { params }: { params: Promise<{ id: str
   const { id, action } = await params;
   if (!ALLOWED.has(action)) return Response.json({ error: 'unknown action' }, { status: 404 });
   try {
-    const res = await fetch(`${apiBase()}/api/v1/site/instructions/${id}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/site/instructions/${id}/${action}`, {
       method: 'PUT',
       headers: await authHeader(),
       cache: 'no-store',

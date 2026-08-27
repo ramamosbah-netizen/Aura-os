@@ -15,6 +15,16 @@ packages:
   - "infrastructure"
   - "packages/*"
 
+# jsPDF currently allows an older optional DOMPurify release. Pin the patched compatible version
+# until jsPDF raises its own floor; this keeps browser-side PDF sanitization off the vulnerable line.
+overrides:
+  # Nest decorators and DI tokens must come from one physical package version across the host
+  # and every workspace library. Mixed versions make tokens such as Reflector unresolvable.
+  '@nestjs/common': 11.2.3
+  '@nestjs/core': 11.2.3
+  '@nestjs/platform-express': 11.2.3
+  dompurify: 3.4.13
+
 # Build-script policy. Every dependency that ships a postinstall/native build step must
 # be listed with an explicit true/false — otherwise `pnpm install` stops on the
 # "ignored build scripts" prompt and exits non-zero, which would break CI.

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Permit-to-work command forwarder (G-08 residue). One thin proxy for the state-machine verbs the
 // backend added in 0229 — approve and close keep their own static routes. The API enforces the
@@ -15,7 +15,7 @@ export async function PUT(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/hse/ptws/${id}/${command}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/hse/ptws/${id}/${command}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: §14 Win Plan — merge fields; returns the deal + size-aware derived coverage.
 
@@ -6,7 +6,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}/win-plan`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/opportunities/${id}/win-plan`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

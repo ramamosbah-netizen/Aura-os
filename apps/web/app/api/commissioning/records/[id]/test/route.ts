@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Record a test pass/total against a commissioning record.
 export async function PUT(
@@ -18,7 +18,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/commissioning/records/${id}/test`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/commissioning/records/${id}/test`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

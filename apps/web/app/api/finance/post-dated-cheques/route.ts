@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(request: NextRequest): Promise<Response> {
   const { searchParams } = request.nextUrl;
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (status) query.append('status', status);
   if (direction) query.append('direction', direction);
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/post-dated-cheques?${query.toString()}`, { headers: await authHeader(), cache: 'no-store' });
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/post-dated-cheques?${query.toString()}`, { headers: await authHeader(), cache: 'no-store' });
     return Response.json(res.ok ? await res.json() : [], { status: res.ok ? 200 : res.status });
   } catch {
     return Response.json([], { status: 502 });
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/post-dated-cheques`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/post-dated-cheques`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

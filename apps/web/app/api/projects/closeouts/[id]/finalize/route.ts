@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: finalize the closeout (handover date, DLP) — the project is ready to complete.
 
@@ -6,7 +6,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   try {
     const body = await req.json().catch(() => ({}));
-    const res = await fetch(`${apiBase()}/api/v1/projects/closeouts/${id}/finalize`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/closeouts/${id}/finalize`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

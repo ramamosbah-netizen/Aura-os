@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(
   request: NextRequest,
@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { projectId } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/projects/cbs/summary/${projectId}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/cbs/summary/${projectId}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

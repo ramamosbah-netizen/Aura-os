@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Permit 360 read — the permit with the risk assessment that authorises it. A GET forwarder is
 // needed (not just server-side getJson) so the 360 page can refresh itself after a transition
@@ -9,7 +9,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await props.params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/hse/ptws/${id}/detail`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/hse/ptws/${id}/detail`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

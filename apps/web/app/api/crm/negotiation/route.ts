@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: the negotiation log — what was asked, what was answered, what the competition was doing.
 //
@@ -9,7 +9,7 @@ import { apiBase, authHeader } from '@/lib/api';
 export async function GET(req: Request): Promise<Response> {
   const qs = new URL(req.url).search;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/negotiation${qs}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/negotiation${qs}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -23,7 +23,7 @@ export async function GET(req: Request): Promise<Response> {
 export async function POST(req: Request): Promise<Response> {
   const body = await req.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/negotiation`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/negotiation`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

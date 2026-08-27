@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Transmittal conveyance-command forwarder (G-33): send / receive (POST). `acknowledge` keeps its
 // own PUT route. The backend enforces the lifecycle transition.
@@ -14,7 +14,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/doccontrol/transmittals/${id}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/doccontrol/transmittals/${id}/${action}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

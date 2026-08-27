@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Metadata only. The kernel still owns VIEW authorisation and never exposes storage keys through
 // this BFF unless the caller is allowed to see the document record.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/documents/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/documents/${id}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

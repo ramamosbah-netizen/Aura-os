@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function DELETE(
   request: Request,
@@ -6,7 +6,7 @@ export async function DELETE(
 ): Promise<Response> {
   const { id } = await props.params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/fleet/vehicles/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/fleet/vehicles/${id}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

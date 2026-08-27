@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward contract creation to the Nest Contracts API server-side.
 export async function POST(request: Request): Promise<Response> {
@@ -17,7 +17,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'title required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/contracts/contracts`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/contracts/contracts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

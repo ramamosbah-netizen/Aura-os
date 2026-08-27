@@ -1,15 +1,8 @@
 // Split from postgres-quality-store.ts — one file per entity store.
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
-import type { Ncr } from './domain/ncr';
-import type { InspectionRequest } from './domain/inspection-request';
-import type { Snag } from './domain/snag';
-import type { Itp, ItpPoint } from './domain/itp';
-import type { MaterialApproval } from './domain/material-approval';
-import type { Calibration } from './domain/calibration';
 import type { AuditSchedule } from './domain/audit-schedule';
-import { type Page, PageParams, makePage } from '@aura/shared';
-import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { AuditScheduleStore } from './store.interface';
 
 export class PostgresAuditScheduleStore implements AuditScheduleStore {
   constructor(private readonly pool: Pool) {}
@@ -68,7 +61,7 @@ export class PostgresAuditScheduleStore implements AuditScheduleStore {
     return res.rows.map((row) => this.mapAudit(row));
   }
 
-  private mapAudit(row: any): AuditSchedule {
+  private mapAudit(row: QueryResultRow): AuditSchedule {
     return {
       id: row.id,
       tenantId: row.tenant_id,

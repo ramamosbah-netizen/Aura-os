@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: Form Designer — one schema's fields + overrides; save / reset the patch.
 
 async function proxy(method: 'GET' | 'PUT' | 'DELETE', id: string, body?: unknown): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/admin/forms/${encodeURIComponent(id)}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/admin/forms/${encodeURIComponent(id)}`, {
       method,
       headers: {
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),

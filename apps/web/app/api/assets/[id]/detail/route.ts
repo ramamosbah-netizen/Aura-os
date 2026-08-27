@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Asset 360 read — the register row with its maintenance, open-job count, and disposal.
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await props.params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/assets/${id}/detail`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/assets/${id}/detail`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

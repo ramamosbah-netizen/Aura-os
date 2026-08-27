@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function POST(
   request: NextRequest,
@@ -16,7 +16,7 @@ export async function POST(
   if (!status) return Response.json({ error: 'status required' }, { status: 400 });
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/projects/eot-claims/${id}/decide`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/eot-claims/${id}/decide`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: revoke one share. Requires SHARE on the document — whoever may grant access may take it
 // away. The kernel decides; this relays.
@@ -9,7 +9,7 @@ export async function DELETE(
 ): Promise<Response> {
   const { id, permissionId } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/documents/${id}/permissions/${permissionId}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/documents/${id}/permissions/${permissionId}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

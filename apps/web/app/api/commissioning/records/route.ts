@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Client-side register proxy for Commissioning records. GET (list) is fetched server-side
 // in the Commissioning page via getJson; this forwards the register from the client.
@@ -18,7 +18,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/commissioning/records`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/commissioning/records`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

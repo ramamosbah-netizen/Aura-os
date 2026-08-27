@@ -6,10 +6,18 @@ import { PG_POOL } from '../events/pg-pool';
 import { Projection } from './projection.types';
 import type { DomainEvent } from '@aura/shared';
 
+export type ProjectionReadinessStatus = {
+  ready: boolean;
+  pending: string[];
+  failed: string[];
+};
+
 @Injectable()
 export class ProjectionEngine implements OnModuleInit {
   private readonly logger = new Logger('ProjectionEngine');
   private readonly projections = new Map<string, Projection>();
+  private readonly alignmentPending = new Set<string>();
+  private readonly alignmentFailures = new Set<string>();
 
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool | null,
@@ -45,10 +53,29 @@ export class ProjectionEngine implements OnModuleInit {
     this.projections.set(projection.name, projection);
     this.logger.log(`Registered projection: ${projection.name} (V${projection.version})`);
     
-    // Asynchronously align projection status (rebuild if version changed)
-    this.alignProjection(projection.name).catch((err) => {
-      this.logger.error(`Failed to align projection ${projection.name}: ${err.message}`, err.stack);
-    });
+    // Asynchronously align projection status (rebuild if version changed). Readiness remains
+    // closed until alignment completes, and a failed rebuild stays visible to health probes.
+    this.alignmentPending.add(projection.name);
+    this.alignmentFailures.delete(projection.name);
+    void this.alignProjection(projection.name)
+      .catch((error: unknown) => {
+        this.alignmentFailures.add(projection.name);
+        const err = error instanceof Error ? error : new Error(String(error));
+        this.logger.error(`Failed to align projection ${projection.name}: ${err.message}`, err.stack);
+      })
+      .finally(() => {
+        this.alignmentPending.delete(projection.name);
+      });
+  }
+
+  getReadinessStatus(): ProjectionReadinessStatus {
+    const pending = [...this.alignmentPending].sort();
+    const failed = [...this.alignmentFailures].sort();
+    return {
+      ready: pending.length === 0 && failed.length === 0,
+      pending,
+      failed,
+    };
   }
 
   async replay(name: string): Promise<void> {

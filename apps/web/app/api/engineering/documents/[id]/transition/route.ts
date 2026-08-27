@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as { status?: string };
   if (!body.status) return Response.json({ error: 'status required' }, { status: 400 });
   try {
-    const res = await fetch(`${apiBase()}/api/v1/engineering/documents/${id}/transition`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/engineering/documents/${id}/transition`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

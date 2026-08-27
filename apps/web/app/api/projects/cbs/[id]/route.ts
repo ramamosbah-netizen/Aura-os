@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PATCH(
   request: NextRequest,
@@ -26,7 +26,7 @@ export async function PATCH(
   if (typeof body.notes === 'string') payload.notes = body.notes;
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/projects/cbs/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/cbs/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(payload),
@@ -45,7 +45,7 @@ export async function DELETE(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/projects/cbs/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/projects/cbs/${id}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

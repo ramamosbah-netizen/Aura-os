@@ -1,9 +1,9 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: open (or create) a direct-message channel with a peer.
 export async function POST(request: Request): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/comms/dm`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/comms/dm`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(await request.json().catch(() => ({}))),

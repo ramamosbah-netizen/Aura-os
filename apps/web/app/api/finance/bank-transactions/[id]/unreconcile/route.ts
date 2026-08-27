@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function POST(
   request: Request,
@@ -7,7 +7,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/bank-transactions/${id}/unreconcile`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/bank-transactions/${id}/unreconcile`, {
       method: 'POST',
       headers: { ...(await authHeader()) },
       cache: 'no-store',

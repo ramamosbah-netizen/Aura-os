@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: Opportunity Radar — open signals + triage counts by status / source / type.
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/signals/radar`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/signals/radar`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

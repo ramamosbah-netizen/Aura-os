@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Close a permit to work — the auditable end of the high-risk activity (area made safe).
 export async function PUT(
@@ -7,7 +7,7 @@ export async function PUT(
 ): Promise<Response> {
   const { id } = await props.params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/hse/ptws/${id}/close`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/hse/ptws/${id}/close`, {
       method: 'PUT',
       headers: await authHeader(),
       cache: 'no-store',

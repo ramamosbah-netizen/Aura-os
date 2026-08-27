@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PUT(
   request: Request,
@@ -7,7 +7,7 @@ export async function PUT(
   const { id, itemId } = await params;
   try {
     const body = await request.json().catch(() => ({}));
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/boq/items/${itemId}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/${id}/boq/items/${itemId}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),
@@ -26,7 +26,7 @@ export async function DELETE(
 ): Promise<Response> {
   const { id, itemId } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/boq/items/${itemId}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/${id}/boq/items/${itemId}`, {
       method: 'DELETE',
       headers: await authHeader(),
       cache: 'no-store',

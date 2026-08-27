@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: add an opportunity stakeholder (buying-committee member).
 
@@ -9,7 +9,7 @@ export async function POST(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}/stakeholders`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/opportunities/${id}/stakeholders`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

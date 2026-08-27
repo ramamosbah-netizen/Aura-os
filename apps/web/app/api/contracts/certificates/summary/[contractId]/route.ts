@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: contract billing summary — certificate register + work-done / retention / net to date.
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { contractId } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/contracts/certificates/summary/${contractId}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/contracts/certificates/summary/${contractId}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

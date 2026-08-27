@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: record a stock movement (in/out).
 export async function POST(
@@ -8,7 +8,7 @@ export async function POST(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/inventory/stock/${id}/movements`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/inventory/stock/${id}/movements`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

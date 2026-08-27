@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward field updates to the Nest API server-side (with identity).
 export async function PATCH(
@@ -8,7 +8,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/invoices/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/invoices/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

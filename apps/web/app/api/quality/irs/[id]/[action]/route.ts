@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // IR workflow-command forwarder (POST verbs): start the inspection, or raise an NCR from a failed
 // one. `resolve` keeps its own PUT route. The backend enforces the transition.
@@ -14,7 +14,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/quality/irs/${id}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/quality/irs/${id}/${action}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -1,4 +1,4 @@
-import { apiBase } from '@/lib/api';
+import { apiFetch, apiBase } from '@/lib/api';
 import { storeSession } from '@/lib/auth-session';
 
 // BFF: answer a `password_change` challenge — the second half of sign-in for an account whose
@@ -7,7 +7,7 @@ import { storeSession } from '@/lib/auth-session';
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as { challengeId?: unknown; newPassword?: unknown };
   try {
-    const res = await fetch(`${apiBase()}/api/v1/auth/login/password-change`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/auth/login/password-change`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

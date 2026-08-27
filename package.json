@@ -10,7 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=648",
     "lint:fix": "eslint . --fix",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
@@ -27,7 +27,7 @@
     "hooks:install": "git config core.hooksPath .githooks && echo \"pre-commit hook enabled (.githooks)\""
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.4",
     "@vitest/coverage-v8": "^3.2.6",
     "eslint": "^9.39.4",
     "globals": "^17.7.0",

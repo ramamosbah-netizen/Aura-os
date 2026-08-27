@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 const ALLOWED = new Set(['allocate', 'dispute']);
 
@@ -7,7 +7,7 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
   if (!ALLOWED.has(action)) return Response.json({ error: 'unknown action' }, { status: 404 });
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/fleet/salik/${id}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/fleet/salik/${id}/${action}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

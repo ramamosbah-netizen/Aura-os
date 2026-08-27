@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: the contract clause library — list (?category=&active=) + create.
 
 export async function GET(req: Request): Promise<Response> {
   const qs = new URL(req.url).search;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/contracts/clauses${qs}`, { headers: await authHeader(), cache: 'no-store' });
+    const res = await apiFetch(`${apiBase()}/api/v1/contracts/clauses${qs}`, { headers: await authHeader(), cache: 'no-store' });
     const data = await res.json().catch(() => []);
     return Response.json(data, { status: res.status });
   } catch {
@@ -20,7 +20,7 @@ export async function POST(req: Request): Promise<Response> {
     if (typeof body.tags === 'string') {
       body.tags = body.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
     }
-    const res = await fetch(`${apiBase()}/api/v1/contracts/clauses`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/contracts/clauses`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

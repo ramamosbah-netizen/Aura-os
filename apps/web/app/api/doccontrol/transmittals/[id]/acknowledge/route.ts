@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PUT(
   request: Request,
@@ -6,7 +6,7 @@ export async function PUT(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/doccontrol/transmittals/${id}/acknowledge`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/doccontrol/transmittals/${id}/acknowledge`, {
       method: 'PUT',
       headers: { ...(await authHeader()) },
       cache: 'no-store',

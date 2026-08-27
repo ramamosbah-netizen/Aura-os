@@ -1,9 +1,9 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(request: NextRequest): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/tax-summary`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/tax-summary`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

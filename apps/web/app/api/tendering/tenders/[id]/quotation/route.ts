@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: generate the client-facing CRM quotation from the tender's priced BOQ.
 
@@ -6,7 +6,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   try {
     const body = await request.json().catch(() => ({}));
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/quotation`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/${id}/quotation`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

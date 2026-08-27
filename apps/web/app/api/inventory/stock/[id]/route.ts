@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: stock item detail (with movement history).
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/inventory/stock/${id}`, { headers: await authHeader(), cache: 'no-store' });
+    const res = await apiFetch(`${apiBase()}/api/v1/inventory/stock/${id}`, { headers: await authHeader(), cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
     return Response.json(data, { status: res.status });
   } catch {

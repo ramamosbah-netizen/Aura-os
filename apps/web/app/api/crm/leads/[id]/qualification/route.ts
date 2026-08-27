@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: lead qualification — GET the current verdict (derived, never cached), PATCH the
 // eight-dimension assessment. The engine recommends QUALIFY / REVIEW / DISQUALIFY; the
@@ -10,7 +10,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/leads/${id}/qualification`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/leads/${id}/qualification`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -28,7 +28,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/leads/${id}/qualification`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/leads/${id}/qualification`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

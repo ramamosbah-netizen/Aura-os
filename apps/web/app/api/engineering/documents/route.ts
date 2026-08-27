@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
@@ -9,7 +9,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'projectId, code, title and docType required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/engineering/documents`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/engineering/documents`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

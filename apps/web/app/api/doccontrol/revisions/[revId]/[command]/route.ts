@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Document-revision workflow-command forwarder (G-33). The backend enforces the transition; this
 // whitelists the verb and forwards the body.
@@ -14,7 +14,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/doccontrol/revisions/${revId}/${command}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/doccontrol/revisions/${revId}/${command}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

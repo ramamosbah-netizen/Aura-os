@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: stream one customer's full dossier as a multi-sheet Excel download.
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/accounts/${id}/dossier.xlsx`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/accounts/${id}/dossier.xlsx`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

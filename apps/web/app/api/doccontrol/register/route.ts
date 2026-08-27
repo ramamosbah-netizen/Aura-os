@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Create a controlled register entry (drawing/document). List is server-fetched via getJson.
 export async function POST(request: Request): Promise<Response> {
@@ -19,7 +19,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/doccontrol/register`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/doccontrol/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

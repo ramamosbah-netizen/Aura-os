@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: forward GRN creation to the Nest Inventory API server-side (with identity).
 export async function POST(request: Request): Promise<Response> {
@@ -16,7 +16,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'title required' }, { status: 400 });
   }
   try {
-    const res = await fetch(`${apiBase()}/api/v1/inventory/grns`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/inventory/grns`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

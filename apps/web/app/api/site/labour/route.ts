@@ -1,4 +1,4 @@
-import { apiBase, authHeader, replayHeaders } from '@/lib/api';
+import { apiFetch, apiBase, authHeader, replayHeaders } from '@/lib/api';
 
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
@@ -17,7 +17,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/site/labour`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/site/labour`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()), ...replayHeaders(request) },
       body: JSON.stringify(body),
@@ -32,7 +32,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/site/labour`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/site/labour`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

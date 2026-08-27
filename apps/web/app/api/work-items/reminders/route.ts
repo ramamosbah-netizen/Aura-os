@@ -1,8 +1,8 @@
-import { apiBase, authHeader, replayHeaders } from '@/lib/api';
+import { apiFetch, apiBase, authHeader, replayHeaders } from '@/lib/api';
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/work-items/reminders/sync`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/work-items/reminders/sync`, {
       method: 'POST',
       headers: { ...(await authHeader()), ...replayHeaders(request) },
       cache: 'no-store',

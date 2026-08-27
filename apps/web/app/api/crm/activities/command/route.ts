@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: Commercial Activity command center — overdue + relationship-inactivity view.
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/activities/command`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/activities/command`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

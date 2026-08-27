@@ -28,41 +28,50 @@ function ec(kid = 'ec-1'): { jwks: Jwks; priv: KeyObject } {
 }
 
 const future = Math.floor(Date.now() / 1000) + 3600;
+// Key generation is intentionally outside individual test deadlines. Under the monorepo's full
+// parallel suite, generating a fresh 2048-bit RSA pair in every test made a security assertion
+// intermittently exceed Vitest's five-second budget even though verification itself is immediate.
+const RSA = rsa();
+const RSA_OTHER_SAME_KID = rsa('rsa-1');
+const EC = ec();
 
 describe('jwks verifier (hosted-IdP tokens)', () => {
   it('verifies a valid RS256 token', () => {
-    const { jwks, priv } = rsa();
+    const { jwks, priv } = RSA;
     const claims = verifyJwtWithJwks(mint(priv, 'RS256', 'rsa-1', { sub: 'u-1', exp: future }), jwks);
     expect(claims?.sub).toBe('u-1');
   });
 
   it('verifies a valid ES256 token', () => {
-    const { jwks, priv } = ec();
+    const { jwks, priv } = EC;
     const claims = verifyJwtWithJwks(mint(priv, 'ES256', 'ec-1', { sub: 'u-2', exp: future }), jwks);
     expect(claims?.sub).toBe('u-2');
   });
 
   it('rejects a tampered payload', () => {
-    const { jwks, priv } = rsa();
+    const { jwks, priv } = RSA;
     const [h, , s] = mint(priv, 'RS256', 'rsa-1', { sub: 'u-1', exp: future }).split('.');
     const forged = `${h}.${b64({ sub: 'attacker', exp: future })}.${s}`;
     expect(verifyJwtWithJwks(forged, jwks)).toBeNull();
   });
 
   it('rejects a token signed by a different key (same kid)', () => {
-    const a = rsa('rsa-1');
-    const b = rsa('rsa-1'); // different keypair, same kid
-    expect(verifyJwtWithJwks(mint(a.priv, 'RS256', 'rsa-1', { sub: 'u-1', exp: future }), b.jwks)).toBeNull();
+    expect(
+      verifyJwtWithJwks(
+        mint(RSA.priv, 'RS256', 'rsa-1', { sub: 'u-1', exp: future }),
+        RSA_OTHER_SAME_KID.jwks,
+      ),
+    ).toBeNull();
   });
 
   it('rejects an expired token', () => {
-    const { jwks, priv } = rsa();
+    const { jwks, priv } = RSA;
     const past = Math.floor(Date.now() / 1000) - 10;
     expect(verifyJwtWithJwks(mint(priv, 'RS256', 'rsa-1', { sub: 'u-1', exp: past }), jwks)).toBeNull();
   });
 
   it('rejects alg=none and malformed tokens', () => {
-    const { jwks } = rsa();
+    const { jwks } = RSA;
     const none = `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: 'x', exp: future })}.`;
     expect(verifyJwtWithJwks(none, jwks)).toBeNull();
     expect(verifyJwtWithJwks('not-a-jwt', jwks)).toBeNull();

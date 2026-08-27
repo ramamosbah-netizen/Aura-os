@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(request: NextRequest): Promise<Response> {
   const { searchParams } = request.nextUrl;
@@ -7,7 +7,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const query = reference ? `?reference=${reference}` : '';
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/journals${query}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/journals${query}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -32,7 +32,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/journals`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/journals`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({

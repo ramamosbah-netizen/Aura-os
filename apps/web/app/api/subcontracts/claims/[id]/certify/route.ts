@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function PATCH(
   request: Request,
@@ -6,7 +6,7 @@ export async function PATCH(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/subcontracts/claims/${id}/certify`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/subcontracts/claims/${id}/certify`, {
       method: 'PATCH',
       headers: await authHeader(),
       cache: 'no-store',

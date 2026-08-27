@@ -18,7 +18,12 @@ const MODULES = [
   'hse', 'inventory', 'procurement', 'projects', 'quality', 'site', 'subcontracts', 'tendering',
 ];
 
+const tsFileCache = new Map<string, string[]>();
+const sourceCache = new Map<string, string>();
+
 function tsFiles(dir: string): string[] {
+  const cached = tsFileCache.get(dir);
+  if (cached) return cached;
   if (!existsSync(dir)) return [];
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
@@ -27,7 +32,16 @@ function tsFiles(dir: string): string[] {
     if (statSync(p).isDirectory()) out.push(...tsFiles(p));
     else if (name.endsWith('.ts') && !name.endsWith('.test.ts')) out.push(p);
   }
+  tsFileCache.set(dir, out);
   return out;
+}
+
+function source(file: string): string {
+  const cached = sourceCache.get(file);
+  if (cached !== undefined) return cached;
+  const text = readFileSync(file, 'utf8');
+  sourceCache.set(file, text);
+  return text;
 }
 
 describe('Architecture fitness — ADR-0004: modules do not import each other', () => {
@@ -45,7 +59,7 @@ describe('Architecture fitness — ADR-0004: modules do not import each other', 
     const edges = new Set<string>();
     for (const mod of MODULES) {
       for (const file of tsFiles(join(REPO, 'modules', mod, 'src'))) {
-        const src = readFileSync(file, 'utf8');
+        const src = source(file);
         for (const m of src.matchAll(importRe)) {
           const target = m[1];
           if (MODULES.includes(target) && target !== mod) edges.add(`${mod}->${target}`);
@@ -77,7 +91,7 @@ describe('Architecture fitness — ADR-0017: capabilities are type-agnostic', ()
     for (const file of scan) {
       // the registry itself is the ONE place types are named
       if (file.endsWith('engineering-document.ts')) continue;
-      const src = readFileSync(file, 'utf8');
+      const src = source(file);
       if (literalBranch.test(src) || switchDocType.test(src)) offenders.push(file.replace(REPO, ''));
     }
     expect(offenders).toEqual([]);
@@ -116,11 +130,11 @@ describe('Architecture fitness — ADR-0012: shared dimensions have a single sou
     const offenders: string[] = [];
     for (const mod of MODULES) {
       for (const file of tsFiles(join(REPO, 'modules', mod, 'src'))) {
-        if (definesDiscipline.test(readFileSync(file, 'utf8'))) offenders.push(file.replace(REPO, ''));
+        if (definesDiscipline.test(source(file))) offenders.push(file.replace(REPO, ''));
       }
     }
     expect(offenders).toEqual([]);
-  });
+  }, 15_000);
 });
 
 describe('Architecture fitness — Rule of Three: platform Definition Registry stays unextracted', () => {
@@ -130,7 +144,7 @@ describe('Architecture fitness — Rule of Three: platform Definition Registry s
     // premature framework (ADR-0011 Rule of Three, ADR-0017 scope).
     const offenders: string[] = [];
     for (const file of tsFiles(join(REPO, 'shared', 'src'))) {
-      const src = readFileSync(file, 'utf8');
+      const src = source(file);
       if (/DocumentDefinition|DEFINITION_REGISTRY|registerDefinition/.test(src)) {
         offenders.push(file.replace(REPO, ''));
       }

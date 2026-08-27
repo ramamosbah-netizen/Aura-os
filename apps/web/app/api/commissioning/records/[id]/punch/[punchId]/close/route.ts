@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Close a commissioning punch item (the retest gate) — the backend requires a resolution note.
 export async function PUT(
@@ -8,7 +8,7 @@ export async function PUT(
   const { id, punchId } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/commissioning/records/${id}/punch/${punchId}/close`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/commissioning/records/${id}/punch/${punchId}/close`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

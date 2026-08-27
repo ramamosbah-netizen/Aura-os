@@ -1,4 +1,4 @@
-import { apiBase } from '@/lib/api';
+import { apiFetch, apiBase } from '@/lib/api';
 import { storeSession } from '@/lib/auth-session';
 
 /**
@@ -20,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
     code?: unknown;
   };
   try {
-    const res = await fetch(`${apiBase()}/api/v1/auth/login`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

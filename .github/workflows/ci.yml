@@ -46,10 +46,10 @@ jobs:
       - name: API HTTP e2e (Supertest — TIER-2 #39/#40)
         run: pnpm --filter @aura/api test:e2e
 
-      # Non-blocking: surfaces known upstream advisories (multer/xlsx/postcss) without
-      # failing the build, since no non-breaking fix is published yet (TIER-2 #43).
+      # Blocking: the production graph is expected to stay at zero known advisories. SheetJS is
+      # pinned to its official patched distribution and DOMPurify is overridden to a fixed release.
       - name: Dependency audit (TIER-2 #43)
-        run: pnpm audit --prod || true
+        run: pnpm audit --prod
 
   # P0 #4 (Vol 23): the migration gate — the full chain must apply onto an empty
   # Postgres, be idempotent on rerun, and the built API must boot against the result.
@@ -491,6 +491,11 @@ jobs:
 
       - name: Install Chromium
         run: pnpm --filter @aura/web exec playwright install --with-deps chromium
+
+      - name: Accessibility gate (WCAG 2.1 A/AA + keyboard order)
+        run: pnpm --filter @aura/web e2e:a11y
+        env:
+          CI: 'true'
 
       # Until now this job ran the web server alone, so every spec that wrote through the BFF
       # could only ever pass by not being written. That is the N-04 failure mode — "verified" by

@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: RFQ detail (with quotes + recommendation).
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/procurement/rfqs/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/procurement/rfqs/${id}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

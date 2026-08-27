@@ -10,7 +10,7 @@ A Tier-1 ERP **Operating System** for Contractors · MEP · ELV · Facilities Ma
 EXPERIENCE     apps/web (Next.js) · portals · mobile · BI
 INTELLIGENCE   intelligence/  (AI agents, forecasting, risk — read-only)
 OPTIMIZATION   pricing (IEC) · CBS · profitability — read-only
-MODULES        modules/*  (16 bounded contexts, each owns its schema + events)
+MODULES        modules/*  (21 bounded contexts, each owns its schema + events)
 KERNEL         core/  (tenancy · auth/RBAC · event store + outbox · workflow · audit)
 ```
 
@@ -21,18 +21,19 @@ KERNEL         core/  (tenancy · auth/RBAC · event store + outbox · workflow 
 | Path | Package | Role |
 |---|---|---|
 | `apps/api` | `@aura/api` | NestJS host — wires the kernel + modules |
-| `apps/web` | `@aura/web` | Next.js experience shell *(from next increment)* |
+| `apps/web` | `@aura/web` | Next.js 16 experience layer — workspaces, operational pages and BFF routes |
 | `core` | `@aura/core` | Kernel: event store, outbox, tenancy |
 | `shared` | `@aura/shared` | Framework-free types, value objects, event contracts |
-| `modules/*` | — | Business modules *(added from T1)* |
+| `modules/*` | — | 21 business contexts: AMC, assets, commissioning, compliance, contracts, CRM, document control, ELV, engineering, finance, fleet, HR, HSE, inventory, market intelligence, procurement, projects, quality, site, subcontracts and tendering |
 
 ## Develop
 
 ```bash
 pnpm install
 pnpm auth:configure-local   # generates the local JWT + master-admin secrets and .env.local
-pnpm build                  # turbo: builds shared → core → api
+pnpm build                  # turbo: builds all 28 workspace projects
 pnpm --filter @aura/api start:dev   # API on http://localhost:4000/api
+pnpm --filter @aura/web dev         # web app on http://localhost:3000
 ```
 
 Run `pnpm auth:configure-local` before you trust anything you see locally. Measured behaviour of

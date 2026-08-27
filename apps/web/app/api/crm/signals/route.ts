@@ -1,11 +1,11 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: CRM signals — list (Opportunity Radar source) + create (manual detection).
 
 export async function GET(request: Request): Promise<Response> {
   const qs = new URL(request.url).searchParams.toString();
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/signals${qs ? `?${qs}` : ''}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/signals${qs ? `?${qs}` : ''}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -19,7 +19,7 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/signals`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/signals`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

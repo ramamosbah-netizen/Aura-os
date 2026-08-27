@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: one opportunity. GET is what the Buying Journey panel loads itself from — without it the
 // fetch 405s, `opp` stays null and the panel sits on "Loading buying journey…" forever, which also
@@ -6,7 +6,7 @@ import { apiBase, authHeader } from '@/lib/api';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/opportunities/${id}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -24,7 +24,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/opportunities/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

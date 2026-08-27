@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: kernel DMS documents. Read-only here — the list is filtered server-side to what the
 // caller may actually see (DmsService.listFor), so this proxy adds no authorisation of its own
@@ -7,7 +7,7 @@ import { apiBase, authHeader } from '@/lib/api';
 export async function GET(req: Request): Promise<Response> {
   const qs = new URL(req.url).search;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/documents${qs}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/documents${qs}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

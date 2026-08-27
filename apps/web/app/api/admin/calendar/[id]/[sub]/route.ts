@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: calendar holidays/adjustments sub-resources (Admin Center phase 2).
 // Proxies /api/admin/calendar/:id/(holidays|adjustments) to the Nest API.
@@ -10,7 +10,7 @@ async function proxy(method: string, id: string, sub: string, request: Request):
   const qs = new URL(request.url).searchParams.toString();
   const url = `${apiBase()}/api/v1/admin/calendar/${encodeURIComponent(id)}/${sub}${qs ? `?${qs}` : ''}`;
   try {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method,
       headers: {
         ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),

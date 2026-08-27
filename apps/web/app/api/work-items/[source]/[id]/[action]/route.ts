@@ -1,4 +1,4 @@
-import { apiBase, authHeader, replayHeaders } from '@/lib/api';
+import { apiFetch, apiBase, authHeader, replayHeaders } from '@/lib/api';
 
 const ACTIONS = new Set(['start', 'complete', 'reopen', 'reschedule']);
 
@@ -7,7 +7,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ source:
   if (!ACTIONS.has(action)) return Response.json({ error: 'Unknown work-item action' }, { status: 400 });
   try {
     const body = await req.json().catch(() => null);
-    const res = await fetch(`${apiBase()}/api/v1/work-items/${encodeURIComponent(source)}/${encodeURIComponent(id)}/${action}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/work-items/${encodeURIComponent(source)}/${encodeURIComponent(id)}/${action}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()), ...replayHeaders(req) },
       ...(body ? { body: JSON.stringify(body) } : {}),

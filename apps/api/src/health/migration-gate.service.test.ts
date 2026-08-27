@@ -70,14 +70,13 @@ describe('MigrationGateService', () => {
     expect(s.appliedButAbsent).toEqual([]);
   });
 
-  // G-09 — drift the other way: applied rows whose files are gone. The live dev DB had 5 of these
-  // (renames/renumbers from stacked-PR rebases) and the gate reported "up to date", because it only
-  // ever asked about pending. Reported, but never degrading — the app is fine, the history is not.
-  it('reports applied migrations that no longer exist on disk, without degrading', async () => {
+  // G-09 — drift the other way: applied rows whose files are gone. The node cannot prove that the
+  // database schema matches the immutable history shipped with this build, so it fails closed.
+  it('degrades when applied migrations no longer exist on disk', async () => {
     const s = await new MigrationGateService(
       fakePool(['0001_a.sql', '0002_b.sql', '0003_renamed_away.sql']),
     ).evaluate();
-    expect(s.degraded).toBe(false);
+    expect(s.degraded).toBe(true);
     expect(s.pending).toEqual([]);
     expect(s.appliedButAbsent).toEqual(['0003_renamed_away.sql']);
     expect(s.applied).toBe(3);
@@ -86,7 +85,7 @@ describe('MigrationGateService', () => {
 
   it('reports drift in both directions at once', async () => {
     const s = await new MigrationGateService(fakePool(['0001_a.sql', '0009_gone.sql'])).evaluate();
-    expect(s.degraded).toBe(true); // pending still decides degraded
+    expect(s.degraded).toBe(true);
     expect(s.pending).toEqual(['0002_b.sql']);
     expect(s.appliedButAbsent).toEqual(['0009_gone.sql']);
   });

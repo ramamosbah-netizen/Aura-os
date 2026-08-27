@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
@@ -15,7 +15,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/quality/irs`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/quality/irs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),
@@ -30,7 +30,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(): Promise<Response> {
   try {
-    const res = await fetch(`${apiBase()}/api/v1/quality/irs`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/quality/irs`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

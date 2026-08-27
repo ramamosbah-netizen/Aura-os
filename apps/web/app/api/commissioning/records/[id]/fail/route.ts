@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Mark a commissioning record failed, with the reason for the retest trail.
 export async function PUT(
@@ -13,7 +13,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/commissioning/records/${id}/fail`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/commissioning/records/${id}/fail`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -1,10 +1,10 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: read + replace the approval matrix for an entity type.
 export async function GET(request: Request): Promise<Response> {
   const et = new URL(request.url).searchParams.get('entityType') ?? 'purchase-request';
   try {
-    const res = await fetch(`${apiBase()}/api/v1/admin/approval-matrix?entityType=${encodeURIComponent(et)}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/admin/approval-matrix?entityType=${encodeURIComponent(et)}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -17,7 +17,7 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/admin/approval-matrix`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/admin/approval-matrix`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

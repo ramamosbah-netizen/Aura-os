@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: file/pay a VAT return.
 export async function PATCH(
@@ -8,7 +8,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/finance/vat-returns/${id}/status`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/finance/vat-returns/${id}/status`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

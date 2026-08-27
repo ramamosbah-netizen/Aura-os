@@ -1,15 +1,9 @@
 // Split from postgres-quality-store.ts — one file per entity store.
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
-import type { Ncr } from './domain/ncr';
 import type { InspectionRequest } from './domain/inspection-request';
-import type { Snag } from './domain/snag';
-import type { Itp, ItpPoint } from './domain/itp';
-import type { MaterialApproval } from './domain/material-approval';
-import type { Calibration } from './domain/calibration';
-import type { AuditSchedule } from './domain/audit-schedule';
 import { type Page, PageParams, makePage } from '@aura/shared';
-import type { NcrStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { InspectionRequestStore } from './store.interface';
 
 export class PostgresInspectionRequestStore implements InspectionRequestStore {
   constructor(private readonly pool: Pool) {}

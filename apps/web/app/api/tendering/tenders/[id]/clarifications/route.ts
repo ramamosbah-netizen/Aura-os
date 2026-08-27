@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // T4 — clarifications & addenda proxy (list + record).
 export async function GET(
@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await params;
   const search = new URL(request.url).search;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/clarifications${search}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/${id}/clarifications${search}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });
@@ -26,7 +26,7 @@ export async function POST(
   const { id } = await params;
   try {
     const body = await request.json();
-    const res = await fetch(`${apiBase()}/api/v1/tendering/tenders/${id}/clarifications`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/tendering/tenders/${id}/clarifications`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const apiFetchMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/lib/api', () => ({
+  apiFetch: apiFetchMock,
   apiBase: () => 'http://api.test',
   authHeader: async () => ({ authorization: 'Bearer session-token' }),
 }));
@@ -8,13 +11,13 @@ vi.mock('@/lib/api', () => ({
 import { GET } from './route';
 
 describe('document metadata BFF', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => apiFetchMock.mockReset());
 
   it('does not expose internal storage keys to the browser', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({
+    apiFetchMock.mockResolvedValue(Response.json({
       document: { id: 'doc-1', currentVersion: 1 },
       versions: [{ version: 1, fileName: 'drawing.pdf', contentType: 'application/pdf', storageKey: 'tenant/private/key', checksum: 'abc' }],
-    })));
+    }));
     const response = await GET(new Request('http://localhost:3000/api/documents/doc-1'), {
       params: Promise.resolve({ id: 'doc-1' }),
     });

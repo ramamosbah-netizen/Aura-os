@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 export async function GET(request: NextRequest): Promise<Response> {
   const subcontractId = request.nextUrl.searchParams.get('subcontractId');
@@ -7,7 +7,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (subcontractId) query.append('subcontractId', subcontractId);
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/subcontracts/back-charges/summary?${query.toString()}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/subcontracts/back-charges/summary?${query.toString()}`, {
       headers: await authHeader(),
       cache: 'no-store',
     });

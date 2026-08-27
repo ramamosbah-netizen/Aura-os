@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Site daily-report command forwarder (G-34). POST verbs for the state machine + line-items; the
 // backend enforces the transition + the draft-only guard. (`submit` keeps its own PUT route.)
@@ -14,7 +14,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/site/daily-reports/${id}/${command}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/site/daily-reports/${id}/${command}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

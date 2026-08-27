@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Drawing workflow-command forwarder (G-32). One thin proxy for every state-machine command —
 // the backend enforces the transition; this only whitelists the verb and forwards the body.
@@ -14,7 +14,7 @@ export async function POST(
   }
   const body = await request.json().catch(() => ({}));
   try {
-    const res = await fetch(`${apiBase()}/api/v1/engineering/drawings/${id}/${command}`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/engineering/drawings/${id}/${command}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

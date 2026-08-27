@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // BFF: opportunity → draft quotation (the direct-sale route of the deal chain).
 // The API has always had this endpoint; the proxy was missing, so the "→ Quotation" button on
@@ -7,7 +7,7 @@ import { apiBase, authHeader } from '@/lib/api';
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/crm/opportunities/${id}/convert-to-quotation`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/opportunities/${id}/convert-to-quotation`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       cache: 'no-store',

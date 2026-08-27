@@ -1,4 +1,4 @@
-import { apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // Revise a register entry — bumps the controlled revision + status, keeping the entry.
 export async function PUT(
@@ -13,7 +13,7 @@ export async function PUT(
   }
 
   try {
-    const res = await fetch(`${apiBase()}/api/v1/doccontrol/register/${id}/revise`, {
+    const res = await apiFetch(`${apiBase()}/api/v1/doccontrol/register/${id}/revise`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify(body),

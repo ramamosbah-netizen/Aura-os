@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Hash, Loader2, Mic, Paperclip, Plus, Search, Send, Square, Users } from 'lucide-react';
 import { displayName } from '@aura/shared';
@@ -99,6 +99,7 @@ export default function InternalChat({
   const [teamName, setTeamName] = useState('');
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
   const [teamError, setTeamError] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   /** A conversation is being opened; the composer belongs to no settled conversation until it lands. */
   const [opening, setOpening] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -106,6 +107,43 @@ export default function InternalChat({
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const active = channels.find((c) => c.id === activeId) ?? null;
+
+  /** The active token is intentionally narrow: only a username-like token at the caret opens suggestions. */
+  const mentionToken = useMemo(() => text.match(/(^|\s)@([a-zA-Z0-9._-]*)$/), [text]);
+  const mentionSuggestions = useMemo(() => {
+    if (!mentionToken || !active) return [];
+    const needle = mentionToken[2]!.toLowerCase();
+    return users
+      .filter((user) => active.members.includes(user.username))
+      .filter((user) => user.username !== me)
+      .filter((user) => user.username.toLowerCase().includes(needle) || displayName(user.username).toLowerCase().includes(needle))
+      .slice(0, 6);
+  }, [active, me, mentionToken, users]);
+
+  function insertMention(username: string) {
+    if (!mentionToken) return;
+    const tokenStart = mentionToken.index! + mentionToken[1]!.length;
+    setText(`${text.slice(0, tokenStart)}@${username} `);
+    setMentionIndex(0);
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!mentionSuggestions.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setMentionIndex((current) => (current + 1) % mentionSuggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setMentionIndex((current) => (current - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+    } else if (event.key === 'Enter' && mentionToken) {
+      event.preventDefault();
+      insertMention(mentionSuggestions[mentionIndex]?.username ?? mentionSuggestions[0]!.username);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setText(text.replace(/(^|\s)@([a-zA-Z0-9._-]*)$/, '$1'));
+      setMentionIndex(0);
+    }
+  }
 
   const refreshChannels = useCallback(async () => {
     try {
@@ -478,6 +516,24 @@ export default function InternalChat({
               className={styles.composer}
               onSubmit={(event) => { event.preventDefault(); void send('text', null, activeId); }}
             >
+              {mentionSuggestions.length > 0 ? (
+                <div className={styles.mentionPicker} role="listbox" aria-label="Mention a colleague">
+                  {mentionSuggestions.map((user, index) => (
+                    <button
+                      key={user.username}
+                      type="button"
+                      role="option"
+                      aria-selected={index === mentionIndex}
+                      className={`${styles.mentionRow} ${index === mentionIndex ? styles.mentionRowActive : ''}`}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => insertMention(user.username)}
+                    >
+                      <strong>{displayName(user.username)}</strong>
+                      <small>@{user.username}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <input
                 ref={fileRef}
                 type="file"
@@ -500,7 +556,8 @@ export default function InternalChat({
               <input
                 className={styles.composerInput}
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={(event) => { setText(event.target.value); setMentionIndex(0); }}
+                onKeyDown={handleComposerKeyDown}
                 placeholder={recording ? 'Recording voice note…' : `Message ${channelLabel(active, me)}`}
                 aria-label="Message"
                 // Closed while a conversation is opening: the box on screen belongs to the conversation

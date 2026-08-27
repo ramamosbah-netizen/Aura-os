@@ -273,6 +273,23 @@ describe('Company isolation', () => {
       .rejects.toBeInstanceOf(NotFoundException);
     await expect(service.openTeam(TENANT_A, ALICE, 'Bid review', [BOB])).resolves.toMatchObject({ id: channel.id });
   });
+
+  it('notifies every other member when a shared team channel receives a message', async () => {
+    const record = vi.fn().mockResolvedValue(undefined);
+    const workspace = {
+      get: vi.fn().mockResolvedValue({ assignments: { [ALICE]: 'finance', [BOB]: 'finance', [MALLORY]: 'hr' } }),
+    } as unknown as WorkspaceConfigService;
+    const service = new CommsService(
+      workspace,
+      { record } as unknown as NotificationService,
+      new InMemoryCommsStore(),
+      new InMemoryMailStore(),
+    );
+    const team = await service.openTeam(TENANT_A, ALICE, 'Tender room', [BOB]);
+    await service.post(TENANT_A, { channelId: team.id, sender: ALICE, kind: 'text', text: 'shared update' });
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: BOB, refType: 'chat.channel', title: 'New message in Tender room' }));
+    expect(record).not.toHaveBeenCalledWith(expect.objectContaining({ userId: ALICE, refType: 'chat.channel' }));
+  });
 });
 
 describe('Attachments inherit their parent authorization', () => {

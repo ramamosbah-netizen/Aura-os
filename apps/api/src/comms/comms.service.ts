@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { AccessService, NotificationService, UsersService } from '@aura/core';
 import { ProjectService } from '@aura/projects';
 import {
@@ -256,6 +256,35 @@ export class CommsService {
     return isAdmin || members.has(username);
   }
 
+  /** Resolve notification recipients from the channel's current membership. */
+  private async membersForChannel(tenantId: string, channel: StoredChannel): Promise<string[]> {
+    if (channel.kind === 'company') {
+      return (await this.directoryPeople(tenantId)).filter((person) => person.active).map((person) => person.username);
+    }
+    if (channel.kind === 'project' && this.access) {
+      const projectId = channel.id.startsWith('ch-project-') ? channel.id.slice('ch-project-'.length) : null;
+      if (projectId) {
+        const members = new Set(
+          this.access.listGrants()
+            .filter((grant) => grant.scope.kind === 'resource'
+              && grant.scope.resourceType === 'project'
+              && grant.scope.resourceId === projectId)
+            .map((grant) => grant.userId),
+        );
+        const project = this.projects ? await this.projects.get(projectId) : null;
+        if (project?.ownerId) members.add(project.ownerId);
+        return this.activeMembers(tenantId, [...members]);
+      }
+    }
+    return this.activeMembers(tenantId, channel.members);
+  }
+
+  private async activeMembers(tenantId: string, members: string[]): Promise<string[]> {
+    if (!this.users) return members;
+    await this.users.ensureTenant(tenantId);
+    return members.filter((member) => this.users?.get(tenantId, member)?.active !== false);
+  }
+
   private preview(m: ChatMessage): string {
     if (m.kind === 'voice') return '🎤 Voice message';
     if (m.kind === 'file') return `📎 ${m.attachment?.name ?? 'Attachment'}`;
@@ -443,7 +472,11 @@ export class CommsService {
       }
     }
     const existing = (await this.store.listChannels(tenantId)).find((channel) => channel.kind === 'team' && channel.name === title);
-    if (existing) return existing;
+    if (existing) {
+      const sameMembers = existing.members.length === members.length && existing.members.every((member) => members.includes(member));
+      if (sameMembers && existing.members.includes(username)) return existing;
+      throw new ConflictException('team name already exists');
+    }
     const channel: ChatChannel = { id: `team:${newId()}`, kind: 'team', name: title, members: members.sort() };
     await this.store.ensureChannels(tenantId, [channel], username, effective);
     return channel;
@@ -502,7 +535,7 @@ export class CommsService {
     }));
   }
 
-  /** Post a message; notifies the DM peer (chat notifications stay lightweight). */
+  /** Post a message; notify every other member of the conversation. */
   async post(
     tenantId: string,
     input: NewChatMessage,
@@ -534,13 +567,13 @@ export class CommsService {
       visibilityKey: result.channelId,
     });
 
-    const peer = dmPeer(result.channelId, input.sender);
-    if (peer) {
+    const recipients = await this.membersForChannel(tenantId, channel);
+    for (const recipient of recipients.filter((member) => member !== input.sender)) {
       await this.notifications.record({
         tenantId,
-        userId: peer,
-        title: `New message from ${displayName(input.sender)}`,
-        body: this.preview(result),
+        userId: recipient,
+        title: channel.kind === 'dm' ? `New message from ${displayName(input.sender)}` : `New message in ${channel.name}`,
+        body: channel.kind === 'dm' ? this.preview(result) : `${displayName(input.sender)}: ${this.preview(result)}`,
         category: 'chat',
         refType: 'chat.channel',
         refId: result.channelId,

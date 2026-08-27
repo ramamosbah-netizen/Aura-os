@@ -68,7 +68,7 @@ export default async function MyCommunicationPage({
     fetchJson<ChatChannelView[]>('/api/comms/channels'),
     getJson<Mailbox>('/api/comms/mail'),
     getJson<WorkspaceMe>('/api/workspace/me'),
-    getJson<WorkspaceUser[]>('/api/workspace/users'),
+    getJson<WorkspaceUser[]>('/api/comms/people'),
     getJson<MailAccountView[]>('/api/comms/mailbox/accounts'),
   ]);
   const channels = channelResult.ok ? channelResult.data : null;

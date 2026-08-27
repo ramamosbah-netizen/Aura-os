@@ -93,6 +93,7 @@ export default function InternalChat({
   const [sendError, setSendError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [dmOpen, setDmOpen] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
   /** A conversation is being opened; the composer belongs to no settled conversation until it lands. */
   const [opening, setOpening] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -252,19 +253,23 @@ export default function InternalChat({
    */
   async function openDm(peer: string) {
     setDmOpen(false);
+    setDmError(null);
     setOpening(true);
     try {
       const res = await fetch('/api/comms/dm', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ peer }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setDmError(res.status === 404 ? 'That person is not in your active company.' : 'Could not start the private conversation.');
+        return;
+      }
       const channel = (await res.json()) as ChatChannelView;
       // Switch the view BEFORE refreshing the rail, and never the other way round. Awaiting the
       // rail first left the previous conversation on screen with its composer live for the whole
       // round trip. The rail is cosmetic here and can catch up on its own.
       select(channel.id);
       void refreshChannels();
-    } catch { /* the rail is unchanged; the user can retry */ } finally {
+    } catch { setDmError('Could not start the private conversation. Check your connection and retry.'); } finally {
       setOpening(false);
     }
   }
@@ -322,7 +327,9 @@ export default function InternalChat({
           </p>
           {dmOpen && (
             <div className={styles.dmPicker} role="group" aria-label="Start a direct message">
-              {users.filter((user) => user.username !== me).map((user) => (
+              {users.filter((user) => user.username !== me).length === 0 ? (
+                <p className={styles.railEmpty}>No active colleagues are available in your company.</p>
+              ) : users.filter((user) => user.username !== me).map((user) => (
                 <button key={user.username} type="button" className={styles.dmPickerRow} onClick={() => void openDm(user.username)}>
                   <strong>{displayName(user.username)}</strong>
                   {user.roleLabel ? <small>{user.roleLabel}</small> : null}
@@ -330,6 +337,7 @@ export default function InternalChat({
               ))}
             </div>
           )}
+          {dmError ? <p className={styles.sendError} role="alert">{dmError}</p> : null}
           {dms.length === 0 && !dmOpen ? (
             <p className={styles.railEmpty}>Message a teammate directly — they get a notification.</p>
           ) : dms.map((channel) => (

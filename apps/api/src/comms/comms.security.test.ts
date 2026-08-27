@@ -41,6 +41,28 @@ async function seedDm(service: CommsService) {
 }
 
 describe('Communication authorization', () => {
+  it('notifies the sender once when the DM recipient reads new messages', async () => {
+    const record = vi.fn().mockResolvedValue(undefined);
+    const notifications = { record } as unknown as NotificationService;
+    const workspace = {
+      get: vi.fn().mockResolvedValue({ assignments: { [ALICE]: 'finance', [BOB]: 'finance' } }),
+    } as unknown as WorkspaceConfigService;
+    const isolated = new CommsService(workspace, notifications, new InMemoryCommsStore(), new InMemoryMailStore());
+    const isolatedDm = await isolated.openDm(TENANT_A, ALICE, BOB);
+    await isolated.post(TENANT_A, { channelId: isolatedDm.id, sender: ALICE, kind: 'text', text: 'read receipt' });
+
+    await isolated.messages(TENANT_A, BOB, isolatedDm.id);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      userId: ALICE,
+      title: expect.stringContaining('read your message'),
+      refType: 'chat.read',
+    }));
+    const reads = record.mock.calls.filter(([input]) => input.refType === 'chat.read');
+    await isolated.messages(TENANT_A, BOB, isolatedDm.id);
+    const readsAfterPolling = record.mock.calls.filter(([input]) => input.refType === 'chat.read');
+    expect(readsAfterPolling).toHaveLength(reads.length);
+  });
+
   it('refuses a third party the DM between two other users', async () => {
     const { service } = makeService();
     const dm = await seedDm(service);
@@ -167,10 +189,38 @@ describe('Company isolation', () => {
   });
 
   it('refuses a company-B caller a DM created inside company A', async () => {
-    const { service } = makeService();
-    const dm = await service.openDm(TENANT_A, ALICE, BOB, COMPANY_A);
+    const { service, store } = makeService();
+    const dm = { id: 'dm:u-alice|u-bob', kind: 'dm' as const, name: 'Bob', members: [ALICE, BOB] };
+    await store.ensureChannels(TENANT_A, [dm], ALICE, COMPANY_A);
     await expect(service.messages(TENANT_A, ALICE, dm.id, false, COMPANY_B)).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.messages(TENANT_A, ALICE, dm.id, false, COMPANY_A)).resolves.toEqual([]);
+  });
+
+  it('only offers active people in the caller company for new private chats', async () => {
+    const store = new InMemoryCommsStore();
+    const workspace = {
+      users: vi.fn().mockResolvedValue([
+        { username: ALICE, roleLabel: 'Finance' },
+        { username: BOB, roleLabel: 'Finance' },
+        { username: MALLORY, roleLabel: 'HR' },
+      ]),
+      get: vi.fn().mockResolvedValue({ assignments: { [ALICE]: 'finance', [BOB]: 'finance', [MALLORY]: 'hr' } }),
+    } as unknown as WorkspaceConfigService;
+    const registry = {
+      ensureTenant: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockReturnValue([
+        { userId: ALICE, companyId: COMPANY_A, active: true },
+        { userId: BOB, companyId: COMPANY_A, active: true },
+        { userId: MALLORY, companyId: COMPANY_B, active: true },
+      ]),
+      get: vi.fn((tenant: string, user: string) => ({ tenantId: tenant, userId: user, companyId: user === MALLORY ? COMPANY_B : COMPANY_A, active: true })),
+    };
+    const service = new CommsService(workspace, { record: vi.fn().mockResolvedValue(undefined) } as unknown as NotificationService, store, new InMemoryMailStore(), registry as never);
+
+    expect(await service.people(TENANT_A, ALICE, COMPANY_A)).toEqual([
+      { username: BOB, roleLabel: 'Finance', companyId: COMPANY_A },
+    ]);
+    await expect(service.openDm(TENANT_A, ALICE, MALLORY, COMPANY_A)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -224,6 +274,7 @@ describe('Route permissions', () => {
    */
   it.each([
     ['channels', 'comms.channel.read'],
+    ['people', 'comms.channel.read'],
     ['openDm', 'comms.dm.create'],
     ['messages', 'comms.channel.read'],
     ['post', 'comms.channel.send'],

@@ -1,5 +1,5 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { NotificationService } from '@aura/core';
+import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { NotificationService, UsersService } from '@aura/core';
 import {
   type ChatChannel,
   type ChatMessage,
@@ -98,6 +98,16 @@ export interface ChannelSummary extends ChatChannel {
   lastPreview: string | null;
 }
 
+export interface ChatPerson {
+  username: string;
+  roleLabel: string;
+  companyId: string | null;
+}
+
+interface DirectoryPerson extends ChatPerson {
+  active: boolean;
+}
+
 /**
  * Team chat + internal mail, tenant-scoped, persisted through CommsStore (migration 0234).
  * Channels are seeded from the workspace directory so the org structure (company / departments)
@@ -120,7 +130,67 @@ export class CommsService {
     // The single mail write path. Mail is a facet of this context, so the legacy endpoint uses the
     // same persistence as MailService rather than a parallel one of its own.
     @Inject(MAIL_STORE) private readonly mail: MailStore,
+    // Optional keeps the direct service harnesses and in-memory unit tests backwards-compatible;
+    // the API application always supplies the registry from CoreModule.
+    @Optional() private readonly users: UsersService | null = null,
   ) {}
+
+  /**
+   * Resolve the company-aware people directory used by DM creation and the picker.
+   * Workspace assignments provide the role; the identity registry provides company and active
+   * status. The union keeps an invited/registered person reachable even before a role is assigned.
+   */
+  private async directoryPeople(tenantId: string): Promise<DirectoryPerson[]> {
+    // A few focused service harnesses provide only `get()`; derive the same lightweight directory
+    // shape there rather than making an unrelated mock implement the whole workspace service.
+    const workspaceUsers = this.workspace.users as unknown as ((id: string) => Promise<Array<{ username: string; roleLabel: string }>>) | undefined;
+    const assigned = typeof workspaceUsers === 'function'
+      ? await workspaceUsers.call(this.workspace, tenantId)
+      : Object.entries((await this.workspace.get(tenantId)).assignments).map(([username, role]) => ({ username, roleLabel: String(role) }));
+    if (this.users) await this.users.ensureTenant(tenantId);
+    const registered = this.users?.list(tenantId) ?? [];
+    const byId = new Map<string, DirectoryPerson>();
+    for (const user of assigned) {
+      const identity = registered.find((candidate) => candidate.userId === user.username);
+      byId.set(user.username, {
+        username: user.username,
+        roleLabel: user.roleLabel,
+        companyId: identity?.companyId ?? null,
+        active: identity?.active !== false,
+      });
+    }
+    for (const user of registered) {
+      if (!byId.has(user.userId)) {
+        byId.set(user.userId, {
+          username: user.userId,
+          roleLabel: 'Member',
+          companyId: user.companyId,
+          active: user.active,
+        });
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.username.localeCompare(b.username));
+  }
+
+  /** Company from the verified request wins; otherwise use the registered caller assignment. */
+  private async effectiveCompany(tenantId: string, username: string, companyId: string | null): Promise<string | null> {
+    if (companyId) return companyId;
+    if (this.users) {
+      await this.users.ensureTenant(tenantId);
+      return this.users.get(tenantId, username)?.companyId ?? null;
+    }
+    return null;
+  }
+
+  /** People the caller may start a private conversation with — never a client-side filter. */
+  async people(tenantId: string, username: string, companyId: string | null = null): Promise<ChatPerson[]> {
+    const people = await this.directoryPeople(tenantId);
+    const effective = await this.effectiveCompany(tenantId, username, companyId);
+    return people
+      .filter((person) => person.username !== username && person.active)
+      .filter((person) => !effective || person.companyId === effective)
+      .map(({ active: _active, ...person }) => person);
+  }
 
   /**
    * Assert the directory channels exist, once per process per tenant. `ensureChannels` is an
@@ -164,11 +234,27 @@ export class CommsService {
 
   /** Open (or create) the DM channel between two users. */
   async openDm(tenantId: string, me: string, peer: string, companyId: string | null = null): Promise<ChatChannel> {
-    const id = dmChannelId(me, peer);
+    const target = peer.trim();
+    if (!target || target === me) throw new NotFoundException('user not found');
+    const people = await this.directoryPeople(tenantId);
+    const effective = await this.effectiveCompany(tenantId, me, companyId);
+    const peerRecord = people.find((person) => person.username === target);
+    // In-memory direct-service harnesses historically used arbitrary principals. Keep that dev
+    // fallback only when there is no identity registry and no company scope; a real API request is
+    // backed by UsersService and therefore fails closed for unknown or inactive people.
+    const registryKnown = (this.users?.list(tenantId).length ?? 0) > 0;
+    if ((!peerRecord && (this.users || effective || registryKnown)) || peerRecord?.active === false
+      || (effective && peerRecord?.companyId !== effective)) {
+      throw new NotFoundException('user not found');
+    }
+    const id = dmChannelId(me, target);
     const existing = await this.store.getChannel(tenantId, id);
-    if (existing) return existing;
-    const channel: ChatChannel = { id, kind: 'dm', name: displayName(peer), members: [me, peer].sort() };
-    await this.store.ensureChannels(tenantId, [channel], me, companyId);
+    if (existing) {
+      if (!canAccessChannel(existing, me, false, effective)) throw new NotFoundException('user not found');
+      return existing;
+    }
+    const channel: ChatChannel = { id, kind: 'dm', name: displayName(target), members: [me, target].sort() };
+    await this.store.ensureChannels(tenantId, [channel], me, effective);
     return channel;
   }
 
@@ -193,9 +279,29 @@ export class CommsService {
   async messages(
     tenantId: string, username: string, channelId: string, isAdmin = false, companyId: string | null = null,
   ): Promise<ChatMessage[]> {
-    await this.requireChannel(tenantId, username, channelId, isAdmin, companyId);
+    const channel = await this.requireChannel(tenantId, username, channelId, isAdmin, companyId);
+    const previousRead = await this.store.getLastRead(tenantId, channelId, username);
     const msgs = await this.store.listMessages(tenantId, channelId);
     await this.store.setLastRead(tenantId, channelId, username, new Date().toISOString());
+    // A read receipt is a notification to the sender, but only for private DMs. Broadcasting
+    // "Alice read your message" for a company room would create noise and disclose presence to an
+    // audience that did not ask for receipts. The watermark makes this idempotent across polling.
+    if (channel.kind === 'dm') {
+      const peer = dmPeer(channel.id, username);
+      const newlyRead = msgs.filter((message) => message.sender !== username && (!previousRead || message.sentAt > previousRead));
+      if (peer && newlyRead.length > 0) {
+        const count = newlyRead.length;
+        await this.notifications.record({
+          tenantId,
+          userId: peer,
+          title: `${displayName(username)} read your message`,
+          body: `${displayName(username)} read ${count} message${count === 1 ? '' : 's'} in your private conversation.`,
+          category: 'chat',
+          refType: 'chat.read',
+          refId: channel.id,
+        });
+      }
+    }
     return msgs;
   }
 

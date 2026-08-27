@@ -229,7 +229,7 @@ test('the chat is usable on a phone', async ({ page }) => {
 
 test('a third party cannot read a DM between two other people', async ({ page, browser, baseURL }) => {
   // 9. The session user opens a DM with someone, and posts into it.
-  const peer = 'u-carol';
+  const peer = 'u-ceo';
   const opened = await page.request.post('/api/comms/dm', { data: { peer } });
   expect(opened.ok()).toBe(true);
   const dm = await opened.json() as { id: string };

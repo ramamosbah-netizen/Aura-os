@@ -35,6 +35,19 @@ describe('NotificationService (notification center)', () => {
     expect(await s.unreadCount('t1')).toBe(1);
     expect((await s.list({ tenantId: 't2' })).map((n) => n.title)).toEqual(['Y']);
   });
+
+  it('filters personal notifications to the addressed user while retaining broadcasts', async () => {
+    const s = svc();
+    await s.record({ tenantId: 't1', userId: 'u-alice', title: 'Alice', body: 'private' });
+    await s.record({ tenantId: 't1', userId: 'u-bob', title: 'Bob', body: 'private' });
+    await s.record({ tenantId: 't1', title: 'Company', body: 'broadcast' });
+
+    expect((await s.list({ tenantId: 't1', userId: 'u-alice' })).map((n) => n.title)).toEqual(['Company', 'Alice']);
+    expect((await s.list({ tenantId: 't1', userId: 'u-bob' })).map((n) => n.title)).toEqual(['Company', 'Bob']);
+    expect(await s.unreadCount('t1', 'u-alice')).toBe(2);
+    await s.markRead('t1', (await s.list({ tenantId: 't1', userId: 'u-bob' })).find((n) => n.title === 'Bob')!.id, 'u-alice');
+    expect(await s.unreadCount('t1', 'u-bob')).toBe(2);
+  });
 });
 
 describe('NotificationService (channel delivery)', () => {

@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Permissions, TenantContext } from '@aura/core';
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage, Mailbox } from '@aura/shared';
-import { CommsService, type ChannelSummary } from './comms.service';
+import { CommsService, type ChannelSummary, type ChatPerson } from './comms.service';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
 
 /** Dev fallback identity when auth enforcement is off (mirrors WorkspaceController). */
@@ -35,10 +35,17 @@ export class CommsController {
     return this.comms.channels(tenantId, username, isAdmin, companyId);
   }
 
+  @Get('people')
+  @Permissions('comms.channel.read')
+  async people(): Promise<ChatPerson[]> {
+    const { tenantId, companyId, username } = await this.caller();
+    return this.comms.people(tenantId, username, companyId);
+  }
+
   @Post('dm')
   @Permissions('comms.dm.create')
   async openDm(@Body() body: { peer?: string }): Promise<ChatChannel> {
-    if (!body?.peer) throw new BadRequestException('peer is required');
+    if (typeof body?.peer !== 'string' || !body.peer.trim()) throw new BadRequestException('peer is required');
     const { tenantId, companyId, username } = await this.caller();
     return this.comms.openDm(tenantId, username, body.peer, companyId);
   }

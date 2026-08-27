@@ -148,12 +148,12 @@ export class NotificationService {
     return this.store.list(filter);
   }
 
-  markRead(tenantId: string, id: string): Promise<void> {
-    return this.store.markRead(tenantId, id);
+  markRead(tenantId: string, id: string, userId?: string | null): Promise<void> {
+    return this.store.markRead(tenantId, id, userId);
   }
 
-  unreadCount(tenantId: string): Promise<number> {
-    return this.store.unreadCount(tenantId);
+  unreadCount(tenantId: string, userId?: string | null): Promise<number> {
+    return this.store.unreadCount(tenantId, userId);
   }
 
   async send(payload: NotificationPayload): Promise<DispatchResult[]> {

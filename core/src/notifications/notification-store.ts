@@ -46,6 +46,8 @@ export const NOTIFICATION_STORE = Symbol('NOTIFICATION_STORE');
 
 export interface NotificationFilter {
   tenantId: string;
+  /** Include tenant broadcasts plus notifications addressed to this user. Omit only for internal/admin reads. */
+  userId?: string | null;
   unreadOnly?: boolean;
   limit?: number;
 }
@@ -53,8 +55,8 @@ export interface NotificationFilter {
 export interface NotificationStore {
   save(n: Notification): Promise<void>;
   list(filter: NotificationFilter): Promise<Notification[]>;
-  markRead(tenantId: string, id: string): Promise<void>;
-  unreadCount(tenantId: string): Promise<number>;
+  markRead(tenantId: string, id: string, userId?: string | null): Promise<void>;
+  unreadCount(tenantId: string, userId?: string | null): Promise<number>;
 }
 
 export class InMemoryNotificationStore implements NotificationStore {
@@ -65,16 +67,17 @@ export class InMemoryNotificationStore implements NotificationStore {
   }
   async list(filter: NotificationFilter): Promise<Notification[]> {
     let out = [...this.data.values()].filter((n) => n.tenantId === filter.tenantId);
+    if (filter.userId !== undefined) out = out.filter((n) => n.userId === null || n.userId === filter.userId);
     if (filter.unreadOnly) out = out.filter((n) => !n.read);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }
-  async markRead(tenantId: string, id: string): Promise<void> {
+  async markRead(tenantId: string, id: string, userId?: string | null): Promise<void> {
     const n = this.data.get(id);
-    if (n && n.tenantId === tenantId) n.read = true;
+    if (n && n.tenantId === tenantId && (userId === undefined || n.userId === null || n.userId === userId)) n.read = true;
   }
-  async unreadCount(tenantId: string): Promise<number> {
-    return [...this.data.values()].filter((n) => n.tenantId === tenantId && !n.read).length;
+  async unreadCount(tenantId: string, userId?: string | null): Promise<number> {
+    return [...this.data.values()].filter((n) => n.tenantId === tenantId && !n.read && (userId === undefined || n.userId === null || n.userId === userId)).length;
   }
 }
 
@@ -109,11 +112,23 @@ export class PostgresNotificationStore implements NotificationStore {
     const res = await this.pool.query<Row>(sql, params);
     return res.rows.map(toN);
   }
-  async markRead(tenantId: string, id: string): Promise<void> {
-    await this.pool.query('UPDATE public.aura_notifications SET read = true WHERE tenant_id = $1 AND id = $2', [tenantId, id]);
+  async markRead(tenantId: string, id: string, userId?: string | null): Promise<void> {
+    const params: unknown[] = [tenantId, id];
+    let sql = 'UPDATE public.aura_notifications SET read = true WHERE tenant_id = $1 AND id = $2';
+    if (userId !== undefined) {
+      params.push(userId);
+      sql += ` AND (user_id IS NULL OR user_id = $${params.length})`;
+    }
+    await this.pool.query(sql, params);
   }
-  async unreadCount(tenantId: string): Promise<number> {
-    const res = await this.pool.query<{ c: string }>('SELECT COUNT(*)::int AS c FROM public.aura_notifications WHERE tenant_id = $1 AND read = false', [tenantId]);
+  async unreadCount(tenantId: string, userId?: string | null): Promise<number> {
+    const params: unknown[] = [tenantId];
+    let sql = 'SELECT COUNT(*)::int AS c FROM public.aura_notifications WHERE tenant_id = $1 AND read = false';
+    if (userId !== undefined) {
+      params.push(userId);
+      sql += ` AND (user_id IS NULL OR user_id = $${params.length})`;
+    }
+    const res = await this.pool.query<{ c: string }>(sql, params);
     return res.rows.length ? Number(res.rows[0].c) : 0;
   }
 }

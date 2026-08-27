@@ -4,6 +4,7 @@ import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 import { readTenderAwardEvidence, type TenderAwardEvidence } from './domain/tender-award-evidence';
+import { readTenderCommercialBasis, type TenderCommercialBasis } from './domain/tender-commercial-basis';
 import type { TenderFilter, TenderStore } from './tender-store';
 
 interface Row {
@@ -23,10 +24,11 @@ interface Row {
   created_by: string | null;
   created_at: Date | string;
   award_evidence: unknown;
+  commercial_basis: unknown;
 }
 
 const COLS =
-  'id, tenant_id, company_id, title, reference, account_id, account_name, status, source, value, submission_deadline, source_opportunity_id, owner_id, created_by, created_at, award_evidence';
+  'id, tenant_id, company_id, title, reference, account_id, account_name, status, source, value, submission_deadline, source_opportunity_id, owner_id, created_by, created_at, award_evidence, commercial_basis';
 
 function rowToTender(r: Row): Tender {
   return {
@@ -47,6 +49,8 @@ function rowToTender(r: Row): Tender {
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
     // Refuses anything it cannot fully parse -> null -> "award not evidenced" (ADR-0021).
     awardEvidence: readTenderAwardEvidence(r.award_evidence),
+    // Refuses what it cannot fully parse -> null -> "awaiting commercial basis".
+    commercialBasis: readTenderCommercialBasis(r.commercial_basis),
   };
 }
 
@@ -65,8 +69,8 @@ export class PostgresTenderStore implements TenderStore {
 
   private insert(executor: Pool | PoolClient, t: Tender): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_tendering_tenders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [t.id, t.tenantId, t.companyId, t.title, t.reference, t.accountId, t.accountName, t.status, t.source, t.value, t.submissionDeadline, t.sourceOpportunityId, t.ownerId, t.createdBy, t.createdAt, t.awardEvidence ? JSON.stringify(t.awardEvidence) : null],
+      `INSERT INTO public.aura_tendering_tenders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+      [t.id, t.tenantId, t.companyId, t.title, t.reference, t.accountId, t.accountName, t.status, t.source, t.value, t.submissionDeadline, t.sourceOpportunityId, t.ownerId, t.createdBy, t.createdAt, t.awardEvidence ? JSON.stringify(t.awardEvidence) : null, t.commercialBasis ? JSON.stringify(t.commercialBasis) : null],
     );
   }
 
@@ -103,6 +107,21 @@ export class PostgresTenderStore implements TenderStore {
       `UPDATE public.aura_tendering_tenders SET status='won', award_evidence=$2
          WHERE id=$1 AND award_evidence IS NULL`,
       [id, JSON.stringify(evidence)],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * Write-once link of the commercial basis. `WHERE commercial_basis IS NULL` is the guard: a replay,
+   * or a second baseline locking later, matches no row and reports `false` instead of re-basing a
+   * contract that already exists. Absent from `upd()` on purpose.
+   */
+  async linkCommercialBasisWithClient(tx: TxHandle | null, id: Id, basis: TenderCommercialBasis): Promise<boolean> {
+    const executor: Pool | PoolClient = tx === null ? this.pool : (tx as PoolClient);
+    const res = await executor.query(
+      `UPDATE public.aura_tendering_tenders SET commercial_basis=$2
+         WHERE id=$1 AND commercial_basis IS NULL`,
+      [id, JSON.stringify(basis)],
     );
     return (res.rowCount ?? 0) > 0;
   }

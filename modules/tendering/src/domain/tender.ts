@@ -1,5 +1,6 @@
 import { type Id, newId } from '@aura/shared';
 import type { TenderAwardEvidence } from './tender-award-evidence';
+import type { TenderCommercialBasis } from './tender-commercial-basis';
 
 // Tendering domain — framework-free. A Tender is a bid/proposal in response to a
 // client opportunity: the second link in the deal chain (CRM → Tender → Contract →
@@ -62,6 +63,14 @@ export interface Tender {
    * Immutable once captured — enforced by the database, not by service discipline.
    */
   awardEvidence: TenderAwardEvidence | null;
+  /**
+   * ADR-0021 follow-up — OUR approved offer behind the award, pinned so the contract cannot be
+   * built from whichever baseline happens to be newest when the reactor runs. `null` means no
+   * commercial basis is established yet: the tender is legitimately won and NO contract exists,
+   * which surfaces as "Awaiting commercial basis" rather than a contract with an invented value.
+   * Immutable once established — enforced by the database.
+   */
+  commercialBasis: TenderCommercialBasis | null;
   createdAt: string;
   createdBy: Id | null;
 }
@@ -101,6 +110,8 @@ export function makeTender(input: NewTender): Tender {
     // Never born evidenced: evidence is captured by the governed award command, in the same
     // transaction as the transition it justifies.
     awardEvidence: null,
+    // Established by the governed award (or a later baseline link), never at creation.
+    commercialBasis: null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };

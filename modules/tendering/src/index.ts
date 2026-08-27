@@ -2,6 +2,7 @@
 export * from './domain/tender';
 export * from './domain/tender-gate';
 export * from './domain/tender-award-evidence';
+export * from './domain/tender-commercial-basis';
 export * from './domain/boq';
 export * from './tender-store';
 export * from './boq-store';

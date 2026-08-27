@@ -48,6 +48,7 @@ const tenantId = 'tenant-e2e';
  * the "awarded straight off the estimate" path every other test here uses.
  */
 function buildHarness(pricedQuote?: { id: string; status: string; baselineId: string; total: number }) {
+  let quotationsStub: Record<string, unknown> = {};
   const linkedContracts: Array<{ quotationId: string; contractId: string }> = [];
   const bus = new EventBus();
   const events = new InMemoryEventStore(bus);
@@ -199,15 +200,22 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
     // QuotationService (CRM). Two jobs on the award path: whether a tender's quotation is already
     // committed (so a frozen estimate is never silently restamped), and — since G-50 — supplying
     // the approved commercial baseline the contract must inherit.
-    {
+    (quotationsStub = {
       listBySourceTender: async () => [],
       list: async () => (pricedQuote ? [{ id: pricedQuote.id, status: pricedQuote.status }] : []),
       getBaseline: async (_t: string, qid: string) =>
         pricedQuote && qid === pricedQuote.id ? { id: pricedQuote.baselineId, total: pricedQuote.total } : null,
+      // The locked event names the baseline as its aggregate, so the deferred reactor reads it by id.
+      getBaselineById: async (_t: string, bid: string) =>
+        pricedQuote && bid === pricedQuote.baselineId
+          ? { id: pricedQuote.baselineId, quotationId: pricedQuote.id, total: pricedQuote.total,
+              sourceTenderId: (globalThis as Record<string, unknown>).__deferredTenderId ?? null,
+              lockedAt: '2026-08-22T09:00:00.000Z' }
+          : null,
       linkContract: async (qid: string, contractId: string) => {
         linkedContracts.push({ quotationId: qid, contractId });
       },
-    } as any,
+    }) as any,
     // PreAwardPackageService (CRM) — the Slice 9 accept→Won reactor reads the current frozen pricing
     // sheet for its lineage guard. These tender-chain tests never emit quotation.accepted, so a null
     // (no governed package) is enough.
@@ -220,7 +228,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
 }
 
 /**
@@ -241,11 +249,27 @@ const CUSTOMER_AWARDED_AT = '2026-08-21T07:30:00.000Z';
  * ADR-0021 — award a tender the ONLY governed way: with the customer's award evidence. Reaching
  * `won` by flipping status is refused by the service, so every deal-chain test now goes through here.
  */
+/**
+ * Resolve the award-time commercial basis the way the app layer does. The controller owns this in
+ * production (only it may read tendering -> quotation -> baseline); mirroring it here keeps the test
+ * exercising the real shape rather than a convenience.
+ */
+async function awardBasis(h: ReturnType<typeof buildHarness>) {
+  const quotes = await (h.quotationsStub as { list: () => Promise<Array<{ id: string; status: string }>> }).list();
+  const rank = (s: string): number => (s === 'accepted' ? 0 : s === 'approved' ? 1 : s === 'sent' ? 2 : 3);
+  for (const q of quotes.filter((x) => rank(x.status) < 3).sort((a, b) => rank(a.status) - rank(b.status))) {
+    const b = await (h.quotationsStub as { getBaseline: (t: string, q: string) => Promise<{ id: string; total: number } | null> }).getBaseline(tenantId, q.id);
+    if (b) return { baselineId: b.id, quotationId: q.id, value: b.total };
+  }
+  return null;
+}
+
 async function awardTender(
   h: ReturnType<typeof buildHarness>,
   tenderId: string,
   over: Partial<{ awardedValue: number; currency: string; awardedAt: string; awardReference: string | null }> = {},
 ) {
+  const basis = await awardBasis(h);
   return h.tenders.award(tenderId, {
     awardedValue: 1_000_000,
     currency: 'AED',
@@ -253,7 +277,7 @@ async function awardTender(
     awardReference: 'LOA-2026-77',
     capturedBy: 'u-bid-manager',
     ...over,
-  });
+  }, basis);
 }
 
 /**
@@ -281,7 +305,9 @@ async function awardWithoutEvidence(h: ReturnType<typeof buildHarness>, tenderId
 
 describe('reactor failure policy — the outbox is the error handler', () => {
   let h: ReturnType<typeof buildHarness>;
-  beforeEach(() => { h = buildHarness(); });
+  // Priced, so the award actually reaches `contracts.create` — with no commercial basis the reactor
+  // returns early and there would be nothing to fail.
+  beforeEach(() => { h = buildHarness({ id: 'q-fail', status: 'approved', baselineId: 'baseline-fail', total: 500 }); });
 
   /**
    * OutboxRelay decides retry-vs-done purely by whether `bus.publish` rejects: resolve stamps
@@ -326,7 +352,9 @@ describe('reactor failure policy — the outbox is the error handler', () => {
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
   let h: ReturnType<typeof buildHarness>;
   beforeEach(() => {
-    h = buildHarness();
+    // A tender priced through an approved quotation is the ORDINARY case: it has a commercial basis,
+    // so the deal chain produces a contract. Tests about the no-basis path build their own harness.
+    h = buildHarness({ id: 'q-default', status: 'approved', baselineId: 'baseline-default', total: 900_000 });
   });
 
   it('auto-creates Tender → Contract → Project, carrying references down the chain', async () => {
@@ -356,11 +384,17 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     await makeTenderSubmittable(h, tender.id);
     await awardTender(h, tender.id);
     expect((await h.opportunities.get(opp.id))?.stage).toBe('won'); // tender.awarded → close-opportunity
+    // The contract is valued from the approved COMMERCIAL BASIS (900k), never from the tender's own
+    // 1M estimate. The two being different is the assertion — while the fallback existed they were
+    // always the same number, so nothing could tell them apart.
+    expect(tender.value).toBe(1_000_000);
     const contracts = await h.contracts.list({ tenderId: tender.id });
     expect(contracts).toHaveLength(1);
     expect(contracts[0].tenderId).toBe(tender.id);
     expect(contracts[0].accountName).toBe('Acme Developments LLC');
-    expect(contracts[0].value).toBe(1_000_000);
+    expect(contracts[0].value).toBe(900_000);                  // the approved basis…
+    expect(contracts[0].commercialBaselineId).toBe('baseline-default');
+    expect(contracts[0].value).not.toBe(tender.value);          // …and NOT the tender's estimate
     const contract = contracts[0];
 
     // 3. Contract signed → Project (planned).
@@ -369,7 +403,9 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(projects).toHaveLength(1);
     expect(projects[0].contractId).toBe(contract.id);
     expect(projects[0].accountName).toBe('Acme Developments LLC');
-    expect(projects[0].value).toBe(1_000_000);
+    // The project inherits the CONTRACT's value, which is the approved basis — so the basis now
+    // propagates all the way down the chain instead of the tender's estimate doing so.
+    expect(projects[0].value).toBe(900_000);
   });
 
   // G-50 — path-asymmetry. The DIRECT path locks a commercial baseline on quotation approval and
@@ -458,11 +494,13 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(resolveDealOutcome(won).state).toBe('LEGACY_WON');
     expect(won.qualificationAtAward).toBeNull();
 
-    // …while the CONTRACT still inherits that baseline. The baseline kept its own job; it simply
-    // stopped doing a job that was never its own.
-    const [contract] = await priced.contracts.list({ tenderId: tender.id });
-    expect(contract.value).toBe(2_000_000);
-    expect(contract.commercialBaselineId).toBe('baseline-99');
+    // …and NO contract exists. A legacy award event pins no commercial basis (it never went through
+    // the governed `award()`), and the follow-up rule is absolute: no basis, no contract. The 2M
+    // baseline is still the approved offer — it simply has not been linked to this award, and only a
+    // `crm.commercial_baseline.locked` event can do that. A tender won before this model existed
+    // therefore waits for a basis rather than inheriting one chosen at delivery time.
+    expect((await priced.tenders.get(tender.id))!.commercialBasis).toBeNull();
+    expect(await priced.contracts.list({ tenderId: tender.id })).toEqual([]);
   });
 
   // The other half of the invariant, through the real reactor: with no approved baseline there is no
@@ -487,17 +525,61 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(outcome.awardDocumented && outcome.awardValue == null).toBe(false);
   });
 
-  it('still creates the contract from the tender value when the tender was never priced through a quotation', async () => {
-    const opp = await h.opportunities.create({ tenantId, title: 'Unpriced Job', value: 800_000 });
-    const tender = await h.tenders.create({ tenantId, title: 'Tender: Unpriced Job', value: 800_000 });
-    await h.tenders.linkOpportunity(tender.id, opp.id);
-    await makeTenderSubmittable(h, tender.id);
-    await awardTender(h, tender.id);
+  // SEMANTIC CORRECTION, deliberate and NOT a refactor. This test used to assert that an unpriced
+  // tender still produced a contract valued at the tender's own ESTIMATE. That estimate then flowed
+  // into PaymentCertificateService as `contractValue` and drove IPC maths — an internal guess
+  // wearing a contractual number. ADR-0021's vocabulary forbids exactly that conflation.
+  //
+  // Now: no commercial basis, no contract. The award itself stays valid.
+  it('NO commercial basis → NO contract; the tender estimate is never banked as a contract value', async () => {
+    const unpriced = buildHarness(); // deliberately no priced quotation behind the tender
+    const opp = await unpriced.opportunities.create({ tenantId, title: 'Unpriced Job', value: 800_000 });
+    const tender = await unpriced.tenders.create({ tenantId, title: 'Tender: Unpriced Job', value: 800_000 });
+    await unpriced.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(unpriced, tender.id);
+    await awardTender(unpriced, tender.id);
 
-    const [contract] = await h.contracts.list({ tenderId: tender.id });
-    expect(contract.value).toBe(800_000);
-    expect(contract.commercialBaselineId).toBeNull();
-    expect(h.linkedContracts).toEqual([]);
+    // The win is real and governed…
+    const won = (await unpriced.opportunities.get(opp.id))!;
+    expect(won.stage).toBe('won');
+    expect(resolveDealOutcome(won).state).toBe('GOVERNED_WON');
+    // …and the tender is awaiting a commercial basis, so no contract was invented for it.
+    expect((await unpriced.tenders.get(tender.id))!.commercialBasis).toBeNull();
+    expect(await unpriced.contracts.list({ tenderId: tender.id })).toEqual([]);
+    expect(unpriced.linkedContracts).toEqual([]);
+  });
+
+  // The deferred half: the baseline arrives later and the contract is built THEN, from that basis,
+  // recorded as POST_AWARD_LINKED so the timing is never misreported as award-time.
+  it('a baseline locked AFTER the award links as POST_AWARD_LINKED and builds the deferred contract', async () => {
+    const late = buildHarness({ id: 'q-late', status: 'approved', baselineId: 'baseline-late', total: 640_000 });
+    const opp = await late.opportunities.create({ tenantId, title: 'Deferred Job', value: 600_000 });
+    const tender = await late.tenders.create({ tenantId, title: 'Tender: Deferred Job', value: 600_000 });
+    await late.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(late, tender.id);
+
+    // Award with NO basis available at that moment.
+    (globalThis as Record<string, unknown>).__deferredTenderId = tender.id;
+    await late.tenders.award(tender.id, {
+      awardedValue: 700_000, currency: 'AED', awardedAt: CUSTOMER_AWARDED_AT, capturedBy: 'u-bid-manager',
+    }, null);
+    expect(await late.contracts.list({ tenderId: tender.id })).toEqual([]); // deferred, not lost
+
+    // …then the baseline locks.
+    await late.bus.publish(makeEvent({
+      type: 'crm.commercial_baseline.locked',
+      tenantId, companyId: null, actorId: 'u-commercial',
+      aggregateType: 'crm.commercial_baseline', aggregateId: 'baseline-late',
+      payload: { quotationId: 'q-late', quoteNumber: 'Q-LATE', total: 640_000 },
+    }));
+
+    const basis = (await late.tenders.get(tender.id))!.commercialBasis!;
+    expect(basis.kind).toBe('POST_AWARD_LINKED');           // NOT award-time — a different claim
+    expect(basis.baselineId).toBe('baseline-late');
+    const [contract] = await late.contracts.list({ tenderId: tender.id });
+    expect(contract.value).toBe(640_000);                   // the approved offer, not the 700k award
+    expect(contract.commercialBaselineId).toBe('baseline-late');
+    delete (globalThis as Record<string, unknown>).__deferredTenderId;
   });
 
   it('is idempotent: re-delivered award/sign events do not duplicate downstream records', async () => {

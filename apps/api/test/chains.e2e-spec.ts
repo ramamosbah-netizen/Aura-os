@@ -73,6 +73,19 @@ describe('business-chain e2e (HTTP)', () => {
     ).body;
     expect(tender.sourceOpportunityId).toBe(opp.id);
 
+    // 2b. Price the bid and APPROVE the resulting quotation, which locks the immutable Commercial
+    //     Baseline. That baseline is the contract's commercial basis. Without one the award is still
+    //     valid but NO contract is created (the deferred path) — the tender's own estimate is never
+    //     promoted to a contractual value. See ADR-0021's follow-up.
+    const { boq } = (await http.get(`/api/v1/tendering/tenders/${tender.id}/boq`).expect(200)).body;
+    await http.post(`/api/v1/tendering/tenders/${tender.id}/boq/items`)
+      .send({ boqId: boq.id, itemCode: '1.1', description: 'ELV package', unit: 'LS', quantity: 1, rate: 780_000 })
+      .expect(201);
+    const quote = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
+    expect(quote.sourceTenderId).toBe(tender.id);
+    await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'submit_review' }).expect(200);
+    await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);
+
     // 3. Award the tender → the contract is drafted AND (J3) the source opportunity closes Won.
     // ADR-0021 — the governed award, with the customer's evidence. This is what makes the deal
     // chain fire AND what makes the resulting Opportunity GOVERNED_WON rather than LEGACY_WON.
@@ -85,7 +98,10 @@ describe('business-chain e2e (HTTP)', () => {
     );
     expect(contracts).toHaveLength(1);
     const contract = contracts[0];
-    expect(contract.value).toBe(750_000);
+    // The CONTRACT is valued from the approved commercial basis, never from the 750k tender estimate
+    // and never from the 1,000,000 the customer awarded — three separate measures.
+    expect(contract.value).not.toBe(750_000);
+    expect(contract.commercialBaselineId).toBeTruthy();
 
     // The award is the opportunity's outcome — it is now Won, with a reason naming the tender.
     const wonOpp = await eventually(async () => {

@@ -4,7 +4,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
-import { AccountService } from '@aura/crm';
+import { AccountService, QuotationService } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 import * as xlsx from 'xlsx';
 
@@ -81,6 +81,7 @@ export class TenderingController {
     private readonly tenders: TenderService,
     private readonly clarifications: ClarificationService,
     private readonly accounts: AccountService,
+    private readonly quotations: QuotationService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -175,14 +176,55 @@ export class TenderingController {
       throw new BadRequestException('Capturing award evidence requires an authenticated user');
     }
 
-    return this.tenders.award(id, {
-      awardedValue: dto.awardedValue,
-      currency: dto.currency,
-      awardedAt: dto.awardedAt,
-      awardReference: dto.awardReference ?? null,
-      evidenceDocumentId: dto.evidenceDocumentId ?? null,
-      capturedBy,
-    });
+    // The award-time COMMERCIAL BASIS. Resolved HERE, in the app layer, because only this layer may
+    // read across tendering -> quotation -> baseline. Pinning it now is the whole point: the contract
+    // reactor used to resolve it when it happened to run, so a quotation accepted in the delivery
+    // window changed which baseline the contract inherited.
+    //
+    // No basis is a legitimate award: the tender wins, NO contract is created, and it reads
+    // "awaiting commercial basis" until one locks. `tender.value` is NEVER substituted.
+    const basis = await this.resolveAwardBasis(this.tenant.get().tenantId, id);
+
+    return this.tenders.award(
+      id,
+      {
+        awardedValue: dto.awardedValue,
+        currency: dto.currency,
+        awardedAt: dto.awardedAt,
+        awardReference: dto.awardReference ?? null,
+        evidenceDocumentId: dto.evidenceDocumentId ?? null,
+        capturedBy,
+      },
+      basis,
+    );
+  }
+
+  /**
+   * The approved commercial baseline behind this tender's decided quotation, if one is locked now.
+   * Ranked accepted > approved > sent, the same order the contract reactor used — the change is WHEN
+   * the choice is made (once, at the award) rather than HOW it is made.
+   *
+   * Enrichment, so a lookup failure must not fail the award: an award that cannot be recorded is far
+   * worse than one recorded without a basis, which is an expected and handled state.
+   */
+  private async resolveAwardBasis(
+    tenantId: string,
+    tenderId: string,
+  ): Promise<{ baselineId: string; quotationId: string; value: number } | null> {
+    try {
+      const quotes = await this.quotations.list({ tenantId, sourceTenderId: tenderId, limit: 50 });
+      if (!quotes?.length) return null;
+      const rank = (status: string): number => (status === 'accepted' ? 0 : status === 'approved' ? 1 : status === 'sent' ? 2 : 3);
+      const decided = quotes.filter((q) => rank(q.status) < 3).sort((a, b) => rank(a.status) - rank(b.status));
+      for (const q of decided) {
+        const baseline = await this.quotations.getBaseline(tenantId, q.id);
+        // `baseline.total` — the Contract Value measure, VAT-inclusive. Unchanged by this slice.
+        if (baseline) return { baselineId: baseline.id, quotationId: q.id, value: baseline.total };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /**

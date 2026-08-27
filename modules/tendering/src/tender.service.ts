@@ -4,6 +4,7 @@ import { AuditService, CommandBus, EVENT_STORE, type EventStore, NumberingServic
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
 import { checkTenderTransition, tenderGateMessage, type TenderGateEvidence } from './domain/tender-gate';
 import { makeTenderAwardEvidence, type NewTenderAwardEvidence, type TenderAwardEvidence } from './domain/tender-award-evidence';
+import { makeTenderCommercialBasis, type NewTenderCommercialBasis, type TenderCommercialBasis } from './domain/tender-commercial-basis';
 import { makeTenderSubmission, type NewTenderSubmission, type TenderSubmission } from './domain/submission';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
@@ -275,7 +276,19 @@ export class TenderService implements OnModuleInit {
    * The `won` gate still applies. Award evidence justifies the win; it does not excuse a tender that
    * was never submitted.
    */
-  async award(id: Id, evidence: NewTenderAwardEvidence): Promise<Tender> {
+  async award(
+    id: Id,
+    evidence: NewTenderAwardEvidence,
+    /**
+     * The approved commercial basis AS IT STOOD AT THE AWARD, when one exists. Resolved by the APP
+     * layer and passed in, because only that layer may read across tendering -> quotation ->
+     * baseline; this module states what it will accept. Omitted or null means no basis exists yet,
+     * which is a legitimate award: the tender wins and NO contract is created until one is linked.
+     *
+     * NEVER synthesised from `tender.value`. An estimate is not an approved offer.
+     */
+    basis?: Omit<NewTenderCommercialBasis, 'kind' | 'establishedAt'> | null,
+  ): Promise<Tender> {
     // Validate BEFORE anything else: an invalid award must not reach a gate check, a store or a bus.
     const captured: TenderAwardEvidence = makeTenderAwardEvidence(evidence);
 
@@ -310,7 +323,12 @@ export class TenderService implements OnModuleInit {
     const check = checkTenderTransition(existing, 'won', gate);
     if (!check.allowed) throw new Error(tenderGateMessage('won', check.gaps));
 
-    const updated: Tender = { ...existing, status: 'won', awardEvidence: captured };
+    // The basis is fixed at the AWARD instant, not at whatever time a downstream reactor runs.
+    const atAward: TenderCommercialBasis | null = basis
+      ? makeTenderCommercialBasis({ ...basis, kind: 'AT_AWARD', establishedAt: captured.awardedAt })
+      : null;
+
+    const updated: Tender = { ...existing, status: 'won', awardEvidence: captured, commercialBasis: atAward };
 
     const event = makeEvent({
       type: TENDER_EVENT.awarded,
@@ -336,6 +354,9 @@ export class TenderService implements OnModuleInit {
         awardedAt: captured.awardedAt,
         awardReference: captured.awardReference,
         evidenceDocumentId: captured.evidenceDocumentId,
+        // Whether a contract can be built from this award at all. Subscribers still RE-READ the
+        // tender (the basis is immutable, so live == award-time); this is for observability.
+        commercialBasisEstablished: atAward !== null,
       },
     });
 
@@ -343,6 +364,9 @@ export class TenderService implements OnModuleInit {
       // Write-once capture; `false` means another writer got there first inside this window.
       const stamped = await this.store.awardWithClient(handle, id, captured);
       if (!stamped) throw new Error('Tender has already been awarded: award evidence is captured once and never rewritten');
+      // Same transaction as the award it justifies — there is no window where a tender is won with
+      // a half-established basis, and none where the basis outlives a rolled-back award.
+      if (atAward) await this.store.linkCommercialBasisWithClient(handle, id, atAward);
       await this.events.appendWithClient(handle, [event]);
     });
 
@@ -351,6 +375,56 @@ export class TenderService implements OnModuleInit {
         (captured.awardReference ? `, ref ${captured.awardReference}` : ', no reference captured'),
     );
     return updated;
+  }
+
+  /**
+   * ADR-0021 follow-up — link a commercial basis that was locked AFTER the award (the deferred path).
+   *
+   * A tender can legitimately be won before anything is priced through an approved quotation. When
+   * that happens no contract is created — inventing one from `tender.value` would put our own
+   * estimate into a contractual value, and into payment-certificate maths downstream. The tender
+   * simply reads "awaiting commercial basis" until a baseline actually locks.
+   *
+   * Recorded as `POST_AWARD_LINKED`, never as `AT_AWARD`: it is a different historical claim, and
+   * flattening the two would misdate the basis by however long the wait was.
+   *
+   * The CALLER (the app layer) owns the cross-module guards it alone can check — that the baseline
+   * belongs to THIS tender, and that no contract exists yet. This method owns what the aggregate
+   * knows: the tender is won, and a basis is established exactly once.
+   *
+   * Returns the tender unchanged when a basis already exists. That is the race that matters: a
+   * second, different baseline locking later must NEVER re-base a contract that has already been
+   * built — so this reports the no-op instead of overwriting.
+   */
+  async linkCommercialBasis(
+    id: Id,
+    basis: Omit<NewTenderCommercialBasis, 'kind'>,
+  ): Promise<{ tender: Tender; linked: boolean }> {
+    const established = makeTenderCommercialBasis({ ...basis, kind: 'POST_AWARD_LINKED' });
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
+
+    // A basis presupposes the award. Anything else is a caller bug, not a race.
+    if (existing.status !== 'won') {
+      throw new Error('A commercial basis can only be linked to a tender that has been won');
+    }
+    if (existing.commercialBasis) {
+      this.logger.log(
+        `Tender ${existing.title} already has a commercial basis (${existing.commercialBasis.kind}, baseline ` +
+          `${existing.commercialBasis.baselineId}) — ignoring baseline ${established.baselineId}`,
+      );
+      return { tender: existing, linked: false };
+    }
+
+    const linked = await this.store.linkCommercialBasisWithClient(null, id, established);
+    if (!linked) {
+      // Lost a race with a concurrent writer; theirs stands.
+      return { tender: (await this.store.get(id)) ?? existing, linked: false };
+    }
+    this.logger.log(
+      `Tender ${existing.title} — commercial basis linked AFTER award: baseline ${established.baselineId} ` +
+        `(quotation ${established.quotationId}, value ${established.value}) locked ${established.establishedAt}`,
+    );
+    return { tender: { ...existing, commercialBasis: established }, linked: true };
   }
 
   /**

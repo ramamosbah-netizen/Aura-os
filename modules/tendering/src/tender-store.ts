@@ -2,6 +2,7 @@ import type { Id, Page, PageParams } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 import type { TenderAwardEvidence } from './domain/tender-award-evidence';
+import type { TenderCommercialBasis } from './domain/tender-commercial-basis';
 
 /** DI token for the tender store. */
 export const TENDER_STORE = Symbol('TENDER_STORE');
@@ -37,5 +38,12 @@ export interface TenderStore {
    * does not carry this column at all.
    */
   awardWithClient(tx: TxHandle | null, id: Id, evidence: TenderAwardEvidence): Promise<boolean>;
+  /**
+   * WRITE-ONCE capture of the commercial basis. Returns `false` when a basis already exists
+   * (`WHERE commercial_basis IS NULL`), so a replay — or a DIFFERENT baseline locking later —
+   * changes nothing rather than silently re-basing a contract that already exists.
+   * Deliberately NOT part of the generic `update`, so no ordinary edit can reach the column.
+   */
+  linkCommercialBasisWithClient(tx: TxHandle | null, id: Id, basis: TenderCommercialBasis): Promise<boolean>;
 }
 

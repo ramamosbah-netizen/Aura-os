@@ -3,6 +3,7 @@ import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
 import type { TenderAwardEvidence } from './domain/tender-award-evidence';
+import type { TenderCommercialBasis } from './domain/tender-commercial-basis';
 import type { TenderFilter, TenderStore } from './tender-store';
 
 /** Phase-0 tender store — keeps tenders in memory (no-DB boots). */
@@ -30,6 +31,14 @@ export class InMemoryTenderStore implements TenderStore {
     const existing = this.tenders.get(id);
     if (!existing || existing.awardEvidence) return false;
     this.tenders.set(id, { ...existing, status: 'won', awardEvidence: evidence });
+    return true;
+  }
+
+  /** Write-once, mirroring the SQL guard: basis already present -> no change, `false`. */
+  async linkCommercialBasisWithClient(_tx: TxHandle | null, id: Id, basis: TenderCommercialBasis): Promise<boolean> {
+    const existing = this.tenders.get(id);
+    if (!existing || existing.commercialBasis) return false;
+    this.tenders.set(id, { ...existing, commercialBasis: basis });
     return true;
   }
 

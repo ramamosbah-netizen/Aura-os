@@ -3,7 +3,7 @@ import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
 import { ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, VariationService } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
-import { TenderService, EstimateSourcingService } from '@aura/tendering';
+import { TenderService, EstimateSourcingService, type Tender } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
@@ -131,6 +131,42 @@ export class CrossModuleSubscriber implements OnModuleInit {
             ? ` — award evidenced by the customer: ${award.currency} ${award.contractedValue} (excl. VAT) awarded ${award.awardedAt}`
             : ' — no customer award evidence captured on the tender; the win is recorded WITHOUT award provenance (LEGACY_WON)'
           : ''),
+    );
+  }
+
+  /**
+   * Build the Contract from a tender's PINNED commercial basis. The single place a tender-route
+   * contract is created, shared by the award path and the deferred baseline-locked path, so both
+   * produce the same contract from the same source and the idempotency key is identical.
+   *
+   * `basis.value` is the ONLY value source. There is deliberately no fallback: if this is reached
+   * without a basis it is a caller bug, not a case to paper over with an estimate.
+   */
+  private async createContractFromBasis(e: DomainEvent, tender: Tender): Promise<void> {
+    const basis = tender.commercialBasis;
+    if (!basis) return;
+    const contract = await this.contracts.create(
+      {
+        tenantId: tender.tenantId,
+        companyId: tender.companyId,
+        title: `Contract for ${tender.title}`,
+        tenderId: tender.id,
+        tenderTitle: tender.title,
+        accountId: tender.accountId,
+        accountName: tender.accountName,
+        // The approved offer, VAT-inclusive (`baseline.total`) — the Contract Value measure, and a
+        // different thing from the deal's Award Value (excl. VAT) and the tender's estimate.
+        value: basis.value,
+        commercialBaselineId: basis.baselineId,
+        status: 'draft',
+      },
+      // Same key on both paths: an award and a later baseline link can never both produce a contract.
+      `contract-from-tender:${tender.id}`,
+    );
+    await this.quotations.linkContract(basis.quotationId, contract.id).catch(() => undefined);
+    this.logger.log(
+      `⚡ ${e.type} → Contract "${contract.title}" (${contract.id}) from ${basis.kind} basis ` +
+        `${basis.baselineId} (quotation ${basis.quotationId}, value ${basis.value})`,
     );
   }
 
@@ -440,94 +476,71 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }),
     );
 
-    // ── Deal chain: Tender won → auto-create Contract (draft) ──────────
-    // RETRYABLE: `contracts.create` carries the CommandBus idempotency key `contract-from-tender:
-    // <tenderId>`, and IdempotencyService is Postgres-backed (INSERT … ON CONFLICT plus a lease), so a
-    // redelivery returns the first result instead of creating a second contract. Its co-subscriber on
-    // this event (close-opportunity Won below) is also idempotent, so retrying the whole event is safe.
-    // Rethrowing hands a transient failure — a dropped pool connection, say — to the outbox instead of
-    // losing the contract for an award that really happened.
+    // ── Deal chain: Tender won → auto-create Contract (draft), IF a commercial basis exists ──────
+    //
+    // The contract's value comes from the award's PINNED commercial basis and from nothing else.
+    //
+    // WHAT CHANGED AND WHY. This used to call `findTenderBaseline` here, at delivery time: it ranked
+    // the tender's quotations and took the latest locked baseline. Delivery is not immediate — the
+    // outbox polls, retries, and stalls while the API is down — so a quotation accepted in that
+    // window silently changed which baseline the contract inherited. And with no baseline at all it
+    // fell back to `p.value`, the tender's own ESTIMATE, which then flowed into
+    // PaymentCertificateService as `contractValue` and drove IPC maths. An estimate is not a
+    // contractual value; that fallback is now gone.
+    //
+    // NO BASIS => NO CONTRACT. The award itself stays valid and the Opportunity is still
+    // GOVERNED_WON on its award evidence — a governed win and a contract are separate facts. The
+    // tender reads "awaiting commercial basis" until a baseline locks, and the deferred reactor
+    // below builds the contract then.
+    //
+    // The basis is read from the LIVE tender, not the payload: it is immutable, so live is award-time
+    // (re-read what is immutable; trust the payload for what is mutable).
     this.bus.subscribe('tendering.tender.awarded', (e: DomainEvent) =>
       this.retryable('auto-create contract from tender.awarded', e, async () => {
-        const p = e.payload as Record<string, unknown>;
-        const account = p.account as { id: string; name: string } | null;
+        const tender = await this.tenders.get(e.aggregateId);
+        if (!tender) return;
+        if (!tender.commercialBasis) {
+          this.logger.log(
+            `⚡ tender.awarded → NO contract for "${tender.title}" (${tender.id}): awaiting commercial basis. ` +
+              'The win stands; the contract waits for an approved baseline rather than banking the estimate.',
+          );
+          return;
+        }
+        await this.createContractFromBasis(e, tender);
+      }),
+    );
 
-        // WHY THIS READS THE PAYLOAD WHILE ITS SIBLING RE-READS THE AGGREGATE.
-        //
-        // `closeSourceOpportunity`, on this same event, deliberately re-reads the live Tender. This
-        // reactor deliberately does not. The asymmetry is a rule, not an oversight:
-        //
-        //   RE-READ what is IMMUTABLE.  TRUST THE PAYLOAD for what is MUTABLE and must be pinned
-        //   to the moment of the event.
-        //
-        // The opportunity side needs `awardEvidence`, which migration 0253 makes immutable at the
-        // database — a trigger refuses to rewrite or clear it. There, live and award-time are the
-        // same value by construction, so re-reading costs nothing and gets the authoritative record.
-        //
-        // This side needs `title` and `account`, which are NOT immutable: `TenderService.update()`
-        // has no status guard, so a won tender's title, value and account snapshot can all be edited
-        // afterwards. And delivery is genuinely delayed — the OutboxRelay polls every ~1s, retries up
-        // to OUTBOX_MAX_ATTEMPTS, and if the API is down the gap is unbounded. So for these fields
-        // live truth and award-time truth really can differ.
-        //
-        // A contract exists BECAUSE of an award. It must record the facts that were authoritative
-        // when the customer awarded it, not whatever the tender was edited to say before this
-        // handler happened to run. The payload is written inside the award transaction and never
-        // changes again, which makes it the historically correct basis — the better source here, not
-        // the lazier one.
-        //
-        // KNOWN LIMIT, and it is NOT solved by either choice: the commercial basis below is selected
-        // at DELIVERY time. `findTenderBaseline` ranks the tender's quotations (accepted > approved >
-        // sent) and takes the latest locked baseline, so a quotation accepted between the award and
-        // this handler can change which baseline the contract inherits. The individual baseline ROW
-        // is immutable, but WHICH baseline applies was never pinned to the award. Recording an
-        // award-time commercial reference is the real fix and is tracked separately; re-reading the
-        // tender here would not have addressed it.
-        //
-        // R3 parity (gap register G-50). The DIRECT path locks an immutable Commercial Baseline when
-        // the quotation is approved, and the contract inherits it — value and all — so the contract
-        // is provably tied to what was approved rather than re-invented. The tender path used to
-        // skip all of that: it took `p.value`, the tender's own ESTIMATE, and left
-        // quotationId/commercialBaselineId null. Same business intent, two levels of governance —
-        // the path-asymmetry class. A tender that was priced through a quotation now inherits that
-        // quotation's baseline exactly as a direct deal does.
-        const priced = await this.findTenderBaseline(e.tenantId, e.aggregateId);
-        const contract = await this.contracts.create(
-          {
-            tenantId: e.tenantId,
-            companyId: e.companyId,
-            title: `Contract for ${p.title ?? 'Tender'}`,
-            tenderId: e.aggregateId,
-            tenderTitle: (p.title as string) ?? null,
-            accountId: account?.id ?? null,
-            accountName: account?.name ?? null,
-            // Contract Value is the approved commercial basis — `baseline.total`, VAT-inclusive, a
-            // DIFFERENT measure from the deal's Award Value (`awardEvidence.awardedValue`, excl.
-            // VAT) and from the tender estimate. ADR-0021 separates these three deliberately; none
-            // of them substitutes for another.
-            //
-            // The `p.value` fallback is the weakest link here: `Tender.value` is OUR estimate, and
-            // an estimate becoming a Contract Value is the conflation the money vocabulary forbids.
-            // It stands only because of the explicit prior decision recorded on findTenderBaseline —
-            // an award that produces NO contract was judged worse than one carrying an unbaselined
-            // draft value. That trade-off is a business call, flagged for review, not endorsed here.
-            value: priced?.value ?? (p.value as number) ?? 0,
-            commercialBaselineId: priced?.baselineId ?? null,
-            status: 'draft',
-          },
-          // Idempotency: re-awarding the same tender (or an outbox retry) must not
-          // create a duplicate contract — keyed by the source tender id.
-          `contract-from-tender:${e.aggregateId}`,
-        );
-        // Close the provenance loop the same way the direct path does, so the quotation remembers
-        // the contract it became and the Opportunity 360 progression can find it.
-        if (priced) await this.quotations.linkContract(priced.quotationId, contract.id).catch(() => undefined);
+    // ── Deferred: a baseline locks AFTER an award → link it, then build the contract ──────────────
+    //
+    // The other half of "no basis, no contract". Guards, in order, are exactly the invariant table:
+    // the baseline must belong to THIS tender, the tender must be won, no basis may be established
+    // yet, and no contract may already exist. A basis that fails any guard is ignored, never
+    // stretched to fit — in particular a baseline belonging to another tender is never adopted.
+    this.bus.subscribe('crm.commercial_baseline.locked', (e: DomainEvent) =>
+      this.retryable('link post-award commercial basis', e, async () => {
+        // The event NAMES the baseline as its aggregate, so this reads the exact one that locked —
+        // not "the latest for that quotation", which could be a different row by now.
+        const baseline = await this.quotations.getBaselineById(e.tenantId, e.aggregateId);
+        if (!baseline?.sourceTenderId) return; // not a tender-route baseline
+
+        const tender = await this.tenders.get(baseline.sourceTenderId);
+        if (!tender || tender.status !== 'won') return;      // not awarded (yet) — nothing to link
+        if (tender.commercialBasis) return;                  // already established; never re-based
+        const already = await this.contracts.list({ tenantId: e.tenantId, tenderId: tender.id });
+        if (already.length > 0) return;                      // a contract exists; never re-valued
+
+        const { linked } = await this.tenders.linkCommercialBasis(tender.id, {
+          baselineId: baseline.id,
+          quotationId: baseline.quotationId,
+          value: baseline.total,
+          establishedAt: baseline.lockedAt,
+        });
+        if (!linked) return; // lost the race; the winner's basis stands
+
         this.logger.log(
-          `⚡ tender.awarded → auto-created Contract "${contract.title}" (${contract.id})` +
-            (priced
-              ? ` — inherited baseline ${priced.baselineId} from quotation ${priced.quotationId} (value ${priced.value})`
-              : ' — no priced quotation; value from the tender estimate, no baseline'),
+          `⚡ baseline.locked → linked POST-AWARD basis to tender "${tender.title}" (${tender.id}); building the deferred contract`,
         );
+        await this.createContractFromBasis(e, { ...tender, commercialBasis: (await this.tenders.get(tender.id))!.commercialBasis });
       }),
     );
 

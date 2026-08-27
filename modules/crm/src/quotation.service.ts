@@ -156,6 +156,15 @@ export class QuotationService {
   }
 
   /** The locked approved-price baseline for a quotation (null until it has been approved). */
+  /**
+   * The exact baseline by id. `crm.commercial_baseline.locked` names the baseline as its aggregate,
+   * so a subscriber can read the row that actually locked rather than "the latest for that
+   * quotation", which may be a different row by the time the event is delivered.
+   */
+  getBaselineById(tenantId: Id, baselineId: Id): Promise<CommercialBaseline | null> {
+    return this.baselines.get(baselineId).then((b) => (b && b.tenantId === tenantId ? b : null));
+  }
+
   getBaseline(tenantId: Id, quotationId: Id): Promise<CommercialBaseline | null> {
     return this.baselines.getByQuotation(tenantId, quotationId);
   }

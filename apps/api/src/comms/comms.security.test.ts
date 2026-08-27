@@ -235,6 +235,35 @@ describe('Company isolation', () => {
     ]);
     await expect(service.openDm(TENANT_A, ALICE, MALLORY, COMPANY_A)).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('opens a project team channel only for a project member or administrator', async () => {
+    const store = new InMemoryCommsStore();
+    const workspace = { get: vi.fn().mockResolvedValue({ assignments: { [ALICE]: 'projects', [BOB]: 'projects' } }) } as unknown as WorkspaceConfigService;
+    const grants = [
+        { userId: ALICE, roleId: 'r-pm', scope: { kind: 'resource', resourceType: 'project', resourceId: 'project-1' } },
+    ];
+    const access = { listGrants: vi.fn(() => grants) };
+    const projects = {
+      get: vi.fn().mockResolvedValue({ id: 'project-1', tenantId: TENANT_A, companyId: COMPANY_A, title: 'Villa 27', ownerId: null }),
+    };
+    const service = new CommsService(
+      workspace,
+      { record: vi.fn().mockResolvedValue(undefined) } as unknown as NotificationService,
+      store,
+      new InMemoryMailStore(),
+      null,
+      access as never,
+      projects as never,
+    );
+
+    const channel = await service.openProject(TENANT_A, ALICE, 'project-1', false, COMPANY_A);
+    expect(channel).toMatchObject({ id: 'ch-project-project-1', kind: 'project', name: 'Villa 27', members: [ALICE] });
+    await expect(service.openProject(TENANT_A, BOB, 'project-1', false, COMPANY_A)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.openProject(TENANT_A, BOB, 'project-1', true, COMPANY_A)).resolves.toMatchObject({ id: channel.id });
+
+    grants.splice(0, grants.length);
+    await expect(service.messages(TENANT_A, ALICE, channel.id, false, COMPANY_A)).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
 
 describe('Attachments inherit their parent authorization', () => {
@@ -331,6 +360,7 @@ describe('Route permissions', () => {
     ['files', 'comms.channel.read'],
     ['unreadItems', 'comms.channel.read'],
     ['openDm', 'comms.dm.create'],
+    ['openProject', 'comms.channel.read'],
     ['messages', 'comms.channel.read'],
     ['post', 'comms.channel.send'],
     ['mailbox', 'comms.mail.read'],

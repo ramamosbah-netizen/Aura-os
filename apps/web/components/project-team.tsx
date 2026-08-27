@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 // Project Team — who may deliver THIS project, and in what delivery role (Project Delivery, P1).
 // A member is an access grant scoped to `resource:project:<id>`; adding/removing here writes that
@@ -11,6 +12,7 @@ interface AssignRole { id: string; name: string; }
 interface AssignUser { userId: string; displayName: string; email: string; }
 
 export default function ProjectTeam({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
   const [roles, setRoles] = useState<AssignRole[]>([]);
   const [users, setUsers] = useState<AssignUser[]>([]);
@@ -19,6 +21,7 @@ export default function ProjectTeam({ projectId }: { projectId: string }) {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [chatBusy, setChatBusy] = useState(false);
 
   const load = useCallback(async () => {
     const j = async <T,>(url: string, fallback: T): Promise<T> => {
@@ -67,15 +70,30 @@ export default function ProjectTeam({ projectId }: { projectId: string }) {
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   };
 
+  const openChat = async (): Promise<void> => {
+    setChatBusy(true); setErr('');
+    try {
+      const res = await fetch(`/api/comms/projects/${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+      const channel = await res.json().catch(() => ({}));
+      if (!res.ok || typeof channel?.id !== 'string') { setErr(channel?.message ?? channel?.error ?? 'Project chat is only available to team members.'); return; }
+      router.push(`/my-work/communication?view=chat&channel=${encodeURIComponent(channel.id)}`);
+    } catch { setErr('Could not open project chat'); } finally { setChatBusy(false); }
+  };
+
   return (
     <div>
       {err && <div style={st.err}>{err}</div>}
       {msg && <div style={st.ok}>{msg}</div>}
 
-      <p style={st.intro}>
+      <div style={st.teamToolbar}>
+        <p style={st.intro}>
         The delivery team for this project. Each member holds a delivery role <em>scoped to this project only</em> —
         it grants no authority on any other project or across the organisation.
-      </p>
+        </p>
+        <button className="btn btn-ghost" style={st.chatBtn} disabled={chatBusy} onClick={() => void openChat()}>
+          {chatBusy ? 'Opening chat…' : 'Open project chat →'}
+        </button>
+      </div>
 
       {/* add member */}
       <div style={st.addRow}>
@@ -123,6 +141,8 @@ const st = {
   err: { padding: '10px 12px', border: '1px solid var(--bad)', borderRadius: 10, color: 'var(--bad)', marginBottom: 12, fontSize: 13 } as CSSProperties,
   ok: { padding: '10px 12px', border: '1px solid var(--good)', borderRadius: 10, color: 'var(--good)', marginBottom: 12, fontSize: 13 } as CSSProperties,
   intro: { color: 'var(--muted)', fontSize: 12.5, margin: '2px 2px 14px', lineHeight: 1.5 } as CSSProperties,
+  teamToolbar: { display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' } as CSSProperties,
+  chatBtn: { padding: '8px 12px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' } as CSSProperties,
   addRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 } as CSSProperties,
   select: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 10px', fontSize: 12.5, minWidth: 200 } as CSSProperties,
   addBtn: { padding: '8px 14px', fontSize: 12.5, fontWeight: 700 } as CSSProperties,

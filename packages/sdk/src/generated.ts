@@ -870,6 +870,11 @@ export class AuraSdk {
     return this.http.request('POST', `/comms/dm`, body, undefined, opts);
   }
 
+  /** GET /api/v1/comms/projects/{projectId} */
+  commsOpenProject(projectId: string, opts?: RequestOptions): Promise<unknown> {
+    return this.http.request('GET', `/comms/projects/${encodeURIComponent(projectId)}`, undefined, undefined, opts);
+  }
+
   /** GET /api/v1/comms/mail */
   commsMailbox(opts?: RequestOptions): Promise<unknown> {
     return this.http.request('GET', `/comms/mail`, undefined, undefined, opts);

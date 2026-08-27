@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
-import { NotificationService, UsersService } from '@aura/core';
+import { AccessService, NotificationService, UsersService } from '@aura/core';
+import { ProjectService } from '@aura/projects';
 import {
   type ChatChannel,
   type ChatMessage,
@@ -158,6 +159,8 @@ export class CommsService {
     // Optional keeps the direct service harnesses and in-memory unit tests backwards-compatible;
     // the API application always supplies the registry from CoreModule.
     @Optional() private readonly users: UsersService | null = null,
+    @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
+    @Optional() @Inject(ProjectService) private readonly projects: ProjectService | null = null,
   ) {}
 
   /**
@@ -233,6 +236,26 @@ export class CommsService {
     return this.store.listChannels(tenantId);
   }
 
+  /** Project membership is an access grant, so it must be re-evaluated after team changes. */
+  private async canAccessResolved(
+    tenantId: string, channel: StoredChannel, username: string, isAdmin: boolean, companyId: string | null,
+  ): Promise<boolean> {
+    if (channel.kind !== 'project' || !this.access) return canAccessChannel(channel, username, isAdmin, companyId);
+    if (channel.companyId !== null && channel.companyId !== companyId) return false;
+    const projectId = channel.id.startsWith('ch-project-') ? channel.id.slice('ch-project-'.length) : null;
+    if (!projectId) return canAccessChannel(channel, username, isAdmin, companyId);
+    const members = new Set(
+      this.access.listGrants()
+        .filter((grant) => grant.scope.kind === 'resource'
+          && grant.scope.resourceType === 'project'
+          && grant.scope.resourceId === projectId)
+        .map((grant) => grant.userId),
+    );
+    const project = this.projects ? await this.projects.get(projectId) : null;
+    if (project?.ownerId) members.add(project.ownerId);
+    return isAdmin || members.has(username);
+  }
+
   private preview(m: ChatMessage): string {
     if (m.kind === 'voice') return '🎤 Voice message';
     if (m.kind === 'file') return `📎 ${m.attachment?.name ?? 'Attachment'}`;
@@ -244,7 +267,11 @@ export class CommsService {
     const all = await this.channelsFor(tenantId);
     // One rule decides the list and the reads, so a channel can never be listed to someone who
     // would then be refused its messages — or worse, listed to someone who would not be.
-    const withDms = all.filter((c) => canAccessChannel(c, username, isAdmin, companyId));
+    const visible = await Promise.all(all.map(async (channel) => ({
+      channel,
+      visible: await this.canAccessResolved(tenantId, channel, username, isAdmin, companyId),
+    })));
+    const withDms = visible.filter((entry) => entry.visible).map((entry) => entry.channel);
     return Promise.all(withDms.map(async (c) => {
       const msgs = await this.store.listMessages(tenantId, c.id);
       const last = msgs[msgs.length - 1] ?? null;
@@ -265,10 +292,13 @@ export class CommsService {
   async files(
     tenantId: string, username: string, isAdmin: boolean, companyId: string | null = null,
   ): Promise<CommunicationFile[]> {
-    const channels = (await this.channelsFor(tenantId))
-      .filter((channel) => canAccessChannel(channel, username, isAdmin, companyId));
+    const channels = (await this.channelsFor(tenantId));
+    const visible = await Promise.all(channels.map(async (channel) => ({
+      channel,
+      visible: await this.canAccessResolved(tenantId, channel, username, isAdmin, companyId),
+    })));
     const files: CommunicationFile[] = [];
-    for (const channel of channels) {
+    for (const { channel } of visible.filter((entry) => entry.visible)) {
       const messages = await this.store.listMessages(tenantId, channel.id);
       for (const message of messages) {
         if ((message.kind !== 'file' && message.kind !== 'voice') || !message.attachment) continue;
@@ -297,9 +327,13 @@ export class CommsService {
     tenantId: string, username: string, isAdmin: boolean, companyId: string | null = null,
   ): Promise<UnreadCommunication[]> {
     const items: UnreadCommunication[] = [];
-    const channels = (await this.channelsFor(tenantId))
-      .filter((channel) => canAccessChannel(channel, username, isAdmin, companyId));
+    const channels = await this.channelsFor(tenantId);
+    const visible = await Promise.all(channels.map(async (channel) => ({
+      channel,
+      visible: await this.canAccessResolved(tenantId, channel, username, isAdmin, companyId),
+    })));
     for (const channel of channels) {
+      if (!visible.find((entry) => entry.channel.id === channel.id)?.visible) continue;
       const messages = await this.store.listMessages(tenantId, channel.id);
       const lastRead = await this.store.getLastRead(tenantId, channel.id, username);
       const unread = messages.filter((message) => message.sender !== username && (!lastRead || message.sentAt > lastRead));
@@ -357,6 +391,35 @@ export class CommsService {
     return channel;
   }
 
+  /** Open the shared conversation for a project's current delivery team. */
+  async openProject(
+    tenantId: string, username: string, projectId: string, isAdmin = false, companyId: string | null = null,
+  ): Promise<ChatChannel> {
+    if (!this.access || !this.projects) throw new NotFoundException('project not found');
+    const project = await this.projects.get(projectId);
+    if (!project || project.tenantId !== tenantId || (companyId && project.companyId && project.companyId !== companyId)) {
+      throw new NotFoundException('project not found');
+    }
+    const members = new Set(
+      this.access.listGrants()
+        .filter((grant) => grant.scope.kind === 'resource'
+          && grant.scope.resourceType === 'project'
+          && grant.scope.resourceId === projectId)
+        .map((grant) => grant.userId),
+    );
+    if (project.ownerId) members.add(project.ownerId);
+    if (!isAdmin && !members.has(username)) throw new NotFoundException('project not found');
+
+    const channel: ChatChannel = {
+      id: `ch-project-${projectId}`,
+      kind: 'project',
+      name: project.title,
+      members: [...members].sort(),
+    };
+    await this.store.ensureChannels(tenantId, [channel], username, project.companyId);
+    return channel;
+  }
+
   /**
    * The channel, if this caller may see it. Returns 404 rather than 403 for a channel they may
    * not: a distinct "forbidden" would confirm that a given DM exists between two named people,
@@ -368,7 +431,7 @@ export class CommsService {
   ): Promise<StoredChannel> {
     await this.channelsFor(tenantId);
     const channel = await this.store.getChannel(tenantId, channelId);
-    if (!channel || !canAccessChannel(channel, username, isAdmin, companyId)) {
+    if (!channel || !(await this.canAccessResolved(tenantId, channel, username, isAdmin, companyId))) {
       throw new NotFoundException(`channel ${channelId} not found`);
     }
     return channel;

@@ -99,6 +99,7 @@ The audit's **dimension** scores (architecture, security, ERP functionality and 
 
 | Date | Report | Status |
 |---|---|:--:|
+| 2026-08-27 | [**Legacy award commercial basis — audit**](2026-08-27-legacy-award-commercial-basis-audit.md) — what happens to tenders awarded before migration 0256 pinned the basis. **No staging/prod DB is reachable from this repo**, so the counts are not yet measured; the read-only instrument is built and proven (30/30 fixture assertions, rolled back). Findings that need no counts: "awaiting commercial basis" is **invisible** (absent from web + SDK), no operator link path exists, and the old resolver was already non-deterministic on ties | 🔴 *blocked on data* |
 | 2026-07-16 | [Tender OS Plan](2026-07-16-tender-os-plan.md) | 🟡 *T1–T5 done; T6 bid review outstanding* |
 | 2026-07-12 | [Contracts Depth](2026-07-12-contracts-depth.md) · [Projects Depth](2026-07-12-projects-depth.md) | 🗄️ *shipped* |
 

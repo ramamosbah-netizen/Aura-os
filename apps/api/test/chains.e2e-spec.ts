@@ -34,9 +34,12 @@ describe('business-chain e2e (HTTP)', () => {
       transformOptions: { exposeUnsetFields: false },
     }));
     const tenant = app.get(TenantContext);
+    // ADR-0021 needs a REAL identity to capture award evidence (no 'system' fallback), but
+    // switching the actor on globally would turn AccessService on for every other call in these
+    // specs. So the actor is per-request, via a header only the award helper sends.
     app.use((_req: unknown, _res: unknown, next: () => void) =>
       tenant.run(
-        { tenantId: 'chain-tenant', companyId: null, actorId: null, correlationId: 'e2e-chains' },
+        { tenantId: 'chain-tenant', companyId: null, actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? null, correlationId: 'e2e-chains' },
         () => next(),
       ),
     );
@@ -71,7 +74,12 @@ describe('business-chain e2e (HTTP)', () => {
     expect(tender.sourceOpportunityId).toBe(opp.id);
 
     // 3. Award the tender → the contract is drafted AND (J3) the source opportunity closes Won.
-    await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'won' }).expect(200);
+    // ADR-0021 — the governed award, with the customer's evidence. This is what makes the deal
+    // chain fire AND what makes the resulting Opportunity GOVERNED_WON rather than LEGACY_WON.
+    await http.post(`/api/v1/tendering/tenders/${tender.id}/award`)
+      .set('x-e2e-actor', 'u-e2e-bid-manager')
+      .send({ awardedValue: 1_000_000, currency: 'AED', awardedAt: '2026-08-21T07:30:00.000Z', awardReference: 'LOA-E2E' })
+      .expect(201);
     const contracts = await eventually(async () =>
       (await http.get(`/api/v1/contracts/contracts?tenderId=${tender.id}`).expect(200)).body as any[],
     );

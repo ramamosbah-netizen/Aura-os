@@ -24,8 +24,11 @@ describe('T1 tender lifecycle & gates (HTTP)', () => {
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
     app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
+    // ADR-0021 needs a REAL identity to capture award evidence (no 'system' fallback), but
+    // switching the actor on globally would turn AccessService on for every other call in these
+    // specs. So the actor is per-request, via a header only the award helper sends.
     app.use((_req: unknown, _res: unknown, next: () => void) =>
-      tenant.run({ tenantId: 't1-tenant', companyId: null, actorId: null, correlationId: 'e2e-t1' }, () => next()),
+      tenant.run({ tenantId: 't1-tenant', companyId: null, actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? null, correlationId: 'e2e-t1' }, () => next()),
     );
     await app.init();
     http = request(app.getHttpServer());
@@ -40,6 +43,17 @@ describe('T1 tender lifecycle & gates (HTTP)', () => {
 
   const setStatus = (id: string, status: string) =>
     http.patch(`/api/v1/tendering/tenders/${id}/status`).send({ status });
+
+  /**
+   * ADR-0021 — the ONLY governed path to `won`. A tender win is a customer award, so it carries the
+   * customer's award evidence (value excl. VAT, currency, award date). `PATCH /status {won}` is
+   * refused by design; these specs go through the award command exactly as the product does.
+   */
+  const award = (id: string, over: Record<string, unknown> = {}) =>
+    http.post(`/api/v1/tendering/tenders/${id}/award`).set('x-e2e-actor', 'u-e2e-bid-manager').send({
+      awardedValue: 1_000_000, currency: 'AED', awardedAt: '2026-08-21T07:30:00.000Z', awardReference: 'LOA-E2E', ...over,
+    });
+
 
   // Record a bid decision whose weighted score lands on the target recommendation.
   const scoreBid = (tenderId: string, score: number) =>
@@ -67,9 +81,17 @@ describe('T1 tender lifecycle & gates (HTTP)', () => {
     expect(toSubmitted.status).toBe(409); // domain gate → conflict
     expect(toSubmitted.body.message).toContain('bid decision');
 
+    // ADR-0021 made this stricter, not looser: `won` is no longer a status you may set AT ALL, so
+    // the refusal now names the governed command instead of the submission gate.
     const toWon = await setStatus(t.id, 'won');
     expect(toWon.status).toBe(409);
-    expect(toWon.body.message).toContain('Only a submitted bid can be won');
+    expect(toWon.body.message).toContain('can only be won through the governed award command');
+
+    // …and the gate itself was NOT weakened: the governed path still refuses an unsubmitted bid,
+    // so evidence buys a tender a hearing, never a shortcut past the lifecycle.
+    const awarded = await award(t.id);
+    expect(awarded.status).toBe(409);
+    expect(awarded.body.message).toContain('Only a submitted bid can be won');
 
     // The tender did not move.
     const after = (await http.get(`/api/v1/tendering/tenders/${t.id}`).expect(200)).body;
@@ -105,8 +127,12 @@ describe('T1 tender lifecycle & gates (HTTP)', () => {
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'priced' }).expect(200);
 
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'submitted' }).expect(200);
-    const won = (await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'won' }).expect(200)).body;
+    const won = (await award(t.id).expect(201)).body;
     expect(won.status).toBe('won');
+    // The award is EVIDENCED — the customer's number, not our estimate.
+    expect(won.awardEvidence.awardedValue).toBe(1_000_000);
+    expect(won.awardEvidence.currency).toBe('AED');
+    expect(won.value).toBe(500_000); // the estimate is untouched
   });
 
   it('a zero-value bid cannot be submitted even when scored and priced', async () => {

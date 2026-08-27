@@ -26,12 +26,26 @@ describe('T2 tender submission record (HTTP)', () => {
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
     app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
+    // ADR-0021 needs a REAL identity to capture award evidence (no 'system' fallback), but
+    // switching the actor on globally would turn AccessService on for every other call in these
+    // specs. So the actor is per-request, via a header only the award helper sends.
     app.use((_req: unknown, _res: unknown, next: () => void) =>
-      tenant.run({ tenantId: 't2-tenant', companyId: null, actorId: null, correlationId: 'e2e-t2' }, () => next()),
+      tenant.run({ tenantId: 't2-tenant', companyId: null, actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? null, correlationId: 'e2e-t2' }, () => next()),
     );
     await app.init();
     http = request(app.getHttpServer());
   });
+
+
+  /**
+   * ADR-0021 — the ONLY governed path to `won`. A tender win is a customer award, so it carries the
+   * customer's award evidence (value excl. VAT, currency, award date). `PATCH /status {won}` is
+   * refused by design; these specs go through the award command exactly as the product does.
+   */
+  const award = (id: string, over: Record<string, unknown> = {}) =>
+    http.post(`/api/v1/tendering/tenders/${id}/award`).set('x-e2e-actor', 'u-e2e-bid-manager').send({
+      awardedValue: 1_000_000, currency: 'AED', awardedAt: '2026-08-21T07:30:00.000Z', awardReference: 'LOA-E2E', ...over,
+    });
 
   afterAll(async () => {
     await app?.close();
@@ -148,7 +162,7 @@ describe('T2 tender submission record (HTTP)', () => {
     await http.post(`/api/v1/tendering/tenders/${t.id}/submit`).send({ method: 'portal' }).expect(201);
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'priced' }).expect(200);
 
-    const won = (await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'won' }).expect(200)).body;
+    const won = (await award(t.id).expect(201)).body;
     expect(won.status).toBe('won');
   });
 
@@ -163,7 +177,7 @@ describe('T2 tender submission record (HTTP)', () => {
     expect(listed[0].notes).toContain('created already submitted');
 
     // …which is exactly what lets the deal chain move it onward to won.
-    const won = await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'won' });
-    expect(won.status).toBe(200);
+    const won = await award(t.id);
+    expect(won.status).toBe(201);
   });
 });

@@ -1,8 +1,11 @@
 import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   try {
-    const res = await apiFetch(`${apiBase()}/api/v1/views`, { headers: { ...(await authHeader()) }, cache: 'no-store' });
+    // Preserve the optional path filter. The server owns visibility, so the BFF must forward the
+    // filter instead of forcing the client to download every visible view and filter locally.
+    const search = new URL(request.url).search;
+    const res = await apiFetch(`${apiBase()}/api/v1/views${search}`, { headers: { ...(await authHeader()) }, cache: 'no-store' });
     return Response.json(await res.json().catch(() => []), { status: res.status });
   } catch { return Response.json({ error: 'API unreachable' }, { status: 502 }); }
 }

@@ -5,10 +5,7 @@ import {
   CheckSquare2,
   Clock3,
   FileText,
-  FolderOpen,
-  MessageSquareText,
   Star,
-  UsersRound,
 } from 'lucide-react';
 import SuiteDashboardShell, {
   type SuiteAttentionItem,
@@ -52,13 +49,24 @@ export interface MyWorkNotification {
   read: boolean;
 }
 
+/**
+ * My Work is a PERSONAL EXECUTION center, not a launcher for links that already live in the sidebar.
+ * Three tiles were removed because each duplicated somewhere else rather than adding a personal view:
+ *
+ *   Files         -> `/documents/control` is a module register in the sidebar, and the personal half
+ *                    (documents shared with me) is ALREADY inside Approvals, which fetches
+ *                    `/api/documents/shared-with-me` alongside `/api/inbox`. Hence the label below.
+ *   Contacts      -> `/crm/contacts` is a Customers entry in the sidebar. A duplicate here bought
+ *                    nothing; contacts belong with the accounts they work for.
+ *   Communication -> now a sidebar center in its own right. It was removed only AFTER that entry
+ *                    existed: before it, this tile was one of the few ways to reach the page at all.
+ *                    Contextual links from Account/Lead/Opportunity 360 are unchanged — those point
+ *                    at a conversation about that record, which is a different thing from a shortcut.
+ */
 const SHORTCUTS: SuiteShortcut[] = [
   { label: 'My Day', description: 'Today’s plan, meetings and priorities', href: '/my-work/my-day', icon: CalendarDays, tone: 'green' },
   { label: 'Tasks', description: 'Done, in progress and to do', href: '/my-work/tasks', icon: CheckSquare2, tone: 'teal' },
-  { label: 'Approvals', description: 'Decisions and document reviews', href: '/my-work/approvals', icon: CheckCheck, tone: 'blue' },
-  { label: 'Communication', description: 'Mail, chat, sharing and contacts', href: '/my-work/communication', icon: MessageSquareText, tone: 'amber' },
-  { label: 'Contacts', description: 'People and company directory', href: '/crm/contacts', icon: UsersRound, tone: 'cyan' },
-  { label: 'Files', description: 'Documents and shared records', href: '/documents/control', icon: FolderOpen, tone: 'violet' },
+  { label: 'Approvals & shared documents', description: 'Decisions awaiting you, and documents shared with you', href: '/my-work/approvals', icon: CheckCheck, tone: 'blue' },
   { label: 'Favorites', description: 'Your saved functions and pages', href: '/my-work/favorites', icon: Star, tone: 'slate' },
 ];
 
@@ -163,7 +171,7 @@ export default function MyWorkDashboard({
       shortcuts={{
         kicker: 'Personal workspace',
         title: 'My Work',
-        countLabel: '7 shortcuts',
+        countLabel: `${SHORTCUTS.length} shortcuts`,
         itemTestId: 'my-work-shortcut',
         items: SHORTCUTS.map((shortcut) => shortcut.label === 'Favorites' ? { ...shortcut, count: favoriteCount } : shortcut),
       }}

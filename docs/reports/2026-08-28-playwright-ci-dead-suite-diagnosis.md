@@ -167,14 +167,39 @@ the deterministic ones fixed here. That is the more serious half of the problem:
 that always fails teaches everyone to merge past red, which is precisely what #235 was opened to
 prevent.
 
-The recommendation is therefore **not** to relax either gate:
+### Correction — TIER-3 is not deterministic
 
-- **TIER-3 (required): keep it required.** It is deterministic — 3 failed / 71 passed, identical in
-  all five runs examined — and it is now green. A deterministic gate is exactly what a required gate
-  should be.
-- **TIER-2 (not required): leave it not-required for now.** Its varying tail is real and unfixed. It
-  should become required only under #235's existing definition of done — N consecutive green runs on
-  one unchanged commit.
+An earlier draft of this report recommended keeping TIER-3 required *because it is deterministic*,
+citing 3 failed / 71 passed identical across five runs. **That inference was wrong**, and the fix
+disproved it. Two CI runs of the branch:
+
+| Run | TIER-2 failed | TIER-3 failed |
+|---|---|---|
+| 33114602968 | `amc-asset-fleet:113`, `site-execution:10` | `amc-asset-fleet:113`, `site-execution:10` |
+| 33115553892 | `approvals-reviews:3`, `internal-chat:133`, `site-execution:10` | `compliance:54`, `:70`, `:87` |
+
+Three different sets across two runs, on both tiers. `amc-asset-fleet:113` failed at 31.6 s in the
+first run and passed in the second; on `main` it had passed 6/6 at ~2.0 s. In all four job results
+**every one of the three specs fixed here passed.**
+
+The stability I measured was the *deterministic failures masking the flake*: the same three specs
+failed every run, so the varying tail never changed the headline. Remove them and TIER-3's flake
+becomes visible — which is exactly what #235's first comment said in August ("BOTH tiers flake …
+that was reproducibility, not absence of flakes") and what this report under-weighted.
+
+### The recommendation, restated
+
+- **TIER-2 (not required): leave it not-required.** Unchanged.
+- **TIER-3 (required): it flakes, and that is a real problem — but not one this change created or
+  can settle.** It was red before this PR for deterministic reasons and is red after it for flaky
+  ones. Dropping its required status now would remove the only enforced browser gate on the
+  strength of a flake this work merely made visible; keeping it required leaves a gate that can
+  fail for reasons unrelated to the commit. Neither is good, and choosing between them is #235's
+  definition of done, not this report's: establish the real rate over N consecutive runs on one
+  unchanged commit, then fix the cause.
+
+What this change is entitled to claim is narrower: the deterministic failures are gone, and the
+flake that remains is now the *only* thing standing between these jobs and green.
 
 ---
 

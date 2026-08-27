@@ -1,14 +1,19 @@
 import { expect, test } from '@playwright/test';
 
+// My Work is a PERSONAL EXECUTION center, not a launcher for links the sidebar already carries.
+// Contacts (`/crm/contacts`, a Customers entry), Files (`/documents/control`, a module register) and
+// Communication (now a sidebar center of its own) were removed as duplicates. Communication went
+// only AFTER it gained that sidebar entry — before it, this tile was one of the few ways to reach
+// the page at all, so removing it first would have orphaned it.
 const SHORTCUTS = {
   Tasks: '/my-work/tasks',
-  Approvals: '/my-work/approvals',
-  Communication: '/my-work/communication',
+  'Approvals & shared documents': '/my-work/approvals',
   'My Day': '/my-work/my-day',
-  Contacts: '/crm/contacts',
-  Files: '/documents/control',
   Favorites: '/my-work/favorites',
 } as const;
+
+/** Removed as duplicates — asserted absent so they cannot quietly return. */
+const RETIRED_SHORTCUTS = ['Contacts', 'Files', 'Communication'] as const;
 
 test('My Work aggregates attention and keeps domain records at their source', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -22,12 +27,18 @@ test('My Work aggregates attention and keeps domain records at their source', as
   await expect(page.getByRole('link', { name: 'Ask AURA' })).toHaveAttribute('href', '/ai');
 
   const shortcuts = page.getByTestId('my-work-shortcut');
-  await expect(shortcuts).toHaveCount(7);
+  await expect(shortcuts).toHaveCount(4);
   for (const [label, href] of Object.entries(SHORTCUTS)) {
     const shortcut = shortcuts.filter({ has: page.getByText(label, { exact: true }) });
     await expect(shortcut).toHaveAttribute('href', href);
     await expect(shortcut).not.toHaveAttribute('target', '_blank');
   }
+  for (const gone of RETIRED_SHORTCUTS) {
+    await expect(shortcuts.filter({ has: page.getByText(gone, { exact: true }) })).toHaveCount(0);
+  }
+  // …and Communication is still REACHABLE, from the sidebar rather than from here. Removing a
+  // duplicate must not remove the only route to a page.
+  await expect(page.getByRole('link', { name: 'Communication' })).toHaveAttribute('href', '/my-work/communication');
   await expect(shortcuts.filter({ hasText: 'AURA' })).toHaveCount(0);
 
   const attentionItems = page.getByTestId('today-attention-item');

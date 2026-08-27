@@ -44,6 +44,10 @@ export const NAV: NavGroup[] = [
       // CEO/CFO/PM views) needs its own href or the capability is configurable but unreachable.
       { label: 'Command Center', href: '/my-work/command-center', glyph: '✦', desc: 'Role perspectives: CEO, CFO and PM dashboards over live data' },
       { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
+      // Reachability: the Communication Center existed with NO nav entry. It was reachable only from
+      // the My Work tile and three 360 pages, so removing that tile would have orphaned the page
+      // entirely. It is a special center like My Work — not a business suite — so it belongs here.
+      { label: 'Communication', href: '/my-work/communication', glyph: '✆', desc: 'Mail, chat, meetings & shared files in one center' },
       { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },
       // Reachability fix (audit wave 1). These three pages existed and were built, but had NO
       // href anywhere in the web app — no nav entry, no link, nothing. `/ai` is the worst of the

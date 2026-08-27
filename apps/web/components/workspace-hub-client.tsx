@@ -28,7 +28,7 @@ export interface HubInboxItem {
   id: string; module: string; kind: string; title: string; detail: string; action: string;
   href: string; value: number | null; createdAt: string | null;
 }
-export interface HubSavedView { id: string; label: string; path: string; query: string; createdAt: string }
+export interface HubSavedView { id: string; userId: string | null; label: string; path: string; query: string; createdAt: string }
 export interface HubNotification { id: string; title: string; body: string; category: string; read: boolean; createdAt: string }
 interface SearchHit { type: string; id: string; title: string; subtitle: string; href: string }
 
@@ -151,7 +151,7 @@ export default function WorkspaceHubClient(props: {
       )}
       {tab === 'inbox' && <InboxPane items={props.inboxItems} />}
       {tab === 'notifications' && <NotificationsPane items={notifications} onChanged={refreshNotifications} />}
-      {tab === 'views' && <ViewsPane items={props.savedViews} />}
+      {tab === 'views' && <ViewsPane items={props.savedViews} viewerId={me} />}
       {tab === 'search' && <SearchPane initialQuery={props.initialQuery} />}
     </div>
   );
@@ -572,7 +572,7 @@ function NotificationsPane({ items, onChanged }: { items: HubNotification[]; onC
 
 // ------------------------------------------------------- views / search
 
-function ViewsPane({ items }: { items: HubSavedView[] }) {
+function ViewsPane({ items, viewerId }: { items: HubSavedView[]; viewerId: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   async function del(id: string) {
@@ -589,7 +589,7 @@ function ViewsPane({ items }: { items: HubSavedView[] }) {
           <Link href={`${v.path}${v.query ? '?' + v.query : ''}`} style={st.inboxTitle}><strong>★ {v.label}</strong></Link>
           <span style={st.viewPath}>{v.path}{v.query ? `?${v.query}` : ''}</span>
           <div style={{ flex: 1 }} />
-          <button type="button" style={st.ghostBtn} disabled={busy === v.id} onClick={() => void del(v.id)}>✕</button>
+          {v.userId === viewerId ? <button type="button" style={st.ghostBtn} disabled={busy === v.id} onClick={() => void del(v.id)}>✕</button> : <span style={st.channelTime}>Shared</span>}
         </div>
       ))}
     </div>

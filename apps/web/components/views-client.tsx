@@ -5,7 +5,7 @@ import EmptyState from './ui/empty-state';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-interface SavedView { id: string; label: string; path: string; query: string; createdAt: string }
+interface SavedView { id: string; userId: string | null; label: string; path: string; query: string; createdAt: string }
 
 export default function ViewsClient({ initial }: { initial: SavedView[] }) {
   const router = useRouter();
@@ -28,7 +28,7 @@ export default function ViewsClient({ initial }: { initial: SavedView[] }) {
           </Link>
           <span style={s.path}>{v.path}{v.query ? `?${v.query}` : ''}</span>
           <div style={{ flex: 1 }} />
-          <button type="button" style={s.del} disabled={busy === v.id} onClick={() => del(v.id)}>✕</button>
+          {v.userId !== null ? <button type="button" style={s.del} disabled={busy === v.id} onClick={() => del(v.id)}>✕</button> : <span style={s.shared}>Shared</span>}
         </div>
       ))}
     </div>
@@ -41,4 +41,5 @@ const s = {
   path: { color: 'var(--muted)', fontSize: 12, fontFamily: 'ui-monospace, monospace' } as CSSProperties,
   del: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--muted)', padding: '3px 8px', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
+  shared: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
 };

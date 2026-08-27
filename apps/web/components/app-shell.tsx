@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { suiteSections, activeSuite } from '@/lib/suites';
 import Breadcrumbs from './breadcrumbs';
+import FavoritePageButton from './favorite-page-button';
 import CommandPalette from './command-palette';
 import TabBar from './tab-bar';
 import ThemeToggle from './theme-toggle';
@@ -229,6 +230,12 @@ export default function AppShell({
 
           <div className="app-topbar-crumbs" style={s.crumbSlot}>
             <Breadcrumbs />
+          </div>
+
+          {/* Favourite THIS page. Lives in the shell so every page can be saved, which is what makes
+              /my-work/favorites reachable content rather than a list only eight pages can fill. */}
+          <div className="app-topbar-favorite" style={{ marginRight: 10 }}>
+            <FavoritePageButton />
           </div>
 
           {/* ── Quick Create Action ── */}

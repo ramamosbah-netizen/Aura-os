@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsIn, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe, AccessService } from '@aura/core';
-import { FORECAST_CATEGORIES, EXECUTION_TYPES, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence } from '@aura/shared';
+import { FORECAST_CATEGORIES, EXECUTION_TYPES, QUALIFICATION_KEYS, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence, type QualificationKey, type QualificationPatch, type QualificationStatus, type QualificationSource, type QualificationView } from '@aura/shared';
 import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, PricingQuotationService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
@@ -19,7 +19,9 @@ class CreateOpportunityDto {
   @IsOptional() @IsString() accountName?: string;
   @IsOptional() @IsNumber() value?: number;
   @IsOptional() @IsString() stage?: OpportunityStage;
-  @IsOptional() @IsNumber() winProbability?: number;
+  /** 0..100 inclusive. The domain (`assertWinProbability`) and the DB CHECK restate this — the DTO
+   * is the HTTP boundary's own refusal, so a bad request is named here rather than deeper. */
+  @IsOptional() @IsNumber({ allowNaN: false, allowInfinity: false }) @Min(0) @Max(100) winProbability?: number;
   /** §23 — explicit commitment call; CLOSED is earned by the stage, never posted. */
   @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
@@ -44,7 +46,8 @@ class UpdateOpportunityDto {
   @IsOptional() @IsString() accountName?: string;
   @IsOptional() @IsNumber() value?: number;
   @IsOptional() @IsString() stage?: OpportunityStage;
-  @IsOptional() @IsNumber() winProbability?: number;
+  /** 0..100 inclusive — same rule as create; a PATCH is a write boundary too. */
+  @IsOptional() @IsNumber({ allowNaN: false, allowInfinity: false }) @Min(0) @Max(100) winProbability?: number;
   @IsOptional() @IsIn(FORECAST_CATEGORIES.filter((c) => c !== 'CLOSED')) forecastCategory?: ForecastCategory;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() requiresTender?: boolean | string;
@@ -77,6 +80,30 @@ class OverrideOutcomeDto {
   /** The contracted value the authorized user is asserting — never derived from the forecast value. */
   @IsOptional() @IsNumber() contractedValue?: number | null;
   @IsOptional() @IsString() evidenceReference?: string | null;
+}
+
+const QUALIFICATION_STATUSES: readonly QualificationStatus[] = ['UNKNOWN', 'CONFIRMED', 'CONCERN', 'BLOCKER'];
+const QUALIFICATION_SOURCES: readonly QualificationSource[] = ['customer_stated', 'document', 'meeting', 'internal_assessment', 'checkbox'];
+
+/**
+ * ADR-0020 — the evidence-bearing qualification patch. Sparse: only the dimensions present move.
+ *
+ * `confirmedBy` / `confirmedAt` are deliberately NOT accepted from the client — the service stamps
+ * them from the authenticated actor and the server clock. A confirmation whose author and date the
+ * caller could choose would be provenance in name only, and this record is about to be snapshotted
+ * into something nobody can edit afterwards.
+ */
+class QualificationDimensionDto {
+  @IsOptional() @IsIn(QUALIFICATION_STATUSES as string[]) status?: QualificationStatus;
+  @IsOptional() @IsString() evidence?: string | null;
+  @IsOptional() @IsIn(QUALIFICATION_SOURCES as string[]) source?: QualificationSource | null;
+}
+
+class UpdateQualificationDto {
+  @IsOptional() @IsObject() budget?: QualificationDimensionDto;
+  @IsOptional() @IsObject() authority?: QualificationDimensionDto;
+  @IsOptional() @IsObject() need?: QualificationDimensionDto;
+  @IsOptional() @IsObject() timeline?: QualificationDimensionDto;
 }
 
 @Controller('crm/opportunities')
@@ -268,6 +295,35 @@ export class CrmOpportunitiesController {
       evidence = await this.stageEvidence(current, ctx.tenantId);
     }
     return this.opportunities.update(id, patch as Parameters<typeof this.opportunities.update>[1], ctx.actorId, evidence);
+  }
+
+  /**
+   * ADR-0020 — set a qualification dimension's status with its evidence and source. This is the
+   * writer the four checkboxes could never be: it can say CONCERN and BLOCKER, it records WHY, and
+   * it stamps who and when server-side.
+   *
+   * Allowed on a closed deal — correcting the record after an award is legitimate, and the history
+   * it might contradict is already frozen in the write-once snapshot, which no route can reach.
+   */
+  @Patch(':id/qualification')
+  async updateQualification(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: UpdateQualificationDto,
+  ): Promise<{ opportunity: Opportunity; view: QualificationView }> {
+    const ctx = this.tenant.get();
+    // Whitelist the four known dimensions — an unknown key is dropped, never merged blindly.
+    const patch: QualificationPatch = {};
+    for (const key of QUALIFICATION_KEYS) {
+      const d = dto?.[key as keyof UpdateQualificationDto] as QualificationDimensionDto | undefined;
+      if (!d) continue;
+      patch[key as QualificationKey] = {
+        ...(d.status !== undefined ? { status: d.status } : {}),
+        ...(d.evidence !== undefined ? { evidence: d.evidence } : {}),
+        ...(d.source !== undefined ? { source: d.source } : {}),
+      };
+    }
+    if (Object.keys(patch).length === 0) throw new BadRequestException('no qualification dimension supplied');
+    return this.opportunities.updateQualification(id, patch, ctx.actorId);
   }
 
   /**

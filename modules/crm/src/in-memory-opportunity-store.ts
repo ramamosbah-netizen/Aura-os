@@ -1,4 +1,4 @@
-import type { Id, Opportunity, Page, PageParams } from '@aura/shared';
+import type { Id, Opportunity, Page, PageParams, QualificationAtAward } from '@aura/shared';
 import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { OpportunityFilter, OpportunityStore } from './opportunity-store';
@@ -15,7 +15,23 @@ export class InMemoryOpportunityStore implements OpportunityStore {
   }
 
   async update(opportunity: Opportunity): Promise<void> {
-    this.opportunities.set(opportunity.id, { ...opportunity, updatedAt: new Date().toISOString() });
+    const stored = this.opportunities.get(opportunity.id);
+    this.opportunities.set(opportunity.id, {
+      ...opportunity,
+      // ADR-0020 — mirror the Postgres store: the generic update does NOT write the snapshot column,
+      // so an in-memory test cannot pass while the real store would refuse the same write. Whatever
+      // was captured stays captured, whatever the caller's entity happens to be carrying.
+      qualificationAtAward: stored ? stored.qualificationAtAward : opportunity.qualificationAtAward,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  /** Write-once, exactly like the SQL `WHERE qualification_at_award IS NULL`. */
+  async stampQualificationAtAward(_tx: TxHandle | null, id: Id, snapshot: QualificationAtAward): Promise<boolean> {
+    const stored = this.opportunities.get(id);
+    if (!stored || stored.qualificationAtAward) return false;
+    this.opportunities.set(id, { ...stored, qualificationAtAward: snapshot });
+    return true;
   }
 
   async updateWithClient(_tx: TxHandle | null, opportunity: Opportunity): Promise<void> {

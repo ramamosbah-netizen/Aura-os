@@ -16,7 +16,9 @@ import {
   opportunityAttention,
   resolveNextAction,
   resolveDealOutcome,
-  qualificationFromFlags,
+  qualificationView,
+  resolveQualificationRecord,
+  resolveQualificationProvenance,
   buildDealFacts,
   attentionFactsOf,
   checkStageTransition,
@@ -26,6 +28,7 @@ import {
   type ResolvedNextAction,
   type DealOutcome,
   type QualificationView,
+  type QualificationAtAward,
   type DealFacts,
   moneyNumber as r2,
 } from '@aura/shared';
@@ -62,8 +65,18 @@ interface Opportunity360Payload {
    * The booleans and `score` are kept (the checkbox still binds to them); `view` is the semantic
    * layer — four states with evidence, so the client stops inventing its own thresholds and can
    * never again call an unasked question "unqualified".
+   *
+   * ADR-0020 — `view` now comes from the CANONICAL record (evidence, source, who confirmed it when),
+   * and `atAward` is the IMMUTABLE snapshot or `null` meaning NOT CAPTURED. The two are shipped as
+   * separate fields on purpose: they can legitimately differ, and a client that could only see one
+   * number would be back to presenting today's record as history.
    */
-  qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number; view: QualificationView };
+  qualification: {
+    budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number; view: QualificationView;
+    atAward: { snapshot: QualificationAtAward; view: QualificationView } | null;
+    /** What this deal's qualification surface may CLAIM: AT_AWARD · NOT_CAPTURED · CURRENT. */
+    provenance: 'AT_AWARD' | 'NOT_CAPTURED' | 'CURRENT';
+  };
   route: 'tender' | 'direct';
   progression: ProgressionStep[];
   outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number | null; awardSource: Opportunity['awardSource'] };
@@ -145,13 +158,18 @@ export class Opportunity360Controller {
     const contractIds = new Set(contracts.map((c) => c.id));
     const projects = allProjects.filter((p) => p.contractId && contractIds.has(p.contractId));
 
+    const lifecycleOutcome = resolveDealOutcome(opp);
+    const qualificationRecord = resolveQualificationRecord(opp);
+    const provenance = resolveQualificationProvenance({ terminal: lifecycleOutcome.terminal, atAward: opp.qualificationAtAward ?? null });
     const qualification = {
       budget: opp.budgetConfirmed,
       authority: opp.authorityConfirmed,
       need: opp.needConfirmed,
       timeline: opp.timelineConfirmed,
       score: [opp.budgetConfirmed, opp.authorityConfirmed, opp.needConfirmed, opp.timelineConfirmed].filter(Boolean).length,
-      view: qualificationFromFlags(opp),
+      view: qualificationView(qualificationRecord),
+      atAward: provenance.kind === 'AT_AWARD' ? { snapshot: provenance.snapshot, view: provenance.view } : null,
+      provenance: provenance.kind,
     };
 
     const route: 'tender' | 'direct' = opp.requiresTender ? 'tender' : 'direct';
@@ -160,7 +178,7 @@ export class Opportunity360Controller {
     // provenance (accepted quotation → Commercial Baseline subtotal → opportunity.contractedValue),
     // resolved separately; the two are different measures and must not be conflated.
     const contractSum = r2(contracts.filter((c) => c.status !== 'cancelled').reduce((s, c) => s + c.value, 0));
-    const lifecycle = resolveDealOutcome(opp);
+    const lifecycle = lifecycleOutcome;
     const contractedValue = resolveContractedValue(lifecycle, contractSum);
 
     const progression: ProgressionStep[] = [

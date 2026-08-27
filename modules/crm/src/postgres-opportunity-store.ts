@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { Id, Opportunity, OpportunityStage, Page, PageParams, BuyingStage, PursuitDecision, PursuitDimensions } from '@aura/shared';
-import { makePage } from '@aura/shared';
+import type { Id, Opportunity, OpportunityStage, Page, PageParams, BuyingStage, PursuitDecision, PursuitDimensions, QualificationAtAward, QualificationRecord } from '@aura/shared';
+import { makePage, readQualificationAtAward } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { OpportunityFilter, OpportunityStore } from './opportunity-store';
 
@@ -42,12 +42,14 @@ interface OppRow {
   contracted_value: string | null;
   award_source: string | null;
   awarded_at: Date | null;
+  qualification: QualificationRecord | null;
+  qualification_at_award: unknown;
   close_date: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
-const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, forecast_category, close_date, requires_tender, owner_id, next_action, next_action_due_date, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, win_reason, buying_stage, pursuit_decision, pursuit_score, pursuit_rationale, pursuit_decided_by, pursuit_decided_at, pursuit_dimensions, win_plan, created_at, updated_at, execution_type, tender_id, awarded_quotation_id, contracted_value, award_source, awarded_at';
+const COLS = 'id, tenant_id, company_id, lead_id, account_id, account_name, title, value, stage, win_probability, forecast_category, close_date, requires_tender, owner_id, next_action, next_action_due_date, budget_confirmed, authority_confirmed, need_confirmed, timeline_confirmed, competitors, source, loss_reason, win_reason, buying_stage, pursuit_decision, pursuit_score, pursuit_rationale, pursuit_decided_by, pursuit_decided_at, pursuit_dimensions, win_plan, created_at, updated_at, execution_type, tender_id, awarded_quotation_id, contracted_value, award_source, awarded_at, qualification, qualification_at_award';
 
 function rowToOpportunity(r: OppRow): Opportunity {
   return {
@@ -88,6 +90,11 @@ function rowToOpportunity(r: OppRow): Opportunity {
     contractedValue: r.contracted_value != null ? Number(r.contracted_value) : null,
     awardSource: (r.award_source as Opportunity['awardSource']) ?? null,
     awardedAt: r.awarded_at ? r.awarded_at.toISOString() : null,
+    qualification: r.qualification ?? null,
+    // Parsed through the tolerant reader, never cast: a stored document this build cannot fully
+    // understand (a future version, a hand-edited row) reads as null → "not captured", rather than
+    // being half-rendered under a historical label. See qualification-snapshot.ts.
+    qualificationAtAward: readQualificationAtAward(r.qualification_at_award),
     closeDate: r.close_date ? r.close_date.toISOString() : null,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
@@ -124,14 +131,19 @@ export class PostgresOpportunityStore implements OpportunityStore {
               buying_stage = $20, pursuit_decision = $21, pursuit_score = $22, pursuit_rationale = $23,
               pursuit_decided_by = $24, pursuit_decided_at = $25, pursuit_dimensions = $26, win_reason = $27, win_plan = $29,
               execution_type = $30, tender_id = $31,
-              awarded_quotation_id = $32, contracted_value = $33, award_source = $34, awarded_at = $35, updated_at = now()
+              awarded_quotation_id = $32, contracted_value = $33, award_source = $34, awarded_at = $35,
+              qualification = $36, updated_at = now()
         WHERE id = $1`,
       [o.id, o.title, o.value, o.stage, o.winProbability, o.closeDate, o.accountId, o.accountName, o.requiresTender, o.ownerId, o.nextAction,
        o.budgetConfirmed, o.authorityConfirmed, o.needConfirmed, o.timelineConfirmed, o.competitors, o.source, o.lossReason, o.nextActionDueDate,
        o.buyingStage, o.pursuitDecision, o.pursuitScore, o.pursuitRationale, o.pursuitDecidedBy, o.pursuitDecidedAt,
        o.pursuitDimensions ? JSON.stringify(o.pursuitDimensions) : null, o.winReason, o.forecastCategory,
        o.winPlan ? JSON.stringify(o.winPlan) : null, o.executionType, o.tenderId,
-       o.awardedQuotationId, o.contractedValue, o.awardSource, o.awardedAt],
+       o.awardedQuotationId, o.contractedValue, o.awardSource, o.awardedAt,
+       // `qualification` is the canonical MUTABLE record and belongs here. `qualification_at_award`
+       // deliberately does NOT: it is write-once through stampQualificationAtAward, so no ordinary
+       // update can carry a stale snapshot back over the stored one.
+       o.qualification ? JSON.stringify(o.qualification) : null],
     );
   }
 
@@ -139,7 +151,7 @@ export class PostgresOpportunityStore implements OpportunityStore {
     return executor.query(
       // Positional against COLS: adding a column here without adding its $N and its param writes
       // every following value into the wrong column. All three edit together, always.
-      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)`,
+      `INSERT INTO public.aura_crm_opportunities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)`,
       [
         o.id,
         o.tenantId,
@@ -181,8 +193,29 @@ export class PostgresOpportunityStore implements OpportunityStore {
         o.contractedValue,
         o.awardSource,
         o.awardedAt,
+        o.qualification ? JSON.stringify(o.qualification) : null,
+        // A new opportunity is never born awarded, so this is always null here. Kept positional
+        // against COLS rather than omitted — see the note above the INSERT.
+        o.qualificationAtAward ? JSON.stringify(o.qualificationAtAward) : null,
       ],
     );
+  }
+
+  /**
+   * ADR-0020 — capture the snapshot, write-once. `WHERE qualification_at_award IS NULL` makes the
+   * write-once property a race-free CONDITION OF THE STATEMENT rather than a check-then-write in the
+   * service: two concurrent awards cannot both capture, and a replay updates zero rows. The database
+   * trigger backs this up for any writer that does not come through here.
+   */
+  async stampQualificationAtAward(tx: TxHandle | null, id: Id, snapshot: QualificationAtAward): Promise<boolean> {
+    const executor = (tx as PoolClient | null) ?? this.pool;
+    const res = await executor.query(
+      `UPDATE public.aura_crm_opportunities
+          SET qualification_at_award = $2
+        WHERE id = $1 AND qualification_at_award IS NULL`,
+      [id, JSON.stringify(snapshot)],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   async get(id: Id): Promise<Opportunity | null> {

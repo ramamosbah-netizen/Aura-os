@@ -33,7 +33,32 @@ export interface QualificationDimension {
    * evidence was ever recorded — a confirmation nobody can audit. Kept visible rather than assumed.
    */
   evidence: string | null;
+  /**
+   * Phase 2 provenance. Optional because the boolean adapter cannot supply it: a dimension read
+   * from the legacy checkbox has a status and nothing else, and inventing a source or a timestamp
+   * for it would manufacture the exact provenance this model exists to make honest. Absent means
+   * "not recorded", never "none".
+   */
+  source?: QualificationSource | null;
+  confirmedBy?: import('./id').Id | null;
+  confirmedAt?: string | null;
 }
+
+/**
+ * Where a dimension's status came from. `checkbox` is its own source and is NOT a synonym for
+ * "unknown provenance": it says a human ticked a box in AURA with nothing attached, which is a
+ * weaker claim than a customer's own statement or a document, and the difference is the whole point
+ * of recording it. A dimension whose record predates Phase 2 has NO source at all (`null`).
+ */
+export type QualificationSource = 'customer_stated' | 'document' | 'meeting' | 'internal_assessment' | 'checkbox';
+
+export const QUALIFICATION_SOURCE_LABEL: Record<QualificationSource, string> = {
+  customer_stated: 'Customer stated',
+  document: 'Document',
+  meeting: 'Meeting',
+  internal_assessment: 'Internal assessment',
+  checkbox: 'Checkbox only',
+};
 
 /** Coverage band. Describes how much is KNOWN — it is not a verdict on the deal. */
 export type QualificationBand = 'EARLY' | 'DEVELOPING' | 'STRONG' | 'BLOCKED';
@@ -50,7 +75,7 @@ export interface QualificationView {
   band: QualificationBand;
 }
 
-const LABELS: Record<QualificationKey, string> = {
+export const QUALIFICATION_LABEL: Record<QualificationKey, string> = {
   budget: 'Budget',
   authority: 'Authority',
   need: 'Need',
@@ -99,7 +124,7 @@ export function qualificationFromFlags(flags: {
 }): QualificationView {
   const of = (key: QualificationKey, confirmed: boolean): QualificationDimension => ({
     key,
-    label: LABELS[key],
+    label: QUALIFICATION_LABEL[key],
     status: confirmed ? 'CONFIRMED' : 'UNKNOWN',
     evidence: null,
   });

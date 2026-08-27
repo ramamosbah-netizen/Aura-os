@@ -107,8 +107,10 @@ export interface Opportunity {
   value: number;
   stage: OpportunityStage;
   /** The SALESPERSON's confidence (§23) — always was the hand-set number. Stage probability is
-   * derived from `stage` and the model's read is advisory; see forecast-category.ts. */
-  winProbability: number; // 0 to 100
+   * derived from `stage` and the model's read is advisory; see forecast-category.ts.
+   * Range 0..100 inclusive, enforced on WRITE by `assertWinProbability` (and restated by the API
+   * DTO and the DB CHECK). Reads never re-interpret it — see `resolveEffectiveWinProbability`. */
+  winProbability: number;
   /** Explicit forecast commitment call (PIPELINE/BEST_CASE/COMMIT). Null = derive from confidence. */
   forecastCategory: import('./forecast-category').ForecastCategory | null;
   closeDate: string | null;
@@ -131,11 +133,39 @@ export interface Opportunity {
   nextAction: string | null;
   /** When that next step is due (ISO date). Part of the Next-Action Invariant. */
   nextActionDueDate: string | null;
-  /** BANT qualification — how well we understand the deal (drives real probability). */
+  /**
+   * BANT qualification — how well we understand the deal.
+   *
+   * @deprecated COMPATIBILITY SHADOW of `qualification` (ADR-0020). `qualification` is canonical;
+   * these are derived from it (`CONFIRMED` ⇒ true) exactly as `requiresTender` is derived from
+   * `executionType`, and they are written only through that derivation. They are kept so existing
+   * readers and the checkbox binding keep working, and are expected to be removed. Never write one
+   * directly — a boolean write that bypasses the record re-opens the semantic drift this replaced.
+   */
   budgetConfirmed: boolean;
   authorityConfirmed: boolean;
   needConfirmed: boolean;
   timelineConfirmed: boolean;
+  /**
+   * ADR-0020 — the canonical, evidence-bearing qualification: per dimension a status
+   * (UNKNOWN/CONFIRMED/CONCERN/BLOCKER) with its evidence, source, and who confirmed it when.
+   *
+   * `null` means this deal predates Phase 2 and is read through the boolean adapter — status only,
+   * NO provenance. That null is meaningful and is never backfilled: stamping a source and a date we
+   * do not have would invent the provenance this model exists to make honest. Always read it via
+   * `resolveQualificationRecord`, never directly.
+   */
+  qualification: import('./qualification-record').QualificationRecord | null;
+  /**
+   * ADR-0020 — the IMMUTABLE qualification-at-award snapshot: a complete copy of `qualification` as
+   * it stood when a real award was recorded, taken inside the award's own transaction.
+   *
+   * Write-once, and the database refuses to change it once set. Present ONLY when the deal was won
+   * through a path that stamped `awardSource`; a legacy `stage = 'won'` edit produces none, and
+   * `null` on a Won deal therefore means "not captured" — which surfaces must say, rather than
+   * showing today's mutable figure under a historical label.
+   */
+  qualificationAtAward: import('./qualification-snapshot').QualificationAtAward | null;
   /** Who else is bidding — freeform / comma-separated competitor names. */
   competitors: string | null;
   /** Where the opportunity came from (referral, existing client, campaign…). */
@@ -400,6 +430,49 @@ export function leadAttention(
   return { active, gaps, needsAttention: gaps.length > 0, severity };
 }
 
+/**
+ * The win-probability range invariant — 0..100 inclusive, finite.
+ *
+ * This is a WRITE-boundary rule and it lives here, in the domain, because the HTTP DTO is only one
+ * of several writers (tests, jobs, reactors and internal callers reach `OpportunityService`
+ * directly and never see a `class-validator` decorator). The API DTO and the DB CHECK on
+ * `aura_crm_opportunities.win_probability` restate the same numbers at their own boundaries; all
+ * three are deliberate — HTTP, domain and persistence each have to be able to refuse bad input on
+ * their own.
+ *
+ * It REJECTS rather than clamps, and the read side is never the place to fix this: see
+ * `resolveEffectiveWinProbability` in ./deal-rules, which deliberately passes an out-of-range
+ * stored value through VISIBLY. Clamping on read would hide exactly the data problem this guard
+ * exists to prevent, so the two rules must stay on opposite sides of the boundary.
+ */
+export const WIN_PROBABILITY_MIN = 0;
+export const WIN_PROBABILITY_MAX = 100;
+
+/** Applied ONLY when no value is supplied — never as a repair for a supplied-but-invalid one. */
+export const DEFAULT_WIN_PROBABILITY = 20;
+
+/**
+ * Validate a supplied win probability, or fall back to the default when none was supplied.
+ *
+ * `null`/`undefined` mean "not supplied" (the field is optional on create and a sparse PATCH omits
+ * it) and yield the default. ANY other value must be a finite number within range, or this throws:
+ * `NaN`, `Infinity`, `150`, `-0.01` and the string `'50'` are all supplied-but-invalid and must be
+ * refused loudly. The previous behaviour silently turned every one of them into 20, which reported
+ * a number the caller never sent.
+ *
+ * The message is phrased for the API error taxonomy: "must" classifies it 400 VALIDATION
+ * (see apps/api/src/common/all-exceptions.filter.ts), not an opaque 500.
+ */
+export function assertWinProbability(value: unknown): number {
+  if (value === undefined || value === null) return DEFAULT_WIN_PROBABILITY;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < WIN_PROBABILITY_MIN || value > WIN_PROBABILITY_MAX) {
+    throw new Error(
+      `win probability must be a finite number between ${WIN_PROBABILITY_MIN} and ${WIN_PROBABILITY_MAX} — received ${typeof value === 'number' ? value : JSON.stringify(value)}`,
+    );
+  }
+  return value;
+}
+
 export interface NewOpportunity {
   tenantId: Id;
   companyId?: Id | null;
@@ -440,7 +513,7 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     title: input.title.trim(),
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     stage: input.stage ?? 'qualification',
-    winProbability: Number.isFinite(input.winProbability) ? Number(input.winProbability) : 20.0,
+    winProbability: assertWinProbability(input.winProbability),
     forecastCategory: input.forecastCategory ?? null,
     closeDate: input.closeDate ?? null,
     // executionType is the new truth; requiresTender is derived from it and kept in sync. When only
@@ -455,6 +528,11 @@ export function makeOpportunity(input: NewOpportunity): Opportunity {
     authorityConfirmed: input.authorityConfirmed ?? false,
     needConfirmed: input.needConfirmed ?? false,
     timelineConfirmed: input.timelineConfirmed ?? false,
+    // Born WITHOUT a record: null is the honest state for a deal nobody has qualified yet, and it
+    // keeps "never assessed" distinguishable from "assessed as unknown". The record materialises on
+    // the first qualification write; until then the booleans are adapted on read.
+    qualification: null,
+    qualificationAtAward: null,
     competitors: input.competitors?.trim() || null,
     source: input.source?.trim() || null,
     lossReason: input.lossReason?.trim() || null,
@@ -630,4 +708,17 @@ export const CRM_EVENT = {
    * no authoritative accepted quotation backs it — so an out-of-band close is always auditable.
    */
   opportunityAwardOverride: 'crm.opportunity.award_override',
+  /**
+   * ADR-0020 — a qualification dimension's status / evidence / source changed. Emitted for the
+   * evidence-bearing writer as well as the legacy checkbox, because the event log is how a
+   * post-award change to a closed deal's qualification was found in the first place: a richer
+   * writer that recorded nothing would have made the same investigation impossible.
+   */
+  opportunityQualificationChanged: 'crm.opportunity.qualification_changed',
+  /**
+   * ADR-0020 — the immutable qualification-at-award snapshot was captured, inside the award's own
+   * transaction. Carries the FULL snapshot as an audit/replay copy: the column is the read model,
+   * this is the durable record that it was taken, from what, and under which provenance.
+   */
+  opportunityQualificationCaptured: 'crm.opportunity.qualification_captured',
 } as const;

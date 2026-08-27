@@ -48,6 +48,8 @@ export * from './domain/opportunity-health';
 export * from './domain/assessment-state';
 export * from './domain/opportunity-outcome';
 export * from './domain/qualification-state';
+export * from './domain/qualification-record';
+export * from './domain/qualification-snapshot';
 export * from './domain/deal-facts';
 export * from './domain/deal-findings';
 export * from './domain/deal-rules';

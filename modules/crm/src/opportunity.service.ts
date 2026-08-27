@@ -1,13 +1,47 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
 import { AccessService, AiService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
-import { CRM_EVENT, type Opportunity, type OpportunityStage, type AwardSource, type NewOpportunity, makeOpportunity, mergeWinPlan, winPlanCoverage, type WinPlan, type WinPlanCoverage } from '@aura/shared';
+import { CRM_EVENT, type Opportunity, type OpportunityStage, type AwardSource, type NewOpportunity, assertWinProbability, makeOpportunity, mergeWinPlan, winPlanCoverage, type WinPlan, type WinPlanCoverage } from '@aura/shared';
 import {
   type PursuitDecision, type PursuitDimensions, scorePursuit, CRM_JOURNEY_EVENT,
   checkStageTransition, stageGateMessage, type StageEvidence,
 } from '@aura/shared';
+import {
+  captureQualificationAtAward, mergeQualificationRecord, patchFromFlagUpdates, qualificationFlagsOf,
+  qualificationView, resolveQualificationRecord,
+  type QualificationAtAward, type QualificationPatch, type QualificationView,
+} from '@aura/shared';
 import { CRM_OPPORTUNITY_STORE, type OpportunityFilter, type OpportunityStore } from './opportunity-store';
 import { OPPORTUNITY_GOVERNANCE_RESOLVER, type OpportunityGovernanceResolver } from './opportunity-governance';
+
+/**
+ * ADR-0020 — the evidence a tender award must carry to be recorded as award PROVENANCE on the deal.
+ *
+ * WHY THIS IS ONE OBJECT. `awardSource` and `contractedValue` are not independent facts: a documented
+ * award with no authoritative value is the inconsistency `resolveDealOutcome` says must stay visible,
+ * and every money surface keys on `awardDocumented`. Binding them into a single required-field object
+ * means the caller cannot supply one without the other, so that state is not reachable on this route.
+ *
+ * WHAT COUNTS AS THE VALUE. Not `tender.value` — the Tender aggregate documents that as the
+ * "Estimated bid value", it is mutable, and it is the internal estimate rather than anything the
+ * client awarded. Not the submitted bid either: that is what WE offered. The authoritative number is
+ * the approved, immutable Commercial Baseline behind the tender's decided quotation (R3) — the same
+ * number the auto-created Contract inherits from the same award, so the deal and its contract cannot
+ * disagree about what was won. The caller resolves it, because only the app layer may read across the
+ * tendering and quotation modules; this module states what it will accept.
+ */
+export interface TenderAwardProvenance {
+  /** The authoritative contracted value. Required — provenance never travels without its number. */
+  contractedValue: number;
+  /** When the award was DECIDED (the `tendering.tender.awarded` event's own timestamp). */
+  awardedAt: string;
+  /** How the value was established. One value today; named so a second source cannot arrive unlabelled. */
+  valueSource: 'commercial_baseline';
+  /** The immutable Commercial Baseline the value came from. */
+  baselineId: Id;
+  /** The quotation carrying that baseline — audit trail only; NOT `awardedQuotationId` (see below). */
+  quotationId: Id;
+}
 
 @Injectable()
 export class OpportunityService {
@@ -94,6 +128,12 @@ export class OpportunityService {
       this.access.assert(actorId, target);
     }
 
+    // Range integrity on the UPDATE path. `create` gets this through makeOpportunity; an update
+    // bypasses the factory entirely, so without this line a PATCH was the one write path with no
+    // range rule at all. Only a SUPPLIED value is judged — a sparse PATCH that omits the key is
+    // untouched, and it is rejected, never clamped (see assertWinProbability).
+    if (updates.winProbability !== undefined) assertWinProbability(updates.winProbability);
+
     // Drop undefined keys — a sparse PATCH must never overwrite existing values
     // (requires_tender is NOT NULL; an undefined would 500 at the store).
     const defined = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
@@ -107,6 +147,23 @@ export class OpportunityService {
     // maps back to an executionType so the two never disagree.
     if (updates.executionType !== undefined) updated.requiresTender = updates.executionType === 'tender';
     else if (updates.requiresTender !== undefined) updated.executionType = updates.requiresTender ? 'tender' : 'direct_sale';
+
+    // ADR-0020 — the SAME relationship, for qualification. `qualification` (the evidence-bearing
+    // record) is canonical; the four booleans are its compatibility shadow. A legacy checkbox PATCH
+    // is therefore applied to the RECORD and the booleans re-derived from it — never written
+    // straight through — so the two representations cannot drift into disagreeing about one deal.
+    // A tick also stamps WHO and WHEN, which the boolean alone could never carry, and that stamp is
+    // what makes the award snapshot worth taking.
+    const flagPatch = patchFromFlagUpdates(updates);
+    if (Object.keys(flagPatch).length > 0) {
+      const record = mergeQualificationRecord(
+        resolveQualificationRecord(existing),
+        flagPatch,
+        { actorId: actorId ?? null, at: updated.updatedAt },
+      );
+      updated.qualification = record;
+      Object.assign(updated, qualificationFlagsOf(record));
+    }
 
     const isStageChange = updates.stage && updates.stage !== existing.stage;
 
@@ -230,23 +287,70 @@ export class OpportunityService {
    * A no-op if the deal is already closed, so an at-least-once redelivery is idempotent. Supplies the
    * reason (and, for a win, a value) the stage gate requires so the programmatic close passes the
    * same evidence gate a human would.
+   *
+   * AWARD PROVENANCE (ADR-0020). A tender award IS an authoritative award, so when the caller can
+   * evidence one this stamps `awardSource: 'tender_award'` and captures the qualification snapshot
+   * exactly as the quotation path does. `detail.award` is that evidence, and it is a single
+   * indivisible object ON PURPOSE: `contractedValue` is a required field of it, so there is no way to
+   * express "tender provenance without a contracted value" — the combination `resolveDealOutcome`
+   * documents as an inconsistency that must stay visible is unreachable here BY CONSTRUCTION, not by
+   * a check a later edit could drop.
+   *
+   * Without that evidence the deal still closes Won — a tender awarded with no priced, approved
+   * commercial baseline is a legitimate path — but it closes exactly as it always did, with no
+   * provenance, and reads `LEGACY_WON` ("Won — award not evidenced"). That is the honest reading: the
+   * award happened, and AURA holds no authoritative number for it.
+   *
+   * `awardedQuotationId` stays null even when the value came from a quotation's baseline. That field
+   * means "the exact accepted quotation revision the customer awarded"; on this route the customer
+   * awarded the TENDER, and the baseline may sit on a quotation that was approved but never accepted.
+   * Where the number came from is recorded in the event payload instead, which can say it precisely.
    */
   async applyTenderOutcome(
     id: Id,
     outcome: 'won' | 'lost',
-    detail: { reason: string; value?: number },
+    detail: { reason: string; value?: number; award?: TenderAwardProvenance | null },
   ): Promise<Opportunity> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
     if (existing.stage === 'won' || existing.stage === 'lost') return existing; // already closed
     const now = new Date().toISOString();
+    // Provenance belongs to a WIN only — a loss has nothing to evidence.
+    const award = outcome === 'won' ? (detail.award ?? null) : null;
     const updated: Opportunity = {
       ...existing,
       stage: outcome,
       ...(outcome === 'won'
-        ? { winReason: detail.reason, value: existing.value > 0 ? existing.value : (detail.value ?? existing.value) }
+        ? {
+            winReason: detail.reason,
+            // The forecast headline. Deliberately still the deal's own value (or the tender's
+            // estimate when the deal has none) — it is NOT, and must never become, the contracted
+            // value below.
+            value: existing.value > 0 ? existing.value : (detail.value ?? existing.value),
+            ...(award
+              ? {
+                  contractedValue: award.contractedValue,
+                  awardSource: 'tender_award' as const,
+                  // The AWARD's own timestamp, not this reactor's `now()`. The close is asynchronous;
+                  // stamping `now` would date the award by however long the bus took to deliver it.
+                  awardedAt: award.awardedAt,
+                }
+              : {}),
+          }
         : { lossReason: detail.reason }),
       updatedAt: now,
     };
+    // ADR-0020 — capture is keyed on PROVENANCE, not on this code path: the same helper with the same
+    // arguments the quotation and override paths pass. There is no tender-specific branch inside the
+    // snapshot logic, and there must never be one — a snapshot that knew which route produced it
+    // would be a second definition of what an award is.
+    const snapshot = award
+      ? captureQualificationAtAward({
+          record: resolveQualificationRecord(existing),
+          awardSource: 'tender_award',
+          awardedQuotationId: null,
+          capturedAt: award.awardedAt,
+        })
+      : null;
     const event = makeEvent({
       type: CRM_EVENT.opportunityStageChanged,
       tenantId: updated.tenantId,
@@ -259,14 +363,32 @@ export class OpportunityService {
         accountId: updated.accountId, accountName: updated.accountName,
         requiresTender: updated.requiresTender, oldStage: existing.stage,
         changes: { stage: outcome }, viaTender: existing.tenderId,
+        // Provenance on the wire, so a consumer of the stage change sees the same evidence the
+        // aggregate holds — including WHERE the money came from, which the aggregate cannot say.
+        contractedValue: updated.contractedValue,
+        awardSource: updated.awardSource,
+        valueSource: award?.valueSource ?? null,
+        commercialBaselineId: award?.baselineId ?? null,
+        baselineQuotationId: award?.quotationId ?? null,
       },
     });
+    const events = snapshot ? [event, this.qualificationCapturedEvent(updated, snapshot, null)] : [event];
+    // ONE transaction, exactly as the quotation path: the close, the provenance, the snapshot and
+    // their events commit together or not at all.
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);
-      await this.events.appendWithClient(handle, [event]);
+      if (snapshot) await this.store.stampQualificationAtAward(handle, updated.id, snapshot);
+      await this.events.appendWithClient(handle, events);
     });
-    this.logger.log(`Opportunity ${updated.id} closed ${outcome} by its tender ${existing.tenderId} (${detail.reason})`);
-    return updated;
+    this.logger.log(
+      `Opportunity ${updated.id} closed ${outcome} by its tender ${existing.tenderId} (${detail.reason})` +
+        (award
+          ? ` — awarded: contractedValue ${award.contractedValue} from ${award.valueSource} ${award.baselineId}`
+          : outcome === 'won'
+            ? ' — NO award evidence (no approved commercial baseline behind the tender); the win stays unevidenced'
+            : ''),
+    );
+    return snapshot ? { ...updated, qualificationAtAward: snapshot } : updated;
   }
 
   /**
@@ -301,6 +423,82 @@ export class OpportunityService {
       `Award conflict on opportunity ${existing.id}: already awarded (${existing.awardSource}${existing.awardedQuotationId ? ` from ${existing.awardedQuotationId}` : ''}); ` +
         `refused ${c.attemptedSource}${c.incomingQuotationId ? ` ${c.incomingQuotationId}` : ''} — award NOT overwritten [${c.dedupKey}]`,
     );
+  }
+
+  /**
+   * ADR-0020 — the durable audit copy of a capture. The column is the READ MODEL (so no surface has
+   * to replay an event stream to render a badge); this event is the record that the snapshot was
+   * taken, from what, and under which provenance — the two roles are different and both are kept.
+   */
+  private qualificationCapturedEvent(opportunity: Opportunity, snapshot: QualificationAtAward, actorId: Id | null) {
+    const view = qualificationView(snapshot.dimensions);
+    return makeEvent({
+      type: CRM_EVENT.opportunityQualificationCaptured,
+      tenantId: opportunity.tenantId, companyId: opportunity.companyId, actorId,
+      aggregateType: 'crm.opportunity', aggregateId: opportunity.id,
+      payload: {
+        opportunityId: opportunity.id,
+        awardSource: snapshot.awardSource,
+        awardedQuotationId: snapshot.awardedQuotationId,
+        capturedAt: snapshot.capturedAt,
+        confirmed: view.confirmed,
+        total: view.total,
+        // The whole snapshot, not a summary — the event must be able to answer the historical
+        // question on its own if the read model is ever lost or rebuilt.
+        snapshot,
+      },
+    });
+  }
+
+  /**
+   * ADR-0020 — the evidence-bearing qualification writer: per dimension a status
+   * (UNKNOWN/CONFIRMED/CONCERN/BLOCKER) with its evidence and source, stamped with WHO and WHEN
+   * server-side (a client may not backdate a confirmation).
+   *
+   * Deliberately allowed on a CLOSED deal. Correcting the record after an award is legitimate — the
+   * qualification of a live account keeps being learned — and forbidding it would only push the edit
+   * somewhere unaudited. What must not change is HISTORY, and that is guaranteed elsewhere: the
+   * snapshot is write-once in the store and immutable in the database, so this method cannot reach
+   * it however it is called.
+   */
+  async updateQualification(
+    id: Id,
+    patch: QualificationPatch,
+    actorId?: Id | null,
+  ): Promise<{ opportunity: Opportunity; view: QualificationView }> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'Opportunity', id);
+    const now = new Date().toISOString();
+    const before = resolveQualificationRecord(existing);
+    const record = mergeQualificationRecord(before, patch, { actorId: actorId ?? null, at: now });
+    const updated: Opportunity = {
+      ...existing,
+      qualification: record,
+      // The compatibility shadow, re-derived — never written by the caller.
+      ...qualificationFlagsOf(record),
+      updatedAt: now,
+    };
+    const event = makeEvent({
+      type: CRM_EVENT.opportunityQualificationChanged,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId: actorId ?? null,
+      aggregateType: 'crm.opportunity', aggregateId: updated.id,
+      payload: {
+        opportunityId: id,
+        // Before AND after: the live event log is how a post-award qualification change was found at
+        // all, and a payload holding only the new value cannot answer "what did it used to say".
+        before: Object.fromEntries(Object.entries(before).map(([k, v]) => [k, v.status])),
+        after: Object.fromEntries(Object.entries(record).map(([k, v]) => [k, v.status])),
+        stage: updated.stage,
+        // Whether this edit landed on a deal whose pursuit is already over. Stated as a fact, not a
+        // judgement — it is legitimate, and it is exactly what makes the snapshot necessary.
+        afterClose: updated.stage === 'won' || updated.stage === 'lost',
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.store.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Qualification updated on ${updated.id} (${Object.keys(patch).join(', ') || 'no change'})`);
+    return { opportunity: updated, view: qualificationView(record) };
   }
 
   /**
@@ -352,6 +550,15 @@ export class OpportunityService {
       awardedAt: now,
       updatedAt: now,
     };
+    // ADR-0020 — freeze what qualification said AT THIS AWARD, stamped with the award's own
+    // timestamp rather than a second `now()`, so the snapshot and `awardedAt` can never disagree
+    // about when it was taken.
+    const snapshot = captureQualificationAtAward({
+      record: resolveQualificationRecord(existing),
+      awardSource: award.source,
+      awardedQuotationId: award.awardedQuotationId,
+      capturedAt: now,
+    });
     const event = makeEvent({
       type: CRM_EVENT.opportunityStageChanged,
       tenantId: updated.tenantId, companyId: updated.companyId, actorId: null,
@@ -362,12 +569,17 @@ export class OpportunityService {
         changes: { stage: 'won' }, awardedQuotationId: award.awardedQuotationId, awardSource: award.source, valueSource: award.valueSource,
       },
     });
+    const captureEvent = this.qualificationCapturedEvent(updated, snapshot, null);
+    // ONE transaction: the award, the snapshot and their events commit together or not at all. A
+    // rolled-back award can therefore never leave a snapshot behind claiming an award that did not
+    // happen, and a committed award can never lack the history it was supposed to freeze.
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);
-      await this.events.appendWithClient(handle, [event]);
+      await this.store.stampQualificationAtAward(handle, updated.id, snapshot);
+      await this.events.appendWithClient(handle, [event, captureEvent]);
     });
     this.logger.log(`Opportunity ${updated.id} WON from quotation ${award.awardedQuotationId} (contractedValue ${award.contractedValue}, ${award.valueSource})`);
-    return { opportunity: updated, outcome: 'won' };
+    return { opportunity: { ...updated, qualificationAtAward: snapshot }, outcome: 'won' };
   }
 
   /**
@@ -423,6 +635,14 @@ export class OpportunityService {
       awardedAt: now,
       updatedAt: now,
     };
+    // ADR-0020 — an authorized override IS real award provenance (`manual_override`), so it captures
+    // exactly like the quotation path. There is no awarded quotation to reference.
+    const snapshot = captureQualificationAtAward({
+      record: resolveQualificationRecord(existing),
+      awardSource: 'manual_override',
+      awardedQuotationId: null,
+      capturedAt: now,
+    });
     const stageEvent = makeEvent({
       type: CRM_EVENT.opportunityStageChanged,
       tenantId: updated.tenantId, companyId: updated.companyId, actorId: override.actorId ?? null,
@@ -443,12 +663,14 @@ export class OpportunityService {
         previousStage: existing.stage, warning: 'No authoritative accepted quotation',
       },
     });
+    const captureEvent = this.qualificationCapturedEvent(updated, snapshot, override.actorId ?? null);
     await this.tx.run(async (handle) => {
       await this.store.updateWithClient(handle, updated);
-      await this.events.appendWithClient(handle, [stageEvent, auditEvent]);
+      await this.store.stampQualificationAtAward(handle, updated.id, snapshot);
+      await this.events.appendWithClient(handle, [stageEvent, auditEvent, captureEvent]);
     });
     this.logger.warn(`Opportunity ${id} WON by MANUAL OVERRIDE (no accepted-quotation evidence) by ${override.actorId ?? 'unknown'} — ${override.reason.trim()}`);
-    return updated;
+    return { ...updated, qualificationAtAward: snapshot };
   }
 
   /** Record a Pursue / No-Pursue decision — computes the score from the assessment dimensions and

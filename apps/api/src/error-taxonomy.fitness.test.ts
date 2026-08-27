@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { classifyDomainMessage } from './common/all-exceptions.filter';
+import { assertWinProbability } from '@aura/shared';
 
 /**
  * Error-taxonomy fitness test (gap register Vol 23 #8 — "inconsistent 4xx behavior").
@@ -83,5 +84,17 @@ describe('Error taxonomy — every domain throw maps to a client-mappable status
     expect(classifyDomainMessage('3-Way Match validation failed: Invoice value (2000) exceeds PO value (1000)').status).toBe(400);
     expect(classifyDomainMessage('Quality gate blocked PO issuance: reason').status).toBe(400);
     expect(classifyDomainMessage('some totally novel internal explosion').status).toBe(500);
+  });
+
+  /**
+   * The win-probability range guard lives in `shared` (assertWinProbability), which this scanner
+   * does not walk — it only reads modules/* and apps/api. Its message is asserted here instead, so
+   * the guard cannot start escaping as an opaque 500 without a test noticing.
+   */
+  it('classifies the shared win-probability range guard as 400 VALIDATION', () => {
+    let message = '';
+    try { assertWinProbability(150); } catch (e) { message = (e as Error).message; }
+    expect(message).toMatch(/win probability must be a finite number between 0 and 100/i);
+    expect(classifyDomainMessage(message)).toEqual({ status: 400, code: 'VALIDATION' });
   });
 });

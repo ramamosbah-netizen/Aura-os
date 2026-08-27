@@ -2,7 +2,9 @@ import type { Opportunity, AwardSource, AttentionFacts } from './crm';
 import type { BuyingStage } from './buying-journey';
 import type { Id } from './id';
 import { resolveDealOutcome, type DealOutcomeState } from './opportunity-outcome';
-import { qualificationFromFlags, type QualificationDimension } from './qualification-state';
+import type { QualificationDimension } from './qualification-state';
+import { qualificationView, resolveQualificationRecord } from './qualification-record';
+import type { QualificationAtAward } from './qualification-snapshot';
 
 /**
  * DealFacts — the factual snapshot Opportunity 360's deterministic rules read.
@@ -111,6 +113,20 @@ export interface DealFacts {
     blockers: number;
     /** CONFIRMED dimensions with no recorded evidence. A count, not a judgement. */
     unevidenced: number;
+    /**
+     * ADR-0020 — the IMMUTABLE qualification-at-award snapshot, or `null` meaning NOT CAPTURED.
+     *
+     * A separate fact from the mutable record above, never a replacement for it: the two can
+     * legitimately differ (the record keeps being learned after a deal closes) and that difference
+     * is the point. `null` on a Won deal is meaningful — the deal was closed without award
+     * provenance, so no history exists — and must never be filled in from the current record.
+     */
+    atAward: {
+      snapshot: QualificationAtAward;
+      dimensions: QualificationDimension[];
+      confirmed: number;
+      total: number;
+    } | null;
   };
   stakeholders: {
     people: StakeholderFact[];
@@ -199,7 +215,11 @@ export function competitorsFromText(text: string | null | undefined): Competitor
 export function buildDealFacts(input: DealFactsInput): DealFacts {
   const o = input.opportunity;
   const outcome = resolveDealOutcome(o); // REUSED — award provenance is never re-derived here
-  const q = qualificationFromFlags(o);
+  // The canonical record when the deal has one, the boolean adapter when it does not. One resolver,
+  // so facts and the write path can never disagree about what this deal's qualification says.
+  const q = qualificationView(resolveQualificationRecord(o));
+  const atAwardSnapshot = o.qualificationAtAward ?? null;
+  const atAwardView = atAwardSnapshot ? qualificationView(atAwardSnapshot.dimensions) : null;
 
   const liveContracts = input.contracts.filter((c) => c.status !== CANCELLED);
   // Absence of a contract is NOT a contract worth zero. A real 0-value contract keeps its 0.
@@ -236,6 +256,9 @@ export function buildDealFacts(input: DealFactsInput): DealFacts {
       concerns: q.concerns,
       blockers: q.blockers,
       unevidenced: q.unevidenced,
+      atAward: atAwardSnapshot && atAwardView
+        ? { snapshot: atAwardSnapshot, dimensions: atAwardView.dimensions, confirmed: atAwardView.confirmed, total: atAwardView.total }
+        : null,
       // NOTE: `band` is deliberately absent — a readiness label is a rule output, not a fact.
     },
     stakeholders: {

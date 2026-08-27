@@ -120,6 +120,7 @@ The five 2026-07-24 walkthroughs are a **progressive series** — each documents
 
 | Date | Report | Status |
 |---|---|:--:|
+| 2026-08-28 | [**Playwright CI — the "dead suite" was three stale specs**](2026-08-28-playwright-ci-dead-suite-diagnosis.md) — both jobs red for 12+ runs. The "23 failing spec files" was a **measurement artifact** (23 = every file in the suite, because the `list` reporter prints passes too); real counts were 3–7. `Error: aborted` is benign — `offline-sync` kills a browser on purpose. Three specs failed **6/6 runs deterministically**, mislabelled as flake in #235; one was reporting a live regression: **no UI path to create an Opportunity existed since `d80d40ad`**. Fixed; suite **76 passed / 0 failed** | 🟢 |
 | 2026-08-14 | [G-10 Money Model Map & Float-Drift Evidence](2026-08-14-g10-money-model-map.md) | 🟢 *the money path traced end-to-end; drift proven (1,638 real VAT cases), reaches the tax invoice + GL* |
 | 2026-07-11 | [Module Manager + Settings](2026-07-11-module-manager.md) | 🗄️ |
 | 2026-07-10 | [Admin Center Depth Wave](2026-07-10-admin-depth-wave.md) | 🗄️ |

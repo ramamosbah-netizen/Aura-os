@@ -568,14 +568,20 @@ export class CommsService {
     });
 
     const recipients = await this.membersForChannel(tenantId, channel);
+    const mentions = new Set(
+      [...result.text.matchAll(/@([a-zA-Z0-9._-]+)/g)].map((match) => match[1]).filter(Boolean),
+    );
     for (const recipient of recipients.filter((member) => member !== input.sender)) {
+      const mentioned = mentions.has(recipient);
       await this.notifications.record({
         tenantId,
         userId: recipient,
-        title: channel.kind === 'dm' ? `New message from ${displayName(input.sender)}` : `New message in ${channel.name}`,
+        title: mentioned
+          ? `${displayName(input.sender)} mentioned you in ${channel.name}`
+          : channel.kind === 'dm' ? `New message from ${displayName(input.sender)}` : `New message in ${channel.name}`,
         body: channel.kind === 'dm' ? this.preview(result) : `${displayName(input.sender)}: ${this.preview(result)}`,
         category: 'chat',
-        refType: 'chat.channel',
+        refType: mentioned ? 'chat.mention' : 'chat.channel',
         refId: result.channelId,
       });
     }

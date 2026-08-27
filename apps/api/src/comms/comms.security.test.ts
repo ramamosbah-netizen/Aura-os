@@ -290,6 +290,24 @@ describe('Company isolation', () => {
     expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: BOB, refType: 'chat.channel', title: 'New message in Tender room' }));
     expect(record).not.toHaveBeenCalledWith(expect.objectContaining({ userId: ALICE, refType: 'chat.channel' }));
   });
+
+  it('turns a valid channel mention into a targeted notification', async () => {
+    const record = vi.fn().mockResolvedValue(undefined);
+    const workspace = {
+      get: vi.fn().mockResolvedValue({ assignments: { [ALICE]: 'finance', [BOB]: 'finance', [MALLORY]: 'hr' } }),
+    } as unknown as WorkspaceConfigService;
+    const service = new CommsService(
+      workspace,
+      { record } as unknown as NotificationService,
+      new InMemoryCommsStore(),
+      new InMemoryMailStore(),
+    );
+    const team = await service.openTeam(TENANT_A, ALICE, 'Tender room', [BOB, MALLORY]);
+    await service.post(TENANT_A, { channelId: team.id, sender: ALICE, kind: 'text', text: '@u-bob please review' });
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: BOB, refType: 'chat.mention', title: 'Alice mentioned you in Tender room' }));
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: MALLORY, refType: 'chat.channel' }));
+    expect(record).not.toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-unknown', refType: 'chat.mention' }));
+  });
 });
 
 describe('Attachments inherit their parent authorization', () => {

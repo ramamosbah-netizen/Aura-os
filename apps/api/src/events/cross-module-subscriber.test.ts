@@ -220,7 +220,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, createdSignals, linkedContracts };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts };
 }
 
 /**
@@ -278,6 +278,50 @@ async function awardWithoutEvidence(h: ReturnType<typeof buildHarness>, tenderId
     },
   }));
 }
+
+describe('reactor failure policy — the outbox is the error handler', () => {
+  let h: ReturnType<typeof buildHarness>;
+  beforeEach(() => { h = buildHarness(); });
+
+  /**
+   * OutboxRelay decides retry-vs-done purely by whether `bus.publish` rejects: resolve stamps
+   * `processed_at`, throw increments `attempts` and retries, dead-lettering after MAX_ATTEMPTS.
+   * Every reactor used to swallow, so publish always resolved and the retry policy was INERT — a
+   * failed contract creation was marked delivered and lost with only a log line.
+   *
+   * NOTE ON THIS HARNESS: `InMemoryEventStore.append` publishes INLINE, so here a propagated failure
+   * surfaces out of the command that emitted the event. Under Postgres the relay publishes AFTER the
+   * business transaction commits, so the same throw reaches the relay instead — which is the point.
+   * What both paths share, and what this asserts, is that the failure is no longer swallowed.
+   */
+  it('a RETRYABLE reactor PROPAGATES its failure, so the relay retries instead of marking it done', async () => {
+    const opp = await h.opportunities.create({ tenantId, title: 'Retry Job', value: 500 });
+    const tender = await h.tenders.create({ tenantId, title: 'Tender: Retry Job', value: 500 });
+    await h.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(h, tender.id);
+
+    // Exactly the transient shape this codebase has hit before: a dropped pool connection.
+    h.contracts.create = async () => { throw new Error('boom-dropped-connection'); };
+
+    await expect(awardTender(h, tender.id)).rejects.toThrow(/boom-dropped-connection/);
+  });
+
+  it('a BEST-EFFORT reactor SWALLOWS, so optional enrichment cannot block the event', async () => {
+    // The growth-Signal reactor on project.completed is enrichment: losing a Signal must never stop
+    // a project from completing. It stays swallowed deliberately.
+    const failing = buildHarness();
+    failing.signals.create = async () => { throw new Error('boom-signal'); };
+    const contract = await failing.contracts.create({ tenantId, title: 'C', value: 10, status: 'active' });
+    const project = await failing.projects.create({ tenantId, title: 'P', contractId: contract.id });
+    // Walk the project to its valid pre-completed state (planned → active → completed). Completing it
+    // fires BOTH project.completed reactors: the growth-Signal one (throws here) and the contract-close
+    // one (which completes the active contract, in turn firing the renewal-Signal reactor — also a throw).
+    // Every Signal write fails; the completion must still resolve, proving those swallows hold.
+    await failing.projects.changeStatus(project.id, 'active');
+
+    await expect(failing.projects.changeStatus(project.id, 'completed')).resolves.toBeDefined();
+  });
+});
 
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
   let h: ReturnType<typeof buildHarness>;

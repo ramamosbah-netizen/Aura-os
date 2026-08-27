@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 /** The restricted actor: TIER-3 seeds a dedicated one; elsewhere u-approver already is a viewer. */
 const VIEWER = process.env.E2E_VIEWER_USERNAME ?? 'u-approver';
 
-test('global shell exposes Home, My Work, Projects and permission-aware suites', async ({ page, browser }) => {
+test('global shell exposes the Home launcher, the suite sidebar and permission-aware suites', async ({ page, browser }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('aura-home-board')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Where would you like to work/ })).toBeVisible();
@@ -33,7 +33,12 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
   await expect(page).toHaveURL('/my-work');
 
   const navigation = page.getByRole('navigation', { name: 'Main navigation' });
-  for (const label of ['Home', 'My Work', 'Projects', 'Suites', 'Reports', 'Admin']) {
+  // The sidebar IS the suite taxonomy (lib/suites.ts), grouped My Work / Business Suites / System.
+  // It carries no separate Home/Projects/Suites/Reports/Admin entries — those belonged to the
+  // pre-IA topbar. d80d40ad rewrote the first half of this spec for the new taxonomy and left this
+  // half describing the old one, which is why it has failed on every run since 2026-08-22.
+  // One label from each of the three sections, so a dropped section fails here.
+  for (const label of ['My Work', 'Communication', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
     await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
 
@@ -54,8 +59,13 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
 
   await page.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suites-page')).toBeVisible();
-  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(10);
-  const delivery = page.getByRole('link', { name: /Project Delivery/ });
+  // Twelve: every suite in lib/suites.ts, because this actor is an admin and only `adminOnly` and
+  // ungranted `gate`s remove one. Deliberately a literal — the count is the point, so adding or
+  // dropping a suite has to be acknowledged here rather than absorbed by deriving it from the source.
+  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
+  // Scoped to the launcher: the sidebar carries a 'Project Delivery' suite link too, so an
+  // unscoped name match is ambiguous and fails on strict mode rather than on the behaviour.
+  const delivery = page.getByTestId('suite-launcher').getByRole('link', { name: /Project Delivery/ });
   await expect(delivery).not.toHaveAttribute('target', '_blank');
   await delivery.click();
   await expect(page).toHaveURL('/suites/project-delivery');
@@ -65,14 +75,21 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('link', { name: 'Open suite' })).toHaveAttribute('href', '/projects/dashboard');
 
-  await page.goto('/suites/workplace-collaboration', { waitUntil: 'domcontentloaded' });
-  const workplaceTools = page.getByRole('region', { name: 'Workplace shortcuts' });
-  for (const tool of ['My Work', 'Communications', 'Contacts', 'My Day', 'Meetings & MOM']) {
-    await expect(workplaceTools.getByRole('link', { name: new RegExp(`^${tool}`) })).toBeVisible();
-  }
-  await expect(workplaceTools.getByText('Notes', { exact: true })).toBeVisible();
-  await expect(workplaceTools.getByText('NOT IMPLEMENTED', { exact: true })).toBeVisible();
-  await expect(workplaceTools.getByRole('link', { name: /^My Day/ })).toHaveAttribute('href', '/my-work/my-day');
+  // What used to be here: a `/suites/workplace-collaboration` home and its "Workplace shortcuts"
+  // rail. That suite no longer exists in the taxonomy — `findSuite` returns null and the route
+  // 404s — and NO suite populates `featured`, so the rail never renders for any id. The block was
+  // asserting a surface that had been deleted out from under it.
+  //
+  // Its real subject was honest capability reporting: a suite home must admit what is NOT built
+  // rather than list everything as available. Communication still says so — WhatsApp is
+  // NOT IMPLEMENTED — so the intent is kept, against a suite that exists.
+  await page.goto('/suites/communication', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('suite-home')).toBeVisible();
+  // `<aside aria-labelledby>` — role complementary, not region.
+  const capabilities = page.getByRole('complementary', { name: 'Capability truth' });
+  await expect(capabilities.getByText('WhatsApp', { exact: true })).toBeVisible();
+  await expect(capabilities.getByText('NOT IMPLEMENTED', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open suite' })).toHaveAttribute('href', '/my-work/communication');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -81,11 +98,16 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
     await expect(page.getByTestId(`workspace-card-${workspace}`)).toBeVisible();
   }
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/projects/projects', { waitUntil: 'domcontentloaded' });
-  await expect(navigation.getByRole('link', { name: 'Suites', exact: true })).toBeVisible();
-  await navigation.getByRole('link', { name: 'Suites', exact: true }).click();
+  // The sidebar is present on a deep page and still navigates by suite. It has no 'Suites' entry
+  // any more — the taxonomy replaced that hub link — so reaching the launcher is a URL, not a click.
+  await expect(navigation.getByRole('link', { name: 'Sales', exact: true })).toBeVisible();
+  await navigation.getByRole('link', { name: 'Sales', exact: true }).click();
+  await expect(page).toHaveURL('/crm/overview');
+  await page.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suite-launcher')).toBeVisible();
-  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(10);
+  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
 
   const restricted = await browser.newContext({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, height: 900 } });
   const login = await restricted.request.post('/api/auth/login', {
@@ -102,9 +124,20 @@ test('global shell exposes Home, My Work, Projects and permission-aware suites',
   await expect(restrictedMe.json()).resolves.toMatchObject({ username: VIEWER, role: 'viewer', isAdmin: false });
   const restrictedPage = await restricted.newPage();
   await restrictedPage.goto('/suites', { waitUntil: 'domcontentloaded' });
-  await expect(restrictedPage.getByTestId('suite-launcher').getByRole('link')).toHaveCount(1);
-  await expect(restrictedPage.getByRole('link', { name: /Workplace & Collaboration/ })).toBeVisible();
-  await expect(restrictedPage.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0);
+  // Two, not one: a viewer holds no `suite.*` grant, so it sees exactly the suites with no gate —
+  // My Work and Communication — and none of the gated business suites. The old expectation named a
+  // single 'Workplace & Collaboration' suite, which the taxonomy replaced with these two centers.
+  const restrictedLauncher = restrictedPage.getByTestId('suite-launcher');
+  await expect(restrictedLauncher.getByRole('link')).toHaveCount(2);
+  await expect(restrictedLauncher.getByRole('link', { name: /My Work/ })).toBeVisible();
+  await expect(restrictedLauncher.getByRole('link', { name: /Communication/ })).toBeVisible();
+  // The negative half, and the one that carries the permission claim: a gated business suite is
+  // absent, so an empty-looking launcher cannot pass for a working one.
+  await expect(restrictedLauncher.getByRole('link', { name: /Sales/ })).toHaveCount(0);
+  // 'Admin Center' is the link's real name. Asserting `'Admin'` with exact:true matched nothing for
+  // ANY actor once the taxonomy renamed it, so this negative control had stopped measuring the
+  // permission it exists to prove.
+  await expect(restrictedPage.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Admin Center', exact: true })).toHaveCount(0);
   await restrictedPage.goto('/suites/administration-governance', { waitUntil: 'domcontentloaded' });
   await expect(restrictedPage.getByTestId('data-error')).toHaveAttribute('data-error-kind', 'forbidden');
   await restricted.close();

@@ -183,9 +183,10 @@ test('account: create → read in the portfolio', async ({ page }) => {
 });
 
 test('opportunity: create → read in the pipeline list', async ({ page }) => {
-  // The pipeline lives on /crm/leads; the workspace owns the tabs, the create drawer is
-  // rendered on every tab.
-  await page.goto('/crm/leads', { waitUntil: 'domcontentloaded' });
+  // The deal board lives on /crm/pipeline. It used to be /crm/leads, until d80d40ad split Sales
+  // into its own pages: /crm/leads became a leads-only workspace and the opportunity create drawer
+  // went with the pipeline. This spec kept pointing at /crm/leads and had failed on every run since.
+  await page.goto('/crm/pipeline', { waitUntil: 'domcontentloaded' });
   await createViaDrawer(page, 'opportunity', { title: OPPORTUNITY });
 
   await page.getByTestId('pipeline-tab-list').click();

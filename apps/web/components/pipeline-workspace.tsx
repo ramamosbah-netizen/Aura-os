@@ -3,6 +3,7 @@
 import { useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import LeadCapture from './lead-capture';
+import CreateDrawer from './ui/create-drawer';
 
 // Sales Pipeline — one board. A LEADS column sits first (a separate entity, styled distinctly), then
 // the real opportunity stages. Lead and Opportunity stay different records with different lifecycles —
@@ -34,6 +35,8 @@ export interface PipelineLead {
   convertedOpportunityId: string | null;
 }
 export interface PipelineAtRisk { id: string; reasons: string[] }
+/** Accounts feed the Opportunity drawer's account picker — the deal's party, chosen not typed. */
+export interface PipelineAccount { id: string; name: string }
 
 const OPP_COLUMNS: Array<{ stage: string; label: string }> = [
   { stage: 'qualification', label: 'Qualified' },
@@ -56,13 +59,26 @@ export default function PipelineWorkspace({
   opportunities,
   leads,
   atRisk,
+  accounts,
 }: {
   opportunities: PipelineOpp[];
   leads: PipelineLead[];
   atRisk: PipelineAtRisk[];
+  accounts: PipelineAccount[];
 }) {
   const router = useRouter();
   const [opps, setOpps] = useState<PipelineOpp[]>(opportunities);
+  // `opportunities` is re-supplied by the server on every router.refresh(). The local copy exists
+  // only to make the drag-and-drop optimistic, so it must ADOPT a refreshed list instead of
+  // shadowing it forever — `useState` reads its argument once and ignores every later prop.
+  // A moved deal hid this: the optimistic write already showed the new stage, so nobody noticed the
+  // refresh was inert. A CREATED deal has no optimistic path, so it simply never appeared until a
+  // hard reload — which is what `opportunity: create → read in the pipeline list` was reporting.
+  const [servedOpps, setServedOpps] = useState<PipelineOpp[]>(opportunities);
+  if (servedOpps !== opportunities) {
+    setServedOpps(opportunities);
+    setOpps(opportunities);
+  }
   const [view, setView] = useState<'board' | 'list'>('board');
   const [q, setQ] = useState('');
   const [owner, setOwner] = useState('');
@@ -158,9 +174,52 @@ export default function PipelineWorkspace({
         </div>
         <div style={st.headActions}>
           <LeadCapture onSaved={() => router.refresh()} />
+          {/* Creating an opportunity directly — not every deal arrives as a lead. This drawer used to
+              live on the old /crm/leads pipeline client; when d80d40ad split Sales into its own pages
+              that client was left unreferenced, and with it went the ONLY way to create an
+              opportunity in the product. Restored here, on the page that now owns the deal board. */}
+          <CreateDrawer
+            entity="Opportunity"
+            subtitle="A qualified deal. Choose its path: tender/estimation, or direct sale (straight to quotation)."
+            endpoint="/api/crm/opportunities"
+            fields={[
+              { name: 'title', label: 'Opportunity title', kind: 'text', required: true, placeholder: 'e.g. Downtown HQ — security systems', span: 2 },
+              { name: 'value', label: 'Value (AED)', kind: 'number', placeholder: '0' },
+              { name: 'winProbability', label: 'Win probability %', kind: 'number', placeholder: '20' },
+              { name: 'closeDate', label: 'Expected close', kind: 'date' },
+              {
+                name: 'accountId', label: 'Account', kind: 'select', labelField: 'accountName',
+                placeholder: 'No linked account', options: accounts.map((a) => ({ value: a.id, label: a.name })),
+              },
+              { name: 'leadId', label: 'Lead', kind: 'select', placeholder: 'No linked lead', options: leads.map((l) => ({ value: l.id, label: l.name })) },
+              {
+                name: 'requiresTender', label: 'Path after winning', kind: 'select', defaultValue: 'true',
+                hint: 'Tender path auto-creates a tender on win; direct sale goes straight to a quotation.',
+                options: [
+                  { value: 'true', label: 'Tender / estimation' },
+                  { value: 'false', label: 'Direct sale (no tender)' },
+                ],
+              },
+              { name: 'ownerId', label: 'Owner', kind: 'text', placeholder: 'e.g. u-sales' },
+              {
+                name: 'source', label: 'Source', kind: 'select', placeholder: 'Where did it come from?',
+                options: [
+                  { value: 'referral', label: 'Referral' },
+                  { value: 'existing_client', label: 'Existing client' },
+                  { value: 'campaign', label: 'Campaign' },
+                  { value: 'cold_call', label: 'Cold call' },
+                  { value: 'website', label: 'Website' },
+                  { value: 'other', label: 'Other' },
+                ],
+              },
+              { name: 'competitors', label: 'Competitors', kind: 'text', placeholder: 'e.g. Rival ELV LLC, Acme Systems', span: 2, hint: 'Comma-separated — who else is bidding' },
+              { name: 'nextAction', label: 'Next action', kind: 'text', placeholder: 'e.g. Site survey Sunday' },
+              { name: 'nextActionDueDate', label: 'Next action due', kind: 'date', hint: 'Active deals need a next step, an owner & a due date — else they show as Needs Attention' },
+            ]}
+          />
           <div style={st.viewSwitch}>
-            <button type="button" onClick={() => setView('board')} style={view === 'board' ? st.viewOn : st.viewOff}>Board</button>
-            <button type="button" onClick={() => setView('list')} style={view === 'list' ? st.viewOn : st.viewOff}>List</button>
+            <button type="button" data-testid="pipeline-tab-board" onClick={() => setView('board')} style={view === 'board' ? st.viewOn : st.viewOff}>Board</button>
+            <button type="button" data-testid="pipeline-tab-list" onClick={() => setView('list')} style={view === 'list' ? st.viewOn : st.viewOff}>List</button>
           </div>
         </div>
       </div>
@@ -263,7 +322,7 @@ export default function PipelineWorkspace({
         </div>
       ) : (
         <div style={st.listWrap}>
-          <table style={st.table}>
+          <table style={st.table} data-testid="opportunities-list">
             <thead>
               <tr>{['Customer', 'Opportunity', 'Stage', 'Value', 'Owner', 'Expected close', 'Next action', ''].map((h) => <th key={h} style={st.th}>{h}</th>)}</tr>
             </thead>

@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import PipelineWorkspace, {
+  type PipelineAccount,
   type PipelineAtRisk,
   type PipelineLead,
   type PipelineOpp,
@@ -13,10 +14,13 @@ export const dynamic = 'force-dynamic';
 interface Pipeline { atRisk: PipelineAtRisk[] }
 
 export default async function PipelinePage() {
-  const [opportunities, leads, pipeline] = await Promise.all([
+  // Accounts are read for the Opportunity drawer's party picker only — a deal is linked to an
+  // existing account, never to a typed-in name.
+  const [opportunities, leads, pipeline, accounts] = await Promise.all([
     getJson<PipelineOpp[]>('/api/crm/opportunities'),
     getJson<PipelineLead[]>('/api/crm/leads'),
     getJson<Pipeline>('/api/crm/opportunities/pipeline'),
+    getJson<PipelineAccount[]>('/api/crm/accounts'),
   ]);
 
   return (
@@ -24,6 +28,7 @@ export default async function PipelinePage() {
       opportunities={opportunities ?? []}
       leads={leads ?? []}
       atRisk={pipeline?.atRisk ?? []}
+      accounts={accounts ?? []}
     />
   );
 }

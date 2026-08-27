@@ -4,7 +4,7 @@
      the ADR files in this folder are the source of truth (YAML frontmatter). Run
      `pnpm adr:new "<title>"` to reserve the next number safely — never pick one manually. -->
 
-19 decisions.
+21 decisions.
 
 | # | Decision | Status | Category | Date | Links (↦ supersedes · related) |
 |--:|---|---|---|---|---|
@@ -27,3 +27,5 @@
 | [0017](0017-metadata-driven-definitions.md) | Metadata-Driven Definitions | Accepted | Architecture | 2026-07-05 | 0006 0011 0012 0016 |
 | [0018](0018-compliance-core.md) | Compliance Core | Accepted | Architecture | 2026-08-10 | 0011 0012 0002 0004 |
 | [0019](0019-canonical-project-360-route.md) | Canonical Project 360 route and ownership | Accepted | — | 2026-08-16 | — |
+| [0020](0020-qualification-record-and-award-snapshot.md) | Qualification is an evidence-bearing record; qualification-at-award is an immutable snapshot | Accepted | — | 2026-08-26 | — |
+| [0021](0021-tender-award-evidence.md) | Tender Award Evidence and Governed Won Provenance | Accepted | Architecture | 2026-08-27 | 0020 |

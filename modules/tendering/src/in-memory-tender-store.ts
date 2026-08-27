@@ -2,6 +2,7 @@ import type { Id, Page, PageParams } from '@aura/shared';
 import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
+import type { TenderAwardEvidence } from './domain/tender-award-evidence';
 import type { TenderFilter, TenderStore } from './tender-store';
 
 /** Phase-0 tender store — keeps tenders in memory (no-DB boots). */
@@ -22,6 +23,14 @@ export class InMemoryTenderStore implements TenderStore {
 
   async updateWithClient(_tx: TxHandle | null, tender: Tender): Promise<void> {
     return this.update(tender);
+  }
+
+  /** Write-once, mirroring the SQL guard: evidence already present -> no change, `false`. */
+  async awardWithClient(_tx: TxHandle | null, id: Id, evidence: TenderAwardEvidence): Promise<boolean> {
+    const existing = this.tenders.get(id);
+    if (!existing || existing.awardEvidence) return false;
+    this.tenders.set(id, { ...existing, status: 'won', awardEvidence: evidence });
+    return true;
   }
 
   async get(id: Id): Promise<Tender | null> {

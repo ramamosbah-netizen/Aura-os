@@ -3,6 +3,7 @@ import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Tender } from './domain/tender';
+import { readTenderAwardEvidence, type TenderAwardEvidence } from './domain/tender-award-evidence';
 import type { TenderFilter, TenderStore } from './tender-store';
 
 interface Row {
@@ -21,10 +22,11 @@ interface Row {
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
+  award_evidence: unknown;
 }
 
 const COLS =
-  'id, tenant_id, company_id, title, reference, account_id, account_name, status, source, value, submission_deadline, source_opportunity_id, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, title, reference, account_id, account_name, status, source, value, submission_deadline, source_opportunity_id, owner_id, created_by, created_at, award_evidence';
 
 function rowToTender(r: Row): Tender {
   return {
@@ -43,6 +45,8 @@ function rowToTender(r: Row): Tender {
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    // Refuses anything it cannot fully parse -> null -> "award not evidenced" (ADR-0021).
+    awardEvidence: readTenderAwardEvidence(r.award_evidence),
   };
 }
 
@@ -61,8 +65,8 @@ export class PostgresTenderStore implements TenderStore {
 
   private insert(executor: Pool | PoolClient, t: Tender): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_tendering_tenders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [t.id, t.tenantId, t.companyId, t.title, t.reference, t.accountId, t.accountName, t.status, t.source, t.value, t.submissionDeadline, t.sourceOpportunityId, t.ownerId, t.createdBy, t.createdAt],
+      `INSERT INTO public.aura_tendering_tenders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [t.id, t.tenantId, t.companyId, t.title, t.reference, t.accountId, t.accountName, t.status, t.source, t.value, t.submissionDeadline, t.sourceOpportunityId, t.ownerId, t.createdBy, t.createdAt, t.awardEvidence ? JSON.stringify(t.awardEvidence) : null],
     );
   }
 
@@ -83,6 +87,24 @@ export class PostgresTenderStore implements TenderStore {
       `UPDATE public.aura_tendering_tenders SET title=$2, reference=$3, account_id=$4, account_name=$5, status=$6, source=$7, value=$8, owner_id=$9, submission_deadline=$10, source_opportunity_id=$11 WHERE id=$1`,
       [t.id, t.title, t.reference, t.accountId, t.accountName, t.status, t.source, t.value, t.ownerId, t.submissionDeadline, t.sourceOpportunityId],
     );
+  }
+
+  /**
+   * ADR-0021 — capture the customer's award evidence AND the `won` transition in one statement.
+   *
+   * `WHERE award_evidence IS NULL` is the write-once guard: a replay of the same award matches no
+   * row, so it reports `false` instead of overwriting history. Note this column is absent from
+   * `upd()` above ON PURPOSE — an ordinary tender edit has no way to reach it, so immutability does
+   * not depend on every future caller remembering to preserve it.
+   */
+  async awardWithClient(tx: TxHandle | null, id: Id, evidence: TenderAwardEvidence): Promise<boolean> {
+    const executor: Pool | PoolClient = tx === null ? this.pool : (tx as PoolClient);
+    const res = await executor.query(
+      `UPDATE public.aura_tendering_tenders SET status='won', award_evidence=$2
+         WHERE id=$1 AND award_evidence IS NULL`,
+      [id, JSON.stringify(evidence)],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   async get(id: Id): Promise<Tender | null> {

@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Put, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -54,6 +54,24 @@ class SubmitTenderDto {
   @IsOptional() @IsString() addendaAcknowledged?: string;
   @IsOptional() @IsString() validUntil?: string;
   @IsOptional() @IsString() notes?: string;
+}
+
+/**
+ * ADR-0021 — the customer's award evidence. MINIMUM structured evidence is money + currency +
+ * award date; the reference and document are richer provenance and are deliberately optional in v1,
+ * because a genuine award can exist without a clean reference number.
+ *
+ * `@Min(0)` states THE ZERO RULE at the HTTP boundary: a real 0 is a valid award, a negative one is
+ * not. The same rule is restated in the domain factory (which every internal caller hits) and again
+ * as a CHECK constraint in migration 0253 — three boundaries, one rule, the pattern migration 0252
+ * established for win_probability.
+ */
+class AwardTenderDto {
+  @IsNumber() @Min(0) awardedValue!: number;
+  @IsString() currency!: string;
+  @IsString() awardedAt!: string;
+  @IsOptional() @IsString() awardReference?: string;
+  @IsOptional() @IsString() evidenceDocumentId?: string;
 }
 
 /** Tendering API — stamps tenant/actor from context, delegates to TenderService. */
@@ -111,8 +129,10 @@ export class TenderingController {
 
   /**
    * PATCH /api/tendering/tenders/:id/status
-   * Transition a tender's status. Setting status to 'won' triggers the deal chain:
-   * tender.awarded → auto-create Contract.
+   * Transition a tender's status.
+   *
+   * ADR-0021 — `won` is NOT available here: a win is a customer award and must carry its evidence.
+   * The service rejects it; use POST :id/award below.
    */
   @Patch(':id/status')
   async changeStatus(
@@ -123,6 +143,46 @@ export class TenderingController {
     const found = await this.tenders.get(id);
     if (!found) throw new NotFoundException(`tender ${id} not found`);
     return this.tenders.changeStatus(id, dto.status);
+  }
+
+  /**
+   * POST /api/tendering/tenders/:id/award — ADR-0021: the single governed path to `won`.
+   *
+   * Validates the customer's award evidence, persists it, transitions the tender and emits
+   * `tendering.tender.awarded` in ONE transaction. The event then drives the deal chain: the Contract
+   * is auto-created (inheriting the approved commercial baseline, unchanged), and the source
+   * Opportunity closes Won with `awardSource='tender_award'` and the AWARDED value as its contracted
+   * value — GOVERNED_WON, on the same footing as an accepted quotation.
+   *
+   * A tender awarded without this evidence stays "award not evidenced" (LEGACY_WON), by design.
+   */
+  @Post(':id/award')
+  async award(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: AwardTenderDto,
+  ): Promise<Tender> {
+    const found = await this.tenders.get(id);
+    if (!found) throw new NotFoundException(`tender ${id} not found`);
+    // WHO captured it — from the request context, never from the body: a client must not be able to
+    // attribute an award capture to someone else.
+    //
+    // No `'system'` fallback. A governed customer award must carry a REAL identity for whoever
+    // recorded the evidence; substituting a placeholder would put an unattributable award into the
+    // audit trail while looking captured. If a system-generated award is ever needed it gets its own
+    // explicit source and path, rather than impersonating a user that does not exist.
+    const capturedBy = this.tenant.get().actorId;
+    if (!capturedBy) {
+      throw new BadRequestException('Capturing award evidence requires an authenticated user');
+    }
+
+    return this.tenders.award(id, {
+      awardedValue: dto.awardedValue,
+      currency: dto.currency,
+      awardedAt: dto.awardedAt,
+      awardReference: dto.awardReference ?? null,
+      evidenceDocumentId: dto.evidenceDocumentId ?? null,
+      capturedBy,
+    });
   }
 
   /**

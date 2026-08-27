@@ -3,6 +3,7 @@ import { assertSameTenant, type Id, makeEvent, newId, sameTenantOrNull } from '@
 import { AuditService, CommandBus, EVENT_STORE, type EventStore, NumberingService, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTender } from './domain/tender';
 import { checkTenderTransition, tenderGateMessage, type TenderGateEvidence } from './domain/tender-gate';
+import { makeTenderAwardEvidence, type NewTenderAwardEvidence, type TenderAwardEvidence } from './domain/tender-award-evidence';
 import { makeTenderSubmission, type NewTenderSubmission, type TenderSubmission } from './domain/submission';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
@@ -193,6 +194,21 @@ export class TenderService implements OnModuleInit {
     // by construction; a status-only caller just gets a record with no channel details.
     if (status === 'submitted') return (await this.submit(id)).tender;
 
+    // ADR-0021 — `won` is NOT a status you flip. A tender win is a customer award, and an award
+    // without captured evidence cannot produce a trustworthy contracted value. `award()` is the one
+    // governed path: it validates the evidence, persists it, transitions and emits in a single
+    // transaction, so no window exists in which a deal is Won while its evidence is half-captured.
+    //
+    // No `closeWonUnevidenced()` companion is offered, deliberately: an audit of every caller found
+    // none that needs one. Unevidenced wins still exist — historical rows, and the deal-chain
+    // auto-tender that is BORN `won` via create() — and they keep reading LEGACY_WON, which is the
+    // honest answer rather than a failure.
+    if (status === 'won') {
+      throw new Error(
+        "A tender can only be won through the governed award command: capture the customer's award evidence (awarded value, currency and award date) via award()",
+      );
+    }
+
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
 
     const evidence = await this.tenderEvidence(existing.tenantId, id);
@@ -201,8 +217,9 @@ export class TenderService implements OnModuleInit {
 
     const updated: Tender = { ...existing, status };
 
-    const eventType = status === 'won' ? TENDER_EVENT.awarded
-      : status === 'lost' ? TENDER_EVENT.lost
+    // `won` never reaches here — the governed-award guard above rejects it, so `awarded` is emitted
+    // only by award(), which is what makes "an awarded event always carries award evidence" true.
+    const eventType = status === 'lost' ? TENDER_EVENT.lost
       // `submitted` never reaches here — the early return above routes it through submit().
       : status === 'declined' ? TENDER_EVENT.declined
       // Entering `estimating` IS the go/conditional bid decision being acted on (§2.2 bid.decided);
@@ -236,6 +253,103 @@ export class TenderService implements OnModuleInit {
       await this.events.appendWithClient(handle, [event]);
     });
     this.logger.log(`Tender ${updated.title} → ${status}`);
+    return updated;
+  }
+
+  /**
+   * ADR-0021 — AWARD the tender: the single governed path to `won`.
+   *
+   * One command, one transaction: validate the customer's award evidence, persist it, transition the
+   * tender and emit `tendering.tender.awarded` together. Splitting this into "close the tender, then
+   * add evidence later" would leave a window in which the deal is Won while its award evidence is
+   * half-captured — and the downstream reactors would run in exactly that window.
+   *
+   * WHAT IS BEING CAPTURED is what the CUSTOMER awarded. Not `tender.value` (our estimate), not the
+   * submitted bid (what we offered), not a BOQ or estimate total (our build-up). None of those is an
+   * award, and none of them may ever be substituted for one.
+   *
+   * IDEMPOTENT: the store's capture is `WHERE award_evidence IS NULL`, so a redelivered or repeated
+   * award reports a replay and returns the tender unchanged rather than overwriting the original
+   * award — a second award must never silently rewrite the first one's provenance.
+   *
+   * The `won` gate still applies. Award evidence justifies the win; it does not excuse a tender that
+   * was never submitted.
+   */
+  async award(id: Id, evidence: NewTenderAwardEvidence): Promise<Tender> {
+    // Validate BEFORE anything else: an invalid award must not reach a gate check, a store or a bus.
+    const captured: TenderAwardEvidence = makeTenderAwardEvidence(evidence);
+
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
+
+    // Already evidenced. Two very different situations share this branch and must NOT share an
+    // outcome:
+    //   · the SAME award arriving twice (a retry, an at-least-once redelivery) — idempotent no-op
+    //   · a DIFFERENT award for a tender already awarded — a genuine conflict
+    // Returning the stored tender for both would mean a caller who submitted a different amount got
+    // a 200 and a body quietly contradicting what they sent. Not overwriting is necessary but not
+    // sufficient: the conflict has to be visible. `already` classifies to 409.
+    if (existing.awardEvidence) {
+      const prior = existing.awardEvidence;
+      const sameAward =
+        prior.awardedValue === captured.awardedValue &&
+        prior.currency === captured.currency &&
+        prior.awardedAt === captured.awardedAt &&
+        prior.awardReference === captured.awardReference &&
+        prior.evidenceDocumentId === captured.evidenceDocumentId;
+      if (sameAward) {
+        this.logger.log(`Tender ${existing.title} — identical award replayed, ignored (idempotent)`);
+        return existing;
+      }
+      throw new Error(
+        `Tender has already been awarded (${prior.currency} ${prior.awardedValue} on ${prior.awardedAt}): ` +
+          'award evidence is captured once and never rewritten',
+      );
+    }
+
+    const gate = await this.tenderEvidence(existing.tenantId, id);
+    const check = checkTenderTransition(existing, 'won', gate);
+    if (!check.allowed) throw new Error(tenderGateMessage('won', check.gaps));
+
+    const updated: Tender = { ...existing, status: 'won', awardEvidence: captured };
+
+    const event = makeEvent({
+      type: TENDER_EVENT.awarded,
+      tenantId: updated.tenantId,
+      companyId: updated.companyId,
+      actorId: captured.capturedBy,
+      aggregateType: 'tendering.tender',
+      aggregateId: updated.id,
+      payload: {
+        title: updated.title,
+        status: updated.status,
+        // The tender's own ESTIMATE. Kept because the contract reactor still falls back to it when
+        // no baseline exists — and named `value` there exactly as before, so this stays compatible.
+        // It is NOT the award: consumers read `awardedValue` for that, or the tender itself.
+        value: updated.value,
+        bidRecommendation: gate.bidRecommendation ?? null,
+        account: updated.accountId ? { id: updated.accountId, name: updated.accountName } : null,
+        // ADR-0021 — the award facts on the wire, so the event is self-describing. A subscriber must
+        // still RE-READ the live tender before acting on them (the Slice 9 rule): the payload is a
+        // snapshot of one moment on a bus that delivers at-least-once and out of order.
+        awardedValue: captured.awardedValue,
+        currency: captured.currency,
+        awardedAt: captured.awardedAt,
+        awardReference: captured.awardReference,
+        evidenceDocumentId: captured.evidenceDocumentId,
+      },
+    });
+
+    await this.tx.run(async (handle) => {
+      // Write-once capture; `false` means another writer got there first inside this window.
+      const stamped = await this.store.awardWithClient(handle, id, captured);
+      if (!stamped) throw new Error('Tender has already been awarded: award evidence is captured once and never rewritten');
+      await this.events.appendWithClient(handle, [event]);
+    });
+
+    this.logger.log(
+      `Tender ${updated.title} AWARDED — ${captured.currency} ${captured.awardedValue} (excl. VAT) at ${captured.awardedAt}` +
+        (captured.awardReference ? `, ref ${captured.awardReference}` : ', no reference captured'),
+    );
     return updated;
   }
 

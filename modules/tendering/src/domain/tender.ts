@@ -1,4 +1,5 @@
 import { type Id, newId } from '@aura/shared';
+import type { TenderAwardEvidence } from './tender-award-evidence';
 
 // Tendering domain — framework-free. A Tender is a bid/proposal in response to a
 // client opportunity: the second link in the deal chain (CRM → Tender → Contract →
@@ -54,6 +55,13 @@ export interface Tender {
   /** Opportunity this tender was auto-created from (deal chain), reference not join. */
   sourceOpportunityId: Id | null;
   ownerId: Id | null;
+  /**
+   * ADR-0021 — what the CUSTOMER awarded, captured with the award itself. `null` means the win
+   * is NOT evidenced: the deal reads LEGACY_WON, which is the honest answer, not a failure.
+   * NEVER derived from `value` (our estimate) or a submitted bid (what we offered).
+   * Immutable once captured — enforced by the database, not by service discipline.
+   */
+  awardEvidence: TenderAwardEvidence | null;
   createdAt: string;
   createdBy: Id | null;
 }
@@ -90,6 +98,9 @@ export function makeTender(input: NewTender): Tender {
     submissionDeadline: input.submissionDeadline ?? null,
     sourceOpportunityId: input.sourceOpportunityId ?? null,
     ownerId: input.ownerId ?? null,
+    // Never born evidenced: evidence is captured by the governed award command, in the same
+    // transaction as the transition it justifies.
+    awardEvidence: null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };

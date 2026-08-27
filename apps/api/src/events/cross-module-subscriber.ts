@@ -76,21 +76,62 @@ export class CrossModuleSubscriber implements OnModuleInit {
    * the programmatic close passes the same gate a human would. No-ops when the tender has no source
    * opportunity or the deal is already closed — making an at-least-once redelivery idempotent.
    */
-  private async closeSourceOpportunity(tenderId: string, outcome: 'won' | 'lost'): Promise<void> {
+  private async closeSourceOpportunity(
+    tenderId: string,
+    outcome: 'won' | 'lost',
+    awardedAt?: string,
+  ): Promise<void> {
     const tender = await this.tenders.get(tenderId);
     if (!tender?.sourceOpportunityId) return; // a tender with no CRM deal behind it
     const opp = await this.opportunities.get(tender.sourceOpportunityId);
     if (!opp || opp.stage === 'won' || opp.stage === 'lost') return; // gone, or already closed
     const ref = tender.reference ?? tender.id;
     const reason = outcome === 'won' ? `Won on tender ${ref}` : `Lost on tender ${ref}`;
+
+    // ADR-0021 — AWARD PROVENANCE comes from the CUSTOMER'S AWARD EVIDENCE, and from nothing else.
+    //
+    // `this.tenders.get()` above is a LIVE re-read of the tender, not the event payload (the Slice 9
+    // rule): the bus delivers at-least-once and out of order, so a payload is a snapshot of one past
+    // moment while the aggregate is the current truth. The evidence is read from that live record.
+    //
+    // WHAT IS NOT A CANDIDATE, and why this reactor no longer consults the commercial baseline:
+    // ADR-0021 separates two concepts that were previously collapsed into one number. The Approved
+    // Commercial Baseline is the OFFER/commercial basis — what we were willing to be paid — and it
+    // still governs the CONTRACT created from this same event (see the contract reactor below, which
+    // is deliberately unchanged). It is not evidence of what the customer awarded. Nor is
+    // `tender.value` (our mutable estimate) or a submitted bid (what we offered).
+    //
+    // So a tender won with NO captured evidence claims no provenance and the deal reads LEGACY_WON —
+    // "won, award not evidenced" — even when a baseline exists. Visible, never papered over.
+    const evidence = outcome === 'won' ? tender.awardEvidence : null;
+    const award = evidence
+      ? {
+          contractedValue: evidence.awardedValue,
+          // The CUSTOMER's award date, carried from the evidence. Not this reactor's `now()`, which
+          // would date the award by however long the bus took, and not `awardedAt` off the event.
+          awardedAt: evidence.awardedAt,
+          valueSource: 'customer_award_evidence' as const,
+          currency: evidence.currency,
+          awardReference: evidence.awardReference,
+          evidenceDocumentId: evidence.evidenceDocumentId,
+        }
+      : null;
+
     // The tender OWNS this deal's outcome — the public update refuses manual won/lost, so the single
     // sanctioned writer is the dedicated internal command. Idempotent (no-op if already closed).
     await this.opportunities.applyTenderOutcome(
       tender.sourceOpportunityId,
       outcome,
-      { reason, value: tender.value },
+      { reason, value: tender.value, award },
     );
-    this.logger.log(`⚡ tender.${outcome} → Opportunity "${opp.title}" (${opp.id}) closed ${outcome} (tender ${ref})`);
+    this.logger.log(
+      `⚡ tender.${outcome} → Opportunity "${opp.title}" (${opp.id}) closed ${outcome} (tender ${ref})` +
+        (outcome === 'won'
+          ? award
+            ? ` — award evidenced by the customer: ${award.currency} ${award.contractedValue} (excl. VAT) awarded ${award.awardedAt}`
+            : ' — no customer award evidence captured on the tender; the win is recorded WITHOUT award provenance (LEGACY_WON)'
+          : ''),
+    );
   }
 
   /**
@@ -396,7 +437,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // already closed, so an at-least-once redelivery is safe.
     this.bus.subscribe('tendering.tender.awarded', async (e: DomainEvent) => {
       try {
-        await this.closeSourceOpportunity(e.aggregateId, 'won');
+        await this.closeSourceOpportunity(e.aggregateId, 'won', e.occurredAt);
       } catch (err) {
         this.logger.error(`Failed to close opportunity Won from tender.awarded: ${err}`);
       }

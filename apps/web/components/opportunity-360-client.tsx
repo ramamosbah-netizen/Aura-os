@@ -17,7 +17,7 @@ import {
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { qualificationBadge } from '@/lib/qualification-badge';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
-import { describeQualification, missingFacts, nextBestAction, resolveEffectiveWinProbability, evaluateDealRules, assessDeal, qualificationCoverageLow, type QualificationView, type DealFacts, type MissingFactKey, type Finding } from '@aura/shared';
+import { describeQualification, missingFacts, nextBestAction, resolveEffectiveWinProbability, evaluateDealRules, assessDeal, qualificationCoverageLow, QUALIFICATION_STATUS_LABEL, QUALIFICATION_SOURCE_LABEL, type QualificationView, type QualificationAtAward, type DealFacts, type MissingFactKey, type Finding } from '@aura/shared';
 
 // Opportunity 360 — the deal command center. Header (value/close/owner/route) →
 // qualification (BANT, editable) → progression (opportunity → tender? → quotation
@@ -46,7 +46,12 @@ interface Payload {
   tenders: TenderLite[];
   quotations: QuotationLite[];
   activities: ActivityRec[];
-  qualification: { budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number; view: QualificationView };
+  qualification: {
+    budget: boolean; authority: boolean; need: boolean; timeline: boolean; score: number; view: QualificationView;
+    /** ADR-0020 — the immutable snapshot, or null = NOT CAPTURED. Never substituted by `view`. */
+    atAward: { snapshot: QualificationAtAward; view: QualificationView } | null;
+    provenance: 'AT_AWARD' | 'NOT_CAPTURED' | 'CURRENT';
+  };
   route: 'tender' | 'direct';
   progression: Step[];
   outcome: { status: 'open' | 'won' | 'lost'; lossReason: string | null; contractedValue: number | null; awardSource: string | null };
@@ -76,11 +81,17 @@ const EXECUTION_OPTIONS = [
   { value: 'amc_renewal', label: 'AMC renewal' },
   { value: 'variation_order', label: 'Variation order' },
 ];
-const BANT: Array<{ key: 'budget' | 'authority' | 'need' | 'timeline'; field: string; label: string }> = [
-  { key: 'budget', field: 'budgetConfirmed', label: 'Budget' },
-  { key: 'authority', field: 'authorityConfirmed', label: 'Authority' },
-  { key: 'need', field: 'needConfirmed', label: 'Need' },
-  { key: 'timeline', field: 'timelineConfirmed', label: 'Timeline' },
+const QUALIFICATION_STATUSES = ['UNKNOWN', 'CONFIRMED', 'CONCERN', 'BLOCKER'] as const;
+const QUALIFICATION_SOURCES = ['customer_stated', 'document', 'meeting', 'internal_assessment', 'checkbox'] as const;
+
+// The boolean `field` names are gone from here: the card writes through the qualification record,
+// and the four columns are now its derived shadow (ADR-0020). Reintroducing a direct boolean write
+// would re-open the drift this replaced.
+const BANT: Array<{ key: 'budget' | 'authority' | 'need' | 'timeline'; label: string }> = [
+  { key: 'budget', label: 'Budget' },
+  { key: 'authority', label: 'Authority' },
+  { key: 'need', label: 'Need' },
+  { key: 'timeline', label: 'Timeline' },
 ];
 
 export default function Opportunity360Client({ opportunityId }: { opportunityId: string }) {
@@ -199,6 +210,26 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     } finally { setBusy(false); }
   }, [opportunityId, load]);
 
+  // ADR-0020 — the evidence-bearing writer. Separate from `patch` because it is a different
+  // contract, not a different field: it can say CONCERN and BLOCKER (which no checkbox can) and it
+  // records WHY. Whatever it writes is what a future award will freeze, so an unevidenced tick here
+  // becomes an unevidenced tick in the permanent record.
+  const patchQualification = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/crm/opportunities/${opportunityId}/qualification`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setErr(d.message || d.error || 'Qualification update refused');
+        return false;
+      }
+      await load();
+      return true;
+    } finally { setBusy(false); }
+  }, [opportunityId, load]);
+
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading opportunity…'}</p>;
 
   const { opportunity: o, account, stakeholders, tenders, quotations, activities, qualification, route, progression, outcome, nextAction, attention, stageGate, facts } = data;
@@ -216,12 +247,14 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   // resolved boolean to a tone.
   const weakQualification = qualificationCoverageLow(facts);
   // A closed deal's qualification is historical evidence, so the badge states it without praising
-  // or alarming — see lib/qualification-badge.
+  // or alarming — see lib/qualification-badge. `atAward` is what unlocks the "at award" wording, and
+  // it carries the snapshot's OWN counts: the badge can never print history over current numbers.
   const bantBadge = qualificationBadge({
     confirmed: facts.qualification.confirmed,
     total: facts.qualification.dimensions.length,
     terminal: facts.outcome.terminal,
     weak: weakQualification,
+    atAward: facts.qualification.atAward,
   });
 
   const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
@@ -365,7 +398,15 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
     { label: 'Owner', value: o.ownerId ?? 'Unassigned' },
     // null = award provenance without a resolved contracted value (a real inconsistency) — show it
     // as such, never as "AED 0". 0 with no award is a legitimate legacy/uncontracted zero.
-    { label: 'Contracted', value: outcome.contractedValue == null ? 'AED — (award value missing)' : `AED ${aed2(outcome.contractedValue)}`, tone: outcome.contractedValue == null ? 'warn' : outcome.contractedValue > 0 ? 'good' : 'neutral' },
+    // ADR-0021 money vocabulary — this ONE field carries two different measures depending on the
+    // lifecycle (award value when the award is documented, the downstream contract sum otherwise),
+    // so it must not present both under one name. Naming it by its actual basis is the whole rule:
+    // Quoted Total (incl. VAT) · Award Value (excl. VAT) · Contract Value are never interchangeable.
+    {
+      label: lifecycle.awardDocumented ? 'Award Value (excl. VAT)' : 'Contract Value',
+      value: outcome.contractedValue == null ? 'AED — (award value missing)' : `AED ${aed2(outcome.contractedValue)}`,
+      tone: outcome.contractedValue == null ? 'warn' : outcome.contractedValue > 0 ? 'good' : 'neutral',
+    },
   ];
 
   const pendingApprovals = quotations.filter((q) => q.status === 'internal_review');
@@ -446,7 +487,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
 
           <RecordCard title="Win / Loss intelligence">
             <div style={{ fontSize: 14, fontWeight: 700, color: OUTCOME.color, marginBottom: 6 }}>● {OUTCOME.label}</div>
-            {outcome.status === 'won' && <p style={st.muted}>Contracted value {outcome.contractedValue == null ? '— (award value missing)' : `AED ${aed2(outcome.contractedValue)}`}{o.competitors ? ` · beat: ${o.competitors}` : ''}.</p>}
+            {outcome.status === 'won' && <p style={st.muted}>{lifecycle.awardDocumented ? 'Award value (excl. VAT)' : 'Contract value'} {outcome.contractedValue == null ? '— (award value missing)' : `AED ${aed2(outcome.contractedValue)}`}{o.competitors ? ` · beat: ${o.competitors}` : ''}.</p>}
             {outcome.status === 'lost' && (
               <>
                 <p style={{ ...st.muted, marginTop: 0 }}>Reason we lost:</p>
@@ -467,22 +508,93 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       )}
 
       {tab === 'overview' && (
-        <RecordCard title="Qualification (BANT)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {BANT.map((b) => (
-              <label key={b.key} style={st.checkRow}>
-                <input type="checkbox" disabled={busy} checked={qualification[b.key]} onChange={(e) => void patch({ [b.field]: e.target.checked })} />
-                <span>{b.label} confirmed</span>
-              </label>
-            ))}
-          </div>
-          <p style={{ ...st.muted, marginTop: 8 }}>{describeQualification(qualification.view)}</p>
-          {qualification.view.unevidenced > 0 && (
-            <p style={{ ...st.muted, marginTop: 4 }}>
-              {qualification.view.unevidenced} confirmed without recorded evidence — a tick nobody can audit.
-            </p>
+        <>
+          {/*
+            ADR-0020 — after the pursuit ends, qualification stops being a task and becomes evidence.
+            History and the live record are shown as TWO cards because they are two different facts:
+            the record keeps being learned after a deal closes, and collapsing them is exactly what
+            let a closed deal's qualification silently change from 1/4 to 0/4 with nothing to compare
+            it against. When no snapshot exists the card says so — it never borrows the numbers below.
+          */}
+          {qualification.provenance !== 'CURRENT' && (
+            <RecordCard title="Qualification at award">
+              {qualification.atAward ? (
+                <>
+                  <p style={{ fontSize: 14, fontWeight: 700, marginTop: 0, marginBottom: 6 }}>
+                    {qualification.atAward.view.confirmed} of {qualification.atAward.view.total} confirmed at award
+                  </p>
+                  <p style={{ ...st.muted, marginTop: 0 }}>
+                    Captured {d(qualification.atAward.snapshot.capturedAt)} · {qualification.atAward.snapshot.awardSource.replace(/_/g, ' ')}. This record is immutable.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                    {qualification.atAward.view.dimensions.map((dim) => (
+                      <div key={dim.key} style={{ fontSize: 12 }}>
+                        <b style={{ color: 'var(--text)' }}>{dim.label}</b>
+                        <span style={{ color: 'var(--muted)' }}> — {QUALIFICATION_STATUS_LABEL[dim.status]}</span>
+                        {dim.source && <span style={{ color: 'var(--muted)' }}> · {QUALIFICATION_SOURCE_LABEL[dim.source]}</span>}
+                        {/* A confirmation with nothing attached is named as such rather than left to look verified. */}
+                        {dim.status === 'CONFIRMED' && !dim.evidence && <span style={{ color: 'var(--muted)' }}> · never independently verified</span>}
+                        {dim.evidence && <span style={{ color: 'var(--muted)' }}> · {dim.evidence}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  {qualification.atAward.view.confirmed !== qualification.view.confirmed && (
+                    <p style={{ ...st.muted, marginTop: 8 }}>
+                      The current record reads {qualification.view.confirmed}/{qualification.view.total} — it changed after the deal closed. The figure above is the one that stands for this award.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p style={{ ...st.muted, marginTop: 0 }}>
+                  Not captured. This deal was closed without recorded award provenance, so AURA holds no qualification record from the moment of award — and will not infer one from data that has been editable ever since. Only the current record below can be shown.
+                </p>
+              )}
+            </RecordCard>
           )}
-        </RecordCard>
+
+          <RecordCard title={facts.outcome.terminal ? 'Qualification record (current)' : 'Qualification (BANT)'}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {BANT.map((b) => {
+                const dim = qualification.view.dimensions.find((x) => x.key === b.key);
+                const status = dim?.status ?? 'UNKNOWN';
+                return (
+                  <div key={b.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, minWidth: 74 }}>{b.label}</span>
+                      {/* Four states, not a tick: "not established" is an absence and must stay
+                          distinguishable from a concern and from a blocker. */}
+                      <select style={st.select} disabled={busy} value={status}
+                        onChange={(e) => void patchQualification({ [b.key]: { status: e.target.value } })}>
+                        {QUALIFICATION_STATUSES.map((sv) => <option key={sv} value={sv}>{QUALIFICATION_STATUS_LABEL[sv]}</option>)}
+                      </select>
+                      <select style={st.select} disabled={busy} value={dim?.source ?? ''}
+                        onChange={(e) => void patchQualification({ [b.key]: { source: e.target.value || null } })}>
+                        <option value="">Source not recorded</option>
+                        {QUALIFICATION_SOURCES.map((sv) => <option key={sv} value={sv}>{QUALIFICATION_SOURCE_LABEL[sv]}</option>)}
+                      </select>
+                    </div>
+                    {status === 'CONFIRMED' && (
+                      <input key={`${b.key}-${dim?.evidence ?? ''}`} defaultValue={dim?.evidence ?? ''} disabled={busy} style={st.input}
+                        placeholder={`What makes ${b.label.toLowerCase()} believable? e.g. PO-4471, minutes of 12 Aug`}
+                        onBlur={(e) => { if (e.target.value !== (dim?.evidence ?? '')) void patchQualification({ [b.key]: { evidence: e.target.value } }); }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{ ...st.muted, marginTop: 8 }}>{describeQualification(qualification.view)}</p>
+            {qualification.view.unevidenced > 0 && (
+              <p style={{ ...st.muted, marginTop: 4 }}>
+                {qualification.view.unevidenced} confirmed without recorded evidence — a tick nobody can audit.
+              </p>
+            )}
+            {facts.outcome.terminal && (
+              <p style={{ ...st.muted, marginTop: 4 }}>
+                The pursuit is over, so this is a record rather than a task. Editing it is allowed and audited; it does not change what was captured at award.
+              </p>
+            )}
+          </RecordCard>
+        </>
       )}
 
       {tab === 'commercial' && <CommercialPanel opportunityId={o.id} />}

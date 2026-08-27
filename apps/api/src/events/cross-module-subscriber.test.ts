@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { makeEvent } from '@aura/shared';
+import { makeEvent, resolveDealOutcome } from '@aura/shared';
 import {
   EventBus,
   InMemoryEventStore,
@@ -234,6 +234,51 @@ async function makeTenderSubmittable(h: ReturnType<typeof buildHarness>, tenderI
   await h.tenders.changeStatus(tenderId, 'submitted');
 }
 
+/** The customer's award date. Deliberately in the past so "this is not a now() stamp" stays provable. */
+const CUSTOMER_AWARDED_AT = '2026-08-21T07:30:00.000Z';
+
+/**
+ * ADR-0021 — award a tender the ONLY governed way: with the customer's award evidence. Reaching
+ * `won` by flipping status is refused by the service, so every deal-chain test now goes through here.
+ */
+async function awardTender(
+  h: ReturnType<typeof buildHarness>,
+  tenderId: string,
+  over: Partial<{ awardedValue: number; currency: string; awardedAt: string; awardReference: string | null }> = {},
+) {
+  return h.tenders.award(tenderId, {
+    awardedValue: 1_000_000,
+    currency: 'AED',
+    awardedAt: CUSTOMER_AWARDED_AT,
+    awardReference: 'LOA-2026-77',
+    capturedBy: 'u-bid-manager',
+    ...over,
+  });
+}
+
+/**
+ * A LEGACY / pre-ADR-0021 award: the `awarded` event fires for a tender that carries no customer
+ * award evidence. This is how historical rows (won before evidence existed) still reach the reactor,
+ * and it is the only remaining way to produce an unevidenced win — the governed command cannot.
+ */
+async function awardWithoutEvidence(h: ReturnType<typeof buildHarness>, tenderId: string): Promise<void> {
+  const tender = (await h.tenders.get(tenderId))!;
+  await h.bus.publish(makeEvent({
+    type: 'tendering.tender.awarded',
+    tenantId: tender.tenantId,
+    companyId: tender.companyId,
+    actorId: null,
+    aggregateType: 'tendering.tender',
+    aggregateId: tender.id,
+    payload: {
+      title: tender.title,
+      status: 'won',
+      value: tender.value,
+      account: tender.accountId ? { id: tender.accountId, name: tender.accountName } : null,
+    },
+  }));
+}
+
 describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () => {
   let h: ReturnType<typeof buildHarness>;
   beforeEach(() => {
@@ -265,7 +310,7 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
 
     // 2. Tender submitted, then awarded → Contract (draft) AND the source opportunity closes Won.
     await makeTenderSubmittable(h, tender.id);
-    await h.tenders.changeStatus(tender.id, 'won');
+    await awardTender(h, tender.id);
     expect((await h.opportunities.get(opp.id))?.stage).toBe('won'); // tender.awarded → close-opportunity
     const contracts = await h.contracts.list({ tenderId: tender.id });
     expect(contracts).toHaveLength(1);
@@ -294,7 +339,7 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     const tender = await priced.tenders.create({ tenantId, title: 'Tender: Baselined Job', value: 1_400_000 });
     await priced.tenders.linkOpportunity(tender.id, opp.id);
     await makeTenderSubmittable(priced, tender.id);
-    await priced.tenders.changeStatus(tender.id, 'won');
+    await awardTender(priced, tender.id);
 
     const [contract] = await priced.contracts.list({ tenderId: tender.id });
     expect(contract.commercialBaselineId).toBe('baseline-77'); // was null before G-50
@@ -303,12 +348,107 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(priced.linkedContracts).toEqual([{ quotationId: 'q-tender-1', contractId: contract.id }]);
   });
 
+  // ADR-0021 — TENDER AWARD PROVENANCE from the CUSTOMER'S EVIDENCE, end to end through the real
+  // reactor.
+  //
+  // SEMANTIC CORRECTION, deliberate and NOT a refactor. The previous behaviour (shipped under the
+  // ADR-0020 follow-up) stamped provenance from the approved Commercial Baseline, so a baselined
+  // tender was GOVERNED_WON on the strength of OUR OWN approved offer. ADR-0021 separates the two
+  // concepts: the baseline is the offer/commercial basis and still governs the contract, while only
+  // the customer's captured award evidence is authority for what was awarded.
+  //
+  // The award value here (1,725,000) deliberately DIFFERS from the baseline (1,575,000) — that gap is
+  // the whole point. It proves the deal takes the awarded figure and not the approved offer, which no
+  // test could show while the two were the same number.
+  it('a tender award stamps provenance from the CUSTOMER award value, not the approved baseline', async () => {
+    const priced = buildHarness({ id: 'q-tender-2', status: 'accepted', baselineId: 'baseline-88', total: 1_575_000 });
+    const opp = await priced.opportunities.create({ tenantId, title: 'Evidenced Job', value: 1_400_000 });
+    const tender = await priced.tenders.create({ tenantId, title: 'Tender: Evidenced Job', value: 1_400_000 });
+    await priced.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(priced, tender.id);
+    await awardTender(priced, tender.id, { awardedValue: 1_725_000 });
+
+    const won = (await priced.opportunities.get(opp.id))!;
+    expect(won.stage).toBe('won');
+    expect(won.awardSource).toBe('tender_award');
+    expect(won.contractedValue).toBe(1_725_000);  // what the CUSTOMER awarded
+    expect(won.contractedValue).not.toBe(1_575_000); // NOT the approved baseline
+    expect(won.value).toBe(1_400_000);            // the headline is NOT overwritten by the award
+    // The award's own date, carried from the evidence — not the reactor's now().
+    expect(won.awardedAt).toBe(CUSTOMER_AWARDED_AT);
+    // The customer awarded the TENDER; there is no accepted quotation revision to name here.
+    expect(won.awardedQuotationId).toBeNull();
+
+    // SEPARATION OF CONCEPTS, asserted in one place: the CONTRACT still inherits the approved
+    // baseline (its offer basis, G-50) while the DEAL carries the customer's award value. They are
+    // allowed to differ, and before ADR-0021 they could not.
+    const [contract] = await priced.contracts.list({ tenderId: tender.id });
+    expect(contract.value).toBe(1_575_000);
+    expect(contract.commercialBaselineId).toBe('baseline-88');
+
+    // The win is evidenced, and the qualification-at-award snapshot follows from the provenance —
+    // with no tender-specific logic anywhere in the snapshot path.
+    const outcome = resolveDealOutcome(won);
+    expect(outcome.state).toBe('GOVERNED_WON');
+    expect(outcome.awardValue).toBe(1_725_000);
+    expect(won.qualificationAtAward).not.toBeNull();
+    expect(won.qualificationAtAward!.awardSource).toBe('tender_award');
+    expect(won.qualificationAtAward!.capturedAt).toBe(won.awardedAt);
+  });
+
+  // ADR-0021 — THE CONSEQUENCE, stated as a test: an approved baseline is NOT a substitute for
+  // customer award evidence. This deal has a fully approved, baselined quotation behind it and still
+  // reads LEGACY_WON, because nobody captured what the customer actually awarded.
+  it('a BASELINED tender awarded with no customer evidence still reads LEGACY_WON', async () => {
+    const priced = buildHarness({ id: 'q-tender-9', status: 'accepted', baselineId: 'baseline-99', total: 2_000_000 });
+    const opp = await priced.opportunities.create({ tenantId, title: 'Baselined but unevidenced', value: 1_900_000 });
+    const tender = await priced.tenders.create({ tenantId, title: 'Tender: Baselined unevidenced', value: 1_900_000 });
+    await priced.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(priced, tender.id);
+    await awardWithoutEvidence(priced, tender.id);
+
+    const won = (await priced.opportunities.get(opp.id))!;
+    expect(won.stage).toBe('won');
+    expect(won.awardSource).toBeNull();
+    expect(won.contractedValue).toBeNull();          // the 2M baseline did NOT become an award value
+    expect(resolveDealOutcome(won).state).toBe('LEGACY_WON');
+    expect(won.qualificationAtAward).toBeNull();
+
+    // …while the CONTRACT still inherits that baseline. The baseline kept its own job; it simply
+    // stopped doing a job that was never its own.
+    const [contract] = await priced.contracts.list({ tenderId: tender.id });
+    expect(contract.value).toBe(2_000_000);
+    expect(contract.commercialBaselineId).toBe('baseline-99');
+  });
+
+  // The other half of the invariant, through the real reactor: with no approved baseline there is no
+  // authoritative number, so no provenance is claimed. The tender's own ESTIMATE is not promoted —
+  // it is what the contract falls back to, which is a draft value, not a claim about what was awarded.
+  it('an unbaselined tender award records the win WITHOUT provenance rather than banking the estimate', async () => {
+    const opp = await h.opportunities.create({ tenantId, title: 'Unevidenced Job', value: 800_000 });
+    const tender = await h.tenders.create({ tenantId, title: 'Tender: Unevidenced Job', value: 800_000 });
+    await h.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(h, tender.id);
+    await awardWithoutEvidence(h, tender.id);
+
+    const won = (await h.opportunities.get(opp.id))!;
+    expect(won.stage).toBe('won');
+    expect(won.awardSource).toBeNull();
+    expect(won.contractedValue).toBeNull();   // the 800k estimate did NOT become a contracted value
+    expect(won.awardedAt).toBeNull();
+    expect(won.qualificationAtAward).toBeNull();
+    expect(resolveDealOutcome(won).state).toBe('LEGACY_WON');
+    // THE invariant, asserted where the wiring actually runs.
+    const outcome = resolveDealOutcome(won);
+    expect(outcome.awardDocumented && outcome.awardValue == null).toBe(false);
+  });
+
   it('still creates the contract from the tender value when the tender was never priced through a quotation', async () => {
     const opp = await h.opportunities.create({ tenantId, title: 'Unpriced Job', value: 800_000 });
     const tender = await h.tenders.create({ tenantId, title: 'Tender: Unpriced Job', value: 800_000 });
     await h.tenders.linkOpportunity(tender.id, opp.id);
     await makeTenderSubmittable(h, tender.id);
-    await h.tenders.changeStatus(tender.id, 'won');
+    await awardTender(h, tender.id);
 
     const [contract] = await h.contracts.list({ tenderId: tender.id });
     expect(contract.value).toBe(800_000);
@@ -323,8 +463,8 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     await h.tenders.linkOpportunity(tender.id, opp.id);
     await makeTenderSubmittable(h, tender.id);
 
-    await h.tenders.changeStatus(tender.id, 'won');
-    await h.tenders.changeStatus(tender.id, 'won');
+    await awardTender(h, tender.id);
+    await awardTender(h, tender.id); // replay: write-once, must not duplicate anything
     expect(await h.contracts.list({ tenderId: tender.id })).toHaveLength(1);
 
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
@@ -344,7 +484,7 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     const tender = await h.tenders.create({ tenantId, title: 'Tender: Downtown ELV', value: 800_000, accountId: 'acct-9', accountName: 'Nakheel PJSC' });
     await h.tenders.linkOpportunity(tender.id, opp.id);
     await makeTenderSubmittable(h, tender.id);
-    await h.tenders.changeStatus(tender.id, 'won');
+    await awardTender(h, tender.id);
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
     await h.contracts.changeStatus(contract.id, 'active');
     const project = (await h.projects.list({ contractId: contract.id }))[0];
@@ -455,7 +595,7 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     });
 
     await makeTenderSubmittable(h, tender.id);
-    await h.tenders.changeStatus(tender.id, 'won');
+    await awardTender(h, tender.id);
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
     await h.contracts.changeStatus(contract.id, 'active');
     const project = (await h.projects.list({ contractId: contract.id }))[0];

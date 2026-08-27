@@ -22,25 +22,35 @@ import { OPPORTUNITY_GOVERNANCE_RESOLVER, type OpportunityGovernanceResolver } f
  * and every money surface keys on `awardDocumented`. Binding them into a single required-field object
  * means the caller cannot supply one without the other, so that state is not reachable on this route.
  *
- * WHAT COUNTS AS THE VALUE. Not `tender.value` — the Tender aggregate documents that as the
- * "Estimated bid value", it is mutable, and it is the internal estimate rather than anything the
- * client awarded. Not the submitted bid either: that is what WE offered. The authoritative number is
- * the approved, immutable Commercial Baseline behind the tender's decided quotation (R3) — the same
- * number the auto-created Contract inherits from the same award, so the deal and its contract cannot
- * disagree about what was won. The caller resolves it, because only the app layer may read across the
- * tendering and quotation modules; this module states what it will accept.
+ * WHAT COUNTS AS THE VALUE (ADR-0021). Only what the CUSTOMER awarded — the Tender Award Evidence
+ * captured on the tender when it was awarded. Explicitly NOT `tender.value` (the Tender aggregate
+ * documents that as the mutable "Estimated bid value"), NOT the submitted bid or `ourBidValue` (what
+ * WE offered), and NOT a BOQ or estimate total (our own build-up).
+ *
+ * And deliberately NOT the Approved Commercial Baseline either. That baseline is not a rival source
+ * for this number, it is a DIFFERENT CONCEPT, and ADR-0021 separates the two rather than letting
+ * them compete for one field:
+ *
+ *   Approved Commercial Baseline  =  offer / commercial basis  -> still governs the CONTRACT (G-50)
+ *   Tender Award Evidence         =  customer award authority  -> governs THIS, the deal's provenance
+ *
+ * An approved offer is what we were willing to be paid; it is not proof of what the customer awarded.
+ * So a tender won WITHOUT captured evidence yields no provenance here and the deal reads LEGACY_WON,
+ * even when a baseline exists. That is the intended reading, not a gap.
  */
 export interface TenderAwardProvenance {
-  /** The authoritative contracted value. Required — provenance never travels without its number. */
+  /** The authoritative contracted value, excl. VAT. Required — provenance never travels without its number. */
   contractedValue: number;
-  /** When the award was DECIDED (the `tendering.tender.awarded` event's own timestamp). */
+  /** When the CUSTOMER awarded it, from the evidence — never the reactor's `now()`. */
   awardedAt: string;
-  /** How the value was established. One value today; named so a second source cannot arrive unlabelled. */
-  valueSource: 'commercial_baseline';
-  /** The immutable Commercial Baseline the value came from. */
-  baselineId: Id;
-  /** The quotation carrying that baseline — audit trail only; NOT `awardedQuotationId` (see below). */
-  quotationId: Id;
+  /** How the value was established. One value: the customer's own award evidence. */
+  valueSource: 'customer_award_evidence';
+  /** The award currency, carried so the number is never read under an assumed currency. */
+  currency: string;
+  /** PO / LOA / Award Letter reference, when the customer's award carried one. */
+  awardReference: string | null;
+  /** The supporting document in the DMS, when one exists. */
+  evidenceDocumentId: Id | null;
 }
 
 @Injectable()
@@ -288,23 +298,23 @@ export class OpportunityService {
    * reason (and, for a win, a value) the stage gate requires so the programmatic close passes the
    * same evidence gate a human would.
    *
-   * AWARD PROVENANCE (ADR-0020). A tender award IS an authoritative award, so when the caller can
-   * evidence one this stamps `awardSource: 'tender_award'` and captures the qualification snapshot
-   * exactly as the quotation path does. `detail.award` is that evidence, and it is a single
-   * indivisible object ON PURPOSE: `contractedValue` is a required field of it, so there is no way to
-   * express "tender provenance without a contracted value" — the combination `resolveDealOutcome`
-   * documents as an inconsistency that must stay visible is unreachable here BY CONSTRUCTION, not by
-   * a check a later edit could drop.
+   * AWARD PROVENANCE (ADR-0020, sourced per ADR-0021). A tender award IS an authoritative award, so
+   * when the caller can evidence one this stamps `awardSource: 'tender_award'` and captures the
+   * qualification snapshot exactly as the quotation path does. `detail.award` is that evidence, and
+   * it is a single indivisible object ON PURPOSE: `contractedValue` is a required field of it, so
+   * there is no way to express "tender provenance without a contracted value" — the combination
+   * `resolveDealOutcome` documents as an inconsistency that must stay visible is unreachable here BY
+   * CONSTRUCTION, not by a check a later edit could drop.
    *
-   * Without that evidence the deal still closes Won — a tender awarded with no priced, approved
-   * commercial baseline is a legitimate path — but it closes exactly as it always did, with no
-   * provenance, and reads `LEGACY_WON` ("Won — award not evidenced"). That is the honest reading: the
-   * award happened, and AURA holds no authoritative number for it.
+   * ADR-0021 fixes WHERE that evidence comes from: the customer's own Tender Award Evidence, never
+   * an approved commercial baseline. Those are two different concepts — the baseline is the offer
+   * basis and still governs the contract — so a tender won with no captured evidence closes Won with
+   * NO provenance and reads `LEGACY_WON` ("Won — award not evidenced"), even when a baseline exists.
+   * That is the honest reading: the award happened, and AURA holds no authoritative number for it.
    *
-   * `awardedQuotationId` stays null even when the value came from a quotation's baseline. That field
-   * means "the exact accepted quotation revision the customer awarded"; on this route the customer
-   * awarded the TENDER, and the baseline may sit on a quotation that was approved but never accepted.
-   * Where the number came from is recorded in the event payload instead, which can say it precisely.
+   * `awardedQuotationId` stays null on this route. That field means "the exact accepted quotation
+   * revision the customer awarded"; here the customer awarded the TENDER. The award's own reference
+   * (PO/LOA) travels in the event payload instead, which can say it precisely.
    */
   async applyTenderOutcome(
     id: Id,
@@ -333,6 +343,11 @@ export class OpportunityService {
                   // The AWARD's own timestamp, not this reactor's `now()`. The close is asynchronous;
                   // stamping `now` would date the award by however long the bus took to deliver it.
                   awardedAt: award.awardedAt,
+                  // STATED, not assumed. This field means "the exact accepted quotation revision the
+                  // customer awarded"; on this route the customer awarded the TENDER, so there is no
+                  // such revision. It was already null in practice — but a provenance invariant must
+                  // not rest on a field happening to stay null, so the award path asserts it.
+                  awardedQuotationId: null,
                 }
               : {}),
           }
@@ -368,8 +383,12 @@ export class OpportunityService {
         contractedValue: updated.contractedValue,
         awardSource: updated.awardSource,
         valueSource: award?.valueSource ?? null,
-        commercialBaselineId: award?.baselineId ?? null,
-        baselineQuotationId: award?.quotationId ?? null,
+        // ADR-0021 — the customer's own award facts travel with the stage change, so a consumer sees
+        // the evidence rather than an unattributed number. The commercial baseline is NOT here: it
+        // is the offer basis behind the contract, not evidence of what the customer awarded.
+        awardCurrency: award?.currency ?? null,
+        awardReference: award?.awardReference ?? null,
+        awardEvidenceDocumentId: award?.evidenceDocumentId ?? null,
       },
     });
     const events = snapshot ? [event, this.qualificationCapturedEvent(updated, snapshot, null)] : [event];
@@ -383,9 +402,9 @@ export class OpportunityService {
     this.logger.log(
       `Opportunity ${updated.id} closed ${outcome} by its tender ${existing.tenderId} (${detail.reason})` +
         (award
-          ? ` — awarded: contractedValue ${award.contractedValue} from ${award.valueSource} ${award.baselineId}`
+          ? ` — awarded: contractedValue ${award.currency} ${award.contractedValue} from ${award.valueSource}`
           : outcome === 'won'
-            ? ' — NO award evidence (no approved commercial baseline behind the tender); the win stays unevidenced'
+            ? ' — NO customer award evidence captured on the tender; the win stays unevidenced (LEGACY_WON)'
             : ''),
     );
     return snapshot ? { ...updated, qualificationAtAward: snapshot } : updated;

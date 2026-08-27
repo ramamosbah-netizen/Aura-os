@@ -196,7 +196,9 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
  */
 async function warmRoutes(page: import('@playwright/test').Page, baseURL: string): Promise<void> {
   const routes = [
-    '/crm/accounts', '/crm/leads', '/crm/quotations', '/crm/my-day',
+    // `/crm/pipeline` is the deal board — `spine-journey` opens the Opportunity drawer there since
+    // the Sales split moved it off `/crm/leads`. Warming both, because both are still driven.
+    '/crm/accounts', '/crm/leads', '/crm/pipeline', '/crm/quotations', '/crm/my-day',
     '/contracts/contracts', '/projects/projects', '/finance/invoices',
     '/hse/permits', '/amc/work-orders', '/assets/register', '/fleet/fines',
     '/compliance', '/quality/ncrs', '/engineering/drawings', '/doccontrol/register',

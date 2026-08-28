@@ -43,14 +43,14 @@ export const AURA_SUITES: AuraSuite[] = [
     description: 'Your personal command center — priorities, tasks, approvals and daily focus, composed from every suite.',
     entryHref: '/my-work', gate: null,
     capabilities: [{ label: 'Attention queue', status: 'IMPLEMENTED' }, { label: 'Tasks & My Day', status: 'PARTIALLY IMPLEMENTED' }, { label: 'Approvals', status: 'IMPLEMENTED' }, { label: 'Notifications & saved views', status: 'IMPLEMENTED' }],
-    owns: (href) => exact('/', '/my-work', '/my-work/my-day', '/my-work/tasks', '/my-work/approvals', '/my-work/favorites', '/inbox', '/notifications', '/views', '/search', '/ai')(href),
+    owns: (href) => exact('/', '/my-work', '/my-work/my-day', '/my-work/tasks', '/my-work/approvals', '/my-work/favorites')(href),
   },
   {
     id: 'communication', name: 'Communication', shortName: 'Communication', glyph: '✉', section: 'work',
     description: 'The shared communication center — internal chat, mail, meetings and file sharing for every suite.',
     // Same destination as My Work → Communication, so the two never diverge.
     entryHref: '/my-work/communication', gate: null,
-    capabilities: [{ label: 'Internal chat', status: 'IMPLEMENTED' }, { label: 'Mail', status: 'PARTIALLY IMPLEMENTED' }, { label: 'WhatsApp Business Cloud', status: 'IMPLEMENTED' }, { label: 'Meetings', status: 'PARTIALLY IMPLEMENTED' }],
+    capabilities: [{ label: 'Internal chat', status: 'IMPLEMENTED' }, { label: 'Mail', status: 'PARTIALLY IMPLEMENTED' }, { label: 'WhatsApp Business Cloud', status: 'PARTIALLY IMPLEMENTED' }, { label: 'Meetings', status: 'PARTIALLY IMPLEMENTED' }],
     owns: (href) => href === '/my-work/communication' || starts('/workspace')(href),
   },
 

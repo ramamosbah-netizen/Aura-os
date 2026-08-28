@@ -3,7 +3,7 @@ import { ActivityService, type ActivityRelatedType } from '@aura/crm';
 import { NotificationService } from '@aura/core';
 import { newId } from '@aura/shared';
 import { COMMS_STORE, type CommsStore } from './comms-store';
-import { MEETING_STORE, MEETING_TYPES, type Meeting, type MeetingAttendee, type MeetingItem, type MeetingPatch, type MeetingStore, type MeetingType } from './meeting-store';
+import { MEETING_STORE, type Meeting, type MeetingAttendee, type MeetingItem, type MeetingPatch, type MeetingStore, type MeetingType } from './meeting-store';
 
 const RELATED_TYPES = new Set(['account', 'contact', 'lead', 'opportunity', 'quotation', 'tender', 'contract', 'project']);
 
@@ -29,10 +29,18 @@ export class MeetingService {
     });
   }
 
-  async get(tenantId: string, id: string): Promise<Meeting> {
+  async get(tenantId: string, id: string, companyId: string | null = null): Promise<Meeting> {
     const row = await this.store.get(tenantId, id);
-    if (!row) throw new NotFoundException('Meeting not found');
+    if (!row || (companyId !== null && row.companyId !== companyId)) throw new NotFoundException('Meeting not found');
     return row;
+  }
+
+  private async requireActor(tenantId: string, id: string, companyId: string | null, actorId: string | null, isAdmin: boolean): Promise<Meeting> {
+    const meeting = await this.get(tenantId, id, companyId);
+    if (!actorId || isAdmin) return meeting;
+    const attendee = meeting.attendees.some((person) => person.userId === actorId);
+    if (meeting.organizerId !== actorId && !attendee) throw new NotFoundException('Meeting not found');
+    return meeting;
   }
 
   async create(input: {
@@ -52,14 +60,15 @@ export class MeetingService {
     return meeting;
   }
 
-  async update(tenantId: string, id: string, patch: MeetingPatch): Promise<Meeting> {
+  async update(tenantId: string, id: string, patch: MeetingPatch, actorId: string | null = null, isAdmin = false, companyId: string | null = null): Promise<Meeting> {
+    await this.requireActor(tenantId, id, companyId, actorId, isAdmin);
     if (patch.startsAt && Number.isNaN(Date.parse(patch.startsAt))) throw new BadRequestException('Meeting start is invalid');
     if (patch.endsAt && Number.isNaN(Date.parse(patch.endsAt))) throw new BadRequestException('Meeting end is invalid');
     const updated = await this.store.update(tenantId, id, patch); if (!updated) throw new NotFoundException('Meeting not found'); return updated;
   }
 
-  async addItem(tenantId: string, actorId: string, meetingId: string, input: { kind?: string; title?: string; detail?: string | null; ownerId?: string | null; dueAt?: string | null }): Promise<Meeting> {
-    const meeting = await this.get(tenantId, meetingId);
+  async addItem(tenantId: string, actorId: string, meetingId: string, input: { kind?: string; title?: string; detail?: string | null; ownerId?: string | null; dueAt?: string | null }, isAdmin = false, companyId: string | null = null): Promise<Meeting> {
+    const meeting = await this.requireActor(tenantId, meetingId, companyId, actorId, isAdmin);
     const kind = input.kind === 'decision' ? 'decision' : input.kind === 'action' ? 'action' : null;
     if (!kind || !input.title?.trim()) throw new BadRequestException('An item kind and title are required');
     let taskId: string | null = null;
@@ -72,16 +81,16 @@ export class MeetingService {
     const updated = await this.store.addItem(tenantId, meetingId, item); if (!updated) throw new NotFoundException('Meeting not found'); return updated;
   }
 
-  async updateItem(tenantId: string, meetingId: string, itemId: string, patch: { status?: 'open' | 'done' | 'cancelled' }): Promise<Meeting> {
-    const meeting = await this.get(tenantId, meetingId);
+  async updateItem(tenantId: string, meetingId: string, itemId: string, patch: { status?: 'open' | 'done' | 'cancelled' }, actorId: string | null = null, isAdmin = false, companyId: string | null = null): Promise<Meeting> {
+    const meeting = await this.requireActor(tenantId, meetingId, companyId, actorId, isAdmin);
     const item = [...meeting.decisions, ...meeting.actionItems].find((candidate) => candidate.id === itemId);
     if (!item) throw new NotFoundException('Meeting item not found');
     if (patch.status === 'done' && item.taskId) await this.activities.complete(item.taskId, undefined, `Completed from meeting: ${meeting.title}`);
     const updated = await this.store.updateItem(tenantId, meetingId, itemId, patch); if (!updated) throw new NotFoundException('Meeting not found'); return updated;
   }
 
-  async close(tenantId: string, id: string, minutes: string | null): Promise<Meeting> {
-    const meeting = await this.get(tenantId, id);
+  async close(tenantId: string, id: string, minutes: string | null, actorId: string | null = null, isAdmin = false, companyId: string | null = null): Promise<Meeting> {
+    const meeting = await this.requireActor(tenantId, id, companyId, actorId, isAdmin);
     if (!minutes?.trim() && !meeting.minutes?.trim()) throw new BadRequestException('Minutes are required before closing a meeting');
     const updated = await this.store.update(tenantId, id, { status: 'completed', minutes: minutes?.trim() || meeting.minutes }); if (!updated) throw new NotFoundException('Meeting not found');
     await this.comms.publishTimeline(tenantId, { id: newId(), companyId: updated.companyId, occurredAt: updated.closedAt ?? new Date().toISOString(), channel: 'meeting', direction: 'internal', actor: updated.organizerId, subjectType: 'meeting', subjectId: updated.id, title: updated.title, preview: `${updated.decisions.length} decisions · ${updated.actionItems.length} action items`, visibility: 'participants', visibilityKey: updated.id });

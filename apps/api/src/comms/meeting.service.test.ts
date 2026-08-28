@@ -23,4 +23,12 @@ describe('MeetingService', () => {
     const store = new InMemoryMeetingStore(); const service = new MeetingService(store, { create: vi.fn() } as never, { record: vi.fn() } as never, { publishTimeline: vi.fn() } as never); const meeting = await service.create(input);
     await expect(service.close('t1', meeting.id, null)).rejects.toThrow('Minutes are required');
   });
+
+  it('does not allow an unrelated user to mutate a meeting', async () => {
+    const store = new InMemoryMeetingStore(); const service = new MeetingService(store, { create: vi.fn() } as never, { record: vi.fn() } as never, { publishTimeline: vi.fn() } as never);
+    const meeting = await service.create({ ...input, attendees: [{ userId: 'u-site', displayName: 'Site' }] });
+    await expect(service.update('t1', meeting.id, { title: 'Hijacked' }, 'u-other', false, null)).rejects.toThrow('Meeting not found');
+    await expect(service.close('t1', meeting.id, 'Minutes', 'u-other', false, null)).rejects.toThrow('Meeting not found');
+    await expect(service.addItem('t1', 'u-other', meeting.id, { kind: 'action', title: 'Hijacked' }, false, null)).rejects.toThrow('Meeting not found');
+  });
 });

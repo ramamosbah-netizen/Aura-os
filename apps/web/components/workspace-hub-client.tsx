@@ -1,6 +1,7 @@
 'use client';
 
-// My Workspace hub — chat + mail + inbox + notifications + saved views + search
+// Compatibility hub — notifications + saved views + search. Communication owns chat and mail;
+// My Work owns approvals.
 // in one page. Chat/mail/notifications poll for freshness; everything else is
 // server-fetched and refreshed on demand.
 
@@ -24,15 +25,11 @@ interface HubChatMessage {
 }
 export interface HubMail { id: string; from: string; to: string[]; subject: string; body: string; sentAt: string; readBy: string[] }
 export interface HubMailbox { inbox: HubMail[]; sent: HubMail[]; unread: number }
-export interface HubInboxItem {
-  id: string; module: string; kind: string; title: string; detail: string; action: string;
-  href: string; value: number | null; createdAt: string | null;
-}
 export interface HubSavedView { id: string; userId: string | null; label: string; path: string; query: string; createdAt: string }
 export interface HubNotification { id: string; title: string; body: string; category: string; read: boolean; createdAt: string }
 interface SearchHit { type: string; id: string; title: string; subtitle: string; href: string }
 
-type TabId = 'chat' | 'mail' | 'inbox' | 'notifications' | 'views' | 'search';
+type TabId = 'chat' | 'mail' | 'notifications' | 'views' | 'search';
 
 // ----------------------------------------------------------------- helpers
 
@@ -66,14 +63,13 @@ export default function WorkspaceHubClient(props: {
   users: HubUser[];
   initialChannels: HubChannel[];
   initialMailbox: HubMailbox;
-  inboxItems: HubInboxItem[];
   savedViews: HubSavedView[];
   initialNotifications: HubNotification[];
   initialTab: string;
   initialQuery: string;
 }) {
   const me = props.me?.username ?? 'u-admin';
-  const validTabs: TabId[] = ['chat', 'mail', 'inbox', 'notifications', 'views', 'search'];
+  const validTabs: TabId[] = ['chat', 'mail', 'notifications', 'views', 'search'];
   const [tab, setTab] = useState<TabId>(validTabs.includes(props.initialTab as TabId) ? (props.initialTab as TabId) : 'chat');
 
   const [channels, setChannels] = useState<HubChannel[]>(props.initialChannels);
@@ -113,7 +109,6 @@ export default function WorkspaceHubClient(props: {
   const tabs: Array<{ id: TabId; glyph: string; label: string; badge: number }> = [
     { id: 'chat', glyph: '💬', label: 'Chat', badge: chatUnread },
     { id: 'mail', glyph: '📧', label: 'Mail', badge: mailbox.unread },
-    { id: 'inbox', glyph: '◉', label: 'Inbox', badge: props.inboxItems.length },
     { id: 'notifications', glyph: '🔔', label: 'Notifications', badge: notifUnread },
     { id: 'views', glyph: '★', label: 'Saved Views', badge: 0 },
     { id: 'search', glyph: '⌕', label: 'Search', badge: 0 },
@@ -138,7 +133,7 @@ export default function WorkspaceHubClient(props: {
         {tabs.map((t) => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)} style={st.tab(tab === t.id)}>
             <span style={{ fontSize: 15 }}>{t.glyph}</span> {t.label}
-            {t.badge > 0 ? <span style={st.badge(t.id === 'inbox')}>{t.badge}</span> : null}
+            {t.badge > 0 ? <span style={st.badge(false)}>{t.badge}</span> : null}
           </button>
         ))}
       </nav>
@@ -149,7 +144,6 @@ export default function WorkspaceHubClient(props: {
       {tab === 'mail' && (
         <MailPane me={me} users={props.users} mailbox={mailbox} onChanged={() => { void refreshMailbox(); void refreshNotifications(); }} />
       )}
-      {tab === 'inbox' && <InboxPane items={props.inboxItems} />}
       {tab === 'notifications' && <NotificationsPane items={notifications} onChanged={refreshNotifications} />}
       {tab === 'views' && <ViewsPane items={props.savedViews} viewerId={me} />}
       {tab === 'search' && <SearchPane initialQuery={props.initialQuery} />}
@@ -499,35 +493,7 @@ function MailPane({ me, users, mailbox, onChanged }: {
   );
 }
 
-// ---------------------------------------------------- inbox / notifications
-
-function InboxPane({ items }: { items: HubInboxItem[] }) {
-  const byModule = new Map<string, HubInboxItem[]>();
-  for (const item of items) byModule.set(item.module, [...(byModule.get(item.module) ?? []), item]);
-  if (items.length === 0) return <section style={st.panel}><p style={st.emptyChat}>All clear — nothing is waiting on you. ✅</p></section>;
-  return (
-    <div>
-      {[...byModule.entries()].map(([module, moduleItems]) => (
-        <section key={module} style={{ marginBottom: 18 }}>
-          <h2 style={st.groupTitle}>{module} <span style={st.groupCount}>{moduleItems.length}</span></h2>
-          <div style={st.panel}>
-            {moduleItems.map((item) => (
-              <div key={`${item.kind}-${item.id}`} style={st.inboxRow}>
-                <span style={st.actionPill(item.action)}>{item.action}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <a href={item.href} style={st.inboxTitle}>{item.title}</a>
-                  <div style={st.inboxDetail}>{item.kind}{item.detail ? ` · ${item.detail}` : ''}</div>
-                </div>
-                {item.value !== null ? <span style={st.inboxValue}>{money(item.value)}</span> : null}
-                <span style={st.channelTime}>{timeAgo(item.createdAt)}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
+// ---------------------------------------------------------- notifications
 
 function NotificationsPane({ items, onChanged }: { items: HubNotification[]; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);

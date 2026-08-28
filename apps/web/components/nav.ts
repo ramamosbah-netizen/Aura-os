@@ -41,19 +41,9 @@ export const NAV: NavGroup[] = [
       { label: 'Home', href: '/', glyph: '⌂', desc: 'AURA OS front door and operating overview' },
       { label: 'My Work', href: '/my-work', glyph: '◆', desc: 'Your live personal command center' },
       { label: 'My Day', href: '/my-work/my-day', glyph: '◐', desc: 'Today: meetings, tasks, priorities, approvals & AI suggestions' },
-      { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
-      // Reachability: the Communication Center existed with NO nav entry. It was reachable only from
-      // the My Work tile and three 360 pages, so removing that tile would have orphaned the page
-      // entirely. It is a special center like My Work — not a business suite — so it belongs here.
+      // Communication is a work center like My Work, not a business suite; keep it as the single
+      // navigation entry for chat, mail, meetings, WhatsApp and shared files.
       { label: 'Communication', href: '/my-work/communication', glyph: '✆', desc: 'Mail, chat, meetings & shared files in one center' },
-      { label: 'Search', href: '/search', glyph: '⌕', desc: 'Find any record across the platform' },
-      // Reachability fix (audit wave 1). These three pages existed and were built, but had NO
-      // href anywhere in the web app — no nav entry, no link, nothing. `/ai` is the worst of the
-      // three: it is the end-user AI workspace that five separate reports describe as shipped,
-      // and no user could open it. A page nobody can navigate to is not a shipped feature.
-      { label: 'AI Workspace', href: '/ai', glyph: '✦', desc: 'Ask the agents, run assistants & review what they proposed' },
-      { label: 'Notifications', href: '/notifications', glyph: '◔', desc: 'Everything the system has told you, newest first' },
-      { label: 'Saved Views', href: '/views', glyph: '▤', desc: 'Your saved filters & lists across every module' },
     ],
   },
   {
@@ -343,7 +333,7 @@ export const CREATE_ACTIONS: PaletteAction[] = [
   { label: 'Create Invoice', href: '/finance/invoices', desc: 'New supplier invoice' },
   { label: 'Create Customer Invoice', href: '/finance/customer-invoices', desc: 'New AR tax invoice' },
   { label: 'Create Subcontract', href: '/subcontracts/subcontracts', desc: 'New subcontractor agreement' },
-  { label: 'Open Inbox', href: '/inbox', desc: 'All pending approvals' },
+  { label: 'Open Approvals', href: '/my-work/approvals', desc: 'All pending approvals' },
 ];
 
 /**

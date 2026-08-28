@@ -43,6 +43,12 @@ describe('AURA suite taxonomy', () => {
     expect(activeSuite('/my-work/command-center')?.id).toBeUndefined();
   });
 
+  it('does not give retired utility aliases a second My Work owner', () => {
+    for (const path of ['/inbox', '/notifications', '/views', '/search', '/ai']) {
+      expect(activeSuite(path)?.id, `${path} should resolve through its canonical utility or compatibility route`).toBeUndefined();
+    }
+  });
+
   it('groups into work / control / business / system with nine business suites', () => {
     const sections = suiteSections(null, true);
     expect(sections.map((s) => s.section)).toEqual(['work', 'control', 'business', 'system']);

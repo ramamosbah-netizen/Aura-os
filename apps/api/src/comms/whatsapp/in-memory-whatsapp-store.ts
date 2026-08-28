@@ -45,7 +45,9 @@ export class InMemoryWhatsAppStore implements WhatsAppStore {
   async updateStatus(tenantId: string, providerAccountId: string, externalMessageId: string, status: WhatsAppMessageStatus, failedReason: string | null = null) {
     const row = [...this.messages.values()].find((m) => m.tenantId === tenantId && m.providerAccountId === providerAccountId && m.externalMessageId === externalMessageId);
     if (!row) return null;
-    const updated = { ...row, status, failedReason }; this.messages.set(row.id, updated); return updated;
+    const rank: Record<WhatsAppMessageStatus, number> = { received: 0, queued: 1, sent: 2, delivered: 3, read: 4, failed: 5 };
+    const nextStatus = rank[status] < rank[row.status] && row.status !== 'failed' ? row.status : status;
+    const updated = { ...row, status: nextStatus, failedReason }; this.messages.set(row.id, updated); return updated;
   }
   async setMessageDelivery(tenantId: string, messageId: string, externalMessageId: string | null, status: WhatsAppMessageStatus, failedReason: string | null = null) { const row = this.messages.get(messageId); if (!row || row.tenantId !== tenantId) return null; const updated = { ...row, externalMessageId, status, failedReason }; this.messages.set(messageId, updated); return updated; }
   async markRead(tenantId: string, threadId: string) {

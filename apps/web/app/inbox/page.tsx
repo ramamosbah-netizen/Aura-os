@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
 
-// The approvals inbox now lives inside the unified Workspace hub.
+// Compatibility route: approvals are owned by My Work, not a second Inbox surface.
 export default function InboxPage(): never {
-  redirect('/workspace?tab=inbox');
+  permanentRedirect('/my-work/approvals');
 }

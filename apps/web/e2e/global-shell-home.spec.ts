@@ -42,6 +42,9 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   for (const label of ['My Work', 'Communication', 'Business Command Center', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
     await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
+  for (const retired of ['Inbox', 'Search', 'AI Workspace', 'Notifications', 'Saved Views']) {
+    await expect(navigation.getByRole('link', { name: retired, exact: true })).toHaveCount(0);
+  }
 
   const myWork = navigation.getByRole('link', { name: 'My Work', exact: true });
   await myWork.focus();
@@ -63,6 +66,13 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(page.getByTestId('business-command-center')).toBeVisible();
   await expect(page.getByText('AURA OS / BUSINESS COMMAND CENTER')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Organization health, decisions and control.' })).toBeVisible();
+
+  await page.goto('/inbox', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL('/my-work/approvals');
+  await expect(page.getByTestId('my-approvals-page')).toBeVisible();
+
+  await page.goto('/ai', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL('/intelligence');
 
   await page.goto('/my-work/command-center?view=ceo', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL('/command-center?view=ceo');
@@ -100,7 +110,7 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   const capabilities = page.getByRole('complementary', { name: 'Capability truth' });
   const whatsappCapability = capabilities.locator('li').filter({ hasText: 'WhatsApp Business Cloud' });
   await expect(whatsappCapability).toBeVisible();
-  await expect(whatsappCapability.getByText('IMPLEMENTED', { exact: true })).toBeVisible();
+  await expect(whatsappCapability.getByText('PARTIALLY IMPLEMENTED', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open suite' })).toHaveAttribute('href', '/my-work/communication');
 
   await page.setViewportSize({ width: 390, height: 844 });

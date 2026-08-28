@@ -238,8 +238,8 @@ export default function CommandCenter({
             <h2 className="cc-section-title">
               <span aria-hidden>🎯</span> Needs your attention
             </h2>
-            <a className="cc-section-link" href="/inbox">
-              Open Inbox →
+            <a className="cc-section-link" href="/my-work/approvals">
+              Open Approvals →
             </a>
           </div>
 

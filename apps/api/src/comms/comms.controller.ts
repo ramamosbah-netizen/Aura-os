@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { Permissions, TenantContext } from '@aura/core';
+import { EventBus, Permissions, TenantContext } from '@aura/core';
+import { Observable } from 'rxjs';
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage, Mailbox } from '@aura/shared';
 import { CommsService, type ChannelSummary, type ChatPerson, type CommunicationFile, type UnreadCommunication } from './comms.service';
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
@@ -14,6 +15,7 @@ export class CommsController {
     private readonly comms: CommsService,
     private readonly workspace: WorkspaceConfigService,
     private readonly tenant: TenantContext,
+    private readonly events: EventBus,
   ) {}
 
   /**
@@ -101,6 +103,22 @@ export class CommsController {
     }, companyId, isAdmin);
     if ('error' in result) throw new BadRequestException(result.error);
     return result;
+  }
+
+  @Get('stream')
+  @Permissions('comms.channel.read')
+  async stream(): Promise<Observable<{ data: unknown; type: string }>> {
+    const { tenantId, companyId, username, isAdmin } = await this.caller();
+    return new Observable((subscriber) => {
+      const unsubscribe = this.events.subscribe('comms.chat.message', async (event) => {
+        if (event.tenantId !== tenantId || (companyId !== null && event.companyId !== companyId)) return;
+        const channelId = typeof event.payload?.channelId === 'string' ? event.payload.channelId : null;
+        if (!channelId || !(await this.comms.isChannelVisible(tenantId, username, channelId, isAdmin, companyId))) return;
+        subscriber.next({ type: 'chat', data: event.payload });
+      });
+      const heartbeat = setInterval(() => subscriber.next({ type: 'heartbeat', data: { at: new Date().toISOString() } }), 25_000);
+      return () => { unsubscribe(); clearInterval(heartbeat); };
+    });
   }
 
   @Get('mail')

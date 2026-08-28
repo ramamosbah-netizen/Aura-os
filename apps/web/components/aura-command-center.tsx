@@ -101,7 +101,7 @@ export default async function AuraWorkspace({ variant }: { variant: 'home' | 'bu
           <p style={s.heroCopy}>{variant === 'home' ? 'Start with what needs attention, enter a project, or choose a suite. Every view stays connected to the same records and permissions.' : 'A permission-aware control surface for business health, cross-module decisions, risks and role dashboards.'}</p>
         </div>
         <nav style={s.heroActions} aria-label={variant === 'home' ? 'Home actions' : 'Business Command Center actions'}>
-          {variant === 'home' ? <Link href="/my-work" style={s.primaryAction}>Open My Work</Link> : <Link href="/workspace?tab=inbox" style={s.primaryAction}>Open inbox</Link>}
+          {variant === 'home' ? <Link href="/my-work" style={s.primaryAction}>Open My Work</Link> : <Link href="/my-work/approvals" style={s.primaryAction}>Open approvals</Link>}
           <Link href="/projects/projects" style={s.secondaryAction}>Projects</Link>
           <Link href="/suites" style={s.secondaryAction}>All suites</Link>
         </nav>

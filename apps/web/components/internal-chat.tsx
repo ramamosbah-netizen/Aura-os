@@ -44,8 +44,8 @@ interface ChatMessageView {
   readByOtherAt?: string | null;
 }
 
-/** Poll cadence for the open conversation. Matches the hub's existing 4s rhythm. */
-const POLL_MS = 4_000;
+/** Slow fallback refresh for deployments that do not keep an SSE connection alive. */
+const POLL_MS = 30_000;
 
 const stamp = (iso: string): string =>
   new Intl.DateTimeFormat(DISPLAY_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIME_ZONE }).format(new Date(iso));
@@ -170,7 +170,9 @@ export default function InternalChat({
     if (!activeId) return;
     void loadMessages(activeId);
     const timer = setInterval(() => { void loadMessages(activeId); void refreshChannels(); }, POLL_MS);
-    return () => clearInterval(timer);
+    const source = typeof window !== 'undefined' ? new EventSource('/api/comms/stream') : null;
+    source?.addEventListener('chat', () => { void loadMessages(activeId); void refreshChannels(); });
+    return () => { clearInterval(timer); source?.close(); };
   }, [activeId, loadMessages, refreshChannels]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages?.length]);

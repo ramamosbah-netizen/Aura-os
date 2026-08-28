@@ -1,6 +1,5 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import crypto from 'node:crypto';
-import type { WhatsAppMessageType } from '@aura/shared';
 
 export interface WhatsAppSendResult { externalMessageId: string; status: 'sent' | 'failed'; error?: string }
 
@@ -25,9 +24,34 @@ export class WhatsAppCloudProvider {
   }
   async sendText(to: string, body: string): Promise<WhatsAppSendResult> {
     if (!this.token || !this.phoneNumberId) throw new ServiceUnavailableException('WhatsApp Business is not configured');
-    const response = await fetch(`https://graph.facebook.com/${this.version}/${this.phoneNumberId}/messages`, { method: 'POST', headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: to.replace(/^\+/, ''), type: 'text', text: { preview_url: false, body } }) });
+    const response = await this.request({ messaging_product: 'whatsapp', recipient_type: 'individual', to: to.replace(/^\+/, ''), type: 'text', text: { preview_url: false, body } });
     const data = await response.json().catch(() => ({})) as { messages?: Array<{ id?: string }>; error?: { message?: string } };
     if (!response.ok || !data.messages?.[0]?.id) return { externalMessageId: '', status: 'failed', error: data.error?.message ?? `WhatsApp API HTTP ${response.status}` };
     return { externalMessageId: data.messages[0].id, status: 'sent' };
+  }
+
+  /** A read receipt is a separate Cloud API operation from the local AURA read state. */
+  async markRead(messageId: string): Promise<void> {
+    if (!this.token || !this.phoneNumberId) throw new ServiceUnavailableException('WhatsApp Business is not configured');
+    const response = await this.request({ messaging_product: 'whatsapp', status: 'read', message_id: messageId });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      throw new Error(data.error?.message ?? `WhatsApp read receipt HTTP ${response.status}`);
+    }
+  }
+
+  private async request(body: Record<string, unknown>): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      return await fetch(`https://graph.facebook.com/${this.version}/${this.phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }

@@ -4,10 +4,9 @@ import { ContactService } from '@aura/crm';
 import { makeEvent, newId, normalizeWhatsAppPhone, type WhatsAppMessageType, type WhatsAppMessageStatus } from '@aura/shared';
 import { COMMS_STORE, type CommsStore } from '../comms-store';
 import { WhatsAppCloudProvider } from './whatsapp-cloud.provider';
-import { WHATSAPP_STORE, type WhatsAppStore, type StoredWhatsAppThread, type NewWhatsAppMessage } from './whatsapp-store';
+import { WHATSAPP_STORE, type WhatsAppStore, type StoredWhatsAppThread } from './whatsapp-store';
 
 type MetaWebhook = { entry?: Array<{ changes?: Array<{ value?: { metadata?: { phone_number_id?: string }; contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>; messages?: Array<Record<string, unknown>>; statuses?: Array<Record<string, unknown>> } }> }> };
-type RealtimeEvent = { type: 'whatsapp.message' | 'whatsapp.status'; tenantId: string; threadId: string; messageId?: string };
 
 function messageType(value: string | undefined): WhatsAppMessageType { return ['text','image','document','audio','video','sticker'].includes(value ?? '') ? value as WhatsAppMessageType : 'unknown'; }
 function status(value: string | undefined): WhatsAppMessageStatus { return value === 'delivered' || value === 'read' || value === 'failed' || value === 'sent' ? value : 'sent'; }
@@ -38,13 +37,13 @@ export class WhatsAppService {
     for (const entry of payload.entry ?? []) for (const change of entry.changes ?? []) {
       const value = change.value; const externalAccountId = value?.metadata?.phone_number_id; if (!externalAccountId) continue;
       const account = await this.store.findProviderAccountByExternalAccountId(externalAccountId); if (!account) { this.logger.warn(`Ignoring webhook for unregistered phone number ${externalAccountId}`); continue; }
-      for (const raw of value?.messages ?? []) { if (await this.inbound(account, value?.contacts ?? [], raw, externalAccountId)) processed++; }
+      for (const raw of value?.messages ?? []) { if (await this.inbound(account, value?.contacts ?? [], raw)) processed++; }
       for (const raw of value?.statuses ?? []) { if (await this.delivery(account.tenantId, account.id, raw)) processed++; }
     }
     return { received: true, processed };
   }
 
-  private async inbound(account: { id: string; tenantId: string; companyId: string | null; ownerUserId: string | null }, contacts: Array<{ wa_id?: string; profile?: { name?: string } }>, raw: Record<string, unknown>, externalAccountId: string): Promise<boolean> {
+  private async inbound(account: { id: string; tenantId: string; companyId: string | null; ownerUserId: string | null }, contacts: Array<{ wa_id?: string; profile?: { name?: string } }>, raw: Record<string, unknown>): Promise<boolean> {
     const externalMessageId = typeof raw.id === 'string' ? raw.id : null; const from = typeof raw.from === 'string' ? normalizeWhatsAppPhone(raw.from) : ''; if (!from) return false;
     const contactMeta = contacts.find((c) => c.wa_id === raw.from); const displayName = contactMeta?.profile?.name?.trim() || from; let contactId: string | null = null; let accountId: string | null = null; let ownerId = account.ownerUserId;
     if (this.contacts) { const matches = await this.contacts.list({ tenantId: account.tenantId, status: 'active' }); const found = matches.find((c) => c.phone && normalizeWhatsAppPhone(c.phone) === from); if (found) { contactId = found.id; accountId = found.accountId; ownerId = found.ownerId ?? ownerId; } }
@@ -66,14 +65,46 @@ export class WhatsAppService {
   }
 
   async threads(tenantId: string, companyId: string | null, ownerId?: string | null): Promise<StoredWhatsAppThread[]> { return this.store.listThreads(tenantId, companyId, ownerId); }
-  async messages(tenantId: string, companyId: string | null, threadId: string): Promise<ReturnType<WhatsAppStore['listMessages']> extends Promise<infer T> ? T : never> { const thread = await this.store.findThread(tenantId, threadId); if (!thread || (companyId !== null && thread.companyId !== companyId)) throw new NotFoundException('WhatsApp conversation not found'); return this.store.listMessages(tenantId, threadId); }
-  async markRead(tenantId: string, companyId: string | null, threadId: string): Promise<void> { const thread = await this.store.findThread(tenantId, threadId); if (!thread || (companyId !== null && thread.companyId !== companyId)) throw new NotFoundException('WhatsApp conversation not found'); await this.store.markRead(tenantId, threadId); }
-  async reply(tenantId: string, companyId: string | null, sender: string, threadId: string, text: string) {
-    const thread = await this.store.findThread(tenantId, threadId); if (!thread || (companyId !== null && thread.companyId !== companyId)) throw new NotFoundException('WhatsApp conversation not found'); const body = text.trim(); if (!body) throw new BadRequestException('Message text is required');
+
+  /** Resource-level authorization for WhatsApp conversations. Unassigned threads are claimable;
+   * assigned threads are private to the assignee and tenant admins. */
+  async isThreadVisible(tenantId: string, companyId: string | null, actorId: string, isAdmin: boolean, threadId: string): Promise<boolean> {
+    const thread = await this.store.findThread(tenantId, threadId);
+    return Boolean(thread && (companyId === null || thread.companyId === companyId) && (isAdmin || !thread.ownerId || thread.ownerId === actorId));
+  }
+
+  private async requireThread(tenantId: string, companyId: string | null, actorId: string, isAdmin: boolean, threadId: string): Promise<StoredWhatsAppThread> {
+    const thread = await this.store.findThread(tenantId, threadId);
+    if (!thread || (companyId !== null && thread.companyId !== companyId) || (!isAdmin && thread.ownerId && thread.ownerId !== actorId)) throw new NotFoundException('WhatsApp conversation not found');
+    return thread;
+  }
+
+  async messages(tenantId: string, companyId: string | null, actorId: string, isAdmin: boolean, threadId: string): Promise<ReturnType<WhatsAppStore['listMessages']> extends Promise<infer T> ? T : never> { await this.requireThread(tenantId, companyId, actorId, isAdmin, threadId); return this.store.listMessages(tenantId, threadId); }
+
+  async markRead(tenantId: string, companyId: string | null, actorId: string, isAdmin: boolean, threadId: string): Promise<void> {
+    const thread = await this.requireThread(tenantId, companyId, actorId, isAdmin, threadId);
+    const messages = await this.store.listMessages(tenantId, threadId);
+    for (const message of messages.filter((candidate) => candidate.direction === 'inbound' && candidate.externalMessageId && candidate.status !== 'read')) {
+      try { await this.provider.markRead(message.externalMessageId!); } catch (error) { this.logger.warn(`WhatsApp read receipt failed for ${message.id}: ${error instanceof Error ? error.message : 'unknown error'}`); }
+    }
+    await this.store.markRead(tenantId, thread.id);
+  }
+
+  async reply(tenantId: string, companyId: string | null, sender: string, isAdmin: boolean, threadId: string, text: string) {
+    const thread = await this.requireThread(tenantId, companyId, sender, isAdmin, threadId); const body = text.trim(); if (!body) throw new BadRequestException('Message text is required');
     const queued = await this.store.insertMessage({ tenantId, companyId: thread.companyId, providerAccountId: thread.providerAccountId, threadId, externalMessageId: null, direction: 'outbound', status: 'queued', type: 'text', body, sender, occurredAt: new Date().toISOString() });
-    let updated = queued.message; try { const sent = await this.provider.sendText(thread.phone, body); updated = await this.store.setMessageDelivery(tenantId, queued.message.id, sent.externalMessageId || null, sent.status, sent.error) ?? updated; } catch (error) { updated = await this.store.setMessageDelivery(tenantId, queued.message.id, null, 'failed', error instanceof Error ? error.message : 'WhatsApp send failed') ?? updated; }
+    let updated = queued.message; let lastError: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try { const sent = await this.provider.sendText(thread.phone, body); updated = await this.store.setMessageDelivery(tenantId, queued.message.id, sent.externalMessageId || null, sent.status, sent.error) ?? updated; lastError = null; break; }
+      catch (error) { lastError = error; if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 250)); }
+    }
+    if (lastError) updated = await this.store.setMessageDelivery(tenantId, queued.message.id, null, 'failed', lastError instanceof Error ? lastError.message : 'WhatsApp send failed') ?? updated;
     await this.comms.publishTimeline(tenantId, { id: newId(), companyId: thread.companyId, occurredAt: updated.occurredAt, channel: 'whatsapp', direction: 'outbound', actor: sender, subjectType: 'whatsapp', subjectId: updated.id, title: `WhatsApp reply to ${thread.displayName}`, preview: body.slice(0, 240), visibility: 'tenant', visibilityKey: thread.providerAccountId });
     return updated;
   }
-  async link(tenantId: string, threadId: string, links: { contactId?: string | null; accountId?: string | null; ownerId?: string | null }) { return this.store.linkThread(tenantId, threadId, links); }
+  async link(tenantId: string, companyId: string | null, actorId: string, isAdmin: boolean, threadId: string, links: { contactId?: string | null; accountId?: string | null; ownerId?: string | null }) {
+    await this.requireThread(tenantId, companyId, actorId, isAdmin, threadId);
+    if (!isAdmin && links.ownerId !== undefined && links.ownerId !== null && links.ownerId !== actorId) throw new ForbiddenException('Only an administrator may assign a WhatsApp conversation to another user');
+    return this.store.linkThread(tenantId, threadId, links);
+  }
 }

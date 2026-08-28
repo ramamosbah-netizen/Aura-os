@@ -109,8 +109,13 @@ export function makeChatMessage(input: NewChatMessage): ChatMessage | { error: s
   if ((input.kind === 'file' || input.kind === 'voice') && !attachment) {
     return { error: 'Attachment is required for file/voice messages' };
   }
-  if (attachment && attachment.size > MAX_ATTACHMENT_BYTES) {
-    return { error: `Attachment exceeds ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB limit` };
+  if (attachment) {
+    if (!Number.isSafeInteger(attachment.size) || attachment.size < 0) return { error: 'Attachment size is invalid' };
+    if (attachment.size > MAX_ATTACHMENT_BYTES) return { error: `Attachment exceeds ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB limit` };
+    // The client-provided size is advisory. For data-URL transport, independently cap the
+    // encoded payload so a forged metadata value cannot push oversized bytes into the database.
+    const encoded = attachment.dataUrl.match(/^data:[^;,]+;base64,([A-Za-z0-9+/=]+)$/)?.[1];
+    if (encoded && Math.floor(encoded.length * 3 / 4) > MAX_ATTACHMENT_BYTES) return { error: `Attachment exceeds ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB limit` };
   }
   return {
     id: newId(),

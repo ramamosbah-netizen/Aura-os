@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
-import { AccessService, NotificationService, UsersService } from '@aura/core';
+import { AccessService, EventBus, NotificationService, UsersService } from '@aura/core';
 import { ProjectService } from '@aura/projects';
 import {
   type ChatChannel,
@@ -15,6 +15,7 @@ import {
   mailboxFor,
   makeChatMessage,
   makeMail,
+  makeEvent,
   newId,
   unreadChatCount,
 } from '@aura/shared';
@@ -166,6 +167,7 @@ export class CommsService {
     // WhatsApp is another Communication facet. Optional keeps the focused chat/mail harnesses
     // usable while the production module supplies the persisted store.
     @Optional() @Inject(WHATSAPP_STORE) private readonly whatsapp: WhatsAppStore | null = null,
+    @Optional() private readonly events: EventBus | null = null,
   ) {}
 
   /**
@@ -557,6 +559,10 @@ export class CommsService {
     }));
   }
 
+  async isChannelVisible(tenantId: string, username: string, channelId: string, isAdmin: boolean, companyId: string | null): Promise<boolean> {
+    try { await this.requireChannel(tenantId, username, channelId, isAdmin, companyId); return true; } catch { return false; }
+  }
+
   /** Post a message; notify every other member of the conversation. */
   async post(
     tenantId: string,
@@ -570,6 +576,7 @@ export class CommsService {
     const result = makeChatMessage(input);
     if ('error' in result) return result;
     await this.store.addMessage(tenantId, companyId, result);
+    await this.events?.publish(makeEvent({ type: 'comms.chat.message', tenantId, companyId, aggregateType: 'comms.chat.message', aggregateId: result.id, actorId: result.sender, payload: { channelId: result.channelId, messageId: result.id } }));
     // Your own message never counts as unread to you.
     await this.store.setLastRead(tenantId, result.channelId, input.sender, result.sentAt);
     await this.publishTimeline(tenantId, {

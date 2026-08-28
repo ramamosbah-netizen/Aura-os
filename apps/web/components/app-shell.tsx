@@ -285,7 +285,7 @@ export default function AppShell({
 
           {/* ── Pulsing Notification Bell ── */}
           <Link
-            href="/inbox"
+            href="/notifications"
             className="app-topbar-notifications"
             style={{
               position: 'relative',
@@ -302,7 +302,7 @@ export default function AppShell({
               marginRight: 10,
               fontSize: 14,
             }}
-            title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : 'Inbox & Notifications'}
+            title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : 'Notifications'}
           >
             <span>🔔</span>
             {unreadCount > 0 && (

@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { EventBus, NotificationService, TenantContext } from '@aura/core';
-import { ContactService } from '@aura/crm';
+import { AccountService, ContactService } from '@aura/crm';
 import { makeEvent, newId, normalizeWhatsAppPhone, type WhatsAppMessageType, type WhatsAppMessageStatus } from '@aura/shared';
 import { COMMS_STORE, type CommsStore } from '../comms-store';
 import { WhatsAppCloudProvider } from './whatsapp-cloud.provider';
@@ -26,6 +26,7 @@ export class WhatsAppService {
     private readonly events: EventBus,
     private readonly tenant: TenantContext,
     @Optional() @Inject(ContactService) private readonly contacts: ContactService | null = null,
+    @Optional() @Inject(AccountService) private readonly accounts: AccountService | null = null,
   ) {}
 
   configured(): boolean { return this.provider.isConfigured(); }
@@ -103,8 +104,20 @@ export class WhatsAppService {
     return updated;
   }
   async link(tenantId: string, companyId: string | null, actorId: string, isAdmin: boolean, threadId: string, links: { contactId?: string | null; accountId?: string | null; ownerId?: string | null }) {
-    await this.requireThread(tenantId, companyId, actorId, isAdmin, threadId);
+    const current = await this.requireThread(tenantId, companyId, actorId, isAdmin, threadId);
     if (!isAdmin && links.ownerId !== undefined && links.ownerId !== null && links.ownerId !== actorId) throw new ForbiddenException('Only an administrator may assign a WhatsApp conversation to another user');
-    return this.store.linkThread(tenantId, threadId, links);
+    if (links.contactId && this.contacts) {
+      const contact = await this.contacts.get(links.contactId);
+      if (!contact || contact.tenantId !== tenantId || (companyId !== null && contact.companyId !== companyId)) throw new BadRequestException('Contact is not available in this company');
+    }
+    if (links.accountId && this.accounts) {
+      const account = await this.accounts.get(links.accountId);
+      if (!account || account.tenantId !== tenantId || (companyId !== null && account.companyId !== companyId)) throw new BadRequestException('Account is not available in this company');
+    }
+    return this.store.linkThread(tenantId, threadId, {
+      contactId: links.contactId !== undefined ? links.contactId : current.contactId,
+      accountId: links.accountId !== undefined ? links.accountId : current.accountId,
+      ownerId: links.ownerId !== undefined ? links.ownerId : current.ownerId,
+    });
   }
 }

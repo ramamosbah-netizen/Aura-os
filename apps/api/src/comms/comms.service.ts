@@ -113,11 +113,12 @@ export interface CommunicationFile {
   channelId: string;
   channelName: string;
   sender: string;
-  kind: 'file' | 'voice';
+  kind: 'file' | 'voice' | 'whatsapp-media';
+  source: 'chat' | 'whatsapp';
   name: string;
   mime: string;
   size: number;
-  dataUrl: string;
+  dataUrl: string | null;
   sentAt: string;
 }
 
@@ -344,12 +345,23 @@ export class CommsService {
           channelName: channel.name,
           sender: message.sender,
           kind: message.kind,
+          source: 'chat',
           name: message.attachment.name,
           mime: message.attachment.mime,
           size: message.attachment.size,
           dataUrl: message.attachment.dataUrl,
           sentAt: message.sentAt,
         });
+      }
+    }
+    if (this.whatsapp) {
+      const threads = await this.whatsapp.listThreads(tenantId, companyId, isAdmin ? undefined : username);
+      for (const thread of threads) {
+        const messages = await this.whatsapp.listMessages(tenantId, thread.id);
+        for (const message of messages) {
+          if (!message.mediaId || message.type === 'text') continue;
+          files.push({ id: message.id, channelId: thread.id, channelName: thread.displayName, sender: message.sender, kind: 'whatsapp-media', source: 'whatsapp', name: `${thread.displayName} · ${message.type}`, mime: `application/x-whatsapp-${message.type}`, size: 0, dataUrl: null, sentAt: message.occurredAt });
+        }
       }
     }
     return files.sort((a, b) => b.sentAt.localeCompare(a.sentAt)).slice(0, 200);

@@ -48,6 +48,8 @@ export default function ContactsClient({ initialContacts, initialTotal, initialS
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
+  const [accountQuery, setAccountQuery] = useState('');
+  const [remoteAccounts, setRemoteAccounts] = useState<Account[]>([]);
   const [roleFilter, setRoleFilter] = useState('');
   const [page, setPage] = useState({ offset: 0, limit: 50, total: initialTotal ?? initialContacts.length, hasMore: (initialTotal ?? initialContacts.length) > 50 });
   const [loading, setLoading] = useState(false);
@@ -95,6 +97,19 @@ export default function ContactsClient({ initialContacts, initialTotal, initialS
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [query, accountFilter, roleFilter, page.offset]);
 
+  useEffect(() => {
+    const needle = accountQuery.trim();
+    if (!needle) { setRemoteAccounts([]); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/crm/accounts/paged?search=${encodeURIComponent(needle)}&limit=20&offset=0`, { cache: 'no-store', signal: controller.signal })
+        .then((res) => res.ok ? res.json() : null)
+        .then((data: { items?: Account[] } | null) => { if (data?.items) setRemoteAccounts(data.items); })
+        .catch(() => undefined);
+    }, 220);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [accountQuery]);
+
   const [contactsState, setContacts] = useState<Contact[]>(initialContacts);
   const currentContacts = contactsState;
 
@@ -136,7 +151,11 @@ export default function ContactsClient({ initialContacts, initialTotal, initialS
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   };
 
-  const accountOptions = initialAccounts.map((a) => ({ value: a.id, label: a.name }));
+  const accountOptionRecords = useMemo(() => {
+    const byId = new Map([...initialAccounts, ...remoteAccounts].map((a) => [a.id, a]));
+    return [...byId.values()];
+  }, [initialAccounts, remoteAccounts]);
+  const accountOptions = accountOptionRecords.map((a) => ({ value: a.id, label: a.name }));
   const serverExportHref = useMemo(() => {
     const params = new URLSearchParams();
     if (query.trim()) params.set('search', query.trim());
@@ -148,7 +167,7 @@ export default function ContactsClient({ initialContacts, initialTotal, initialS
     return `/api/crm/contacts/export.csv${suffix ? `?${suffix}` : ''}`;
   }, [query, accountFilter, roleFilter]);
   const accountName = (c: Contact): string =>
-    c.accountName ?? initialAccounts.find((a) => a.id === c.accountId)?.name ?? 'Account';
+    c.accountName ?? accountOptionRecords.find((a) => a.id === c.accountId)?.name ?? 'Account';
 
   const contactOptions = initialContacts.map((c) => ({ value: c.id, label: `${c.name}${c.jobTitle ? ` · ${c.jobTitle}` : ''}` }));
 
@@ -220,10 +239,24 @@ export default function ContactsClient({ initialContacts, initialTotal, initialS
           value={query}
           onChange={(e) => { setQuery(e.target.value); setPage((p) => ({ ...p, offset: 0 })); }}
         />
-        <select style={st.search} value={accountFilter} onChange={(e) => { setAccountFilter(e.target.value); setPage((p) => ({ ...p, offset: 0 })); }}>
-          <option value="">All accounts</option>
-          {accountOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <div style={{ position: 'relative' }}>
+          <input
+            style={st.search}
+            list="contact-account-options"
+            placeholder="Filter by account…"
+            value={accountQuery}
+            onChange={(e) => {
+              const value = e.target.value;
+              const match = accountOptionRecords.find((a) => a.name === value);
+              setAccountQuery(value);
+              setAccountFilter(match?.id ?? '');
+              setPage((p) => ({ ...p, offset: 0 }));
+            }}
+          />
+          <datalist id="contact-account-options">
+            {accountOptions.map((o) => <option key={o.value} value={o.label} />)}
+          </datalist>
+        </div>
         <ExportButton filename="contacts" rows={contacts as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'name' }, { key: 'jobTitle' }, { key: 'accountName' }, { key: 'stakeholderRole' }, { key: 'relationshipStrength' }, { key: 'reportsToName' }, { key: 'email' }, { key: 'phone' }, { key: 'isPrimary' }, { key: 'status' }, { key: 'ownerId' }]} />
         <a href={serverExportHref} style={st.fullExport} title="Export every contact matching the current filters">⬇ Full CSV</a>

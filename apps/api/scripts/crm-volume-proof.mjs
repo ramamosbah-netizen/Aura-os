@@ -37,7 +37,7 @@ async function seed() {
         (id, tenant_id, company_id, account_id, account_name, name, job_title, email, phone, is_primary, status, owner_id, created_by, stakeholder_role, relationship_strength)
       SELECT md5('volume-contact-' || g)::uuid, $1, 'volume-company',
              md5('volume-account-' || (((g - 1) % $2::int) + 1)),
-             'Volume Account ' || (((g - 1) % $2::int) + 1)), 'Volume Contact ' || g,
+             'Volume Account ' || (((g - 1) % $2::int) + 1), 'Volume Contact ' || g,
              'Stakeholder', 'volume-' || g || '@example.invalid', '+971500' || lpad(g::text, 6, '0'),
              g % 4 = 0, 'active', 'u-volume-owner-' || (g % 20), 'volume-proof',
              CASE WHEN g % 5 = 0 THEN 'Decision Maker' WHEN g % 3 = 0 THEN 'Champion' ELSE 'Influencer' END,
@@ -50,14 +50,14 @@ async function seed() {
       SELECT md5('volume-opportunity-' || g)::uuid, $1, 'volume-company', 'Volume Opportunity ' || g,
              (g % 500 + 1) * 1000, CASE WHEN g % 10 = 0 THEN 'won' WHEN g % 7 = 0 THEN 'lost' WHEN g % 3 = 0 THEN 'proposal' ELSE 'qualification' END,
              (g % 100)::numeric, CURRENT_DATE + (g % 180),
-             md5('volume-account-' || (((g - 1) % $2::int) + 1)), 'Volume Account ' || (((g - 1) % $2::int) + 1))
+             md5('volume-account-' || (((g - 1) % $2::int) + 1)), 'Volume Account ' || (((g - 1) % $2::int) + 1)
       FROM generate_series(1, $3::int) g
       ON CONFLICT (id) DO NOTHING`, [tenantId, counts.accounts, counts.opportunities]);
     await client.query(`
       INSERT INTO public.aura_contracts_contracts
         (id, tenant_id, company_id, title, reference, account_id, account_name, status, value, owner_id, created_by)
       SELECT md5('volume-contract-' || g)::uuid, $1, 'volume-company', 'Volume Contract ' || g, 'VC-' || g,
-             md5('volume-account-' || (((g - 1) % $2::int) + 1)), 'Volume Account ' || (((g - 1) % $2::int) + 1)),
+             md5('volume-account-' || (((g - 1) % $2::int) + 1)), 'Volume Account ' || (((g - 1) % $2::int) + 1),
              CASE WHEN g % 9 = 0 THEN 'cancelled' WHEN g % 2 = 0 THEN 'active' ELSE 'draft' END, (g % 200 + 1) * 5000,
              'u-volume-owner-' || (g % 20), 'volume-proof'
       FROM generate_series(1, $3::int) g
@@ -66,7 +66,7 @@ async function seed() {
       INSERT INTO public.aura_projects_projects
         (id, tenant_id, company_id, title, reference, account_id, account_name, status, value, owner_id, created_by)
       SELECT md5('volume-project-' || g)::uuid, $1, 'volume-company', 'Volume Project ' || g, 'VP-' || g,
-             md5('volume-account-' || (((g - 1) % $2::int) + 1)), 'Volume Account ' || (((g - 1) % $2::int) + 1)),
+             md5('volume-account-' || (((g - 1) % $2::int) + 1)), 'Volume Account ' || (((g - 1) % $2::int) + 1),
              CASE WHEN g % 5 = 0 THEN 'active' WHEN g % 2 = 0 THEN 'planned' ELSE 'completed' END, (g % 300 + 1) * 7000,
              'u-volume-owner-' || (g % 20), 'volume-proof'
       FROM generate_series(1, $3::int) g

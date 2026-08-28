@@ -25,34 +25,34 @@ export function defaultRoleFunctions(): Record<string, string[]> {
       'panel.operations', 'panel.financial', 'panel.risk', 'panel.spine',
       'perspective.ceo', 'perspective.cfo', 'perspective.pm',
       'action.contract', 'action.project', 'action.customer',
-      'suite.dealChain', 'suite.operate', 'suite.finance', 'suite.intelligence', 'suite.platform',
+      'suite.commandCenter', 'suite.dealChain', 'suite.operate', 'suite.finance', 'suite.intelligence', 'suite.platform',
     ],
     finance: [
       'panel.health', 'panel.briefing', 'panel.attention', 'panel.nextActions', 'panel.financial', 'panel.risk',
       'perspective.cfo',
       'action.invoice', 'action.po',
       // finance pages (invoices, ledger, treasury) live under the Operate nav group
-      'suite.finance', 'suite.dealChain', 'suite.operate',
+      'suite.commandCenter', 'suite.finance', 'suite.dealChain', 'suite.operate',
     ],
     procurement: [
       'panel.briefing', 'panel.attention', 'panel.nextActions', 'panel.operations',
       'action.rfq', 'action.po',
-      'suite.operate',
+      'suite.commandCenter', 'suite.operate',
     ],
     projects: [
       'panel.health', 'panel.briefing', 'panel.attention', 'panel.nextActions', 'panel.operations', 'panel.risk',
       'perspective.pm',
       'action.project', 'action.siteReport',
-      'suite.dealChain', 'suite.operate',
+      'suite.commandCenter', 'suite.dealChain', 'suite.operate',
     ],
     operations: [
       'panel.briefing', 'panel.attention', 'panel.nextActions', 'panel.operations',
       'action.siteReport', 'action.ncr', 'action.ticket',
-      'suite.operate',
+      'suite.commandCenter', 'suite.operate',
     ],
     hr: [
       'panel.briefing', 'panel.attention', 'panel.nextActions',
-      'suite.operate',
+      'suite.commandCenter', 'suite.operate',
     ],
     viewer: [
       'panel.briefing', 'panel.attention',

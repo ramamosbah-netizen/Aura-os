@@ -2,8 +2,8 @@ import { ALL_ITEMS, type NavItem } from '@/components/nav';
 
 export type CapabilityStatus = 'IMPLEMENTED' | 'PARTIALLY IMPLEMENTED' | 'UI MISSING' | 'NOT IMPLEMENTED' | 'NOT VERIFIED';
 
-/** Where a suite sits in the sidebar. Work centers and System are not ordinary business suites. */
-export type SuiteSection = 'work' | 'business' | 'system';
+/** Where a suite sits in the sidebar. Work centers, Control and System are not ordinary business suites. */
+export type SuiteSection = 'work' | 'control' | 'business' | 'system';
 
 export interface AuraSuite {
   id: string;
@@ -26,8 +26,8 @@ const exact = (...routes: string[]) => (href: string) => routes.includes(href);
 /**
  * AURA OS navigation taxonomy — the single source of truth for the sidebar.
  *
- * Two work centers (My Work, Communication) that serve EVERY suite, nine business suites in a
- * fixed order, and one system area (Admin). Each entry is a front door: `entryHref` opens the
+ * Two work centers (My Work, Communication), one cross-suite control center, nine business suites
+ * in a fixed order, and one system area (Admin). Each entry is a front door: `entryHref` opens the
  * suite's real Home; `owns(pathname)` decides which suite stays highlighted even on a deep record
  * page (e.g. `/tendering/tenders/123/pricing` keeps Pre-Award active). `owns` sets are kept mutually
  * exclusive so exactly one suite claims any path — that is what makes deep-page highlighting correct
@@ -43,7 +43,7 @@ export const AURA_SUITES: AuraSuite[] = [
     description: 'Your personal command center — priorities, tasks, approvals and daily focus, composed from every suite.',
     entryHref: '/my-work', gate: null,
     capabilities: [{ label: 'Attention queue', status: 'IMPLEMENTED' }, { label: 'Tasks & My Day', status: 'PARTIALLY IMPLEMENTED' }, { label: 'Approvals', status: 'IMPLEMENTED' }, { label: 'Notifications & saved views', status: 'IMPLEMENTED' }],
-    owns: (href) => exact('/', '/my-work', '/my-work/my-day', '/my-work/tasks', '/my-work/approvals', '/my-work/favorites', '/my-work/command-center', '/inbox', '/notifications', '/views', '/search', '/ai')(href),
+    owns: (href) => exact('/', '/my-work', '/my-work/my-day', '/my-work/tasks', '/my-work/approvals', '/my-work/favorites', '/inbox', '/notifications', '/views', '/search', '/ai')(href),
   },
   {
     id: 'communication', name: 'Communication', shortName: 'Communication', glyph: '✉', section: 'work',
@@ -52,6 +52,15 @@ export const AURA_SUITES: AuraSuite[] = [
     entryHref: '/my-work/communication', gate: null,
     capabilities: [{ label: 'Internal chat', status: 'IMPLEMENTED' }, { label: 'Mail', status: 'PARTIALLY IMPLEMENTED' }, { label: 'WhatsApp Business Cloud', status: 'IMPLEMENTED' }, { label: 'Meetings', status: 'PARTIALLY IMPLEMENTED' }],
     owns: (href) => href === '/my-work/communication' || starts('/workspace')(href),
+  },
+
+  // ── Cross-suite control ──
+  {
+    id: 'business-command-center', name: 'Business Command Center', shortName: 'Command Center', glyph: '✦', section: 'control',
+    description: 'Organization health, cross-module decisions, risks and role dashboards.',
+    entryHref: '/command-center', gate: 'suite.commandCenter',
+    capabilities: [{ label: 'Business health', status: 'IMPLEMENTED' }, { label: 'Cross-module decisions', status: 'IMPLEMENTED' }, { label: 'Risk and financial snapshots', status: 'IMPLEMENTED' }, { label: 'Role perspectives', status: 'IMPLEMENTED' }],
+    owns: (href) => href === '/command-center' || starts('/command-center')(href),
   },
 
   // ── Business suites (fixed order) ──
@@ -137,11 +146,11 @@ export function visibleSuites(allowed: string[] | null | undefined, isAdmin: boo
   });
 }
 
-/** Sidebar model: visible suites grouped into their three sections, order preserved. */
+/** Sidebar model: visible suites grouped into their four sections, order preserved. */
 export function suiteSections(allowed: string[] | null | undefined, isAdmin: boolean): Array<{ section: SuiteSection; title: string; suites: AuraSuite[] }> {
   const visible = visibleSuites(allowed, isAdmin);
-  const titles: Record<SuiteSection, string> = { work: 'My Work', business: 'Business Suites', system: 'System' };
-  return (['work', 'business', 'system'] as SuiteSection[])
+  const titles: Record<SuiteSection, string> = { work: 'My Work', control: 'Control', business: 'Business Suites', system: 'System' };
+  return (['work', 'control', 'business', 'system'] as SuiteSection[])
     .map((section) => ({ section, title: titles[section], suites: visible.filter((suite) => suite.section === section) }))
     .filter((group) => group.suites.length > 0);
 }

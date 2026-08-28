@@ -1,12 +1,22 @@
-import AuraWorkspace from '@/components/aura-command-center';
+import { permanentRedirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * The role-aware Command Center that used to be Home. Home is now a suite launcher and
- * My Work is the attention dashboard, so this keeps the `perspective.*` role views
- * (CEO / CFO / PM) reachable instead of orphaning a configurable capability.
+ * Compatibility route for bookmarks created before Business Command Center became a
+ * cross-suite control surface. Preserve query parameters for saved role/deep links.
  */
-export default async function MyWorkCommandCenterPage() {
-  return <AuraWorkspace variant="my-work" />;
+export default async function LegacyMyWorkCommandCenterPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const input = await searchParams;
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (Array.isArray(value)) value.forEach((entry) => query.append(key, entry));
+    else if (value !== undefined) query.set(key, value);
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  permanentRedirect(`/command-center${suffix}`);
 }

@@ -29,7 +29,8 @@ export interface NavGroup {
 
 // Experience Architecture (L5) — the sidebar is a spine of front-doors + workspaces, not a page
 // directory. Every item below keeps its exact href (routes, APIs, permissions unchanged); this file
-// only RE-PARENTS them into the workspace a person would look for them in. The old flat 54-item
+// only RE-PARENTS them into the workspace a person would look for them in. The cross-suite Control
+// group owns the Business Command Center; the old flat 54-item
 // "Operate" group is split into Operations / Finance; CRM→Sales, Deal chain→Delivery. See
 // docs/reports/2026-07-27-aura-os-experience-architecture.md.
 export const NAV: NavGroup[] = [
@@ -40,9 +41,6 @@ export const NAV: NavGroup[] = [
       { label: 'Home', href: '/', glyph: '⌂', desc: 'AURA OS front door and operating overview' },
       { label: 'My Work', href: '/my-work', glyph: '◆', desc: 'Your live personal command center' },
       { label: 'My Day', href: '/my-work/my-day', glyph: '◐', desc: 'Today: meetings, tasks, priorities, approvals & AI suggestions' },
-      // Home became a suite launcher, so the role-aware Command Center (the `perspective.*`
-      // CEO/CFO/PM views) needs its own href or the capability is configurable but unreachable.
-      { label: 'Command Center', href: '/my-work/command-center', glyph: '✦', desc: 'Role perspectives: CEO, CFO and PM dashboards over live data' },
       { label: 'Inbox', href: '/inbox', glyph: '✉', desc: 'Approvals & internal mail awaiting you' },
       // Reachability: the Communication Center existed with NO nav entry. It was reachable only from
       // the My Work tile and three 360 pages, so removing that tile would have orphaned the page
@@ -56,6 +54,13 @@ export const NAV: NavGroup[] = [
       { label: 'AI Workspace', href: '/ai', glyph: '✦', desc: 'Ask the agents, run assistants & review what they proposed' },
       { label: 'Notifications', href: '/notifications', glyph: '◔', desc: 'Everything the system has told you, newest first' },
       { label: 'Saved Views', href: '/views', glyph: '▤', desc: 'Your saved filters & lists across every module' },
+    ],
+  },
+  {
+    title: 'Control',
+    glyph: '✦',
+    items: [
+      { label: 'Business Command Center', href: '/command-center', glyph: '✦', desc: 'Organization health, cross-module decisions, risks and role dashboards' },
     ],
   },
   {
@@ -283,6 +288,7 @@ export const ALL_ITEMS: NavItem[] = NAV.flatMap(groupAllItems);
 // Knowledge+Administration were Platform → platform; Analytics was Intelligence.) Home is the
 // front-door band — unmapped, so it always shows.
 export const GROUP_SUITE: Record<string, string> = {
+  Control: 'suite.commandCenter',
   Sales: 'suite.dealChain',
   Delivery: 'suite.dealChain',
   Operations: 'suite.operate',

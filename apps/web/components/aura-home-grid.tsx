@@ -58,7 +58,7 @@ const SUITE_ICON: Record<string, LucideIcon> = {
   'administration-governance': Settings2,
 };
 const TONES: HomeWorkspace['tone'][] = ['teal', 'blue', 'amber', 'green', 'violet', 'slate'];
-const SECTION_EYEBROW: Record<string, string> = { work: 'Work center', business: 'Business suite', system: 'System' };
+const SECTION_EYEBROW: Record<string, string> = { work: 'Work center', control: 'Control center', business: 'Business suite', system: 'System' };
 
 const WORKSPACES: HomeWorkspace[] = AURA_SUITES.map((suite, i) => ({
   id: suite.id,

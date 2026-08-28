@@ -41,6 +41,7 @@ export const WORKSPACE_FUNCTIONS: WorkspaceFunction[] = [
 
   // ── Navigation suites ────────────────────────────────────────────────────
   { id: 'suite.dealChain', label: 'Deal chain', category: 'suite', description: 'CRM → tenders → contracts → projects.' },
+  { id: 'suite.commandCenter', label: 'Business Command Center', category: 'suite', description: 'Organization health, cross-module decisions, risks and role dashboards.' },
   { id: 'suite.operate', label: 'Operate', category: 'suite', description: 'Procurement, inventory, site, HSE, quality, HR, fleet, assets.' },
   { id: 'suite.finance', label: 'Finance', category: 'suite', description: 'Invoices, ledger, statements, treasury.' },
   { id: 'suite.intelligence', label: 'Intelligence', category: 'suite', description: 'AI insights + console.' },

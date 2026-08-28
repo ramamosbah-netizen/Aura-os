@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AURA_SUITES, activeSuite, suiteSections } from '@/lib/suites';
+import { defaultWorkspaceConfig, visibleFunctionIds } from '@aura/shared';
 
 // The suite taxonomy is the backbone of the sidebar IA (Sidebar → Suite Home → Functions). These
 // invariants are what make deep-page highlighting correct and keep one path from being claimed by
@@ -36,10 +37,26 @@ describe('AURA suite taxonomy', () => {
     expect(activeSuite('/projects/dashboard')?.id).toBe('project-delivery');
   });
 
-  it('groups into work / business / system with nine business suites', () => {
+  it('owns the canonical route in Control and leaves the legacy My Work path unowned', () => {
+    expect(activeSuite('/command-center')?.id).toBe('business-command-center');
+    expect(activeSuite('/command-center/ceo')?.id).toBe('business-command-center');
+    expect(activeSuite('/my-work/command-center')?.id).toBeUndefined();
+  });
+
+  it('groups into work / control / business / system with nine business suites', () => {
     const sections = suiteSections(null, true);
-    expect(sections.map((s) => s.section)).toEqual(['work', 'business', 'system']);
+    expect(sections.map((s) => s.section)).toEqual(['work', 'control', 'business', 'system']);
+    expect(sections.find((s) => s.section === 'control')?.suites.map((s) => s.id)).toEqual(['business-command-center']);
     expect(sections.find((s) => s.section === 'business')?.suites).toHaveLength(9);
     expect(sections.find((s) => s.section === 'work')?.suites.map((s) => s.id)).toEqual(['my-work', 'communication']);
+  });
+
+  it('gates Business Command Center from the viewer workspace', () => {
+    const config = defaultWorkspaceConfig();
+    const viewer = suiteSections(visibleFunctionIds(config, 'viewer'), false);
+    expect(viewer.find((s) => s.section === 'control')).toBeUndefined();
+
+    const executive = suiteSections(visibleFunctionIds(config, 'executive'), false);
+    expect(executive.find((s) => s.section === 'control')?.suites.map((s) => s.id)).toEqual(['business-command-center']);
   });
 });

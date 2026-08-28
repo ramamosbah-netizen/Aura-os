@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
 
 // The Home launcher is DERIVED from the AURA_SUITES taxonomy (same source as the sidebar): the two
-// work centers, the nine business suites (Sales first among them), and the Admin Center — each card
+// work centers, the cross-suite Business Command Center, the nine business suites (Sales first among them), and the Admin Center — each card
 // opens that suite's Home. A subset is asserted here; the full set is generated, so this only pins
 // the destinations that matter most.
 const WORKSPACES = {
   'my-work': '/my-work',
+  'business-command-center': '/command-center',
   communication: '/my-work/communication',
   sales: '/crm/overview',
   'pre-award': '/tendering',

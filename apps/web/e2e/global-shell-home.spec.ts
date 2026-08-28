@@ -9,11 +9,12 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(page.getByRole('heading', { name: /Where would you like to work/ })).toBeVisible();
   // The launcher is derived from AURA_SUITES; assert a representative set of suite cards (Sales
   // included) and their Home destinations.
-  for (const section of ['My Work', 'Communication', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
+  for (const section of ['My Work', 'Communication', 'Business Command Center', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
     await expect(page.getByText(section, { exact: true })).toBeVisible();
   }
   const workspaceDestinations = {
     'my-work': '/my-work',
+    'business-command-center': '/command-center',
     sales: '/crm/overview',
     'pre-award': '/tendering',
     'project-delivery': '/projects/dashboard',
@@ -33,12 +34,12 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(page).toHaveURL('/my-work');
 
   const navigation = page.getByRole('navigation', { name: 'Main navigation' });
-  // The sidebar IS the suite taxonomy (lib/suites.ts), grouped My Work / Business Suites / System.
+  // The sidebar IS the suite taxonomy (lib/suites.ts), grouped My Work / Control / Business Suites / System.
   // It carries no separate Home/Projects/Suites/Reports/Admin entries — those belonged to the
   // pre-IA topbar. d80d40ad rewrote the first half of this spec for the new taxonomy and left this
   // half describing the old one, which is why it has failed on every run since 2026-08-22.
-  // One label from each of the three sections, so a dropped section fails here.
-  for (const label of ['My Work', 'Communication', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
+  // One label from each of the four sections, so a dropped section fails here.
+  for (const label of ['My Work', 'Communication', 'Business Command Center', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
     await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
 
@@ -57,12 +58,22 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
     await expect(myWorkTools.getByRole('link', { name: new RegExp(`^${tool}`) })).toBeVisible();
   }
 
+  await navigation.getByRole('link', { name: 'Business Command Center', exact: true }).click();
+  await expect(page).toHaveURL('/command-center');
+  await expect(page.getByTestId('business-command-center')).toBeVisible();
+  await expect(page.getByText('AURA OS / BUSINESS COMMAND CENTER')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Organization health, decisions and control.' })).toBeVisible();
+
+  await page.goto('/my-work/command-center?view=ceo', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL('/command-center?view=ceo');
+  await expect(page.getByTestId('business-command-center')).toBeVisible();
+
   await page.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suites-page')).toBeVisible();
-  // Twelve: every suite in lib/suites.ts, because this actor is an admin and only `adminOnly` and
+  // Thirteen: every suite in lib/suites.ts, because this actor is an admin and only `adminOnly` and
   // ungranted `gate`s remove one. Deliberately a literal — the count is the point, so adding or
   // dropping a suite has to be acknowledged here rather than absorbed by deriving it from the source.
-  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
+  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(13);
   // Scoped to the launcher: the sidebar carries a 'Project Delivery' suite link too, so an
   // unscoped name match is ambiguous and fails on strict mode rather than on the behaviour.
   const delivery = page.getByTestId('suite-launcher').getByRole('link', { name: /Project Delivery/ });
@@ -108,7 +119,7 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(page).toHaveURL('/crm/overview');
   await page.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suite-launcher')).toBeVisible();
-  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
+  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(13);
 
   const restricted = await browser.newContext({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, height: 900 } });
   const login = await restricted.request.post('/api/auth/login', {
@@ -141,5 +152,8 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(restrictedPage.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Admin Center', exact: true })).toHaveCount(0);
   await restrictedPage.goto('/suites/administration-governance', { waitUntil: 'domcontentloaded' });
   await expect(restrictedPage.getByTestId('data-error')).toHaveAttribute('data-error-kind', 'forbidden');
+  await restrictedPage.goto('/command-center', { waitUntil: 'domcontentloaded' });
+  await expect(restrictedPage).toHaveURL('/my-work');
+  await expect(restrictedPage.getByTestId('my-work-dashboard')).toBeVisible();
   await restricted.close();
 });

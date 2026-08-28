@@ -72,7 +72,7 @@ interface InboxItem {
 type RoleType = 'command' | 'ceo' | 'cfo' | 'pm';
 
 const PERSPECTIVES: Array<{ id: RoleType; label: string; fn?: string }> = [
-  { id: 'command', label: '✦ Command Center' },
+  { id: 'command', label: '✦ Business Command Center' },
   { id: 'ceo', label: '👔 CEO Command Center', fn: 'perspective.ceo' },
   { id: 'cfo', label: '📈 CFO Finance Portal', fn: 'perspective.cfo' },
   { id: 'pm', label: '🏗️ PM WBS Dashboard', fn: 'perspective.pm' },

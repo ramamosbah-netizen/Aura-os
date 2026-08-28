@@ -5,7 +5,7 @@ import { apiBase, currentUser, getJson } from '@/lib/api';
 import RoleDashboardShell from './role-dashboard-shell';
 
 /**
- * The role-aware Command Center. It carries the workspace `perspective.*` functions
+ * The role-aware Business Command Center. It carries the workspace `perspective.*` functions
  * (CEO / CFO / PM), which are declared in shared/src/workspace/functions.ts and assigned
  * per role in config.ts — so this composition is the only renderer of a configurable
  * platform capability, and stays routed even though Home is now a suite launcher.
@@ -74,7 +74,7 @@ export function displayName(sub: string | undefined): string | null {
   return base.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default async function AuraWorkspace({ variant }: { variant: 'home' | 'my-work' }) {
+export default async function AuraWorkspace({ variant }: { variant: 'home' | 'business-command-center' }) {
   const [user, events, documents, invoices, bankAccounts, projects, pipelineData, ledgers, inbox, me, workspaceConfig] =
     await Promise.all([
       currentUser(),
@@ -93,14 +93,14 @@ export default async function AuraWorkspace({ variant }: { variant: 'home' | 'my
   const online = events !== null || documents !== null;
 
   return (
-    <div style={s.shell} data-testid={variant === 'home' ? 'aura-home' : 'my-work'}>
+    <div style={s.shell} data-testid={variant === 'home' ? 'aura-home' : 'business-command-center'}>
       <header style={s.hero}>
         <div>
-          <p style={s.eyebrow}>{variant === 'home' ? 'AURA OS / HOME' : 'AURA OS / MY WORK'}</p>
-          <h1 style={s.heroTitle}>{variant === 'home' ? 'One operating view across the business.' : 'Your decisions, priorities and next actions.'}</h1>
-          <p style={s.heroCopy}>{variant === 'home' ? 'Start with what needs attention, enter a project, or choose a suite. Every view stays connected to the same records and permissions.' : 'A role-aware command center built from your live inbox, project signals and permitted actions.'}</p>
+          <p style={s.eyebrow}>{variant === 'home' ? 'AURA OS / HOME' : 'AURA OS / BUSINESS COMMAND CENTER'}</p>
+          <h1 style={s.heroTitle}>{variant === 'home' ? 'One operating view across the business.' : 'Organization health, decisions and control.'}</h1>
+          <p style={s.heroCopy}>{variant === 'home' ? 'Start with what needs attention, enter a project, or choose a suite. Every view stays connected to the same records and permissions.' : 'A permission-aware control surface for business health, cross-module decisions, risks and role dashboards.'}</p>
         </div>
-        <nav style={s.heroActions} aria-label={variant === 'home' ? 'Home actions' : 'My Work actions'}>
+        <nav style={s.heroActions} aria-label={variant === 'home' ? 'Home actions' : 'Business Command Center actions'}>
           {variant === 'home' ? <Link href="/my-work" style={s.primaryAction}>Open My Work</Link> : <Link href="/workspace?tab=inbox" style={s.primaryAction}>Open inbox</Link>}
           <Link href="/projects/projects" style={s.secondaryAction}>Projects</Link>
           <Link href="/suites" style={s.secondaryAction}>All suites</Link>
@@ -134,7 +134,7 @@ export default async function AuraWorkspace({ variant }: { variant: 'home' | 'my
         />
       )}
 
-      <footer style={s.footer}>AURA OS · {variant === 'home' ? 'Enterprise Home' : 'My Work'}</footer>
+      <footer style={s.footer}>AURA OS · {variant === 'home' ? 'Enterprise Home' : 'Business Command Center'}</footer>
     </div>
   );
 }

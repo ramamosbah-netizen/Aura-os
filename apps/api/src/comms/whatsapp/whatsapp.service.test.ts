@@ -11,18 +11,19 @@ function makeService(store = new InMemoryWhatsAppStore(), dispatch?: InMemoryMai
     sendText: vi.fn().mockResolvedValue({ externalMessageId: 'wamid-out', status: 'sent' }),
     markRead: vi.fn().mockResolvedValue(undefined),
   };
+  const notifications = { record: vi.fn().mockResolvedValue(undefined) };
   const service = new WhatsAppService(
     store,
     { publishTimeline: vi.fn().mockResolvedValue(undefined) } as never,
     provider as never,
-    { record: vi.fn().mockResolvedValue(undefined) } as never,
+    notifications as never,
     { publish: vi.fn().mockResolvedValue(undefined) } as never,
     { get: vi.fn().mockReturnValue({ tenantId: 't1' }) } as never,
     null,
     null,
     dispatch ?? null,
   );
-  return { service, store, provider };
+  return { service, store, provider, notifications };
 }
 
 async function thread(store: InMemoryWhatsAppStore, ownerId: string | null = 'u-owner') {
@@ -63,5 +64,13 @@ describe('WhatsAppService resource authorization', () => {
     const sent = await service.reply('t1', 'company-1', 'u-owner', false, row.id, 'hello');
     expect(sent.status).toBe('sent');
     expect((await dispatch.getDispatch('t1', sent.id))?.state).toBe('done');
+  });
+
+  it('ignores duplicate or out-of-order Meta status webhooks', async () => {
+    const { service, store, notifications } = makeService(); const row = await thread(store, 'u-owner');
+    await store.insertMessage({ tenantId: 't1', companyId: 'company-1', providerAccountId: 'account-1', threadId: row.id, externalMessageId: 'wamid-out-status', direction: 'outbound', status: 'sent', type: 'text', body: 'hello', sender: 'u-owner', occurredAt: new Date().toISOString() });
+    const first = await (service as never as { delivery: (tenantId: string, providerAccountId: string, raw: Record<string, unknown>) => Promise<boolean> }).delivery('t1', 'account-1', { id: 'wamid-out-status', status: 'read' });
+    const duplicate = await (service as never as { delivery: (tenantId: string, providerAccountId: string, raw: Record<string, unknown>) => Promise<boolean> }).delivery('t1', 'account-1', { id: 'wamid-out-status', status: 'read' });
+    expect(first).toBe(true); expect(duplicate).toBe(false); expect(notifications.record).toHaveBeenCalledTimes(1);
   });
 });

@@ -11,6 +11,7 @@ type MetaWebhook = { entry?: Array<{ changes?: Array<{ value?: { metadata?: { ph
 
 function messageType(value: string | undefined): WhatsAppMessageType { return ['text','image','document','audio','video','sticker'].includes(value ?? '') ? value as WhatsAppMessageType : 'unknown'; }
 function status(value: string | undefined): WhatsAppMessageStatus { return value === 'delivered' || value === 'read' || value === 'failed' || value === 'sent' ? value : 'sent'; }
+const STATUS_RANK: Record<WhatsAppMessageStatus, number> = { received: 0, queued: 1, sent: 2, delivered: 3, read: 4, failed: 5 };
 function bodyOf(m: Record<string, unknown>): { body: string; mediaId: string | null; type: WhatsAppMessageType } {
   const type = messageType(typeof m.type === 'string' ? m.type : undefined); const payload = (m[type] ?? {}) as Record<string, unknown>;
   return { body: type === 'text' && typeof payload.body === 'string' ? payload.body : type === 'unknown' ? 'WhatsApp message' : `[${type}]`, mediaId: typeof payload.id === 'string' ? payload.id : null, type };
@@ -56,13 +57,24 @@ export class WhatsAppService {
     const result = await this.store.insertMessage({ tenantId: account.tenantId, companyId: account.companyId, providerAccountId: account.id, threadId: thread.id, externalMessageId, direction: 'inbound', status: 'received', type: parsed.type, body: parsed.body, mediaId: parsed.mediaId, sender: from, occurredAt: timestamp, rawPayload: raw });
     if (!result.inserted) return false;
     await this.comms.publishTimeline(account.tenantId, { id: newId(), companyId: account.companyId, occurredAt: timestamp, channel: 'whatsapp', direction: 'inbound', actor: from, subjectType: 'whatsapp', subjectId: result.message.id, title: `WhatsApp from ${displayName}`, preview: parsed.body.slice(0, 240), visibility: 'tenant', visibilityKey: account.id });
-    await this.notifications.record({ tenantId: account.tenantId, userId: thread.ownerId, title: `New WhatsApp message from ${displayName}`, body: parsed.body.slice(0, 240), category: 'chat', refType: 'comms.whatsapp', refId: thread.id });
+    // A company-scoped, unassigned thread has no safe recipient in the notification schema (which
+    // is tenant-scoped). Do not turn it into a tenant-wide broadcast; the unread thread remains
+    // visible to eligible company users and can be claimed from Communication.
+    if (thread.ownerId || account.companyId === null) {
+      await this.notifications.record({ tenantId: account.tenantId, userId: thread.ownerId, title: `New WhatsApp message from ${displayName}`, body: parsed.body.slice(0, 240), category: 'chat', refType: 'comms.whatsapp', refId: thread.id });
+    }
     await this.events.publish(makeEvent({ type: 'comms.whatsapp.received', tenantId: account.tenantId, companyId: account.companyId, aggregateType: 'comms.whatsapp.message', aggregateId: result.message.id, actorId: from, payload: { threadId: thread.id, messageId: result.message.id } }));
     return true;
   }
 
   private async delivery(tenantId: string, providerAccountId: string, raw: Record<string, unknown>): Promise<boolean> {
-    const id = typeof raw.id === 'string' ? raw.id : ''; if (!id) return false; const next = await this.store.updateStatus(tenantId, providerAccountId, id, status(typeof raw.status === 'string' ? raw.status : undefined), typeof raw.errors === 'string' ? raw.errors : null); if (!next) return false;
+    const id = typeof raw.id === 'string' ? raw.id : ''; if (!id) return false;
+    const nextStatus = status(typeof raw.status === 'string' ? raw.status : undefined);
+    const current = await this.store.findMessageByExternalId(tenantId, providerAccountId, id);
+    // Meta may redeliver the same status webhook. Treat an equal or older monotonic status as a
+    // no-op so duplicate deliveries cannot create repeated read notifications or SSE events.
+    if (!current || current.status === nextStatus || (current.status !== 'failed' && STATUS_RANK[nextStatus] <= STATUS_RANK[current.status])) return false;
+    const next = await this.store.updateStatus(tenantId, providerAccountId, id, nextStatus, typeof raw.errors === 'string' ? raw.errors : null); if (!next) return false;
     if (next.status === 'read' && next.direction === 'outbound') await this.notifications.record({ tenantId, userId: next.sender, title: 'WhatsApp message read', body: `Your message to the customer was read.`, category: 'chat', refType: 'comms.whatsapp', refId: next.threadId });
     await this.events.publish(makeEvent({ type: 'comms.whatsapp.status', tenantId, companyId: next.companyId, aggregateType: 'comms.whatsapp.message', aggregateId: next.id, actorId: null, payload: { threadId: next.threadId, externalMessageId: id, status: next.status } })); return true;
   }

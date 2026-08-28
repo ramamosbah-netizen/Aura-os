@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
@@ -32,8 +32,9 @@ interface Contact {
 }
 interface Account { id: string; name: string; }
 
-export default function ContactsClient({ initialContacts, initialAccounts }: {
+export default function ContactsClient({ initialContacts, initialTotal, initialAccounts }: {
   initialContacts: Contact[];
+  initialTotal?: number;
   initialAccounts: Account[];
 }) {
   const router = useRouter();
@@ -43,9 +44,30 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
   const [query, setQuery] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [page, setPage] = useState({ offset: 0, limit: 50, total: initialTotal ?? initialContacts.length, hasMore: (initialTotal ?? initialContacts.length) > 50 });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ limit: String(page.limit), offset: String(page.offset) });
+      if (query.trim()) params.set('search', query.trim());
+      if (accountFilter) params.set('accountId', accountFilter);
+      setLoading(true);
+      void fetch(`/api/crm/contacts/paged?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
+        .then((res) => res.ok ? res.json() : null)
+        .then((next: { items: Contact[]; total: number; limit: number; offset: number; hasMore: boolean } | null) => {
+          if (next) { setPage({ offset: next.offset, limit: next.limit, total: next.total, hasMore: next.hasMore }); setContacts(next.items); }
+        }).catch(() => undefined).finally(() => setLoading(false));
+    }, query ? 250 : 0);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [query, accountFilter, page.offset]);
+
+  const [contactsState, setContacts] = useState<Contact[]>(initialContacts);
+  const currentContacts = contactsState;
 
   const contacts = useMemo(() => {
-    let out = initialContacts;
+    let out = currentContacts;
     if (accountFilter) out = out.filter((c) => c.accountId === accountFilter);
     if (roleFilter === 'champions') out = out.filter((c) => c.relationshipStrength === 'champion' || c.relationshipStrength === 'strong');
     else if (roleFilter === 'unmapped') out = out.filter((c) => !c.stakeholderRole);
@@ -57,10 +79,10 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
       );
     }
     return out;
-  }, [initialContacts, query, accountFilter, roleFilter]);
+  }, [currentContacts, query, accountFilter, roleFilter]);
 
   const kpi = useMemo(() => {
-    const all = initialContacts;
+    const all = currentContacts;
     const active = all.filter((c) => c.status === 'active');
     const linked = all.filter((c) => c.accountId);
     const primaries = all.filter((c) => c.isPrimary && c.status === 'active');
@@ -72,7 +94,7 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
     const champions = all.filter((c) => c.relationshipStrength === 'champion' || c.relationshipStrength === 'strong').length;
     const unmapped = all.filter((c) => !c.stakeholderRole).length;
     return { total: all.length, active: active.length, linked: linked.length, primaries: primaries.length, recent: recent.length, uncovered, decisionMakers, champions, unmapped };
-  }, [initialContacts, initialAccounts]);
+  }, [currentContacts, initialAccounts]);
 
   const patch = async (c: Contact, body: Record<string, unknown>, note?: string): Promise<void> => {
     setBusy(true); setErr(''); setMsg('');
@@ -175,7 +197,7 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
 
       {contacts.length === 0 ? (
         <p style={st.muted}>
-          {initialContacts.length === 0
+          {page.total === 0
             ? 'No contacts yet — add the people you deal with at each account.'
             : 'No contacts match the filter.'}
         </p>
@@ -259,6 +281,15 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
           </div>
         </section>
       )}
+      {page.total > page.limit ? (
+        <div style={st.pagination}>
+          <span style={st.muted}>{page.offset + 1}–{Math.min(page.offset + currentContacts.length, page.total)} of {page.total} contacts</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" disabled={loading || page.offset === 0} onClick={() => setPage((p) => ({ ...p, offset: Math.max(0, p.offset - p.limit) }))} style={st.pageBtn}>Previous</button>
+            <button type="button" disabled={loading || !page.hasMore} onClick={() => setPage((p) => ({ ...p, offset: p.offset + p.limit }))} style={st.pageBtn}>Next</button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -285,6 +316,8 @@ const st = {
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   ok: { color: 'var(--good)', fontSize: 13 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
+  pagination: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12, flexWrap: 'wrap' } as CSSProperties,
+  pageBtn: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 } as CSSProperties,
   starBtn: { background: 'transparent', border: 'none', fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 } as CSSProperties,
 };

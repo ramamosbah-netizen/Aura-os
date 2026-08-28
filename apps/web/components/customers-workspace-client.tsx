@@ -24,6 +24,7 @@ export type CustomerContact = {
   ownerId: string | null;
   createdAt: string;
 };
+export type CustomerContactPage = { items: CustomerContact[]; total: number; limit: number; offset: number; hasMore: boolean };
 export type CustomerAccount = { id: string; name: string };
 
 type View = 'accounts' | 'contacts' | 'stakeholders';
@@ -31,11 +32,13 @@ type View = 'accounts' | 'contacts' | 'stakeholders';
 export default function CustomersWorkspaceClient({
   portfolio,
   contacts,
+  contactPage,
   accountOptions,
   currentUserId,
 }: {
   portfolio: CustomerPortfolioPage;
   contacts: CustomerContact[];
+  contactPage: CustomerContactPage;
   accountOptions: CustomerAccount[];
   currentUserId: string | null;
 }) {
@@ -94,7 +97,7 @@ export default function CustomersWorkspaceClient({
       {view === 'accounts' ? (
         <AccountsPortfolioClient initialPage={portfolio} currentUserId={currentUserId} />
       ) : view === 'contacts' ? (
-        <ContactsClient initialContacts={contacts} initialAccounts={accountOptions} />
+        <ContactsClient initialContacts={contactPage.items} initialTotal={contactPage.total} initialAccounts={accountOptions} />
       ) : (
         <section aria-label="Stakeholder map" style={st.mapGrid}>
           <div style={st.mapIntro}>

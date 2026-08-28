@@ -8,6 +8,8 @@ import {
 } from './stakeholder-meta';
 import Timeline from './timeline';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import DataStateNotice from './ui/data-state';
+import { classifyStatus, type DataError } from '@/lib/data-error';
 
 // Contact 360 — the stakeholder command center. Header (role + strength + account
 // hierarchy) → snapshot → stakeholder map (manager / reports / peers) → the deals
@@ -66,13 +68,19 @@ function ago(iso: string | null): string {
 export default function Contact360Client({ contactId }: { contactId: string }) {
   const [data, setData] = useState<Payload | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<DataError | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/crm/contacts/${contactId}/summary`, { cache: 'no-store' });
-    if (!res.ok) { setErr('Failed to load the contact'); return; }
-    setData(await res.json());
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/crm/contacts/${contactId}/summary`, { cache: 'no-store', signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) { setLoadError({ kind: classifyStatus(res.status), status: res.status }); return; }
+      setData(await res.json());
+    } catch {
+      setLoadError({ kind: 'unreachable', status: 0 });
+    }
   }, [contactId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -92,7 +100,10 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
     } finally { setBusy(false); }
   }, [contactId, load]);
 
-  if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading contact…'}</p>;
+  if (!data) {
+    if (loadError) return <DataStateNotice error={loadError} subject="this contact" />;
+    return <p style={{ color: 'var(--muted)' }}>Loading contact…</p>;
+  }
 
   const { contact: c, account, reportsTo, reports, peers, opportunities, tenders, quotations, contracts, projects, activities, summary, whatsapp } = data;
   const roleLabel = c.stakeholderRole ? STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole : null;
@@ -239,7 +250,7 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
         {tab === 'deals' && (
           <div>
             <p style={st.muted}>Deals at {summary.accountName ?? 'this account'} this stakeholder is involved in.</p>
-            <DealTable title="Opportunities" cols={['Title', 'Stage', 'Value', 'Win %']} rows={opportunities.map((o) => [o.title, o.stage, `AED ${aed(o.value)}`, `${o.winProbability}%`])} href="/crm/leads" />
+            <DealTable title="Opportunities" cols={['Title', 'Stage', 'Value', 'Win %']} rows={opportunities.map((o) => [o.title, o.stage, `AED ${aed(o.value)}`, `${o.winProbability}%`])} href="/crm/pipeline" />
             <DealTable title="Tenders" cols={['Tender', 'Ref', 'Status', 'Value']} rows={tenders.map((t) => [t.title, t.reference ?? '—', t.status, `AED ${aed(t.value)}`])} />
             <DealTable title="Quotations" cols={['Number', 'Status', 'Total', 'Issued']} rows={quotations.map((q) => [q.quoteNumber, q.status, `AED ${aed(q.total)}`, q.issueDate])} href="/crm/quotations" />
             <DealTable title="Contracts" cols={['Contract', 'Status', 'Value', 'Awarded']} rows={contracts.map((ct) => [ct.title, ct.status, `AED ${aed(ct.value)}`, d(ct.createdAt)])} />

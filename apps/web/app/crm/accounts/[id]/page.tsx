@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice from '../../../../components/ui/data-state';
 import RecordChrome from '../../../../components/record-chrome';
 import Account360Client from '../../../../components/account-360-client';
 
@@ -17,9 +18,12 @@ interface Account {
  */
 export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const account = await getJson<Account>(`/api/crm/accounts/${id}`);
+  const result = await fetchJson<Account>(`/api/crm/accounts/${id}`);
 
-  if (!account) {
+  if (!result.ok) {
+    if (result.error.kind !== 'not-found') {
+      return <div style={st.container}><DataStateNotice error={result.error} subject="this account" /></div>;
+    }
     return (
       <div style={st.container}>
         <h1 style={st.h1}>Account Not Found</h1>
@@ -30,11 +34,11 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div style={st.container}>
-      <RecordChrome type="Account" title={account.name} />
+      <RecordChrome type="Account" title={result.data.name} />
       <div style={st.navRow}>
         <a href="/crm/customers?view=accounts" style={st.link}>← Back to Customers</a>
       </div>
-      <Account360Client accountId={account.id} />
+      <Account360Client accountId={result.data.id} />
     </div>
   );
 }

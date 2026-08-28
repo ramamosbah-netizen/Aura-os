@@ -17,6 +17,8 @@ import Timeline from './timeline';
 import RelationshipGraphPanel from './relationship-graph-panel';
 import InstalledBasePanel from './installed-base-panel';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import DataStateNotice from './ui/data-state';
+import { classifyStatus, type DataError } from '@/lib/data-error';
 
 // Account 360 — the customer COMMAND CENTER. The Account is the persistent
 // commercial party every deal revolves around (the hub, not the first step).
@@ -108,6 +110,7 @@ const PARTY_LABEL: Record<string, string> = {
 export default function Account360Client({ accountId }: { accountId: string }) {
   const [data, setData] = useState<Payload | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<DataError | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [busy, setBusy] = useState(false);
   // Identity for ownership: the account owner is stored as a workspace username
@@ -121,12 +124,17 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   const [docs, setDocs] = useState<DocRow[] | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/crm/accounts/${accountId}/summary`, { cache: 'no-store' });
-    if (!res.ok) {
-      setErr('Failed to load the account');
-      return;
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/crm/accounts/${accountId}/summary`, { cache: 'no-store', signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) {
+        setLoadError({ kind: classifyStatus(res.status), status: res.status });
+        return;
+      }
+      setData(await res.json());
+    } catch {
+      setLoadError({ kind: 'unreachable', status: 0 });
     }
-    setData(await res.json());
   }, [accountId]);
 
   useEffect(() => {
@@ -211,7 +219,10 @@ export default function Account360Client({ accountId }: { accountId: string }) {
     }
   }, [load]);
 
-  if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading account…'}</p>;
+  if (!data) {
+    if (loadError) return <DataStateNotice error={loadError} subject="this account" />;
+    return <p style={{ color: 'var(--muted)' }}>Loading account…</p>;
+  }
 
   const { account: a, contacts, opportunities, tenders, quotations, contracts, projects, activities, receivables, summary } = data;
 

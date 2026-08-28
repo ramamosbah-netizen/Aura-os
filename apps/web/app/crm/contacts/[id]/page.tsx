@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice from '../../../../components/ui/data-state';
 import RecordChrome from '../../../../components/record-chrome';
 import Contact360Client from '../../../../components/contact-360-client';
 
@@ -15,9 +16,12 @@ interface Contact { id: string; name: string; }
  */
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const contact = await getJson<Contact>(`/api/crm/contacts/${id}`);
+  const result = await fetchJson<Contact>(`/api/crm/contacts/${id}`);
 
-  if (!contact) {
+  if (!result.ok) {
+    if (result.error.kind !== 'not-found') {
+      return <div style={st.container}><DataStateNotice error={result.error} subject="this contact" /></div>;
+    }
     return (
       <div style={st.container}>
         <h1 style={st.h1}>Contact Not Found</h1>
@@ -28,11 +32,11 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div style={st.container}>
-      <RecordChrome type="Contact" title={contact.name} />
+      <RecordChrome type="Contact" title={result.data.name} />
       <div style={st.navRow}>
         <a href="/crm/customers?view=contacts" style={st.link}>← Back to Customers</a>
       </div>
-      <Contact360Client contactId={contact.id} />
+      <Contact360Client contactId={result.data.id} />
     </div>
   );
 }

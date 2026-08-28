@@ -21,6 +21,7 @@ import {
 import { WorkspaceConfigService } from '../workspace/workspace-config.service';
 import { COMMS_STORE, type CommsStore, type StoredChannel, type TimelineEntry } from './comms-store';
 import { MAIL_STORE, type MailStore } from './mail/mail-store';
+import { WHATSAPP_STORE, type WhatsAppStore } from './whatsapp/whatsapp-store';
 
 /**
  * Who may see a channel, and therefore its messages and their attachments.
@@ -122,12 +123,13 @@ export interface CommunicationFile {
 /** One actionable row in the Communication unread view. */
 export interface UnreadCommunication {
   id: string;
-  source: 'chat' | 'mail';
+  source: 'chat' | 'mail' | 'whatsapp';
   title: string;
   detail: string;
   date: string;
   channelId: string | null;
   mailId: string | null;
+  threadId: string | null;
 }
 
 interface DirectoryPerson extends ChatPerson {
@@ -161,6 +163,9 @@ export class CommsService {
     @Optional() private readonly users: UsersService | null = null,
     @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
     @Optional() @Inject(ProjectService) private readonly projects: ProjectService | null = null,
+    // WhatsApp is another Communication facet. Optional keeps the focused chat/mail harnesses
+    // usable while the production module supplies the persisted store.
+    @Optional() @Inject(WHATSAPP_STORE) private readonly whatsapp: WhatsAppStore | null = null,
   ) {}
 
   /**
@@ -376,6 +381,7 @@ export class CommsService {
           date: last.sentAt,
           channelId: channel.id,
           mailId: null,
+          threadId: null,
         });
       }
     }
@@ -389,7 +395,23 @@ export class CommsService {
         date: mail.sentAt,
         channelId: null,
         mailId: mail.id,
+        threadId: null,
       });
+    }
+    if (this.whatsapp) {
+      const threads = await this.whatsapp.listThreads(tenantId, companyId, username);
+      for (const thread of threads.filter((candidate) => candidate.unread > 0)) {
+        items.push({
+          id: `whatsapp:${thread.id}`,
+          source: 'whatsapp',
+          title: thread.displayName,
+          detail: thread.lastPreview ?? thread.phone,
+          date: thread.lastMessageAt ?? new Date(0).toISOString(),
+          channelId: null,
+          mailId: null,
+          threadId: thread.id,
+        });
+      }
     }
     return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
   }
@@ -696,10 +718,20 @@ export class CommsService {
     }
   }
 
-  /** One badge feed: chat unread + mail unread (notifications count comes from its own endpoint). */
-  async unread(tenantId: string, username: string, isAdmin: boolean, companyId: string | null = null): Promise<{ chat: number; mail: number }> {
-    const summaries = await this.channels(tenantId, username, isAdmin, companyId);
-    const box = await this.mailbox(tenantId, username);
-    return { chat: summaries.reduce((sum, c) => sum + c.unread, 0), mail: box.unread };
+  /** One badge feed for every Communication channel. Notifications remain a separate feed. */
+  async unread(
+    tenantId: string,
+    username: string,
+    isAdmin: boolean,
+    companyId: string | null = null,
+  ): Promise<{ chat: number; mail: number; whatsapp: number; total: number }> {
+    const [summaries, box, whatsappThreads] = await Promise.all([
+      this.channels(tenantId, username, isAdmin, companyId),
+      this.mailbox(tenantId, username),
+      this.whatsapp?.listThreads(tenantId, companyId, username) ?? Promise.resolve([]),
+    ]);
+    const chat = summaries.reduce((sum, c) => sum + c.unread, 0);
+    const whatsapp = whatsappThreads.reduce((sum, thread) => sum + thread.unread, 0);
+    return { chat, mail: box.unread, whatsapp, total: chat + box.unread + whatsapp };
   }
 }

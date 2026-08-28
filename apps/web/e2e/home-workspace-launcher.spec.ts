@@ -20,6 +20,7 @@ test('Home is a responsive suite launcher with working destinations (incl. Sales
   await expect(page.getByRole('complementary', { name: 'Primary' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /Where would you like to work/ })).toBeVisible();
   await expect(page.getByLabel(/Signed in as/)).toBeVisible();
+  await expect(page.getByTestId('home-communication-unread')).toHaveAttribute('href', '/my-work/communication?view=unread');
 
   for (const [workspace, destination] of Object.entries(WORKSPACES)) {
     const card = page.getByTestId(`workspace-card-${workspace}`);

@@ -25,6 +25,7 @@ test('My Work aggregates attention and keeps domain records at their source', as
   await expect(auraTabs.nth(0)).toContainText('My Work');
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Ask AURA' })).toHaveAttribute('href', '/ai');
+  await expect(page.getByText('Unread communication · chat · mail · WhatsApp')).toBeVisible();
 
   const shortcuts = page.getByTestId('my-work-shortcut');
   await expect(shortcuts).toHaveCount(4);

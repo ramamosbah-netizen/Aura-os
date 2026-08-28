@@ -8,6 +8,7 @@ import MyWorkDashboard, {
 export const dynamic = 'force-dynamic';
 
 interface SavedViewLite { id: string; userId: string | null }
+interface CommunicationUnreadSummary { chat: number; mail: number; whatsapp: number; total: number }
 
 function displayName(subject: string | undefined): string {
   const base = subject?.replace(/^u-/, '').replace(/[-_.]+/g, ' ').trim();
@@ -18,11 +19,12 @@ export default async function MyWorkPage() {
   const user = await currentUser();
   const username = user?.sub;
   const dayPath = `/api/crm/my-day${username ? `?userId=${encodeURIComponent(username)}` : ''}`;
-  const [day, decisions, notifications, favorites] = await Promise.all([
+  const [day, decisions, notifications, favorites, communicationUnread] = await Promise.all([
     getJson<MyWorkDay>(dayPath),
     getJson<MyWorkDecision[]>('/api/inbox'),
     getJson<MyWorkNotification[]>('/api/notifications'),
     getJson<SavedViewLite[]>('/api/views'),
+    getJson<CommunicationUnreadSummary>('/api/comms/unread'),
   ]);
 
   return (
@@ -31,6 +33,7 @@ export default async function MyWorkPage() {
       day={day}
       decisions={decisions}
       notifications={notifications}
+      communicationUnread={communicationUnread}
       favoriteCount={favorites && username ? favorites.filter((favorite) => favorite.userId === username).length : null}
     />
   );

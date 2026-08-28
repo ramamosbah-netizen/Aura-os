@@ -96,15 +96,20 @@ export default function AppShell({
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   useEffect(() => {
-    fetch('/api/notifications', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: Array<{ read?: boolean }> | null) => {
-        if (Array.isArray(d)) {
-          const unread = d.filter((n) => !n.read).length;
-          setUnreadCount(unread);
-        }
-      })
-      .catch(() => undefined);
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const response = await fetch('/api/notifications/unread-count', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json() as { count?: number };
+        if (!cancelled && typeof data.count === 'number') setUnreadCount(Math.max(0, data.count));
+      } catch {
+        // Keep the last known badge across a transient API outage.
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, []);
 
   useEffect(() => {

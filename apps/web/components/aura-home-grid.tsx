@@ -9,6 +9,7 @@ import {
   BriefcaseBusiness,
   Building2,
   ClipboardList,
+  Inbox,
   Landmark,
   MessagesSquare,
   Scale,
@@ -31,6 +32,13 @@ interface HomeWorkspace {
   icon: LucideIcon;
   tone: 'teal' | 'blue' | 'amber' | 'green' | 'violet' | 'slate';
   featured?: boolean;
+}
+
+interface CommunicationUnreadSummary {
+  chat: number;
+  mail: number;
+  whatsapp: number;
+  total: number;
 }
 
 // One icon per suite; the launcher is DERIVED from the same AURA_SUITES taxonomy the sidebar uses,
@@ -64,7 +72,7 @@ const WORKSPACES: HomeWorkspace[] = AURA_SUITES.map((suite, i) => ({
   featured: suite.id === 'sales',
 }));
 
-export default function AuraHomeGrid({ userName }: { userName: string }) {
+export default function AuraHomeGrid({ userName, communicationUnread }: { userName: string; communicationUnread: CommunicationUnreadSummary | null }) {
   // The clock is CLIENT-ONLY on purpose. Seeding `now` from `new Date()` would run on the server at
   // SSR time and again in the browser at hydration time — a few minutes apart — so the two renders
   // disagree and React throws a hydration mismatch on the clock text. Start null (identical on server
@@ -74,6 +82,22 @@ export default function AuraHomeGrid({ userName }: { userName: string }) {
     setNow(new Date());
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
+  }, []);
+  const [liveUnread, setLiveUnread] = useState<CommunicationUnreadSummary | null>(communicationUnread);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const response = await fetch('/api/comms/unread', { cache: 'no-store' });
+        if (!response.ok) return;
+        const next = await response.json() as CommunicationUnreadSummary;
+        if (!cancelled && Number.isFinite(next.total)) setLiveUnread(next);
+      } catch {
+        // Keep the last known value during a transient API outage.
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, []);
   const clock = useMemo(() => (now ? new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Dubai',
@@ -106,6 +130,15 @@ export default function AuraHomeGrid({ userName }: { userName: string }) {
           <span className={styles.date}>{date} · GST</span>
         </div>
       </header>
+
+      <Link href="/my-work/communication?view=unread" className={styles.communicationPulse} data-testid="home-communication-unread">
+        <span className={styles.communicationPulseIcon} aria-hidden><Inbox size={17} /></span>
+        <span className={styles.communicationPulseCopy}>
+          <strong>{liveUnread === null ? 'Communication status unavailable' : liveUnread.total === 0 ? 'Communication is all caught up' : `${liveUnread.total} unread communication${liveUnread.total === 1 ? '' : 's'}`}</strong>
+          <small>{liveUnread === null ? 'Open Communication to retry the live sources' : `${liveUnread.chat} chat · ${liveUnread.mail} mail · ${liveUnread.whatsapp} WhatsApp`}</small>
+        </span>
+        <ArrowUpRight aria-hidden />
+      </Link>
 
       <main className={styles.launcher} aria-label="AURA workspaces">
         <div className={styles.sectionHead}>

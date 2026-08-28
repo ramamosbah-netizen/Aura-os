@@ -5,6 +5,7 @@ import { CommsController } from './comms.controller';
 import { CommsService, canAccessChannel } from './comms.service';
 import { InMemoryCommsStore } from './in-memory-comms-store';
 import { InMemoryMailStore } from './mail/in-memory-mail-store';
+import { InMemoryWhatsAppStore } from './whatsapp/in-memory-whatsapp-store';
 import type { WorkspaceConfigService } from '../workspace/workspace-config.service';
 
 /**
@@ -21,7 +22,7 @@ const MALLORY = 'u-mallory';
 const TENANT_A = 'tenant-a';
 const TENANT_B = 'tenant-b';
 
-function makeService() {
+function makeService(whatsapp?: InMemoryWhatsAppStore) {
   const store = new InMemoryCommsStore();
   const workspace = {
     // Two named staff plus an outsider, so a directory channel exists to be a member of.
@@ -29,7 +30,7 @@ function makeService() {
   } as unknown as WorkspaceConfigService;
   const notifications = { record: vi.fn().mockResolvedValue(undefined) } as unknown as NotificationService;
   const mail = new InMemoryMailStore();
-  return { service: new CommsService(workspace, notifications, store, mail), store, mail };
+  return { service: new CommsService(workspace, notifications, store, mail, null, null, null, whatsapp), store, mail };
 }
 
 /** Establish a DM between Alice and Bob carrying one message. */
@@ -163,6 +164,30 @@ describe('Communication authorization', () => {
     expect((await service.unread(TENANT_A, BOB, false)).chat).toBe(1);
     await service.messages(TENANT_A, BOB, dm.id);
     expect((await service.unread(TENANT_A, BOB, false)).chat).toBe(0);
+  });
+
+  it('projects owned WhatsApp unread into the unified badge and worklist', async () => {
+    const whatsapp = new InMemoryWhatsAppStore();
+    const { service } = makeService(whatsapp);
+    await whatsapp.ensureThread({
+      id: 'wa-thread-1', tenantId: TENANT_A, companyId: null, providerAccountId: 'wa-account-1',
+      channel: 'whatsapp', displayName: 'ABC Contracting', phone: '+971500000001',
+      externalConversationId: '+971500000001', contactId: null, accountId: null, ownerId: BOB,
+    });
+    await whatsapp.insertMessage({
+      tenantId: TENANT_A, companyId: null, providerAccountId: 'wa-account-1', threadId: 'wa-thread-1',
+      externalMessageId: 'wamid-1', direction: 'inbound', status: 'received', type: 'text',
+      body: 'Please send the revised quotation.', mediaId: null, sender: '+971500000001',
+      occurredAt: '2026-08-28T08:00:00.000Z',
+    });
+
+    expect(await service.unread(TENANT_A, BOB, false)).toMatchObject({ whatsapp: 1, total: 1 });
+    expect(await service.unreadItems(TENANT_A, BOB, false)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: 'whatsapp', threadId: 'wa-thread-1', title: 'ABC Contracting' }),
+    ]));
+
+    await whatsapp.markRead(TENANT_A, 'wa-thread-1');
+    expect((await service.unread(TENANT_A, BOB, false)).whatsapp).toBe(0);
   });
 });
 

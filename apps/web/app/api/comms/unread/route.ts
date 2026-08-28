@@ -4,8 +4,8 @@ import { apiFetch, apiBase, authHeader } from '@/lib/api';
 export async function GET(): Promise<Response> {
   try {
     const res = await apiFetch(`${apiBase()}/api/v1/comms/unread`, { headers: await authHeader(), cache: 'no-store' });
-    return Response.json(await res.json().catch(() => ({ chat: 0, mail: 0 })), { status: res.status });
+    return Response.json(await res.json().catch(() => ({ chat: 0, mail: 0, whatsapp: 0, total: 0 })), { status: res.status });
   } catch {
-    return Response.json({ chat: 0, mail: 0 }, { status: 200 });
+    return Response.json({ chat: 0, mail: 0, whatsapp: 0, total: 0 }, { status: 200 });
   }
 }

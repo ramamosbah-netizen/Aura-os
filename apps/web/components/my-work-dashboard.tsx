@@ -49,6 +49,13 @@ export interface MyWorkNotification {
   read: boolean;
 }
 
+export interface CommunicationUnreadSummary {
+  chat: number;
+  mail: number;
+  whatsapp: number;
+  total: number;
+}
+
 /**
  * My Work is a PERSONAL EXECUTION center, not a launcher for links that already live in the sidebar.
  * Three tiles were removed because each duplicated somewhere else rather than adding a personal view:
@@ -90,12 +97,14 @@ export default function MyWorkDashboard({
   day,
   decisions,
   notifications,
+  communicationUnread,
   favoriteCount,
 }: {
   userName: string;
   day: MyWorkDay | null;
   decisions: MyWorkDecision[] | null;
   notifications: MyWorkNotification[] | null;
+  communicationUnread: CommunicationUnreadSummary | null;
   favoriteCount: number | null;
 }) {
   const tasks = day ? [...day.now, ...day.meetings, ...day.next] : [];
@@ -103,9 +112,7 @@ export default function MyWorkDashboard({
   const today = uniqueTasks.slice(0, 4);
   const pendingDecisions = decisions?.length ?? 0;
   const unread = notifications?.filter((notification) => !notification.read).length ?? 0;
-  const mentions = notifications?.filter((notification) => !notification.read && (
-    notification.category.toLowerCase() === 'mention' || notification.title.includes('@')
-  )).length ?? 0;
+  const communicationUnreadCount = communicationUnread?.total ?? 0;
   const activeTaskCount = day ? day.counts.overdue + day.counts.today + day.counts.thisWeek : 0;
   const overdue = day?.counts.overdue ?? 0;
   const firstPriority = uniqueTasks.find((task) => task.when === 'OVERDUE') ?? uniqueTasks[0] ?? null;
@@ -114,7 +121,7 @@ export default function MyWorkDashboard({
     { label: 'Active tasks', value: day ? String(activeTaskCount) : '—', sub: 'open across AURA', href: '/my-work/tasks', icon: CheckSquare2, tone: 'teal' },
     { label: 'Approvals', value: decisions ? String(pendingDecisions) : '—', sub: 'accessible decisions', href: '/my-work/approvals', icon: CheckCheck, tone: 'blue' },
     { label: 'Overdue', value: day ? String(overdue) : '—', sub: 'past due date', href: '/my-work/tasks', icon: Clock3, tone: overdue > 0 ? 'red' : 'green' },
-    { label: mentions > 0 ? 'Mentions' : 'Unread', value: notifications ? String(mentions || unread) : '—', sub: 'in communication', href: '/my-work/communication', icon: Bell, tone: 'amber' },
+    { label: 'Unread communication', value: communicationUnread ? String(communicationUnreadCount) : notifications ? String(unread) : '—', sub: communicationUnread ? 'chat · mail · WhatsApp' : 'notification center', href: '/my-work/communication?view=unread', icon: Bell, tone: 'amber' },
   ];
 
   const attentionItems: SuiteAttentionItem[] | null = day === null ? null : today.map((task) => ({
@@ -156,11 +163,19 @@ export default function MyWorkDashboard({
         unavailableLabel: 'Your personal task feed is unavailable. Open Tasks to check the source workspace.',
         emptyLabel: 'Your personal task queue is clear for today.',
         itemTestId: 'today-attention-item',
-        strip: decisions && decisions.length > 0 ? {
-          icon: CheckCheck,
-          text: `${decisions.length} accessible decision${decisions.length === 1 ? '' : 's'} waiting across AURA`,
-          link: { href: decisions[0]!.href, label: 'Review highest item', tabTitle: decisions[0]!.title, tabType: decisions[0]!.kind },
-        } : null,
+        strip: decisions && decisions.length > 0
+          ? {
+              icon: CheckCheck,
+              text: `${decisions.length} accessible decision${decisions.length === 1 ? '' : 's'} waiting across AURA`,
+              link: { href: decisions[0]!.href, label: 'Review highest item', tabTitle: decisions[0]!.title, tabType: decisions[0]!.kind },
+            }
+          : communicationUnread && communicationUnreadCount > 0
+            ? {
+                icon: Bell,
+                text: `${communicationUnreadCount} unread communication item${communicationUnreadCount === 1 ? '' : 's'} waiting`,
+                link: { href: '/my-work/communication?view=unread', label: 'Open unread', tabTitle: 'Unread Communication', tabType: 'Communication' },
+              }
+            : null,
       }}
       brief={{
         kicker: 'Live work signals',

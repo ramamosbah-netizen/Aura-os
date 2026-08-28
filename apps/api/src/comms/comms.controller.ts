@@ -134,7 +134,7 @@ export class CommsController {
 
   @Get('unread')
   @Permissions('comms.channel.read')
-  async unread(@Query() _q: unknown): Promise<{ chat: number; mail: number }> {
+  async unread(@Query() _q: unknown): Promise<{ chat: number; mail: number; whatsapp: number; total: number }> {
     const { tenantId, companyId, username, isAdmin } = await this.caller();
     return this.comms.unread(tenantId, username, isAdmin, companyId);
   }

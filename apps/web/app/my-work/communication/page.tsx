@@ -49,8 +49,10 @@ interface UnreadCommunicationView {
   date: string;
   channelId: string | null;
   mailId: string | null;
+  threadId: string | null;
 }
 interface WhatsAppThreadView { id: string; displayName: string; phone: string; unread: number; lastMessageAt: string | null; lastPreview: string | null; contactId: string | null; accountId: string | null }
+interface WhatsAppStatusView { configured: boolean }
 
 interface RecentCommunication {
   id: string;
@@ -68,10 +70,9 @@ function fileSize(bytes: number): string {
 }
 
 /**
- * The Communication sections. Only Internal Chat is built here (C2); the rest are honest
- * navigation entries whose status says what actually exists today — an entry that points at a
- * working capability elsewhere links to it, and one with no implementation says so rather than
- * offering a button that does nothing.
+ * The Communication sections share one workspace: internal chat, mail, meetings, WhatsApp and
+ * shared-file projections. Provider-backed channels keep an honest live status rather than
+ * presenting an unconfigured integration as if it were operational.
  */
 type ViewId = 'overview' | 'email' | 'chat' | 'meetings' | 'whatsapp' | 'files' | 'unread';
 
@@ -97,7 +98,7 @@ export default async function MyCommunicationPage({
 
   // Channels use fetchJson so a refusal is distinguishable from an empty list. C1 conceals
   // channels a user may not see, and rendering "no conversations" for a 403 would misreport it.
-  const [channelResult, mailbox, me, users, accounts, fileResult, unreadResult, whatsappResult, meetings] = await Promise.all([
+  const [channelResult, mailbox, me, users, accounts, fileResult, unreadResult, whatsappResult, whatsappStatusResult, meetings] = await Promise.all([
     fetchJson<ChatChannelView[]>('/api/comms/channels'),
     getJson<Mailbox>('/api/comms/mail'),
     getJson<WorkspaceMe>('/api/workspace/me'),
@@ -106,22 +107,19 @@ export default async function MyCommunicationPage({
     fetchJson<CommunicationFileView[]>('/api/comms/files'),
     fetchJson<UnreadCommunicationView[]>('/api/comms/unread/items'),
     fetchJson<WhatsAppThreadView[]>('/api/comms/whatsapp/threads'),
+    getJson<WhatsAppStatusView>('/api/comms/whatsapp/status'),
     getJson<MeetingView[]>('/api/comms/meetings?scope=all'),
   ]);
   const channels = channelResult.ok ? channelResult.data : null;
   const files = fileResult.ok ? fileResult.data : null;
   const unreadItems = unreadResult.ok ? unreadResult.data : null;
   const whatsappThreads = whatsappResult.ok ? whatsappResult.data : null;
-  const allUnreadItems: UnreadCommunicationView[] | null = unreadItems === null
-    ? null
-    : [
-      ...unreadItems,
-      ...(whatsappThreads ?? []).filter((thread) => thread.unread > 0).map((thread) => ({
-        id: `whatsapp-${thread.id}`, source: 'whatsapp' as const, title: thread.displayName,
-        detail: thread.lastPreview ?? thread.phone, date: thread.lastMessageAt ?? new Date().toISOString(),
-        channelId: null, mailId: null,
-      })),
-    ];
+  // WhatsApp is projected by the same authenticated unread endpoint as Chat and Mail. Keeping
+  // one source here prevents duplicate rows when a thread appears in both projections.
+  const allUnreadItems: UnreadCommunicationView[] | null = unreadItems;
+  const views = VIEWS.map((entry) => entry.id === 'whatsapp'
+    ? { ...entry, status: whatsappStatusResult?.configured ? 'Connected' : 'Not connected' }
+    : entry);
 
   const recent: RecentCommunication[] = [
     ...(channels ?? []).filter((channel) => channel.lastMessageAt).map((channel) => ({
@@ -177,7 +175,7 @@ export default async function MyCommunicationPage({
       </header>
 
       <nav className={styles.channelGrid} aria-label="Communication sections">
-        {VIEWS.map((entry) => {
+        {views.map((entry) => {
           const Icon = entry.icon;
           const active = entry.id === view;
           return (
@@ -312,7 +310,7 @@ export default async function MyCommunicationPage({
                 const href = item.source === 'chat' && item.channelId
                   ? `/my-work/communication?view=chat&channel=${encodeURIComponent(item.channelId)}`
                   : item.source === 'whatsapp'
-                    ? `/my-work/communication?view=whatsapp&thread=${encodeURIComponent(item.id.replace(/^whatsapp-/, ''))}`
+                    ? `/my-work/communication?view=whatsapp&thread=${encodeURIComponent(item.threadId ?? item.id.replace(/^whatsapp[: -]?/, ''))}`
                   : `/my-work/communication?view=email&mail=${encodeURIComponent(item.mailId ?? '')}`;
                 return (
                   <AuraTabLink key={item.id} href={href} tabTitle={item.title} tabType="Communication" className={styles.decision}>

@@ -153,6 +153,35 @@
 
 .launcher { max-width: var(--home-max); margin: 0 auto; }
 
+.communicationPulse {
+  max-width: var(--home-max);
+  margin: 0 auto clamp(24px, 4vw, 42px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 13px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 94%, var(--accent) 6%);
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .2s ease, transform .2s ease, background .2s ease;
+}
+
+.communicationPulse:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
+  transform: translateY(-2px);
+}
+
+.communicationPulse:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.communicationPulseIcon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; color: var(--accent-ink); background: var(--accent-grad); }
+.communicationPulseCopy { min-width: 0; display: grid; gap: 2px; flex: 1; }
+.communicationPulseCopy strong { font-size: 13px; }
+.communicationPulseCopy small { color: var(--muted); font-size: 10px; letter-spacing: .04em; }
+.communicationPulse > svg { color: var(--muted); }
+
 .sectionHead {
   display: flex;
   align-items: center;

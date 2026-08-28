@@ -1,8 +1,8 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Contact, type ContactStatus, type RelationshipStrength, type StakeholderRole, AccountService, ContactService } from '@aura/crm';
+import { RELATIONSHIP_STRENGTHS, STAKEHOLDER_ROLES, type Contact, type ContactStatus, type RelationshipStrength, type StakeholderRole, AccountService, ContactService } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
 class CreateContactDto {
@@ -13,11 +13,11 @@ class CreateContactDto {
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
-  @IsOptional() @IsString() stakeholderRole?: StakeholderRole;
-  @IsOptional() @IsString() relationshipStrength?: RelationshipStrength;
+  @IsOptional() @IsIn(STAKEHOLDER_ROLES) stakeholderRole?: StakeholderRole;
+  @IsOptional() @IsIn(RELATIONSHIP_STRENGTHS) relationshipStrength?: RelationshipStrength;
   @IsOptional() @IsString() reportsToId?: string;
   @IsOptional() @IsString() reportsToName?: string;
-  @IsOptional() @IsString() status?: ContactStatus;
+  @IsOptional() @IsIn(['active', 'inactive']) status?: ContactStatus;
 }
 
 class UpdateContactDto {
@@ -28,11 +28,11 @@ class UpdateContactDto {
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
-  @IsOptional() @IsString() stakeholderRole?: StakeholderRole;
-  @IsOptional() @IsString() relationshipStrength?: RelationshipStrength;
+  @IsOptional() @IsIn(STAKEHOLDER_ROLES) stakeholderRole?: StakeholderRole;
+  @IsOptional() @IsIn(RELATIONSHIP_STRENGTHS) relationshipStrength?: RelationshipStrength;
   @IsOptional() @IsString() reportsToId?: string;
   @IsOptional() @IsString() reportsToName?: string;
-  @IsOptional() @IsString() status?: ContactStatus;
+  @IsOptional() @IsIn(['active', 'inactive']) status?: ContactStatus;
   @IsOptional() @IsString() ownerId?: string;
 }
 
@@ -49,9 +49,10 @@ export class CrmContactsController {
   ) {}
 
   @Post()
-  async create(@Body() dto: CreateContactDto): Promise<Contact> {
+  async create(@Body() dto: CreateContactDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Contact> {
     if (!dto?.name?.trim()) throw new BadRequestException('name is required');
     const ctx = this.tenant.get();
+    if (dto.accountId && !(await this.accounts.get(dto.accountId))) throw new BadRequestException('account not found');
     return this.contacts.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
@@ -69,12 +70,13 @@ export class CrmContactsController {
       status: dto.status,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, idempotencyKey);
   }
 
   @Patch(':id')
   async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateContactDto): Promise<Contact> {
     try {
+      if (dto.accountId && !(await this.accounts.get(dto.accountId))) throw new BadRequestException('account not found');
       return await this.contacts.update(id, {
         ...dto,
         ...(await accountSnapshotPatch(this.accounts, dto.accountId, dto.accountName)),

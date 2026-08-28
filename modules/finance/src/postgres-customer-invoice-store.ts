@@ -8,6 +8,7 @@ interface Row {
   tenant_id: string;
   company_id: string | null;
   invoice_number: string;
+  account_id: string | null;
   customer_name: string;
   project_id: string | null;
   project_name: string | null;
@@ -29,7 +30,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, invoice_number, customer_name, project_id, project_name, contract_ref, ' +
+  'id, tenant_id, company_id, invoice_number, account_id, customer_name, project_id, project_name, contract_ref, ' +
   'issue_date::text AS issue_date, due_date::text AS due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total, amount_paid, status, deleted_at, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
@@ -40,6 +41,7 @@ function rowTo(r: Row): CustomerInvoice {
     tenantId: r.tenant_id,
     companyId: r.company_id,
     invoiceNumber: r.invoice_number,
+    accountId: r.account_id,
     customerName: r.customer_name,
     projectId: r.project_id,
     projectName: r.project_name,
@@ -67,13 +69,13 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
   async save(inv: CustomerInvoice): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_finance_customer_invoices
-        (id, tenant_id, company_id, invoice_number, customer_name, project_id, project_name, contract_ref,
+        (id, tenant_id, company_id, invoice_number, account_id, customer_name, project_id, project_name, contract_ref,
          issue_date, due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total, amount_paid, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        ON CONFLICT (id) DO UPDATE SET
          amount_paid = EXCLUDED.amount_paid, status = EXCLUDED.status`,
       [
-        inv.id, inv.tenantId, inv.companyId, inv.invoiceNumber, inv.customerName, inv.projectId, inv.projectName, inv.contractRef,
+        inv.id, inv.tenantId, inv.companyId, inv.invoiceNumber, inv.accountId, inv.customerName, inv.projectId, inv.projectName, inv.contractRef,
         inv.issueDate, inv.dueDate, JSON.stringify(inv.lines), inv.subtotal, inv.vatTotal, inv.total, inv.currency, inv.exchangeRate, inv.baseTotal, inv.amountPaid, inv.status, inv.createdBy, inv.createdAt,
       ],
     );

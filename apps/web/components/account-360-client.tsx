@@ -163,13 +163,18 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   }, []);
 
   const patchAccount = useCallback(async (body: Record<string, unknown>) => {
-    setBusy(true);
+    setBusy(true); setErr(null);
     try {
-      await fetch(`/api/crm/accounts/${accountId}`, {
+      const res = await fetch(`/api/crm/accounts/${accountId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({})) as { message?: string; error?: string };
+        setErr(detail.message ?? detail.error ?? 'Could not update this account. Your previous value was preserved.');
+        return;
+      }
       await load();
     } finally {
       setBusy(false);
@@ -188,13 +193,18 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   // etc. — then the whole account summary reloads so counts and the header
   // primary contact stay in sync.
   const patchContact = useCallback(async (id: string, body: Record<string, unknown>) => {
-    setBusy(true);
+    setBusy(true); setErr(null);
     try {
-      await fetch(`/api/crm/contacts/${id}`, {
+      const res = await fetch(`/api/crm/contacts/${id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({})) as { message?: string; error?: string };
+        setErr(detail.message ?? detail.error ?? 'Could not update this contact. Your previous value was preserved.');
+        return;
+      }
       await load();
     } finally {
       setBusy(false);
@@ -231,7 +241,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   const activeContracts = contracts.filter((c) => c.status === 'active');
   const activeProjects = projects.filter((p) => p.status === 'active' || p.status === 'planned');
   const liveBusiness = activeContracts.length > 0 || activeProjects.length > 0 || openOpps.length > 0;
-  const stageMismatch = contracts.length > 0 && (a.status === 'prospect' || a.status === 'qualified' || a.status === 'lead');
+  const stageMismatch = activeContracts.length > 0 && (a.status === 'prospect' || a.status === 'qualified' || a.status === 'lead');
   const healthReasons: string[] = [];
   if (receivables.overdue > 0) healthReasons.push(`AED ${aed(receivables.overdue)} overdue receivables`);
   if (liveBusiness && !a.ownerId) healthReasons.push('no account owner assigned');
@@ -274,7 +284,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   else if (!a.ownerId) nba = { label: 'Assign an owner', hint: me ? 'assign to you' : 'no owner yet', onClick: () => { if (me) void assignOwner(me.username); } };
   else if (contacts.length === 0) nba = { label: 'Add key contacts', onClick: () => setTab('contacts') };
   else if (!hasPrimary) nba = { label: 'Set the primary contact', onClick: () => setTab('contacts') };
-  else if (openOpps.length === 0) nba = { label: 'Create an opportunity', href: '/crm/leads' };
+  else if (openOpps.length === 0) nba = { label: 'Create an opportunity', href: '/crm/pipeline' };
   else if (upcoming.length === 0) nba = { label: 'Schedule the next step', href: '/crm/activities' };
 
   // Outcome Loop — writes a real activity linked to this account (§17 activity stream).
@@ -325,6 +335,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
 
   return (
     <div>
+      {err && <div role="alert" style={st.error}>{err}</div>}
       {/* ── Header: identity + relationship health (shared record-shell) ── */}
       <RecordHeader
         title={a.name}
@@ -356,7 +367,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
         ]}
         actions={
           <>
-            <ActionButton href="/crm/leads">+ Opportunity</ActionButton>
+            <ActionButton href="/crm/pipeline">+ Opportunity</ActionButton>
             <ActionButton href="/crm/quotations">+ Quotation</ActionButton>
             <ActionButton href="/tendering/tenders">+ Tender</ActionButton>
             <details style={{ position: 'relative' }}>
@@ -867,6 +878,7 @@ function Table({ cols, rows, empty }: { cols: string[]; rows: Array<Array<React.
 }
 
 const st = {
+  error: { border: '1px solid color-mix(in srgb, var(--bad) 45%, var(--border))', background: 'color-mix(in srgb, var(--bad) 10%, var(--panel))', color: 'var(--bad)', borderRadius: 9, padding: '9px 12px', marginBottom: 12, fontSize: 12.5 } as CSSProperties,
   header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 } as CSSProperties,
   h1: { fontSize: 26, margin: '0 0 6px', color: 'var(--accent)', letterSpacing: -0.4 } as CSSProperties,
   stagePill: { fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px', color: 'var(--text)', fontWeight: 700, background: 'var(--panel)' } as CSSProperties,

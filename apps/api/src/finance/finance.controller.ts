@@ -657,17 +657,19 @@ export class FinanceController {
 
   @Post('customer-invoices')
   async createCustomerInvoice(
-    @Body() dto: { invoiceNumber: string; customerName: string; projectId?: string; projectName?: string; contractRef?: string; issueDate: string; dueDate?: string; lines: NewCustomerInvoiceLine[]; currency?: string; exchangeRate?: number },
+    @Body() dto: { invoiceNumber: string; customerName: string; accountId?: string; projectId?: string; projectName?: string; contractRef?: string; issueDate: string; dueDate?: string; lines: NewCustomerInvoiceLine[]; currency?: string; exchangeRate?: number },
   ): Promise<CustomerInvoice> {
     if (!dto?.invoiceNumber?.trim()) throw new BadRequestException('invoiceNumber is required');
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
     const ctx = this.tenant.get();
+    if (dto.accountId && !(await this.accounts.get(dto.accountId))) throw new BadRequestException('account not found');
     return await this.customerInvoices.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
       invoiceNumber: dto.invoiceNumber,
+      accountId: dto.accountId ?? null,
       customerName: dto.customerName,
       projectId: dto.projectId ?? null,
       projectName: dto.projectName ?? null,

@@ -90,7 +90,7 @@ export class Account360Controller {
    * The account PORTFOLIO — every relationship with its commercial roll-up and a
    * derived health flag, in one call (the Accounts page is a portfolio manager,
    * not a customer register). One pass over the tenant's chain records, grouped
-   * by accountId (invoices by the customer-name snapshot).
+   * by accountId (legacy invoices without a link fall back to their customer-name snapshot).
    */
   @Get('portfolio')
   async portfolio(): Promise<Array<{
@@ -143,7 +143,7 @@ export class Account360Controller {
       const accQuotes = quotations.filter((q) => q.accountId === a.id);
       const accContracts = contracts.filter((c) => c.accountId === a.id);
       const accProjects = projects.filter((p) => p.accountId === a.id);
-      const accInvoices = invoices.filter((i) => i.customerName === a.name && i.status !== 'cancelled');
+      const accInvoices = invoices.filter((i) => (i.accountId === a.id || (!i.accountId && i.customerName === a.name)) && i.status !== 'cancelled');
       const accActivities = activities.filter((x) => x.relatedId === a.id);
 
       const outstandingAR = r2(accInvoices.reduce((s, i) => s + (i.total - i.amountPaid), 0));
@@ -167,7 +167,7 @@ export class Account360Controller {
       if (overdueAR > 0) healthReasons.push(`AED ${overdueAR} overdue receivables`);
       if (hasLiveBusiness && !a.ownerId) healthReasons.push('no account owner assigned');
       if (hasLiveBusiness && (!lastActivityAt || lastActivityAt < staleBefore)) healthReasons.push('no activity in 60 days');
-      const stageMismatch = accContracts.length > 0 && (a.status === 'prospect' || a.status === 'qualified');
+      const stageMismatch = activeContracts.length > 0 && (a.status === 'prospect' || a.status === 'qualified');
       if (stageMismatch) healthReasons.push('has contracts but still marked a prospect');
 
       const health: 'healthy' | 'attention' | 'at_risk' = overdueAR > 0 ? 'at_risk' : healthReasons.length > 0 ? 'attention' : 'healthy';
@@ -291,13 +291,13 @@ export class Account360Controller {
       this.contracts.list({ tenantId, accountId: id }),
       this.projects.list({ tenantId, accountId: id }),
       this.activities.list({ tenantId, relatedId: id }),
-      // Invoices reference the customer by name snapshot (no accountId column) — match on it.
+      // Stable accountId is authoritative; legacy rows without it retain a name-snapshot fallback.
       this.invoices.list({ tenantId, limit: 2000 }),
     ]);
 
     // Primary contact first — the 360 header shows contacts[0] as the main contact.
     contacts.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
-    const accInvoices = allInvoices.filter((i) => i.customerName === account.name && i.status !== 'cancelled');
+    const accInvoices = allInvoices.filter((i) => (i.accountId === account.id || (!i.accountId && i.customerName === account.name)) && i.status !== 'cancelled');
     const today = new Date().toISOString().slice(0, 10);
     const receivables = {
       invoiced: r2(accInvoices.reduce((s, i) => s + i.total, 0)),

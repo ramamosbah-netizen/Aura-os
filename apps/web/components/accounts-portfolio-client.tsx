@@ -145,7 +145,7 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
     { key: 'all', label: 'All Accounts', match: () => true },
     { key: 'mine', label: 'My Accounts', match: (r) => !!myId && r.ownerId === myId },
     { key: 'prospects', label: 'Prospects', match: (r) => r.stage === 'prospect' || r.stage === 'qualified' },
-    { key: 'active', label: 'Active Customers', match: (r) => r.stage === 'active_customer' },
+    { key: 'active', label: 'Active Customers', match: (r) => r.stage === 'active_customer' || r.stage === 'strategic' },
     { key: 'strategic', label: 'Strategic', match: (r) => r.stage === 'strategic' },
     { key: 'at_risk', label: 'At Risk', match: (r) => r.health === 'at_risk' },
     { key: 'dormant', label: 'Dormant', match: (r) => r.stage === 'dormant' || r.stage === 'inactive' },

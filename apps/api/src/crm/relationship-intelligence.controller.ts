@@ -182,7 +182,7 @@ export class RelationshipIntelligenceController {
       const balance = balanceOf(inv);
       if (balance <= 0) continue;
       const daysOverdue = daysSince(inv.dueDate, now) ?? 0;
-      const accountId = accountByName.get(inv.customerName);
+      const accountId = inv.accountId ?? accountByName.get(inv.customerName);
       alerts.push({
         id: `overdue-ar:${inv.id}`, kind: 'overdue-ar',
         severity: daysOverdue >= 30 ? 'high' : 'medium',

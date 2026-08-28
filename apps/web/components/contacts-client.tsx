@@ -117,7 +117,6 @@ export default function ContactsClient({ initialContacts, initialAccounts }: {
     },
     { name: 'email', label: 'Email', kind: 'text' as const, placeholder: 'name@company.com' },
     { name: 'phone', label: 'Phone', kind: 'text' as const, placeholder: '+971 …' },
-    ...(forEdit ? [] : [{ name: 'ownerId', label: 'Owner', kind: 'text' as const, placeholder: 'e.g. u-sales' }]),
   ];
 
   return (

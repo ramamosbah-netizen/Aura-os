@@ -98,9 +98,9 @@ const VIEW_GROUPS: Array<{ label: string; ids: ViewId[] }> = [
 export default async function MyCommunicationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; channel?: string; mail?: string; thread?: string; meeting?: string }>;
+  searchParams: Promise<{ view?: string; channel?: string; mail?: string; thread?: string; meeting?: string; contactId?: string }>;
 }) {
-  const { view: requestedView, channel: deepLinkedChannel, mail: deepLinkedMail, thread: deepLinkedThread, meeting: deepLinkedMeeting } = await searchParams;
+  const { view: requestedView, channel: deepLinkedChannel, mail: deepLinkedMail, thread: deepLinkedThread, meeting: deepLinkedMeeting, contactId: deepLinkedContact } = await searchParams;
   // A bare ?channel= link means "open this conversation", so it implies the chat view.
   const view: ViewId = (VIEWS.find((entry) => entry.id === requestedView)?.id
     ?? (deepLinkedChannel ? 'chat' : deepLinkedMail ? 'email' : 'overview'));
@@ -125,6 +125,9 @@ export default async function MyCommunicationPage({
   const files = fileResult.ok ? fileResult.data : null;
   const unreadItems = unreadResult.ok ? unreadResult.data : null;
   const whatsappThreads = whatsappResult.ok ? whatsappResult.data : null;
+  const visibleWhatsAppThreads = deepLinkedContact
+    ? (whatsappThreads ?? []).filter((thread) => thread.contactId === deepLinkedContact)
+    : whatsappThreads;
   // WhatsApp is projected by the same authenticated unread endpoint as Chat and Mail. Keeping
   // one source here prevents duplicate rows when a thread appears in both projections.
   const allUnreadItems: UnreadCommunicationView[] | null = unreadItems;
@@ -145,7 +148,7 @@ export default async function MyCommunicationPage({
       id: `mail-${mail.id}`, title: mail.subject || '(No subject)', detail: `From ${mail.from}`,
       date: mail.sentAt, href: '/my-work/communication?view=email', kind: 'Mail' as const,
     })),
-    ...(whatsappThreads ?? []).filter((thread) => thread.lastMessageAt).map((thread) => ({
+    ...(visibleWhatsAppThreads ?? []).filter((thread) => thread.lastMessageAt).map((thread) => ({
       id: `whatsapp-${thread.id}`, title: thread.displayName, detail: thread.lastPreview ?? thread.phone,
       date: thread.lastMessageAt!, href: `/my-work/communication?view=whatsapp&thread=${encodeURIComponent(thread.id)}`, kind: 'Chat' as const,
     })),
@@ -291,7 +294,7 @@ export default async function MyCommunicationPage({
           <header className={styles.sectionHead}>
             <div><h2 id="comm-whatsapp-title">WhatsApp</h2><p>Official WhatsApp Business conversations, inside the unified inbox.</p></div>
           </header>
-          <WhatsAppInbox initialThreads={whatsappThreads} initialThreadId={deepLinkedThread} contacts={crmContacts.ok ? crmContacts.data : []} accounts={crmAccounts.ok ? crmAccounts.data : []} />
+          <WhatsAppInbox initialThreads={visibleWhatsAppThreads} initialThreadId={deepLinkedThread} contacts={crmContacts.ok ? crmContacts.data : []} accounts={crmAccounts.ok ? crmAccounts.data : []} />
         </section>
       ) : null}
 

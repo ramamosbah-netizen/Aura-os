@@ -29,6 +29,8 @@ export interface CustomerInvoice {
   tenantId: Id;
   companyId: Id | null;
   invoiceNumber: string;
+  /** Stable CRM relationship reference; customerName remains the legal snapshot. */
+  accountId?: Id | null;
   customerName: string;
   projectId: Id | null;
   projectName: string | null;
@@ -57,6 +59,7 @@ export interface NewCustomerInvoice {
   tenantId: Id;
   companyId?: Id | null;
   invoiceNumber: string;
+  accountId?: Id | null;
   customerName: string;
   projectId?: Id | null;
   projectName?: string | null;
@@ -114,6 +117,7 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
     invoiceNumber: input.invoiceNumber.trim(),
+    accountId: input.accountId ?? null,
     customerName: input.customerName.trim(),
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,

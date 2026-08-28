@@ -1,4 +1,4 @@
-import { apiFetch, apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader, replayHeaders } from '@/lib/api';
 
 // BFF: CRM contacts — list + create.
 
@@ -18,7 +18,7 @@ export async function POST(req: Request): Promise<Response> {
     const body = await req.json().catch(() => ({}));
     const res = await apiFetch(`${apiBase()}/api/v1/crm/contacts`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(await authHeader()) },
+      headers: { 'content-type': 'application/json', ...replayHeaders(req), ...(await authHeader()) },
       body: JSON.stringify(body),
       cache: 'no-store',
     });

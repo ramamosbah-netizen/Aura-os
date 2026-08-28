@@ -25,7 +25,7 @@ export function classifyDomainMessage(m: string): DomainClassification {
   if (/access denied/i.test(m)) return { status: 403, code: 'FORBIDDEN' };
 
   // 404 — absent aggregates and absent prerequisite data.
-  if (/not found|^no (payroll|schedule|.* records?|.* runs?)\b/i.test(m)) return { status: 404, code: 'NOT_FOUND' };
+  if (/not found|no longer exists|^no (payroll|schedule|.* records?|.* runs?)\b/i.test(m)) return { status: 404, code: 'NOT_FOUND' };
 
   // 409 — state-transition guards: the request is well-formed but the aggregate's current
   // state forbids it ("only a draft agreement can be activated", "is already disposed", …).
@@ -40,7 +40,7 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // Also the pricing-sheet precondition guards: nothing to freeze/compare, no earlier version,
   // and "not linked to a quotation yet — create the quote shell first".
   if (
-    /required|requires\b|\bmust\b|invalid|cannot|expected|validation failed|exceeds\b|out of range|needs a\b|needs at least|duplicate\b|dependency cycle|gate blocked|no lines?\b|missing\b|negative\b|unknown\b|nothing to \w+|not linked|no earlier version/i.test(m)
+    /required|requires\b|\bmust\b|invalid|cannot|expected|validation failed|exceeds\b|out of range|needs a\b|needs at least|duplicate\b|dependency cycle|would create a cycle|gate blocked|no lines?\b|missing\b|negative\b|unknown\b|nothing to \w+|not linked|no earlier version/i.test(m)
   ) {
     return { status: 400, code: 'VALIDATION' };
   }

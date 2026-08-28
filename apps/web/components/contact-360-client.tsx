@@ -27,6 +27,7 @@ interface ContractRec { id: string; title: string; status: string; value: number
 interface ProjectRec { id: string; title: string; status: string; createdAt: string }
 interface ActivityRec { id: string; type: string; subject: string; status: string; dueDate: string | null; createdAt: string }
 interface TimelineEntry { at: string; kind: string; label: string; href: string | null }
+interface WhatsAppThreadRec { id: string; displayName: string; phone: string; unread: number; lastMessageAt: string | null; lastPreview: string | null }
 
 interface Payload {
   contact: Contact;
@@ -46,9 +47,10 @@ interface Payload {
     openActions: number; lastInteractionAt: string | null;
   };
   timeline: TimelineEntry[];
+  whatsapp: WhatsAppThreadRec[];
 }
 
-type Tab = 'overview' | 'deals' | 'activity';
+type Tab = 'overview' | 'deals' | 'activity' | 'communication';
 
 const aed = (n: number): string => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
 const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
@@ -76,18 +78,23 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
   useEffect(() => { void load(); }, [load]);
 
   const patch = useCallback(async (body: Record<string, unknown>) => {
-    setBusy(true);
+    setBusy(true); setErr(null);
     try {
-      await fetch(`/api/crm/contacts/${contactId}`, {
+      const res = await fetch(`/api/crm/contacts/${contactId}`, {
         method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({})) as { message?: string; error?: string };
+        setErr(detail.message ?? detail.error ?? 'Could not update this contact. Your previous value was preserved.');
+        return;
+      }
       await load();
     } finally { setBusy(false); }
   }, [contactId, load]);
 
   if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading contact…'}</p>;
 
-  const { contact: c, account, reportsTo, reports, peers, opportunities, tenders, quotations, contracts, projects, activities, summary } = data;
+  const { contact: c, account, reportsTo, reports, peers, opportunities, tenders, quotations, contracts, projects, activities, summary, whatsapp } = data;
   const roleLabel = c.stakeholderRole ? STAKEHOLDER_ROLE_LABEL[c.stakeholderRole] ?? c.stakeholderRole : null;
   const strengthColor = c.relationshipStrength ? STRENGTH_COLOR[c.relationshipStrength] ?? 'var(--muted)' : 'var(--muted)';
 
@@ -95,10 +102,12 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
     { id: 'overview', label: 'Overview' },
     { id: 'deals', label: 'Deals', count: opportunities.length + tenders.length + quotations.length + contracts.length + projects.length },
     { id: 'activity', label: 'Activity', count: activities.length },
+    { id: 'communication', label: 'Communication', count: whatsapp.reduce((sum, thread) => sum + thread.unread, 0) || undefined },
   ];
 
   return (
     <div>
+      {err && <div role="alert" style={st.error}>{err}</div>}
       {/* header */}
       <div style={st.header}>
         <div style={{ minWidth: 0 }}>
@@ -256,6 +265,23 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
             </table>
           )
         )}
+
+        {tab === 'communication' && (
+          <div>
+            <p style={st.muted}>Communication is owned by the Communication Center. This view shows WhatsApp conversations linked to this contact without duplicating messages in CRM.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              <a href={`/my-work/communication?view=whatsapp&contactId=${encodeURIComponent(c.id)}`} style={st.actionBtn}>Open Communication Center →</a>
+              {c.phone && <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" style={st.actionBtn}>Open in WhatsApp ↗</a>}
+            </div>
+            {whatsapp.length === 0 ? <p style={st.muted}>No WhatsApp conversation is linked to this contact yet.</p> : whatsapp.map((thread) => (
+              <div key={thread.id} style={st.commRow}>
+                <div style={{ minWidth: 0, flex: 1 }}><b>{thread.displayName}</b><div style={st.muted}>{thread.lastPreview ?? 'No messages yet'} · {thread.phone}</div></div>
+                {thread.unread > 0 && <span style={st.unreadPill}>{thread.unread} unread</span>}
+                <a href={`/my-work/communication?view=whatsapp&thread=${encodeURIComponent(thread.id)}`} style={st.link}>Open</a>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -304,6 +330,7 @@ function DealTable({ title, cols, rows, href }: { title: string; cols: string[];
 }
 
 const st = {
+  error: { border: '1px solid color-mix(in srgb, var(--bad) 45%, var(--border))', background: 'color-mix(in srgb, var(--bad) 10%, var(--panel))', color: 'var(--bad)', borderRadius: 9, padding: '9px 12px', marginBottom: 12, fontSize: 12.5 } as CSSProperties,
   header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 } as CSSProperties,
   h1: { fontSize: 25, margin: '0 0 6px', color: 'var(--accent)', letterSpacing: -0.4 } as CSSProperties,
   subline: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
@@ -330,4 +357,6 @@ const st = {
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
   th: { padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', textAlign: 'left' } as CSSProperties,
   td: { padding: '9px 10px', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  commRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  unreadPill: { fontSize: 11, fontWeight: 700, color: 'var(--accent-ink, #fff)', background: 'var(--accent)', borderRadius: 999, padding: '3px 8px', whiteSpace: 'nowrap' } as CSSProperties,
 };

@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
+import { Controller, Get, Inject, NotFoundException, Optional, Param } from '@nestjs/common';
 import { ParseUuidOr404Pipe, TenantContext } from '@aura/core';
 import {
   AccountService,
@@ -16,6 +16,8 @@ import { moneyNumber as r2 } from '@aura/shared';
 import { TenderService, type Tender } from '@aura/tendering';
 import { ContractService, type Contract } from '@aura/contracts';
 import { ProjectService, type Project } from '@aura/projects';
+import { WHATSAPP_STORE, type WhatsAppStore } from '../comms/whatsapp/whatsapp-store';
+import { WorkspaceConfigService } from '../workspace/workspace-config.service';
 
 // Contact 360 — the STAKEHOLDER command center. A contact is a person inside an
 // Account; the deals belong to the account, so this person's "involvement" is the
@@ -47,6 +49,7 @@ interface Contact360Payload {
     lastInteractionAt: string | null;
   };
   timeline: TimelineEntry[];
+  whatsapp: Array<{ id: string; displayName: string; phone: string; unread: number; lastMessageAt: string | null; lastPreview: string | null }>;
 }
 
 
@@ -62,6 +65,8 @@ export class Contact360Controller {
     private readonly contracts: ContractService,
     private readonly projects: ProjectService,
     private readonly tenant: TenantContext,
+    private readonly workspace: WorkspaceConfigService,
+    @Optional() @Inject(WHATSAPP_STORE) private readonly whatsappStore: WhatsAppStore | null = null,
   ) {}
 
   @Get(':id/summary')
@@ -72,6 +77,8 @@ export class Contact360Controller {
 
     const accountId = contact.accountId;
     const account = accountId ? await this.accounts.get(accountId) : null;
+    const actorId = this.tenant.get().actorId;
+    const me = await this.workspace.me(tenantId, actorId ?? 'u-admin');
 
     const [siblings, opportunities, tenders, quotations, contracts, projects, activities] = await Promise.all([
       accountId ? this.contacts.list({ tenantId, accountId }) : Promise.resolve([]),
@@ -117,10 +124,17 @@ export class Contact360Controller {
       })),
     ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 40);
 
+    const whatsapp = this.whatsappStore
+      ? (await this.whatsappStore.listThreads(tenantId, this.tenant.get().companyId ?? null, me.isAdmin ? undefined : actorId)).filter((thread) => thread.contactId === id).map((thread) => ({
+        id: thread.id, displayName: thread.displayName, phone: thread.phone, unread: thread.unread,
+        lastMessageAt: thread.lastMessageAt, lastPreview: thread.lastPreview,
+      }))
+      : [];
+
     return {
       contact, account, reportsTo, reports, peers,
       opportunities, tenders, quotations, contracts, projects, activities,
-      summary, timeline,
+      summary, timeline, whatsapp,
     };
   }
 }

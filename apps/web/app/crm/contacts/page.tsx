@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice from '@/components/ui/data-state';
 import ContactsClient from '../../../components/contacts-client';
 
 export const dynamic = 'force-dynamic';
@@ -24,10 +25,13 @@ interface Contact {
 interface Account { id: string; name: string; }
 
 export default async function CrmContactsPage() {
-  const [contacts, accounts] = await Promise.all([
-    getJson<Contact[]>('/api/crm/contacts'),
-    getJson<Account[]>('/api/crm/accounts'),
+  const [contactsResult, accountsResult] = await Promise.all([
+    fetchJson<Contact[]>('/api/crm/contacts'),
+    fetchJson<Account[]>('/api/crm/accounts'),
   ]);
+
+  if (!contactsResult.ok) return <DataStateNotice error={contactsResult.error} subject="contacts" />;
+  if (!accountsResult.ok) return <DataStateNotice error={accountsResult.error} subject="accounts" />;
 
   return (
     <div style={st.page}>
@@ -37,7 +41,7 @@ export default async function CrmContactsPage() {
         (decision maker, influencer, technical, finance…), how strong the relationship is, and who
         they report to. Open any contact for the full stakeholder 360.
       </p>
-      <ContactsClient initialContacts={contacts ?? []} initialAccounts={accounts ?? []} />
+      <ContactsClient initialContacts={contactsResult.data ?? []} initialAccounts={accountsResult.data ?? []} />
     </div>
   );
 }

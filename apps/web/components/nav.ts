@@ -321,7 +321,8 @@ export interface PaletteAction {
 
 /** ⌘K "Actions" group — each lands on the page whose creation form does the work. */
 export const CREATE_ACTIONS: PaletteAction[] = [
-  { label: 'Create Account', href: '/crm/accounts', desc: 'New customer or prospect' },
+  { label: 'Create Account', href: '/crm/customers?view=accounts', desc: 'New customer or prospect' },
+  { label: 'Create Contact', href: '/crm/customers?view=contacts', desc: 'New stakeholder at an account' },
   { label: 'Create Lead', href: '/crm/leads', desc: 'New sales lead' },
   { label: 'Create Quotation', href: '/crm/quotations', desc: 'New customer quote' },
   { label: 'Create Tender', href: '/tendering/tenders', desc: 'New bid / proposal' },

@@ -2,7 +2,7 @@ import type { Id, Page, PageParams } from '@aura/shared';
 import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Contact } from './domain/contact';
-import type { ContactFilter, ContactStore } from './contact-store';
+import type { ContactFilter, ContactStore, ContactSummary } from './contact-store';
 
 /** Phase-0 contact store — keeps contacts in memory (no-DB boots). */
 export class InMemoryContactStore implements ContactStore {
@@ -44,5 +44,20 @@ export class InMemoryContactStore implements ContactStore {
   async listPaged(filter: ContactFilter, page: PageParams): Promise<Page<Contact>> {
     const all = await this.list({ ...filter, limit: undefined });
     return paginate(all, page);
+  }
+
+  async summary(filter: ContactFilter): Promise<ContactSummary> {
+    const all = await this.list({ ...filter, limit: undefined });
+    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    return {
+      total: all.length,
+      active: all.filter((c) => c.status === 'active').length,
+      linked: all.filter((c) => Boolean(c.accountId)).length,
+      primaries: all.filter((c) => c.isPrimary && c.status === 'active').length,
+      recent: all.filter((c) => c.createdAt >= monthAgo).length,
+      decisionMakers: all.filter((c) => c.stakeholderRole === 'decision_maker').length,
+      champions: all.filter((c) => c.relationshipStrength === 'champion' || c.relationshipStrength === 'strong').length,
+      unmapped: all.filter((c) => !c.stakeholderRole).length,
+    };
   }
 }

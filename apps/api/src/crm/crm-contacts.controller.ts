@@ -107,10 +107,10 @@ export class CrmContactsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    return this.contacts.listPaged(
-      { tenantId: this.tenant.get().tenantId, accountId, status, search, stakeholderRole, relationshipStrength },
-      parsePageParams(limit, offset),
-    );
+    const filter = { tenantId: this.tenant.get().tenantId, accountId, status, search, stakeholderRole, relationshipStrength };
+    const page = parsePageParams(limit, offset);
+    return Promise.all([this.contacts.listPaged(filter, page), this.contacts.summary(filter)])
+      .then(([result, summary]) => ({ ...result, summary }));
   }
 
   @Get(':id')

@@ -24,7 +24,11 @@ export type CustomerContact = {
   ownerId: string | null;
   createdAt: string;
 };
-export type CustomerContactPage = { items: CustomerContact[]; total: number; limit: number; offset: number; hasMore: boolean };
+export type CustomerContactSummary = {
+  total: number; active: number; linked: number; primaries: number; recent: number;
+  decisionMakers: number; champions: number; unmapped: number;
+};
+export type CustomerContactPage = { items: CustomerContact[]; total: number; limit: number; offset: number; hasMore: boolean; summary?: CustomerContactSummary };
 export type CustomerAccount = { id: string; name: string };
 
 type View = 'accounts' | 'contacts' | 'stakeholders';
@@ -78,8 +82,8 @@ export default function CustomersWorkspaceClient({
       <nav aria-label="Customer views" style={st.tabs}>
         {([
             ['accounts', 'Accounts', portfolio.total, 'Commercial accounts, pipeline, delivery and financial exposure'],
-          ['contacts', 'Contacts', contacts.length, 'People, roles and relationship strength'],
-          ['stakeholders', 'Stakeholder Map', contacts.filter((c) => c.accountId).length, 'Account-to-person relationship coverage'],
+            ['contacts', 'Contacts', contactPage.summary?.total ?? contactPage.total, 'People, roles and relationship strength'],
+          ['stakeholders', 'Stakeholder Map', contactPage.summary?.linked ?? contacts.filter((c) => c.accountId).length, 'Account-to-person relationship coverage'],
         ] as const).map(([key, label, count, description]) => (
           <button
             key={key}
@@ -97,7 +101,7 @@ export default function CustomersWorkspaceClient({
       {view === 'accounts' ? (
         <AccountsPortfolioClient initialPage={portfolio} currentUserId={currentUserId} />
       ) : view === 'contacts' ? (
-        <ContactsClient initialContacts={contactPage.items} initialTotal={contactPage.total} initialAccounts={accountOptions} />
+        <ContactsClient initialContacts={contactPage.items} initialTotal={contactPage.total} initialSummary={contactPage.summary} initialAccounts={accountOptions} />
       ) : (
         <section aria-label="Stakeholder map" style={st.mapGrid}>
           <div style={st.mapIntro}>

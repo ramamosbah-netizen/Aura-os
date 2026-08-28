@@ -3,7 +3,7 @@ import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Contact } from './domain/contact';
-import type { ContactFilter, ContactStore } from './contact-store';
+import type { ContactFilter, ContactStore, ContactSummary } from './contact-store';
 
 interface Row {
   id: string;
@@ -126,5 +126,36 @@ export class PostgresContactStore implements ContactStore {
       winParams,
     );
     return makePage(res.rows.map(rowToContact), total, page);
+  }
+
+  async summary(filter: ContactFilter): Promise<ContactSummary> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const res = await this.pool.query<{
+      total: string; active: string; linked: string; primaries: string; recent: string;
+      decision_makers: string; champions: string; unmapped: string;
+    }>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+         COUNT(*) FILTER (WHERE account_id IS NOT NULL)::int AS linked,
+         COUNT(*) FILTER (WHERE is_primary = true AND status = 'active')::int AS primaries,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS recent,
+         COUNT(*) FILTER (WHERE stakeholder_role = 'decision_maker')::int AS decision_makers,
+         COUNT(*) FILTER (WHERE relationship_strength IN ('champion', 'strong'))::int AS champions,
+         COUNT(*) FILTER (WHERE stakeholder_role IS NULL)::int AS unmapped
+       FROM public.aura_crm_contacts ${whereSql}`,
+      params,
+    );
+    const row = res.rows[0];
+    return {
+      total: Number(row?.total ?? 0),
+      active: Number(row?.active ?? 0),
+      linked: Number(row?.linked ?? 0),
+      primaries: Number(row?.primaries ?? 0),
+      recent: Number(row?.recent ?? 0),
+      decisionMakers: Number(row?.decision_makers ?? 0),
+      champions: Number(row?.champions ?? 0),
+      unmapped: Number(row?.unmapped ?? 0),
+    };
   }
 }

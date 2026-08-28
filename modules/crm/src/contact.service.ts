@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs
 import { assertSameTenant, type Id, makeEvent, newId, type PageParams, sameTenantOrNull } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NullTxRunner, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { CRM_CONTACT_EVENT, type Contact, type NewContact, makeContact } from './domain/contact';
-import { CRM_CONTACT_STORE, type ContactFilter, type ContactStore } from './contact-store';
+import { CRM_CONTACT_STORE, type ContactFilter, type ContactStore, type ContactSummary } from './contact-store';
 
 /**
  * CRM Contact service — people at an account. Owns `aura_crm_contacts` and emits
@@ -120,6 +120,10 @@ export class ContactService implements OnModuleInit {
 
   listPaged(filter: ContactFilter, page: PageParams) {
     return this.store.listPaged(filter, page);
+  }
+
+  summary(filter: ContactFilter): Promise<ContactSummary> {
+    return this.store.summary(filter);
   }
 
   /** Validate the reporting hierarchy before a write. References never cross tenants/accounts,

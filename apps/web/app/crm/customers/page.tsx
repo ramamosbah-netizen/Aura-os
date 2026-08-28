@@ -27,7 +27,7 @@ export default async function CustomersPage() {
     <CustomersWorkspaceClient
       portfolio={portfolioResult.data ?? { items: [], total: 0, limit: 50, offset: 0, hasMore: false, summary: { totalAccounts: 0, activeCustomers: 0, prospects: 0, strategicAccounts: 0, atRiskAccounts: 0, totalPipeline: 0, activeDeals: 0, contractedValue: 0, outstandingAR: 0 } }}
       contacts={contactsResult.data ?? []}
-      contactPage={contactPageResult.data ?? { items: [], total: 0, limit: 50, offset: 0, hasMore: false }}
+      contactPage={contactPageResult.data ?? { items: [], total: 0, limit: 50, offset: 0, hasMore: false, summary: { total: 0, active: 0, linked: 0, primaries: 0, recent: 0, decisionMakers: 0, champions: 0, unmapped: 0 } }}
       accountOptions={accountsResult.data ?? []}
       currentUserId={user?.sub ?? null}
     />

@@ -31,10 +31,15 @@ interface Contact {
   createdAt: string;
 }
 interface Account { id: string; name: string; }
+interface ContactSummary {
+  total: number; active: number; linked: number; primaries: number; recent: number;
+  decisionMakers: number; champions: number; unmapped: number;
+}
 
-export default function ContactsClient({ initialContacts, initialTotal, initialAccounts }: {
+export default function ContactsClient({ initialContacts, initialTotal, initialSummary, initialAccounts }: {
   initialContacts: Contact[];
   initialTotal?: number;
+  initialSummary?: ContactSummary;
   initialAccounts: Account[];
 }) {
   const router = useRouter();
@@ -46,6 +51,14 @@ export default function ContactsClient({ initialContacts, initialTotal, initialA
   const [roleFilter, setRoleFilter] = useState('');
   const [page, setPage] = useState({ offset: 0, limit: 50, total: initialTotal ?? initialContacts.length, hasMore: (initialTotal ?? initialContacts.length) > 50 });
   const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<ContactSummary>(initialSummary ?? {
+    total: initialTotal ?? initialContacts.length, active: initialContacts.filter((c) => c.status === 'active').length,
+    linked: initialContacts.filter((c) => Boolean(c.accountId)).length,
+    primaries: initialContacts.filter((c) => c.isPrimary && c.status === 'active').length,
+    recent: 0, decisionMakers: initialContacts.filter((c) => c.stakeholderRole === 'decision_maker').length,
+    champions: initialContacts.filter((c) => c.relationshipStrength === 'champion' || c.relationshipStrength === 'strong').length,
+    unmapped: initialContacts.filter((c) => !c.stakeholderRole).length,
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -58,10 +71,26 @@ export default function ContactsClient({ initialContacts, initialTotal, initialA
       else if (roleFilter) params.set('stakeholderRole', roleFilter);
       setLoading(true);
       void fetch(`/api/crm/contacts/paged?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
-        .then((res) => res.ok ? res.json() : null)
-        .then((next: { items: Contact[]; total: number; limit: number; offset: number; hasMore: boolean } | null) => {
-          if (next) { setPage({ offset: next.offset, limit: next.limit, total: next.total, hasMore: next.hasMore }); setContacts(next.items); }
-        }).catch(() => undefined).finally(() => setLoading(false));
+        .then(async (res) => {
+          if (res.ok) return res.json();
+          const body = await res.json().catch(() => ({})) as { message?: string; error?: string };
+          const fallback = res.status === 401 ? 'Authentication required.'
+            : res.status === 403 ? "You don't have access to these contacts."
+              : res.status >= 500 ? 'Contact service temporarily unavailable. Retry in a moment.'
+                : 'Could not load contacts.';
+          throw new Error(body.message ?? body.error ?? fallback);
+        })
+        .then((next: { items: Contact[]; total: number; limit: number; offset: number; hasMore: boolean; summary?: ContactSummary } | null) => {
+          if (next) {
+            setErr('');
+            setPage({ offset: next.offset, limit: next.limit, total: next.total, hasMore: next.hasMore });
+            setContacts(next.items);
+            if (next.summary) setSummary(next.summary);
+          }
+        }).catch((cause: unknown) => {
+          if (cause instanceof DOMException && cause.name === 'AbortError') return;
+          setErr(cause instanceof Error ? cause.message : 'Could not load contacts.');
+        }).finally(() => setLoading(false));
     }, query ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [query, accountFilter, roleFilter, page.offset]);
@@ -86,18 +115,11 @@ export default function ContactsClient({ initialContacts, initialTotal, initialA
 
   const kpi = useMemo(() => {
     const all = currentContacts;
-    const active = all.filter((c) => c.status === 'active');
     const linked = all.filter((c) => c.accountId);
-    const primaries = all.filter((c) => c.isPrimary && c.status === 'active');
-    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-    const recent = all.filter((c) => c.createdAt >= monthAgo);
     const accountsWithContact = new Set(linked.map((c) => c.accountId));
     const uncovered = initialAccounts.filter((a) => !accountsWithContact.has(a.id)).length;
-    const decisionMakers = all.filter((c) => c.stakeholderRole === 'decision_maker').length;
-    const champions = all.filter((c) => c.relationshipStrength === 'champion' || c.relationshipStrength === 'strong').length;
-    const unmapped = all.filter((c) => !c.stakeholderRole).length;
-    return { total: all.length, active: active.length, linked: linked.length, primaries: primaries.length, recent: recent.length, uncovered, decisionMakers, champions, unmapped };
-  }, [currentContacts, initialAccounts]);
+    return { ...summary, uncovered };
+  }, [summary, currentContacts, initialAccounts]);
 
   const patch = async (c: Contact, body: Record<string, unknown>, note?: string): Promise<void> => {
     setBusy(true); setErr(''); setMsg('');

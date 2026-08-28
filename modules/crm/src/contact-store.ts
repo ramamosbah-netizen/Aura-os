@@ -16,6 +16,18 @@ export interface ContactFilter {
   limit?: number;
 }
 
+/** Aggregates for the filtered contact directory, independent of the current page. */
+export interface ContactSummary {
+  total: number;
+  active: number;
+  linked: number;
+  primaries: number;
+  recent: number;
+  decisionMakers: number;
+  champions: number;
+  unmapped: number;
+}
+
 /** Persistence for CRM contacts. Postgres in production; in-memory stand-in for no-DB boots. */
 export interface ContactStore {
   save(contact: Contact): Promise<void>;
@@ -24,4 +36,5 @@ export interface ContactStore {
   get(id: Id): Promise<Contact | null>;
   list(filter?: ContactFilter): Promise<Contact[]>;
   listPaged(filter: ContactFilter, page: PageParams): Promise<Page<Contact>>;
+  summary(filter: ContactFilter): Promise<ContactSummary>;
 }

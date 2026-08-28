@@ -1,6 +1,8 @@
-import { Controller, Get, Header, NotFoundException, Param, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Header, Inject, NotFoundException, Optional, Param, Query, StreamableFile } from '@nestjs/common';
 import * as XLSX from 'xlsx';
-import { ParseUuidOr404Pipe, TenantContext } from '@aura/core';
+import { ParseUuidOr404Pipe, PG_POOL, TenantContext } from '@aura/core';
+import { parsePageParams } from '@aura/shared';
+import type { Pool } from 'pg';
 import {
   AccountService,
   ActivityService,
@@ -18,6 +20,7 @@ import { TenderService, type Tender } from '@aura/tendering';
 import { ContractService, type Contract } from '@aura/contracts';
 import { ProjectService, type Project } from '@aura/projects';
 import { CustomerInvoiceService } from '@aura/finance';
+import { AccountPortfolioQueryService, type PortfolioQueryRow } from './account-portfolio-query.service';
 
 // Account 360 — the customer command center. The Account is the PERSISTENT
 // commercial party at the head of the deal chain; opportunities, tenders,
@@ -60,6 +63,8 @@ interface Account360Payload {
 
 @Controller('crm/accounts')
 export class Account360Controller {
+  private readonly portfolioQuery: AccountPortfolioQueryService | null;
+
   constructor(
     private readonly accounts: AccountService,
     private readonly contacts: ContactService,
@@ -71,7 +76,10 @@ export class Account360Controller {
     private readonly projects: ProjectService,
     private readonly invoices: CustomerInvoiceService,
     private readonly tenant: TenantContext,
-  ) {}
+    @Optional() @Inject(PG_POOL) pool: Pool | null,
+  ) {
+    this.portfolioQuery = pool ? new AccountPortfolioQueryService(pool) : null;
+  }
 
   private async compose(id: string): Promise<{
     payload: Account360Payload;
@@ -201,6 +209,51 @@ export class Account360Controller {
         suggestedStage: stageMismatch ? 'active_customer' : null,
       };
     });
+  }
+
+  /** Bounded portfolio projection with DB-side aggregates and server-owned KPIs. */
+  @Get('portfolio/paged')
+  async portfolioPaged(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<{
+    items: PortfolioQueryRow[];
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+    summary: { totalAccounts: number; activeCustomers: number; strategicAccounts: number; atRiskAccounts: number; totalPipeline: number; outstandingAR: number };
+  }> {
+    const page = parsePageParams(limit, offset);
+    const filters = { search, status, ownerId };
+    if (this.portfolioQuery) return this.portfolioQuery.page(this.tenant.get().tenantId, filters, page);
+
+    // In-memory/CI fallback preserves the same response contract. Production uses the SQL path.
+    const all = await this.portfolio();
+    const needle = search?.trim().toLowerCase();
+    const filtered = all.filter((row) =>
+      (!status || row.stage === status) && (!ownerId || row.ownerId === ownerId) &&
+      (!needle || [row.name, row.industry, row.email, row.phone, row.ownerId].some((v) => v?.toLowerCase().includes(needle))),
+    );
+    const items = filtered.slice(page.offset, page.offset + page.limit).map((row) => ({
+      ...row,
+      activeContracts: row.contracts,
+      liveProjects: row.activeProjects,
+    })) as PortfolioQueryRow[];
+    return {
+      items, total: filtered.length, limit: page.limit, offset: page.offset, hasMore: page.offset + items.length < filtered.length,
+      summary: {
+        totalAccounts: filtered.length,
+        activeCustomers: filtered.filter((r) => r.stage === 'active_customer' || r.stage === 'strategic').length,
+        strategicAccounts: filtered.filter((r) => r.stage === 'strategic').length,
+        atRiskAccounts: filtered.filter((r) => r.health === 'at_risk').length,
+        totalPipeline: filtered.reduce((sum, r) => sum + r.pipelineValue, 0),
+        outstandingAR: filtered.reduce((sum, r) => sum + r.outstandingAR, 0),
+      },
+    };
   }
 
   /** The accounts register as an Excel workbook (every profile column). */

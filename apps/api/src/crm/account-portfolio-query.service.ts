@@ -41,9 +41,12 @@ export interface PortfolioQueryRow {
 export interface PortfolioQuerySummary {
   totalAccounts: number;
   activeCustomers: number;
+  prospects: number;
   strategicAccounts: number;
   atRiskAccounts: number;
   totalPipeline: number;
+  activeDeals: number;
+  contractedValue: number;
   outstandingAR: number;
 }
 
@@ -65,7 +68,9 @@ export class AccountPortfolioQueryService {
 
   async page(tenantId: string, filters: PortfolioQueryFilters, page: PageParams): Promise<PortfolioQueryPage> {
     const search = filters.search?.trim() ?? '';
-    const status = filters.status?.trim() ?? '';
+    // Allow smart views to express a small set of canonical statuses (for example
+    // prospect + qualified) without falling back to client-side filtering.
+    const status = (filters.status ?? '').split(',').map((value) => value.trim()).filter(Boolean).join(',');
     const ownerId = filters.ownerId?.trim() ?? '';
     const base = [tenantId, search, status, ownerId];
 
@@ -76,7 +81,7 @@ export class AccountPortfolioQueryService {
          FROM public.aura_crm_accounts
          WHERE tenant_id = $1
            AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR industry ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%' OR phone ILIKE '%' || $2 || '%')
-           AND ($3 = '' OR status = $3)
+           AND ($3 = '' OR status = ANY(string_to_array($3, ',')))
            AND ($4 = '' OR owner_id = $4)
        ), page_accounts AS (
          SELECT * FROM filtered ORDER BY created_at DESC, id DESC LIMIT $5 OFFSET $6
@@ -142,16 +147,18 @@ export class AccountPortfolioQueryService {
       `SELECT COUNT(*)::int AS count FROM public.aura_crm_accounts
        WHERE tenant_id = $1
          AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR industry ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%' OR phone ILIKE '%' || $2 || '%')
-         AND ($3 = '' OR status = $3) AND ($4 = '' OR owner_id = $4)`, base,
+         AND ($3 = '' OR status = ANY(string_to_array($3, ','))) AND ($4 = '' OR owner_id = $4)`, base,
     );
     const summaryRes = await this.pool.query<Record<string, unknown>>(
       `WITH filtered AS (
          SELECT id::text AS id, name, status, owner_id FROM public.aura_crm_accounts
          WHERE tenant_id = $1
            AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR industry ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%' OR phone ILIKE '%' || $2 || '%')
-           AND ($3 = '' OR status = $3) AND ($4 = '' OR owner_id = $4)
+           AND ($3 = '' OR status = ANY(string_to_array($3, ','))) AND ($4 = '' OR owner_id = $4)
        ), opp AS (
-         SELECT account_id::text AS id, COALESCE(SUM(value) FILTER (WHERE stage NOT IN ('won','lost')),0)::numeric AS pipeline
+         SELECT account_id::text AS id,
+                COUNT(*) FILTER (WHERE stage NOT IN ('won','lost'))::int AS active_deals,
+                COALESCE(SUM(value) FILTER (WHERE stage NOT IN ('won','lost')),0)::numeric AS pipeline
          FROM public.aura_crm_opportunities WHERE tenant_id = $1 GROUP BY account_id
        ), invoices AS (
          SELECT f.id,
@@ -164,10 +171,17 @@ export class AccountPortfolioQueryService {
        SELECT COUNT(*)::int AS total_accounts,
               COUNT(*) FILTER (WHERE status IN ('active_customer','strategic'))::int AS active_customers,
               COUNT(*) FILTER (WHERE status = 'strategic')::int AS strategic_accounts,
+              COUNT(*) FILTER (WHERE status IN ('prospect','qualified'))::int AS prospects,
+              COALESCE(SUM(o.active_deals),0)::int AS active_deals,
               COALESCE(SUM(o.pipeline),0)::numeric AS total_pipeline,
+              COALESCE(SUM(c.contracted_value),0)::numeric AS contracted_value,
               COALESCE(SUM(i.outstanding),0)::numeric AS outstanding_ar,
               COUNT(*) FILTER (WHERE COALESCE(i.overdue,0) > 0)::int AS at_risk_accounts
-       FROM filtered f LEFT JOIN opp o ON o.id = f.id LEFT JOIN invoices i ON i.id = f.id`, base,
+       FROM filtered f LEFT JOIN opp o ON o.id = f.id LEFT JOIN invoices i ON i.id = f.id
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(value) FILTER (WHERE status <> 'cancelled'),0)::numeric AS contracted_value
+         FROM public.aura_contracts_contracts c WHERE c.tenant_id = $1 AND c.account_id::text = f.id
+       ) c ON TRUE`, base,
     );
     const total = Number(countRes.rows[0]?.count ?? 0);
     const toNumber = (value: unknown): number => Number(value ?? 0);
@@ -209,8 +223,8 @@ export class AccountPortfolioQueryService {
     return {
       items, total, limit: page.limit, offset: page.offset, hasMore: page.offset + items.length < total,
       summary: {
-        totalAccounts: toNumber(s.total_accounts), activeCustomers: toNumber(s.active_customers), strategicAccounts: toNumber(s.strategic_accounts),
-        atRiskAccounts: toNumber(s.at_risk_accounts), totalPipeline: toNumber(s.total_pipeline), outstandingAR: toNumber(s.outstanding_ar),
+        totalAccounts: toNumber(s.total_accounts), activeCustomers: toNumber(s.active_customers), prospects: toNumber(s.prospects), strategicAccounts: toNumber(s.strategic_accounts),
+        atRiskAccounts: toNumber(s.at_risk_accounts), totalPipeline: toNumber(s.total_pipeline), activeDeals: toNumber(s.active_deals), contractedValue: toNumber(s.contracted_value), outstandingAR: toNumber(s.outstanding_ar),
       },
     };
   }

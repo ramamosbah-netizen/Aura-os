@@ -6,6 +6,7 @@ import AccountsPortfolioClient from './accounts-portfolio-client';
 import ContactsClient from './contacts-client';
 
 export type CustomerPortfolioRow = import('./accounts-portfolio-client').PortfolioRow;
+export type CustomerPortfolioPage = import('./accounts-portfolio-client').PortfolioPage;
 export type CustomerContact = {
   id: string;
   accountId: string | null;
@@ -28,12 +29,12 @@ export type CustomerAccount = { id: string; name: string };
 type View = 'accounts' | 'contacts' | 'stakeholders';
 
 export default function CustomersWorkspaceClient({
-  accounts,
+  portfolio,
   contacts,
   accountOptions,
   currentUserId,
 }: {
-  accounts: CustomerPortfolioRow[];
+  portfolio: CustomerPortfolioPage;
   contacts: CustomerContact[];
   accountOptions: CustomerAccount[];
   currentUserId: string | null;
@@ -73,7 +74,7 @@ export default function CustomersWorkspaceClient({
 
       <nav aria-label="Customer views" style={st.tabs}>
         {([
-          ['accounts', 'Accounts', accounts.length, 'Commercial accounts, pipeline, delivery and financial exposure'],
+            ['accounts', 'Accounts', portfolio.total, 'Commercial accounts, pipeline, delivery and financial exposure'],
           ['contacts', 'Contacts', contacts.length, 'People, roles and relationship strength'],
           ['stakeholders', 'Stakeholder Map', contacts.filter((c) => c.accountId).length, 'Account-to-person relationship coverage'],
         ] as const).map(([key, label, count, description]) => (
@@ -91,7 +92,7 @@ export default function CustomersWorkspaceClient({
       </nav>
 
       {view === 'accounts' ? (
-        <AccountsPortfolioClient rows={accounts} currentUserId={currentUserId} />
+        <AccountsPortfolioClient initialPage={portfolio} currentUserId={currentUserId} />
       ) : view === 'contacts' ? (
         <ContactsClient initialContacts={contacts} initialAccounts={accountOptions} />
       ) : (

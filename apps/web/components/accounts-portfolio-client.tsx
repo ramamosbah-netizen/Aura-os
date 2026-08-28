@@ -37,6 +37,27 @@ export interface PortfolioRow {
   suggestedStage: string | null;
 }
 
+export interface PortfolioSummary {
+  totalAccounts: number;
+  activeCustomers: number;
+  prospects: number;
+  strategicAccounts: number;
+  atRiskAccounts: number;
+  totalPipeline: number;
+  activeDeals: number;
+  contractedValue: number;
+  outstandingAR: number;
+}
+
+export interface PortfolioPage {
+  items: PortfolioRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  summary: PortfolioSummary;
+}
+
 const STAGE_LABEL: Record<string, string> = {
   prospect: 'Prospect',
   qualified: 'Qualified',
@@ -91,13 +112,31 @@ function ago(iso: string | null): string {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-export default function AccountsPortfolioClient({ rows, currentUserId }: {
-  rows: PortfolioRow[] | null;
+export default function AccountsPortfolioClient({ initialPage, rows, currentUserId }: {
+  initialPage?: PortfolioPage | null;
+  /** Legacy Accounts route compatibility; Customers uses the paged contract. */
+  rows?: PortfolioRow[] | null;
   currentUserId: string | null;
 }) {
   const router = useRouter();
   const [view, setView] = useState<ViewKey>('all');
   const [q, setQ] = useState('');
+  const seedPage: PortfolioPage | null = initialPage ?? (rows ? {
+    items: rows, total: rows.length, limit: Math.max(rows.length, 1), offset: 0, hasMore: false,
+    summary: {
+      totalAccounts: rows.length,
+      activeCustomers: rows.filter((r) => r.stage === 'active_customer' || r.stage === 'strategic').length,
+      prospects: rows.filter((r) => r.stage === 'prospect' || r.stage === 'qualified').length,
+      strategicAccounts: rows.filter((r) => r.stage === 'strategic').length,
+      atRiskAccounts: rows.filter((r) => r.health === 'at_risk').length,
+      totalPipeline: rows.reduce((sum, r) => sum + r.pipelineValue, 0),
+      activeDeals: rows.reduce((sum, r) => sum + r.activeDeals, 0),
+      contractedValue: rows.reduce((sum, r) => sum + r.contractedValue, 0),
+      outstandingAR: rows.reduce((sum, r) => sum + r.outstandingAR, 0),
+    },
+  } : null);
+  const [page, setPage] = useState<PortfolioPage | null>(seedPage);
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   // Ownership is a workspace username; "me" comes from /workspace/me (the session
   // `sub` passed from the server need not equal the username and is null in dev).
@@ -128,18 +167,18 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
     return u?.roleLabel ? `${username} · ${u.roleLabel}` : username;
   };
 
-  const all = useMemo(() => rows ?? [], [rows]);
+  const all = useMemo(() => page?.items ?? [], [page]);
 
   const kpis = useMemo(() => ({
-    total: all.length,
-    prospects: all.filter((r) => r.stage === 'prospect' || r.stage === 'qualified').length,
-    activeCustomers: all.filter((r) => r.stage === 'active_customer' || r.stage === 'strategic').length,
-    activeOpps: all.reduce((s, r) => s + r.activeDeals, 0),
-    pipeline: all.reduce((s, r) => s + r.pipelineValue, 0),
-    contracted: all.reduce((s, r) => s + r.contractedValue, 0),
-    outstanding: all.reduce((s, r) => s + r.outstandingAR, 0),
-    atRisk: all.filter((r) => r.health === 'at_risk').length,
-  }), [all]);
+    total: page?.summary.totalAccounts ?? page?.total ?? 0,
+    prospects: page?.summary.prospects ?? all.filter((r) => r.stage === 'prospect' || r.stage === 'qualified').length,
+    activeCustomers: page?.summary.activeCustomers ?? all.filter((r) => r.stage === 'active_customer' || r.stage === 'strategic').length,
+    activeOpps: page?.summary.activeDeals ?? all.reduce((s, r) => s + r.activeDeals, 0),
+    pipeline: page?.summary.totalPipeline ?? all.reduce((s, r) => s + r.pipelineValue, 0),
+    contracted: page?.summary.contractedValue ?? all.reduce((s, r) => s + r.contractedValue, 0),
+    outstanding: page?.summary.outstandingAR ?? all.reduce((s, r) => s + r.outstandingAR, 0),
+    atRisk: page?.summary.atRiskAccounts ?? all.filter((r) => r.health === 'at_risk').length,
+  }), [all, page]);
 
   const views: Array<{ key: ViewKey; label: string; match: (r: PortfolioRow) => boolean }> = useMemo(() => [
     { key: 'all', label: 'All Accounts', match: () => true },
@@ -163,6 +202,46 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
         || (r.ownerId ?? '').toLowerCase().includes(needle))
       .sort((a, b) => (b.contractedValue + b.pipelineValue) - (a.contractedValue + a.pipelineValue));
   }, [all, views, view, q]);
+
+  // The page contract owns search, status filters, and pagination. Keep the
+  // rendered rows bounded even for large tenants; only the initial response is
+  // server-rendered and subsequent changes use the same BFF contract.
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const status = view === 'prospects' ? 'prospect,qualified'
+        : view === 'active' ? 'active_customer,strategic'
+        : view === 'strategic' ? 'strategic'
+        : view === 'dormant' ? 'dormant,inactive' : '';
+      const params = new URLSearchParams({ limit: String(page?.limit ?? 50), offset: String(view === 'all' && !q ? (page?.offset ?? 0) : 0) });
+      if (q.trim()) params.set('search', q.trim());
+      if (status) params.set('status', status);
+      if (view === 'mine' && myId) params.set('ownerId', myId);
+      setLoading(true);
+      void fetch(`/api/crm/accounts/portfolio/paged?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
+        .then((res) => res.ok ? res.json() : null)
+        .then((next: PortfolioPage | null) => { if (next) setPage(next); })
+        .catch(() => undefined)
+        .finally(() => setLoading(false));
+    }, q ? 250 : 0);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  // myId is intentionally included so “My Accounts” refetches once identity loads.
+  }, [q, view, myId]);
+
+  const goToPage = (nextOffset: number) => {
+    const params = new URLSearchParams({ limit: String(page?.limit ?? 50), offset: String(nextOffset) });
+    if (q.trim()) params.set('search', q.trim());
+    const status = view === 'prospects' ? 'prospect,qualified'
+      : view === 'active' ? 'active_customer,strategic'
+      : view === 'strategic' ? 'strategic'
+      : view === 'dormant' ? 'dormant,inactive' : '';
+    if (status) params.set('status', status);
+    if (view === 'mine' && myId) params.set('ownerId', myId);
+    void fetch(`/api/crm/accounts/portfolio/paged?${params.toString()}`, { cache: 'no-store' })
+      .then((res) => res.ok ? res.json() : null)
+      .then((next: PortfolioPage | null) => { if (next) setPage(next); })
+      .catch(() => undefined);
+  };
 
   async function patchAccount(id: string, body: Record<string, unknown>) {
     setBusy(id);
@@ -246,7 +325,7 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
       </div>
 
       <section style={st.panel}>
-        {rows === null ? (
+        {page === null ? (
           <p style={st.muted}>API offline.</p>
         ) : visible.length === 0 ? (
           <p style={st.muted}>{all.length === 0 ? 'No accounts yet — add one above.' : 'No accounts match this view.'}</p>
@@ -346,6 +425,15 @@ export default function AccountsPortfolioClient({ rows, currentUserId }: {
           </div>
         )}
       </section>
+      {page && page.total > page.limit ? (
+        <div style={st.pagination} aria-label="Account pagination">
+          <span style={st.muted}>{page.offset + 1}–{Math.min(page.offset + page.items.length, page.total)} of {page.total} accounts</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" disabled={loading || page.offset === 0} onClick={() => goToPage(Math.max(0, page.offset - page.limit))} style={st.pageBtn}>Previous</button>
+            <button type="button" disabled={loading || !page.hasMore} onClick={() => goToPage(page.offset + page.limit)} style={st.pageBtn}>Next</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -367,6 +455,8 @@ const st = {
   search: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 12px', fontSize: 13, minWidth: 260 } as CSSProperties,
   panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '4px 8px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
+  pagination: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12, flexWrap: 'wrap' } as CSSProperties,
+  pageBtn: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
   th: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' } as CSSProperties,
   td: { padding: '10px 10px', borderBottom: '1px solid var(--border)', verticalAlign: 'top' } as CSSProperties,

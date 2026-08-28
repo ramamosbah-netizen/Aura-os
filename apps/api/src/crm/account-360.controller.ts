@@ -225,7 +225,7 @@ export class Account360Controller {
     limit: number;
     offset: number;
     hasMore: boolean;
-    summary: { totalAccounts: number; activeCustomers: number; strategicAccounts: number; atRiskAccounts: number; totalPipeline: number; outstandingAR: number };
+    summary: { totalAccounts: number; activeCustomers: number; prospects: number; strategicAccounts: number; atRiskAccounts: number; totalPipeline: number; activeDeals: number; contractedValue: number; outstandingAR: number };
   }> {
     const page = parsePageParams(limit, offset);
     const filters = { search, status, ownerId };
@@ -234,8 +234,9 @@ export class Account360Controller {
     // In-memory/CI fallback preserves the same response contract. Production uses the SQL path.
     const all = await this.portfolio();
     const needle = search?.trim().toLowerCase();
+    const statuses = (status ?? '').split(',').map((value) => value.trim()).filter(Boolean);
     const filtered = all.filter((row) =>
-      (!status || row.stage === status) && (!ownerId || row.ownerId === ownerId) &&
+      (!statuses.length || statuses.includes(row.stage)) && (!ownerId || row.ownerId === ownerId) &&
       (!needle || [row.name, row.industry, row.email, row.phone, row.ownerId].some((v) => v?.toLowerCase().includes(needle))),
     );
     const items = filtered.slice(page.offset, page.offset + page.limit).map((row) => ({
@@ -248,9 +249,12 @@ export class Account360Controller {
       summary: {
         totalAccounts: filtered.length,
         activeCustomers: filtered.filter((r) => r.stage === 'active_customer' || r.stage === 'strategic').length,
+        prospects: filtered.filter((r) => r.stage === 'prospect' || r.stage === 'qualified').length,
         strategicAccounts: filtered.filter((r) => r.stage === 'strategic').length,
         atRiskAccounts: filtered.filter((r) => r.health === 'at_risk').length,
         totalPipeline: filtered.reduce((sum, r) => sum + r.pipelineValue, 0),
+        activeDeals: filtered.reduce((sum, r) => sum + r.activeDeals, 0),
+        contractedValue: filtered.reduce((sum, r) => sum + r.contractedValue, 0),
         outstandingAR: filtered.reduce((sum, r) => sum + r.outstandingAR, 0),
       },
     };

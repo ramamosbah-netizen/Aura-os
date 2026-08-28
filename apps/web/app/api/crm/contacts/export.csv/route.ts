@@ -7,8 +7,7 @@ export async function GET(req: Request): Promise<Response> {
     const res = await apiFetch(`${apiBase()}/api/v1/crm/contacts/export.csv${qs}`, {
       headers: await authHeader(), cache: 'no-store',
     });
-    const body = await res.text();
-    return new Response(body, {
+    return new Response(res.body, {
       status: res.status,
       headers: {
         'content-type': res.headers.get('content-type') ?? 'text/csv; charset=utf-8',

@@ -49,5 +49,14 @@ describe('CRM customer search and pagination contract', () => {
 
     const summary = await store.summary({ tenantId: 'large-tenant' });
     expect(summary).toMatchObject({ total: 10_000, active: 10_000, linked: 10_000, decisionMakers: 1_000, unmapped: 9_000 });
+
+    let streamed = 0;
+    let largestBatch = 0;
+    await store.streamAll({ tenantId: 'large-tenant' }, async (rows) => {
+      streamed += rows.length;
+      largestBatch = Math.max(largestBatch, rows.length);
+    });
+    expect(streamed).toBe(10_000);
+    expect(largestBatch).toBeLessThanOrEqual(500);
   });
 });

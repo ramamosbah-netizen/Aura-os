@@ -124,6 +124,32 @@ export class PostgresContactStore implements ContactStore {
     return res.rows.map(rowToContact);
   }
 
+  async streamAll(filter: ContactFilter, onBatch: (rows: Contact[]) => Promise<void>): Promise<void> {
+    const base = this.buildWhere(filter);
+    let cursorCreatedAt: string | null = null;
+    let cursorId: string | null = null;
+    for (;;) {
+      const params = [...base.params];
+      let whereSql = base.whereSql;
+      if (cursorCreatedAt !== null && cursorId !== null) {
+        const join = whereSql ? ' AND ' : 'WHERE ';
+        params.push(cursorCreatedAt, cursorId);
+        whereSql += `${join}(created_at < $${params.length - 1} OR (created_at = $${params.length - 1} AND id < $${params.length}))`;
+      }
+      params.push(500);
+      const res = await this.pool.query<Row>(
+        `SELECT ${COLS} FROM public.aura_crm_contacts ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
+        params,
+      );
+      if (res.rows.length === 0) return;
+      await onBatch(res.rows.map(rowToContact));
+      const last = res.rows[res.rows.length - 1];
+      cursorCreatedAt = last.created_at instanceof Date ? last.created_at.toISOString() : String(last.created_at);
+      cursorId = last.id;
+      if (res.rows.length < 500) return;
+    }
+  }
+
   async listPaged(filter: ContactFilter, page: PageParams): Promise<Page<Contact>> {
     const { whereSql, params } = this.buildWhere(filter);
     const countRes = await this.pool.query<{ count: string }>(

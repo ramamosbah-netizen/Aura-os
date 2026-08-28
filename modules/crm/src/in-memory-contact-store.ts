@@ -45,6 +45,11 @@ export class InMemoryContactStore implements ContactStore {
     return this.list({ ...filter, limit: undefined });
   }
 
+  async streamAll(filter: ContactFilter, onBatch: (rows: Contact[]) => Promise<void>): Promise<void> {
+    const rows = await this.listAll(filter);
+    for (let offset = 0; offset < rows.length; offset += 500) await onBatch(rows.slice(offset, offset + 500));
+  }
+
   async listPaged(filter: ContactFilter, page: PageParams): Promise<Page<Contact>> {
     const all = await this.list({ ...filter, limit: undefined });
     return paginate(all, page);

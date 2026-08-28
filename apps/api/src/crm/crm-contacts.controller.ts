@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Header, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Headers, NotFoundException, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams, toCsv } from '@aura/shared';
@@ -34,6 +34,11 @@ class UpdateContactDto {
   @IsOptional() @IsString() reportsToName?: string;
   @IsOptional() @IsIn(['active', 'inactive']) status?: ContactStatus;
   @IsOptional() @IsString() ownerId?: string;
+}
+
+interface CsvResponse {
+  write(chunk: string): boolean;
+  end(): void;
 }
 
 /**
@@ -117,16 +122,16 @@ export class CrmContactsController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="contacts.csv"')
   async exportCsv(
+    @Res() response: CsvResponse,
     @Query('accountId') accountId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('stakeholderRole') stakeholderRole?: string,
     @Query('relationshipStrength') relationshipStrength?: string,
-  ): Promise<string> {
-    const rows = await this.contacts.listAll({
-      tenantId: this.tenant.get().tenantId, accountId, status, search, stakeholderRole, relationshipStrength,
-    });
-    return toCsv(rows.map((c) => ({
+  ): Promise<void> {
+    const columns = ['name', 'jobTitle', 'accountName', 'stakeholderRole', 'relationshipStrength', 'reportsToName', 'email', 'phone', 'isPrimary', 'status', 'ownerId'];
+    const filter = { tenantId: this.tenant.get().tenantId, accountId, status, search, stakeholderRole, relationshipStrength };
+    const csvRow = (c: Contact): Record<string, unknown> => ({
       name: c.name,
       jobTitle: c.jobTitle ?? '',
       accountName: c.accountName ?? '',
@@ -138,7 +143,17 @@ export class CrmContactsController {
       isPrimary: c.isPrimary,
       status: c.status,
       ownerId: c.ownerId ?? '',
-    })), ['name', 'jobTitle', 'accountName', 'stakeholderRole', 'relationshipStrength', 'reportsToName', 'email', 'phone', 'isPrimary', 'status', 'ownerId']);
+    });
+    const header = `${columns.join(',')}\n`;
+    response.write(header);
+    await this.contacts.streamAll(filter, async (rows) => {
+      const chunk = toCsv(rows.map(csvRow), columns);
+      if (!chunk) return;
+      const lines = chunk.split('\n');
+      lines.shift();
+      response.write(`${lines.join('\n')}\n`);
+    });
+    response.end();
   }
 
   @Get(':id')

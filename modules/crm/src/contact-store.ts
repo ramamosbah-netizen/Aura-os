@@ -37,6 +37,8 @@ export interface ContactStore {
   list(filter?: ContactFilter): Promise<Contact[]>;
   /** Full filtered register for controlled exports; unlike list(), never applies the UI preview limit. */
   listAll(filter: ContactFilter): Promise<Contact[]>;
+  /** Stream the full filtered register in bounded batches for large exports. */
+  streamAll(filter: ContactFilter, onBatch: (rows: Contact[]) => Promise<void>): Promise<void>;
   listPaged(filter: ContactFilter, page: PageParams): Promise<Page<Contact>>;
   summary(filter: ContactFilter): Promise<ContactSummary>;
 }

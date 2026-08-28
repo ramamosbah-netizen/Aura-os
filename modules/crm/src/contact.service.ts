@@ -122,6 +122,10 @@ export class ContactService implements OnModuleInit {
     return this.store.listAll(filter);
   }
 
+  streamAll(filter: ContactFilter, onBatch: (rows: Contact[]) => Promise<void>): Promise<void> {
+    return this.store.streamAll(filter, onBatch);
+  }
+
   listPaged(filter: ContactFilter, page: PageParams) {
     return this.store.listPaged(filter, page);
   }

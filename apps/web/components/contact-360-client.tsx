@@ -250,7 +250,13 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
         {tab === 'deals' && (
           <div>
             <p style={st.muted}>Deals at {summary.accountName ?? 'this account'} this stakeholder is involved in.</p>
-            <DealTable title="Opportunities" cols={['Title', 'Stage', 'Value', 'Win %']} rows={opportunities.map((o) => [o.title, o.stage, `AED ${aed(o.value)}`, `${o.winProbability}%`])} href="/crm/pipeline" />
+            <DealTable
+              title="Opportunities"
+              cols={['Title', 'Stage', 'Value', 'Win %']}
+              rows={opportunities.map((o) => [o.title, o.stage, `AED ${aed(o.value)}`, `${o.winProbability}%`])}
+              rowLinks={opportunities.map((o) => `/crm/opportunities/${o.id}`)}
+              href="/crm/pipeline"
+            />
             <DealTable title="Tenders" cols={['Tender', 'Ref', 'Status', 'Value']} rows={tenders.map((t) => [t.title, t.reference ?? '—', t.status, `AED ${aed(t.value)}`])} />
             <DealTable title="Quotations" cols={['Number', 'Status', 'Total', 'Issued']} rows={quotations.map((q) => [q.quoteNumber, q.status, `AED ${aed(q.total)}`, q.issueDate])} href="/crm/quotations" />
             <DealTable title="Contracts" cols={['Contract', 'Status', 'Value', 'Awarded']} rows={contracts.map((ct) => [ct.title, ct.status, `AED ${aed(ct.value)}`, d(ct.createdAt)])} />
@@ -316,7 +322,7 @@ function Info({ label, value, link }: { label: string; value: string | null; lin
   );
 }
 
-function DealTable({ title, cols, rows, href }: { title: string; cols: string[]; rows: string[][]; href?: string }) {
+function DealTable({ title, cols, rows, href, rowLinks }: { title: string; cols: string[]; rows: string[][]; href?: string; rowLinks?: Array<string | null> }) {
   return (
     <div style={{ marginTop: 14 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 6 }}>{title} ({rows.length})</div>
@@ -328,7 +334,7 @@ function DealTable({ title, cols, rows, href }: { title: string; cols: string[];
               {rows.map((r, i) => (
                 <tr key={i}>{r.map((cell, j) => (
                   <td key={j} style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
-                    {j === 0 && href ? <a href={href} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{cell}</a> : cell}
+                    {j === 0 && (rowLinks?.[i] ?? href) ? <a href={rowLinks?.[i] ?? href} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{cell}</a> : cell}
                   </td>
                 ))}</tr>
               ))}

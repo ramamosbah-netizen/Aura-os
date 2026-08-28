@@ -9,4 +9,8 @@ describe('Contact 360 opportunity navigation', () => {
     expect(SOURCE).toContain('href="/crm/pipeline"');
     expect(SOURCE).not.toContain('href="/crm/leads"');
   });
+
+  it('deep-links each opportunity row to its Opportunity 360 record', () => {
+    expect(SOURCE).toContain('rowLinks={opportunities.map((o) => `/crm/opportunities/${o.id}`)}');
+  });
 });

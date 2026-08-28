@@ -832,6 +832,8 @@ jobs:
           DATABASE_URL: ${{ env.OWNER_URL }}
       - name: Activate runtime role
         run: psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "ALTER ROLE aura_app LOGIN PASSWORD 'aura_app_ci';"
+      - name: Mark disposable database
+        run: psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.aura_environment (marker text PRIMARY KEY); INSERT INTO public.aura_environment (marker) VALUES ('crm-volume-disposable') ON CONFLICT DO NOTHING; GRANT SELECT ON public.aura_environment TO aura_app;"
       - name: Build and boot API
         run: |
           pnpm --filter @aura/api... build

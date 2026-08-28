@@ -39,7 +39,7 @@ async function seed() {
              md5('volume-account-' || (((g - 1) % $2::int) + 1)),
              'Volume Account ' || (((g - 1) % $2::int) + 1), 'Volume Contact ' || g,
              'Stakeholder', 'volume-' || g || '@example.invalid', '+971500' || lpad(g::text, 6, '0'),
-             g % 4 = 0, 'active', 'u-volume-owner-' || (g % 20), 'volume-proof',
+             g <= $2::int, 'active', 'u-volume-owner-' || (g % 20), 'volume-proof',
              CASE WHEN g % 5 = 0 THEN 'Decision Maker' WHEN g % 3 = 0 THEN 'Champion' ELSE 'Influencer' END,
              CASE WHEN g % 2 = 0 THEN 'strong' ELSE 'medium' END
       FROM generate_series(1, $3::int) g

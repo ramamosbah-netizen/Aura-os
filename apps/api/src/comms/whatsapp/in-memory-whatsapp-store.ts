@@ -31,6 +31,7 @@ export class InMemoryWhatsAppStore implements WhatsAppStore {
     return [...this.threads.values()].filter((t) => t.tenantId === tenantId && (companyId === null || t.companyId === companyId) && (!ownerId || !t.ownerId || t.ownerId === ownerId)).sort((a, b) => (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? ''));
   }
   async listMessages(tenantId: string, threadId: string) { return [...this.messages.values()].filter((m) => m.tenantId === tenantId && m.threadId === threadId).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)); }
+  async getMessage(tenantId: string, messageId: string) { const row = this.messages.get(messageId); return row?.tenantId === tenantId ? { ...row } : null; }
   async insertMessage(input: NewWhatsAppMessage) {
     if (input.externalMessageId) {
       const duplicate = [...this.messages.values()].find((m) => m.tenantId === input.tenantId && m.providerAccountId === input.providerAccountId && m.externalMessageId === input.externalMessageId);

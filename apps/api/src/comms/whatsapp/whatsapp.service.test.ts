@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryWhatsAppStore } from './in-memory-whatsapp-store';
 import { WhatsAppService } from './whatsapp.service';
+import { InMemoryMailStore } from '../mail/in-memory-mail-store';
 
-function makeService(store = new InMemoryWhatsAppStore()) {
+function makeService(store = new InMemoryWhatsAppStore(), dispatch?: InMemoryMailStore) {
   const provider = {
     isConfigured: () => true,
     verifySignature: () => true,
@@ -17,6 +18,9 @@ function makeService(store = new InMemoryWhatsAppStore()) {
     { record: vi.fn().mockResolvedValue(undefined) } as never,
     { publish: vi.fn().mockResolvedValue(undefined) } as never,
     { get: vi.fn().mockReturnValue({ tenantId: 't1' }) } as never,
+    null,
+    null,
+    dispatch ?? null,
   );
   return { service, store, provider };
 }
@@ -52,5 +56,12 @@ describe('WhatsAppService resource authorization', () => {
     await service.markRead('t1', 'company-1', 'u-owner', false, row.id);
     expect(provider.markRead).toHaveBeenCalledWith('wamid-in');
     expect((await store.findThread('t1', row.id))?.unread).toBe(0);
+  });
+
+  it('records a durable dispatch and closes it after an immediate send', async () => {
+    const dispatch = new InMemoryMailStore(); const { service, store } = makeService(new InMemoryWhatsAppStore(), dispatch); const row = await thread(store, 'u-owner');
+    const sent = await service.reply('t1', 'company-1', 'u-owner', false, row.id, 'hello');
+    expect(sent.status).toBe('sent');
+    expect((await dispatch.getDispatch('t1', sent.id))?.state).toBe('done');
   });
 });

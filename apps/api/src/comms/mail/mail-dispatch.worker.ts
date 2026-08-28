@@ -95,7 +95,7 @@ export class MailDispatchWorker implements OnModuleInit, OnModuleDestroy {
     // rather than sitting ambiguous while newer mail goes out around it.
     await this.recoverStalled(tenantId, now);
 
-    const claimed = await this.store.claimDueDispatch(tenantId, now, BATCH);
+    const claimed = await this.store.claimDueDispatch(tenantId, now, BATCH, 'mail');
     let sent = 0;
     let failed = 0;
     for (const dispatch of claimed) {

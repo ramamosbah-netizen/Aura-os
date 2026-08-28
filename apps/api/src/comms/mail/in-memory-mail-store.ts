@@ -173,13 +173,13 @@ export class InMemoryMailStore implements MailStore {
     return [...new Set([...this.mail.keys(), ...this.dispatch.keys()])];
   }
 
-  async claimDueDispatch(tenantId: string, now: string, limit: number): Promise<DispatchRecord[]> {
+  async claimDueDispatch(tenantId: string, now: string, limit: number, subjectType?: DispatchRecord['subjectType']): Promise<DispatchRecord[]> {
     const claimed: DispatchRecord[] = [];
     for (const dispatch of this.queue(tenantId).values()) {
       if (claimed.length >= limit) break;
       // Only pending work that is actually due. Mirrors the Postgres claim exactly, including the
       // fact that a claimed row is invisible to the next caller.
-      if (dispatch.state !== 'pending' || dispatch.scheduledAt > now) continue;
+      if (dispatch.state !== 'pending' || dispatch.scheduledAt > now || (subjectType && dispatch.subjectType !== subjectType)) continue;
       const taken = { ...dispatch, state: 'processing' as const };
       this.queue(tenantId).set(dispatch.subjectId, taken);
       claimed.push(structuredClone(taken));

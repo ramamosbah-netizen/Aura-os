@@ -49,6 +49,7 @@ export interface WhatsAppStore {
   ensureThread(input: Omit<StoredWhatsAppThread, 'unread' | 'lastMessageAt' | 'lastPreview'> & Partial<Pick<StoredWhatsAppThread, 'unread' | 'lastMessageAt' | 'lastPreview'>>): Promise<StoredWhatsAppThread>;
   listThreads(tenantId: string, companyId: string | null, ownerId?: string | null): Promise<StoredWhatsAppThread[]>;
   listMessages(tenantId: string, threadId: string): Promise<StoredWhatsAppMessage[]>;
+  getMessage(tenantId: string, messageId: string): Promise<StoredWhatsAppMessage | null>;
   insertMessage(input: NewWhatsAppMessage): Promise<{ message: StoredWhatsAppMessage; inserted: boolean }>;
   updateStatus(tenantId: string, providerAccountId: string, externalMessageId: string, status: WhatsAppMessageStatus, failedReason?: string | null): Promise<StoredWhatsAppMessage | null>;
   setMessageDelivery(tenantId: string, messageId: string, externalMessageId: string | null, status: WhatsAppMessageStatus, failedReason?: string | null): Promise<StoredWhatsAppMessage | null>;

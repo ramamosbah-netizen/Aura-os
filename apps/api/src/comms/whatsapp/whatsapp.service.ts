@@ -3,6 +3,7 @@ import { EventBus, NotificationService, TenantContext } from '@aura/core';
 import { AccountService, ContactService } from '@aura/crm';
 import { makeEvent, newId, normalizeWhatsAppPhone, type WhatsAppMessageType, type WhatsAppMessageStatus } from '@aura/shared';
 import { COMMS_STORE, type CommsStore } from '../comms-store';
+import { MAIL_STORE, type MailStore } from '../mail/mail-store';
 import { WhatsAppCloudProvider } from './whatsapp-cloud.provider';
 import { WHATSAPP_STORE, type WhatsAppStore, type StoredWhatsAppThread } from './whatsapp-store';
 
@@ -27,6 +28,7 @@ export class WhatsAppService {
     private readonly tenant: TenantContext,
     @Optional() @Inject(ContactService) private readonly contacts: ContactService | null = null,
     @Optional() @Inject(AccountService) private readonly accounts: AccountService | null = null,
+    @Optional() @Inject(MAIL_STORE) private readonly dispatchStore: MailStore | null = null,
   ) {}
 
   configured(): boolean { return this.provider.isConfigured(); }
@@ -94,12 +96,33 @@ export class WhatsAppService {
   async reply(tenantId: string, companyId: string | null, sender: string, isAdmin: boolean, threadId: string, text: string) {
     const thread = await this.requireThread(tenantId, companyId, sender, isAdmin, threadId); const body = text.trim(); if (!body) throw new BadRequestException('Message text is required');
     const queued = await this.store.insertMessage({ tenantId, companyId: thread.companyId, providerAccountId: thread.providerAccountId, threadId, externalMessageId: null, direction: 'outbound', status: 'queued', type: 'text', body, sender, occurredAt: new Date().toISOString() });
+    const dispatchId = newId();
+    const dispatch = { id: dispatchId, subjectType: 'whatsapp' as const, subjectId: queued.message.id, accountId: thread.providerAccountId, scheduledAt: new Date(Date.now() + 30_000).toISOString(), scheduledTimezone: 'UTC', state: 'pending' as const, attempts: 0 };
+    if (this.dispatchStore) await this.dispatchStore.upsertDispatch(tenantId, dispatch);
     let updated = queued.message; let lastError: unknown = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      try { const sent = await this.provider.sendText(thread.phone, body); updated = await this.store.setMessageDelivery(tenantId, queued.message.id, sent.externalMessageId || null, sent.status, sent.error) ?? updated; lastError = null; break; }
+      try {
+        const sent = await this.provider.sendText(thread.phone, body);
+        if (sent.status === 'sent') {
+          updated = await this.store.setMessageDelivery(tenantId, queued.message.id, sent.externalMessageId || null, 'sent', null) ?? updated;
+          lastError = null;
+          if (this.dispatchStore) await this.dispatchStore.completeDispatch(tenantId, dispatchId, new Date().toISOString());
+          break;
+        }
+        lastError = new Error(sent.error ?? 'WhatsApp API rejected the message');
+        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+      }
       catch (error) { lastError = error; if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 250)); }
     }
-    if (lastError) updated = await this.store.setMessageDelivery(tenantId, queued.message.id, null, 'failed', lastError instanceof Error ? lastError.message : 'WhatsApp send failed') ?? updated;
+    if (lastError) {
+      const reason = lastError instanceof Error ? lastError.message : 'WhatsApp send failed';
+      if (this.dispatchStore) {
+        updated = await this.store.setMessageDelivery(tenantId, queued.message.id, null, 'queued', reason) ?? updated;
+        await this.dispatchStore.failDispatch(tenantId, dispatchId, reason, new Date(Date.now() + 60_000).toISOString());
+      } else {
+        updated = await this.store.setMessageDelivery(tenantId, queued.message.id, null, 'failed', reason) ?? updated;
+      }
+    }
     await this.comms.publishTimeline(tenantId, { id: newId(), companyId: thread.companyId, occurredAt: updated.occurredAt, channel: 'whatsapp', direction: 'outbound', actor: sender, subjectType: 'whatsapp', subjectId: updated.id, title: `WhatsApp reply to ${thread.displayName}`, preview: body.slice(0, 240), visibility: 'tenant', visibilityKey: thread.providerAccountId });
     return updated;
   }

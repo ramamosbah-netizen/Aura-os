@@ -168,6 +168,7 @@ import { WorkItemsService } from './work-items/work-items.service';
 import { WhatsAppController } from './comms/whatsapp/whatsapp.controller';
 import { WhatsAppService } from './comms/whatsapp/whatsapp.service';
 import { WhatsAppCloudProvider } from './comms/whatsapp/whatsapp-cloud.provider';
+import { WhatsAppDispatchWorker } from './comms/whatsapp/whatsapp-dispatch.worker';
 import { WHATSAPP_STORE } from './comms/whatsapp/whatsapp-store';
 import { InMemoryWhatsAppStore } from './comms/whatsapp/in-memory-whatsapp-store';
 import { PostgresWhatsAppStore } from './comms/whatsapp/postgres-whatsapp-store';
@@ -222,6 +223,7 @@ import { MEETING_STORE, InMemoryMeetingStore, PostgresMeetingStore } from './com
       useFactory: (pool: Pool | null) => pool ? new PostgresWhatsAppStore(pool) : new InMemoryWhatsAppStore(),
     },
     MailDispatchWorker,
+    WhatsAppDispatchWorker,
     MeetingService,
     {
       provide: MEETING_STORE,

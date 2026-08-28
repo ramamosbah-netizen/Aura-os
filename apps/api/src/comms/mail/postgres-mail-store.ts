@@ -437,7 +437,7 @@ export class PostgresMailStore implements MailStore {
     return rows.map((row) => row.tenant_id);
   }
 
-  async claimDueDispatch(tenantId: string, now: string, limit: number): Promise<DispatchRecord[]> {
+  async claimDueDispatch(tenantId: string, now: string, limit: number, subjectType?: DispatchRecord['subjectType']): Promise<DispatchRecord[]> {
     // One statement claims the work: the sub-select takes the rows with FOR UPDATE SKIP LOCKED, so
     // a second worker walks past them instead of blocking, and the UPDATE flips them out of
     // 'pending' before anyone else can read them. That atomic hand-off IS the duplicate-send guard.
@@ -450,13 +450,14 @@ export class PostgresMailStore implements MailStore {
         where d.id in (
           select id from public.aura_comms_dispatch
            where tenant_id = $1 and state = 'pending' and scheduled_at <= $2
+             and ($4::text is null or subject_type = $4)
            order by scheduled_at
            limit $3
            for update skip locked
         )
       returning d.id, d.subject_type, d.subject_id, d.account_id, d.scheduled_at,
                 d.scheduled_timezone, d.state, d.attempts, d.last_error`,
-      [tenantId, now, limit],
+      [tenantId, now, limit, subjectType ?? null],
     );
     return rows.map((row) => ({
       id: row.id,

@@ -95,7 +95,7 @@ export interface MailStore {
    * pending -> processing in one statement, so a second worker (or a second tick of the same one)
    * finds nothing to take rather than sending the message twice.
    */
-  claimDueDispatch(tenantId: string, now: string, limit: number): Promise<DispatchRecord[]>;
+  claimDueDispatch(tenantId: string, now: string, limit: number, subjectType?: DispatchRecord['subjectType']): Promise<DispatchRecord[]>;
   completeDispatch(tenantId: string, dispatchId: string, at: string): Promise<void>;
   /** `retryAt` null means give up: the row is dead-lettered with its error rather than looping. */
   failDispatch(tenantId: string, dispatchId: string, error: string, retryAt: string | null): Promise<void>;

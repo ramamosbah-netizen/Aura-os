@@ -100,6 +100,7 @@ export default function InternalChat({
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
   const [teamError, setTeamError] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [liveState, setLiveState] = useState<'connecting' | 'connected' | 'reconnecting' | 'offline'>('connecting');
   /** A conversation is being opened; the composer belongs to no settled conversation until it lands. */
   const [opening, setOpening] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -170,9 +171,27 @@ export default function InternalChat({
     if (!activeId) return;
     void loadMessages(activeId);
     const timer = setInterval(() => { void loadMessages(activeId); void refreshChannels(); }, POLL_MS);
-    const source = typeof window !== 'undefined' ? new EventSource('/api/comms/stream') : null;
-    source?.addEventListener('chat', () => { void loadMessages(activeId); void refreshChannels(); });
-    return () => { clearInterval(timer); source?.close(); };
+    let source: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    let attempt = 0;
+    const connect = () => {
+      if (stopped || typeof window === 'undefined') return;
+      setLiveState(attempt === 0 ? 'connecting' : 'reconnecting');
+      source = new EventSource('/api/comms/stream');
+      source.onopen = () => { attempt = 0; setLiveState('connected'); };
+      source.addEventListener('chat', () => { void loadMessages(activeId); void refreshChannels(); });
+      source.onerror = () => {
+        source?.close();
+        source = null;
+        if (stopped) return;
+        attempt += 1;
+        setLiveState(attempt >= 5 ? 'offline' : 'reconnecting');
+        retryTimer = setTimeout(connect, Math.min(30_000, 1_000 * 2 ** Math.min(attempt - 1, 5)));
+      };
+    };
+    connect();
+    return () => { stopped = true; clearInterval(timer); if (retryTimer) clearTimeout(retryTimer); source?.close(); };
   }, [activeId, loadMessages, refreshChannels]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages?.length]);
@@ -458,6 +477,9 @@ export default function InternalChat({
                   {active.kind === 'company' ? 'Everyone in the company'
                     : active.kind === 'dm' ? 'Direct conversation — visible only to the two of you'
                     : `${active.members.length} member${active.members.length === 1 ? '' : 's'}`}
+                  <span className={`${styles.liveState} ${styles[`liveState_${liveState}`]}`} role="status" aria-label={`Realtime ${liveState}`}>
+                    <span aria-hidden>●</span> {liveState === 'connected' ? 'Connected' : liveState === 'connecting' ? 'Connecting…' : liveState === 'reconnecting' ? 'Reconnecting…' : 'Offline · polling'}
+                  </span>
                 </p>
               </div>
             </header>

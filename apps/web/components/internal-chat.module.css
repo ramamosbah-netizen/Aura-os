@@ -42,6 +42,8 @@
 .conversationHead{padding:14px 16px;border-bottom:1px solid var(--border)}
 .conversationHead h3{margin:0;font-size:15px}
 .conversationHead p{margin:3px 0 0;color:var(--muted);font-size:12px}
+.liveState{display:inline-flex;align-items:center;gap:4px;margin-left:10px;font-size:10px;font-weight:700;white-space:nowrap}
+.liveState_connected{color:var(--good)} .liveState_connecting,.liveState_reconnecting{color:var(--warn)} .liveState_offline{color:var(--muted)}
 
 .messages{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
 .loading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;margin:0}

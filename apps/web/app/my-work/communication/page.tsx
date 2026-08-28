@@ -9,6 +9,7 @@ import {
   Mail,
   MessageCircleMore,
   MessageSquareText,
+  Search,
   Share2,
   ShieldCheck,
 } from 'lucide-react';
@@ -87,6 +88,11 @@ const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mai
   { id: 'whatsapp', label: 'WhatsApp', status: 'Not connected', icon: MessageCircleMore },
   { id: 'files', label: 'Shared Files', status: 'Live', icon: Share2 },
   { id: 'unread', label: 'Unread', status: 'Live', icon: Inbox },
+];
+const VIEW_GROUPS: Array<{ label: string; ids: ViewId[] }> = [
+  { label: 'Your work', ids: ['unread', 'files'] },
+  { label: 'Internal', ids: ['chat', 'meetings'] },
+  { label: 'External', ids: ['whatsapp', 'email'] },
 ];
 
 export default async function MyCommunicationPage({
@@ -180,23 +186,41 @@ export default async function MyCommunicationPage({
       </header>
 
       <nav className={styles.channelGrid} aria-label="Communication sections">
-        {views.map((entry) => {
-          const Icon = entry.icon;
-          const active = entry.id === view;
-          return (
-            <Link
-              key={entry.id}
-              href={`/my-work/communication?view=${entry.id}`}
-              className={`${styles.channel} ${active ? styles.channelActive : ''}`}
-              aria-current={active ? 'page' : undefined}
-              data-testid={`comm-section-${entry.id}`}
-            >
-              <span className={styles.channelIcon} aria-hidden><Icon /></span>
-              <strong>{entry.label}</strong>
-              <span className={styles.status}>{entry.status}</span>
+        {VIEW_GROUPS.map((group) => (
+          <section key={group.label} className={styles.channelGroup} aria-labelledby={`comm-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>
+            <h2 id={`comm-group-${group.label.toLowerCase().replaceAll(' ', '-')}`} className={styles.channelGroupLabel}>{group.label}</h2>
+            <div className={styles.channelGroupItems}>
+              {group.ids.map((id) => {
+                const entry = views.find((candidate) => candidate.id === id)!;
+                const Icon = entry.icon;
+                const active = entry.id === view;
+                return (
+                  <Link
+                    key={entry.id}
+                    href={`/my-work/communication?view=${entry.id}`}
+                    className={`${styles.channel} ${active ? styles.channelActive : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                    data-testid={`comm-section-${entry.id}`}
+                  >
+                    <span className={styles.channelIcon} aria-hidden><Icon /></span>
+                    <strong>{entry.label}</strong>
+                    <span className={styles.status}>{entry.status}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+        <section className={styles.channelGroup} aria-labelledby="comm-group-tools">
+          <h2 id="comm-group-tools" className={styles.channelGroupLabel}>Tools</h2>
+          <div className={styles.channelGroupItems}>
+            <Link href="/search" className={styles.channel} data-testid="comm-tool-search">
+              <span className={styles.channelIcon} aria-hidden><Search /></span>
+              <strong>Search</strong>
+              <span className={styles.status}>All AURA records</span>
             </Link>
-          );
-        })}
+          </div>
+        </section>
       </nav>
 
       {view === 'chat' ? (
@@ -296,7 +320,7 @@ export default async function MyCommunicationPage({
       {view === 'unread' ? (
         <section className={styles.section} aria-labelledby="comm-unread-title">
           <header className={styles.sectionHead}>
-            <div><h2 id="comm-unread-title">Unread</h2><p>One actionable list from the chat and mail systems you already belong to.</p></div>
+            <div><h2 id="comm-unread-title">Unread</h2><p>One actionable list from the Chat, WhatsApp and Mail conversations you already belong to.</p></div>
           </header>
           {allUnreadItems === null ? (
             <p className={styles.truth}><ShieldCheck aria-hidden /><span>Unread communication is currently unavailable. Open Chat or Email directly to retry.</span></p>

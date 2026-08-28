@@ -58,8 +58,7 @@ export const NAV: NavGroup[] = [
     glyph: '◎',
     items: [
       { label: 'Overview', href: '/crm/overview', glyph: '◎', desc: 'Sales cockpit — pipeline health, forecast, deals needing attention & the quote book' },
-      { label: 'Accounts', href: '/crm/accounts', glyph: '◈', desc: 'Customers & prospects' },
-      { label: 'Contacts', href: '/crm/contacts', glyph: '☎', desc: 'People at each account' },
+      { label: 'Customers', href: '/crm/customers', glyph: '◈', desc: 'Accounts, contacts & stakeholder relationships' },
       { label: 'Pipeline & Opportunities', href: '/crm/leads', glyph: '⌥', desc: 'Sales funnel — leads, opportunities & deals' },
       { label: 'Campaigns', href: '/crm/campaigns', glyph: '◔', desc: 'Marketing campaigns — spend, leads generated & ROI by channel' },
       { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'Quotation OS — Overview · Board · List · Analytics; pricing, approvals & margins' },

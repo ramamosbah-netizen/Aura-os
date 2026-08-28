@@ -23,7 +23,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     return (
       <div style={st.container}>
         <h1 style={st.h1}>Account Not Found</h1>
-        <a href="/crm/accounts" style={st.link}>← Back to Accounts</a>
+        <a href="/crm/customers?view=accounts" style={st.link}>← Back to Customers</a>
       </div>
     );
   }
@@ -32,7 +32,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     <div style={st.container}>
       <RecordChrome type="Account" title={account.name} />
       <div style={st.navRow}>
-        <a href="/crm/accounts" style={st.link}>← Back to Accounts</a>
+        <a href="/crm/customers?view=accounts" style={st.link}>← Back to Customers</a>
       </div>
       <Account360Client accountId={account.id} />
     </div>

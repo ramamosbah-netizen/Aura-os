@@ -57,7 +57,7 @@ export interface SalesOpportunity {
 /** Sales Home is a command center, not a launcher: six workspaces, each one job in the sell cycle. */
 const SHORTCUTS: SuiteShortcut[] = [
   { label: 'Pipeline', description: 'Deals by stage — where they are & what’s next', href: '/crm/pipeline', icon: Workflow, tone: 'teal' },
-  { label: 'Customers', description: 'Accounts, contacts & relationship 360', href: '/crm/accounts', icon: Building2, tone: 'cyan' },
+  { label: 'Customers', description: 'Accounts, contacts & relationship 360', href: '/crm/customers', icon: Building2, tone: 'cyan' },
   { label: 'Quotations', description: 'Draft → review → sent → won', href: '/crm/quotations', icon: FileText, tone: 'amber' },
   { label: 'Activities', description: 'Calls, meetings, visits & follow-ups', href: '/crm/activities', icon: CalendarCheck, tone: 'green' },
   { label: 'Forecast', description: 'Commit, best-case & expected close', href: '/crm/pipeline', icon: Target, tone: 'blue' },

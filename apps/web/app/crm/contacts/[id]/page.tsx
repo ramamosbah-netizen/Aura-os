@@ -21,7 +21,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     return (
       <div style={st.container}>
         <h1 style={st.h1}>Contact Not Found</h1>
-        <a href="/crm/contacts" style={st.link}>← Back to Contacts</a>
+        <a href="/crm/customers?view=contacts" style={st.link}>← Back to Customers</a>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     <div style={st.container}>
       <RecordChrome type="Contact" title={contact.name} />
       <div style={st.navRow}>
-        <a href="/crm/contacts" style={st.link}>← Back to Contacts</a>
+        <a href="/crm/customers?view=contacts" style={st.link}>← Back to Customers</a>
       </div>
       <Contact360Client contactId={contact.id} />
     </div>

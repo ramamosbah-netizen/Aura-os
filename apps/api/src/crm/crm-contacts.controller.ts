@@ -90,19 +90,21 @@ export class CrmContactsController {
   list(
     @Query('accountId') accountId?: string,
     @Query('status') status?: string,
+    @Query('search') search?: string,
   ): Promise<Contact[]> {
-    return this.contacts.list({ tenantId: this.tenant.get().tenantId, accountId, status, limit: 100 });
+    return this.contacts.list({ tenantId: this.tenant.get().tenantId, accountId, status, search, limit: 100 });
   }
 
   @Get('paged')
   paged(
     @Query('accountId') accountId?: string,
     @Query('status') status?: string,
+    @Query('search') search?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.contacts.listPaged(
-      { tenantId: this.tenant.get().tenantId, accountId, status },
+      { tenantId: this.tenant.get().tenantId, accountId, status, search },
       parsePageParams(limit, offset),
     );
   }

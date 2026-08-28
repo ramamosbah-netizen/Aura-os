@@ -92,6 +92,10 @@ export class PostgresContactStore implements ContactStore {
     add('tenant_id', filter.tenantId);
     add('account_id', filter.accountId);
     add('status', filter.status);
+    if (filter.search?.trim()) {
+      params.push(`%${filter.search.trim()}%`);
+      where.push(`(name ILIKE $${params.length} OR job_title ILIKE $${params.length} OR email ILIKE $${params.length} OR phone ILIKE $${params.length} OR account_name ILIKE $${params.length})`);
+    }
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 

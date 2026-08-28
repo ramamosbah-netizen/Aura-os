@@ -26,6 +26,11 @@ export class InMemoryContactStore implements ContactStore {
     if (filter.tenantId) out = out.filter((c) => c.tenantId === filter.tenantId);
     if (filter.accountId) out = out.filter((c) => c.accountId === filter.accountId);
     if (filter.status) out = out.filter((c) => c.status === filter.status);
+    if (filter.search?.trim()) {
+      const needle = filter.search.trim().toLowerCase();
+      out = out.filter((c) => [c.name, c.jobTitle, c.email, c.phone, c.accountName]
+        .some((value) => value?.toLowerCase().includes(needle)));
+    }
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

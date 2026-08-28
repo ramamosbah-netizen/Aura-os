@@ -9,6 +9,8 @@ export interface ContactFilter {
   tenantId?: string;
   accountId?: string;
   status?: string;
+  /** Case-insensitive search across person and account snapshot fields. */
+  search?: string;
   limit?: number;
 }
 

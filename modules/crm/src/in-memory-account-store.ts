@@ -33,6 +33,11 @@ export class InMemoryAccountStore implements AccountStore {
     let out = [...this.accounts.values()];
     if (filter.tenantId) out = out.filter((a) => a.tenantId === filter.tenantId);
     if (filter.status) out = out.filter((a) => a.status === filter.status);
+    if (filter.search?.trim()) {
+      const needle = filter.search.trim().toLowerCase();
+      out = out.filter((a) => [a.name, a.industry, a.email, a.phone, a.ownerId]
+        .some((value) => value?.toLowerCase().includes(needle)));
+    }
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

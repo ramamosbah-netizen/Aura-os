@@ -119,18 +119,19 @@ export class CrmAccountsController {
   }
 
   @Get()
-  list(@Query('status') status?: string): Promise<Account[]> {
-    return this.accounts.list({ status, limit: 100 });
+  list(@Query('status') status?: string, @Query('search') search?: string): Promise<Account[]> {
+    return this.accounts.list({ status, search, limit: 100 });
   }
 
   @Get('paged')
   paged(
     @Query('status') status?: string,
+    @Query('search') search?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.accounts.listPaged(
-      { tenantId: this.tenant.get().tenantId, status },
+      { tenantId: this.tenant.get().tenantId, status, search },
       parsePageParams(limit, offset),
     );
   }

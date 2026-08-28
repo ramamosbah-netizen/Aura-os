@@ -8,6 +8,8 @@ export const CRM_ACCOUNT_STORE = Symbol('CRM_ACCOUNT_STORE');
 export interface AccountFilter {
   tenantId?: string;
   status?: string;
+  /** Case-insensitive search across account identity and contact fields. */
+  search?: string;
   limit?: number;
 }
 

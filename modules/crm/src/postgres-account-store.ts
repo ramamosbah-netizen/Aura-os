@@ -102,6 +102,10 @@ export class PostgresAccountStore implements AccountStore {
       params.push(filter.status);
       where.push(`status = $${params.length}`);
     }
+    if (filter.search?.trim()) {
+      params.push(`%${filter.search.trim()}%`);
+      where.push(`(name ILIKE $${params.length} OR industry ILIKE $${params.length} OR email ILIKE $${params.length} OR phone ILIKE $${params.length})`);
+    }
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 

@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Release-proof runs must finish their disposable DB/browser evidence. Cancelling an in-flight
+  # proof when a follow-up commit lands leaves required checks red without a product assertion.
+  cancel-in-progress: false
 
 jobs:
   verify:

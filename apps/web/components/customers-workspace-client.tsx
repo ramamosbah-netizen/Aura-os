@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import AccountsPortfolioClient from './accounts-portfolio-client';
 import ContactsClient from './contacts-client';
@@ -35,13 +35,11 @@ type View = 'accounts' | 'contacts' | 'stakeholders';
 
 export default function CustomersWorkspaceClient({
   portfolio,
-  contacts,
   contactPage,
   accountOptions,
   currentUserId,
 }: {
   portfolio: CustomerPortfolioPage;
-  contacts: CustomerContact[];
   contactPage: CustomerContactPage;
   accountOptions: CustomerAccount[];
   currentUserId: string | null;
@@ -51,12 +49,33 @@ export default function CustomersWorkspaceClient({
   const params = useSearchParams();
   const requested = params.get('view');
   const view: View = requested === 'contacts' || requested === 'stakeholders' ? requested : 'accounts';
+  const [mapPage, setMapPage] = useState<CustomerContactPage>(contactPage);
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapErr, setMapErr] = useState('');
+
+  useEffect(() => {
+    setMapPage(contactPage);
+  }, [contactPage]);
+
+  const loadMapPage = async (offset: number) => {
+    setMapLoading(true);
+    setMapErr('');
+    try {
+      const res = await fetch(`/api/crm/contacts/paged?limit=${mapPage.limit}&offset=${offset}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status >= 500 ? 'Stakeholder Map service temporarily unavailable.' : 'Could not load stakeholders.');
+      setMapPage(await res.json() as CustomerContactPage);
+    } catch (cause) {
+      setMapErr(cause instanceof Error ? cause.message : 'Could not load stakeholders.');
+    } finally {
+      setMapLoading(false);
+    }
+  };
 
   const setView = (next: View) => router.replace(`${pathname}?view=${next}`, { scroll: false });
 
   const grouped = useMemo(() => {
     const byAccount = new Map<string, { id: string; name: string; contacts: CustomerContact[] }>();
-    for (const contact of contacts) {
+    for (const contact of mapPage.items) {
       const key = contact.accountId ?? 'unlinked';
       const name = contact.accountName ?? 'Unlinked contacts';
       const group = byAccount.get(key) ?? { id: key, name, contacts: [] };
@@ -64,7 +83,7 @@ export default function CustomersWorkspaceClient({
       byAccount.set(key, group);
     }
     return [...byAccount.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [contacts]);
+  }, [mapPage.items]);
 
   return (
     <div style={st.page} className="aura-fluid-page">
@@ -83,7 +102,7 @@ export default function CustomersWorkspaceClient({
         {([
             ['accounts', 'Accounts', portfolio.total, 'Commercial accounts, pipeline, delivery and financial exposure'],
             ['contacts', 'Contacts', contactPage.summary?.total ?? contactPage.total, 'People, roles and relationship strength'],
-          ['stakeholders', 'Stakeholder Map', contactPage.summary?.linked ?? contacts.filter((c) => c.accountId).length, 'Account-to-person relationship coverage'],
+          ['stakeholders', 'Stakeholder Map', contactPage.summary?.linked ?? mapPage.items.filter((c) => c.accountId).length, 'Account-to-person relationship coverage'],
         ] as const).map(([key, label, count, description]) => (
           <button
             key={key}
@@ -108,6 +127,7 @@ export default function CustomersWorkspaceClient({
             <h2 style={st.sectionTitle}>Stakeholder Map</h2>
             <p style={st.muted}>See who is connected to each account, their decision role, and relationship strength. Select a person or company to open its 360 view.</p>
           </div>
+          {mapErr ? <p style={st.error} role="alert">{mapErr}</p> : null}
           {grouped.length === 0 ? <p style={st.muted}>No linked stakeholders yet. Add a contact and link it to an account.</p> : null}
           {grouped.map((group) => (
             <article key={group.id} style={st.accountCard}>
@@ -126,6 +146,15 @@ export default function CustomersWorkspaceClient({
               </div>
             </article>
           ))}
+          {mapPage.total > mapPage.limit ? (
+            <div style={st.mapPager}>
+              <span style={st.muted}>{mapPage.offset + 1}–{Math.min(mapPage.offset + mapPage.items.length, mapPage.total)} of {mapPage.total} contacts</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" disabled={mapLoading || mapPage.offset === 0} onClick={() => void loadMapPage(Math.max(0, mapPage.offset - mapPage.limit))} style={st.pageBtn}>Previous</button>
+                <button type="button" disabled={mapLoading || !mapPage.hasMore} onClick={() => void loadMapPage(mapPage.offset + mapPage.limit)} style={st.pageBtn}>Next</button>
+              </div>
+            </div>
+          ) : null}
         </section>
       )}
     </div>
@@ -147,6 +176,9 @@ const st = {
   mapIntro: { gridColumn: '1 / -1' } as CSSProperties,
   sectionTitle: { margin: 0, fontSize: 21 } as CSSProperties,
   muted: { color: 'var(--muted)', lineHeight: 1.5 } as CSSProperties,
+  error: { color: 'var(--bad)', lineHeight: 1.5 } as CSSProperties,
+  mapPager: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, gridColumn: '1 / -1', marginTop: 4, flexWrap: 'wrap' } as CSSProperties,
+  pageBtn: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   accountCard: { border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', padding: 14 } as CSSProperties,
   accountHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 } as CSSProperties,
   accountName: { color: 'var(--accent)', fontWeight: 700, textDecoration: 'none' } as CSSProperties,

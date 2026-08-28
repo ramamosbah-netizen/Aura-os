@@ -394,7 +394,7 @@ export class Account360Controller {
         at: o.createdAt,
         kind: 'opportunity',
         label: `Opportunity — ${o.title} (${o.stage}, AED ${o.value})`,
-        href: '/crm/leads',
+        href: `/crm/opportunities/${o.id}`,
       })),
       ...tenders.map((t) => ({
         at: t.createdAt,

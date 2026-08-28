@@ -115,6 +115,15 @@ export class PostgresContactStore implements ContactStore {
     return res.rows.map(rowToContact);
   }
 
+  async listAll(filter: ContactFilter): Promise<Contact[]> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_contacts ${whereSql} ORDER BY created_at DESC`,
+      params,
+    );
+    return res.rows.map(rowToContact);
+  }
+
   async listPaged(filter: ContactFilter, page: PageParams): Promise<Page<Contact>> {
     const { whereSql, params } = this.buildWhere(filter);
     const countRes = await this.pool.query<{ count: string }>(

@@ -118,6 +118,10 @@ export class ContactService implements OnModuleInit {
     return this.store.list(filter);
   }
 
+  listAll(filter: ContactFilter): Promise<Contact[]> {
+    return this.store.listAll(filter);
+  }
+
   listPaged(filter: ContactFilter, page: PageParams) {
     return this.store.listPaged(filter, page);
   }

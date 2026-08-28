@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, toCsv } from '@aura/shared';
 import { RELATIONSHIP_STRENGTHS, STAKEHOLDER_ROLES, type Contact, type ContactStatus, type RelationshipStrength, type StakeholderRole, AccountService, ContactService } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
@@ -111,6 +111,34 @@ export class CrmContactsController {
     const page = parsePageParams(limit, offset);
     return Promise.all([this.contacts.listPaged(filter, page), this.contacts.summary(filter)])
       .then(([result, summary]) => ({ ...result, summary }));
+  }
+
+  @Get('export.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="contacts.csv"')
+  async exportCsv(
+    @Query('accountId') accountId?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('stakeholderRole') stakeholderRole?: string,
+    @Query('relationshipStrength') relationshipStrength?: string,
+  ): Promise<string> {
+    const rows = await this.contacts.listAll({
+      tenantId: this.tenant.get().tenantId, accountId, status, search, stakeholderRole, relationshipStrength,
+    });
+    return toCsv(rows.map((c) => ({
+      name: c.name,
+      jobTitle: c.jobTitle ?? '',
+      accountName: c.accountName ?? '',
+      stakeholderRole: c.stakeholderRole ?? '',
+      relationshipStrength: c.relationshipStrength ?? '',
+      reportsToName: c.reportsToName ?? '',
+      email: c.email ?? '',
+      phone: c.phone ?? '',
+      isPrimary: c.isPrimary,
+      status: c.status,
+      ownerId: c.ownerId ?? '',
+    })), ['name', 'jobTitle', 'accountName', 'stakeholderRole', 'relationshipStrength', 'reportsToName', 'email', 'phone', 'isPrimary', 'status', 'ownerId']);
   }
 
   @Get(':id')

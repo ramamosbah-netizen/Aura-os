@@ -137,6 +137,16 @@ export default function ContactsClient({ initialContacts, initialTotal, initialS
   };
 
   const accountOptions = initialAccounts.map((a) => ({ value: a.id, label: a.name }));
+  const serverExportHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set('search', query.trim());
+    if (accountFilter) params.set('accountId', accountFilter);
+    if (roleFilter === 'champions') params.set('relationshipStrength', 'champion,strong');
+    else if (roleFilter === 'unmapped') params.set('stakeholderRole', 'unmapped');
+    else if (roleFilter) params.set('stakeholderRole', roleFilter);
+    const suffix = params.toString();
+    return `/api/crm/contacts/export.csv${suffix ? `?${suffix}` : ''}`;
+  }, [query, accountFilter, roleFilter]);
   const accountName = (c: Contact): string =>
     c.accountName ?? initialAccounts.find((a) => a.id === c.accountId)?.name ?? 'Account';
 
@@ -216,6 +226,7 @@ export default function ContactsClient({ initialContacts, initialTotal, initialS
         </select>
         <ExportButton filename="contacts" rows={contacts as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'name' }, { key: 'jobTitle' }, { key: 'accountName' }, { key: 'stakeholderRole' }, { key: 'relationshipStrength' }, { key: 'reportsToName' }, { key: 'email' }, { key: 'phone' }, { key: 'isPrimary' }, { key: 'status' }, { key: 'ownerId' }]} />
+        <a href={serverExportHref} style={st.fullExport} title="Export every contact matching the current filters">⬇ Full CSV</a>
         {err && <span style={st.err}>{err}</span>}
         {msg && <span style={st.ok}>{msg}</span>}
       </div>
@@ -345,4 +356,5 @@ const st = {
   pageBtn: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 } as CSSProperties,
   starBtn: { background: 'transparent', border: 'none', fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1 } as CSSProperties,
+  fullExport: { display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 8, color: 'var(--text)', padding: '8px 12px', fontSize: 13, textDecoration: 'none' } as CSSProperties,
 };

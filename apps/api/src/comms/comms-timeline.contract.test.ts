@@ -23,6 +23,7 @@ const COMMS_DIR = resolve(__dirname);
 const WRITE_PATHS: Array<{ file: string; method: string; channel: string }> = [
   { file: 'comms.service.ts', method: 'post', channel: 'chat' },
   { file: 'comms.service.ts', method: 'sendMail', channel: 'mail' },
+  { file: 'meeting.service.ts', method: 'close', channel: 'meeting' },
 ];
 
 /** The publish seam. Renaming it is fine; leaving a write path without one is not. */

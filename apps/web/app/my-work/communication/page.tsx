@@ -18,6 +18,7 @@ import AuraTabAnchor from '@/components/aura-tab-anchor';
 import InternalChat, { type ChatChannelView, type ChatUserView } from '@/components/internal-chat';
 import EmailWorkspace, { type MailAccountView } from '@/components/email-workspace';
 import WhatsAppInbox from '@/components/whatsapp-inbox';
+import MeetingsWorkspace, { type MeetingView } from '@/components/meetings-workspace';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from '@/components/my-work-center.module.css';
 
@@ -57,7 +58,7 @@ interface RecentCommunication {
   detail: string;
   date: string;
   href: string;
-  kind: 'Chat' | 'Mail';
+  kind: 'Chat' | 'Mail' | 'Meeting';
 }
 
 function fileSize(bytes: number): string {
@@ -78,7 +79,7 @@ const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mai
   { id: 'overview', label: 'Overview', status: 'Live', icon: LayoutDashboard },
   { id: 'email', label: 'Email', status: 'Internal only', icon: Mail },
   { id: 'chat', label: 'Chat', status: 'Live', icon: MessageSquareText },
-  { id: 'meetings', label: 'Meetings', status: 'Not implemented', icon: CalendarClock },
+  { id: 'meetings', label: 'Meetings', status: 'Live', icon: CalendarClock },
   { id: 'whatsapp', label: 'WhatsApp', status: 'Not connected', icon: MessageCircleMore },
   { id: 'files', label: 'Shared Files', status: 'Live', icon: Share2 },
   { id: 'unread', label: 'Unread', status: 'Live', icon: Inbox },
@@ -87,16 +88,16 @@ const VIEWS: Array<{ id: ViewId; label: string; status: string; icon: typeof Mai
 export default async function MyCommunicationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; channel?: string; mail?: string; thread?: string }>;
+  searchParams: Promise<{ view?: string; channel?: string; mail?: string; thread?: string; meeting?: string }>;
 }) {
-  const { view: requestedView, channel: deepLinkedChannel, mail: deepLinkedMail, thread: deepLinkedThread } = await searchParams;
+  const { view: requestedView, channel: deepLinkedChannel, mail: deepLinkedMail, thread: deepLinkedThread, meeting: deepLinkedMeeting } = await searchParams;
   // A bare ?channel= link means "open this conversation", so it implies the chat view.
   const view: ViewId = (VIEWS.find((entry) => entry.id === requestedView)?.id
     ?? (deepLinkedChannel ? 'chat' : deepLinkedMail ? 'email' : 'overview'));
 
   // Channels use fetchJson so a refusal is distinguishable from an empty list. C1 conceals
   // channels a user may not see, and rendering "no conversations" for a 403 would misreport it.
-  const [channelResult, mailbox, me, users, accounts, fileResult, unreadResult, whatsappResult] = await Promise.all([
+  const [channelResult, mailbox, me, users, accounts, fileResult, unreadResult, whatsappResult, meetings] = await Promise.all([
     fetchJson<ChatChannelView[]>('/api/comms/channels'),
     getJson<Mailbox>('/api/comms/mail'),
     getJson<WorkspaceMe>('/api/workspace/me'),
@@ -105,6 +106,7 @@ export default async function MyCommunicationPage({
     fetchJson<CommunicationFileView[]>('/api/comms/files'),
     fetchJson<UnreadCommunicationView[]>('/api/comms/unread/items'),
     fetchJson<WhatsAppThreadView[]>('/api/comms/whatsapp/threads'),
+    getJson<MeetingView[]>('/api/comms/meetings?scope=all'),
   ]);
   const channels = channelResult.ok ? channelResult.data : null;
   const files = fileResult.ok ? fileResult.data : null;
@@ -137,6 +139,10 @@ export default async function MyCommunicationPage({
     ...(whatsappThreads ?? []).filter((thread) => thread.lastMessageAt).map((thread) => ({
       id: `whatsapp-${thread.id}`, title: thread.displayName, detail: thread.lastPreview ?? thread.phone,
       date: thread.lastMessageAt!, href: `/my-work/communication?view=whatsapp&thread=${encodeURIComponent(thread.id)}`, kind: 'Chat' as const,
+    })),
+    ...(meetings ?? []).map((meeting) => ({
+      id: `meeting-${meeting.id}`, title: meeting.title, detail: `${meeting.status} · ${meeting.meetingType.replaceAll('_', ' ')}`,
+      date: meeting.startsAt, href: `/my-work/communication?view=meetings&meeting=${encodeURIComponent(meeting.id)}`, kind: 'Meeting' as const,
     })),
   ].sort((left, right) => right.date.localeCompare(left.date)).slice(0, 10);
 
@@ -246,9 +252,10 @@ export default async function MyCommunicationPage({
       {view === 'meetings' ? (
         <section className={styles.section} aria-labelledby="comm-meetings-title">
           <header className={styles.sectionHead}>
-            <div><h2 id="comm-meetings-title">Meetings</h2><p>Not implemented.</p></div>
+            <div><h2 id="comm-meetings-title">Meetings</h2><p>Schedule → Meet → Minutes → Actions → Close.</p></div>
           </header>
-          <p className={styles.truth}><ShieldCheck aria-hidden /><span>AURA has no meeting record, participant model or provider integration yet, so nothing is shown. Scheduling, Zoom and Teams arrive with the meetings slice; until then this section deliberately offers no controls.</span></p>
+          <MeetingsWorkspace initialMeetings={meetings ?? []} initialMeetingId={deepLinkedMeeting ?? null} />
+          <p className={styles.truth}><ShieldCheck aria-hidden /><span>AURA owns the meeting record, minutes and actions. Video links and calendar invitations remain provider integrations, so this workspace never pretends to be Zoom or Teams.</span></p>
         </section>
       ) : null}
 

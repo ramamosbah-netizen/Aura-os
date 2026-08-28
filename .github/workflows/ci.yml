@@ -790,3 +790,59 @@ jobs:
       - name: API log on failure
         if: failure()
         run: cat apps/api/api-pg.log || true
+
+  crm-volume-proof:
+    name: CRM Customers production-volume proof
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aura
+          POSTGRES_PASSWORD: aura
+          POSTGRES_DB: aura
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aura -d aura"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable
+      PGPASSWORD: aura
+      VOLUME_TENANT: dev-tenant
+      AUTH_DEV_PASSWORD: e2e-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Compose disposable connection strings
+        run: |
+          echo "OWNER_URL=postgres://aura:${PGPASSWORD}@localhost:5432/aura?sslmode=disable" >> "$GITHUB_ENV"
+      - name: Migrate disposable database
+        run: node apps/api/scripts/migrate.mjs
+        env:
+          DATABASE_URL: ${{ env.OWNER_URL }}
+      - name: Activate runtime role
+        run: psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "ALTER ROLE aura_app LOGIN PASSWORD 'aura_app_ci';"
+      - name: Build and boot API
+        run: |
+          pnpm --filter @aura/api... build
+          cd apps/api
+          RATE_LIMIT_MAX=100000 PORT=4000 AUTH_JWT_SECRET=e2e-only-not-a-real-secret AUTH_DEV_PASSWORD=e2e-password AUTH_DEV_ADMIN_USER=u-admin nohup node dist/main.js > volume-api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4000/api/v1/health >/dev/null && break; sleep 1; done
+          curl -sf http://localhost:4000/api/v1/health >/dev/null || { cat volume-api.log; exit 1; }
+      - name: Seed and measure production-volume baseline
+        run: node apps/api/scripts/crm-volume-proof.mjs
+        env:
+          AURA_API_URL: http://localhost:4000
+      - name: API log on failure
+        if: failure()
+        run: cat apps/api/volume-api.log || true

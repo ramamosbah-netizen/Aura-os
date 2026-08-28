@@ -26,6 +26,12 @@ export class InMemoryContactStore implements ContactStore {
     if (filter.tenantId) out = out.filter((c) => c.tenantId === filter.tenantId);
     if (filter.accountId) out = out.filter((c) => c.accountId === filter.accountId);
     if (filter.status) out = out.filter((c) => c.status === filter.status);
+    if (filter.stakeholderRole === 'unmapped') out = out.filter((c) => !c.stakeholderRole);
+    else if (filter.stakeholderRole) out = out.filter((c) => c.stakeholderRole === filter.stakeholderRole);
+    if (filter.relationshipStrength) {
+      const strengths = filter.relationshipStrength.split(',').map((v) => v.trim()).filter(Boolean);
+      out = out.filter((c) => strengths.includes(c.relationshipStrength ?? ''));
+    }
     if (filter.search?.trim()) {
       const needle = filter.search.trim().toLowerCase();
       out = out.filter((c) => [c.name, c.jobTitle, c.email, c.phone, c.accountName]

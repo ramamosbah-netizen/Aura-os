@@ -91,8 +91,10 @@ export class CrmContactsController {
     @Query('accountId') accountId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('stakeholderRole') stakeholderRole?: string,
+    @Query('relationshipStrength') relationshipStrength?: string,
   ): Promise<Contact[]> {
-    return this.contacts.list({ tenantId: this.tenant.get().tenantId, accountId, status, search, limit: 100 });
+    return this.contacts.list({ tenantId: this.tenant.get().tenantId, accountId, status, search, stakeholderRole, relationshipStrength, limit: 100 });
   }
 
   @Get('paged')
@@ -100,11 +102,13 @@ export class CrmContactsController {
     @Query('accountId') accountId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('stakeholderRole') stakeholderRole?: string,
+    @Query('relationshipStrength') relationshipStrength?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.contacts.listPaged(
-      { tenantId: this.tenant.get().tenantId, accountId, status, search },
+      { tenantId: this.tenant.get().tenantId, accountId, status, search, stakeholderRole, relationshipStrength },
       parsePageParams(limit, offset),
     );
   }

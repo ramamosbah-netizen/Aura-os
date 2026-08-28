@@ -53,6 +53,9 @@ export default function ContactsClient({ initialContacts, initialTotal, initialA
       const params = new URLSearchParams({ limit: String(page.limit), offset: String(page.offset) });
       if (query.trim()) params.set('search', query.trim());
       if (accountFilter) params.set('accountId', accountFilter);
+      if (roleFilter === 'champions') params.set('relationshipStrength', 'champion,strong');
+      else if (roleFilter === 'unmapped') params.set('stakeholderRole', 'unmapped');
+      else if (roleFilter) params.set('stakeholderRole', roleFilter);
       setLoading(true);
       void fetch(`/api/crm/contacts/paged?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
         .then((res) => res.ok ? res.json() : null)
@@ -61,7 +64,7 @@ export default function ContactsClient({ initialContacts, initialTotal, initialA
         }).catch(() => undefined).finally(() => setLoading(false));
     }, query ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [query, accountFilter, page.offset]);
+  }, [query, accountFilter, roleFilter, page.offset]);
 
   const [contactsState, setContacts] = useState<Contact[]>(initialContacts);
   const currentContacts = contactsState;
@@ -164,7 +167,7 @@ export default function ContactsClient({ initialContacts, initialTotal, initialA
           const val = 'value' in v ? (v.value as string) : '';
           const active = roleFilter === val;
           return (
-            <button key={v.label} onClick={() => setRoleFilter(val)} style={{ ...st.viewBtn, ...(active ? st.viewBtnActive : {}) }}>
+            <button key={v.label} onClick={() => { setRoleFilter(val); setPage((p) => ({ ...p, offset: 0 })); }} style={{ ...st.viewBtn, ...(active ? st.viewBtnActive : {}) }}>
               {v.label}
             </button>
           );
@@ -183,9 +186,9 @@ export default function ContactsClient({ initialContacts, initialTotal, initialA
           style={st.search}
           placeholder="Search name, title, email, account…"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setPage((p) => ({ ...p, offset: 0 })); }}
         />
-        <select style={st.search} value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
+        <select style={st.search} value={accountFilter} onChange={(e) => { setAccountFilter(e.target.value); setPage((p) => ({ ...p, offset: 0 })); }}>
           <option value="">All accounts</option>
           {accountOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>

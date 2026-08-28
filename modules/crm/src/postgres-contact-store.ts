@@ -92,6 +92,12 @@ export class PostgresContactStore implements ContactStore {
     add('tenant_id', filter.tenantId);
     add('account_id', filter.accountId);
     add('status', filter.status);
+    if (filter.stakeholderRole === 'unmapped') where.push('stakeholder_role IS NULL');
+    else if (filter.stakeholderRole) add('stakeholder_role', filter.stakeholderRole);
+    if (filter.relationshipStrength) {
+      const strengths = filter.relationshipStrength.split(',').map((v) => v.trim()).filter(Boolean);
+      if (strengths.length) { params.push(strengths); where.push(`relationship_strength = ANY($${params.length})`); }
+    }
     if (filter.search?.trim()) {
       params.push(`%${filter.search.trim()}%`);
       where.push(`(name ILIKE $${params.length} OR job_title ILIKE $${params.length} OR email ILIKE $${params.length} OR phone ILIKE $${params.length} OR account_name ILIKE $${params.length})`);

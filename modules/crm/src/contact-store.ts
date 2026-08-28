@@ -11,6 +11,8 @@ export interface ContactFilter {
   status?: string;
   /** Case-insensitive search across person and account snapshot fields. */
   search?: string;
+  stakeholderRole?: string;
+  relationshipStrength?: string;
   limit?: number;
 }
 

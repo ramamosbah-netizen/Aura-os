@@ -616,7 +616,7 @@ function SearchPane({ initialQuery }: { initialQuery: string }) {
 // ------------------------------------------------------------------ styles
 
 const st = {
-  page: { maxWidth: 1160, margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
+  page: { width: '100%', maxWidth: 1680, margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
   header: { display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 18 } as CSSProperties,
   h1: { fontSize: 27, margin: 0, letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '6px 0 0', maxWidth: 560, lineHeight: 1.5, fontSize: 13.5 } as CSSProperties,

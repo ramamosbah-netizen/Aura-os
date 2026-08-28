@@ -191,7 +191,9 @@ a {
    It applies ONLY to the direct children of <main>, i.e. the page wrapper itself —
    never to cards, tables, or anything inside the page. */
 :root {
-  --page-max: 1440px;
+  /* Fluid workspace canvas: operational pages use the available desktop width;
+     compact forms and print layouts keep their own intentional limits. */
+  --page-max: 1680px;
   --page-gutter: clamp(16px, 2vw, 32px);
   --page-top: 28px;
   --page-bottom: 64px;

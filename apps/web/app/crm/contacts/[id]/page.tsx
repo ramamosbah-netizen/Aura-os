@@ -38,7 +38,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 }
 
 const st = {
-  container: { maxWidth: 1180, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  container: { width: '100%', maxWidth: 1680, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 24, margin: '0 0 10px', color: 'var(--accent)' } as CSSProperties,
   navRow: { marginBottom: 14 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 500 } as CSSProperties,

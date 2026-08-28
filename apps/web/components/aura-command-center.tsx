@@ -140,7 +140,7 @@ export default async function AuraWorkspace({ variant }: { variant: 'home' | 'bu
 }
 
 const s = {
-  shell: { maxWidth: 1080, margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
+  shell: { width: '100%', maxWidth: 1680, margin: '0 auto', padding: '24px 28px 64px' } as CSSProperties,
   hero: { display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 22, padding: '20px 0 24px', borderBottom: '1px solid var(--border)', marginBottom: 18, flexWrap: 'wrap' } as CSSProperties,
   eyebrow: { margin: '0 0 7px', color: 'var(--accent)', fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase' } as CSSProperties,
   heroTitle: { maxWidth: 720, margin: 0, fontSize: 'clamp(26px, 4vw, 40px)', lineHeight: 1.05, letterSpacing: '-0.045em' } as CSSProperties,

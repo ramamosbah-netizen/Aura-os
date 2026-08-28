@@ -59,7 +59,7 @@ export default function CustomersWorkspaceClient({
   }, [contacts]);
 
   return (
-    <div style={st.page}>
+    <div style={st.page} className="aura-fluid-page">
       <header style={st.header}>
         <div>
           <div style={st.eyebrow}>CRM · CUSTOMER RELATIONSHIPS</div>
@@ -125,7 +125,7 @@ export default function CustomersWorkspaceClient({
 }
 
 const st = {
-  page: { maxWidth: 1240, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  page: { width: '100%', maxWidth: 1680, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   header: { marginBottom: 18 } as CSSProperties,
   eyebrow: { color: 'var(--accent)', fontSize: 11, fontWeight: 700, letterSpacing: 1.1, textTransform: 'uppercase' as const } as CSSProperties,
   h1: { fontSize: 32, margin: '5px 0 6px', letterSpacing: -0.7 } as CSSProperties,

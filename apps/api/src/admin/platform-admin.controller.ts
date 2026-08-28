@@ -184,77 +184,77 @@ export class PlatformAdminController {
 
   @Permissions('admin.ai.manage')
   @Post('ai/pilot-suite/run')
-  runPilotSuite(): Promise<any> {
+  runPilotSuite(): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.pilotSuite.runPilotSuite(tenantId);
   }
 
   @Permissions('admin.ai.manage')
   @Get('ai/billing/credits')
-  getTenantCredits(): Promise<any> {
+  getTenantCredits(): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.billing.getTenantBalance(tenantId);
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/billing/credits/topup')
-  topUpCredits(@Body() body: { amountCredits: number }): Promise<any> {
+  topUpCredits(@Body() body: { amountCredits: number }): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.billing.topUpCredits(tenantId, body.amountCredits);
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/management/executive-copilot')
-  runExecutiveCopilot(): Promise<any> {
+  runExecutiveCopilot(): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.managementAgents.runExecutiveCopilot(tenantId);
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/management/project-risk')
-  runProjectRiskAgent(@Body() body: { projectName?: string }): Promise<any> {
+  runProjectRiskAgent(@Body() body: { projectName?: string }): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.managementAgents.runProjectRiskAgent(tenantId, body.projectName);
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/management/cfo')
-  runCfoAgent(): Promise<any> {
+  runCfoAgent(): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.managementAgents.runCfoAgent(tenantId);
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/evaluations/feedback')
-  recordFeedback(@Body() body: { proposalId: string; agentId: string; userAction: 'approved' | 'modified' | 'rejected'; feedbackText?: string }): Promise<any> {
+  recordFeedback(@Body() body: { proposalId: string; agentId: string; userAction: 'approved' | 'modified' | 'rejected'; feedbackText?: string }): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.evaluation.recordFeedback({ tenantId, ...body });
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/revenue/sales-radar')
-  runSalesRadar(@Body() body: { customerName: string; sourceSignalText: string }): Promise<any> {
+  runSalesRadar(@Body() body: { customerName: string; sourceSignalText: string }): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.revenueAgents.runSalesRadar({ tenantId, ...body });
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/revenue/tender-intelligence')
-  runTenderIntelligence(@Body() body: { tenderTitle: string; specificationText: string; estimatedBudgetAed: number }): Promise<any> {
+  runTenderIntelligence(@Body() body: { tenderTitle: string; specificationText: string; estimatedBudgetAed: number }): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.revenueAgents.runTenderIntelligence({ tenantId, ...body });
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/revenue/elv-estimation')
-  runELVEstimation(@Body() body: { tenderId: string; boqItemsCount: number; targetMarginPercent?: number }): Promise<any> {
+  runELVEstimation(@Body() body: { tenderId: string; boqItemsCount: number; targetMarginPercent?: number }): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.revenueAgents.runELVEstimation({ tenantId, ...body });
   }
 
   @Permissions('admin.ai.manage')
   @Post('ai/revenue/commercial-quotation')
-  runCommercialQuotation(@Body() body: { quoteTitle: string; totalCostAed: number; proposedMarginPercent: number }): Promise<any> {
+  runCommercialQuotation(@Body() body: { quoteTitle: string; totalCostAed: number; proposedMarginPercent: number }): Promise<unknown> {
     const tenantId = this.tenant.get().tenantId;
     return this.revenueAgents.runCommercialQuotation({ tenantId, ...body });
   }
@@ -511,7 +511,7 @@ export class PlatformAdminController {
   /** Execute an agent via the standardized AgentRuntime pipeline. */
   @Permissions('admin.ai.manage')
   @Post('ai/runtime/execute')
-  async executeAgentRuntime(@Body() dto: { agentId?: string; payload?: Record<string, any> }): Promise<AgentRuntimeResult> {
+  async executeAgentRuntime(@Body() dto: { agentId?: string; payload?: Record<string, unknown> }): Promise<AgentRuntimeResult> {
     if (!dto?.agentId?.trim()) throw new BadRequestException('agentId is required');
     const ctx = this.tenant.get();
     const result = await this.agentRuntime.execute({
@@ -527,7 +527,7 @@ export class PlatformAdminController {
   /** Trigger execution of a declarative multi-agent workflow. */
   @Permissions('admin.ai.manage')
   @Post('ai/workflow/start')
-  async startWorkflow(@Body() dto: { definitionId?: string; payload?: Record<string, any> }): Promise<WorkflowInstance> {
+  async startWorkflow(@Body() dto: { definitionId?: string; payload?: Record<string, unknown> }): Promise<WorkflowInstance> {
     if (!dto?.definitionId?.trim()) throw new BadRequestException('definitionId is required');
     const ctx = this.tenant.get();
     const instance = await this.workflowEngine.startWorkflow(dto.definitionId.trim(), ctx.tenantId, dto.payload ?? {});

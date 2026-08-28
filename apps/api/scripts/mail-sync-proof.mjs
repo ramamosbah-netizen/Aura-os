@@ -110,7 +110,7 @@ if (phase === 'setup') {
   await engine.syncAccount(accountRef(accOther, TENANT_B), adapter([{ messages: [message({ providerMessageId: 'pm-proof-9' })], cursor: { token: 'cur-x', fetchedAt: new Date().toISOString() }, hasMore: false }]), null);
   console.log('setup complete — process exiting');
 } else if (phase === 'resume') {
-  const { accA, accB, accOther } = readState();
+  const { accA, accOther } = readState();
 
   const cursor = await store.getSyncCursor(TENANT_A, accA);
   say(cursor === 'cur-1', `checkpoint survived the restart: ${cursor}`);

@@ -109,11 +109,12 @@ export class AccountPortfolioQueryService {
          FROM public.aura_projects_projects pr JOIN page_accounts p ON p.id = pr.account_id::text
          WHERE pr.tenant_id = $1 GROUP BY pr.account_id
        ), invoices AS (
-         SELECT account_id::text AS id,
-                COALESCE(SUM(total - amount_paid) FILTER (WHERE status <> 'cancelled'), 0)::numeric AS outstanding_ar,
-                COALESCE(SUM(total - amount_paid) FILTER (WHERE status <> 'cancelled' AND status <> 'paid' AND due_date < CURRENT_DATE), 0)::numeric AS overdue_ar
-         FROM public.aura_finance_customer_invoices i JOIN page_accounts p ON p.id = i.account_id::text
-         WHERE i.tenant_id = $1 GROUP BY i.account_id
+         SELECT p.id,
+                COALESCE(SUM(i.total - i.amount_paid) FILTER (WHERE i.status <> 'cancelled'), 0)::numeric AS outstanding_ar,
+                COALESCE(SUM(i.total - i.amount_paid) FILTER (WHERE i.status <> 'cancelled' AND i.status <> 'paid' AND i.due_date < CURRENT_DATE), 0)::numeric AS overdue_ar
+         FROM public.aura_finance_customer_invoices i JOIN page_accounts p
+           ON (p.id = i.account_id::text OR (i.account_id IS NULL AND i.customer_name = p.name))
+         WHERE i.tenant_id = $1 GROUP BY p.id
        ), touches AS (
          SELECT account_id::text AS id, MAX(at) AS last_activity_at FROM (
            SELECT o.account_id::text, o.created_at AS at FROM public.aura_crm_opportunities o JOIN page_accounts p ON p.id = o.account_id::text WHERE o.tenant_id = $1
@@ -145,7 +146,7 @@ export class AccountPortfolioQueryService {
     );
     const summaryRes = await this.pool.query<Record<string, unknown>>(
       `WITH filtered AS (
-         SELECT id::text AS id, status, owner_id FROM public.aura_crm_accounts
+         SELECT id::text AS id, name, status, owner_id FROM public.aura_crm_accounts
          WHERE tenant_id = $1
            AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR industry ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%' OR phone ILIKE '%' || $2 || '%')
            AND ($3 = '' OR status = $3) AND ($4 = '' OR owner_id = $4)
@@ -153,10 +154,12 @@ export class AccountPortfolioQueryService {
          SELECT account_id::text AS id, COALESCE(SUM(value) FILTER (WHERE stage NOT IN ('won','lost')),0)::numeric AS pipeline
          FROM public.aura_crm_opportunities WHERE tenant_id = $1 GROUP BY account_id
        ), invoices AS (
-         SELECT account_id::text AS id,
-                COALESCE(SUM(total-amount_paid) FILTER (WHERE status <> 'cancelled'),0)::numeric AS outstanding,
-                COALESCE(SUM(total-amount_paid) FILTER (WHERE status <> 'cancelled' AND status <> 'paid' AND due_date < CURRENT_DATE),0)::numeric AS overdue
-         FROM public.aura_finance_customer_invoices WHERE tenant_id = $1 GROUP BY account_id
+         SELECT f.id,
+                COALESCE(SUM(i.total-i.amount_paid) FILTER (WHERE i.status <> 'cancelled'),0)::numeric AS outstanding,
+                COALESCE(SUM(i.total-i.amount_paid) FILTER (WHERE i.status <> 'cancelled' AND i.status <> 'paid' AND i.due_date < CURRENT_DATE),0)::numeric AS overdue
+         FROM public.aura_finance_customer_invoices i JOIN filtered f
+           ON (f.id = i.account_id::text OR (i.account_id IS NULL AND i.customer_name = f.name))
+         WHERE i.tenant_id = $1 GROUP BY f.id
        )
        SELECT COUNT(*)::int AS total_accounts,
               COUNT(*) FILTER (WHERE status IN ('active_customer','strategic'))::int AS active_customers,

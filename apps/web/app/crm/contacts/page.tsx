@@ -23,16 +23,25 @@ interface Contact {
   createdAt: string;
 }
 interface Account { id: string; name: string; }
+interface ContactPage {
+  items: Contact[];
+  total: number;
+  summary?: {
+    total: number; active: number; linked: number; primaries: number; recent: number;
+    decisionMakers: number; champions: number; unmapped: number;
+  };
+}
 
 export default async function CrmContactsPage() {
   const [contactsResult, accountsResult] = await Promise.all([
-    fetchJson<Contact[]>('/api/crm/contacts'),
+    fetchJson<ContactPage>('/api/crm/contacts/paged?limit=50&offset=0'),
     fetchJson<Account[]>('/api/crm/accounts'),
   ]);
 
   if (!contactsResult.ok) return <DataStateNotice error={contactsResult.error} subject="contacts" />;
   if (!accountsResult.ok) return <DataStateNotice error={accountsResult.error} subject="accounts" />;
 
+  const page = contactsResult.data ?? { items: [], total: 0 };
   return (
     <div style={st.page}>
       <h1 style={st.h1}>CRM · Contacts &amp; Stakeholders</h1>
@@ -41,7 +50,7 @@ export default async function CrmContactsPage() {
         (decision maker, influencer, technical, finance…), how strong the relationship is, and who
         they report to. Open any contact for the full stakeholder 360.
       </p>
-      <ContactsClient initialContacts={contactsResult.data ?? []} initialAccounts={accountsResult.data ?? []} />
+      <ContactsClient initialContacts={page.items} initialTotal={page.total} initialSummary={page.summary} initialAccounts={accountsResult.data ?? []} />
     </div>
   );
 }

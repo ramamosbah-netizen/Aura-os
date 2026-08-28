@@ -93,7 +93,7 @@ export class AccountPortfolioQueryService {
          WHERE o.tenant_id = $1 GROUP BY o.account_id
        ), tenders AS (
          SELECT account_id::text AS id,
-                COUNT(*) FILTER (WHERE status IN ('draft','submitted'))::int AS open_tenders
+                COUNT(*) FILTER (WHERE t.status IN ('draft','submitted'))::int AS open_tenders
          FROM public.aura_tendering_tenders t JOIN page_accounts p ON p.id = t.account_id::text
          WHERE t.tenant_id = $1 GROUP BY t.account_id
        ), quotes AS (
@@ -103,14 +103,14 @@ export class AccountPortfolioQueryService {
        ), contracts AS (
          SELECT account_id::text AS id,
                 COUNT(*)::int AS contracts,
-                COUNT(*) FILTER (WHERE status = 'active')::int AS active_contracts,
-                COALESCE(SUM(value) FILTER (WHERE status <> 'cancelled'), 0)::numeric AS contracted_value
+                COUNT(*) FILTER (WHERE c.status = 'active')::int AS active_contracts,
+                COALESCE(SUM(c.value) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS contracted_value
          FROM public.aura_contracts_contracts c JOIN page_accounts p ON p.id = c.account_id::text
          WHERE c.tenant_id = $1 GROUP BY c.account_id
        ), projects AS (
          SELECT account_id::text AS id,
-                COUNT(*) FILTER (WHERE status IN ('active','planned'))::int AS active_projects,
-                COUNT(*) FILTER (WHERE status = 'active')::int AS live_projects
+                COUNT(*) FILTER (WHERE pr.status IN ('active','planned'))::int AS active_projects,
+                COUNT(*) FILTER (WHERE pr.status = 'active')::int AS live_projects
          FROM public.aura_projects_projects pr JOIN page_accounts p ON p.id = pr.account_id::text
          WHERE pr.tenant_id = $1 GROUP BY pr.account_id
        ), invoices AS (

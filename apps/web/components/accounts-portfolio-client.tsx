@@ -137,6 +137,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
   } : null);
   const [page, setPage] = useState<PortfolioPage | null>(seedPage);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   // Ownership is a workspace username; "me" comes from /workspace/me (the session
   // `sub` passed from the server need not equal the username and is null in dev).
@@ -203,6 +204,16 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
       .sort((a, b) => (b.contractedValue + b.pipelineValue) - (a.contractedValue + a.pipelineValue));
   }, [all, views, view, q]);
 
+  const viewCount = (key: ViewKey): number => {
+    if (!page) return 0;
+    if (key === 'all') return page.summary.totalAccounts;
+    if (key === 'prospects') return page.summary.prospects;
+    if (key === 'active') return page.summary.activeCustomers;
+    if (key === 'strategic') return page.summary.strategicAccounts;
+    if (key === 'at_risk') return page.summary.atRiskAccounts;
+    return all.filter(views.find((v) => v.key === key)?.match ?? (() => true)).length;
+  };
+
   // The page contract owns search, status filters, and pagination. Keep the
   // rendered rows bounded even for large tenants; only the initial response is
   // server-rendered and subsequent changes use the same BFF contract.
@@ -220,9 +231,20 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
       if (view === 'mine' && myId) params.set('ownerId', myId);
       setLoading(true);
       void fetch(`/api/crm/accounts/portfolio/paged?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
-        .then((res) => res.ok ? res.json() : null)
-        .then((next: PortfolioPage | null) => { if (next) setPage(next); })
-        .catch(() => undefined)
+        .then(async (res) => {
+          if (res.ok) return res.json();
+          const body = await res.json().catch(() => ({})) as { message?: string; error?: string };
+          const fallback = res.status === 401 ? 'Authentication required.'
+            : res.status === 403 ? "You don't have access to customer accounts."
+              : res.status >= 500 ? 'Customer account service temporarily unavailable. Retry in a moment.'
+                : 'Could not load customer accounts.';
+          throw new Error(body.message ?? body.error ?? fallback);
+        })
+        .then((next: PortfolioPage | null) => { if (next) { setErr(''); setPage(next); } })
+        .catch((cause: unknown) => {
+          if (cause instanceof DOMException && cause.name === 'AbortError') return;
+          setErr(cause instanceof Error ? cause.message : 'Could not load customer accounts.');
+        })
         .finally(() => setLoading(false));
     }, q ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
@@ -240,9 +262,12 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
     if (view === 'at_risk') params.set('health', 'at_risk');
     if (view === 'mine' && myId) params.set('ownerId', myId);
     void fetch(`/api/crm/accounts/portfolio/paged?${params.toString()}`, { cache: 'no-store' })
-      .then((res) => res.ok ? res.json() : null)
-      .then((next: PortfolioPage | null) => { if (next) setPage(next); })
-      .catch(() => undefined);
+      .then(async (res) => {
+        if (res.ok) return res.json();
+        throw new Error(res.status >= 500 ? 'Customer account service temporarily unavailable. Retry in a moment.' : 'Could not load customer accounts.');
+      })
+      .then((next: PortfolioPage | null) => { if (next) { setErr(''); setPage(next); } })
+      .catch((cause: unknown) => setErr(cause instanceof Error ? cause.message : 'Could not load customer accounts.'));
   };
 
   async function patchAccount(id: string, body: Record<string, unknown>) {
@@ -304,7 +329,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
       <div style={st.toolbar}>
         <div style={st.viewsRow}>
           {views.map((v) => {
-            const count = all.filter(v.match).length;
+            const count = viewCount(v.key);
             const active = view === v.key;
             return (
               <button
@@ -324,6 +349,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
           placeholder="Search accounts, industries, owners…"
           style={st.search}
         />
+        {err && <span style={st.err} role="alert">{err}</span>}
       </div>
 
       <section style={st.panel}>
@@ -455,6 +481,7 @@ const st = {
   viewBtnActive: { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   viewCount: { fontSize: 11, background: 'var(--panel-2)', borderRadius: 999, padding: '1px 7px', color: 'var(--muted)' } as CSSProperties,
   search: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 12px', fontSize: 13, minWidth: 260 } as CSSProperties,
+  err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '4px 8px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
   pagination: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12, flexWrap: 'wrap' } as CSSProperties,

@@ -28,4 +28,26 @@ describe('CRM customer search and pagination contract', () => {
     const summary = await store.summary({ tenantId: 't1', search: 'falcon' });
     expect(summary).toMatchObject({ total: 3, active: 3, linked: 3, primaries: 1, decisionMakers: 1, champions: 1, unmapped: 2 });
   });
+
+  it('keeps contact pagination and summaries correct beyond the legacy 100-row ceiling', async () => {
+    const store = new InMemoryContactStore();
+    for (let i = 0; i < 10_000; i += 1) {
+      await store.save(makeContact({
+        tenantId: 'large-tenant', accountId: `account-${i % 250}`, accountName: `Account ${i % 250}`,
+        name: `Contact ${i}`, stakeholderRole: i % 10 === 0 ? 'decision_maker' : null,
+      }));
+    }
+
+    const lastPage = await store.listPaged({ tenantId: 'large-tenant', search: 'Contact 9999' }, { limit: 50, offset: 0 });
+    expect(lastPage.total).toBe(1);
+    expect(lastPage.items[0]?.name).toBe('Contact 9999');
+
+    const page = await store.listPaged({ tenantId: 'large-tenant' }, { limit: 50, offset: 9_950 });
+    expect(page.items).toHaveLength(50);
+    expect(page.items.every((contact) => contact.name.startsWith('Contact '))).toBe(true);
+    expect(page.hasMore).toBe(false);
+
+    const summary = await store.summary({ tenantId: 'large-tenant' });
+    expect(summary).toMatchObject({ total: 10_000, active: 10_000, linked: 10_000, decisionMakers: 1_000, unmapped: 9_000 });
+  });
 });

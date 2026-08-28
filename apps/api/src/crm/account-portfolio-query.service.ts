@@ -177,6 +177,11 @@ export class AccountPortfolioQueryService {
                 COUNT(*) FILTER (WHERE stage NOT IN ('won','lost'))::int AS active_deals,
                 COALESCE(SUM(value) FILTER (WHERE stage NOT IN ('won','lost')),0)::numeric AS pipeline
          FROM public.aura_crm_opportunities WHERE tenant_id = $1 GROUP BY account_id
+       ), contracts AS (
+         SELECT account_id::text AS id,
+                COALESCE(SUM(value) FILTER (WHERE status <> 'cancelled'),0)::numeric AS contracted_value
+         FROM public.aura_contracts_contracts
+         WHERE tenant_id = $1 GROUP BY account_id
        ), invoices AS (
          SELECT f.id,
                 COALESCE(SUM(i.total-i.amount_paid) FILTER (WHERE i.status <> 'cancelled'),0)::numeric AS outstanding,
@@ -194,11 +199,7 @@ export class AccountPortfolioQueryService {
               COALESCE(SUM(c.contracted_value),0)::numeric AS contracted_value,
               COALESCE(SUM(i.outstanding),0)::numeric AS outstanding_ar,
               COUNT(*) FILTER (WHERE COALESCE(i.overdue,0) > 0)::int AS at_risk_accounts
-       FROM filtered f LEFT JOIN opp o ON o.id = f.id LEFT JOIN invoices i ON i.id = f.id
-       LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM(value) FILTER (WHERE status <> 'cancelled'),0)::numeric AS contracted_value
-         FROM public.aura_contracts_contracts c WHERE c.tenant_id = $1 AND c.account_id::text = f.id
-       ) c ON TRUE`, base,
+       FROM filtered f LEFT JOIN opp o ON o.id = f.id LEFT JOIN contracts c ON c.id = f.id LEFT JOIN invoices i ON i.id = f.id`, base,
     );
     const total = Number(countRes.rows[0]?.count ?? 0);
     const toNumber = (value: unknown): number => Number(value ?? 0);

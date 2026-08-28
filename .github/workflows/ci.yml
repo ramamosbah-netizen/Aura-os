@@ -471,6 +471,7 @@ jobs:
   web-smoke:
     name: web smoke (Playwright — TIER-2 #41)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -571,6 +572,7 @@ jobs:
   web-smoke-postgres:
     name: web smoke TIER-3 (Playwright · PostgreSQL)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: pgvector/pgvector:pg16 # migration 0019 needs `create extension vector`

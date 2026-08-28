@@ -217,6 +217,7 @@ export class Account360Controller {
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('ownerId') ownerId?: string,
+    @Query('health') health?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ): Promise<{
@@ -228,15 +229,17 @@ export class Account360Controller {
     summary: { totalAccounts: number; activeCustomers: number; prospects: number; strategicAccounts: number; atRiskAccounts: number; totalPipeline: number; activeDeals: number; contractedValue: number; outstandingAR: number };
   }> {
     const page = parsePageParams(limit, offset);
-    const filters = { search, status, ownerId };
+    const filters = { search, status, ownerId, health: health === 'at_risk' ? 'at_risk' as const : '' as const };
     if (this.portfolioQuery) return this.portfolioQuery.page(this.tenant.get().tenantId, filters, page);
 
     // In-memory/CI fallback preserves the same response contract. Production uses the SQL path.
     const all = await this.portfolio();
     const needle = search?.trim().toLowerCase();
     const statuses = (status ?? '').split(',').map((value) => value.trim()).filter(Boolean);
+    const atRiskOnly = health === 'at_risk';
     const filtered = all.filter((row) =>
       (!statuses.length || statuses.includes(row.stage)) && (!ownerId || row.ownerId === ownerId) &&
+      (!atRiskOnly || row.health === 'at_risk') &&
       (!needle || [row.name, row.industry, row.email, row.phone, row.ownerId].some((v) => v?.toLowerCase().includes(needle))),
     );
     const items = filtered.slice(page.offset, page.offset + page.limit).map((row) => ({

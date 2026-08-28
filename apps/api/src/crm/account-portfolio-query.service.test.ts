@@ -16,12 +16,13 @@ describe('AccountPortfolioQueryService', () => {
       .mockResolvedValueOnce({ rows: [{ total_accounts: '8', active_customers: '3', prospects: '2', strategic_accounts: '1', at_risk_accounts: '2', active_deals: '5', total_pipeline: '500000', contracted_value: '210000', outstanding_ar: '12000' }] });
 
     const result = await new AccountPortfolioQueryService({ query } as unknown as Pool).page(
-      'tenant-1', { search: 'falcon', status: 'prospect', ownerId: 'u1' }, { limit: 1, offset: 0 },
+      'tenant-1', { search: 'falcon', status: 'prospect', ownerId: 'u1', health: 'at_risk' }, { limit: 1, offset: 0 },
     );
 
     expect(result).toMatchObject({ total: 8, limit: 1, offset: 0, hasMore: true });
     expect(result.items[0]).toMatchObject({ id: 'a1', activeDeals: 2, pipelineValue: 125000, overdueAR: 500 });
     expect(result.summary).toEqual({ totalAccounts: 8, activeCustomers: 3, prospects: 2, strategicAccounts: 1, atRiskAccounts: 2, activeDeals: 5, totalPipeline: 500000, contractedValue: 210000, outstandingAR: 12000 });
+    expect(query.mock.calls[0]?.[1]).toEqual(['tenant-1', 'falcon', 'prospect', 'u1', 'at_risk', 1, 0]);
     expect(query).toHaveBeenCalledTimes(3);
   });
 });

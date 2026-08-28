@@ -5,6 +5,7 @@ export interface PortfolioQueryFilters {
   search?: string;
   status?: string;
   ownerId?: string;
+  health?: 'at_risk' | '';
 }
 
 export interface PortfolioQueryRow {
@@ -72,19 +73,25 @@ export class AccountPortfolioQueryService {
     // prospect + qualified) without falling back to client-side filtering.
     const status = (filters.status ?? '').split(',').map((value) => value.trim()).filter(Boolean).join(',');
     const ownerId = filters.ownerId?.trim() ?? '';
-    const base = [tenantId, search, status, ownerId];
+    const health = filters.health === 'at_risk' ? 'at_risk' : '';
+    const base = [tenantId, search, status, ownerId, health];
 
     const pageRes = await this.pool.query<Record<string, unknown>>(
       `WITH filtered AS (
          SELECT id::text AS id, name, status, party_type, industry, owner_id, phone, email, source,
                 payment_terms, website, billing_address, created_at
-         FROM public.aura_crm_accounts
-         WHERE tenant_id = $1
-           AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR industry ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%' OR phone ILIKE '%' || $2 || '%')
-           AND ($3 = '' OR status = ANY(string_to_array($3, ',')))
-           AND ($4 = '' OR owner_id = $4)
+         FROM public.aura_crm_accounts a
+         WHERE a.tenant_id = $1
+           AND ($2 = '' OR a.name ILIKE '%' || $2 || '%' OR a.industry ILIKE '%' || $2 || '%' OR a.email ILIKE '%' || $2 || '%' OR a.phone ILIKE '%' || $2 || '%')
+           AND ($3 = '' OR a.status = ANY(string_to_array($3, ',')))
+           AND ($4 = '' OR a.owner_id = $4)
+           AND ($5 = '' OR ($5 = 'at_risk' AND EXISTS (
+             SELECT 1 FROM public.aura_finance_customer_invoices ri
+             WHERE ri.tenant_id = $1 AND ri.status NOT IN ('cancelled','paid') AND ri.due_date < CURRENT_DATE
+               AND (ri.account_id::text = a.id::text OR (ri.account_id IS NULL AND ri.customer_name = a.name))
+           )))
        ), page_accounts AS (
-         SELECT * FROM filtered ORDER BY created_at DESC, id DESC LIMIT $5 OFFSET $6
+         SELECT * FROM filtered ORDER BY created_at DESC, id DESC LIMIT $6 OFFSET $7
        ), opp AS (
          SELECT account_id::text AS id,
                 COUNT(*) FILTER (WHERE stage NOT IN ('won','lost'))::int AS active_deals,
@@ -140,21 +147,31 @@ export class AccountPortfolioQueryService {
        LEFT JOIN opp o ON o.id = p.id LEFT JOIN tenders t ON t.id = p.id LEFT JOIN quotes q ON q.id = p.id
        LEFT JOIN contracts c ON c.id = p.id LEFT JOIN projects pr ON pr.id = p.id LEFT JOIN invoices i ON i.id = p.id
        LEFT JOIN touches x ON x.id = p.id`,
-      [...base, page.limit, page.offset],
+         [...base, page.limit, page.offset],
     );
 
     const countRes = await this.pool.query<{ count: string }>(
-      `SELECT COUNT(*)::int AS count FROM public.aura_crm_accounts
-       WHERE tenant_id = $1
-         AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR industry ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%' OR phone ILIKE '%' || $2 || '%')
-         AND ($3 = '' OR status = ANY(string_to_array($3, ','))) AND ($4 = '' OR owner_id = $4)`, base,
+      `SELECT COUNT(*)::int AS count FROM public.aura_crm_accounts a
+       WHERE a.tenant_id = $1
+         AND ($2 = '' OR a.name ILIKE '%' || $2 || '%' OR a.industry ILIKE '%' || $2 || '%' OR a.email ILIKE '%' || $2 || '%' OR a.phone ILIKE '%' || $2 || '%')
+         AND ($3 = '' OR a.status = ANY(string_to_array($3, ','))) AND ($4 = '' OR a.owner_id = $4)
+         AND ($5 = '' OR ($5 = 'at_risk' AND EXISTS (
+           SELECT 1 FROM public.aura_finance_customer_invoices ri
+           WHERE ri.tenant_id = $1 AND ri.status NOT IN ('cancelled','paid') AND ri.due_date < CURRENT_DATE
+             AND (ri.account_id::text = a.id::text OR (ri.account_id IS NULL AND ri.customer_name = a.name))
+         )))`, base,
     );
     const summaryRes = await this.pool.query<Record<string, unknown>>(
       `WITH filtered AS (
-         SELECT id::text AS id, name, status, owner_id FROM public.aura_crm_accounts
-         WHERE tenant_id = $1
-           AND ($2 = '' OR name ILIKE '%' || $2 || '%' OR industry ILIKE '%' || $2 || '%' OR email ILIKE '%' || $2 || '%' OR phone ILIKE '%' || $2 || '%')
-           AND ($3 = '' OR status = ANY(string_to_array($3, ','))) AND ($4 = '' OR owner_id = $4)
+         SELECT a.id::text AS id, a.name, a.status, a.owner_id FROM public.aura_crm_accounts a
+         WHERE a.tenant_id = $1
+           AND ($2 = '' OR a.name ILIKE '%' || $2 || '%' OR a.industry ILIKE '%' || $2 || '%' OR a.email ILIKE '%' || $2 || '%' OR a.phone ILIKE '%' || $2 || '%')
+           AND ($3 = '' OR a.status = ANY(string_to_array($3, ','))) AND ($4 = '' OR a.owner_id = $4)
+           AND ($5 = '' OR ($5 = 'at_risk' AND EXISTS (
+             SELECT 1 FROM public.aura_finance_customer_invoices ri
+             WHERE ri.tenant_id = $1 AND ri.status NOT IN ('cancelled','paid') AND ri.due_date < CURRENT_DATE
+               AND (ri.account_id::text = a.id::text OR (ri.account_id IS NULL AND ri.customer_name = a.name))
+           )))
        ), opp AS (
          SELECT account_id::text AS id,
                 COUNT(*) FILTER (WHERE stage NOT IN ('won','lost'))::int AS active_deals,
@@ -169,9 +186,9 @@ export class AccountPortfolioQueryService {
          WHERE i.tenant_id = $1 GROUP BY f.id
        )
        SELECT COUNT(*)::int AS total_accounts,
-              COUNT(*) FILTER (WHERE status IN ('active_customer','strategic'))::int AS active_customers,
-              COUNT(*) FILTER (WHERE status = 'strategic')::int AS strategic_accounts,
-              COUNT(*) FILTER (WHERE status IN ('prospect','qualified'))::int AS prospects,
+              COUNT(*) FILTER (WHERE f.status IN ('active_customer','strategic'))::int AS active_customers,
+              COUNT(*) FILTER (WHERE f.status = 'strategic')::int AS strategic_accounts,
+              COUNT(*) FILTER (WHERE f.status IN ('prospect','qualified'))::int AS prospects,
               COALESCE(SUM(o.active_deals),0)::int AS active_deals,
               COALESCE(SUM(o.pipeline),0)::numeric AS total_pipeline,
               COALESCE(SUM(c.contracted_value),0)::numeric AS contracted_value,

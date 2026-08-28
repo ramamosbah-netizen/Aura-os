@@ -216,6 +216,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
       const params = new URLSearchParams({ limit: String(page?.limit ?? 50), offset: String(view === 'all' && !q ? (page?.offset ?? 0) : 0) });
       if (q.trim()) params.set('search', q.trim());
       if (status) params.set('status', status);
+      if (view === 'at_risk') params.set('health', 'at_risk');
       if (view === 'mine' && myId) params.set('ownerId', myId);
       setLoading(true);
       void fetch(`/api/crm/accounts/portfolio/paged?${params.toString()}`, { cache: 'no-store', signal: controller.signal })
@@ -236,6 +237,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
       : view === 'strategic' ? 'strategic'
       : view === 'dormant' ? 'dormant,inactive' : '';
     if (status) params.set('status', status);
+    if (view === 'at_risk') params.set('health', 'at_risk');
     if (view === 'mine' && myId) params.set('ownerId', myId);
     void fetch(`/api/crm/accounts/portfolio/paged?${params.toString()}`, { cache: 'no-store' })
       .then((res) => res.ok ? res.json() : null)

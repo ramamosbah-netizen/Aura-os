@@ -9,10 +9,10 @@ import OpportunityActivitiesCard from './opportunity-activities-card';
 
 // Sales Pipeline workspace — ONE page for working DEALS, clear top-level tabs:
 //
-//   Radar → Overview → Board → List → Forecast → Analytics
+//   Radar → Overview → Opportunities (Board | List) → Forecast → Analytics
 //
 // Radar is the acquisition inbox (signals), Overview is the manager cockpit (+ leads
-// needing attention + an Opportunity-Activities pointer), Board/List work the deals,
+// needing attention + an Opportunity-Activities pointer), Opportunities works the deals,
 // Analytics deep-dives. Each tab is one job. Activity history is contextual and personal
 // execution lives in My Work; the Overview only points to the scoped register.
 
@@ -36,8 +36,7 @@ const ANALYTICS_SUBVIEWS: readonly AnalyticsSub[] = ['analytics', 'sources', 'ex
 const TAB_DEFS: Array<{ id: PageTab; label: string; icon: string; hint: string }> = [
   { id: 'radar', label: 'Radar', icon: '⚡', hint: 'Signals — triage what the market is telling you' },
   { id: 'overview', label: 'Overview', icon: '◎', hint: 'The pipeline cockpit + leads needing attention' },
-  { id: 'board', label: 'Board', icon: '⊞', hint: 'Work deals across stages (drag & drop)' },
-  { id: 'list', label: 'List', icon: '☰', hint: 'Every lead and deal, filterable' },
+  { id: 'board', label: 'Opportunities', icon: '⌁', hint: 'Work opportunities in Board or List view' },
   { id: 'forecast', label: 'Forecast', icon: '◎', hint: 'Commit, best case and expected close' },
   { id: 'analytics', label: 'Analytics', icon: '📈', hint: 'Performance · sources · executive' },
 ];
@@ -146,18 +145,26 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
       <div style={st.tabBar} role="tablist">
         {TAB_DEFS.map((t) => {
           const badge = t.id === 'radar' ? openSignals : t.id === 'overview' ? attention : 0;
-          const active = tab === t.id;
+          const active = t.id === 'board' ? tab === 'board' || tab === 'list' : tab === t.id;
           return (
             <button key={t.id} type="button" role="tab" aria-selected={active} title={t.hint} data-testid={`pipeline-tab-${t.id}`}
-              style={{ ...st.tab, ...(active ? st.tabOn : {}) }} onClick={() => selectTab(t.id)}>
+              style={{ ...st.tab, ...(active ? st.tabOn : {}) }} onClick={() => selectTab(t.id === 'board' ? 'board' : t.id)}>
               <span style={{ fontSize: 14 }}>{t.icon}</span>
               {t.label}
               {badge > 0 && <span style={{ ...st.badge, ...(active ? st.badgeOn : {}) }}>{badge}</span>}
             </button>
           );
         })}
+        {tab === 'board' || tab === 'list' ? (
+          <div style={st.modeBar} role="group" aria-label="Opportunities display mode">
+            <button type="button" data-testid="opportunities-mode-board" aria-pressed={tab === 'board'}
+              style={{ ...st.modeTab, ...(tab === 'board' ? st.modeTabOn : {}) }} onClick={() => selectTab('board')}>Board</button>
+            <button type="button" data-testid="pipeline-tab-list" aria-pressed={tab === 'list'}
+              style={{ ...st.modeTab, ...(tab === 'list' ? st.modeTabOn : {}) }} onClick={() => selectTab('list')}>List</button>
+          </div>
+        ) : null}
       </div>
-      <div style={st.hintLine}>{TAB_DEFS.find((t) => t.id === tab)?.hint}</div>
+      <div style={st.hintLine}>{TAB_DEFS.find((t) => t.id === (tab === 'list' ? 'board' : tab))?.hint}</div>
 
       {tab === 'radar' && <SignalsRadar data={radar} />}
 
@@ -205,6 +212,9 @@ const st: Record<string, CSSProperties> = {
   badgeOn: { borderColor: 'var(--accent)', color: 'var(--accent)' },
   hintLine: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 16px' },
   subBar: { display: 'inline-flex', gap: 4, border: '1px solid var(--border)', borderRadius: 10, padding: 3, background: 'var(--panel)', marginBottom: 14 },
+  modeBar: { display: 'inline-flex', gap: 3, border: '1px solid var(--border)', borderRadius: 9, padding: 3, background: 'var(--panel)', margin: '0 0 0 2px' },
+  modeTab: { border: 'none', background: 'transparent', color: 'var(--muted)', padding: '6px 11px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', borderRadius: 7 },
+  modeTabOn: { background: 'var(--panel-2)', color: 'var(--accent)' },
   subTab: { border: 'none', background: 'transparent', color: 'var(--muted)', padding: '6px 13px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', borderRadius: 8 },
   subTabOn: { background: 'var(--panel-2)', color: 'var(--accent)' },
 };

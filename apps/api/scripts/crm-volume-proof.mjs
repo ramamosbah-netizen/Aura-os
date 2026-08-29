@@ -76,7 +76,7 @@ async function seed() {
         (id, tenant_id, company_id, type, subject, related_type, related_id, due_date, status, assignee_id, created_by)
       SELECT md5('volume-activity-' || g)::uuid, $1, 'volume-company',
              CASE WHEN g % 4 = 0 THEN 'meeting' ELSE 'task' END, 'Volume Activity ' || g, 'account',
-             md5('volume-account-' || (((g - 1) % $2::int) + 1)), CURRENT_DATE::text,
+             md5('volume-account-' || (((g - 1) % $2::int) + 1))::uuid, CURRENT_DATE::text,
              CASE WHEN g % 6 = 0 THEN 'completed' ELSE 'open' END, 'u-volume-owner-' || (g % 20), 'volume-proof'
       FROM generate_series(1, $3::int) g
       ON CONFLICT (id) DO NOTHING`, [tenantId, counts.accounts, counts.activities]);
@@ -169,7 +169,6 @@ async function activityProof() {
   const expectedMeetings = Math.floor(counts.activities / 4);
   const expectedCompleted = Math.floor(counts.activities / 6);
   const expectedAssignee = counts.activities / 20;
-  console.log(`Activity related scope observed: pageTotal=${related.total}, pageItems=${related.items?.length ?? 'n/a'}, summaryTotal=${scopedSummary.total}`);
   if (first.total !== counts.activities || first.items.length !== 50 || middle.items.length !== 50 || last.items.length !== 50 || !first.hasMore || last.hasMore) throw new Error('activity pagination invariant failed');
   if (!distant.items.some((item) => item.subject === 'Volume Activity 99999')) throw new Error('activity deep search invariant failed');
   if (meetings.total !== expectedMeetings || completed.total !== expectedCompleted || assignee.total !== expectedAssignee || byDate.total !== counts.activities) throw new Error('activity filter invariant failed');

@@ -215,7 +215,7 @@ export function normaliseExclusions(raw: string[] | undefined): string[] {
   return out;
 }
 
-function defaultValidUntil(issueDate: string): string {
+export function defaultQuotationValidUntil(issueDate: string): string {
   const d = new Date(issueDate);
   d.setDate(d.getDate() + 30);
   return d.toISOString().slice(0, 10);
@@ -250,7 +250,7 @@ export function makeQuotation(input: NewQuotation): Quotation {
     parentQuotationId: input.parentQuotationId ?? null,
     convertedContractId: null,
     issueDate: input.issueDate,
-    validUntil: input.validUntil ?? defaultValidUntil(input.issueDate),
+    validUntil: input.validUntil ?? defaultQuotationValidUntil(input.issueDate),
     lines,
     subtotal,
     vatTotal,
@@ -329,11 +329,12 @@ export function expireQuotation(q: Quotation): Quotation {
  * draft is created with revision+1 carrying the same number, account, source
  * references, lines and terms — edit then re-send.
  */
-export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Quotation } {
+export function reviseQuotation(q: Quotation, options: { actorId?: Id | null; issueDate?: string } = {}): { superseded: Quotation; next: Quotation } {
   const revisable: QuotationStatus[] = ['sent', 'under_negotiation', 'rejected', 'expired'];
   if (!revisable.includes(q.status)) {
     throw new Error(`cannot revise from status ${q.status} — must be sent, under negotiation, rejected or expired`);
   }
+  const issueDate = options.issueDate ?? new Date().toISOString().slice(0, 10);
   const next = makeQuotation({
     tenantId: q.tenantId,
     companyId: q.companyId,
@@ -353,14 +354,18 @@ export function reviseQuotation(q: Quotation): { superseded: Quotation; next: Qu
     deliveryTerms: q.deliveryTerms,
     revision: q.revision + 1,
     parentQuotationId: q.id,
-    issueDate: new Date().toISOString().slice(0, 10),
-    validUntil: q.validUntil,
+    issueDate,
+    // A new revision must not inherit an already elapsed validity window. Preserve a future
+    // commercial deadline, otherwise apply the same canonical default as a new quotation.
+    validUntil: q.validUntil && q.validUntil >= issueDate ? q.validUntil : null,
     lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })),
     // Carry the internal build-up into the new revision — costs rarely reset between revisions.
     pricing: q.pricing ? { lines: q.pricing.lines.map((l) => ({ ...l })) } : null,
     // The estimation build-up carries into a revision — re-pricing starts from the last cost model.
     estimation: q.estimation ? q.estimation.map((e) => ({ ...e })) : null,
-    createdBy: q.createdBy,
+    // The actor creating this revision is its preparer. Keep the historical creator only for
+    // unauthenticated/system callers that have no actor identity.
+    createdBy: options.actorId ?? q.createdBy,
   });
   return { superseded: { ...q, status: 'revised' }, next };
 }

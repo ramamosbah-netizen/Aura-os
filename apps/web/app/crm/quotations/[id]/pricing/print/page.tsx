@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import DataStateNotice from '../../../../../../components/ui/data-state';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,11 +34,14 @@ const pct = (n: number | null): string => (n === null ? '—' : `${n}%`);
 
 export default async function PricingPrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [v, q] = await Promise.all([
-    getJson<View>(`/api/crm/quotations/${id}/pricing`),
-    getJson<Head>(`/api/crm/quotations/${id}`),
+  const [vResult, qResult] = await Promise.all([
+    fetchJson<View>(`/api/crm/quotations/${id}/pricing`),
+    fetchJson<Head>(`/api/crm/quotations/${id}`),
   ]);
-  if (!v || !q) return <div style={{ padding: 40 }}>Pricing sheet not found or API offline.</div>;
+  if (!vResult.ok) return <div style={{ padding: 40 }}><DataStateNotice error={vResult.error} subject="pricing sheet" /></div>;
+  if (!qResult.ok) return <div style={{ padding: 40 }}><DataStateNotice error={qResult.error} subject="quotation" /></div>;
+  const v = vResult.data;
+  const q = qResult.data;
 
   return (
     <div style={st.sheet}>

@@ -1,4 +1,5 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { CommercialBaseline } from './domain/commercial-baseline';
 import type { CommercialBaselineStore } from './commercial-baseline-store';
 
@@ -7,7 +8,15 @@ export class InMemoryCommercialBaselineStore implements CommercialBaselineStore 
   private readonly rows = new Map<string, CommercialBaseline>();
 
   async save(b: CommercialBaseline): Promise<void> {
+    const existing = [...this.rows.values()].find((row) => row.tenantId === b.tenantId && row.quotationId === b.quotationId);
+    if (existing && existing.id !== b.id) return;
     this.rows.set(b.id, { ...b, lines: b.lines.map((l) => ({ ...l })) });
+  }
+  async saveWithClient(_tx: TxHandle | null, b: CommercialBaseline): Promise<boolean> {
+    const existing = [...this.rows.values()].find((row) => row.tenantId === b.tenantId && row.quotationId === b.quotationId);
+    if (existing && existing.id !== b.id) return false;
+    await this.save(b);
+    return true;
   }
   async get(id: Id): Promise<CommercialBaseline | null> {
     const b = this.rows.get(id);

@@ -26,6 +26,12 @@ export class InMemoryQuotationStore implements QuotationStore {
     return q?.tenantId === tenantId ? q : null;
   }
 
+  async getForTenantForUpdate(_tx: TxHandle, tenantId: string, id: Id): Promise<Quotation | null> {
+    // In-memory mode has no concurrent database transaction; preserve the same tenant-scoped
+    // contract so service tests exercise the authorization path without pretending to lock.
+    return this.getForTenant(tenantId, id);
+  }
+
   async list(filter: QuotationFilter = {}): Promise<Quotation[]> {
     let out = [...this.data.values()];
     if (filter.tenantId) out = out.filter((q) => q.tenantId === filter.tenantId);

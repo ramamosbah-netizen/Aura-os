@@ -101,11 +101,9 @@ export class CrmQuotationsController {
   @Permissions('crm.quotation.update')
   @Post(':id/revise')
   async revise(@Param('id') id: string): Promise<Quotation> {
-    try {
-      return await this.quotations.revise(id);
-    } catch (err) {
-      throw new BadRequestException(err instanceof Error ? err.message : 'revise failed');
-    }
+    // Preserve the shared error taxonomy: inaccessible quotes remain 404 and infrastructure
+    // failures remain 5xx instead of every failure being flattened into a misleading 400.
+    return await this.quotations.revise(id);
   }
 
   @Permissions('crm.quotation.create')

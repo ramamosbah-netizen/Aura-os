@@ -51,6 +51,9 @@ export class QuotationReferenceService {
   }
 
   private belongsToTenant(record: { tenantId?: string }, tenantId: string | null): boolean {
-    return !tenantId || !record.tenantId || record.tenantId === tenantId;
+    // A tenant-bound request must never accept an object whose ownership metadata is missing.
+    // Accepting `undefined` here turns an accidentally unscoped repository response into a
+    // cross-tenant reference bypass. Unbound/system callers retain the legacy unrestricted path.
+    return !tenantId || record.tenantId === tenantId;
   }
 }

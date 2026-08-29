@@ -48,6 +48,8 @@ export interface QuotationStore {
   get(id: Id): Promise<Quotation | null>;
   /** Lookup by both identity and tenant; callers use this for sensitive chain roots. */
   getForTenant(tenantId: string, id: Id): Promise<Quotation | null>;
+  /** Optional row-locking lookup used by lifecycle mutations inside a transaction. */
+  getForTenantForUpdate?(tx: TxHandle, tenantId: string, id: Id): Promise<Quotation | null>;
   list(filter?: QuotationFilter): Promise<Quotation[]>;
   /** Stream the complete filtered register in bounded batches for exports. */
   streamAll(filter: QuotationFilter, onBatch: (rows: Quotation[]) => Promise<void>): Promise<void>;

@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { QuotationLine } from './domain/quotation';
 import type { CommercialBaseline } from './domain/commercial-baseline';
 import type { CommercialBaselineStore } from './commercial-baseline-store';
@@ -54,16 +55,25 @@ export class PostgresCommercialBaselineStore implements CommercialBaselineStore 
   constructor(private readonly pool: Pool) {}
 
   async save(b: CommercialBaseline): Promise<void> {
-    await this.pool.query(
+    await this.insert(this.pool, b);
+  }
+
+  async saveWithClient(tx: TxHandle | null, b: CommercialBaseline): Promise<boolean> {
+    return this.insert((tx as PoolClient | null) ?? this.pool, b);
+  }
+
+  private async insert(executor: Pool | PoolClient, b: CommercialBaseline): Promise<boolean> {
+    const result = await executor.query(
       `INSERT INTO public.aura_crm_commercial_baselines (${COLS})
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (tenant_id, quotation_id) DO NOTHING`,
       [
         b.id, b.tenantId, b.companyId, b.quotationId, b.quoteNumber, b.revision, b.customerName,
         b.accountId, b.sourceOpportunityId, b.sourceTenderId, JSON.stringify(b.lines),
         b.subtotal, b.vatTotal, b.total, b.lockedBy, b.lockedAt, b.createdAt,
       ],
     );
+    return result.rowCount === 1;
   }
 
   async get(id: Id): Promise<CommercialBaseline | null> {

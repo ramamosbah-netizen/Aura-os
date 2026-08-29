@@ -123,6 +123,14 @@ export class PostgresQuotationStore implements QuotationStore {
     return res.rows.length ? rowTo(res.rows[0]) : null;
   }
 
+  async getForTenantForUpdate(tx: TxHandle, tenantId: string, id: Id): Promise<Quotation | null> {
+    const res = await (tx as PoolClient).query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_quotations WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+      [tenantId, id],
+    );
+    return res.rows.length ? rowTo(res.rows[0]) : null;
+  }
+
   private buildWhere(filter: QuotationFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { assertSameTenant, diffFields, estimateLine, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
-import { EVENT_STORE, type EventStore, AccessService, TenantContext } from '@aura/core';
+import { assertSameTenant, diffFields, estimateLine, type DomainEvent, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, TX_RUNNER, type EventStore, type TxHandle, type TxRunner, AccessService, TenantContext } from '@aura/core';
 import {
   QUOTATION_EVENT,
   QUOTATION_ACTIONS,
@@ -37,7 +37,17 @@ export class QuotationService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(TX_RUNNER) private readonly tx: TxRunner | null = null,
   ) {}
+
+  /** Keep the no-DB test/dev path usable while making PostgreSQL writes atomic in production. */
+  private runAtomic<T>(fn: (handle: TxHandle | null) => Promise<T>): Promise<T> {
+    return this.tx ? this.tx.run(fn) : fn(null);
+  }
+
+  private appendEvents(handle: TxHandle | null, events: Parameters<EventStore['append']>[0]): Promise<void> {
+    return handle === null ? this.events.append(events) : this.events.appendWithClient(handle, events);
+  }
 
   /** The acting user for an audit record: the real request actor (ALS) when known, else the fallback. */
   private actor(fallback: Id | null): Id | null {
@@ -46,18 +56,19 @@ export class QuotationService {
 
   async create(input: NewQuotation): Promise<Quotation> {
     const q = makeQuotation(input);
-    await this.store.save(q);
-    await this.events.append([
-      makeEvent({
-        type: QUOTATION_EVENT.created,
-        tenantId: q.tenantId,
-        companyId: q.companyId,
-        actorId: q.createdBy,
-        aggregateType: 'crm.quotation',
-        aggregateId: q.id,
-        payload: { quoteNumber: q.quoteNumber, customerName: q.customerName, total: q.total },
-      }),
-    ]);
+    const event = makeEvent({
+      type: QUOTATION_EVENT.created,
+      tenantId: q.tenantId,
+      companyId: q.companyId,
+      actorId: q.createdBy,
+      aggregateType: 'crm.quotation',
+      aggregateId: q.id,
+      payload: { quoteNumber: q.quoteNumber, customerName: q.customerName, total: q.total },
+    });
+    await this.runAtomic(async (handle) => {
+      await this.store.saveWithClient(handle, q);
+      await this.appendEvents(handle, [event]);
+    });
     this.logger.log(`Quotation ${q.quoteNumber} created for ${q.customerName}: total ${q.total}`);
     return q;
   }
@@ -86,72 +97,75 @@ export class QuotationService {
       paymentConditions: input.paymentConditions !== undefined ? (input.paymentConditions?.trim() || null) : q.paymentConditions,
       deliveryTerms: input.deliveryTerms !== undefined ? (input.deliveryTerms?.trim() || null) : q.deliveryTerms,
     };
-    await this.store.save(updated);
     // Audit trail (P1-2): capture the field-level before→after so the timeline can answer
     // "who changed which term, from what, to what". Real actor from the request context (ALS).
     const changes = diffFields(q, updated, ['terms', 'exclusions', 'paymentConditions', 'deliveryTerms']);
-    await this.events.append([
-      makeEvent({
+    const event = makeEvent({
         type: QUOTATION_EVENT.updated,
         tenantId: q.tenantId, companyId: q.companyId, actorId: this.actor(q.createdBy),
         aggregateType: 'crm.quotation', aggregateId: id,
         payload: { quoteNumber: q.quoteNumber, field: 'commercial_terms', changes },
-      }),
-    ]);
+    });
+    await this.runAtomic(async (handle) => {
+      await this.store.saveWithClient(handle, updated);
+      await this.appendEvents(handle, [event]);
+    });
     return updated;
   }
 
   async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null): Promise<Quotation> {
-    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
-    // Segregation of duties (P0-3): whoever prepared a quotation cannot approve it — approval is a
-    // maker-checker control. Engages only when the actor is known (auth on); with auth off actorId
-    // is null and the check is skipped, consistent with the rest of the access seam. "access denied"
-    // phrasing maps to HTTP 403 via the error taxonomy.
-    if (action === 'approve' && actorId && q.createdBy && actorId === q.createdBy) {
-      throw new Error(
-        `access denied: the preparer of quotation ${q.quoteNumber} cannot approve their own quotation — segregation of duties requires a different approver`,
-      );
-    }
-    // Value-threshold approval (P0-3): the approver's grant must carry enough approvalLimit for the
-    // quote total. Skipped when the actor is unknown (auth off / auto flows). Reuses the ABAC ceiling.
-    if (action === 'approve' && actorId) {
-      this.access.assertApprovalAuthority(
-        actorId,
-        { permission: 'crm.quotation.approve', orgPath: [{ level: 'tenant', id: q.tenantId }], amount: q.total },
-        `quotation ${q.quoteNumber} approval`,
-      );
-    }
-    const updated = applyQuotationAction(q, action);
-    await this.store.save(updated);
-    const eventType =
-      action === 'send' ? QUOTATION_EVENT.sent : action === 'accept' ? QUOTATION_EVENT.accepted : QUOTATION_EVENT.statusChanged;
-    await this.events.append([
-      makeEvent({
+    let baselineInserted = false;
+    let baseline: CommercialBaseline | null = null;
+    let source!: Quotation;
+    let updated!: Quotation;
+    const actor = this.actor(actorId);
+    await this.runAtomic(async (handle) => {
+      const boundTenant = this.tenant?.boundTenantId();
+      const locked = handle !== null && boundTenant && this.store.getForTenantForUpdate
+        ? await this.store.getForTenantForUpdate(handle, boundTenant, id)
+        : await this.store.get(id);
+      const q = assertSameTenant(locked, boundTenant, 'quotation', id);
+      source = q;
+      // Segregation of duties: the preparer cannot approve their own quotation.
+      if (action === 'approve' && actor && q.createdBy && actor === q.createdBy) {
+        throw new Error(`access denied: the preparer of quotation ${q.quoteNumber} cannot approve their own quotation — segregation of duties requires a different approver`);
+      }
+      if (action === 'approve' && actor) {
+        this.access.assertApprovalAuthority(
+          actor,
+          { permission: 'crm.quotation.approve', orgPath: [{ level: 'tenant', id: q.tenantId }], amount: q.total },
+          `quotation ${q.quoteNumber} approval`,
+        );
+      }
+      updated = applyQuotationAction(q, action);
+      const eventType = action === 'send' ? QUOTATION_EVENT.sent : action === 'accept' ? QUOTATION_EVENT.accepted : QUOTATION_EVENT.statusChanged;
+      const events: DomainEvent[] = [makeEvent({
         type: eventType,
-        tenantId: q.tenantId, companyId: q.companyId, actorId,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
         aggregateType: 'crm.quotation', aggregateId: id,
         payload: { quoteNumber: q.quoteNumber, total: q.total, status: updated.status, action },
-      }),
-    ]);
-    this.logger.log(`Quotation ${q.quoteNumber} (rev ${q.revision}) ${action} → ${updated.status}`);
+      })];
+      const existing = action === 'approve' ? await this.baselines.getByQuotation(updated.tenantId, updated.id) : null;
+      baseline = action === 'approve' && !existing ? makeCommercialBaseline(updated, actor) : null;
+      await this.store.saveWithClient(handle, updated);
+      if (baseline) baselineInserted = await this.baselines.saveWithClient(handle, baseline);
+      const committedEvents = baseline && baselineInserted
+        ? [...events, makeEvent({
+            type: COMMERCIAL_BASELINE_EVENT.locked,
+            tenantId: updated.tenantId, companyId: updated.companyId, actorId: actor,
+            aggregateType: 'crm.commercial_baseline', aggregateId: baseline.id,
+            payload: { quotationId: updated.id, quoteNumber: updated.quoteNumber, total: baseline.total },
+          })]
+        : events;
+      await this.appendEvents(handle, committedEvents);
+    });
+    this.logger.log(`Quotation ${source.quoteNumber} (rev ${source.revision}) ${action} → ${updated.status}`);
 
     // Governance (R3): approval locks the immutable Commercial Baseline — the approved-price snapshot
     // the Contract will reference. Idempotent: only the first approval of this quotation locks one.
-    if (action === 'approve') {
-      const existing = await this.baselines.getByQuotation(updated.tenantId, updated.id);
-      if (!existing) {
-        const baseline = makeCommercialBaseline(updated, actorId);
-        await this.baselines.save(baseline);
-        await this.events.append([
-          makeEvent({
-            type: COMMERCIAL_BASELINE_EVENT.locked,
-            tenantId: updated.tenantId, companyId: updated.companyId, actorId,
-            aggregateType: 'crm.commercial_baseline', aggregateId: baseline.id,
-            payload: { quotationId: updated.id, quoteNumber: updated.quoteNumber, total: baseline.total },
-          }),
-        ]);
-        this.logger.log(`Commercial baseline locked for ${updated.quoteNumber}: total ${baseline.total} (${baseline.id})`);
-      }
+    if (baselineInserted) {
+      const lockedBaseline = baseline as unknown as CommercialBaseline;
+      this.logger.log(`Commercial baseline locked for ${updated.quoteNumber}: total ${lockedBaseline.total} (${lockedBaseline.id})`);
     }
     return updated;
   }
@@ -177,19 +191,21 @@ export class QuotationService {
   }
 
   /** Supersede + copy: the old record becomes 'revised', a new draft carries revision+1. */
-  async revise(id: Id): Promise<Quotation> {
+  async revise(id: Id, actorId: Id | null = null): Promise<Quotation> {
     const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
-    const { superseded, next } = reviseQuotation(q);
-    await this.store.save(superseded);
-    await this.store.save(next);
-    await this.events.append([
-      makeEvent({
-        type: QUOTATION_EVENT.revised,
-        tenantId: q.tenantId, companyId: q.companyId, actorId: null,
-        aggregateType: 'crm.quotation', aggregateId: next.id,
-        payload: { quoteNumber: q.quoteNumber, fromRevision: q.revision, toRevision: next.revision, supersededId: q.id },
-      }),
-    ]);
+    const actor = this.actor(actorId);
+    const { superseded, next } = reviseQuotation(q, { actorId: actor });
+    const event = makeEvent({
+      type: QUOTATION_EVENT.revised,
+      tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
+      aggregateType: 'crm.quotation', aggregateId: next.id,
+      payload: { quoteNumber: q.quoteNumber, fromRevision: q.revision, toRevision: next.revision, supersededId: q.id },
+    });
+    await this.runAtomic(async (handle) => {
+      await this.store.saveWithClient(handle, superseded);
+      await this.store.saveWithClient(handle, next);
+      await this.appendEvents(handle, [event]);
+    });
     this.logger.log(`Quotation ${q.quoteNumber} revised: Rev ${q.revision} → Rev ${next.revision}`);
     return next;
   }

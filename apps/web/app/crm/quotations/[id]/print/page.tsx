@@ -1,5 +1,6 @@
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import DataStateNotice from '../../../../../components/ui/data-state';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +13,9 @@ const money = (n: number) => `AED ${Number(n).toLocaleString('en-AE', { minimumF
 
 export default async function QuotationPrint({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const q = await getJson<Q>(`/api/crm/quotations/${id}`);
-  if (!q) return <div style={{ padding: 40 }}>Quotation not found or API offline.</div>;
+  const result = await fetchJson<Q>(`/api/crm/quotations/${id}`);
+  if (!result.ok) return <div style={{ padding: 40 }}><DataStateNotice error={result.error} subject="quotation" /></div>;
+  const q = result.data;
   return (
     <DocumentSheet
       kind="QUOTATION"

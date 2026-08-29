@@ -1,9 +1,11 @@
 'use client';
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Timeline from './timeline';
 import type { AssessmentInput } from '@aura/shared';
+import DataStateNotice from './ui/data-state';
+import type { DataError } from '@/lib/data-error';
 import {
   RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
   RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordOutcome,
@@ -58,12 +60,26 @@ const money = (n: number): string => `AED ${Number(n).toLocaleString('en-AE', { 
 const aed0 = (n: number): string => `AED ${Number(n).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const pct = (n: number): string => `${n.toFixed(1)}%`;
 
-export default function Quotation360Client({ quotation: q, revisions, pricingView }: { quotation: Quotation; revisions: Quotation[]; pricingView?: QuotationPricingView | null }) {
+export default function Quotation360Client({ quotation: q, revisions, pricingView, revisionsError = null, pricingError = null }: {
+  quotation: Quotation;
+  revisions: Quotation[];
+  pricingView?: QuotationPricingView | null;
+  revisionsError?: DataError | null;
+  pricingError?: DataError | null;
+}) {
   const router = useRouter();
   const [tab, setTab] = useTab('overview');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const operationKeys = useRef<Record<string, string>>({});
+  const operationKey = (name: string): string => {
+    const existing = operationKeys.current[name];
+    if (existing) return existing;
+    const key = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${q.id}:${name}`;
+    operationKeys.current[name] = key;
+    return key;
+  };
   // Outcome Loop — capture what happened after acting so no quote stalls unseen.
   const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
 
@@ -95,10 +111,14 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
   // ── Lifecycle actions (same API as the register page) ───────────────────────
   const act = async (action: string) => {
+    if ((action === 'reject' || action === 'cancel' || action === 'expire') && typeof window !== 'undefined') {
+      const label = action === 'reject' ? 'reject' : action === 'cancel' ? 'cancel' : 'expire';
+      if (!window.confirm(`Are you sure you want to ${label} this quotation?`)) return;
+    }
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await fetch(`/api/crm/quotations/${q.id}/status`, {
-        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }),
+        method: 'PATCH', headers: { 'content-type': 'application/json', 'Idempotency-Key': operationKey(`status:${action}`) }, body: JSON.stringify({ action }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
@@ -108,16 +128,17 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   const revise = async () => {
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const res = await fetch(`/api/crm/quotations/${q.id}/revise`, { method: 'POST' });
+      const res = await fetch(`/api/crm/quotations/${q.id}/revise`, { method: 'POST', headers: { 'Idempotency-Key': operationKey('revise') } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
       router.push(`/crm/quotations/${data.id}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   const toContract = async () => {
+    if (typeof window !== 'undefined' && !window.confirm('Convert this accepted quotation into a contract?')) return;
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const res = await fetch(`/api/crm/quotations/${q.id}/convert-to-contract`, { method: 'POST' });
+      const res = await fetch(`/api/crm/quotations/${q.id}/convert-to-contract`, { method: 'POST', headers: { 'Idempotency-Key': operationKey('convert-to-contract') } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
       setMsg(`Contract "${data.title}" created — the chain continues in Contracts.`);
@@ -161,6 +182,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       )}
       <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/print`} target="_blank" rel="noopener noreferrer">⭳ Export PDF</ActionButton>
       <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/pricing`} target="_blank" rel="noopener noreferrer">⊞ Pricing sheet</ActionButton>
+      {pastValidity && isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => void act('expire')}>Expire</ActionButton>}
       {isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => act('cancel')}>Cancel</ActionButton>}
     </>
   );
@@ -172,14 +194,14 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
     { label: 'VAT', value: aed0(q.vatTotal) },
     {
       label: 'Margin', tone: pricing ? (pricing.marginPct >= 20 ? 'good' : pricing.marginPct >= 10 ? 'warn' : 'bad') : 'neutral',
-      value: pricing ? pct(pricing.marginPct) : '—', hint: pricing ? `${aed0(pricing.totalMargin)} over cost ${aed0(pricing.totalCost)}` : 'No pricing sheet',
+      value: pricingError ? '—' : pricing ? pct(pricing.marginPct) : '—', hint: pricingError ? 'Pricing unavailable' : pricing ? `${aed0(pricing.totalMargin)} over cost ${aed0(pricing.totalCost)}` : 'No pricing sheet',
     },
     { label: 'Lines', value: q.lines.length },
     {
       label: 'Valid until', value: q.validUntil ?? '—',
       tone: pastValidity ? 'bad' : expiresSoon ? 'warn' : 'neutral',
     },
-    { label: 'Revisions', value: revisions.length || 1 },
+    { label: 'Revisions', value: revisionsError ? '—' : revisions.length || 1 },
   ];
 
   // ── Insights rail ─────────────────────────────────────────────────────────────
@@ -195,7 +217,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   } else if (expiresSoon) {
     insights.push({ tone: 'warn', title: 'Expiring within 7 days', detail: `Valid until ${q.validUntil} — chase a decision now.` });
   }
-  if (!pricing && isOpen) {
+  if (!pricing && !pricingError && isOpen) {
     insights.push({ tone: 'warn', title: 'No pricing sheet linked', detail: 'Margin is unknown — build the cost breakdown before negotiating.', action: { label: 'Open pricing sheet', href: `/crm/quotations/${q.id}/pricing` } });
   }
   if (pricing && pricing.marginPct < 10 && isOpen) {
@@ -237,14 +259,14 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   else if (expiresSoon) bandHealth = { label: 'Expiring soon', tone: 'warn', reasons: [`valid until ${q.validUntil}`] };
   else if (q.status === 'expired') bandHealth = { label: 'Expired', tone: 'warn' };
   else if (q.status === 'draft' || q.status === 'internal_review') bandHealth = { label: 'Awaiting approval', tone: 'warn' };
-  else if (!pricing && isOpen) bandHealth = { label: 'No margin visibility', tone: 'warn', reasons: ['no pricing sheet linked'] };
+  else if (!pricing && !pricingError && isOpen) bandHealth = { label: 'No margin visibility', tone: 'warn', reasons: ['no pricing sheet linked'] };
   else bandHealth = { label: 'On track', tone: 'good' };
 
   // Missing Information — what's blocking this quote from progressing.
   const missing: string[] = [];
   if (isOpen) {
     if (q.status === 'draft' || q.status === 'internal_review') missing.push('Approval');
-    if (!pricing) missing.push('Pricing sheet');
+    if (!pricing && !pricingError) missing.push('Pricing sheet');
     if (!q.validUntil) missing.push('Validity date');
     if (!q.contactName) missing.push('Customer contact');
     // A quote with no payment terms, no delivery terms, no exclusions AND no notes has no
@@ -258,7 +280,8 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   if (q.status === 'accepted' && !q.convertedContractId) nba = { label: '→ Convert to contract', hint: 'award the quote', onClick: () => void toContract() };
   else if (q.status === 'draft' || q.status === 'internal_review') nba = { label: 'Approve', hint: 'locks the commercial baseline', onClick: () => void act('approve') };
   else if (q.status === 'approved') nba = { label: 'Send to customer', onClick: () => void act('send') };
-  else if (pastValidity || q.status === 'rejected' || q.status === 'expired') nba = { label: 'Revise ↺', hint: `supersede Rev ${q.revision}`, onClick: () => void revise() };
+  else if (pastValidity) nba = { label: 'Expire quotation', hint: `valid until ${q.validUntil}`, onClick: () => void act('expire') };
+  else if (q.status === 'rejected' || q.status === 'expired') nba = { label: 'Revise ↺', hint: `supersede Rev ${q.revision}`, onClick: () => void revise() };
   else if (q.status === 'sent' || q.status === 'under_negotiation') nba = { label: 'Chase a decision', hint: 'awaiting customer', onClick: () => setTab('activity') };
   else if (!pricing && isOpen) nba = { label: 'Build the pricing sheet', href: `/crm/quotations/${q.id}/pricing` };
 
@@ -375,7 +398,11 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       )}
 
       {tab === 'pricing' && (
-        pricing ? (
+        pricingError ? (
+          <RecordCard title="Pricing & margin">
+            <DataStateNotice error={pricingError} subject="pricing" compact />
+          </RecordCard>
+        ) : pricing ? (
           <RecordCard title="Cost & margin per line" action={<ActionButton kind="ghost" href={`/crm/quotations/${q.id}/pricing`}>Open full sheet ⊞</ActionButton>}>
             <div style={{ overflowX: 'auto' }}>
               <table style={st.table}>
@@ -416,7 +443,9 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
       {tab === 'revisions' && (
         <RecordCard title="Revision history">
-          {revisions.length <= 1 ? (
+          {revisionsError ? (
+            <DataStateNotice error={revisionsError} subject="revision history" compact />
+          ) : revisions.length <= 1 ? (
             <p style={st.empty}>Single revision — this document has never been superseded.</p>
           ) : (
             <div style={st.revChain}>
@@ -455,6 +484,7 @@ function CommercialTerms({ q, editable, onSaved }: { q: Quotation; editable: boo
   const [notes, setNotes] = useState(q.terms ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const idempotencyKey = useRef<string | null>(null);
 
   const list = q.exclusions ?? [];
   const anything = !!q.terms || !!q.paymentConditions || !!q.deliveryTerms || list.length > 0;
@@ -463,10 +493,11 @@ function CommercialTerms({ q, editable, onSaved }: { q: Quotation; editable: boo
     if (busy) return;
     setBusy(true);
     setErr(null);
+    idempotencyKey.current ??= typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${q.id}:terms`;
     try {
       const res = await fetch(`/api/crm/quotations/${q.id}/terms`, {
         method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'Idempotency-Key': idempotencyKey.current },
         body: JSON.stringify({
           exclusions: exclusions.split('\n').map((s) => s.trim()).filter(Boolean),
           paymentConditions: payment.trim() || null,
@@ -477,6 +508,7 @@ function CommercialTerms({ q, editable, onSaved }: { q: Quotation; editable: boo
       if (res.status === 409) { setErr('This quote is past draft — raise a revision to change its terms.'); return; }
       if (!res.ok) { setErr('Could not save the terms.'); return; }
       setEditing(false);
+      idempotencyKey.current = null;
       onSaved();
     } catch {
       setErr('Could not reach the server — nothing was saved.');

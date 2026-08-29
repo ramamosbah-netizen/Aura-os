@@ -42,19 +42,25 @@ describe('QuotationReferenceService — tenant-safe provenance', () => {
 
   it('requires source references to agree with the account and each other', async () => {
     const { service, accounts, opportunities, tenders } = harness();
-    accounts.get.mockResolvedValue({ id: 'account-a' });
-    opportunities.get.mockResolvedValue({ id: 'opportunity-a', accountId: 'account-b' });
+    accounts.get.mockResolvedValue({ id: 'account-a', tenantId: 'tenant-a' });
+    opportunities.get.mockResolvedValue({ id: 'opportunity-a', accountId: 'account-b', tenantId: 'tenant-a' });
     await expect(service.validate({ accountId: 'account-a', sourceOpportunityId: 'opportunity-a' })).rejects.toThrow('source reference does not belong to account');
 
     accounts.get.mockResolvedValue(null);
-    opportunities.get.mockResolvedValue({ id: 'opportunity-a', accountId: 'account-a' });
-    tenders.get.mockResolvedValue({ id: 'tender-a', accountId: 'account-a', sourceOpportunityId: 'opportunity-b' });
+    opportunities.get.mockResolvedValue({ id: 'opportunity-a', accountId: 'account-a', tenantId: 'tenant-a' });
+    tenders.get.mockResolvedValue({ id: 'tender-a', accountId: 'account-a', sourceOpportunityId: 'opportunity-b', tenantId: 'tenant-a' });
     await expect(service.validate({ sourceOpportunityId: 'opportunity-a', sourceTenderId: 'tender-a' })).rejects.toThrow('tender and opportunity references do not match');
   });
 
   it('derives the durable account id from a tenant-scoped source', async () => {
     const { service, opportunities } = harness();
-    opportunities.get.mockResolvedValue({ id: 'opportunity-a', accountId: 'account-a' });
+    opportunities.get.mockResolvedValue({ id: 'opportunity-a', accountId: 'account-a', tenantId: 'tenant-a' });
     await expect(service.validate({ sourceOpportunityId: 'opportunity-a' })).resolves.toEqual({ accountId: 'account-a' });
+  });
+
+  it('rejects a reference whose ownership metadata is missing', async () => {
+    const { service, accounts } = harness();
+    accounts.get.mockResolvedValue({ id: 'account-a' });
+    await expect(service.validate({ accountId: 'account-a' })).rejects.toThrow('account not found');
   });
 });

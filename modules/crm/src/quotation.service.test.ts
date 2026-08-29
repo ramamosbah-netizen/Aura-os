@@ -75,6 +75,32 @@ describe('QuotationService — commercial governance (R3)', () => {
     // A different tenant sees nothing for this quotation id.
     expect(await svc.getBaseline('t2', q.id)).toBeNull();
   });
+
+  it('writes approval, baseline, and outbox events through one transaction handle', async () => {
+    const store = new InMemoryQuotationStore();
+    const baselines = new InMemoryCommercialBaselineStore();
+    const events = {
+      append: vi.fn().mockResolvedValue(undefined),
+      appendWithClient: vi.fn().mockResolvedValue(undefined),
+    } as unknown as EventStore;
+    const tx = { run: vi.fn(async (fn: (handle: unknown) => Promise<unknown>) => fn('tx-handle')) };
+    const storeSave = vi.spyOn(store, 'saveWithClient');
+    const baselineSave = vi.spyOn(baselines, 'saveWithClient');
+    const svc = new QuotationService(store, baselines, events, noopAccess, null, tx as never);
+    const q = await newQuote(svc);
+    // Creation is transactional too; isolate the approval transaction this assertion covers.
+    tx.run.mockClear();
+    storeSave.mockClear();
+    baselineSave.mockClear();
+    (events.appendWithClient as ReturnType<typeof vi.fn>).mockClear();
+
+    await svc.changeStatus(q.id, 'approve', 'u-manager');
+
+    expect(tx.run).toHaveBeenCalledTimes(1);
+    expect(storeSave).toHaveBeenCalledWith('tx-handle', expect.objectContaining({ status: 'approved' }));
+    expect(baselineSave).toHaveBeenCalledWith('tx-handle', expect.objectContaining({ quotationId: q.id }));
+    expect((events.appendWithClient as any).mock.calls[0][0]).toBe('tx-handle');
+  });
 });
 
 describe('QuotationService.listRevisions — the chain is links, not the number', () => {
@@ -126,6 +152,18 @@ describe('QuotationService.listRevisions — the chain is links, not the number'
   it('returns nothing for a quotation that does not exist', async () => {
     const { svc } = harness();
     expect(await svc.listRevisions('t1', 'nope')).toEqual([]);
+  });
+
+  it('restarts validity and records the revising actor when the old window has elapsed', async () => {
+    const { svc } = harness();
+    const r0 = await quote(svc, 'QT-EXPIRED');
+    await svc.changeStatus(r0.id, 'approve', 'u-manager');
+    await svc.changeStatus(r0.id, 'send');
+    const r1 = await svc.revise(r0.id, 'u-reviser');
+
+    expect(r1.createdBy).toBe('u-reviser');
+    expect(r1.validUntil).not.toBeNull();
+    expect(r1.validUntil! >= r1.issueDate).toBe(true);
   });
 
   it('does not disclose a foreign-tenant quotation revision chain', async () => {

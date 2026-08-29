@@ -1,7 +1,8 @@
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
 import RecordChrome from '../../../../../components/record-chrome';
 import PricingAdvicePanel from '../../../../../components/pricing-advice-panel';
 import PricingWorkspace, { type SheetHead } from '../../../../../components/pricing-workspace';
+import DataStateNotice from '../../../../../components/ui/data-state';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,13 +10,15 @@ interface QuotationHead { id: string; quoteNumber: string; revision: number; sta
 
 export default async function QuotationPricingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [q, sheets] = await Promise.all([
-    getJson<QuotationHead>(`/api/crm/quotations/${id}`),
+  const [qResult, sheetsResult] = await Promise.all([
+    fetchJson<QuotationHead>(`/api/crm/quotations/${id}`),
     // The PricingSheet aggregate behind this quote — newest first, so [0] is the working version.
-    getJson<SheetHead[]>(`/api/crm/pricing-sheets?quotationId=${id}`),
+    fetchJson<SheetHead[]>(`/api/crm/pricing-sheets?quotationId=${id}`),
   ]);
-  if (!q) return <div style={{ padding: 40 }}>Quotation not found or API offline.</div>;
-  const workingSheet = Array.isArray(sheets) && sheets.length > 0 ? sheets[0] : null;
+  if (!qResult.ok) return <div style={{ padding: 40 }}><DataStateNotice error={qResult.error} subject="quotation" /></div>;
+  if (!sheetsResult.ok) return <div style={{ padding: 40 }}><DataStateNotice error={sheetsResult.error} subject="pricing sheet" /></div>;
+  const q = qResult.data;
+  const workingSheet = sheetsResult.data.length > 0 ? sheetsResult.data[0] : null;
 
   return (
     <div style={{ maxWidth: 1240, margin: '0 auto', padding: '24px 28px 64px' }}>

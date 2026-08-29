@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useMemo, useRef, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
@@ -58,6 +58,14 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [openTerms, setOpenTerms] = useState<string | null>(null);
+  const operationKeys = useRef<Record<string, string>>({});
+  const operationKey = (name: string): string => {
+    const existing = operationKeys.current[name];
+    if (existing) return existing;
+    const key = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `quotation:${name}`;
+    operationKeys.current[name] = key;
+    return key;
+  };
 
   const kpi = useMemo(() => {
     const sum = (list: Quotation[]) => list.reduce((s, q) => s + q.total, 0);
@@ -80,9 +88,10 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
   }, [quotes]);
 
   const act = async (id: string, action: string) => {
+    if ((action === 'reject' || action === 'cancel' || action === 'expire') && typeof window !== 'undefined' && !window.confirm(`Are you sure you want to ${action} this quotation?`)) return;
     setError(''); setMsg('');
     try {
-      const res = await fetch(`/api/crm/quotations/${id}/status`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) });
+      const res = await fetch(`/api/crm/quotations/${id}/status`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'Idempotency-Key': operationKey(`${id}:status:${action}`) }, body: JSON.stringify({ action }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
       router.refresh();
@@ -92,7 +101,7 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
   const revise = async (q: Quotation) => {
     setError(''); setMsg('');
     try {
-      const res = await fetch(`/api/crm/quotations/${q.id}/revise`, { method: 'POST' });
+      const res = await fetch(`/api/crm/quotations/${q.id}/revise`, { method: 'POST', headers: { 'Idempotency-Key': operationKey(`${q.id}:revise`) } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
       setMsg(`${q.quoteNumber} Rev ${q.revision ?? 0} superseded — Rev ${data.revision} drafted, edit and re-send.`);
@@ -103,7 +112,8 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
   const convertToContract = async (q: Quotation) => {
     setError(''); setMsg('');
     try {
-      const res = await fetch(`/api/crm/quotations/${q.id}/convert-to-contract`, { method: 'POST' });
+      if (typeof window !== 'undefined' && !window.confirm(`Convert ${q.quoteNumber} into a contract?`)) return;
+      const res = await fetch(`/api/crm/quotations/${q.id}/convert-to-contract`, { method: 'POST', headers: { 'Idempotency-Key': operationKey(`${q.id}:convert`) } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
       setMsg(`Contract "${data.title}" created from ${q.quoteNumber} — the chain continues in Contracts.`);
@@ -207,6 +217,9 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
                           )}
                           {['sent', 'under_negotiation', 'rejected', 'expired'].includes(q.status) && (
                             <button type="button" className="btn" style={st.smBtn} title="Supersede and draft Rev n+1" onClick={() => revise(q)}>Revise ↺</button>
+                          )}
+                          {OPEN_STATUSES.includes(q.status) && q.validUntil && q.validUntil < today && (
+                            <button type="button" className="btn btn-ghost" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(q.id, 'expire')}>Expire</button>
                           )}
                           {q.status === 'accepted' && !q.convertedContractId && (
                             <button type="button" className="btn btn-primary" style={st.smBtn} onClick={() => convertToContract(q)}>→ Contract</button>

@@ -1,7 +1,6 @@
 import { getJson } from '@/lib/api';
+import { redirect } from 'next/navigation';
 import SalesPipelineWorkspace from '@/components/sales-pipeline-workspace';
-import type { LeadCommand } from '@/components/lead-attention-panel';
-import type { RadarData } from '@/components/signals-radar';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,18 +8,23 @@ interface PipelineLead { id: string; name: string; companyName: string | null; e
 interface PipelineOpportunity { id: string; leadId: string | null; accountId: string | null; accountName: string | null; title: string; value: number; stage: string; winProbability: number; closeDate: string | null; createdAt: string }
 interface PipelineAccount { id: string; name: string }
 
-// Sales Pipeline — the focused deal board. Opportunities and leads share one journey; the pipeline
-// engine's at-risk list supplies the server-computed attention reasons. Every figure is read live.
+// Opportunities — the focused deal workspace. Forecast, Analytics and Radar are separate
+// surfaces; these redirects preserve older pipeline-tab bookmarks without keeping duplicate UI.
 
-export default async function PipelinePage() {
-  // Pipeline owns the complete sales workspace. Board/List behavior remains in CrmPipelineClient;
-  // SalesPipelineWorkspace adds the explicit Overview/Forecast/Analytics navigation around it.
-  const [opportunities, leads, accounts, leadCommand, radar] = await Promise.all([
+export default async function PipelinePage({ searchParams }: { searchParams: Promise<{ tab?: string; view?: string }> }) {
+  const query = await searchParams;
+  if (query.tab === 'radar') redirect('/crm/radar');
+  if (query.tab === 'forecast') redirect('/crm/forecast');
+  if (query.tab === 'analytics' || query.tab === 'sources' || query.tab === 'executive') {
+    const view = query.tab === 'sources' ? 'sources' : query.tab === 'executive' ? 'executive' : query.view === 'sources' || query.view === 'executive' ? query.view : 'performance';
+    redirect(`/crm/analytics?view=${view}`);
+  }
+  if (query.tab === 'overview') redirect('/crm/overview');
+
+  const [opportunities, leads, accounts] = await Promise.all([
     getJson<PipelineOpportunity[]>('/api/crm/opportunities'),
     getJson<PipelineLead[]>('/api/crm/leads'),
     getJson<PipelineAccount[]>('/api/crm/accounts'),
-    getJson<LeadCommand>('/api/crm/leads/command'),
-    getJson<RadarData>('/api/crm/signals/radar'),
   ]);
 
   return (
@@ -28,8 +32,6 @@ export default async function PipelinePage() {
       opportunities={opportunities ?? []}
       leads={leads ?? []}
       accounts={accounts ?? []}
-      leadCommand={leadCommand}
-      radar={radar}
     />
   );
 }

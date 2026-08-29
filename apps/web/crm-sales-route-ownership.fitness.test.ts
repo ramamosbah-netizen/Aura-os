@@ -12,41 +12,40 @@ describe('CRM Sales route ownership', () => {
     expect(page).not.toContain("from '@/components/pipeline-workspace'");
   });
 
-  it('keeps Leads separate and sends the legacy Forecast route to the canonical tab', () => {
+  it('keeps Leads separate and gives Forecast its own canonical surface', () => {
     const leads = read('app/crm/leads/page.tsx');
     const forecast = read('app/crm/forecast/page.tsx');
     expect(leads).toContain('LeadsWorkspace');
-    expect(forecast).toContain("redirect('/crm/pipeline?tab=forecast')");
+    expect(forecast).toContain("SalesInsightWorkspace kind=\"forecast\"");
   });
 
   it('exposes distinct Forecast and Analytics destinations from Sales', () => {
     const dashboard = read('components/sales-dashboard.tsx');
-    expect(dashboard).toContain("href: '/crm/pipeline?tab=forecast'");
-    expect(dashboard).toContain("href: '/crm/pipeline?tab=analytics&view=performance'");
+    expect(dashboard).toContain("href: '/crm/forecast'");
+    expect(dashboard).toContain("href: '/crm/analytics?view=performance'");
   });
 
   it('defines all canonical Pipeline views and URL synchronization', () => {
     const workspace = read('components/sales-pipeline-workspace.tsx');
-    expect(workspace).toContain("{ id: 'forecast'");
-    expect(workspace).toContain("{ id: 'analytics'");
+    expect(workspace).toContain('Board and List are display modes');
     expect(workspace).toContain("query.set('view', next)");
     expect(workspace).toContain('router.push(`${pathname}?${query.toString()}`');
-    expect(workspace).toContain("query.set('tab', 'analytics')");
-    expect(workspace).toContain('PAGE_TABS.includes(urlTab as PageTab)');
+    expect(workspace).toContain('data-testid="pipeline-tab-list"');
   });
 
   it('labels the sidebar routes according to their actual ownership', () => {
     const nav = read('components/nav.ts');
     expect(nav).toContain("{ label: 'Leads', href: '/crm/leads'");
     expect(nav).toContain("{ label: 'Opportunities', href: '/crm/pipeline?view=board'");
-    expect(nav).toContain("{ label: 'Forecast', href: '/crm/pipeline?tab=forecast'");
-    expect(nav).toContain("{ label: 'Analytics', href: '/crm/pipeline?tab=analytics&view=performance'");
+    expect(nav).toContain("{ label: 'Radar', href: '/crm/radar'");
+    expect(nav).toContain("{ label: 'Forecast', href: '/crm/forecast'");
+    expect(nav).toContain("{ label: 'Analytics', href: '/crm/analytics?view=performance'");
     expect(nav).not.toContain("{ label: 'Pipeline & Opportunities', href: '/crm/leads'");
   });
 
   it('routes legacy reports to the canonical Analytics view', () => {
     const reports = read('app/crm/reports/page.tsx');
-    expect(reports).toContain("redirect('/crm/pipeline?tab=analytics&view=performance')");
+    expect(reports).toContain("redirect('/crm/analytics?view=performance')");
   });
 
   it('keeps the operational summary scoped to Opportunities display modes', () => {

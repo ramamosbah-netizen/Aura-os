@@ -59,8 +59,8 @@ const SHORTCUTS: SuiteShortcut[] = [
   { label: 'Opportunities', description: 'Deals by stage — switch between Board and List', href: '/crm/pipeline?view=board', icon: Workflow, tone: 'teal' },
   { label: 'Customers', description: 'Accounts, contacts & relationship 360', href: '/crm/customers', icon: Building2, tone: 'cyan' },
   { label: 'Quotations', description: 'Draft → review → sent → won', href: '/crm/quotations', icon: FileText, tone: 'amber' },
-  { label: 'Forecast', description: 'Commit, best-case & expected close', href: '/crm/pipeline?tab=forecast', icon: Target, tone: 'blue' },
-  { label: 'Analytics', description: 'Conversion, win/loss & performance', href: '/crm/pipeline?tab=analytics&view=performance', icon: BarChart3, tone: 'violet' },
+  { label: 'Forecast', description: 'Commit, best-case & expected close', href: '/crm/forecast', icon: Target, tone: 'blue' },
+  { label: 'Analytics', description: 'Conversion, win/loss & performance', href: '/crm/analytics?view=performance', icon: BarChart3, tone: 'violet' },
 ];
 
 const aed = (n: number): string => 'AED ' + n.toLocaleString('en-AE', { maximumFractionDigits: 0 });
@@ -106,7 +106,7 @@ export default function SalesDashboard({
 
   const metrics: SuiteMetric[] = [
     { label: 'Open pipeline', value: kpis ? aed(kpis.openValue) : '—', sub: 'un-weighted', href: '/crm/pipeline', icon: Workflow, tone: 'teal' },
-    { label: 'Forecast', value: kpis ? aed(kpis.weighted) : '—', sub: 'probability-weighted', href: '/crm/pipeline?tab=forecast', icon: Target, tone: 'blue' },
+    { label: 'Forecast', value: kpis ? aed(kpis.weighted) : '—', sub: 'probability-weighted', href: '/crm/forecast', icon: Target, tone: 'blue' },
     { label: 'Active deals', value: kpis ? String(kpis.openDeals) : '—', sub: 'open opportunities', href: '/crm/pipeline', icon: TrendingUp, tone: 'amber' },
     { label: 'Win rate', value: kpis?.winRate == null ? '—' : `${kpis.winRate}%`, sub: kpis ? `${kpis.won90}W · ${kpis.lost90}L (90d)` : 'no data', href: '/crm/pipeline', icon: Trophy, tone: 'green' },
   ];

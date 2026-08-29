@@ -151,10 +151,21 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
   const [err, setErr] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [form, setForm] = useState({ title: '', source: 'MANUAL', type: 'NEW_PROJECT', accountName: '', confidence: 50, evidence: '' });
 
   const counts = data?.counts ?? { open: 0, new: 0, reviewing: 0, researching: 0, promoted: 0, dismissed: 0 };
   const signals = data?.signals ?? [];
+  const filteredSignals = signals.filter((signal) => {
+    const haystack = `${signal.title} ${signal.accountName ?? ''} ${signal.evidence ?? ''} ${signal.description ?? ''}`.toLowerCase();
+    return (!search || haystack.includes(search.trim().toLowerCase()))
+      && (!sourceFilter || signal.source === sourceFilter)
+      && (!typeFilter || signal.type === typeFilter)
+      && (!statusFilter || signal.status === statusFilter);
+  });
   const call = async (id: string, path: string, method: string, body?: unknown): Promise<void> => {
     setBusy(id); setErr(null);
     try {
@@ -228,14 +239,31 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
         </div>
       )}
 
+      <div style={st.filters} data-testid="radar-filters">
+        <input style={{ ...st.input, flex: '1 1 260px' }} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search signals, accounts or evidence…" aria-label="Search radar" />
+        <select style={st.input} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="Filter radar by source">
+          <option value="">All sources</option>{SOURCES.map((source) => <option key={source} value={source}>{label(source)}</option>)}
+        </select>
+        <select style={st.input} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter radar by type">
+          <option value="">All signal types</option>{TYPES.map((type) => <option key={type} value={type}>{label(type)}</option>)}
+        </select>
+        <select style={st.input} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter radar by status">
+          <option value="">All statuses</option>{['NEW', 'REVIEWING', 'RESEARCHING'].map((status) => <option key={status} value={status}>{label(status)}</option>)}
+        </select>
+        {(search || sourceFilter || typeFilter || statusFilter) && <button type="button" style={st.linkBtn} onClick={() => { setSearch(''); setSourceFilter(''); setTypeFilter(''); setStatusFilter(''); }}>Clear filters</button>}
+        <span style={st.filterCount}>{filteredSignals.length} of {signals.length} open signals</span>
+      </div>
+
       {/* ── Cards ── */}
       {data === null ? (
         <p style={st.empty}>Radar unavailable.</p>
       ) : signals.length === 0 ? (
         <p style={st.empty}>No open signals — the radar is clear. New business events (renewals due, expansions, tenders detected) land here automatically.</p>
+      ) : filteredSignals.length === 0 ? (
+        <p style={st.empty}>No signals match these filters. Clear the filters to return to the open radar.</p>
       ) : (
         <div style={st.grid}>
-          {signals.map((s) => {
+          {filteredSignals.map((s) => {
             const ai = analyzeSignal(s);
             const age = daysSince(s.detectedAt);
             return (
@@ -342,6 +370,8 @@ const st: Record<string, CSSProperties> = {
   addBtn: { alignSelf: 'center', fontSize: 13, fontWeight: 600, padding: '10px 16px', borderRadius: 10, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', cursor: 'pointer', whiteSpace: 'nowrap' },
   err: { border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 10, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 12 },
   form: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', border: '1px dashed var(--border)', borderRadius: 12, padding: 12, marginBottom: 16, background: 'var(--panel)' },
+  filters: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 12, padding: 10, marginBottom: 16, background: 'var(--panel)' },
+  filterCount: { color: 'var(--muted)', fontSize: 11.5, marginLeft: 'auto', whiteSpace: 'nowrap' },
   input: { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12.5 },
   slider: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)' },
   primaryBtn: { fontSize: 12.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--accent)', background: 'var(--accent)', color: '#0b1020', cursor: 'pointer' },

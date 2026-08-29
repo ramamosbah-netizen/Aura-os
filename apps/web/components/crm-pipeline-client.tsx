@@ -112,10 +112,10 @@ interface ForecastHistory {
   };
 }
 
-export default function CrmPipelineClient({ initialLeads, initialOpportunities, initialAccounts, view: controlledView, onViewChange }: {
+export default function CrmPipelineClient({ initialLeads, initialOpportunities, initialAccounts, view: controlledView, onViewChange, showAuthoring = true }: {
   initialLeads: Lead[]; initialOpportunities: Opportunity[]; initialAccounts: Account[];
   /** When provided the workspace owns the tab bar — internal switcher hides, navigation delegates up. */
-  view?: View; onViewChange?: (v: View) => void;
+  view?: View; onViewChange?: (v: View) => void; showAuthoring?: boolean;
 }) {
   const router = useRouter();
   const [internalView, setInternalView] = useState<View>('command');
@@ -392,8 +392,8 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
         </div>
       )}
 
-      {/* view switch + creates (switcher hides when the workspace owns the tabs) */}
-      <div style={s.tabBar}>
+      {/* View switch + authoring belongs to Opportunities. Forecast/Analytics are read surfaces. */}
+      {showAuthoring && <div style={s.tabBar}>
         {!controlledView && (['command', 'board', 'analytics', 'sources', 'executive', 'list'] as View[]).map((v) => (
           <button key={v} type="button" data-testid={`pipeline-view-${v}`} style={view === v ? s.tabActive : s.tab} onClick={() => setView(v)}>
             {v === 'command' ? 'Overview' : v[0].toUpperCase() + v.slice(1)}
@@ -466,7 +466,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
             { name: 'nextActionDueDate', label: 'Next action due', kind: 'date', hint: 'Active deals need a next step, an owner & a due date — else they show as Needs Attention' },
           ]}
         />
-      </div>
+      </div>}
 
       {(view === 'board' || view === 'list') && (
         <div style={{ ...s.tabBar, marginTop: 10 }} data-testid="pipeline-filters">

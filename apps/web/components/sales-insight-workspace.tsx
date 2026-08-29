@@ -36,7 +36,7 @@ export default function SalesInsightWorkspace({ kind, view, leads, opportunities
           <Link href="/crm/analytics?view=executive" style={{ ...st.subTab, ...(view === 'executive' ? st.subTabOn : {}) }}>Executive</Link>
         </nav>
       )}
-      <CrmPipelineClient initialLeads={leads} initialOpportunities={opportunities} initialAccounts={accounts} view={view} />
+      <CrmPipelineClient initialLeads={leads} initialOpportunities={opportunities} initialAccounts={accounts} view={view} showAuthoring={false} />
     </section>
   );
 }

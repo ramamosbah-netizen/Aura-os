@@ -148,7 +148,11 @@ try {
   await sqlProof();
   log('result=pass');
 } catch (error) {
-  console.error(`[radar-proof] result=fail ${error instanceof Error ? error.stack : String(error)}`);
+  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  console.error(`[radar-proof] result=fail ${detail}`);
+  // Emit the first failure as a GitHub annotation so a proof-only failure remains diagnosable
+  // without exposing database credentials or requiring privileged log-download access.
+  process.stdout.write(`::error title=Radar proof failure::${detail.replace(/\r?\n/g, '%0A').slice(0, 4000)}\n`);
   process.exitCode = 1;
 } finally {
   await owner.query('DELETE FROM public.aura_crm_leads WHERE signal_id IN ($1,$2)', [uuid('radar-proof-promotion'), uuid('radar-proof-foreign')]).catch(() => undefined);

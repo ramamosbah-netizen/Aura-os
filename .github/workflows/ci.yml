@@ -858,3 +858,81 @@ jobs:
       - name: API log on failure
         if: failure()
         run: cat apps/api/volume-api.log || true
+
+  crm-radar-release-proof:
+    name: CRM Radar disposable release proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aura
+          POSTGRES_PASSWORD: aura
+          POSTGRES_DB: aura
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aura -d aura"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      PGPASSWORD: aura
+      RADAR_PROOF_TENANT: radar-proof-a
+      RADAR_PROOF_SIGNAL_COUNT: 6001
+      AUTH_DEV_PASSWORD: e2e-password
+      AUTH_DEV_ADMIN_USER: u-admin,u-viewer
+      AUTH_DEFAULT_TENANT: radar-proof-a
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Compose disposable connection strings
+        run: |
+          echo "OWNER_URL=postgres://aura:${PGPASSWORD}@localhost:5432/aura?sslmode=disable" >> "$GITHUB_ENV"
+          echo "APP_DATABASE_URL=postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable" >> "$GITHUB_ENV"
+          echo "MIGRATION_DATABASE_URL=postgres://aura:${PGPASSWORD}@localhost:5432/aura?sslmode=disable" >> "$GITHUB_ENV"
+      - name: Migrate disposable database from zero through 0266
+        run: node apps/api/scripts/migrate.mjs
+        env:
+          DATABASE_URL: ${{ env.OWNER_URL }}
+      - name: Activate runtime role and mark database disposable
+        run: |
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "ALTER ROLE aura_app LOGIN PASSWORD 'aura_app_ci';"
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.aura_environment (marker text PRIMARY KEY); INSERT INTO public.aura_environment (marker) VALUES ('e2e-disposable') ON CONFLICT DO NOTHING; GRANT SELECT ON public.aura_environment TO aura_app;"
+      - name: Build and boot API as aura_app
+        run: |
+          pnpm --filter @aura/api... build
+          cd apps/api
+          DATABASE_URL="$APP_DATABASE_URL" AUTH_REQUIRED=true AUTH_JWT_SECRET=radar-proof-only AUTH_DEV_PASSWORD="$AUTH_DEV_PASSWORD" AUTH_DEV_ADMIN_USER="$AUTH_DEV_ADMIN_USER" AUTH_DEFAULT_TENANT="$AUTH_DEFAULT_TENANT" RATE_LIMIT_MAX=100000 PORT=4000 nohup node dist/main.js > radar-api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4000/api/v1/health >/dev/null && break; sleep 1; done
+          curl -sf http://localhost:4000/api/v1/health >/dev/null || { cat radar-api.log; exit 1; }
+      - name: Run Radar PostgreSQL/RLS/volume/query-plan proof
+        run: node apps/api/scripts/crm-radar-release-proof.mjs
+        env:
+          OWNER_URL: ${{ env.OWNER_URL }}
+          APP_DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          AURA_API_URL: http://localhost:4000
+      - name: Build web dependencies and install Chromium
+        run: |
+          pnpm --filter @aura/web^... build
+          pnpm --filter @aura/web exec playwright install --with-deps chromium
+      - name: Run isolated authenticated Radar browser proof
+        run: pnpm --filter @aura/web exec playwright test radar-release-proof.spec.ts --project=chromium
+        env:
+          AURA_API_URL: http://localhost:4000
+          E2E_DISPOSABLE_DB: '1'
+          E2E_USERNAME: u-admin
+          E2E_PASSWORD: e2e-password
+          E2E_TEST_TIMEOUT: '120000'
+          E2E_EXPECT_TIMEOUT: '30000'
+      - name: API log on failure
+        if: failure()
+        run: cat apps/api/radar-api.log || true

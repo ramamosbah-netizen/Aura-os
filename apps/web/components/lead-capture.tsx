@@ -17,7 +17,7 @@ interface Shown { id: string; label: string; type: 'Customer' | 'Contact' | 'Lea
 const digits = (s: string): string => s.replace(/\D/g, '');
 const norm = (s: string): string => s.trim().toLowerCase();
 
-export default function LeadCapture({ onSaved }: { onSaved: () => void }) {
+export default function LeadCapture({ onSaved, buttonLabel = '+ New Lead' }: { onSaved: () => void; buttonLabel?: string }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ companyName: '', name: '', phone: '', email: '', requirement: '', source: 'website', assignedTo: '' });
   const [dup, setDup] = useState<DupPreview | null>(null);
@@ -80,7 +80,7 @@ export default function LeadCapture({ onSaved }: { onSaved: () => void }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} style={st.newBtn}>+ New Lead</button>
+      <button type="button" onClick={() => setOpen(true)} style={st.newBtn}>{buttonLabel}</button>
       {open && (
         <div style={st.overlay} onClick={() => !saving && setOpen(false)}>
           <div style={st.drawer} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="New lead">

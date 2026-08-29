@@ -5,5 +5,5 @@ import { redirect } from 'next/navigation';
 // and analysis live inside the Pipeline workspace's analysis tab. A dedicated Forecast space is a
 // LATER slice (Forecast = future expectation; Analytics = historical performance).
 export default function ForecastRedirect() {
-  redirect('/crm/leads?tab=analytics');
+  redirect('/crm/pipeline?tab=forecast');
 }

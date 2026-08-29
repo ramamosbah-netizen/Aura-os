@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { opportunityAttention, attentionFactsOfOpportunity } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
+import LeadCapture from './lead-capture';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // CRM · Sales Pipeline — the full sales cycle, with Lead and Opportunity kept
@@ -41,7 +42,7 @@ const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, {
 // PR #213; reconcile there.
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
-export type View = 'command' | 'board' | 'analytics' | 'sources' | 'executive' | 'list';
+export type View = 'command' | 'board' | 'forecast' | 'analytics' | 'sources' | 'executive' | 'list';
 
 /** C5 / G15 (§29) — Source → Wins → Contract Value → Actual Margin. Every money field names the
  * subset it was measured over; nulls mean "not measured yet", never zero. */
@@ -129,9 +130,18 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [funnel, setFunnel] = useState<SourceFunnel | null>(null);
   const [execDays, setExecDays] = useState(365);
   const [execData, setExecData] = useState<ExecutiveCrm | null>(null);
+  // Preserve the original pipeline workspace's deal filters while the richer workspace owns the
+  // tabs. Filters are intentionally local to Board/List; management KPIs stay server-backed.
+  const [query, setQuery] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [stageFilter, setStageFilter] = useState('');
+  const [minValue, setMinValue] = useState('');
+  const [onlyAttention, setOnlyAttention] = useState(false);
+  const [onlySoon, setOnlySoon] = useState(false);
 
   useEffect(() => {
-    if ((view !== 'command' && view !== 'analytics') || command) return;
+    if (!['command', 'forecast', 'analytics'].includes(view) || command) return;
     void fetch('/api/crm/opportunities/pipeline', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setCommand(d))
@@ -162,7 +172,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   }, [view, funnel]);
 
   useEffect(() => {
-    if (view !== 'analytics' || fcast) return;
+    if ((view !== 'forecast' && view !== 'analytics') || fcast) return;
     loadForecast();
   }, [view, fcast]);
 
@@ -174,6 +184,24 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       else { const d = await res.json().catch(() => ({})); setErr(d.message ?? d.error ?? 'Capture failed'); }
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   };
+
+  const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const soonIso = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 30 * 86400000));
+  const openDeal = (o: Opportunity): boolean => !['won', 'lost'].includes(o.stage);
+  const needsAttention = (o: Opportunity): boolean => openDeal(o) && (!o.nextAction || (!!o.nextActionDueDate && o.nextActionDueDate < todayIso));
+  const closingSoon = (o: Opportunity): boolean => openDeal(o) && !!o.closeDate && o.closeDate >= todayIso && o.closeDate <= soonIso;
+  const filteredOpportunities = initialOpportunities.filter((o) =>
+    (!query || `${o.title} ${o.accountName ?? ''}`.toLowerCase().includes(query.toLowerCase()))
+    && (!ownerFilter || o.ownerId === ownerFilter)
+    && (!customerFilter || o.accountName === customerFilter)
+    && (!stageFilter || o.stage === stageFilter)
+    && (!minValue || (o.value || 0) >= Number(minValue))
+    && (!onlyAttention || needsAttention(o))
+    && (!onlySoon || closingSoon(o)),
+  );
+  const filteredLeads = initialLeads.filter((l) => !query || `${l.name} ${l.companyName ?? ''}`.toLowerCase().includes(query.toLowerCase()));
+  const filterOwners = [...new Set(initialOpportunities.map((o) => o.ownerId).filter((x): x is string => !!x))].sort();
+  const filterCustomers = [...new Set(initialOpportunities.map((o) => o.accountName).filter((x): x is string => !!x))].sort();
   // Native HTML5 drag & drop across board columns (buttons stay as the
   // keyboard-accessible fallback for the same moves).
   const [drag, setDrag] = useState<{ kind: 'lead' | 'opp'; id: string; from: string } | null>(null);
@@ -308,8 +336,8 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   });
 
   /* ── KPIs (leads and opportunities counted separately) ─────────────────── */
-  const leads = initialLeads;
-  const opps = initialOpportunities;
+  const leads = filteredLeads;
+  const opps = filteredOpportunities;
   const activeLeads = leads.filter((l) => l.status !== 'disqualified');
   const qualifiedLeads = leads.filter((l) => l.status === 'qualified');
   const activeOpps = opps.filter((o) => ACTIVE_STAGES.includes(o.stage));
@@ -358,6 +386,10 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
           </button>
         ))}
         <div style={{ flex: 1 }} />
+        {/* Preserve the original pipeline's duplicate-aware quick lead capture alongside the
+            full account-first drawer. The distinct label makes the two intentional entry paths
+            clear instead of presenting duplicate-looking "New Lead" buttons. */}
+        <LeadCapture buttonLabel="+ Quick lead" onSaved={() => router.refresh()} />
         <CreateDrawer
           entity="Lead"
           subtitle="Account-first: name the account, add the person you deal with, capture the interest — then Qualify & Convert links it all and opens an Opportunity."
@@ -422,6 +454,18 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
         />
       </div>
 
+      {(view === 'board' || view === 'list') && (
+        <div style={{ ...s.tabBar, marginTop: 10 }} data-testid="pipeline-filters">
+          <input style={{ ...field, minWidth: 220, flex: 1 }} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search leads, deals or customers…" aria-label="Search pipeline" />
+          <select style={s.select} value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} aria-label="Filter by owner"><option value="">All owners</option>{filterOwners.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+          <select style={s.select} value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} aria-label="Filter by stage"><option value="">All stages</option>{OPP_STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select>
+          <select style={s.select} value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} aria-label="Filter by customer"><option value="">All customers</option>{filterCustomers.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+          <input style={{ ...field, width: 120 }} type="number" min="0" value={minValue} onChange={(e) => setMinValue(e.target.value)} placeholder="Min value" aria-label="Minimum value" />
+          <label style={{ ...s.tab, padding: '7px 9px', gap: 5 }}><input type="checkbox" checked={onlyAttention} onChange={(e) => setOnlyAttention(e.target.checked)} /> Needs attention</label>
+          <label style={{ ...s.tab, padding: '7px 9px', gap: 5 }}><input type="checkbox" checked={onlySoon} onChange={(e) => setOnlySoon(e.target.checked)} /> Closing soon</label>
+        </div>
+      )}
+
       {/* ── COMMAND ── the sales manager's cockpit */}
       {view === 'command' && (
         command === null ? <p style={s.muted}>Loading the pipeline command center…</p> : (
@@ -484,7 +528,70 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
         )
       )}
 
-      {/* ── ANALYTICS ── the deep-dive, moved off the Overview to keep it focused */}
+      {/* ── FORECAST ── forward-looking expectation and snapshot slippage */}
+      {view === 'forecast' && (
+        command === null ? <p style={s.muted}>Loading forecast…</p> : (
+          <div style={s.cmdGrid}>
+            <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
+              <div style={s.cmdTitle}>Current forecast</div>
+              <div style={s.cmdKpiRow}>
+                {(command.categories ?? []).map((c) => (
+                  <CmdKpi key={c.category}
+                    label={c.category === 'BEST_CASE' ? 'Best case' : c.category.charAt(0) + c.category.slice(1).toLowerCase()}
+                    value={`${c.deals} · ${money(c.value)}`}
+                    accent={c.category === 'COMMIT'} good={c.category === 'CLOSED'} />
+                ))}
+                <CmdKpi label="Weighted total" value={money(command.kpis.weighted)} accent />
+              </div>
+            </section>
+            <section style={s.cmdCard}>
+              <div style={s.cmdTitle}>Expected close by month</div>
+              {command.forecastByMonth.length === 0 ? <p style={s.muted}>No active opportunities.</p> : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead><tr>{['Month', 'Deals', 'Value', 'Weighted'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                  <tbody>{command.forecastByMonth.map((f) => (
+                    <tr key={f.month}>
+                      <td style={s.cmdTd}>{f.month === 'unscheduled' ? 'Unscheduled' : f.month}</td>
+                      <td style={s.cmdTd}>{f.deals}</td><td style={s.cmdTd}>{money(f.value)}</td>
+                      <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(f.weighted)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              )}
+            </section>
+            <section style={{ ...s.cmdCard, gridColumn: '2 / -1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                <div style={{ ...s.cmdTitle, marginBottom: 0 }}>Forecast slippage</div>
+                <button type="button" style={s.btnSec} disabled={busy} onClick={() => void captureSnapshot()}>📸 Capture snapshot</button>
+              </div>
+              {fcast === null ? <p style={s.muted}>Loading forecast history…</p>
+                : fcast.captures.length === 0 ? <p style={s.muted}>No snapshots yet — capture one to start tracking movement.</p>
+                  : !fcast.latestDiff.hasPrior ? <p style={s.muted}>One snapshot on record (captured {fmt(fcast.captures[0].takenAt)}). Capture again later to see slippage.</p>
+                    : <>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                        <span style={s.slipTotal}>Weighted {fcast.latestDiff.totals.weightedDelta >= 0 ? '▲' : '▼'} {money(Math.abs(fcast.latestDiff.totals.weightedDelta))}</span>
+                        {fcast.latestDiff.slippedValue > 0 && <span style={s.riskChip}>slipped {money(fcast.latestDiff.slippedValue)}</span>}
+                        {fcast.latestDiff.reasons.map((r) => <span key={r} style={s.slipChip}>{r}</span>)}
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                        <thead><tr>{['Month', 'Prev weighted', 'Now weighted', 'Δ', 'Deals Δ'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
+                        <tbody>{fcast.latestDiff.byPeriod.map((p) => (
+                          <tr key={p.period}>
+                            <td style={s.cmdTd}>{p.period === 'unscheduled' ? 'Unscheduled' : p.period}</td>
+                            <td style={s.cmdTd}>{money(p.prevWeighted)}</td><td style={s.cmdTd}>{money(p.currWeighted)}</td>
+                            <td style={{ ...s.cmdTd, fontWeight: 700, color: p.weightedDelta < 0 ? 'var(--bad)' : p.weightedDelta > 0 ? 'var(--good)' : 'var(--muted)' }}>{p.weightedDelta === 0 ? '—' : `${p.weightedDelta > 0 ? '+' : ''}${money(p.weightedDelta)}`}</td>
+                            <td style={{ ...s.cmdTd, color: p.dealDelta < 0 ? 'var(--bad)' : p.dealDelta > 0 ? 'var(--good)' : 'var(--muted)' }}>{p.dealDelta === 0 ? '—' : `${p.dealDelta > 0 ? '+' : ''}${p.dealDelta}`}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                      <p style={{ ...s.muted, padding: '8px 0 0', fontSize: 11.5 }}>{fcast.captures.length} snapshot{fcast.captures.length === 1 ? '' : 's'} on record · latest {fmt(fcast.captures[0].takenAt)}</p>
+                    </>}
+            </section>
+          </div>
+        )
+      )}
+
+      {/* ── ANALYTICS ── historical and explanatory performance read */}
       {view === 'analytics' && (
         command === null ? <p style={s.muted}>Loading analytics…</p> : (
           <div style={s.cmdGrid}>
@@ -520,72 +627,6 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                   </tbody>
                 </table>
               )}
-            </section>
-
-            {/* Weighted forecast by month */}
-            <section style={s.cmdCard}>
-              <div style={s.cmdTitle}>Weighted forecast by close month</div>
-              {command.forecastByMonth.length === 0 ? <p style={s.muted}>No active opportunities.</p> : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                  <thead><tr>{['Month', 'Deals', 'Value', 'Weighted'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {command.forecastByMonth.map((f) => (
-                      <tr key={f.month}>
-                        <td style={s.cmdTd}>{f.month === 'unscheduled' ? 'Unscheduled' : f.month}</td>
-                        <td style={s.cmdTd}>{f.deals}</td>
-                        <td style={s.cmdTd}>{money(f.value)}</td>
-                        <td style={{ ...s.cmdTd, color: 'var(--accent)', fontWeight: 700 }}>{money(f.weighted)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </section>
-
-            {/* Forecast slippage — snapshots over time */}
-            <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-                <div style={{ ...s.cmdTitle, marginBottom: 0 }}>Forecast slippage</div>
-                <button type="button" style={s.btnSec} disabled={busy} onClick={() => void captureSnapshot()}>📸 Capture snapshot</button>
-              </div>
-              {fcast === null ? <p style={s.muted}>Loading forecast history…</p>
-                : fcast.captures.length === 0 ? <p style={s.muted}>No snapshots yet — capture one to start tracking how the forecast moves week over week.</p>
-                : (
-                  <>
-                    {!fcast.latestDiff.hasPrior
-                      ? <p style={s.muted}>One snapshot on record (captured {fmt(fcast.captures[0].takenAt)}). Capture again later to see slippage.</p>
-                      : (
-                        <>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                            <span style={s.slipTotal}>
-                              Weighted {fcast.latestDiff.totals.weightedDelta >= 0 ? '▲' : '▼'} {money(Math.abs(fcast.latestDiff.totals.weightedDelta))}
-                            </span>
-                            {fcast.latestDiff.slippedValue > 0 && <span style={s.riskChip}>slipped {money(fcast.latestDiff.slippedValue)}</span>}
-                            {fcast.latestDiff.reasons.map((r) => <span key={r} style={s.slipChip}>{r}</span>)}
-                          </div>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                            <thead><tr>{['Month', 'Prev weighted', 'Now weighted', 'Δ', 'Deals Δ'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
-                            <tbody>
-                              {fcast.latestDiff.byPeriod.map((p) => (
-                                <tr key={p.period}>
-                                  <td style={s.cmdTd}>{p.period === 'unscheduled' ? 'Unscheduled' : p.period}</td>
-                                  <td style={s.cmdTd}>{money(p.prevWeighted)}</td>
-                                  <td style={s.cmdTd}>{money(p.currWeighted)}</td>
-                                  <td style={{ ...s.cmdTd, fontWeight: 700, color: p.weightedDelta < 0 ? 'var(--bad)' : p.weightedDelta > 0 ? 'var(--good)' : 'var(--muted)' }}>
-                                    {p.weightedDelta === 0 ? '—' : `${p.weightedDelta > 0 ? '+' : ''}${money(p.weightedDelta)}`}
-                                  </td>
-                                  <td style={{ ...s.cmdTd, color: p.dealDelta < 0 ? 'var(--bad)' : p.dealDelta > 0 ? 'var(--good)' : 'var(--muted)' }}>
-                                    {p.dealDelta === 0 ? '—' : `${p.dealDelta > 0 ? '+' : ''}${p.dealDelta}`}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </>
-                      )}
-                    <p style={{ ...s.muted, padding: '8px 0 0', fontSize: 11.5 }}>{fcast.captures.length} snapshot{fcast.captures.length === 1 ? '' : 's'} on record · latest {fmt(fcast.captures[0].takenAt)}</p>
-                  </>
-                )}
             </section>
 
             {/* Stalled deals */}

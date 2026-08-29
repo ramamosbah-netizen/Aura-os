@@ -15,6 +15,8 @@ export interface ActivityFilter {
   type?: string;
   /** Case-insensitive server-side search across subject, notes, related name and counterparty. */
   search?: string;
+  dueDateFrom?: string;
+  dueDateTo?: string;
   limit?: number;
 }
 

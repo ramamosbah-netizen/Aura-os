@@ -99,6 +99,8 @@ export class PostgresActivityStore implements ActivityStore {
     add('related_id', filter.relatedId);
     add('status', filter.status);
     add('type', filter.type);
+    if (filter.dueDateFrom) { params.push(filter.dueDateFrom); where.push(`due_date >= $${params.length}`); }
+    if (filter.dueDateTo) { params.push(filter.dueDateTo); where.push(`due_date <= $${params.length}`); }
     if (filter.search?.trim()) {
       params.push(`%${filter.search.trim()}%`);
       where.push(`(subject ILIKE $${params.length} OR notes ILIKE $${params.length} OR related_name ILIKE $${params.length} OR counterparty ILIKE $${params.length} OR assignee_id ILIKE $${params.length})`);

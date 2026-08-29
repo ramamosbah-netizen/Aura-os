@@ -25,6 +25,8 @@ export class InMemoryActivityStore implements ActivityStore {
     if (filter.relatedId) out = out.filter((a) => a.relatedId === filter.relatedId);
     if (filter.status) out = out.filter((a) => a.status === filter.status);
     if (filter.type) out = out.filter((a) => a.type === filter.type);
+    if (filter.dueDateFrom) out = out.filter((a) => a.dueDate != null && a.dueDate >= filter.dueDateFrom!);
+    if (filter.dueDateTo) out = out.filter((a) => a.dueDate != null && a.dueDate <= filter.dueDateTo!);
     if (filter.search) {
       const q = filter.search.trim().toLowerCase();
       if (q) out = out.filter((a) => [a.subject, a.notes, a.relatedName, a.counterparty, a.assigneeId].some((value) => value?.toLowerCase().includes(q)));

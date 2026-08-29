@@ -89,8 +89,11 @@ export class CrmActivitiesController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
   ): Promise<Activity[]> {
-    return this.activities.list({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, limit: 100 });
+    return this.activities.list({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo, limit: 100 });
   }
 
   @Permissions('crm.activity.read')
@@ -101,11 +104,14 @@ export class CrmActivitiesController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.activities.listPaged(
-      { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search },
+      { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo },
       parsePageParams(limit, offset),
     );
   }
@@ -118,8 +124,11 @@ export class CrmActivitiesController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
   ) {
-    return this.activities.summary({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search });
+    return this.activities.summary({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo });
   }
 
   @Permissions('crm.activity.read')
@@ -131,8 +140,11 @@ export class CrmActivitiesController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
   ): Promise<string> {
-    const filter: ActivityFilter = { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search };
+    const filter: ActivityFilter = { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo };
     const rows = await this.activities.listAll(filter);
     const fields: Array<keyof Activity> = ['type', 'subject', 'relatedName', 'assigneeId', 'dueDate', 'status', 'outcome'];
     const quote = (value: unknown): string => {

@@ -58,15 +58,15 @@ describe('G1 universal activity + G2 next-action projection (HTTP)', () => {
     (await http.get(`/api/v1/crm/opportunities/${id}/summary`).expect(200)).body as Opp360;
 
   // ── G1 ────────────────────────────────────────────────────────────────────────────────────────
-  it('G1: an activity attaches to every step of the deal chain, not just CRM', async () => {
-    // The whole point: the same work system spans the chain. Ids are polymorphic references
-    // (type + id, no join), so these need not exist as rows for the reference to be legal.
+  it('G1: an activity rejects missing deal-chain references', async () => {
+    // References remain polymorphic, but the service boundary verifies that the target exists
+    // in the current tenant before persisting the activity. This prevents dangling links and
+    // cross-tenant probing while retaining one universal activity model.
     for (const relatedType of ['account', 'contact', 'lead', 'opportunity', 'quotation', 'tender', 'contract', 'project']) {
-      const a = await newActivity({
+      await http.post('/api/v1/crm/activities').send({
         type: 'task', subject: `work on a ${relatedType}`, relatedType,
         relatedId: '11111111-1111-4111-8111-111111111111', dueDate: isoDate(3),
-      });
-      expect(a.id).toBeTruthy();
+      }).expect(400);
     }
   });
 
@@ -76,11 +76,11 @@ describe('G1 universal activity + G2 next-action projection (HTTP)', () => {
       .expect(400);
   });
 
-  it('G1: activities are listable by the new deal-chain types', async () => {
-    const tenderId = '22222222-2222-4222-8222-222222222222';
-    await newActivity({ type: 'meeting', subject: 'Tender clarification meeting', relatedType: 'tender', relatedId: tenderId, dueDate: isoDate(1) });
-    const rows = (await http.get(`/api/v1/crm/activities?relatedType=tender&relatedId=${tenderId}`).expect(200)).body as Array<{ subject: string }>;
-    expect(rows.map((r) => r.subject)).toContain('Tender clarification meeting');
+  it('G1: activities are listable against an existing deal-chain record', async () => {
+    const opportunity = (await http.post('/api/v1/crm/opportunities').send({ title: 'Activity reference deal', value: 1000 }).expect(201)).body as { id: string };
+    await newActivity({ type: 'meeting', subject: 'Opportunity progress meeting', relatedType: 'opportunity', relatedId: opportunity.id, dueDate: isoDate(1) });
+    const rows = (await http.get(`/api/v1/crm/activities?relatedType=opportunity&relatedId=${opportunity.id}`).expect(200)).body as Array<{ subject: string }>;
+    expect(rows.map((r) => r.subject)).toContain('Opportunity progress meeting');
   });
 
   // ── G2 ────────────────────────────────────────────────────────────────────────────────────────

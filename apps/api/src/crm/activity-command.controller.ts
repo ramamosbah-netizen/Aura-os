@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { AccountService, ActivityService, OpportunityService, ATTENTION_THRESHOLDS, lastActivityByRecord, daysSince, isQuiet, type Activity } from '@aura/crm';
 
 // Commercial Activity command center — the "what needs my attention today" view.
@@ -32,6 +32,7 @@ export class ActivityCommandController {
     private readonly tenant: TenantContext,
   ) {}
 
+  @Permissions('crm.activity.read')
   @Get('command')
   async command(
     @Query('accountStaleDays') accountStaleDays?: string,

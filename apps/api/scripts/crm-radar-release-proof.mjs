@@ -94,7 +94,7 @@ async function apiProof() {
   const final = await page((count + 1) - 50);
   const searched = await page(0, '&search=Radar%20Proof%20Signal%206001');
   const filtered = await page(0, '&source=MANUAL&type=NEW_PROJECT');
-  assert(first?.page?.total === count + 1, `radar total mismatch: ${first?.page?.total}`);
+  assert(first?.page?.total === count + 1, `radar total mismatch: ${first?.page?.total}; response=${JSON.stringify(first).slice(0, 1200)}`);
   assert(first.page.items.length === 50 && deep.page.items.length === 50 && final.page.hasMore === false, 'pagination invariant failed');
   assert(searched.page.items.some((row) => row.title === 'Radar Proof Signal 6001'), 'deep search failed');
   assert(filtered.page.total > 50, 'combined filter did not exceed one page');

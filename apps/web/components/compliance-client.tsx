@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Badge, Button, Card, Field, Input, KpiTile, Select, Table, Td, Th } from './ui/kit';
 import NextBestActionBanner from './ui/next-best-action-banner';
@@ -72,6 +72,9 @@ export default function ComplianceClient({
   const [filter, setFilter] = useState({ authorityCode: '', status: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // A mount-time refresh and a write-triggered refresh can overlap. Keep the latest response only;
+  // otherwise a slower, pre-write GET can arrive after the POST and erase the newly opened case.
+  const casesRequest = useRef(0);
 
   const [auth, setAuth] = useState({ code: '', name: '', jurisdiction: 'AE-DU' });
   const [draft, setDraft] = useState({ authorityCode: '', obligationCode: '', scope: 'PROJECT', subjectId: '', system: 'cctv' });
@@ -80,11 +83,15 @@ export default function ComplianceClient({
   const [detail, setDetail] = useState<{ submissions: Submission[]; decisions: Decision[]; certificates: Certificate[]; inspections: Inspection[] } | null>(null);
 
   const reloadCases = useCallback(async () => {
+    const request = ++casesRequest.current;
     const qs = new URLSearchParams();
     if (filter.authorityCode) qs.set('authorityCode', filter.authorityCode);
     if (filter.status) qs.set('status', filter.status);
     const res = await fetch(`/api/compliance/cases?${qs}`, { cache: 'no-store' });
-    if (res.ok) setCases(await res.json());
+    if (res.ok) {
+      const next = await res.json();
+      if (request === casesRequest.current) setCases(next);
+    }
   }, [filter]);
 
   useEffect(() => {

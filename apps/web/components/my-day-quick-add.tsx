@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 // Capture, without leaving the day. The second half of making My Day a command
 // centre rather than a dashboard: you could not previously write anything down
-// here — every capture meant navigating to Activities and losing the view you
+// here — every capture stays in My Work instead of navigating to Activities and losing the view you
 // were reasoning about.
 
 // Mirrors ActivityType in modules/crm/src/domain/activity.ts. It cannot be imported:

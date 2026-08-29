@@ -15,6 +15,7 @@ import {
   type HealthState, type NextBestAction, type WorkflowGateView,
 } from './crm/record-shell';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { activityRegisterHref } from '@/lib/activity-navigation';
 import { qualificationBadge } from '@/lib/qualification-badge';
 import { buildDealOutreach, requestDealOutreachDraft, personalise, toE164Digits, mailtoHref, whatsappHref } from '@/lib/lead-outreach';
 import { describeQualification, missingFacts, nextBestAction, resolveEffectiveWinProbability, evaluateDealRules, assessDeal, qualificationCoverageLow, QUALIFICATION_STATUS_LABEL, QUALIFICATION_SOURCE_LABEL, type QualificationView, type QualificationAtAward, type DealFacts, type MissingFactKey, type Finding } from '@aura/shared';
@@ -651,7 +652,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       {tab === 'engagement' && (
         <RecordCard title="Activities">
           {activities.length === 0 ? (
-            <p style={st.muted}>No activities logged yet — <a href="/crm/activities" style={st.link}>log the next step →</a></p>
+            <p style={st.muted}>No activities logged yet — <a href={activityRegisterHref('opportunity', o.id)} style={st.link}>log the next step →</a></p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={st.qTable}>

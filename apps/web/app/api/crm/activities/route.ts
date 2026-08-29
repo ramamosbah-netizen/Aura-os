@@ -1,6 +1,6 @@
-import { apiFetch, apiBase, authHeader } from '@/lib/api';
+import { apiFetch, apiBase, authHeader, replayHeaders } from '@/lib/api';
 
-// BFF: CRM activities list (the pipeline's Activities view).
+// BFF: shared CRM activity register (contextual timelines and the transition register).
 
 export async function GET(req: Request): Promise<Response> {
   const qs = new URL(req.url).search;
@@ -21,7 +21,7 @@ export async function POST(req: Request): Promise<Response> {
     const body = await req.json().catch(() => ({}));
     const res = await apiFetch(`${apiBase()}/api/v1/crm/activities`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(await authHeader()) },
+      headers: { 'content-type': 'application/json', ...replayHeaders(req), ...(await authHeader()) },
       body: JSON.stringify(body),
       cache: 'no-store',
     });

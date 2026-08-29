@@ -144,7 +144,7 @@ export class Opportunity360Controller {
       accountId ? this.quotations.list({ tenantId, accountId }) : Promise.resolve([]),
       accountId ? this.contracts.list({ tenantId, accountId }) : Promise.resolve([]),
       accountId ? this.projects.list({ tenantId, accountId }) : Promise.resolve([]),
-      this.activities.list({ tenantId, relatedId: id }),
+      this.activities.list({ tenantId, relatedType: 'opportunity', relatedId: id }),
     ]);
 
     // Follow the rest of the provenance chain this opportunity spawned.

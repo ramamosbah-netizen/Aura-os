@@ -237,9 +237,9 @@ export class WorkItemsService {
     const activity = await this.activities.get(id);
     if (!activity || activity.tenantId !== tenantId) throw new NotFoundException('Work item not found');
     if (activity.assigneeId !== actorId) throw new ForbiddenException('Only the assigned user can update this work item here.');
-    const updated = action === 'start' ? await this.activities.start(id)
-      : action === 'complete' ? await this.activities.complete(id)
-        : await this.activities.reopen(id);
+    const updated = action === 'start' ? await this.activities.start(id, actorId)
+      : action === 'complete' ? await this.activities.complete(id, undefined, undefined, actorId)
+        : await this.activities.reopen(id, actorId);
     if (action === 'complete') await this.createNextOccurrence(activity);
     const payload = await this.list(tenantId, actorId);
     const item = payload.items.find((candidate) => candidate.source === source && candidate.sourceId === updated.id);

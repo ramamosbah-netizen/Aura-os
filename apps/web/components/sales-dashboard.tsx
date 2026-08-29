@@ -1,4 +1,4 @@
-import { BarChart3, Building2, CalendarCheck, FileText, Target, TrendingUp, Trophy, Workflow } from 'lucide-react';
+import { BarChart3, Building2, FileText, Target, TrendingUp, Trophy, Workflow } from 'lucide-react';
 import SuiteDashboardShell, {
   type SuiteAttentionItem,
   type SuiteMetric,
@@ -54,14 +54,13 @@ export interface SalesOpportunity {
   closeDate: string | null;
 }
 
-/** Sales Home is a command center, not a launcher: six workspaces, each one job in the sell cycle. */
+/** Sales Home is a cockpit, not an activity manager: each shortcut has one clear job in the sell cycle. */
 const SHORTCUTS: SuiteShortcut[] = [
   { label: 'Pipeline', description: 'Deals by stage — where they are & what’s next', href: '/crm/pipeline', icon: Workflow, tone: 'teal' },
   { label: 'Customers', description: 'Accounts, contacts & relationship 360', href: '/crm/customers', icon: Building2, tone: 'cyan' },
   { label: 'Quotations', description: 'Draft → review → sent → won', href: '/crm/quotations', icon: FileText, tone: 'amber' },
-  { label: 'Activities', description: 'Calls, meetings, visits & follow-ups', href: '/crm/activities', icon: CalendarCheck, tone: 'green' },
-  { label: 'Forecast', description: 'Commit, best-case & expected close', href: '/crm/pipeline', icon: Target, tone: 'blue' },
-  { label: 'Analytics', description: 'Conversion, win/loss & performance', href: '/crm/pipeline', icon: BarChart3, tone: 'violet' },
+  { label: 'Forecast', description: 'Commit, best-case & expected close', href: '/crm/pipeline?tab=forecast', icon: Target, tone: 'blue' },
+  { label: 'Analytics', description: 'Conversion, win/loss & performance', href: '/crm/pipeline?tab=analytics', icon: BarChart3, tone: 'violet' },
 ];
 
 const aed = (n: number): string => 'AED ' + n.toLocaleString('en-AE', { maximumFractionDigits: 0 });
@@ -107,7 +106,7 @@ export default function SalesDashboard({
 
   const metrics: SuiteMetric[] = [
     { label: 'Open pipeline', value: kpis ? aed(kpis.openValue) : '—', sub: 'un-weighted', href: '/crm/pipeline', icon: Workflow, tone: 'teal' },
-    { label: 'Forecast', value: kpis ? aed(kpis.weighted) : '—', sub: 'probability-weighted', href: '/crm/pipeline', icon: Target, tone: 'blue' },
+    { label: 'Forecast', value: kpis ? aed(kpis.weighted) : '—', sub: 'probability-weighted', href: '/crm/pipeline?tab=forecast', icon: Target, tone: 'blue' },
     { label: 'Active deals', value: kpis ? String(kpis.openDeals) : '—', sub: 'open opportunities', href: '/crm/pipeline', icon: TrendingUp, tone: 'amber' },
     { label: 'Win rate', value: kpis?.winRate == null ? '—' : `${kpis.winRate}%`, sub: kpis ? `${kpis.won90}W · ${kpis.lost90}L (90d)` : 'no data', href: '/crm/pipeline', icon: Trophy, tone: 'green' },
   ];
@@ -177,8 +176,11 @@ export default function SalesDashboard({
         body: briefBody,
         cta: { href: '/crm/pipeline', label: 'Review deals', tabTitle: 'Pipeline', tabType: 'Sales' },
       }}
+      ownership={<>
+        <FileText aria-hidden />
+        <span><strong>Sales owns the sell cycle: Lead → Opportunity → Quote → Won.</strong> Email, documents, approvals and tenders are shown in context but owned by their own systems. Activity history lives in each customer, contact, opportunity and quotation timeline; personal tasks, follow-ups and reminders are executed in <a href="/my-work">My Work</a>. <a href="/crm/activities">Open the all-activity register →</a></span>
+      </>}
       shortcuts={{ kicker: 'Sales workspaces', title: 'Workspaces', itemTestId: 'sales-shortcut', items: SHORTCUTS }}
-      ownership={<><FileText aria-hidden /><span><strong>Sales owns the sell cycle: Lead → Opportunity → Quote → Won.</strong> Email, documents, approvals and tenders are shown in context but owned by their own systems.</span></>}
     />
   );
 }

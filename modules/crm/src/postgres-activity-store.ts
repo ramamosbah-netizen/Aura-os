@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { Activity } from './domain/activity';
-import type { ActivityFilter, ActivityStore } from './activity-store';
+import type { ActivityFilter, ActivityStore, ActivitySummary } from './activity-store';
 
 interface Row {
   id: string;
@@ -99,6 +99,12 @@ export class PostgresActivityStore implements ActivityStore {
     add('related_id', filter.relatedId);
     add('status', filter.status);
     add('type', filter.type);
+    if (filter.dueDateFrom) { params.push(filter.dueDateFrom); where.push(`due_date >= $${params.length}`); }
+    if (filter.dueDateTo) { params.push(filter.dueDateTo); where.push(`due_date <= $${params.length}`); }
+    if (filter.search?.trim()) {
+      params.push(`%${filter.search.trim()}%`);
+      where.push(`(subject ILIKE $${params.length} OR notes ILIKE $${params.length} OR related_name ILIKE $${params.length} OR counterparty ILIKE $${params.length} OR assignee_id ILIKE $${params.length})`);
+    }
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 
@@ -123,5 +129,41 @@ export class PostgresActivityStore implements ActivityStore {
       winParams,
     );
     return makePage(res.rows.map(rowToActivity), total, page);
+  }
+
+  async listAll(filter: ActivityFilter = {}): Promise<Activity[]> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_activities ${whereSql} ORDER BY created_at DESC`,
+      params,
+    );
+    return res.rows.map(rowToActivity);
+  }
+
+  async summary(filter: ActivityFilter = {}, now = new Date()): Promise<ActivitySummary> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const today = now.toISOString().slice(0, 10);
+    const weekEnd = new Date(now.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+    const monthAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
+    const res = await this.pool.query<{
+      total: string; open: string; overdue: string; due_today: string; due_this_week: string; completed30: string; unassigned: string;
+    }>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE status IN ('open','in_progress'))::int AS open,
+         COUNT(*) FILTER (WHERE status IN ('open','in_progress') AND due_date < $${params.length + 1})::int AS overdue,
+         COUNT(*) FILTER (WHERE status IN ('open','in_progress') AND due_date = $${params.length + 1})::int AS due_today,
+         COUNT(*) FILTER (WHERE status IN ('open','in_progress') AND due_date > $${params.length + 1} AND due_date <= $${params.length + 2})::int AS due_this_week,
+         COUNT(*) FILTER (WHERE status = 'completed' AND COALESCE(completed_at::text, created_at::text) >= $${params.length + 3})::int AS completed30,
+         COUNT(*) FILTER (WHERE status IN ('open','in_progress') AND assignee_id IS NULL)::int AS unassigned
+       FROM public.aura_crm_activities ${whereSql}`,
+      [...params, today, weekEnd, monthAgo],
+    );
+    const row = res.rows[0];
+    return {
+      total: Number(row?.total ?? 0), open: Number(row?.open ?? 0), overdue: Number(row?.overdue ?? 0),
+      dueToday: Number(row?.due_today ?? 0), dueThisWeek: Number(row?.due_this_week ?? 0),
+      completed30: Number(row?.completed30 ?? 0), unassigned: Number(row?.unassigned ?? 0),
+    };
   }
 }

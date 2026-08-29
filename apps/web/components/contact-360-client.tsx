@@ -8,6 +8,7 @@ import {
 } from './stakeholder-meta';
 import Timeline from './timeline';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { activityRegisterHref } from '@/lib/activity-navigation';
 import DataStateNotice from './ui/data-state';
 import { classifyStatus, type DataError } from '@/lib/data-error';
 
@@ -150,7 +151,7 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {c.email && <a href={`mailto:${c.email}`} style={st.actionBtn}>✉ Email</a>}
           {c.phone && <a href={`tel:${c.phone}`} style={st.actionBtn}>☎ Call</a>}
-          <a href="/crm/activities" style={st.actionBtn}>+ Log activity</a>
+          <a href={activityRegisterHref('contact', c.id)} style={st.actionBtn}>+ Log activity</a>
         </div>
       </div>
 
@@ -228,7 +229,7 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
             <div style={st.block}>
               <div style={st.blockTitle}>Upcoming Actions</div>
               {activities.filter((a) => a.status === 'open').length === 0 ? (
-                <p style={st.muted}>No open activities — <a href="/crm/activities" style={st.link}>log the next step →</a></p>
+                <p style={st.muted}>No open activities — <a href={activityRegisterHref('contact', c.id)} style={st.link}>log the next step →</a></p>
               ) : (
                 activities.filter((a) => a.status === 'open').slice(0, 6).map((a) => (
                   <div key={a.id} style={st.tlRow}>

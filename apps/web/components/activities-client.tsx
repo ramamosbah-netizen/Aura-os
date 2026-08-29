@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
 import RelationshipAlerts from './relationship-alerts';
+import AuraTabLink from './aura-tab-link';
+import { isPersonalExecutableActivity, myWorkActivityHref } from '@/lib/activity-navigation';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
-// CRM · Activities — every interaction and to-do on the deal chain (call, email,
+// Sales · All Activity Register — every interaction and to-do on the deal chain (call, email,
 // meeting, note, task), agenda-grouped by urgency: Overdue → Today → This week →
 // Later → No due date. Each activity links to the record it's about.
 
@@ -31,6 +33,8 @@ interface Activity {
 interface Account { id: string; name: string; }
 interface Contact { id: string; name: string; accountName: string | null; }
 interface Opportunity { id: string; title: string; }
+interface ActivityPageInfo { total: number; limit: number; offset: number; hasMore: boolean; }
+interface ActivitySummary { total: number; open: number; overdue: number; dueToday: number; dueThisWeek: number; completed30: number; unassigned: number; }
 
 const TYPE_GLYPH: Record<string, string> = {
   call: '☎', email: '✉', meeting: '👥', note: '✎', task: '☑',
@@ -38,39 +42,57 @@ const TYPE_GLYPH: Record<string, string> = {
 };
 /** G10 — the full activity vocabulary (WhatsApp and site visits are how ELV deals actually move). */
 const ALL_TYPES = ['call', 'email', 'meeting', 'note', 'task', 'follow_up', 'whatsapp', 'site_visit', 'technical_discovery', 'demo', 'presentation', 'reminder'];
+const REGISTER_LOG_TYPES = ['call', 'note', 'site_visit', 'technical_discovery', 'demo', 'presentation'];
 /** G11 — open reads "planned"; in-progress work is still LIVE work. */
 const isLive = (s: string): boolean => s === 'open' || s === 'in_progress';
 const RELATED_HREF: Record<string, (id: string) => string> = {
   account: (id) => `/crm/accounts/${id}`,
   contact: (id) => `/crm/contacts/${id}`,
   opportunity: (id) => `/crm/opportunities/${id}`,
-  lead: () => '/crm/leads',
-  quotation: () => '/crm/quotations',
+  lead: (id) => `/crm/leads/${id}`,
+  quotation: (id) => `/crm/quotations/${id}`,
+  tender: (id) => `/tendering/tenders/${id}`,
+  contract: (id) => `/contracts/contracts/${id}`,
+  // Project 360 owns the canonical detail route; the /projects/projects namespace is
+  // compatibility-only and must not be reintroduced by contextual activity links.
+  project: (id) => `/project/${id}`,
 };
 
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 const RELATED_TYPE_LABEL: Record<string, string> = {
   opportunity: '◎ Opportunities', account: '◆ Accounts', contact: '☎ Contacts', lead: '⌥ Leads', quotation: '✎ Quotations',
+  tender: '◳ Tenders', contract: '▦ Contracts', project: '▥ Projects',
 };
 
-export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '', initialFocusedId = '' }: {
+export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '', initialRelatedId = '', initialFocusedId = '', initialPage, initialSummary, exportUrl, previousHref, nextHref, initialSearch = '', initialType = '', initialStatus = '' }: {
   initialActivities: Activity[];
   accounts: Account[];
   contacts: Contact[];
   opportunities: Opportunity[];
   /** Saved-view scope from the URL (e.g. 'opportunity') — pre-applies the related-type filter. */
   initialRelatedType?: string;
+  /** Related record scope from a 360 page; it is preselected and locked in the log form. */
+  initialRelatedId?: string;
   /** Deep-link focus from My Day or a notification. */
   initialFocusedId?: string;
+  initialPage?: ActivityPageInfo;
+  initialSummary?: ActivitySummary | null;
+  exportUrl?: string;
+  previousHref?: string | null;
+  nextHref?: string | null;
+  initialSearch?: string;
+  initialType?: string;
+  initialStatus?: string;
 }) {
   const router = useRouter();
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState(initialType);
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [relatedFilter, setRelatedFilter] = useState(initialRelatedType);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialSearch);
   const [completing, setCompleting] = useState<{ id: string; outcome: string; fuOn: boolean; fuType: string; fuSubject: string; fuDate: string } | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -85,19 +107,22 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
     const dueWeek = open.filter((a) => a.dueDate && a.dueDate > today && a.dueDate <= weekEnd);
     const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
     const done30 = base.filter((a) => a.status === 'completed' && (a.completedAt ?? a.createdAt) >= monthAgo);
-    return { open: open.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, done30: done30.length };
-  }, [initialActivities, relatedFilter, today, weekEnd]);
+    return initialSummary
+      ? { open: initialSummary.open, overdue: initialSummary.overdue, dueToday: initialSummary.dueToday, dueWeek: initialSummary.dueThisWeek, done30: initialSummary.completed30 }
+      : { open: open.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, done30: done30.length };
+  }, [initialActivities, initialSummary, relatedFilter, today, weekEnd]);
 
   const filtered = useMemo(() => {
     let out = initialActivities;
     if (relatedFilter) out = out.filter((a) => a.relatedType === relatedFilter);
     if (typeFilter) out = out.filter((a) => a.type === typeFilter);
+    if (statusFilter) out = out.filter((a) => a.status === statusFilter);
     const q = query.trim().toLowerCase();
     if (q) out = out.filter((a) => [a.subject, a.notes, a.relatedName, a.assigneeId].some((v) => v && v.toLowerCase().includes(q)));
     return out;
-  }, [initialActivities, relatedFilter, typeFilter, query]);
+  }, [initialActivities, relatedFilter, typeFilter, statusFilter, query]);
 
-  /** Work-center buckets — every open activity by urgency, plus a Completed tab. */
+  /** Register buckets — every open activity by urgency, plus a Completed tab. */
   const groups = useMemo(() => {
     const buckets: Array<{ key: string; label: string; tone?: 'bad' | 'accent'; items: Activity[] }> = [
       { key: 'overdue', label: 'Overdue', tone: 'bad', items: [] },
@@ -179,12 +204,12 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       <div style={st.toolbar}>
         <CreateDrawer
           entity="Activity"
-          subtitle="Log an interaction or plan a to-do — attach it to the account, contact or deal it's about."
+          subtitle={initialRelatedId ? `Log a commercial interaction for this ${initialRelatedType}. The related record is locked to preserve context.` : "Log a commercial interaction and attach it to the account, contact or deal it's about. Personal tasks are created and worked in My Work."}
           endpoint="/api/crm/activities"
           fields={[
             {
-              name: 'type', label: 'Type', kind: 'select', defaultValue: 'task',
-              options: ALL_TYPES.map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
+              name: 'type', label: 'Type', kind: 'select', defaultValue: 'call',
+              options: REGISTER_LOG_TYPES.map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
             },
             { name: 'subject', label: 'Subject', kind: 'text', required: true, placeholder: 'e.g. Follow up on QT-2026-001', span: 2 },
             {
@@ -192,22 +217,36 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
               options: [{ value: 'outbound', label: '→ Outbound (we reached out)' }, { value: 'inbound', label: '← Inbound (they reached us)' }],
             },
             { name: 'counterparty', label: 'With', kind: 'text', placeholder: 'e.g. john@acme.com / +971…' },
-            { name: 'relatedId', label: 'Related to', kind: 'select', placeholder: 'Nothing linked', options: relatedOptions },
+            ...(initialRelatedId ? [
+              { name: 'relatedType', label: 'Related type', kind: 'text' as const, defaultValue: initialRelatedType, readonly: true },
+              { name: 'relatedId', label: 'Related record', kind: 'text' as const, defaultValue: initialRelatedId, readonly: true },
+            ] : [
+              { name: 'relatedId', label: 'Related to', kind: 'select' as const, placeholder: 'Nothing linked', options: relatedOptions },
+            ]),
             { name: 'dueDate', label: 'Due date', kind: 'date' },
             { name: 'assigneeId', label: 'Assignee', kind: 'text', placeholder: 'e.g. u-sales' },
             { name: 'notes', label: 'Notes', kind: 'textarea', placeholder: 'What happened / what to do…', span: 2 },
           ]}
         />
-        <input style={st.search} placeholder="Search subject, notes, related…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <select style={st.search} value={relatedFilter} onChange={(e) => setRelatedFilter(e.target.value)} title="Scope to what the activity is about">
+        <form action="/crm/activities" method="get" style={st.filterForm}>
+        {initialRelatedId && <><input type="hidden" name="relatedType" value={initialRelatedType} /><input type="hidden" name="record" value={initialRelatedId} /></>}
+        <input style={st.search} name="search" placeholder="Search subject, notes, related…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <select style={st.search} name="relatedType" value={relatedFilter} onChange={(e) => setRelatedFilter(e.target.value)} title="Scope to what the activity is about" disabled={Boolean(initialRelatedId)}>
           <option value="">All records</option>
           {Object.entries(RELATED_TYPE_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
         </select>
-        <select style={st.search} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+        <select style={st.search} name="type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
           {['call', 'email', 'meeting', 'note', 'task'].map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
+        <select style={st.search} name="status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="">All statuses</option>
+          {['open', 'in_progress', 'completed', 'cancelled'].map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+        </select>
+        <button type="submit" className="btn btn-ghost" style={st.smBtn}>Apply</button>
+        </form>
         <ExportButton filename="activities" rows={filtered as unknown as Array<Record<string, unknown>>}
+          csvUrl={exportUrl}
           columns={[{ key: 'type' }, { key: 'subject' }, { key: 'relatedName' }, { key: 'assigneeId' }, { key: 'dueDate' }, { key: 'status' }, { key: 'outcome' }]} />
         {err && <span style={st.err}>{err}</span>}
       </div>
@@ -229,7 +268,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       {active.items.length === 0 ? (
         <p style={st.muted}>
           {initialActivities.length === 0
-            ? 'Nothing logged yet — every call, meeting and task lives here.'
+            ? 'Nothing logged yet — record history here; personal work is surfaced in My Work.'
             : `Nothing in ${active.label}. ${activeKey === 'overdue' ? 'You’re all caught up.' : ''}`}
         </p>
       ) : (
@@ -266,7 +305,12 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                     {a.dueDate ? fmt(a.dueDate) : '—'}
                   </td>
                   <td style={{ width: 200, whiteSpace: 'nowrap' }}>
-                    {isLive(a.status) && (
+                    {isPersonalExecutableActivity(a.type) ? (
+                      <>
+                        <span className={a.status === 'completed' ? 'badge badge-good' : a.status === 'cancelled' ? 'badge badge-bad' : 'badge badge-accent'}>{a.status.replace(/_/g, ' ')}</span>
+                        <AuraTabLink href={myWorkActivityHref(a.id)} tabTitle={a.subject} tabType="My Work" tabKey="/my-work/tasks" className="btn btn-ghost" style={{ ...st.smBtn, marginLeft: 6 }}>Open in My Work ↗</AuraTabLink>
+                      </>
+                    ) : isLive(a.status) && (
                       <>
                         {a.status === 'open'
                           ? <button type="button" className="btn btn-ghost" style={st.smBtn} disabled={busy} onClick={() => void act(a, 'start')}>▶ Start</button>
@@ -321,6 +365,13 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
           </table>
         </section>
       )}
+      {initialPage ? (
+        <nav style={st.pagination} aria-label="Activity pages">
+          {previousHref ? <a className="btn btn-ghost" href={previousHref}>← Previous</a> : <span />}
+          <span style={st.muted}>Showing {initialPage.total === 0 ? 0 : initialPage.offset + 1}–{Math.min(initialPage.offset + initialPage.limit, initialPage.total)} of {initialPage.total}</span>
+          {nextHref ? <a className="btn btn-ghost" href={nextHref}>Next →</a> : <span />}
+        </nav>
+      ) : null}
     </>
   );
 }
@@ -340,9 +391,11 @@ const st = {
   cardLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: 0.5 } as CSSProperties,
   cardVal: { fontSize: 18, fontWeight: 700, marginTop: 4 } as CSSProperties,
   toolbar: { display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' } as CSSProperties,
+  filterForm: { display: 'contents' } as CSSProperties,
   search: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none', minWidth: 170 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
+  pagination: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 } as CSSProperties,
   tabBar: { display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 0 12px', borderBottom: '1px solid var(--border)', paddingBottom: 8 } as CSSProperties,
   tab: { display: 'inline-flex', alignItems: 'center', gap: 7, background: 'transparent', border: '1px solid transparent', borderRadius: 8, padding: '6px 11px', fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', cursor: 'pointer' } as CSSProperties,

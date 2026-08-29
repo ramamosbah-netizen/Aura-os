@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, Query } from '@nestjs/common';
-import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { EVENT_STORE, type EventStore, Permissions, TenantContext } from '@aura/core';
 import { ActivityService } from '@aura/crm';
 import type { DomainEvent } from '@aura/shared';
 
@@ -58,6 +58,7 @@ export class CrmTimelineController {
   ) {}
 
   /** GET /crm/timeline?id=<recordId>&limit=50 — merged event + activity feed. */
+  @Permissions('crm.activity.read')
   @Get()
   async timeline(@Query('id') id?: string, @Query('limit') limit?: string): Promise<TimelineEntry[]> {
     if (!id) return [];
@@ -66,12 +67,12 @@ export class CrmTimelineController {
 
     const [events, activities] = await Promise.all([
       this.events.list({ tenantId, aggregateId: id, limit: 200 }),
-      this.activities.list({ tenantId, limit: 5000 }),
+      // Record-scoped query: never load the tenant-wide activity register just to
+      // filter it in memory for a 360 timeline.
+      this.activities.list({ tenantId, relatedId: id, limit: 200 }),
     ]);
 
-    const fromActivities: TimelineEntry[] = activities
-      .filter((a) => a.relatedId === id)
-      .map((a) => ({
+    const fromActivities: TimelineEntry[] = activities.map((a) => ({
         id: a.id,
         at: a.completedAt ?? a.dueDate ?? a.createdAt,
         kind: 'activity' as const,

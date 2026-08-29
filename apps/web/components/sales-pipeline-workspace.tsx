@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, type CSSProperties, type ReactNode } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import CrmPipelineClient, { type View } from './crm-pipeline-client';
 import LeadAttentionPanel, { type LeadCommand } from './lead-attention-panel';
 import SignalsRadar, { type RadarData } from './signals-radar';
@@ -9,12 +9,12 @@ import OpportunityActivitiesCard from './opportunity-activities-card';
 
 // Sales Pipeline workspace — ONE page for working DEALS, clear top-level tabs:
 //
-//   Radar → Overview → Board → List → Analytics
+//   Radar → Overview → Board → List → Forecast → Analytics
 //
 // Radar is the acquisition inbox (signals), Overview is the manager cockpit (+ leads
 // needing attention + an Opportunity-Activities pointer), Board/List work the deals,
-// Analytics deep-dives. Each tab is one job. Activity EXECUTION lives in the Activities
-// Work Center; the Overview only points to it (scoped) so the pipeline stays about deals.
+// Analytics deep-dives. Each tab is one job. Activity history is contextual and personal
+// execution lives in My Work; the Overview only points to the scoped register.
 
 interface Lead {
   id: string; name: string; companyName: string | null; email: string | null;
@@ -27,7 +27,7 @@ interface Opportunity {
 }
 interface Account { id: string; name: string }
 
-type PageTab = 'radar' | 'overview' | 'board' | 'list' | 'analytics';
+type PageTab = 'radar' | 'overview' | 'board' | 'list' | 'forecast' | 'analytics';
 type AnalyticsSub = 'analytics' | 'sources' | 'executive';
 
 const TAB_DEFS: Array<{ id: PageTab; label: string; icon: string; hint: string }> = [
@@ -35,6 +35,7 @@ const TAB_DEFS: Array<{ id: PageTab; label: string; icon: string; hint: string }
   { id: 'overview', label: 'Overview', icon: '◎', hint: 'The pipeline cockpit + leads needing attention' },
   { id: 'board', label: 'Board', icon: '⊞', hint: 'Work deals across stages (drag & drop)' },
   { id: 'list', label: 'List', icon: '☰', hint: 'Every lead and deal, filterable' },
+  { id: 'forecast', label: 'Forecast', icon: '◎', hint: 'Commit, best case and expected close' },
   { id: 'analytics', label: 'Analytics', icon: '📈', hint: 'Performance · sources · executive' },
 ];
 
@@ -42,14 +43,48 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
   leads: Lead[]; opportunities: Opportunity[]; accounts: Account[];
   leadCommand: LeadCommand | null; radar: RadarData | null;
 }) {
-  // Deep-linkable from the Sales Home shortcuts (e.g. Analytics → /crm/leads?tab=analytics).
+  // Deep-linkable from the Sales Home shortcuts (e.g. Analytics → /crm/pipeline?tab=analytics).
   const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const urlTab = params.get('tab');
-  const initialTab: PageTab = (['radar', 'overview', 'board', 'list', 'analytics'] as const).includes(urlTab as PageTab)
+  const initialTab: PageTab = (['radar', 'overview', 'board', 'list', 'forecast', 'analytics'] as const).includes(urlTab as PageTab)
     ? (urlTab as PageTab)
     : 'overview';
   const [tab, setTab] = useState<PageTab>(initialTab);
   const [sub, setSub] = useState<AnalyticsSub>('analytics');
+
+  // The URL is the source of truth for a workspace tab. This keeps refresh, deep links and
+  // browser back/forward aligned with the visible view instead of leaving the tab in local state.
+  useEffect(() => {
+    if (urlTab === 'forecast' || urlTab === 'analytics' || urlTab === 'sources' || urlTab === 'executive'
+      || urlTab === 'radar' || urlTab === 'overview' || urlTab === 'board' || urlTab === 'list') {
+      if (urlTab === 'sources' || urlTab === 'executive') {
+        setTab('analytics');
+        setSub(urlTab);
+      } else setTab(urlTab as PageTab);
+    } else {
+      // Unknown/malformed tab values must never leave the workspace in an
+      // ambiguous state. Fall back to and canonicalize to the Overview tab so
+      // refresh/back-forward never reintroduce an unsupported view.
+      setTab('overview');
+      setSub('analytics');
+      if (pathname === '/crm/pipeline' && urlTab) {
+        const query = new URLSearchParams(params.toString());
+        query.set('tab', 'overview');
+        router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+      }
+    }
+  }, [urlTab, pathname, params, router]);
+
+  const selectTab = (next: PageTab): void => {
+    setTab(next);
+    if (pathname === '/crm/pipeline') {
+      const query = new URLSearchParams(params.toString());
+      query.set('tab', next);
+      router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+    }
+  };
 
   const openSignals = radar?.counts.open ?? 0;
   const attention = leadCommand?.counts?.needsAttention ?? 0;
@@ -58,13 +93,14 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
     tab === 'overview' ? 'command'
       : tab === 'board' ? 'board'
         : tab === 'list' ? 'list'
+          : tab === 'forecast' ? 'forecast'
           : tab === 'analytics' ? sub : null;
 
   // Cross-tab navigation from inside the pipeline client ("work on the Board…" links).
   const onViewChange = (v: View): void => {
-    if (v === 'analytics' || v === 'sources' || v === 'executive') { setTab('analytics'); setSub(v); }
-    else if (v === 'command') setTab('overview');
-    else setTab(v as PageTab);
+    if (v === 'analytics' || v === 'sources' || v === 'executive') { setSub(v); selectTab('analytics'); }
+    else if (v === 'command') selectTab('overview');
+    else selectTab(v as PageTab);
   };
 
   return (
@@ -76,7 +112,7 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
           const active = tab === t.id;
           return (
             <button key={t.id} type="button" role="tab" aria-selected={active} title={t.hint} data-testid={`pipeline-tab-${t.id}`}
-              style={{ ...st.tab, ...(active ? st.tabOn : {}) }} onClick={() => setTab(t.id)}>
+              style={{ ...st.tab, ...(active ? st.tabOn : {}) }} onClick={() => selectTab(t.id)}>
               <span style={{ fontSize: 14 }}>{t.icon}</span>
               {t.label}
               {badge > 0 && <span style={{ ...st.badge, ...(active ? st.badgeOn : {}) }}>{badge}</span>}

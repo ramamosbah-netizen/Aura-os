@@ -235,5 +235,8 @@ export const CRM_ACTIVITY_EVENT = {
   created: 'crm.activity.created',
   updated: 'crm.activity.updated',
   archived: 'crm.activity.archived',
+  started: 'crm.activity.started',
+  cancelled: 'crm.activity.cancelled',
+  reopened: 'crm.activity.reopened',
   completed: 'crm.activity.completed',
 } as const;

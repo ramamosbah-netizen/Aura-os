@@ -158,6 +158,12 @@ jobs:
       - name: R1 activation — grant aura_app LOGIN
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER ROLE aura_app LOGIN PASSWORD 'aura_app_ci';"
 
+      - name: CRM Activities RLS — same-tenant and cross-tenant proof under aura_app
+        run: |
+          OWNER_URL="$DATABASE_URL" \
+          APP_DATABASE_URL="postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable" \
+            node apps/api/scripts/crm-activities-rls-proof.mjs
+
       - name: R1 activation — boot the API as aura_app and run a business flow
         run: |
           cd apps/api

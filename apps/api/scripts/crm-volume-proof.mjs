@@ -107,6 +107,13 @@ async function explain() {
     ORDER BY a.created_at DESC, a.id DESC LIMIT 50`, [tenantId, 'Volume Account 9999']);
   const plan = rows[0]['QUERY PLAN'][0];
   console.log(`EXPLAIN ANALYZE search: ${plan['Execution Time']} ms; plan=${plan.Plan['Node Type']}`);
+  const activity = await pool.query(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+    SELECT id, subject, status, assignee_id, related_id
+    FROM public.aura_crm_activities
+    WHERE tenant_id = $1 AND subject ILIKE '%' || $2 || '%'
+    ORDER BY created_at DESC, id DESC LIMIT 50`, [tenantId, 'Volume Activity 99999']);
+  const activityPlan = activity.rows[0]['QUERY PLAN'][0];
+  console.log(`EXPLAIN ANALYZE activity search: ${activityPlan['Execution Time']} ms; plan=${activityPlan.Plan['Node Type']}`);
 }
 
 async function apiProof() {
@@ -127,6 +134,52 @@ async function apiProof() {
   console.log(`API proof: total=${first.total}, first=${first.items.length}, last=${last.items.length}, distantSearch=${distant.items.length}, strategic=${filtered.total}`);
 }
 
+async function activityProof() {
+  const login = await fetch(`${apiBase}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'u-admin', password: process.env.AUTH_DEV_PASSWORD ?? 'e2e-password' }) });
+  if (!login.ok) throw new Error(`Activities proof login failed (${login.status})`);
+  const token = (await login.json()).token;
+  const headers = { authorization: `Bearer ${token}` };
+  const get = async (path) => timed(path, async () => {
+    const response = await fetch(`${apiBase}${path}`, { headers });
+    if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+    return response.json();
+  });
+  const page = (offset, query = '') => `/api/v1/crm/activities/paged?limit=50&offset=${offset}${query}`;
+  const first = (await get(page(0))).value;
+  const middle = (await get(page(50_000))).value;
+  const last = (await get(page(counts.activities - 50))).value;
+  const distant = (await get(page(0, '&search=Volume%20Activity%2099999'))).value;
+  const meetings = (await get(page(0, '&type=meeting'))).value;
+  const completed = (await get(page(0, '&status=completed'))).value;
+  const assignee = (await get(page(0, '&assigneeId=u-volume-owner-7'))).value;
+  const byDate = (await get(page(0, `&dueDateFrom=${new Date().toISOString().slice(0, 10)}&dueDateTo=${new Date().toISOString().slice(0, 10)}`))).value;
+  const account = await pool.query(`SELECT id FROM public.aura_crm_accounts WHERE tenant_id = $1 AND name = 'Volume Account 1'`, [tenantId]);
+  const relatedId = account.rows[0]?.id;
+  if (!relatedId) throw new Error('volume proof account seed missing');
+  const related = (await get(page(0, `&relatedType=account&relatedId=${encodeURIComponent(relatedId)}`))).value;
+  const summary = (await get('/api/v1/crm/activities/summary')).value;
+  const scopedSummary = (await get(`/api/v1/crm/activities/summary?relatedType=account&relatedId=${encodeURIComponent(relatedId)}`)).value;
+  const exportResponse = await fetch(`${apiBase}/api/v1/crm/activities/export?status=completed`, { headers });
+  if (!exportResponse.ok) throw new Error(`activity export returned ${exportResponse.status}`);
+  const csvRows = (await exportResponse.text()).trimEnd().split('\n').length - 1;
+  const invalidAssignee = await fetch(`${apiBase}/api/v1/crm/activities`, {
+    method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'task', subject: 'invalid assignee proof', assigneeId: 'u-volume-unknown' }),
+  });
+  const expectedMeetings = Math.floor(counts.activities / 4);
+  const expectedCompleted = Math.floor(counts.activities / 6);
+  const expectedAssignee = counts.activities / 20;
+  console.log(`Activity related scope observed: pageTotal=${related.total}, pageItems=${related.items?.length ?? 'n/a'}, summaryTotal=${scopedSummary.total}`);
+  if (first.total !== counts.activities || first.items.length !== 50 || middle.items.length !== 50 || last.items.length !== 50 || !first.hasMore || last.hasMore) throw new Error('activity pagination invariant failed');
+  if (!distant.items.some((item) => item.subject === 'Volume Activity 99999')) throw new Error('activity deep search invariant failed');
+  if (meetings.total !== expectedMeetings || completed.total !== expectedCompleted || assignee.total !== expectedAssignee || byDate.total !== counts.activities) throw new Error('activity filter invariant failed');
+  if (related.total !== 10 || related.items.length !== 10 || scopedSummary.total !== 10) throw new Error('activity related scope invariant failed');
+  if (summary.total !== first.total || summary.open !== first.total - completed.total) throw new Error('activity summary must be page-independent');
+  if (csvRows !== expectedCompleted) throw new Error(`activity export returned ${csvRows} rows, expected ${expectedCompleted}`);
+  if (invalidAssignee.status !== 400) throw new Error(`unknown assignee was accepted (${invalidAssignee.status})`);
+  console.log(`Activities proof: total=${first.total}, first/middle/last=${first.items.length}/${middle.items.length}/${last.items.length}, deepSearch=${distant.items.length}, meetings=${meetings.total}, completed=${completed.total}, assignee=${assignee.total}, date=${byDate.total}, related=${related.total}, exportCompleted=${csvRows}, unknownAssignee=${invalidAssignee.status}`);
+}
+
 try {
   console.log(`CRM volume proof tenant=${tenantId}`);
   await timed('seed disposable dataset', seed);
@@ -136,6 +189,7 @@ try {
   }
   await explain();
   await apiProof();
+  await activityProof();
 } finally {
   await pool.end();
 }

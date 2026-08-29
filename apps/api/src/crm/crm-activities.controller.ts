@@ -1,12 +1,16 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
-import { IsIn, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Activity, type ActivityType, type ActivityStatus, type ActivityRelatedType,
   type CommunicationDirection,
-  ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, COMMUNICATION_DIRECTIONS, ActivityService,
+  ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, COMMUNICATION_DIRECTIONS, ActivityService, type ActivityFilter,
 } from '@aura/crm';
+import { ActivityReferenceService } from './activity-reference.service';
+
+const ACTIVITY_STATUSES: readonly ActivityStatus[] = ['open', 'in_progress', 'completed', 'cancelled'];
 
 class CreateActivityDto {
   // G10 — same edge rule as relatedType: a typo'd type would persist and silently vanish from
@@ -20,7 +24,7 @@ class CreateActivityDto {
   @IsOptional() @IsIn(ACTIVITY_RELATED_TYPES as readonly string[]) relatedType?: ActivityRelatedType;
   @IsOptional() @IsString() relatedId?: string;
   @IsOptional() @IsString() dueDate?: string;
-  @IsOptional() @IsString() status?: ActivityStatus;
+  @IsOptional() @IsIn(ACTIVITY_STATUSES as readonly string[]) status?: ActivityStatus;
   @IsOptional() @IsString() assigneeId?: string;
   @IsOptional() @IsString() relatedName?: string;
   @IsOptional() @IsString() outcome?: string;
@@ -37,7 +41,7 @@ class FollowUpDto {
 
 class CompleteActivityDto {
   @IsOptional() @IsString() outcome?: string;
-  @IsOptional() followUp?: FollowUpDto;
+  @IsOptional() @ValidateNested() @Type(() => FollowUpDto) followUp?: FollowUpDto;
 }
 
 /**
@@ -49,13 +53,16 @@ export class CrmActivitiesController {
   constructor(
     private readonly activities: ActivityService,
     private readonly tenant: TenantContext,
+    private readonly references: ActivityReferenceService,
   ) {}
 
+  @Permissions('crm.activity.create')
   @Post()
-  create(@Body() dto: CreateActivityDto): Promise<Activity> {
+  async create(@Body() dto: CreateActivityDto): Promise<Activity> {
     if (!dto?.type) throw new BadRequestException('type is required');
     if (!dto?.subject?.trim()) throw new BadRequestException('subject is required');
     const ctx = this.tenant.get();
+    await this.references.validate(ctx.tenantId, dto.relatedType, dto.relatedId);
     return this.activities.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
@@ -74,31 +81,80 @@ export class CrmActivitiesController {
     });
   }
 
+  @Permissions('crm.activity.read')
   @Get()
   list(
     @Query('relatedType') relatedType?: string,
     @Query('relatedId') relatedId?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
+    @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
   ): Promise<Activity[]> {
-    return this.activities.list({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, limit: 100 });
+    return this.activities.list({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo, limit: 100 });
   }
 
+  @Permissions('crm.activity.read')
   @Get('paged')
   paged(
     @Query('relatedType') relatedType?: string,
     @Query('relatedId') relatedId?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
+    @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.activities.listPaged(
-      { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type },
+      { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo },
       parsePageParams(limit, offset),
     );
   }
 
+  @Permissions('crm.activity.read')
+  @Get('summary')
+  summary(
+    @Query('relatedType') relatedType?: string,
+    @Query('relatedId') relatedId?: string,
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+    @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
+  ) {
+    return this.activities.summary({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo });
+  }
+
+  @Permissions('crm.activity.read')
+  @Header('content-type', 'text/csv; charset=utf-8')
+  @Get('export')
+  async export(
+    @Query('relatedType') relatedType?: string,
+    @Query('relatedId') relatedId?: string,
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+    @Query('search') search?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('dueDateFrom') dueDateFrom?: string,
+    @Query('dueDateTo') dueDateTo?: string,
+  ): Promise<string> {
+    const filter: ActivityFilter = { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, assigneeId, dueDateFrom, dueDateTo };
+    const rows = await this.activities.listAll(filter);
+    const fields: Array<keyof Activity> = ['type', 'subject', 'relatedName', 'assigneeId', 'dueDate', 'status', 'outcome'];
+    const quote = (value: unknown): string => {
+      const text = value == null ? '' : String(value);
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    return `${fields.join(',')}\n${rows.map((row) => fields.map((field) => quote(row[field])).join(',')).join('\n')}\n`;
+  }
+
+  @Permissions('crm.activity.read')
   @Get(':id')
   async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
     const found = await this.activities.get(id);
@@ -106,30 +162,36 @@ export class CrmActivitiesController {
     return found;
   }
 
+  @Permissions('crm.activity.update')
   @Post(':id/cancel')
   async cancel(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
     try {
-      return await this.activities.cancel(id);
+      return await this.activities.cancel(id, this.tenant.get().actorId);
     } catch (err) {
+      if (err instanceof ForbiddenException) throw err;
       throw new BadRequestException(err instanceof Error ? err.message : 'cancel failed');
     }
   }
 
   /** G11 — begin work on a planned activity (site visits span hours; started ≠ scheduled). */
+  @Permissions('crm.activity.update')
   @Post(':id/start')
   async start(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
     try {
-      return await this.activities.start(id);
+      return await this.activities.start(id, this.tenant.get().actorId);
     } catch (err) {
+      if (err instanceof ForbiddenException) throw err;
       throw new BadRequestException(err instanceof Error ? err.message : 'start failed');
     }
   }
 
+  @Permissions('crm.activity.update')
   @Post(':id/reopen')
   async reopen(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Activity> {
     try {
-      return await this.activities.reopen(id);
+      return await this.activities.reopen(id, this.tenant.get().actorId);
     } catch (err) {
+      if (err instanceof ForbiddenException) throw err;
       throw new BadRequestException(err instanceof Error ? err.message : 'reopen failed');
     }
   }
@@ -139,11 +201,13 @@ export class CrmActivitiesController {
    * follow-up task linked to the same record — the "log the call → what happened
    * → book the next step" loop that keeps a relationship warm.
    */
+  @Permissions('crm.activity.update')
   @Post(':id/complete')
   async complete(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto?: CompleteActivityDto): Promise<Activity> {
-    const done = await this.activities.complete(id, undefined, dto?.outcome);
+    const ctx = this.tenant.get();
+    const done = await this.activities.complete(id, undefined, dto?.outcome, ctx.actorId);
     if (dto?.followUp?.subject?.trim() && dto.followUp.type) {
-      const ctx = this.tenant.get();
+      await this.references.validate(ctx.tenantId, done.relatedType, done.relatedId);
       await this.activities.create({
         tenantId: ctx.tenantId,
         companyId: ctx.companyId,
@@ -159,4 +223,5 @@ export class CrmActivitiesController {
     }
     return done;
   }
+
 }

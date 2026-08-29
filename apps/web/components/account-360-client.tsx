@@ -19,6 +19,7 @@ import InstalledBasePanel from './installed-base-panel';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import DataStateNotice from './ui/data-state';
 import { classifyStatus, type DataError } from '@/lib/data-error';
+import { activityRegisterHref } from '@/lib/activity-navigation';
 
 // Account 360 — the customer COMMAND CENTER. The Account is the persistent
 // commercial party every deal revolves around (the hub, not the first step).
@@ -296,7 +297,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   else if (contacts.length === 0) nba = { label: 'Add key contacts', onClick: () => setTab('contacts') };
   else if (!hasPrimary) nba = { label: 'Set the primary contact', onClick: () => setTab('contacts') };
   else if (openOpps.length === 0) nba = { label: 'Create an opportunity', href: '/crm/pipeline' };
-  else if (upcoming.length === 0) nba = { label: 'Schedule the next step', href: '/crm/activities' };
+  else if (upcoming.length === 0) nba = { label: 'Schedule the next step', href: activityRegisterHref('account', a.id) };
 
   // Outcome Loop — writes a real activity linked to this account (§17 activity stream).
   const logOutcome = async (choiceId: string): Promise<void> => {
@@ -392,7 +393,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
               <summary style={{ ...st.actionBtn, listStyle: 'none', cursor: 'pointer' }}>More ▾</summary>
               <div style={st.menu}>
                 <button type="button" onClick={() => setTab('contacts')} style={{ ...st.menuItem, background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%' }}>+ Contact</button>
-                <a href="/crm/activities" style={st.menuItem}>+ Activity</a>
+                <a href={activityRegisterHref('account', a.id)} style={st.menuItem}>+ Activity</a>
                 <a href="/finance/ar" style={st.menuItem}>Accounts receivable →</a>
               </div>
             </details>
@@ -492,7 +493,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             <div style={st.oCard}>
               <div style={st.oTitle}>Upcoming Actions</div>
               {upcoming.length === 0 ? (
-                <p style={st.oMuted}>No open activities — <a href="/crm/activities" style={st.rowLink}>log the next step →</a></p>
+                <p style={st.oMuted}>No open activities — <a href={activityRegisterHref('account', a.id)} style={st.rowLink}>log the next step →</a></p>
               ) : (
                 upcoming.map((x) => (
                   <div key={x.id} style={st.tlRow}>

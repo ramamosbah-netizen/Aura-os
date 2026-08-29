@@ -1,16 +1,11 @@
-import { apiFetch, apiBase, authHeader } from '@/lib/api';
-
-// BFF: Commercial Activity command center — overdue + relationship-inactivity view.
-
+/**
+ * The former Activity Command Center duplicated Relationship Intelligence and had no active
+ * UI consumer. Keep a safe tombstone for stale bookmarks/integrations while the canonical
+ * surfaces remain `/crm/intelligence/alerts`, Sales Overview, and the Activity summary.
+ */
 export async function GET(): Promise<Response> {
-  try {
-    const res = await apiFetch(`${apiBase()}/api/v1/crm/activities/command`, {
-      headers: await authHeader(),
-      cache: 'no-store',
-    });
-    const data = await res.json().catch(() => ({}));
-    return Response.json(data, { status: res.status });
-  } catch {
-    return Response.json({ error: 'CRM API unreachable' }, { status: 502 });
-  }
+  return Response.json(
+    { error: 'Activity command endpoint retired; use Relationship Intelligence or Activity summary.' },
+    { status: 410, headers: { Deprecation: 'true' } },
+  );
 }

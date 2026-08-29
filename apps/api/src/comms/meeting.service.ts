@@ -1,9 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { ActivityService, type ActivityRelatedType } from '@aura/crm';
 import { NotificationService } from '@aura/core';
 import { newId } from '@aura/shared';
 import { COMMS_STORE, type CommsStore } from './comms-store';
 import { MEETING_STORE, type Meeting, type MeetingAttendee, type MeetingItem, type MeetingPatch, type MeetingStore, type MeetingType } from './meeting-store';
+import { ActivityReferenceService } from '../crm/activity-reference.service';
 
 const RELATED_TYPES = new Set(['account', 'contact', 'lead', 'opportunity', 'quotation', 'tender', 'contract', 'project']);
 
@@ -14,6 +15,7 @@ export class MeetingService {
     private readonly activities: ActivityService,
     private readonly notifications: NotificationService,
     @Inject(COMMS_STORE) private readonly comms: CommsStore,
+    @Optional() private readonly references?: ActivityReferenceService,
   ) {}
 
   async list(tenantId: string, companyId: string | null, scope?: string): Promise<Meeting[]> {
@@ -51,8 +53,9 @@ export class MeetingService {
     if (!input.title?.trim()) throw new BadRequestException('Meeting title is required');
     const startsAt = new Date(input.startsAt); const endsAt = new Date(input.endsAt);
     if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) throw new BadRequestException('Meeting times are invalid');
-    const meeting = await this.store.create({ ...input, title: input.title.trim(), meetingType: input.meetingType ?? 'internal_coordination', timezone: input.timezone ?? 'Asia/Dubai', createdBy: input.organizerId, relatedType: input.relatedType && RELATED_TYPES.has(input.relatedType) ? input.relatedType : null });
-    const relatedType = meeting.relatedType && RELATED_TYPES.has(meeting.relatedType) ? meeting.relatedType as ActivityRelatedType : null;
+    const relatedType = input.relatedType && RELATED_TYPES.has(input.relatedType) ? input.relatedType as ActivityRelatedType : null;
+    await this.references?.validate(input.tenantId, relatedType, input.relatedId);
+    const meeting = await this.store.create({ ...input, title: input.title.trim(), meetingType: input.meetingType ?? 'internal_coordination', timezone: input.timezone ?? 'Asia/Dubai', createdBy: input.organizerId, relatedType });
     await this.activities.create({ tenantId: meeting.tenantId, companyId: meeting.companyId, type: 'meeting', subject: meeting.title, notes: meeting.agenda, dueDate: meeting.startsAt.slice(0, 10), relatedType, relatedId: meeting.relatedId, relatedName: meeting.relatedName, assigneeId: meeting.organizerId, createdBy: meeting.createdBy });
     await this.comms.publishTimeline(meeting.tenantId, { id: newId(), companyId: meeting.companyId, occurredAt: meeting.startsAt, channel: 'meeting', direction: 'internal', actor: meeting.organizerId, subjectType: 'meeting', subjectId: meeting.id, title: meeting.title, preview: `${meeting.meetingType} · scheduled`, visibility: 'participants', visibilityKey: meeting.id });
     const recipients = [...new Set([meeting.organizerId, ...meeting.attendees.map((attendee) => attendee.userId).filter((id): id is string => Boolean(id))])];
@@ -73,6 +76,8 @@ export class MeetingService {
     if (!kind || !input.title?.trim()) throw new BadRequestException('An item kind and title are required');
     let taskId: string | null = null;
     if (kind === 'action') {
+      const relatedType = meeting.relatedType && RELATED_TYPES.has(meeting.relatedType) ? meeting.relatedType as ActivityRelatedType : null;
+      await this.references?.validate(tenantId, relatedType, meeting.relatedId);
       const task = await this.activities.create({ tenantId, companyId: meeting.companyId, type: 'task', subject: input.title.trim(), notes: input.detail ?? `Action from meeting: ${meeting.title}`, dueDate: input.dueAt ?? null, relatedType: meeting.relatedType && RELATED_TYPES.has(meeting.relatedType) ? meeting.relatedType as ActivityRelatedType : null, relatedId: meeting.relatedId, relatedName: meeting.relatedName, assigneeId: input.ownerId ?? actorId, createdBy: actorId });
       taskId = task.id;
       if (input.ownerId) await this.notifications.record({ tenantId, userId: input.ownerId, title: `Meeting action assigned: ${input.title.trim()}`, body: meeting.title, category: 'my-work', refType: 'crm.activity', refId: task.id });
@@ -85,7 +90,7 @@ export class MeetingService {
     const meeting = await this.requireActor(tenantId, meetingId, companyId, actorId, isAdmin);
     const item = [...meeting.decisions, ...meeting.actionItems].find((candidate) => candidate.id === itemId);
     if (!item) throw new NotFoundException('Meeting item not found');
-    if (patch.status === 'done' && item.taskId) await this.activities.complete(item.taskId, undefined, `Completed from meeting: ${meeting.title}`);
+    if (patch.status === 'done' && item.taskId) await this.activities.complete(item.taskId, undefined, `Completed from meeting: ${meeting.title}`, actorId);
     const updated = await this.store.updateItem(tenantId, meetingId, itemId, patch); if (!updated) throw new NotFoundException('Meeting not found'); return updated;
   }
 

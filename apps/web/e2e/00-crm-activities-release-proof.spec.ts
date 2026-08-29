@@ -4,20 +4,28 @@ import { scoped } from './fixtures';
 test.describe('CRM Activities release proof', () => {
   test('Opportunity 360 → contextual follow-up → My Work execution → completed timeline', async ({ page }) => {
     const accountResponse = await page.request.post('/api/crm/accounts', { data: { name: scoped('Activities proof account'), status: 'prospect', industry: 'construction' } });
-    expect(accountResponse.ok(), await accountResponse.text()).toBe(true);
-    const account = await accountResponse.json() as { id: string };
+    const accountBody = await accountResponse.text();
+    expect(accountResponse.ok(), `account creation failed (${accountResponse.status()}): ${accountBody}`).toBe(true);
+    const account = JSON.parse(accountBody) as { id?: string; value?: { id?: string } };
+    const accountId = account.id ?? account.value?.id;
+    expect(accountId, `account creation returned no id: ${accountBody}`).toBeTruthy();
+    if (!accountId) throw new Error(`account creation returned no id: ${accountBody}`);
 
     const opportunityResponse = await page.request.post('/api/crm/opportunities', {
-      data: { title: scoped('Activities proof opportunity'), accountId: account.id, value: 125000, stage: 'qualification' },
+      data: { title: scoped('Activities proof opportunity'), accountId, value: 125000, stage: 'qualification' },
     });
-    expect(opportunityResponse.ok(), await opportunityResponse.text()).toBe(true);
-    const opportunity = await opportunityResponse.json() as { id: string };
+    const opportunityBody = await opportunityResponse.text();
+    expect(opportunityResponse.ok(), `opportunity creation failed (${opportunityResponse.status()}): ${opportunityBody}`).toBe(true);
+    const opportunity = JSON.parse(opportunityBody) as { id?: string; value?: { id?: string } };
+    const opportunityId = opportunity.id ?? opportunity.value?.id;
+    expect(opportunityId, `opportunity creation returned no id: ${opportunityBody}`).toBeTruthy();
+    if (!opportunityId) throw new Error(`opportunity creation returned no id: ${opportunityBody}`);
 
-    await page.goto(`/crm/opportunities/${opportunity.id}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`/crm/opportunities/${opportunityId}`, { waitUntil: 'load' });
     await expect(page.getByRole('heading', { name: /Activities proof opportunity/ })).toBeVisible();
     await page.getByRole('tab', { name: 'Engagement' }).click();
     await page.getByRole('link', { name: /log the next step/i }).click();
-    await expect(page).toHaveURL(new RegExp(`/crm/activities\\?relatedType=opportunity&record=${opportunity.id}`));
+    await expect(page).toHaveURL(new RegExp(`/crm/activities\\?relatedType=opportunity&record=${opportunityId}`));
     await expect(page.getByRole('heading', { name: 'Opportunity Activity Timeline' })).toBeVisible();
 
     await page.getByTestId('create-activity').click();
@@ -26,7 +34,8 @@ test.describe('CRM Activities release proof', () => {
     await drawer.getByLabel('Type').selectOption('follow_up');
     await drawer.getByLabel('Subject').fill(scoped('Send revised quotation'));
     await expect(drawer.getByLabel('Related type')).toHaveValue('opportunity');
-    await expect(drawer.getByLabel('Related record')).toHaveValue(opportunity.id);
+    await expect(drawer.getByLabel('Related record')).toHaveValue(opportunityId);
+    await drawer.getByLabel('Assignee').fill(process.env.E2E_USERNAME ?? 'u-admin');
     await drawer.getByTestId('submit-activity').click();
     await expect(page.getByText(/Send revised quotation/)).toBeVisible();
     const activityRow = page.getByText(/Send revised quotation/).locator('xpath=ancestor::tr');
@@ -42,7 +51,7 @@ test.describe('CRM Activities release proof', () => {
     await workItem.getByRole('button', { name: 'Complete' }).click();
     await expect(workItem.getByText('Done')).toBeVisible();
 
-    await page.goto(`/crm/activities?relatedType=opportunity&record=${opportunity.id}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`/crm/activities?relatedType=opportunity&record=${opportunityId}`, { waitUntil: 'load' });
     const completedRow = page.getByText(/Send revised quotation/).locator('xpath=ancestor::tr');
     await expect(completedRow.getByText('completed')).toBeVisible();
   });

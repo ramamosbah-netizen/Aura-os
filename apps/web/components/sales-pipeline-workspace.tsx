@@ -30,6 +30,9 @@ interface Account { id: string; name: string }
 type PageTab = 'radar' | 'overview' | 'board' | 'list' | 'forecast' | 'analytics';
 type AnalyticsSub = 'analytics' | 'sources' | 'executive';
 
+const PAGE_TABS: readonly PageTab[] = ['radar', 'overview', 'board', 'list', 'forecast', 'analytics'];
+const ANALYTICS_SUBVIEWS: readonly AnalyticsSub[] = ['analytics', 'sources', 'executive'];
+
 const TAB_DEFS: Array<{ id: PageTab; label: string; icon: string; hint: string }> = [
   { id: 'radar', label: 'Radar', icon: '⚡', hint: 'Signals — triage what the market is telling you' },
   { id: 'overview', label: 'Overview', icon: '◎', hint: 'The pipeline cockpit + leads needing attention' },
@@ -44,45 +47,79 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
   leadCommand: LeadCommand | null; radar: RadarData | null;
 }) {
   // Deep-linkable from the Sales Home shortcuts (e.g. Analytics → /crm/pipeline?tab=analytics).
+  // Board/List are display modes for the same Opportunities dataset, so their canonical URL is
+  // `?view=board|list`; keep accepting the old `tab=board|list` links for bookmark compatibility.
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const urlTab = params.get('tab');
-  const initialTab: PageTab = (['radar', 'overview', 'board', 'list', 'forecast', 'analytics'] as const).includes(urlTab as PageTab)
-    ? (urlTab as PageTab)
-    : 'overview';
+  const urlView = params.get('view');
+  const initialTab: PageTab = urlTab === 'sources' || urlTab === 'executive' ? 'analytics'
+    : PAGE_TABS.includes(urlTab as PageTab) ? (urlTab as PageTab)
+      : urlView === 'board' || urlView === 'list' ? urlView : 'overview';
+  const initialSub: AnalyticsSub = urlTab === 'sources' || urlTab === 'executive' ? urlTab
+    : urlTab === 'analytics' && ANALYTICS_SUBVIEWS.includes(urlView as AnalyticsSub) ? (urlView as AnalyticsSub)
+      : 'analytics';
   const [tab, setTab] = useState<PageTab>(initialTab);
-  const [sub, setSub] = useState<AnalyticsSub>('analytics');
+  const [sub, setSub] = useState<AnalyticsSub>(initialSub);
 
   // The URL is the source of truth for a workspace tab. This keeps refresh, deep links and
   // browser back/forward aligned with the visible view instead of leaving the tab in local state.
   useEffect(() => {
-    if (urlTab === 'forecast' || urlTab === 'analytics' || urlTab === 'sources' || urlTab === 'executive'
-      || urlTab === 'radar' || urlTab === 'overview' || urlTab === 'board' || urlTab === 'list') {
-      if (urlTab === 'sources' || urlTab === 'executive') {
+    if (urlTab === 'sources' || urlTab === 'executive') {
+      setTab('analytics');
+      setSub(urlTab);
+    } else if (PAGE_TABS.includes(urlTab as PageTab)) {
+      if (urlTab === 'board' || urlTab === 'list') {
+        setTab(urlTab);
+        setSub('analytics');
+      } else if (urlTab === 'analytics') {
         setTab('analytics');
-        setSub(urlTab);
-      } else setTab(urlTab as PageTab);
+        setSub(ANALYTICS_SUBVIEWS.includes(urlView as AnalyticsSub) ? (urlView as AnalyticsSub) : 'analytics');
+      } else {
+        setTab(urlTab as PageTab);
+        setSub('analytics');
+      }
+    } else if (urlView === 'board' || urlView === 'list') {
+      setTab(urlView);
+      setSub('analytics');
     } else {
       // Unknown/malformed tab values must never leave the workspace in an
       // ambiguous state. Fall back to and canonicalize to the Overview tab so
       // refresh/back-forward never reintroduce an unsupported view.
       setTab('overview');
       setSub('analytics');
-      if (pathname === '/crm/pipeline' && urlTab) {
+      if (pathname === '/crm/pipeline' && (urlTab || urlView)) {
         const query = new URLSearchParams(params.toString());
+        query.delete('view');
         query.set('tab', 'overview');
         router.replace(`${pathname}?${query.toString()}`, { scroll: false });
       }
     }
-  }, [urlTab, pathname, params, router]);
+  }, [urlTab, urlView, pathname, params, router]);
 
   const selectTab = (next: PageTab): void => {
     setTab(next);
+    setSub('analytics');
     if (pathname === '/crm/pipeline') {
       const query = new URLSearchParams(params.toString());
-      query.set('tab', next);
-      router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+      query.delete('tab');
+      query.delete('view');
+      if (next === 'board' || next === 'list') query.set('view', next);
+      else query.set('tab', next);
+      router.push(`${pathname}?${query.toString()}`, { scroll: false });
+    }
+  };
+
+  const selectAnalyticsSub = (next: AnalyticsSub): void => {
+    setTab('analytics');
+    setSub(next);
+    if (pathname === '/crm/pipeline') {
+      const query = new URLSearchParams(params.toString());
+      query.set('tab', 'analytics');
+      if (next === 'analytics') query.delete('view');
+      else query.set('view', next);
+      router.push(`${pathname}?${query.toString()}`, { scroll: false });
     }
   };
 
@@ -98,7 +135,7 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
 
   // Cross-tab navigation from inside the pipeline client ("work on the Board…" links).
   const onViewChange = (v: View): void => {
-    if (v === 'analytics' || v === 'sources' || v === 'executive') { setSub(v); selectTab('analytics'); }
+    if (v === 'analytics' || v === 'sources' || v === 'executive') selectAnalyticsSub(v);
     else if (v === 'command') selectTab('overview');
     else selectTab(v as PageTab);
   };
@@ -136,7 +173,7 @@ export default function SalesPipelineWorkspace({ leads, opportunities, accounts,
           {tab === 'analytics' && (
             <div style={st.subBar}>
               {([['analytics', 'Performance'], ['sources', 'Sources & margin'], ['executive', 'Executive']] as Array<[AnalyticsSub, string]>).map(([id, label]) => (
-                <button key={id} type="button" style={{ ...st.subTab, ...(sub === id ? st.subTabOn : {}) }} onClick={() => setSub(id)}>
+                <button key={id} type="button" style={{ ...st.subTab, ...(sub === id ? st.subTabOn : {}) }} onClick={() => selectAnalyticsSub(id)}>
                   {label}
                 </button>
               ))}

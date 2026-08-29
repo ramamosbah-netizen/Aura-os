@@ -8,8 +8,11 @@ describe('Sales navigation ownership', () => {
     expect(sales?.items.some((item) => item.href === '/crm/activities')).toBe(false);
     expect(sales?.items.map((item) => item.href)).toEqual(expect.arrayContaining([
       '/crm/overview',
+      '/crm/pipeline?tab=radar',
       '/crm/leads',
-      '/crm/pipeline',
+      '/crm/pipeline?view=board',
+      '/crm/pipeline?tab=forecast',
+      '/crm/pipeline?tab=analytics&view=performance',
       '/crm/customers',
       '/crm/quotations',
     ]));

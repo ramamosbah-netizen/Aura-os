@@ -56,11 +56,11 @@ export interface SalesOpportunity {
 
 /** Sales Home is a cockpit, not an activity manager: each shortcut has one clear job in the sell cycle. */
 const SHORTCUTS: SuiteShortcut[] = [
-  { label: 'Pipeline', description: 'Deals by stage — where they are & what’s next', href: '/crm/pipeline', icon: Workflow, tone: 'teal' },
+  { label: 'Opportunities', description: 'Deals by stage — switch between Board and List', href: '/crm/pipeline?view=board', icon: Workflow, tone: 'teal' },
   { label: 'Customers', description: 'Accounts, contacts & relationship 360', href: '/crm/customers', icon: Building2, tone: 'cyan' },
   { label: 'Quotations', description: 'Draft → review → sent → won', href: '/crm/quotations', icon: FileText, tone: 'amber' },
   { label: 'Forecast', description: 'Commit, best-case & expected close', href: '/crm/pipeline?tab=forecast', icon: Target, tone: 'blue' },
-  { label: 'Analytics', description: 'Conversion, win/loss & performance', href: '/crm/pipeline?tab=analytics', icon: BarChart3, tone: 'violet' },
+  { label: 'Analytics', description: 'Conversion, win/loss & performance', href: '/crm/pipeline?tab=analytics&view=performance', icon: BarChart3, tone: 'violet' },
 ];
 
 const aed = (n: number): string => 'AED ' + n.toLocaleString('en-AE', { maximumFractionDigits: 0 });
@@ -96,11 +96,11 @@ export default function SalesDashboard({
   const stageValue = (stage: string) => opps.filter((o) => o.stage === stage).reduce((s, o) => s + (o.value || 0), 0);
   const stageCount = (stage: string) => opps.filter((o) => o.stage === stage).length;
   const stages: PipelineStage[] = [
-    { label: 'Lead', count: leadCount ?? 0, value: '—', href: '/crm/pipeline', tabTitle: 'Pipeline', tabType: 'Sales' },
-    { label: 'Qualified', count: stageCount('qualification'), value: aed(stageValue('qualification')), href: '/crm/pipeline', tabTitle: 'Pipeline', tabType: 'Sales' },
-    { label: 'Proposal', count: stageCount('proposal'), value: aed(stageValue('proposal')), href: '/crm/pipeline', tabTitle: 'Pipeline', tabType: 'Sales' },
-    { label: 'Negotiation', count: stageCount('negotiation'), value: aed(stageValue('negotiation')), href: '/crm/pipeline', tabTitle: 'Pipeline', tabType: 'Sales' },
-    { label: 'Won', count: stageCount('won'), value: aed(stageValue('won')), href: '/crm/pipeline', tabTitle: 'Pipeline', tabType: 'Sales' },
+    { label: 'Lead', count: leadCount ?? 0, value: '—', href: '/crm/pipeline', tabTitle: 'Opportunities', tabType: 'Sales' },
+    { label: 'Qualified', count: stageCount('qualification'), value: aed(stageValue('qualification')), href: '/crm/pipeline', tabTitle: 'Opportunities', tabType: 'Sales' },
+    { label: 'Proposal', count: stageCount('proposal'), value: aed(stageValue('proposal')), href: '/crm/pipeline', tabTitle: 'Opportunities', tabType: 'Sales' },
+    { label: 'Negotiation', count: stageCount('negotiation'), value: aed(stageValue('negotiation')), href: '/crm/pipeline', tabTitle: 'Opportunities', tabType: 'Sales' },
+    { label: 'Won', count: stageCount('won'), value: aed(stageValue('won')), href: '/crm/pipeline', tabTitle: 'Opportunities', tabType: 'Sales' },
   ];
   const hasStrip = opportunities !== null || leadCount !== null;
 
@@ -151,7 +151,7 @@ export default function SalesDashboard({
       band={hasStrip ? (
         <PipelineStrip
           title="Pipeline"
-          viewAll={{ href: '/crm/pipeline', label: 'Open pipeline', tabTitle: 'Pipeline', tabType: 'Sales' }}
+          viewAll={{ href: '/crm/pipeline?view=board', label: 'Open opportunities', tabTitle: 'Opportunities', tabType: 'Sales' }}
           stages={stages}
         />
       ) : undefined}
@@ -159,7 +159,7 @@ export default function SalesDashboard({
       attention={{
         kicker: 'Pipeline engine · most valuable first',
         title: 'Needs your attention',
-        headerLink: { href: '/crm/pipeline', label: 'Open pipeline', tabTitle: 'Pipeline', tabType: 'Sales' },
+        headerLink: { href: '/crm/pipeline?view=board', label: 'Open opportunities', tabTitle: 'Opportunities', tabType: 'Sales' },
         items: attentionItems,
         unavailableLabel: 'Pipeline data is unavailable. Open the Pipeline workspace to check the source.',
         emptyLabel: 'No at-risk deals — the pipeline is clean.',
@@ -174,7 +174,7 @@ export default function SalesDashboard({
         kicker: 'Live sales signals',
         title: 'AURA Sales brief',
         body: briefBody,
-        cta: { href: '/crm/pipeline', label: 'Review deals', tabTitle: 'Pipeline', tabType: 'Sales' },
+        cta: { href: '/crm/pipeline?view=board', label: 'Review opportunities', tabTitle: 'Opportunities', tabType: 'Sales' },
       }}
       ownership={<>
         <FileText aria-hidden />

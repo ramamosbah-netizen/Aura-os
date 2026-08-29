@@ -376,17 +376,21 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       {err && <div style={s.errorBar}>{err}</div>}
       {msg && <div style={s.okBar}>{msg}</div>}
 
-      {/* KPI strip — leads and opportunities are SEPARATE counts */}
-      <div style={s.kpiStrip}>
-        <Kpi label="Total Leads" value={String(activeLeads.length)} />
-        <Kpi label="Qualified Leads" value={String(qualifiedLeads.length)} />
-        <Kpi label="Active Opportunities" value={String(activeOpps.length)} />
-        <Kpi label="Pipeline Value" value={money(pipelineValue)} />
-        <Kpi label="Weighted Forecast" value={money(weighted)} accent />
-        <Kpi label="Won Value" value={money(wonValue)} good />
-        <Kpi label="Won This Month" value={`${wonThisMonth.length} · ${money(wonThisMonth.reduce((x, o) => x + o.value, 0))}`} good />
-        <Kpi label="Win Rate" value={winRate === null ? '—' : `${winRate}%`} accent />
-      </div>
+      {/* Operational summary belongs to the Opportunities display modes. Overview, Forecast and
+          Analytics each own a different read model; repeating this strip there made the same
+          pipeline numbers look like three competing sources of truth. */}
+      {(view === 'board' || view === 'list') && (
+        <div style={s.kpiStrip} data-testid="opportunities-summary">
+          <Kpi label="Total Leads" value={String(activeLeads.length)} />
+          <Kpi label="Qualified Leads" value={String(qualifiedLeads.length)} />
+          <Kpi label="Active Opportunities" value={String(activeOpps.length)} />
+          <Kpi label="Pipeline Value" value={money(pipelineValue)} />
+          <Kpi label="Weighted Forecast" value={money(weighted)} accent />
+          <Kpi label="Won Value" value={money(wonValue)} good />
+          <Kpi label="Won This Month" value={`${wonThisMonth.length} · ${money(wonThisMonth.reduce((x, o) => x + o.value, 0))}`} good />
+          <Kpi label="Win Rate" value={winRate === null ? '—' : `${winRate}%`} accent />
+        </div>
+      )}
 
       {/* view switch + creates (switcher hides when the workspace owns the tabs) */}
       <div style={s.tabBar}>
@@ -492,21 +496,6 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               <CmdKpi label="At risk" value={String(command.atRisk.length)} bad={command.atRisk.length > 0} />
             </div>
 
-            {/* §23 forecast categories — the management commitment ladder */}
-            {command.categories && (
-              <div style={s.cmdKpiRow}>
-                {command.categories.map((c) => (
-                  <CmdKpi
-                    key={c.category}
-                    label={c.category === 'BEST_CASE' ? 'Best case' : c.category.charAt(0) + c.category.slice(1).toLowerCase()}
-                    value={`${c.deals} · ${money(c.value)}`}
-                    accent={c.category === 'COMMIT'}
-                    good={c.category === 'CLOSED'}
-                  />
-                ))}
-              </div>
-            )}
-
             <div style={s.cmdGrid}>
               {/* At-risk deals + recommendations */}
               <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
@@ -533,7 +522,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               </section>
 
             </div>
-            <p style={s.muted}>Work deals on the <button type="button" style={s.linkBtn} onClick={() => setView('board')}>Board</button> · deep-dive in <button type="button" style={s.linkBtn} onClick={() => setView('analytics')}>Analytics</button> (aging, owner performance, forecast by month & stalled deals).</p>
+            <p style={s.muted}>Work deals on the <button type="button" style={s.linkBtn} onClick={() => setView('board')}>Opportunities Board</button> · review future close expectations in <button type="button" style={s.linkBtn} onClick={() => setView('forecast')}>Forecast</button> · explain performance in <button type="button" style={s.linkBtn} onClick={() => setView('analytics')}>Analytics</button>.</p>
           </div>
         )
       )}

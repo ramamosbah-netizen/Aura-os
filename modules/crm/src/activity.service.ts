@@ -1,8 +1,8 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { assertSameTenant, type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
-import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { EVENT_STORE, type EventStore, TenantContext, UsersService } from '@aura/core';
 import { ACTIVITY_RELATED_TYPES, CRM_ACTIVITY_EVENT, type Activity, type ActivityDetailsPatch, type NewActivity, archiveActivity, cancelActivity, completeActivity, editActivity, makeActivity, reopenActivity, startActivity } from './domain/activity';
-import { CRM_ACTIVITY_STORE, type ActivityFilter, type ActivityStore } from './activity-store';
+import { CRM_ACTIVITY_STORE, type ActivityFilter, type ActivityStore, type ActivitySummary } from './activity-store';
 
 /**
  * CRM Activity service — logged interactions + tasks across the deal chain. Owns
@@ -18,6 +18,7 @@ export class ActivityService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
   ) {}
 
   async create(input: NewActivity): Promise<Activity> {
@@ -27,6 +28,7 @@ export class ActivityService {
     if (input.relatedType && !(ACTIVITY_RELATED_TYPES as readonly string[]).includes(input.relatedType)) {
       throw new BadRequestException('invalid relatedType');
     }
+    await this.assertAssignee(input.tenantId, input.assigneeId);
     const activity = makeActivity(input);
     await this.store.save(activity);
     await this.events.append([
@@ -142,6 +144,14 @@ export class ActivityService {
     return this.store.listPaged(this.scopedFilter(filter), page);
   }
 
+  summary(filter?: ActivityFilter, now?: Date): Promise<ActivitySummary> {
+    return this.store.summary(this.scopedFilter(filter), now);
+  }
+
+  listAll(filter?: ActivityFilter): Promise<Activity[]> {
+    return this.store.listAll(this.scopedFilter(filter));
+  }
+
   private scopedFilter(filter?: ActivityFilter): ActivityFilter {
     const boundTenant = this.tenant?.boundTenantId();
     if (!boundTenant) return filter ?? {};
@@ -178,5 +188,20 @@ export class ActivityService {
       aggregateId: activity.id,
       payload: { subject: activity.subject, previousStatus, status: activity.status, startedAt: activity.startedAt, completedAt: activity.completedAt },
     })]);
+  }
+
+  /**
+   * Assignment is a workspace relationship, not an arbitrary string. Resolve it through the
+   * canonical tenant-scoped directory before persisting so unknown, foreign-tenant, and disabled
+   * users cannot enter the personal-work queue. The optional dependency keeps in-memory module
+   * tests and non-authenticated tooling compatible; production CoreModule always supplies it.
+   */
+  private async assertAssignee(tenantId: string, assigneeId?: Id | null): Promise<void> {
+    if (assigneeId == null || !this.users) return;
+    if (!assigneeId.trim()) throw new BadRequestException('assignee must be an active user in this workspace');
+    await this.users.ensureTenant(tenantId);
+    const assignee = this.users.get(tenantId, assigneeId);
+    if (!assignee) throw new BadRequestException('assignee must be an active user in this workspace');
+    if (!assignee.active) throw new BadRequestException('assignee is inactive in this workspace');
   }
 }

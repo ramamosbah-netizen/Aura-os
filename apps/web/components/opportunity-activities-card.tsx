@@ -8,27 +8,24 @@ import { type CSSProperties, useEffect, useState } from 'react';
 // pipeline about deals while My Work remains the place personal activities are executed
 // (no duplicated execution logic, context preserved via the deep link).
 
-interface Activity { relatedType: string | null; dueDate: string | null; status: string }
-const isLive = (s: string): boolean => s === 'open' || s === 'in_progress';
+interface ActivitySummary { open: number; overdue: number; dueToday: number }
 
 export default function OpportunityActivitiesCard() {
   const [c, setC] = useState<{ pending: number; overdue: number; today: number } | null>(null);
 
   useEffect(() => {
     let live = true;
-    fetch('/api/crm/activities', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((all: Activity[]) => {
+    fetch('/api/crm/activities/summary?relatedType=opportunity', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('summary unavailable'))))
+      .then((summary: ActivitySummary) => {
         if (!live) return;
-        const today = new Date().toISOString().slice(0, 10);
-        const opp = (Array.isArray(all) ? all : []).filter((a) => a.relatedType === 'opportunity' && isLive(a.status));
         setC({
-          pending: opp.length,
-          overdue: opp.filter((a) => a.dueDate && a.dueDate < today).length,
-          today: opp.filter((a) => a.dueDate === today).length,
+          pending: summary.open,
+          overdue: summary.overdue,
+          today: summary.dueToday,
         });
       })
-      .catch(() => { if (live) setC({ pending: 0, overdue: 0, today: 0 }); });
+      .catch(() => { if (live) setC(null); });
     return () => { live = false; };
   }, []);
 

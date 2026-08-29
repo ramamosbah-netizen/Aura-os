@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
@@ -6,7 +6,7 @@ import { parsePageParams } from '@aura/shared';
 import {
   type Activity, type ActivityType, type ActivityStatus, type ActivityRelatedType,
   type CommunicationDirection,
-  ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, COMMUNICATION_DIRECTIONS, ActivityService,
+  ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, COMMUNICATION_DIRECTIONS, ActivityService, type ActivityFilter,
 } from '@aura/crm';
 import { ActivityReferenceService } from './activity-reference.service';
 
@@ -88,8 +88,9 @@ export class CrmActivitiesController {
     @Query('relatedId') relatedId?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
+    @Query('search') search?: string,
   ): Promise<Activity[]> {
-    return this.activities.list({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, limit: 100 });
+    return this.activities.list({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search, limit: 100 });
   }
 
   @Permissions('crm.activity.read')
@@ -99,13 +100,46 @@ export class CrmActivitiesController {
     @Query('relatedId') relatedId?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
+    @Query('search') search?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.activities.listPaged(
-      { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type },
+      { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search },
       parsePageParams(limit, offset),
     );
+  }
+
+  @Permissions('crm.activity.read')
+  @Get('summary')
+  summary(
+    @Query('relatedType') relatedType?: string,
+    @Query('relatedId') relatedId?: string,
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.activities.summary({ tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search });
+  }
+
+  @Permissions('crm.activity.read')
+  @Header('content-type', 'text/csv; charset=utf-8')
+  @Get('export')
+  async export(
+    @Query('relatedType') relatedType?: string,
+    @Query('relatedId') relatedId?: string,
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+    @Query('search') search?: string,
+  ): Promise<string> {
+    const filter: ActivityFilter = { tenantId: this.tenant.get().tenantId, relatedType, relatedId, status, type, search };
+    const rows = await this.activities.listAll(filter);
+    const fields: Array<keyof Activity> = ['type', 'subject', 'relatedName', 'assigneeId', 'dueDate', 'status', 'outcome'];
+    const quote = (value: unknown): string => {
+      const text = value == null ? '' : String(value);
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    return `${fields.join(',')}\n${rows.map((row) => fields.map((field) => quote(row[field])).join(',')).join('\n')}\n`;
   }
 
   @Permissions('crm.activity.read')

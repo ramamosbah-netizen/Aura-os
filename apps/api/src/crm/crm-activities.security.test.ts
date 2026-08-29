@@ -6,7 +6,7 @@ import { ActivityService } from '../../../../modules/crm/src/activity.service';
 import { InMemoryActivityStore } from '../../../../modules/crm/src/in-memory-activity-store';
 import { describe, expect, it, vi } from 'vitest';
 import { CrmActivitiesController } from './crm-activities.controller';
-import { ActivityCommandController } from './activity-command.controller';
+import { CrmTimelineController } from './crm-timeline.controller';
 import { ActivityReferenceService } from './activity-reference.service';
 
 const permissionOf = (target: object, handler: string): string[] | undefined =>
@@ -17,11 +17,11 @@ describe('CRM activity authorization contract', () => {
     expect(permissionOf(CrmActivitiesController.prototype, 'create')).toEqual(['crm.activity.create']);
     expect(permissionOf(CrmActivitiesController.prototype, 'list')).toEqual(['crm.activity.read']);
     expect(permissionOf(CrmActivitiesController.prototype, 'paged')).toEqual(['crm.activity.read']);
+    expect(permissionOf(CrmTimelineController.prototype, 'timeline')).toEqual(['crm.activity.read']);
     expect(permissionOf(CrmActivitiesController.prototype, 'get')).toEqual(['crm.activity.read']);
     for (const handler of ['cancel', 'start', 'reopen', 'complete']) {
       expect(permissionOf(CrmActivitiesController.prototype, handler)).toEqual(['crm.activity.update']);
     }
-    expect(permissionOf(ActivityCommandController.prototype, 'command')).toEqual(['crm.activity.read']);
   });
 
   it('prevents an unassigned user from changing personal work lifecycle', async () => {
@@ -105,5 +105,27 @@ describe('CRM activity authorization contract', () => {
     await expect(references.validate('tenant-a', 'account', '11111111-1111-4111-8111-111111111111')).rejects.toThrow('related record not found');
     await expect(references.validate('tenant-a', 'opportunity', '22222222-2222-4222-8222-222222222222')).rejects.toThrow('related record not found');
     await expect(references.validate('tenant-a', 'account', undefined)).rejects.toThrow('supplied together');
+  });
+
+  it('rejects unknown, foreign-tenant, and inactive assignees through the canonical directory', async () => {
+    const users = {
+      ensureTenant: vi.fn(async () => undefined),
+      get: vi.fn((tenantId: string, userId: string) => {
+        if (tenantId !== 'tenant-a') return null;
+        if (userId === 'inactive') return { tenantId, userId, active: false };
+        if (userId === 'valid') return { tenantId, userId, active: true };
+        return null;
+      }),
+    };
+    const service = new ActivityService(new InMemoryActivityStore(), { append: async () => undefined } as never, null, users as never);
+
+    await expect(service.create({ tenantId: 'tenant-a', type: 'task', subject: 'unknown', assigneeId: 'missing' }))
+      .rejects.toThrow('active user');
+    await expect(service.create({ tenantId: 'tenant-a', type: 'task', subject: 'foreign', assigneeId: 'tenant-b-user' }))
+      .rejects.toThrow('active user');
+    await expect(service.create({ tenantId: 'tenant-a', type: 'task', subject: 'inactive', assigneeId: 'inactive' }))
+      .rejects.toThrow('inactive');
+    await expect(service.create({ tenantId: 'tenant-a', type: 'task', subject: 'valid', assigneeId: 'valid' })).resolves.toMatchObject({ assigneeId: 'valid' });
+    expect(users.ensureTenant).toHaveBeenCalledWith('tenant-a');
   });
 });

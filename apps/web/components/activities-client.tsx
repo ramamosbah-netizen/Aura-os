@@ -33,6 +33,8 @@ interface Activity {
 interface Account { id: string; name: string; }
 interface Contact { id: string; name: string; accountName: string | null; }
 interface Opportunity { id: string; title: string; }
+interface ActivityPageInfo { total: number; limit: number; offset: number; hasMore: boolean; }
+interface ActivitySummary { total: number; open: number; overdue: number; dueToday: number; dueThisWeek: number; completed30: number; unassigned: number; }
 
 const TYPE_GLYPH: Record<string, string> = {
   call: '☎', email: '✉', meeting: '👥', note: '✎', task: '☑',
@@ -63,7 +65,7 @@ const RELATED_TYPE_LABEL: Record<string, string> = {
   tender: '◳ Tenders', contract: '▦ Contracts', project: '▥ Projects',
 };
 
-export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '', initialRelatedId = '', initialFocusedId = '' }: {
+export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '', initialRelatedId = '', initialFocusedId = '', initialPage, initialSummary, exportUrl, previousHref, nextHref, initialSearch = '', initialType = '', initialStatus = '' }: {
   initialActivities: Activity[];
   accounts: Account[];
   contacts: Contact[];
@@ -74,14 +76,23 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   initialRelatedId?: string;
   /** Deep-link focus from My Day or a notification. */
   initialFocusedId?: string;
+  initialPage?: ActivityPageInfo;
+  initialSummary?: ActivitySummary | null;
+  exportUrl?: string;
+  previousHref?: string | null;
+  nextHref?: string | null;
+  initialSearch?: string;
+  initialType?: string;
+  initialStatus?: string;
 }) {
   const router = useRouter();
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState(initialType);
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [relatedFilter, setRelatedFilter] = useState(initialRelatedType);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialSearch);
   const [completing, setCompleting] = useState<{ id: string; outcome: string; fuOn: boolean; fuType: string; fuSubject: string; fuDate: string } | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -96,17 +107,20 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
     const dueWeek = open.filter((a) => a.dueDate && a.dueDate > today && a.dueDate <= weekEnd);
     const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
     const done30 = base.filter((a) => a.status === 'completed' && (a.completedAt ?? a.createdAt) >= monthAgo);
-    return { open: open.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, done30: done30.length };
-  }, [initialActivities, relatedFilter, today, weekEnd]);
+    return initialSummary
+      ? { open: initialSummary.open, overdue: initialSummary.overdue, dueToday: initialSummary.dueToday, dueWeek: initialSummary.dueThisWeek, done30: initialSummary.completed30 }
+      : { open: open.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, done30: done30.length };
+  }, [initialActivities, initialSummary, relatedFilter, today, weekEnd]);
 
   const filtered = useMemo(() => {
     let out = initialActivities;
     if (relatedFilter) out = out.filter((a) => a.relatedType === relatedFilter);
     if (typeFilter) out = out.filter((a) => a.type === typeFilter);
+    if (statusFilter) out = out.filter((a) => a.status === statusFilter);
     const q = query.trim().toLowerCase();
     if (q) out = out.filter((a) => [a.subject, a.notes, a.relatedName, a.assigneeId].some((v) => v && v.toLowerCase().includes(q)));
     return out;
-  }, [initialActivities, relatedFilter, typeFilter, query]);
+  }, [initialActivities, relatedFilter, typeFilter, statusFilter, query]);
 
   /** Register buckets — every open activity by urgency, plus a Completed tab. */
   const groups = useMemo(() => {
@@ -214,16 +228,25 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
             { name: 'notes', label: 'Notes', kind: 'textarea', placeholder: 'What happened / what to do…', span: 2 },
           ]}
         />
-        <input style={st.search} placeholder="Search subject, notes, related…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <select style={st.search} value={relatedFilter} onChange={(e) => setRelatedFilter(e.target.value)} title="Scope to what the activity is about">
+        <form action="/crm/activities" method="get" style={st.filterForm}>
+        {initialRelatedId && <><input type="hidden" name="relatedType" value={initialRelatedType} /><input type="hidden" name="record" value={initialRelatedId} /></>}
+        <input style={st.search} name="search" placeholder="Search subject, notes, related…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <select style={st.search} name="relatedType" value={relatedFilter} onChange={(e) => setRelatedFilter(e.target.value)} title="Scope to what the activity is about" disabled={Boolean(initialRelatedId)}>
           <option value="">All records</option>
           {Object.entries(RELATED_TYPE_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
         </select>
-        <select style={st.search} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+        <select style={st.search} name="type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
           {['call', 'email', 'meeting', 'note', 'task'].map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
+        <select style={st.search} name="status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="">All statuses</option>
+          {['open', 'in_progress', 'completed', 'cancelled'].map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+        </select>
+        <button type="submit" className="btn btn-ghost" style={st.smBtn}>Apply</button>
+        </form>
         <ExportButton filename="activities" rows={filtered as unknown as Array<Record<string, unknown>>}
+          csvUrl={exportUrl}
           columns={[{ key: 'type' }, { key: 'subject' }, { key: 'relatedName' }, { key: 'assigneeId' }, { key: 'dueDate' }, { key: 'status' }, { key: 'outcome' }]} />
         {err && <span style={st.err}>{err}</span>}
       </div>
@@ -342,6 +365,13 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
           </table>
         </section>
       )}
+      {initialPage ? (
+        <nav style={st.pagination} aria-label="Activity pages">
+          {previousHref ? <a className="btn btn-ghost" href={previousHref}>← Previous</a> : <span />}
+          <span style={st.muted}>Showing {initialPage.total === 0 ? 0 : initialPage.offset + 1}–{Math.min(initialPage.offset + initialPage.limit, initialPage.total)} of {initialPage.total}</span>
+          {nextHref ? <a className="btn btn-ghost" href={nextHref}>Next →</a> : <span />}
+        </nav>
+      ) : null}
     </>
   );
 }
@@ -361,9 +391,11 @@ const st = {
   cardLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: 0.5 } as CSSProperties,
   cardVal: { fontSize: 18, fontWeight: 700, marginTop: 4 } as CSSProperties,
   toolbar: { display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' } as CSSProperties,
+  filterForm: { display: 'contents' } as CSSProperties,
   search: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none', minWidth: 170 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
+  pagination: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12 } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 } as CSSProperties,
   tabBar: { display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 0 12px', borderBottom: '1px solid var(--border)', paddingBottom: 8 } as CSSProperties,
   tab: { display: 'inline-flex', alignItems: 'center', gap: 7, background: 'transparent', border: '1px solid transparent', borderRadius: 8, padding: '6px 11px', fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', cursor: 'pointer' } as CSSProperties,

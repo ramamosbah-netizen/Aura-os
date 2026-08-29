@@ -350,7 +350,7 @@ export class Account360Controller {
       this.quotations.list({ tenantId, accountId: id }),
       this.contracts.list({ tenantId, accountId: id }),
       this.projects.list({ tenantId, accountId: id }),
-      this.activities.list({ tenantId, relatedId: id }),
+      this.activities.list({ tenantId, relatedType: 'account', relatedId: id }),
       // Stable accountId is authoritative; legacy rows without it retain a name-snapshot fallback.
       this.invoices.list({ tenantId, limit: 2000 }),
     ]);

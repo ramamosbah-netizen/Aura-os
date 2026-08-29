@@ -87,7 +87,7 @@ export class Contact360Controller {
       accountId ? this.quotations.list({ tenantId, accountId }) : Promise.resolve([]),
       accountId ? this.contracts.list({ tenantId, accountId }) : Promise.resolve([]),
       accountId ? this.projects.list({ tenantId, accountId }) : Promise.resolve([]),
-      this.activities.list({ tenantId, relatedId: id }),
+      this.activities.list({ tenantId, relatedType: 'contact', relatedId: id }),
     ]);
 
     const reportsTo = contact.reportsToId ? siblings.find((c) => c.id === contact.reportsToId) ?? null : null;

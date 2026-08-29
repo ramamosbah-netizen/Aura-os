@@ -52,6 +52,14 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(can('salesManager', 'POST', 'crm/quotations', ':id/approve')).toBe(true);
   });
 
+  it('quotation lifecycle routes are covered by the permissions they actually derive', () => {
+    // The status/terms/revise handlers intentionally override route-derived action names with the
+    // shared quotation update capability; conversion has its own explicit capability.
+    expect(roleFor('sales').permissions.some((p) => permissionMatches(p, 'crm.quotation.update'))).toBe(true);
+    expect(roleFor('sales').permissions.some((p) => permissionMatches(p, 'contracts.contract.create'))).toBe(false);
+    expect(roleFor('salesManager').permissions.some((p) => permissionMatches(p, 'contracts.contract.create'))).toBe(true);
+  });
+
   it('a PM raises a payment certificate but does not certify it — Finance does', () => {
     expect(can('projectManager', 'POST', 'contracts/certificates')).toBe(true);
     expect(can('projectManager', 'POST', 'contracts/certificates', ':id/certify')).toBe(false);

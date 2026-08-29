@@ -130,6 +130,55 @@ describe('RBAC + tenant isolation (HTTP)', () => {
       const res = await http.get('/api/v1/crm/accounts').set(as(ALICE, TENANT_B));
       expect(res.status).toBe(403);
     });
+
+    describe('quotation lifecycle', () => {
+      let quotationId: string;
+      let betaAccountId: string;
+
+      it('creates a quotation in tenant A for the negative lifecycle checks', async () => {
+        const res = await http
+          .post('/api/v1/crm/quotations')
+          .set(as(ALICE, TENANT_A))
+          .send({
+            customerName: 'Alpha Holdings',
+            issueDate: '2026-08-29',
+            lines: [{ description: 'CCTV', quantity: 1, unitPrice: 1000 }],
+          });
+        expect(res.status).toBeLessThan(300);
+        quotationId = res.body.id;
+      });
+
+      it('refuses every quotation lifecycle mutation without its capability (403)', async () => {
+        const requests = [
+          () => http.patch(`/api/v1/crm/quotations/${quotationId}/status`).set(as(MALLORY, TENANT_A)).send({ action: 'send' }),
+          () => http.post(`/api/v1/crm/quotations/${quotationId}/revise`).set(as(MALLORY, TENANT_A)).send({}),
+          () => http.patch(`/api/v1/crm/quotations/${quotationId}/terms`).set(as(MALLORY, TENANT_A)).send({ terms: 'changed' }),
+          () => http.post(`/api/v1/crm/quotations/${quotationId}/convert-to-contract`).set(as(MALLORY, TENANT_A)).send({}),
+        ];
+        for (const pending of requests) expect((await pending()).status).toBe(403);
+      });
+
+      it('does not expose a tenant A revision chain to tenant B', async () => {
+        const res = await http.get(`/api/v1/crm/quotations/${quotationId}/revisions`).set(as(BOB, TENANT_B));
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual([]);
+      });
+
+      it('rejects nonexistent and foreign-tenant quotation references at the API boundary', async () => {
+        const account = await http.post('/api/v1/crm/accounts').set(as(BOB, TENANT_B)).send({ name: 'Beta Holdings' });
+        expect(account.status).toBeLessThan(300);
+        betaAccountId = account.body.id;
+        const base = { customerName: 'Alpha Holdings', issueDate: '2026-08-29', lines: [{ description: 'CCTV', quantity: 1, unitPrice: 1000 }] };
+        for (const body of [
+          { ...base, accountId: 'missing-account' },
+          { ...base, accountId: betaAccountId },
+          { ...base, sourceOpportunityId: 'missing-opportunity' },
+          { ...base, sourceTenderId: 'missing-tender' },
+        ]) {
+          expect((await http.post('/api/v1/crm/quotations').set(as(ALICE, TENANT_A)).send(body)).status).toBe(400);
+        }
+      });
+    });
   });
 
   describe('tenant isolation', () => {

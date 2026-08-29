@@ -58,13 +58,14 @@ export const ELV_ROLE_MATRIX: ElvRole[] = [
     id: 'salesManager',
     name: 'Sales Manager',
     description:
-      'Everything Sales does, plus the authority to approve a quotation — subject to the value threshold on their grant.',
+      'Everything Sales does, plus the authority to approve quotations and convert accepted quotations into draft contracts — subject to the configured authority limits.',
     permissions: [
       'crm.*.read',
       'crm.*.create',
       'crm.*.update',
       'crm.*.approve',
       'crm.*.send',
+      'contracts.contract.create',
       // Slice 9 PR-2 — the authority to close a deal by an explicit manual OVERRIDE when the win
       // happened outside AURA. A distinct action (not covered by crm.*.update): a plain salesperson
       // cannot bypass the authoritative award path by flipping the stage dropdown.

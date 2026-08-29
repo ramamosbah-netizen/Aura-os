@@ -218,7 +218,10 @@ export class QuotationService {
    * revision number proves the rows are separate quotes.
    */
   async listRevisions(tenantId: string, id: Id): Promise<Quotation[]> {
-    const q = await this.store.get(id);
+    // Resolve the root record through the tenant-scoped path before constructing the chain. A raw
+    // store lookup here would let a quotation id from another tenant leak into the revision view
+    // when the tenant has no matching quote number of its own.
+    const q = await this.store.getForTenant(tenantId, id);
     if (!q) return [];
     const candidates = await this.store.list({ tenantId, quoteNumber: q.quoteNumber, limit: 100 });
     const byId = new Map(candidates.map((c) => [c.id, c]));

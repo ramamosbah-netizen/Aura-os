@@ -21,6 +21,11 @@ export class InMemoryQuotationStore implements QuotationStore {
     return q ? { ...q, lines: q.lines.map((l) => ({ ...l })) } : null;
   }
 
+  async getForTenant(tenantId: string, id: Id): Promise<Quotation | null> {
+    const q = await this.get(id);
+    return q?.tenantId === tenantId ? q : null;
+  }
+
   async list(filter: QuotationFilter = {}): Promise<Quotation[]> {
     let out = [...this.data.values()];
     if (filter.tenantId) out = out.filter((q) => q.tenantId === filter.tenantId);

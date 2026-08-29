@@ -25,6 +25,8 @@ export interface QuotationStore {
    */
   saveWithClient(tx: TxHandle | null, quotation: Quotation): Promise<void>;
   get(id: Id): Promise<Quotation | null>;
+  /** Lookup by both identity and tenant; callers use this for sensitive chain roots. */
+  getForTenant(tenantId: string, id: Id): Promise<Quotation | null>;
   list(filter?: QuotationFilter): Promise<Quotation[]>;
   listPaged(filter: QuotationFilter, page: PageParams): Promise<Page<Quotation>>;
 }

@@ -1,13 +1,14 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { AiService, FormCustomValuesService, FormOverridesService, NumberingService, TenantContext } from '@aura/core';
-import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema } from '@aura/shared';
+import { AiService, FormCustomValuesService, FormOverridesService, NumberingService, Permissions, TenantContext } from '@aura/core';
+import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema, toCsv } from '@aura/shared';
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
   analysePricing, type LineRefs, type SheetLineForAdvice,
 } from '@aura/crm';
 import { MarketItemService } from '@aura/market-intelligence';
 import { type Contract, ContractService } from '@aura/contracts';
+import { QuotationReferenceService } from './quotation-reference.service';
 
 class CreateQuotationDto {
   /** Optional: left blank, the server allocates the next auto-incrementing reference. */
@@ -24,6 +25,7 @@ class CreateQuotationDto {
    * negotiation gate ('is there a proposal yet?') is what surfaced the gap.
    */
   @IsOptional() @IsString() sourceOpportunityId?: string;
+  @IsOptional() @IsString() sourceTenderId?: string;
   @IsString() issueDate!: string;
   @IsOptional() @IsString() validUntil?: string;
   @IsArray() lines!: NewQuotationLine[];
@@ -54,9 +56,11 @@ export class CrmQuotationsController {
     private readonly numbering: NumberingService,
     private readonly marketItems: MarketItemService,
     private readonly ai: AiService,
+    private readonly references: QuotationReferenceService,
   ) {}
 
   /** One-click convert an accepted quotation into a draft contract (carries value + account). */
+  @Permissions('contracts.contract.create')
   @Post(':id/convert-to-contract')
   async convertToContract(@Param('id') id: string): Promise<Contract> {
     const q = await this.quotations.get(id);
@@ -89,6 +93,7 @@ export class CrmQuotationsController {
   }
 
   /** Supersede this quotation (status 'revised') and draft Rev n+1 with the same number, lines and terms. */
+  @Permissions('crm.quotation.update')
   @Post(':id/revise')
   async revise(@Param('id') id: string): Promise<Quotation> {
     try {
@@ -98,6 +103,7 @@ export class CrmQuotationsController {
     }
   }
 
+  @Permissions('crm.quotation.create')
   @Post()
   async create(@Body() dto: CreateQuotationDto, @Req() req: { body?: Record<string, unknown> }): Promise<Quotation> {
     // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
@@ -121,15 +127,21 @@ export class CrmQuotationsController {
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
+    const refs = await this.references.validate({
+      accountId: dto.accountId ?? null,
+      sourceOpportunityId: dto.sourceOpportunityId ?? null,
+      sourceTenderId: dto.sourceTenderId ?? null,
+    });
     const quotation = await this.quotations.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,
       quoteNumber,
       customerName: dto.customerName,
-      accountId: dto.accountId ?? null,
+      accountId: refs.accountId,
       subject: dto.subject ?? null,
       contactName: dto.contactName ?? null,
       sourceOpportunityId: dto.sourceOpportunityId ?? null,
+      sourceTenderId: dto.sourceTenderId ?? null,
       issueDate: dto.issueDate,
       validUntil: dto.validUntil ?? null,
       lines: dto.lines,
@@ -143,12 +155,14 @@ export class CrmQuotationsController {
     return quotation;
   }
 
+  @Permissions('crm.quotation.read')
   @Get()
   list(@Query('status') status?: Quotation['status'], @Query('accountId') accountId?: string): Promise<Quotation[]> {
     return this.quotations.list({ tenantId: this.tenant.get().tenantId, status, accountId, limit: 100 });
   }
 
   /** What this item has been quoted for before — the historic half of the pricing library. */
+  @Permissions('crm.quotation.read')
   @Get('price-history')
   priceHistory(@Query('q') q?: string) {
     return this.quotations.priceHistory(this.tenant.get().tenantId, q);
@@ -168,6 +182,7 @@ export class CrmQuotationsController {
   }
 
   /** All revisions of this quotation (same quote number), oldest first. */
+  @Permissions('crm.quotation.read')
   @Get(':id/revisions')
   revisions(@Param('id') id: string): Promise<Quotation[]> {
     return this.quotations.listRevisions(this.tenant.get().tenantId, id);
@@ -179,6 +194,7 @@ export class CrmQuotationsController {
    * generate). The legacy write endpoints (set/apply/generate-lines/estimation) were removed once
    * the sheet became the single source; the quotation is an output, not a place prices are typed.
    */
+  @Permissions('crm.quotation.read')
   @Get(':id/pricing')
   getPricing(@Param('id') id: string) {
     // Domain errors flow to the taxonomy filter: "not found" → 404.
@@ -191,6 +207,7 @@ export class CrmQuotationsController {
    * verified. The AI only narrates them into advice; it never invents a number. When no AI provider
    * is configured the findings still stand, and `narrative` is null.
    */
+  @Permissions('crm.quotation.read')
   @Get(':id/pricing/advice')
   async pricingAdvice(@Param('id') id: string): Promise<{ advice: ReturnType<typeof analysePricing>; narrative: string | null; provider: string }> {
     const tenantId = this.tenant.get().tenantId;
@@ -246,6 +263,7 @@ export class CrmQuotationsController {
     }
   }
 
+  @Permissions('crm.quotation.read')
   @Get(':id')
   async get(@Param('id') id: string): Promise<Quotation> {
     const found = await this.quotations.get(id);
@@ -254,6 +272,7 @@ export class CrmQuotationsController {
   }
 
   /** The locked Commercial Baseline (approved-price snapshot) for this quotation, or null. */
+  @Permissions('crm.quotation.read')
   @Get(':id/baseline')
   async baseline(@Param('id') id: string) {
     return (await this.quotations.getBaseline(this.tenant.get().tenantId, id)) ?? null;
@@ -265,11 +284,13 @@ export class CrmQuotationsController {
    * terms are what the customer and the baseline hold, and a change means a revision.
    */
   @Patch(':id/terms')
+  @Permissions('crm.quotation.update')
   async updateTerms(@Param('id') id: string, @Body() dto: UpdateTermsDto): Promise<Quotation> {
     return this.quotations.updateCommercialTerms(id, dto);
   }
 
   @Patch(':id/status')
+  @Permissions('crm.quotation.update')
   async changeStatus(@Param('id') id: string, @Body() dto: { action: QuotationAction }): Promise<Quotation> {
     if (!QUOTATION_ACTIONS.includes(dto?.action)) {
       throw new BadRequestException(`action must be one of ${QUOTATION_ACTIONS.join(', ')}`);

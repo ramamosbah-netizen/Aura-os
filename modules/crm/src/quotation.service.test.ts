@@ -7,10 +7,10 @@ import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline
 // Permissive access mock — these tests don't exercise the value-threshold/SoD approval gate.
 const noopAccess = { assert: () => {}, assertApprovalAuthority: () => {} } as unknown as AccessService;
 
-function harness() {
+function harness(access: AccessService = noopAccess) {
   const events = { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
   const baselines = new InMemoryCommercialBaselineStore();
-  const svc = new QuotationService(new InMemoryQuotationStore(), baselines, events, noopAccess);
+  const svc = new QuotationService(new InMemoryQuotationStore(), baselines, events, access);
   return { svc, baselines, events };
 }
 
@@ -52,6 +52,17 @@ describe('QuotationService — commercial governance (R3)', () => {
     const { svc } = harness();
     const q = await newQuote(svc);
     await expect(svc.changeStatus(q.id, 'send')).rejects.toThrow('cannot send from status draft');
+  });
+
+  it('rejects approval when the actor lacks quotation approval authority', async () => {
+    const access = {
+      assert: vi.fn(),
+      assertApprovalAuthority: vi.fn(() => { throw new Error('access denied: quotation approval authority required'); }),
+    } as unknown as AccessService;
+    const { svc } = harness(access);
+    const q = await newQuote(svc);
+    await expect(svc.changeStatus(q.id, 'approve', 'u-sales')).rejects.toThrow(/access denied/i);
+    expect((await svc.get(q.id))?.status).toBe('draft');
   });
 
   it('approval only locks one baseline, and getBaseline is scoped to the tenant', async () => {
@@ -115,6 +126,17 @@ describe('QuotationService.listRevisions — the chain is links, not the number'
   it('returns nothing for a quotation that does not exist', async () => {
     const { svc } = harness();
     expect(await svc.listRevisions('t1', 'nope')).toEqual([]);
+  });
+
+  it('does not disclose a foreign-tenant quotation revision chain', async () => {
+    const { svc } = harness();
+    const foreign = await svc.create({
+      tenantId: 't2', quoteNumber: 'QT-CROSS-TENANT', customerName: 'Private customer', accountId: 'a2',
+      issueDate: '2026-07-14', lines: [{ description: 'CCTV', quantity: 1, unitPrice: 1000 }], createdBy: 'u2',
+    });
+
+    // A known id from another tenant must be indistinguishable from an absent quotation.
+    expect(await svc.listRevisions('t1', foreign.id)).toEqual([]);
   });
 });
 

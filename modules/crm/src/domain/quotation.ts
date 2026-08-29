@@ -98,6 +98,11 @@ export interface Quotation {
    * saw on the quote are the words the delivery team works under. Null on legacy quotes.
    */
   subject: string | null;
+  /**
+   * Commercial snapshot of the contact name printed on this quotation. This is intentionally not
+   * treated as a live CRM relationship; a canonical contactId requires a separate domain decision
+   * and forward migration, so Slice A preserves the historical value exactly as issued.
+   */
   contactName: string | null;
   /** Tender this quotation was generated from (tender pricing sheet), reference not join. */
   sourceTenderId: Id | null;

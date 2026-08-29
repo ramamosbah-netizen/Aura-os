@@ -169,6 +169,7 @@ async function activityProof() {
   const expectedMeetings = Math.floor(counts.activities / 4);
   const expectedCompleted = Math.floor(counts.activities / 6);
   const expectedAssignee = counts.activities / 20;
+  console.log(`Activity related scope observed: pageTotal=${related.total}, pageItems=${related.items?.length ?? 'n/a'}, summaryTotal=${scopedSummary.total}`);
   if (first.total !== counts.activities || first.items.length !== 50 || middle.items.length !== 50 || last.items.length !== 50 || !first.hasMore || last.hasMore) throw new Error('activity pagination invariant failed');
   if (!distant.items.some((item) => item.subject === 'Volume Activity 99999')) throw new Error('activity deep search invariant failed');
   if (meetings.total !== expectedMeetings || completed.total !== expectedCompleted || assignee.total !== expectedAssignee || byDate.total !== counts.activities) throw new Error('activity filter invariant failed');

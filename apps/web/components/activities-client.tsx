@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import ExportButton from './export-button';
 import RelationshipAlerts from './relationship-alerts';
+import AuraTabLink from './aura-tab-link';
+import { isPersonalExecutableActivity, myWorkActivityHref } from '@/lib/activity-navigation';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
-// CRM · Activities — every interaction and to-do on the deal chain (call, email,
+// Sales · All Activity Register — every interaction and to-do on the deal chain (call, email,
 // meeting, note, task), agenda-grouped by urgency: Overdue → Today → This week →
 // Later → No due date. Each activity links to the record it's about.
 
@@ -38,29 +40,38 @@ const TYPE_GLYPH: Record<string, string> = {
 };
 /** G10 — the full activity vocabulary (WhatsApp and site visits are how ELV deals actually move). */
 const ALL_TYPES = ['call', 'email', 'meeting', 'note', 'task', 'follow_up', 'whatsapp', 'site_visit', 'technical_discovery', 'demo', 'presentation', 'reminder'];
+const REGISTER_LOG_TYPES = ['call', 'note', 'site_visit', 'technical_discovery', 'demo', 'presentation'];
 /** G11 — open reads "planned"; in-progress work is still LIVE work. */
 const isLive = (s: string): boolean => s === 'open' || s === 'in_progress';
 const RELATED_HREF: Record<string, (id: string) => string> = {
   account: (id) => `/crm/accounts/${id}`,
   contact: (id) => `/crm/contacts/${id}`,
   opportunity: (id) => `/crm/opportunities/${id}`,
-  lead: () => '/crm/leads',
-  quotation: () => '/crm/quotations',
+  lead: (id) => `/crm/leads/${id}`,
+  quotation: (id) => `/crm/quotations/${id}`,
+  tender: (id) => `/tendering/tenders/${id}`,
+  contract: (id) => `/contracts/contracts/${id}`,
+  // Project 360 owns the canonical detail route; the /projects/projects namespace is
+  // compatibility-only and must not be reintroduced by contextual activity links.
+  project: (id) => `/project/${id}`,
 };
 
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 const RELATED_TYPE_LABEL: Record<string, string> = {
   opportunity: '◎ Opportunities', account: '◆ Accounts', contact: '☎ Contacts', lead: '⌥ Leads', quotation: '✎ Quotations',
+  tender: '◳ Tenders', contract: '▦ Contracts', project: '▥ Projects',
 };
 
-export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '', initialFocusedId = '' }: {
+export default function ActivitiesClient({ initialActivities, accounts, contacts, opportunities, initialRelatedType = '', initialRelatedId = '', initialFocusedId = '' }: {
   initialActivities: Activity[];
   accounts: Account[];
   contacts: Contact[];
   opportunities: Opportunity[];
   /** Saved-view scope from the URL (e.g. 'opportunity') — pre-applies the related-type filter. */
   initialRelatedType?: string;
+  /** Related record scope from a 360 page; it is preselected and locked in the log form. */
+  initialRelatedId?: string;
   /** Deep-link focus from My Day or a notification. */
   initialFocusedId?: string;
 }) {
@@ -97,7 +108,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
     return out;
   }, [initialActivities, relatedFilter, typeFilter, query]);
 
-  /** Work-center buckets — every open activity by urgency, plus a Completed tab. */
+  /** Register buckets — every open activity by urgency, plus a Completed tab. */
   const groups = useMemo(() => {
     const buckets: Array<{ key: string; label: string; tone?: 'bad' | 'accent'; items: Activity[] }> = [
       { key: 'overdue', label: 'Overdue', tone: 'bad', items: [] },
@@ -179,12 +190,12 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       <div style={st.toolbar}>
         <CreateDrawer
           entity="Activity"
-          subtitle="Log an interaction or plan a to-do — attach it to the account, contact or deal it's about."
+          subtitle={initialRelatedId ? `Log a commercial interaction for this ${initialRelatedType}. The related record is locked to preserve context.` : "Log a commercial interaction and attach it to the account, contact or deal it's about. Personal tasks are created and worked in My Work."}
           endpoint="/api/crm/activities"
           fields={[
             {
-              name: 'type', label: 'Type', kind: 'select', defaultValue: 'task',
-              options: ALL_TYPES.map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
+              name: 'type', label: 'Type', kind: 'select', defaultValue: 'call',
+              options: REGISTER_LOG_TYPES.map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
             },
             { name: 'subject', label: 'Subject', kind: 'text', required: true, placeholder: 'e.g. Follow up on QT-2026-001', span: 2 },
             {
@@ -192,7 +203,12 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
               options: [{ value: 'outbound', label: '→ Outbound (we reached out)' }, { value: 'inbound', label: '← Inbound (they reached us)' }],
             },
             { name: 'counterparty', label: 'With', kind: 'text', placeholder: 'e.g. john@acme.com / +971…' },
-            { name: 'relatedId', label: 'Related to', kind: 'select', placeholder: 'Nothing linked', options: relatedOptions },
+            ...(initialRelatedId ? [
+              { name: 'relatedType', label: 'Related type', kind: 'text' as const, defaultValue: initialRelatedType, readonly: true },
+              { name: 'relatedId', label: 'Related record', kind: 'text' as const, defaultValue: initialRelatedId, readonly: true },
+            ] : [
+              { name: 'relatedId', label: 'Related to', kind: 'select' as const, placeholder: 'Nothing linked', options: relatedOptions },
+            ]),
             { name: 'dueDate', label: 'Due date', kind: 'date' },
             { name: 'assigneeId', label: 'Assignee', kind: 'text', placeholder: 'e.g. u-sales' },
             { name: 'notes', label: 'Notes', kind: 'textarea', placeholder: 'What happened / what to do…', span: 2 },
@@ -229,7 +245,7 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       {active.items.length === 0 ? (
         <p style={st.muted}>
           {initialActivities.length === 0
-            ? 'Nothing logged yet — every call, meeting and task lives here.'
+            ? 'Nothing logged yet — record history here; personal work is surfaced in My Work.'
             : `Nothing in ${active.label}. ${activeKey === 'overdue' ? 'You’re all caught up.' : ''}`}
         </p>
       ) : (
@@ -266,7 +282,12 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
                     {a.dueDate ? fmt(a.dueDate) : '—'}
                   </td>
                   <td style={{ width: 200, whiteSpace: 'nowrap' }}>
-                    {isLive(a.status) && (
+                    {isPersonalExecutableActivity(a.type) ? (
+                      <>
+                        <span className={a.status === 'completed' ? 'badge badge-good' : a.status === 'cancelled' ? 'badge badge-bad' : 'badge badge-accent'}>{a.status.replace(/_/g, ' ')}</span>
+                        <AuraTabLink href={myWorkActivityHref(a.id)} tabTitle={a.subject} tabType="My Work" tabKey="/my-work/tasks" className="btn btn-ghost" style={{ ...st.smBtn, marginLeft: 6 }}>Open in My Work ↗</AuraTabLink>
+                      </>
+                    ) : isLive(a.status) && (
                       <>
                         {a.status === 'open'
                           ? <button type="button" className="btn btn-ghost" style={st.smBtn} disabled={busy} onClick={() => void act(a, 'start')}>▶ Start</button>

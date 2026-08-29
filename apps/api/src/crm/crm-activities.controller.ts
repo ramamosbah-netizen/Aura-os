@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -8,6 +9,8 @@ import {
   ACTIVITY_RELATED_TYPES, ACTIVITY_TYPES, COMMUNICATION_DIRECTIONS, ActivityService,
 } from '@aura/crm';
 import { ActivityReferenceService } from './activity-reference.service';
+
+const ACTIVITY_STATUSES: readonly ActivityStatus[] = ['open', 'in_progress', 'completed', 'cancelled'];
 
 class CreateActivityDto {
   // G10 — same edge rule as relatedType: a typo'd type would persist and silently vanish from
@@ -21,7 +24,7 @@ class CreateActivityDto {
   @IsOptional() @IsIn(ACTIVITY_RELATED_TYPES as readonly string[]) relatedType?: ActivityRelatedType;
   @IsOptional() @IsString() relatedId?: string;
   @IsOptional() @IsString() dueDate?: string;
-  @IsOptional() @IsString() status?: ActivityStatus;
+  @IsOptional() @IsIn(ACTIVITY_STATUSES as readonly string[]) status?: ActivityStatus;
   @IsOptional() @IsString() assigneeId?: string;
   @IsOptional() @IsString() relatedName?: string;
   @IsOptional() @IsString() outcome?: string;
@@ -38,7 +41,7 @@ class FollowUpDto {
 
 class CompleteActivityDto {
   @IsOptional() @IsString() outcome?: string;
-  @IsOptional() followUp?: FollowUpDto;
+  @IsOptional() @ValidateNested() @Type(() => FollowUpDto) followUp?: FollowUpDto;
 }
 
 /**

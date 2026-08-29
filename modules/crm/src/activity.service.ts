@@ -87,6 +87,7 @@ export class ActivityService {
     this.assertCanChangeLifecycle(existing, actorId);
     const updated = cancelActivity(existing);
     await this.store.save(updated);
+    await this.appendLifecycleEvent(updated, existing.status, CRM_ACTIVITY_EVENT.cancelled, actorId);
     this.logger.log(`Activity cancelled: ${updated.subject} (${id})`);
     return updated;
   }
@@ -97,6 +98,7 @@ export class ActivityService {
     this.assertCanChangeLifecycle(existing, actorId);
     const updated = startActivity(existing);
     await this.store.save(updated);
+    await this.appendLifecycleEvent(updated, existing.status, CRM_ACTIVITY_EVENT.started, actorId);
     this.logger.log(`Activity started: ${updated.subject} (${id})`);
     return updated;
   }
@@ -106,6 +108,7 @@ export class ActivityService {
     this.assertCanChangeLifecycle(existing, actorId);
     const updated = reopenActivity(existing);
     await this.store.save(updated);
+    await this.appendLifecycleEvent(updated, existing.status, CRM_ACTIVITY_EVENT.reopened, actorId);
     this.logger.log(`Activity reopened: ${updated.subject} (${id})`);
     return updated;
   }
@@ -120,7 +123,7 @@ export class ActivityService {
         type: CRM_ACTIVITY_EVENT.completed,
         tenantId: updated.tenantId, companyId: updated.companyId, actorId: actorId ?? null,
         aggregateType: 'crm.activity', aggregateId: id,
-        payload: { subject: updated.subject, completedAt: updated.completedAt },
+        payload: { subject: updated.subject, previousStatus: existing.status, status: updated.status, completedAt: updated.completedAt },
       }),
     ]);
     return updated;
@@ -163,5 +166,17 @@ export class ActivityService {
 
   private isPersonalWork(activity: Activity): boolean {
     return activity.type === 'task' || activity.type === 'follow_up' || activity.type === 'reminder';
+  }
+
+  private async appendLifecycleEvent(activity: Activity, previousStatus: Activity['status'], eventType: string, actorId?: Id | null): Promise<void> {
+    await this.events.append([makeEvent({
+      type: eventType,
+      tenantId: activity.tenantId,
+      companyId: activity.companyId,
+      actorId: actorId ?? null,
+      aggregateType: 'crm.activity',
+      aggregateId: activity.id,
+      payload: { subject: activity.subject, previousStatus, status: activity.status, startedAt: activity.startedAt, completedAt: activity.completedAt },
+    })]);
   }
 }

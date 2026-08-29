@@ -6,6 +6,7 @@ import Timeline from './timeline';
 import type { AssessmentInput } from '@aura/shared';
 import DataStateNotice from './ui/data-state';
 import type { DataError } from '@/lib/data-error';
+import { activityRegisterHref } from '@/lib/activity-navigation';
 import {
   RecordShell, RecordHeader, ActionButton, RecordCard, InfoRow, CardGrid, InsightsPanel,
   RecordBand, RecordSituation, RecordNextAction, RecordHealth, RecordMissing, RecordOutcome,
@@ -462,7 +463,12 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       )}
 
       {tab === 'activity' && (
-        <RecordCard title="Activity"><Timeline recordId={q.id} /></RecordCard>
+        <RecordCard title="Activity">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            <a href={activityRegisterHref('quotation', q.id)} style={st.link}>Log or review quotation activity →</a>
+          </div>
+          <Timeline recordId={q.id} />
+        </RecordCard>
       )}
     </RecordShell>
   );

@@ -1,4 +1,4 @@
-import { BarChart3, Building2, CalendarCheck, FileText, Target, TrendingUp, Trophy, Workflow } from 'lucide-react';
+import { BarChart3, Building2, FileText, Target, TrendingUp, Trophy, Workflow } from 'lucide-react';
 import SuiteDashboardShell, {
   type SuiteAttentionItem,
   type SuiteMetric,
@@ -54,12 +54,11 @@ export interface SalesOpportunity {
   closeDate: string | null;
 }
 
-/** Sales Home is a command center, not a launcher: six workspaces, each one job in the sell cycle. */
+/** Sales Home is a cockpit, not an activity manager: each shortcut has one clear job in the sell cycle. */
 const SHORTCUTS: SuiteShortcut[] = [
   { label: 'Pipeline', description: 'Deals by stage — where they are & what’s next', href: '/crm/pipeline', icon: Workflow, tone: 'teal' },
   { label: 'Customers', description: 'Accounts, contacts & relationship 360', href: '/crm/customers', icon: Building2, tone: 'cyan' },
   { label: 'Quotations', description: 'Draft → review → sent → won', href: '/crm/quotations', icon: FileText, tone: 'amber' },
-  { label: 'Activities', description: 'Calls, meetings, visits & follow-ups', href: '/crm/activities', icon: CalendarCheck, tone: 'green' },
   { label: 'Forecast', description: 'Commit, best-case & expected close', href: '/crm/pipeline?tab=forecast', icon: Target, tone: 'blue' },
   { label: 'Analytics', description: 'Conversion, win/loss & performance', href: '/crm/pipeline?tab=analytics', icon: BarChart3, tone: 'violet' },
 ];
@@ -177,8 +176,11 @@ export default function SalesDashboard({
         body: briefBody,
         cta: { href: '/crm/pipeline', label: 'Review deals', tabTitle: 'Pipeline', tabType: 'Sales' },
       }}
+      ownership={<>
+        <FileText aria-hidden />
+        <span><strong>Sales owns the sell cycle: Lead → Opportunity → Quote → Won.</strong> Email, documents, approvals and tenders are shown in context but owned by their own systems. Activity history lives in each customer, contact, opportunity and quotation timeline; personal tasks, follow-ups and reminders are executed in <a href="/my-work">My Work</a>. <a href="/crm/activities">Open the all-activity register →</a></span>
+      </>}
       shortcuts={{ kicker: 'Sales workspaces', title: 'Workspaces', itemTestId: 'sales-shortcut', items: SHORTCUTS }}
-      ownership={<><FileText aria-hidden /><span><strong>Sales owns the sell cycle: Lead → Opportunity → Quote → Won.</strong> Email, documents, approvals and tenders are shown in context but owned by their own systems.</span></>}
     />
   );
 }

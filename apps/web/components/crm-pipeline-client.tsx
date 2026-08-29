@@ -185,11 +185,22 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   };
 
-  const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  const soonIso = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 30 * 86400000));
+  // A client component must not read the wall clock during render: the server and browser can
+  // disagree by a day/month at hydration. Render the deterministic shell first, then calculate
+  // the live attention window after mount.
+  const [todayIso, setTodayIso] = useState<string | null>(null);
+  const [soonIso, setSoonIso] = useState<string | null>(null);
+  const [currentMonth, setCurrentMonth] = useState<string | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const formatDay = (value: Date): string => new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(value);
+    setTodayIso(formatDay(now));
+    setSoonIso(formatDay(new Date(now.getTime() + 30 * 86400000)));
+    setCurrentMonth(now.toISOString().slice(0, 7));
+  }, []);
   const openDeal = (o: Opportunity): boolean => !['won', 'lost'].includes(o.stage);
-  const needsAttention = (o: Opportunity): boolean => openDeal(o) && (!o.nextAction || (!!o.nextActionDueDate && o.nextActionDueDate < todayIso));
-  const closingSoon = (o: Opportunity): boolean => openDeal(o) && !!o.closeDate && o.closeDate >= todayIso && o.closeDate <= soonIso;
+  const needsAttention = (o: Opportunity): boolean => openDeal(o) && (!o.nextAction || (todayIso !== null && !!o.nextActionDueDate && o.nextActionDueDate < todayIso));
+  const closingSoon = (o: Opportunity): boolean => openDeal(o) && todayIso !== null && soonIso !== null && !!o.closeDate && o.closeDate >= todayIso && o.closeDate <= soonIso;
   const filteredOpportunities = initialOpportunities.filter((o) =>
     (!query || `${o.title} ${o.accountName ?? ''}`.toLowerCase().includes(query.toLowerCase()))
     && (!ownerFilter || o.ownerId === ownerFilter)
@@ -346,8 +357,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const pipelineValue = activeOpps.reduce((s, o) => s + o.value, 0);
   const weighted = activeOpps.reduce((s, o) => s + o.value * (o.winProbability / 100), 0);
   const wonValue = wonOpps.reduce((s, o) => s + o.value, 0);
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const wonThisMonth = wonOpps.filter((o) => (o.closeDate ?? o.createdAt).slice(0, 7) === thisMonth);
+  const wonThisMonth = currentMonth ? wonOpps.filter((o) => (o.closeDate ?? o.createdAt).slice(0, 7) === currentMonth) : [];
   const winRate = wonOpps.length + lostOpps.length > 0 ? Math.round((wonOpps.length / (wonOpps.length + lostOpps.length)) * 100) : null;
 
   /* ── board columns: leads first, then opportunity stages ───────────────── */

@@ -1,8 +1,10 @@
 import 'reflect-metadata';
 import { ForbiddenException } from '@nestjs/common';
 import { PERMISSIONS_KEY } from '@aura/core';
-import { ActivityService, InMemoryActivityStore, type Activity } from '@aura/crm';
-import { describe, expect, it } from 'vitest';
+import type { Activity } from '../../../../modules/crm/src/domain/activity';
+import { ActivityService } from '../../../../modules/crm/src/activity.service';
+import { InMemoryActivityStore } from '../../../../modules/crm/src/in-memory-activity-store';
+import { describe, expect, it, vi } from 'vitest';
 import { CrmActivitiesController } from './crm-activities.controller';
 import { ActivityCommandController } from './activity-command.controller';
 import { ActivityReferenceService } from './activity-reference.service';
@@ -53,6 +55,28 @@ describe('CRM activity authorization contract', () => {
     expect(started.status).toBe('in_progress');
     const completed = await service.complete(activity.id, undefined, 'done', 'user-b');
     expect(completed.status).toBe('completed');
+  });
+
+  it('records actor and status transitions for lifecycle audit events', async () => {
+    const append = vi.fn(async () => undefined);
+    const service = new ActivityService(new InMemoryActivityStore(), { append } as never);
+    const activity = await service.create({ tenantId: 'tenant-a', type: 'task', subject: 'Audited task', assigneeId: 'user-a', createdBy: 'user-a' });
+    append.mockClear();
+
+    await service.start(activity.id, 'user-a');
+    expect(append.mock.calls[0][0][0]).toMatchObject({
+      type: 'crm.activity.started',
+      actorId: 'user-a',
+      payload: { previousStatus: 'open', status: 'in_progress' },
+    });
+
+    append.mockClear();
+    await service.complete(activity.id, undefined, 'done', 'user-a');
+    expect(append.mock.calls[0][0][0]).toMatchObject({
+      type: 'crm.activity.completed',
+      actorId: 'user-a',
+      payload: { previousStatus: 'in_progress', status: 'completed' },
+    });
   });
 
   it('forces bound tenant scope even when a caller supplies another tenant filter', async () => {

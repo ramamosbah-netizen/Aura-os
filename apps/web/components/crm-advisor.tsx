@@ -71,7 +71,7 @@ export default function CrmAdvisor() {
         ))}
       </div>
 
-      <a href="/crm/activities" style={st.footer}>See all in Activities →</a>
+      <a href="/crm/activities" style={st.footer}>See all sales activity →</a>
     </aside>
   );
 }

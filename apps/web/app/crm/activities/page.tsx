@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { fetchJson } from '@/lib/api';
+import { parseActivityContext } from '@/lib/activity-navigation';
+import DataStateNotice, { DataDegradedNotice } from '../../../components/ui/data-state';
 import ActivitiesClient from '../../../components/activities-client';
 
 export const dynamic = 'force-dynamic';
@@ -27,33 +29,61 @@ interface Opportunity { id: string; title: string; }
 
 const RELATED_LABEL: Record<string, string> = {
   opportunity: 'Opportunity', account: 'Account', contact: 'Contact', lead: 'Lead', quotation: 'Quotation',
+  tender: 'Tender', contract: 'Contract', project: 'Project',
 };
 
 export default async function CrmActivitiesPage({ searchParams }: { searchParams: Promise<{ relatedType?: string; record?: string }> }) {
   const { relatedType, record } = await searchParams;
   const scope = relatedType && RELATED_LABEL[relatedType] ? relatedType : '';
-  const [activities, accounts, contacts, opportunities] = await Promise.all([
-    getJson<Activity[]>('/api/crm/activities'),
-    getJson<Account[]>('/api/crm/accounts'),
-    getJson<Contact[]>('/api/crm/contacts'),
-    getJson<Opportunity[]>('/api/crm/opportunities'),
+  // `record` is a related CRM record when a type scope is present. Without a scope it
+  // remains the legacy activity-focus parameter used by My Day notifications.
+  const context = parseActivityContext(scope, record);
+  const relatedId = context.relatedId;
+  const activityId = context.activityId;
+  const activityQuery = scope && relatedId
+    ? `?relatedType=${encodeURIComponent(scope)}&relatedId=${encodeURIComponent(relatedId)}`
+    : '';
+  const [activitiesResult, accountsResult, contactsResult, opportunitiesResult] = await Promise.all([
+    fetchJson<Activity[]>(`/api/crm/activities${activityQuery}`),
+    fetchJson<Account[]>('/api/crm/accounts'),
+    fetchJson<Contact[]>('/api/crm/contacts'),
+    fetchJson<Opportunity[]>('/api/crm/opportunities'),
   ]);
+
+  if (!activitiesResult.ok) {
+    return (
+      <div style={st.page}>
+        <h1 style={st.h1}>{scope ? `${RELATED_LABEL[scope]} Activity Timeline` : 'Sales · All Activity Register'}</h1>
+        <DataStateNotice error={activitiesResult.error} subject={scope ? `${RELATED_LABEL[scope].toLowerCase()} activity` : 'activities'} />
+      </div>
+    );
+  }
+
+  const failedLookups = [
+    !accountsResult.ok ? 'account selector' : null,
+    !contactsResult.ok ? 'contact selector' : null,
+    !opportunitiesResult.ok ? 'opportunity selector' : null,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>{scope ? `${RELATED_LABEL[scope]} Activities` : 'CRM · Activities'}</h1>
+      <h1 style={st.h1}>{scope ? `${RELATED_LABEL[scope]} Activity Timeline` : 'Sales · All Activity Register'}</h1>
       <p style={st.sub}>
         {scope
-          ? `A saved view of the Activities work center — every open ${RELATED_LABEL[scope].toLowerCase()} touchpoint, worked here. Clear the view to see all activities.`
-          : "Every interaction and to-do on the deal chain — calls, emails, meetings, notes and tasks — agenda-grouped by urgency and linked to the account, contact or deal they're about."}
+          ? `A contextual view of the shared CRM timeline — ${RELATED_LABEL[scope].toLowerCase()} history and open touchpoints. Personal execution stays in My Work.`
+          : "The complete commercial history register — calls, meetings, notes and relationship touchpoints. Customer and deal pages show the same history in context; tasks, follow-ups and reminders are worked in My Work."}
       </p>
+      {failedLookups.length > 0 ? (
+        <DataDegradedNotice message={`${failedLookups.join(', ')} ${failedLookups.length === 1 ? 'is' : 'are'} temporarily unavailable. Existing activity records remain visible.`} />
+      ) : null}
       <ActivitiesClient
-        initialActivities={activities ?? []}
-        accounts={accounts ?? []}
-        contacts={contacts ?? []}
-        opportunities={opportunities ?? []}
+        initialActivities={activitiesResult.data}
+        accounts={accountsResult.ok ? accountsResult.data : []}
+        contacts={contactsResult.ok ? contactsResult.data : []}
+        opportunities={opportunitiesResult.ok ? opportunitiesResult.data : []}
         initialRelatedType={scope}
-        initialFocusedId={record ?? ''}
+        initialRelatedId={relatedId}
+        initialFocusedId={activityId}
       />
     </div>
   );

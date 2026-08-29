@@ -4,8 +4,8 @@ import { type CSSProperties, useEffect, useState } from 'react';
 
 // Opportunity Activities card — a CONTEXTUAL pointer on the Sales Pipeline, not a work
 // surface. It shows how much deal touchpoint work is outstanding, then hands off to the
-// Activities Work Center's "Opportunity" saved view to actually work it. This keeps the
-// pipeline about deals and the Work Center the single place activities are executed
+// all-activity register's "Opportunity" saved view for the full history. This keeps the
+// pipeline about deals while My Work remains the place personal activities are executed
 // (no duplicated execution logic, context preserved via the deep link).
 
 interface Activity { relatedType: string | null; dueDate: string | null; status: string }
@@ -36,7 +36,7 @@ export default function OpportunityActivitiesCard() {
     <div style={st.card}>
       <div style={st.head}>
         <span style={st.title}>Opportunity Activities</span>
-        <a href="/crm/activities?relatedType=opportunity" style={st.link}>Open Opportunity Activities →</a>
+        <a href="/crm/activities?relatedType=opportunity" style={st.link}>Open activity register →</a>
       </div>
       <div style={st.stats}>
         <Stat label="Pending" value={c?.pending} />

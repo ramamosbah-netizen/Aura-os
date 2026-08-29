@@ -13,8 +13,8 @@ import OpportunityActivitiesCard from './opportunity-activities-card';
 //
 // Radar is the acquisition inbox (signals), Overview is the manager cockpit (+ leads
 // needing attention + an Opportunity-Activities pointer), Board/List work the deals,
-// Analytics deep-dives. Each tab is one job. Activity EXECUTION lives in the Activities
-// Work Center; the Overview only points to it (scoped) so the pipeline stays about deals.
+// Analytics deep-dives. Each tab is one job. Activity history is contextual and personal
+// execution lives in My Work; the Overview only points to the scoped register.
 
 interface Lead {
   id: string; name: string; companyName: string | null; email: string | null;

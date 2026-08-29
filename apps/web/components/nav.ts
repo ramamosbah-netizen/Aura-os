@@ -65,7 +65,6 @@ export const NAV: NavGroup[] = [
       { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'Quotation workspace — Overview analytics plus a searchable List/Board register' },
       { label: 'Commercial', href: '/crm/commercial', glyph: '⚖', desc: 'The commercial decision — pricing, quotations, contracts, approvals & margins as linked views' },
       { label: 'Market Intelligence', href: '/crm/market-intelligence', glyph: '⊛', desc: 'The reference catalogue behind pricing — items, brands, benchmark cost/sell & install time' },
-      { label: 'Activities', href: '/crm/activities', glyph: '☑', desc: 'Calls, meetings & tasks' },
     ],
   },
   {

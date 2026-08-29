@@ -80,8 +80,13 @@ async function apiJson(path, options = {}) {
 }
 
 async function apiProof() {
-  const login = await apiJson('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ username: 'u-admin', password: process.env.AUTH_DEV_PASSWORD ?? 'e2e-password' }) });
-  assert(login.response.ok && login.body?.token, `Radar proof login failed (${login.response.status})`);
+  let login;
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    login = await apiJson('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ username: 'u-admin', password: process.env.AUTH_DEV_PASSWORD ?? 'e2e-password' }) });
+    if (login.response.ok && login.body?.token) break;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  assert(login?.response.ok && login.body?.token, `Radar proof login failed (${login?.response.status ?? 'network'}) body=${JSON.stringify(login?.body)}`);
   const headers = { authorization: `Bearer ${login.body.token}` };
   const page = async (offset, query = '') => (await apiJson(`/api/v1/crm/signals/radar?limit=50&offset=${offset}${query}`, { headers })).body;
   const first = await page(0);
@@ -116,8 +121,10 @@ async function sqlProof() {
     assert(indexes.rowCount === 2, 'migration 0266 indexes are missing');
     const plans = [
       ['tenant/status', `SELECT id FROM public.aura_crm_signals WHERE tenant_id = '${tenantA}' AND status = 'NEW' ORDER BY detected_at DESC, id DESC LIMIT 50`],
+      ['source/type', `SELECT id FROM public.aura_crm_signals WHERE tenant_id = '${tenantA}' AND source = 'MANUAL' AND type = 'NEW_PROJECT' ORDER BY detected_at DESC, id DESC LIMIT 50`],
       ['owner', `SELECT id FROM public.aura_crm_signals WHERE tenant_id = '${tenantA}' AND owner_id = 'u-admin' ORDER BY detected_at DESC, id DESC LIMIT 50`],
       ['date', `SELECT id FROM public.aura_crm_signals WHERE tenant_id = '${tenantA}' AND detected_at >= now() - interval '30 days' ORDER BY detected_at DESC, id DESC LIMIT 50`],
+      ['search', `SELECT id FROM public.aura_crm_signals WHERE tenant_id = '${tenantA}' AND (title ILIKE '%6001%' OR description ILIKE '%6001%' OR account_name ILIKE '%6001%' OR evidence ILIKE '%6001%') ORDER BY detected_at DESC, id DESC LIMIT 50`],
       ['summary', `SELECT count(*) FROM public.aura_crm_signals WHERE tenant_id = '${tenantA}'`],
       ['paged', `SELECT id FROM public.aura_crm_signals WHERE tenant_id = '${tenantA}' ORDER BY detected_at DESC, id DESC LIMIT 50 OFFSET 5950`],
     ];
@@ -131,10 +138,18 @@ async function sqlProof() {
 }
 
 try {
+  log('stage=seed');
   await seed();
+  log('stage=rls');
   await rlsProof();
+  log('stage=api');
   await apiProof();
+  log('stage=plans');
   await sqlProof();
+  log('result=pass');
+} catch (error) {
+  console.error(`[radar-proof] result=fail ${error instanceof Error ? error.stack : String(error)}`);
+  process.exitCode = 1;
 } finally {
   await owner.query('DELETE FROM public.aura_crm_leads WHERE signal_id IN ($1,$2)', [uuid('radar-proof-promotion'), uuid('radar-proof-foreign')]).catch(() => undefined);
   await owner.query('DELETE FROM public.aura_crm_signals WHERE tenant_id IN ($1,$2)', [tenantA, tenantB]).catch(() => undefined);

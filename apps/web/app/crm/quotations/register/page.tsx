@@ -1,11 +1,11 @@
 import type { CSSProperties } from 'react';
 import { fetchJson } from '@/lib/api';
 import DataStateNotice from '@/components/ui/data-state';
-import QuotationsWorkspace, { type QuotationPage, type QuotationSummary, type QuotationFilters } from '../../../components/quotations-workspace';
+import QuotationsWorkspace, { type QuotationFilters, type QuotationPage, type QuotationSummary } from '../../../../components/quotations-workspace';
 
 export const dynamic = 'force-dynamic';
 
-export default async function QuotationsPage({
+export default async function QuotationRegisterPage({
   searchParams,
 }: {
   searchParams: Promise<{ search?: string; status?: string; ownerId?: string; from?: string; to?: string; offset?: string; view?: string }>;
@@ -13,31 +13,20 @@ export default async function QuotationsPage({
   const params = await searchParams;
   const filters: QuotationFilters = { search: params.search ?? '', status: params.status ?? '', ownerId: params.ownerId ?? '', from: params.from ?? '', to: params.to ?? '' };
   const query = quotationQuery(filters, params.offset);
-  const isRegister = params.view === 'list' || params.view === 'board' || params.view === 'register';
-  const needsSummary = !isRegister || params.view === 'board';
   const [result, summaryResult] = await Promise.all([
     fetchJson<QuotationPage>(`/api/crm/quotations/paged?${query.toString()}`),
-    needsSummary
+    params.view === 'board'
       ? fetchJson<QuotationSummary>(`/api/crm/quotations/summary?${quotationQuery(filters).toString()}`)
       : Promise.resolve(null),
   ]);
-
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>{params.view === 'list' || params.view === 'board' || params.view === 'register' ? 'Quotation Register' : 'Quotations'}</h1>
-      <p style={st.sub}>
-        {params.view === 'list' || params.view === 'board' || params.view === 'register'
-          ? 'Search, filter, review, export, and progress quotations through their lifecycle.'
-          : 'Decision-ready quotation health and attention signals. Open the register to search, filter, export, and work each quotation.'}
-      </p>
+      <h1 style={st.h1}>Quotation Register</h1>
+      <p style={st.sub}>Search, filter, review, export, and progress quotations through their lifecycle.</p>
       <section style={{ marginTop: 10 }}>
-        {/* This page already distinguished failure from empty, but called every failure "API offline" —
-            a 403 is not an outage, and telling a user their session lapsed is a different instruction. */}
-        {result.ok ? (
-          <QuotationsWorkspace initialPage={result.data} initialSummary={summaryResult?.ok ? summaryResult.data : undefined} surface={isRegister ? 'register' : 'overview'} registerView={params.view === 'board' ? 'board' : 'list'} initialFilters={filters} />
-        ) : (
-          <DataStateNotice error={result.error} subject="quotations" />
-        )}
+        {result.ok
+          ? <QuotationsWorkspace initialPage={result.data} initialSummary={summaryResult?.ok ? summaryResult.data : undefined} surface="register" registerView={params.view === 'board' ? 'board' : 'list'} initialFilters={filters} />
+          : <DataStateNotice error={result.error} subject="quotations" />}
       </section>
     </div>
   );
@@ -55,5 +44,4 @@ const st = {
   page: { maxWidth: 1280, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
-  muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
 };

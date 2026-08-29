@@ -26,6 +26,7 @@ export default function QuotationCreate() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const busyRef = useRef(false); // setBusy is async; a fast second submit lands before re-render
+  const operationKeyRef = useRef<string | null>(null);
 
   // Load the account list once, when the drawer first opens.
   useEffect(() => {
@@ -55,6 +56,7 @@ export default function QuotationCreate() {
     const name = (picked?.name ?? trimmed);
     if (!name) { setErr('Pick or name a customer first.'); return; }
     busyRef.current = true;
+    const operationKey = operationKeyRef.current ?? (operationKeyRef.current = `quotation-create:${crypto.randomUUID()}`);
     setBusy(true);
     setErr(null);
     try {
@@ -74,7 +76,7 @@ export default function QuotationCreate() {
       // real items; the pricing sheet's "Generate lines" replaces it wholesale.
       const res = await fetch('/api/crm/quotations', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'Idempotency-Key': operationKey },
         body: JSON.stringify({
           customerName: account.name,
           accountId: account.id,
@@ -85,6 +87,7 @@ export default function QuotationCreate() {
       });
       if (!res.ok) { setErr('Could not create the quotation.'); return; }
       const q = await res.json();
+      operationKeyRef.current = null;
       // Step two: straight to the pricing sheet to author the items.
       router.push(`/crm/quotations/${q.id}/pricing`);
     } catch {

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { AiService, FormCustomValuesService, FormOverridesService, NumberingService, Permissions, TenantContext } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema, toCsv } from '@aura/shared';
@@ -42,6 +42,11 @@ class UpdateTermsDto {
   @IsOptional() @IsArray() exclusions?: string[];
   @IsOptional() @IsString() paymentConditions?: string | null;
   @IsOptional() @IsString() deliveryTerms?: string | null;
+}
+
+interface CsvResponse {
+  write(chunk: string): boolean;
+  end(): void;
 }
 
 /** CRM customer-quotation API — stamps tenant/actor, delegates to QuotationService. */
@@ -157,8 +162,15 @@ export class CrmQuotationsController {
 
   @Permissions('crm.quotation.read')
   @Get()
-  list(@Query('status') status?: Quotation['status'], @Query('accountId') accountId?: string): Promise<Quotation[]> {
-    return this.quotations.list({ tenantId: this.tenant.get().tenantId, status, accountId, limit: 100 });
+  list(
+    @Query('status') status?: Quotation['status'],
+    @Query('accountId') accountId?: string,
+    @Query('search') search?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('issueDateFrom') issueDateFrom?: string,
+    @Query('issueDateTo') issueDateTo?: string,
+  ): Promise<Quotation[]> {
+    return this.quotations.list({ tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo, limit: 100 });
   }
 
   /** What this item has been quoted for before — the historic half of the pricing library. */
@@ -168,17 +180,78 @@ export class CrmQuotationsController {
     return this.quotations.priceHistory(this.tenant.get().tenantId, q);
   }
 
+  @Permissions('crm.quotation.read')
   @Get('paged')
   paged(
     @Query('status') status?: Quotation['status'],
     @Query('accountId') accountId?: string,
+    @Query('search') search?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('issueDateFrom') issueDateFrom?: string,
+    @Query('issueDateTo') issueDateTo?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.quotations.listPaged(
-      { tenantId: this.tenant.get().tenantId, status, accountId },
+      { tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo },
       parsePageParams(limit, offset),
     );
+  }
+
+  /** Tenant-scoped quotation aggregates for the Overview; intentionally independent of page size. */
+  @Permissions('crm.quotation.read')
+  @Get('summary')
+  summary(
+    @Query('status') status?: Quotation['status'],
+    @Query('accountId') accountId?: string,
+    @Query('search') search?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('issueDateFrom') issueDateFrom?: string,
+    @Query('issueDateTo') issueDateTo?: string,
+  ) {
+    return this.quotations.summary({ tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo });
+  }
+
+  /** Complete, tenant-scoped CSV export. Streams in bounded batches rather than exporting the UI page. */
+  @Permissions('crm.quotation.read')
+  @Get('export.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="quotations.csv"')
+  async exportCsv(
+    @Res() response: CsvResponse,
+    @Query('status') status?: Quotation['status'],
+    @Query('accountId') accountId?: string,
+    @Query('search') search?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('issueDateFrom') issueDateFrom?: string,
+    @Query('issueDateTo') issueDateTo?: string,
+  ): Promise<void> {
+    const columns = ['quoteNumber', 'revision', 'customerName', 'accountId', 'sourceOpportunityId', 'sourceTenderId', 'issueDate', 'validUntil', 'subtotal', 'vatTotal', 'total', 'status', 'ownerId'];
+    const filter = { tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo };
+    const csvRow = (q: Quotation): Record<string, unknown> => ({
+      quoteNumber: q.quoteNumber,
+      revision: q.revision ?? 0,
+      customerName: q.customerName,
+      accountId: q.accountId ?? '',
+      sourceOpportunityId: q.sourceOpportunityId ?? '',
+      sourceTenderId: q.sourceTenderId ?? '',
+      issueDate: q.issueDate,
+      validUntil: q.validUntil ?? '',
+      subtotal: q.subtotal,
+      vatTotal: q.vatTotal,
+      total: q.total,
+      status: q.status,
+      ownerId: q.ownerId ?? '',
+    });
+    response.write(`${columns.join(',')}\n`);
+    await this.quotations.streamAll(filter, async (rows) => {
+      const chunk = toCsv(rows.map(csvRow), columns);
+      if (!chunk) return;
+      const lines = chunk.split('\n');
+      lines.shift();
+      response.write(`${lines.join('\n')}\n`);
+    });
+    response.end();
   }
 
   /** All revisions of this quotation (same quote number), oldest first. */

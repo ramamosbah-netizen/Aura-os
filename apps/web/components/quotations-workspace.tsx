@@ -1,16 +1,15 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import QuotationsClient from './quotations-client';
 import QuotationCreate from './quotation-create';
 
-// Quotations OS — the quotation lifecycle as a workspace, the same UX as Pipeline: an Overview
-// cockpit, a status BOARD (Draft → Review → Approved → Sent → Negotiation → Accepted), the full
-// LIST (the existing enterprise table + actions, reused verbatim), and Analytics. Pure UI over the
-// SAME /api/crm/quotations data — no route/API change.
+// Quotations OS — Overview is the decision cockpit; the separate Register owns operational work.
+// Register List/Board views are URL-backed and use tenant-scoped paged data. Overview analytics use
+// a tenant-scoped summary contract so KPIs are not accidentally limited to the first page.
 
-interface Quotation {
+export interface Quotation {
   id: string;
   quoteNumber: string;
   customerName: string;
@@ -28,15 +27,38 @@ interface Quotation {
   status: string;
 }
 
-const aed = (n: number): string => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+export interface QuotationPage {
+  items: Quotation[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
 
-const TABS = [
-  { id: 'overview', label: 'Overview', icon: '◎' },
-  { id: 'board', label: 'Board', icon: '⊞' },
-  { id: 'list', label: 'List', icon: '≣' },
-  { id: 'analytics', label: 'Analytics', icon: '📈' },
-] as const;
-type TabId = (typeof TABS)[number]['id'];
+export interface QuotationFilters {
+  search: string;
+  status: string;
+  ownerId: string;
+  from: string;
+  to: string;
+}
+
+export interface QuotationSummary {
+  total: number;
+  totalValue: number;
+  draftValue: number;
+  openValue: number;
+  acceptedValue: number;
+  lostValue: number;
+  acceptedCount: number;
+  decidedCount: number;
+  expiringSoon: number;
+  pendingApproval: number;
+  stage: Record<string, { count: number; value: number }>;
+  sources: { opportunity: number; tender: number; direct: number };
+}
+
+const aed = (n: number): string => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 // Board columns map the user-facing stage to the REAL statuses behind it (no invented state).
 const STAGES: Array<{ key: string; label: string; statuses: string[]; tone: string }> = [
@@ -49,9 +71,62 @@ const STAGES: Array<{ key: string; label: string; statuses: string[]; tone: stri
   { key: 'lost', label: 'Lost', statuses: ['rejected', 'expired', 'cancelled'], tone: 'var(--bad)' },
 ];
 
-export default function QuotationsWorkspace({ initialQuotations }: { initialQuotations: Quotation[] }) {
-  const [tab, setTab] = useState<TabId>('overview');
-  const quotes = initialQuotations;
+export default function QuotationsWorkspace({ initialPage, initialSummary, initialFilters, surface = 'overview', registerView = 'list' }: { initialPage: QuotationPage; initialSummary?: QuotationSummary; initialFilters?: Partial<QuotationFilters>; surface?: 'overview' | 'register'; registerView?: 'list' | 'board' }) {
+  const [registerTab, setRegisterTab] = useState<'list' | 'board'>(registerView);
+  const [page, setPage] = useState<QuotationPage>(initialPage);
+  const [summary, setSummary] = useState<QuotationSummary | undefined>(initialSummary);
+  const [filters, setFilters] = useState<QuotationFilters>({ search: '', status: '', ownerId: '', from: '', to: '', ...initialFilters });
+  const [draftFilters, setDraftFilters] = useState<QuotationFilters>({ search: '', status: '', ownerId: '', from: '', to: '', ...initialFilters });
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const quotes = page.items;
+  const hasActiveFilters = Object.values(filters).some((value) => value.trim().length > 0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = new URLSearchParams({ limit: String(page.limit || 50), offset: String(page.offset) });
+    if (filters.search.trim()) query.set('search', filters.search.trim());
+    if (filters.status) query.set('status', filters.status);
+    if (filters.ownerId.trim()) query.set('ownerId', filters.ownerId.trim());
+    if (filters.from) query.set('issueDateFrom', filters.from);
+    if (filters.to) query.set('issueDateTo', filters.to);
+    if (surface === 'register') query.set('view', registerTab);
+    const nextUrl = `${surface === 'register' ? '/crm/quotations/register' : '/crm/quotations'}?${query.toString()}`;
+    window.history.replaceState(null, '', nextUrl);
+    setLoading(true);
+    setLoadError(null);
+    fetch(`/api/crm/quotations/paged?${query.toString()}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (res) => {
+        const data = await res.json().catch(() => null) as QuotationPage | { message?: string; error?: string } | null;
+        if (!res.ok || !data || !('items' in data)) {
+          const failure = data && !('items' in data) ? (data.message ?? data.error) : null;
+          throw new Error(failure || 'Unable to load quotations');
+        }
+        setPage(data);
+        if (surface === 'overview') {
+          fetch(`/api/crm/quotations/summary?${query.toString()}`, { cache: 'no-store', signal: controller.signal })
+            .then(async (summaryRes) => { if (!summaryRes.ok) return; const next = await summaryRes.json() as QuotationSummary; if (next && typeof next.total === 'number') setSummary(next); })
+            .catch(() => undefined);
+        }
+      })
+      .catch((err: unknown) => { if (!(err instanceof DOMException && err.name === 'AbortError')) setLoadError(err instanceof Error ? err.message : 'Unable to load quotations'); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [filters, page.offset, page.limit, surface, registerTab]);
+
+  const applyFilters = (): void => {
+    setPage((current) => ({ ...current, offset: 0 }));
+    setFilters({ ...draftFilters });
+  };
+
+  const clearFilters = (): void => {
+    const empty = { search: '', status: '', ownerId: '', from: '', to: '' };
+    setDraftFilters(empty);
+    setFilters(empty);
+    setPage((current) => ({ ...current, offset: 0 }));
+  };
+
+  const movePage = (nextOffset: number): void => setPage((current) => ({ ...current, offset: Math.max(0, nextOffset) }));
 
   const m = useMemo(() => {
     const sum = (l: Quotation[]) => l.reduce((s, q) => s + q.total, 0);
@@ -70,49 +145,99 @@ export default function QuotationsWorkspace({ initialQuotations }: { initialQuot
       draftValue: sum(draft), openValue: sum(open), acceptedValue: sum(accepted), lostValue: sum(lost),
       totalValue: sum(quotes), avgDeal: quotes.length ? sum(quotes) / quotes.length : 0,
       acceptanceRate: decided > 0 ? Math.round((accepted.length / decided) * 100) : null,
-      expiring, pendingApproval, recent, count: quotes.length,
+      expiring, pendingApproval, recent, count: quotes.length, quotes,
+      summary: summary ?? null,
     };
-  }, [quotes]);
+  }, [quotes, summary]);
 
   return (
     <>
-      {/* Internal workspace tabs (same pattern as Pipeline) */}
-      <div style={st.tabbar} role="tablist">
-        {TABS.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)} style={tab === t.id ? { ...st.tab, ...st.tabActive } : st.tab}>
-            <span style={{ opacity: 0.8 }}>{t.icon}</span> {t.label}
-          </button>
-        ))}
-        <div style={{ marginLeft: 'auto' }}><QuotationCreate /></div>
+      {surface === 'register' && <section className="panel" style={st.filters} aria-label="Quotation search and filters">
+        <div style={st.filterRow}>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Search</span>
+            <input value={draftFilters.search} onChange={(e) => setDraftFilters((f) => ({ ...f, search: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }} placeholder="Quote number, customer, subject or contact" style={st.filterInput} />
+          </label>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Status</span>
+            <select value={draftFilters.status} onChange={(e) => setDraftFilters((f) => ({ ...f, status: e.target.value }))} style={st.filterInput}>
+              <option value="">All statuses</option>
+              {['draft', 'internal_review', 'approved', 'sent', 'under_negotiation', 'accepted', 'rejected', 'expired', 'cancelled', 'revised'].map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+            </select>
+          </label>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Owner ID</span>
+            <input value={draftFilters.ownerId} onChange={(e) => setDraftFilters((f) => ({ ...f, ownerId: e.target.value }))} placeholder="Filter by owner" style={st.filterInput} />
+          </label>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Issued from</span>
+            <input type="date" value={draftFilters.from} onChange={(e) => setDraftFilters((f) => ({ ...f, from: e.target.value }))} style={st.filterInput} />
+          </label>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Issued to</span>
+            <input type="date" value={draftFilters.to} onChange={(e) => setDraftFilters((f) => ({ ...f, to: e.target.value }))} style={st.filterInput} />
+          </label>
+          <div style={st.filterActions}>
+            <button type="button" className="btn btn-primary" onClick={applyFilters}>Apply</button>
+            <button type="button" className="btn btn-ghost" onClick={clearFilters}>Clear</button>
+          </div>
+        </div>
+        <div style={st.filterMeta}>
+          <span>{loading ? 'Refreshing…' : page.total === 0 ? 'No quotations match these filters' : `Showing ${page.offset + 1}–${Math.min(page.offset + quotes.length, page.total)} of ${page.total}`}</span>
+          {loadError && <span role="alert" style={st.err}>{loadError}</span>}
+        </div>
+      </section>}
+      <div style={st.surfaceNav} aria-label="Quotation workspace navigation">
+        <div style={st.surfaceLinks}>
+          <a href="/crm/quotations" style={surface === 'overview' ? { ...st.surfaceLink, ...st.surfaceLinkActive } : st.surfaceLink}>◎ Overview</a>
+          <a href="/crm/quotations/register" style={surface === 'register' ? { ...st.surfaceLink, ...st.surfaceLinkActive } : st.surfaceLink}>≣ Register</a>
+        </div>
+        {surface === 'overview' && <a className="btn btn-primary" href="/crm/quotations/register">Open quotation register →</a>}
+        {surface === 'register' && <div style={st.registerToggle} role="tablist" aria-label="Register view">
+          <button type="button" role="tab" aria-selected={registerTab === 'list'} className={registerTab === 'list' ? 'btn btn-primary' : 'btn btn-ghost'} onClick={() => { setRegisterTab('list'); window.history.replaceState(null, '', '/crm/quotations/register?view=list'); }}>≣ List</button>
+          <button type="button" role="tab" aria-selected={registerTab === 'board'} className={registerTab === 'board' ? 'btn btn-primary' : 'btn btn-ghost'} onClick={() => { setRegisterTab('board'); window.history.replaceState(null, '', '/crm/quotations/register?view=board'); }}>⊞ Board</button>
+          <QuotationCreate />
+        </div>}
       </div>
 
-      {tab === 'overview' && <Overview m={m} />}
-      {tab === 'board' && <Board quotes={quotes} />}
-      {tab === 'list' && <QuotationsClient initialQuotations={quotes as never} embedded />}
-      {tab === 'analytics' && <Analytics quotes={quotes} m={m} />}
+      {surface === 'overview' && <Overview m={m} />}
+      {surface === 'register' && registerTab === 'board' && <Board quotes={quotes} summary={summary} />}
+      {surface === 'register' && registerTab === 'list' && <QuotationsClient initialQuotations={quotes as never} embedded exportCsvUrl={quotationExportUrl(filters)} emptyLabel={hasActiveFilters ? 'No quotations match the active filters.' : undefined} />}
+      {surface === 'register' && <div style={st.pagination} aria-label="Quotation pagination">
+        <button type="button" className="btn btn-ghost" disabled={loading || page.offset === 0} onClick={() => movePage(page.offset - page.limit)}>← Previous</button>
+        <span style={st.pageLabel}>Page {page.total === 0 ? 0 : Math.floor(page.offset / page.limit) + 1} · {page.limit} per page</span>
+        <button type="button" className="btn btn-ghost" disabled={loading || !page.hasMore} onClick={() => movePage(page.offset + page.limit)}>Next →</button>
+      </div>}
     </>
   );
 }
 
 function Overview({ m }: { m: OverviewShape }) {
+  const s = m.summary;
+  const totalValue = s?.totalValue ?? m.totalValue;
+  const openValue = s?.openValue ?? m.openValue;
+  const acceptedValue = s?.acceptedValue ?? m.acceptedValue;
+  const acceptanceRate = s && s.decidedCount > 0 ? Math.round((s.acceptedCount / s.decidedCount) * 100) : m.acceptanceRate;
+  const avgDeal = s && s.total > 0 ? s.totalValue / s.total : m.avgDeal;
+  const expiringCount = s?.expiringSoon ?? m.expiring.length;
+  const approvalCount = s?.pendingApproval ?? m.pendingApproval.length;
   return (
     <>
       <div style={st.cards}>
-        <Kpi label="Total quoted" value={`AED ${aed(m.totalValue)}`} />
-        <Kpi label="Open / sent value" value={`AED ${aed(m.openValue)}`} accent />
-        <Kpi label="Accepted value" value={`AED ${aed(m.acceptedValue)}`} good />
-        <Kpi label="Acceptance rate" value={m.acceptanceRate === null ? '—' : `${m.acceptanceRate}%`} accent />
-        <Kpi label="Avg deal size" value={`AED ${aed(m.avgDeal)}`} />
-        <Kpi label="Expiring ≤ 7 days" value={String(m.expiring.length)} bad={m.expiring.length > 0} />
+        <Kpi label="Total quoted" value={`AED ${aed(totalValue)}`} />
+        <Kpi label="Open / sent value" value={`AED ${aed(openValue)}`} accent />
+        <Kpi label="Accepted value" value={`AED ${aed(acceptedValue)}`} good />
+        <Kpi label="Acceptance rate" value={acceptanceRate === null ? '—' : `${acceptanceRate}%`} accent />
+        <Kpi label="Avg deal size" value={`AED ${aed(avgDeal)}`} />
+        <Kpi label="Expiring ≤ 7 days" value={String(expiringCount)} bad={expiringCount > 0} />
       </div>
 
       <div style={st.twoCol}>
         <section className="panel" style={st.panel}>
-          <h3 style={st.h3}>Pending your approval <span style={st.count}>{m.pendingApproval.length}</span></h3>
-          {m.pendingApproval.length === 0
+          <h3 style={st.h3}>Pending your approval <span style={st.count}>{approvalCount}</span></h3>
+          {approvalCount === 0
             ? <p style={st.muted}>Nothing in internal review.</p>
-            : m.pendingApproval.map((q) => <QuoteRow key={q.id} q={q} right={`AED ${aed(q.total)}`} />)}
+            : <>{m.pendingApproval.map((q) => <QuoteRow key={q.id} q={q} right={`AED ${aed(q.total)}`} />)}{approvalCount > m.pendingApproval.length && <p style={st.muted}>Showing the first {m.pendingApproval.length}. <a href="/crm/quotations/register?status=internal_review" style={{ color: 'var(--accent)' }}>Open register to review all →</a></p>}</>}
         </section>
         <section className="panel" style={st.panel} data-testid="quotations-recent">
           <h3 style={st.h3}>Recent quotations</h3>
@@ -122,31 +247,38 @@ function Overview({ m }: { m: OverviewShape }) {
         </section>
       </div>
 
-      {m.expiring.length > 0 && (
+      {expiringCount > 0 && (
         <section className="panel" style={{ ...st.panel, borderColor: 'var(--bad)' }}>
-          <h3 style={st.h3}>⚠ Expiring within 7 days <span style={st.count}>{m.expiring.length}</span></h3>
+          <h3 style={st.h3}>⚠ Expiring within 7 days <span style={st.count}>{expiringCount}</span></h3>
           {m.expiring.map((q) => <QuoteRow key={q.id} q={q} right={<span style={{ color: 'var(--bad)' }}>valid to {q.validUntil}</span>} />)}
+          {expiringCount > m.expiring.length && <p style={st.muted}>Showing the first {m.expiring.length}. <a href="/crm/quotations/register" style={{ color: 'var(--accent)' }}>Open register to review all →</a></p>}
         </section>
       )}
+      <section style={{ marginTop: 14 }}>
+        <h3 style={{ ...st.h3, marginBottom: 10 }}>Performance analytics</h3>
+        <Analytics quotes={m.quotes} m={m} />
+      </section>
     </>
   );
 }
 
-function Board({ quotes }: { quotes: Quotation[] }) {
+function Board({ quotes, summary }: { quotes: Quotation[]; summary?: QuotationSummary }) {
   const known = new Set(STAGES.flatMap((s) => s.statuses));
   const superseded = quotes.filter((q) => !known.has(q.status)); // revised / any other → not lost, kept visible
+  const isPartial = Boolean(summary && summary.total > quotes.length);
   return (
     <div style={st.boardScroll}>
+      {isPartial && <p style={st.muted}>Showing the current page of {summary?.total} matching quotations. Stage totals include all filtered results.</p>}
       <div style={st.board}>
         {STAGES.map((stage) => {
           const list = quotes.filter((q) => stage.statuses.includes(q.status));
-          const value = list.reduce((s, q) => s + q.total, 0);
+          const totals = summary?.stage[stage.key] ?? { count: list.length, value: list.reduce((s, q) => s + q.total, 0) };
           return (
             <div key={stage.key} style={st.col}>
               <div style={{ ...st.colHead, borderTopColor: stage.tone }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>{stage.label}</span>
-                <span style={st.colCount}>{list.length}</span>
-                <span style={st.colValue}>AED {aed(value)}</span>
+                <span style={st.colCount}>{totals.count}</span>
+                <span style={st.colValue}>AED {aed(totals.value)}</span>
               </div>
               <div style={st.colBody}>
                 {list.length === 0 ? <p style={st.colEmpty}>—</p> : list.map((q) => <Card key={q.id} q={q} />)}
@@ -169,24 +301,25 @@ function Board({ quotes }: { quotes: Quotation[] }) {
 }
 
 function Analytics({ quotes, m }: { quotes: Quotation[]; m: OverviewShape }) {
-  const maxVal = Math.max(1, ...STAGES.map((s) => quotes.filter((q) => s.statuses.includes(q.status)).reduce((t, q) => t + q.total, 0)));
-  const src = {
+  const stageFor = (s: typeof STAGES[number]) => m.summary?.stage[s.key] ?? { count: quotes.filter((q) => s.statuses.includes(q.status)).length, value: quotes.filter((q) => s.statuses.includes(q.status)).reduce((t, q) => t + q.total, 0) };
+  const maxVal = Math.max(1, ...STAGES.map((s) => stageFor(s).value));
+  const src = m.summary?.sources ?? {
     opportunity: quotes.filter((q) => q.sourceOpportunityId).length,
     tender: quotes.filter((q) => q.sourceTenderId && !q.sourceOpportunityId).length,
     direct: quotes.filter((q) => !q.sourceOpportunityId && !q.sourceTenderId).length,
   };
+  const totalCount = m.summary?.total ?? m.count;
   return (
     <div style={st.twoCol}>
       <section className="panel" style={st.panel}>
         <h3 style={st.h3}>Value by stage</h3>
         {STAGES.map((s) => {
-          const list = quotes.filter((q) => s.statuses.includes(q.status));
-          const v = list.reduce((t, q) => t + q.total, 0);
+          const values = stageFor(s);
           return (
             <div key={s.key} style={st.barRow}>
               <span style={st.barLabel}>{s.label}</span>
-              <div style={st.barTrack}><div style={{ ...st.barFill, width: `${(v / maxVal) * 100}%`, background: s.tone }} /></div>
-              <span style={st.barVal}>AED {aed(v)} · {list.length}</span>
+              <div style={st.barTrack}><div style={{ ...st.barFill, width: `${(values.value / maxVal) * 100}%`, background: s.tone }} /></div>
+              <span style={st.barVal}>AED {aed(values.value)} · {values.count}</span>
             </div>
           );
         })}
@@ -194,15 +327,15 @@ function Analytics({ quotes, m }: { quotes: Quotation[]; m: OverviewShape }) {
       <section className="panel" style={st.panel}>
         <h3 style={st.h3}>Outcomes & sources</h3>
         <div style={st.statGrid}>
-          <Stat label="Acceptance rate" value={m.acceptanceRate === null ? '—' : `${m.acceptanceRate}%`} tone="var(--good)" />
-          <Stat label="Accepted value" value={`AED ${aed(m.acceptedValue)}`} tone="var(--good)" />
-          <Stat label="Lost value" value={`AED ${aed(m.lostValue)}`} tone="var(--bad)" />
-          <Stat label="Avg deal size" value={`AED ${aed(m.avgDeal)}`} />
+          <Stat label="Acceptance rate" value={m.summary && m.summary.decidedCount > 0 ? `${Math.round((m.summary.acceptedCount / m.summary.decidedCount) * 100)}%` : m.acceptanceRate === null ? '—' : `${m.acceptanceRate}%`} tone="var(--good)" />
+          <Stat label="Accepted value" value={`AED ${aed(m.summary?.acceptedValue ?? m.acceptedValue)}`} tone="var(--good)" />
+          <Stat label="Lost value" value={`AED ${aed(m.summary?.lostValue ?? m.lostValue)}`} tone="var(--bad)" />
+          <Stat label="Avg deal size" value={`AED ${aed(m.summary && m.summary.total > 0 ? m.summary.totalValue / m.summary.total : m.avgDeal)}`} />
         </div>
         <h4 style={{ ...st.h3, fontSize: 12.5, marginTop: 16 }}>Where quotes come from</h4>
-        <div style={st.barRow}><span style={st.barLabel}>◎ Opportunity</span><div style={st.barTrack}><div style={{ ...st.barFill, width: `${pct(src.opportunity, m.count)}%`, background: 'var(--accent)' }} /></div><span style={st.barVal}>{src.opportunity}</span></div>
-        <div style={st.barRow}><span style={st.barLabel}>◳ Tender</span><div style={st.barTrack}><div style={{ ...st.barFill, width: `${pct(src.tender, m.count)}%`, background: 'var(--accent)' }} /></div><span style={st.barVal}>{src.tender}</span></div>
-        <div style={st.barRow}><span style={st.barLabel}>Direct</span><div style={st.barTrack}><div style={{ ...st.barFill, width: `${pct(src.direct, m.count)}%`, background: 'var(--muted)' }} /></div><span style={st.barVal}>{src.direct}</span></div>
+        <div style={st.barRow}><span style={st.barLabel}>◎ Opportunity</span><div style={st.barTrack}><div style={{ ...st.barFill, width: `${pct(src.opportunity, totalCount)}%`, background: 'var(--accent)' }} /></div><span style={st.barVal}>{src.opportunity}</span></div>
+        <div style={st.barRow}><span style={st.barLabel}>◳ Tender</span><div style={st.barTrack}><div style={{ ...st.barFill, width: `${pct(src.tender, totalCount)}%`, background: 'var(--accent)' }} /></div><span style={st.barVal}>{src.tender}</span></div>
+        <div style={st.barRow}><span style={st.barLabel}>Direct</span><div style={st.barTrack}><div style={{ ...st.barFill, width: `${pct(src.direct, totalCount)}%`, background: 'var(--muted)' }} /></div><span style={st.barVal}>{src.direct}</span></div>
       </section>
     </div>
   );
@@ -211,9 +344,20 @@ function Analytics({ quotes, m }: { quotes: Quotation[]; m: OverviewShape }) {
 // ── small pieces ──
 type OverviewShape = {
   totalValue: number; openValue: number; acceptedValue: number; lostValue: number; avgDeal: number;
-  acceptanceRate: number | null; expiring: Quotation[]; pendingApproval: Quotation[]; recent: Quotation[]; count: number;
+  acceptanceRate: number | null; expiring: Quotation[]; pendingApproval: Quotation[]; recent: Quotation[]; count: number; quotes: Quotation[]; summary: QuotationSummary | null;
 };
 const pct = (n: number, total: number): number => (total > 0 ? Math.round((n / total) * 100) : 0);
+
+function quotationExportUrl(filters: QuotationFilters): string {
+  const query = new URLSearchParams();
+  if (filters.search.trim()) query.set('search', filters.search.trim());
+  if (filters.status) query.set('status', filters.status);
+  if (filters.ownerId.trim()) query.set('ownerId', filters.ownerId.trim());
+  if (filters.from) query.set('issueDateFrom', filters.from);
+  if (filters.to) query.set('issueDateTo', filters.to);
+  const encoded = query.toString();
+  return `/api/crm/quotations/export.csv${encoded ? `?${encoded}` : ''}`;
+}
 
 function Card({ q, muted }: { q: Quotation; muted?: boolean }) {
   return (
@@ -254,6 +398,21 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 }
 
 const st = {
+  filters: { padding: 14, marginBottom: 16 } as CSSProperties,
+  filterRow: { display: 'flex', alignItems: 'end', gap: 10, flexWrap: 'wrap' } as CSSProperties,
+  filterField: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140, flex: '1 1 150px' } as CSSProperties,
+  filterLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: 0.4 } as CSSProperties,
+  filterInput: { width: '100%', minHeight: 34, padding: '7px 9px', borderRadius: 7, border: '1px solid var(--border-strong, var(--border))', background: 'var(--panel-2, var(--panel))', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5 } as CSSProperties,
+  filterActions: { display: 'flex', gap: 7, alignItems: 'center', paddingBottom: 0 } as CSSProperties,
+  filterMeta: { display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 10, fontSize: 12, color: 'var(--muted)' } as CSSProperties,
+  err: { color: 'var(--bad)' } as CSSProperties,
+  pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, marginTop: 18 } as CSSProperties,
+  pageLabel: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
+  surfaceNav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid var(--border)', marginBottom: 18, paddingBottom: 8, flexWrap: 'wrap' } as CSSProperties,
+  surfaceLinks: { display: 'flex', alignItems: 'center', gap: 4 } as CSSProperties,
+  surfaceLink: { display: 'inline-flex', alignItems: 'center', padding: '8px 13px', borderRadius: 8, color: 'var(--muted)', textDecoration: 'none', fontSize: 13.5 } as CSSProperties,
+  surfaceLinkActive: { color: 'var(--text)', background: 'var(--panel-2)', fontWeight: 700 } as CSSProperties,
+  registerToggle: { display: 'flex', alignItems: 'center', gap: 6 } as CSSProperties,
   tabbar: { display: 'flex', alignItems: 'center', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 18, paddingBottom: 2 } as CSSProperties,
   tab: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13.5, color: 'var(--muted)', background: 'transparent', border: 'none', borderBottom: '2px solid transparent', cursor: 'pointer', fontFamily: 'inherit' } as CSSProperties,
   tabActive: { color: 'var(--text)', fontWeight: 700, borderBottomColor: 'var(--accent)' } as CSSProperties,

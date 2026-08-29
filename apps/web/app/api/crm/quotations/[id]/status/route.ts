@@ -4,9 +4,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   try {
+    const replay = request.headers.get('Idempotency-Key');
     const res = await apiFetch(`${apiBase()}/api/v1/crm/quotations/${id}/status`, {
       method: 'PATCH',
-      headers: { 'content-type': 'application/json', ...(await authHeader()) },
+      headers: { 'content-type': 'application/json', ...(replay ? { 'Idempotency-Key': replay } : {}), ...(await authHeader()) },
       body: JSON.stringify(body),
       cache: 'no-store',
     });

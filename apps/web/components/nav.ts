@@ -61,7 +61,7 @@ export const NAV: NavGroup[] = [
       { label: 'Customers', href: '/crm/customers', glyph: '◈', desc: 'Accounts, contacts & stakeholder relationships' },
       { label: 'Pipeline & Opportunities', href: '/crm/leads', glyph: '⌥', desc: 'Sales funnel — leads, opportunities & deals' },
       { label: 'Campaigns', href: '/crm/campaigns', glyph: '◔', desc: 'Marketing campaigns — spend, leads generated & ROI by channel' },
-      { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'Quotation OS — Overview · Board · List · Analytics; pricing, approvals & margins' },
+      { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'Quotation workspace — Overview analytics plus a searchable List/Board register' },
       { label: 'Commercial', href: '/crm/commercial', glyph: '⚖', desc: 'The commercial decision — pricing, quotations, contracts, approvals & margins as linked views' },
       { label: 'Market Intelligence', href: '/crm/market-intelligence', glyph: '⊛', desc: 'The reference catalogue behind pricing — items, brands, benchmark cost/sell & install time' },
       { label: 'Activities', href: '/crm/activities', glyph: '☑', desc: 'Calls, meetings & tasks' },

@@ -12,9 +12,14 @@ export async function GET(): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
   try {
+    const replayHeaders: Record<string, string> = {};
+    for (const name of ['Idempotency-Key', 'Replay-Nonce']) {
+      const value = request.headers.get(name);
+      if (value) replayHeaders[name] = value;
+    }
     const res = await apiFetch(`${apiBase()}/api/v1/crm/quotations`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(await authHeader()) },
+      headers: { 'content-type': 'application/json', ...replayHeaders, ...(await authHeader()) },
       body: JSON.stringify(body),
       cache: 'no-store',
     });

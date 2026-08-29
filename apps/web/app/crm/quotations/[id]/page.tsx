@@ -1,14 +1,19 @@
-import { getJson } from '@/lib/api';
+import { fetchJson, getJson } from '@/lib/api';
 import RecordChrome from '@/components/record-chrome';
-import Quotation360Client, { type Quotation } from '@/components/quotation-360-client';
+import Quotation360Client, { type Quotation, type QuotationPricingView } from '@/components/quotation-360-client';
+import DataStateNotice from '@/components/ui/data-state';
 
 export const dynamic = 'force-dynamic';
 
 export default async function QuotationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const q = await getJson<Quotation>(`/api/crm/quotations/${id}`);
-  if (!q) return <div style={{ padding: 40 }}>Quotation not found or API offline.</div>;
-  const revisions = (await getJson<Quotation[]>(`/api/crm/quotations/${id}/revisions`)) ?? [];
+  const quotationResult = await fetchJson<Quotation>(`/api/crm/quotations/${id}`);
+  if (!quotationResult.ok) return <div style={{ maxWidth: 960, margin: '0 auto', padding: '40px 28px' }}><DataStateNotice error={quotationResult.error} subject="quotation" /></div>;
+  const q = quotationResult.data;
+  const [revisions, pricingView] = await Promise.all([
+    getJson<Quotation[]>(`/api/crm/quotations/${id}/revisions`),
+    getJson<QuotationPricingView>(`/api/crm/quotations/${id}/pricing`),
+  ]);
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 28px 64px' }}>
@@ -16,7 +21,7 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>
         <a href="/crm/quotations" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>Quotations</a> · {q.quoteNumber}
       </div>
-      <Quotation360Client quotation={q} revisions={revisions} />
+      <Quotation360Client quotation={q} revisions={revisions ?? []} pricingView={pricingView} />
     </div>
   );
 }

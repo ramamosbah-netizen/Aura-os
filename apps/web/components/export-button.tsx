@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties } from 'react';
+import { type CSSProperties, useState } from 'react';
 
 export interface ExportColumn { key: string; label?: string }
 
@@ -10,6 +10,8 @@ interface ExportProps {
   columns?: ExportColumn[];
   /** Heading printed on the Excel sheet and the print view. Defaults to the filename. */
   title?: string;
+  /** Optional server export endpoint for a complete filtered register (not just the visible page). */
+  csvUrl?: string;
 }
 
 // Shared reporting control — one drop-in that exports the current rows as CSV or Excel,
@@ -34,13 +36,29 @@ function downloadBlob(blob: Blob, name: string): void {
   URL.revokeObjectURL(url);
 }
 
-export default function ExportButton({ rows, filename, columns, title }: ExportProps) {
+export default function ExportButton({ rows, filename, columns, title, csvUrl }: ExportProps) {
   const disabled = !rows?.length;
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvError, setCsvError] = useState('');
   const cols = () => resolveCols(rows, columns);
   const heading = title ?? filename;
 
-  function exportCsv(): void {
+  async function exportCsv(): Promise<void> {
     if (disabled) return;
+    setCsvError('');
+    if (csvUrl) {
+      setCsvLoading(true);
+      try {
+        const res = await fetch(csvUrl, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Export could not be generated');
+        downloadBlob(await res.blob(), `${filename}-${stamp()}.csv`);
+      } catch (err) {
+        setCsvError(err instanceof Error ? err.message : 'Export could not be generated');
+      } finally {
+        setCsvLoading(false);
+      }
+      return;
+    }
     const c = cols();
     const q = (v: unknown): string => {
       const s = esc(v);
@@ -90,9 +108,10 @@ export default function ExportButton({ rows, filename, columns, title }: ExportP
 
   return (
     <span style={s.group} role="group" aria-label="Export">
-      <button type="button" style={s.btn} onClick={exportCsv} disabled={disabled} title="Export current rows to CSV">⬇ CSV</button>
+      <button type="button" style={s.btn} onClick={() => void exportCsv()} disabled={disabled || csvLoading} title={csvUrl ? 'Export all filtered rows to CSV' : 'Export current rows to CSV'}>{csvLoading ? '… CSV' : '⬇ CSV'}</button>
       <button type="button" style={s.btn} onClick={exportExcel} disabled={disabled} title="Export current rows to Excel">⬇ Excel</button>
       <button type="button" style={s.btn} onClick={printView} disabled={disabled} title="Print / Save as PDF">🖨 Print</button>
+      {csvError && <span role="alert" style={s.error}>{csvError}</span>}
     </span>
   );
 }
@@ -100,4 +119,5 @@ export default function ExportButton({ rows, filename, columns, title }: ExportP
 const s = {
   group: { display: 'inline-flex', gap: 6 } as CSSProperties,
   btn: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 12px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
+  error: { color: 'var(--bad)', fontSize: 12, alignSelf: 'center' } as CSSProperties,
 };

@@ -52,7 +52,7 @@ const OPEN_STATUSES = ['draft', 'internal_review', 'approved', 'sent', 'under_ne
 const LOST_STATUSES = ['rejected', 'expired', 'cancelled'];
 const aed = (n: number): string => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-export default function QuotationsClient({ initialQuotations, embedded }: { initialQuotations: Quotation[]; embedded?: boolean }) {
+export default function QuotationsClient({ initialQuotations, embedded, emptyLabel, exportCsvUrl }: { initialQuotations: Quotation[]; embedded?: boolean; emptyLabel?: string; exportCsvUrl?: string }) {
   const router = useRouter();
   const quotes = initialQuotations;
   const [error, setError] = useState('');
@@ -130,14 +130,14 @@ export default function QuotationsClient({ initialQuotations, embedded }: { init
 
       <div style={st.toolbar}>
         {!embedded && <QuotationCreate />}
-        <ExportButton filename="quotations" rows={quotes as unknown as Array<Record<string, unknown>>}
+        <ExportButton filename="quotations" csvUrl={exportCsvUrl} rows={quotes as unknown as Array<Record<string, unknown>>}
           columns={[{ key: 'quoteNumber' }, { key: 'revision' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'validUntil' }, { key: 'subtotal' }, { key: 'vatTotal' }, { key: 'total' }, { key: 'status' }, { key: 'ownerId' }]} />
         {error && <span style={st.err}>{error}</span>}
         {msg && <span style={st.ok}>{msg}</span>}
       </div>
 
       {quotes.length === 0 ? (
-        <EmptyState compact title="No quotations yet" description="Create a quotation to price a deal and route it for approval." />
+        <EmptyState compact title={emptyLabel ? 'No matching quotations' : 'No quotations yet'} description={emptyLabel ?? 'Create a quotation to price a deal and route it for approval.'} />
       ) : (
         <section className="panel">
           <div style={{ overflowX: 'auto' }}>

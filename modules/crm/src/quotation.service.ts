@@ -19,6 +19,7 @@ import { type QuotationPricingView, computeQuotationPricing, computeEstimationPr
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
+import type { QuotationSummary } from './quotation-store';
 
 export { QUOTATION_ACTIONS, type QuotationAction };
 
@@ -367,7 +368,15 @@ export class QuotationService {
     return this.store.list(filter);
   }
 
+  streamAll(filter: QuotationFilter, onBatch: (rows: Quotation[]) => Promise<void>): Promise<void> {
+    return this.store.streamAll(filter, onBatch);
+  }
+
   listPaged(filter: QuotationFilter, page: import('@aura/shared').PageParams) {
     return this.store.listPaged(filter, page);
+  }
+
+  summary(filter: QuotationFilter): Promise<QuotationSummary> {
+    return this.store.summary(filter);
   }
 }

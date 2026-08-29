@@ -4,7 +4,7 @@ import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Quotation, QuotationLine } from './domain/quotation';
 import type { QuotationPricingInput } from './domain/quotation-pricing';
-import type { QuotationFilter, QuotationStore } from './quotation-store';
+import type { QuotationFilter, QuotationStore, QuotationSummary } from './quotation-store';
 
 interface Row {
   id: string;
@@ -135,9 +135,23 @@ export class PostgresQuotationStore implements QuotationStore {
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('account_id', filter.accountId);
+    add('owner_id', filter.ownerId);
     add('source_tender_id', filter.sourceTenderId);
     add('source_opportunity_id', filter.sourceOpportunityId);
     add('quote_number', filter.quoteNumber);
+    if (filter.search?.trim()) {
+      params.push(`%${filter.search.trim()}%`);
+      const p = `$${params.length}`;
+      where.push(`(quote_number ILIKE ${p} OR customer_name ILIKE ${p} OR COALESCE(subject, '') ILIKE ${p} OR COALESCE(contact_name, '') ILIKE ${p})`);
+    }
+    if (filter.issueDateFrom) {
+      params.push(filter.issueDateFrom);
+      where.push(`issue_date >= $${params.length}`);
+    }
+    if (filter.issueDateTo) {
+      params.push(filter.issueDateTo);
+      where.push(`issue_date <= $${params.length}`);
+    }
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 
@@ -150,6 +164,33 @@ export class PostgresQuotationStore implements QuotationStore {
     );
     return res.rows.map(rowTo);
   }
+
+  async streamAll(filter: QuotationFilter, onBatch: (rows: Quotation[]) => Promise<void>): Promise<void> {
+    const base = this.buildWhere(filter);
+    let cursorCreatedAt: string | null = null;
+    let cursorId: string | null = null;
+    for (;;) {
+      const params = [...base.params];
+      let whereSql = base.whereSql;
+      if (cursorCreatedAt !== null && cursorId !== null) {
+        const join = whereSql ? ' AND ' : 'WHERE ';
+        params.push(cursorCreatedAt, cursorId);
+        whereSql += `${join}(created_at < $${params.length - 1} OR (created_at = $${params.length - 1} AND id < $${params.length}))`;
+      }
+      params.push(500);
+      const res = await this.pool.query<Row>(
+        `SELECT ${COLS} FROM public.aura_crm_quotations ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
+        params,
+      );
+      if (res.rows.length === 0) return;
+      await onBatch(res.rows.map(rowTo));
+      const last = res.rows[res.rows.length - 1];
+      cursorCreatedAt = last.created_at instanceof Date ? last.created_at.toISOString() : String(last.created_at);
+      cursorId = last.id;
+      if (res.rows.length < 500) return;
+    }
+  }
+
   async listPaged(filter: QuotationFilter, page: PageParams): Promise<Page<Quotation>> {
     const { whereSql, params } = this.buildWhere(filter);
     const countRes = await this.pool.query<{ count: string }>(
@@ -161,5 +202,60 @@ export class PostgresQuotationStore implements QuotationStore {
       winParams,
     );
     return makePage(res.rows.map(rowTo), total, page);
+  }
+
+  async summary(filter: QuotationFilter): Promise<QuotationSummary> {
+    const { whereSql, params } = this.buildWhere(filter);
+    const res = await this.pool.query<{
+      total: string; total_value: string; draft_value: string; open_value: string; accepted_value: string; lost_value: string;
+      accepted_count: string; decided_count: string; expiring_soon: string; pending_approval: string;
+      opportunity_count: string; tender_count: string; direct_count: string;
+      draft_count: string; review_count: string; approved_count: string; sent_count: string; negotiation_count: string; lost_count: string;
+      draft_stage_value: string; review_stage_value: string; approved_stage_value: string; sent_stage_value: string; negotiation_stage_value: string; accepted_stage_value: string; lost_stage_value: string;
+    }>(
+      `SELECT
+        COUNT(*)::int AS total,
+        COALESCE(SUM(total), 0)::numeric AS total_value,
+        COALESCE(SUM(total) FILTER (WHERE status IN ('draft','internal_review','approved')), 0)::numeric AS draft_value,
+        COALESCE(SUM(total) FILTER (WHERE status IN ('sent','under_negotiation','negotiation')), 0)::numeric AS open_value,
+        COALESCE(SUM(total) FILTER (WHERE status = 'accepted'), 0)::numeric AS accepted_value,
+        COALESCE(SUM(total) FILTER (WHERE status IN ('rejected','expired','cancelled')), 0)::numeric AS lost_value,
+        COUNT(*) FILTER (WHERE status = 'accepted')::int AS accepted_count,
+        COUNT(*) FILTER (WHERE status IN ('accepted','rejected','expired','cancelled'))::int AS decided_count,
+        COUNT(*) FILTER (WHERE status IN ('draft','internal_review','approved','sent','under_negotiation','negotiation') AND valid_until >= CURRENT_DATE AND valid_until <= CURRENT_DATE + INTERVAL '7 days')::int AS expiring_soon,
+        COUNT(*) FILTER (WHERE status = 'internal_review')::int AS pending_approval,
+        COUNT(*) FILTER (WHERE source_opportunity_id IS NOT NULL)::int AS opportunity_count,
+        COUNT(*) FILTER (WHERE source_tender_id IS NOT NULL AND source_opportunity_id IS NULL)::int AS tender_count,
+        COUNT(*) FILTER (WHERE source_opportunity_id IS NULL AND source_tender_id IS NULL)::int AS direct_count,
+        COUNT(*) FILTER (WHERE status = 'draft')::int AS draft_count,
+        COUNT(*) FILTER (WHERE status = 'internal_review')::int AS review_count,
+        COUNT(*) FILTER (WHERE status = 'approved')::int AS approved_count,
+        COUNT(*) FILTER (WHERE status = 'sent')::int AS sent_count,
+        COUNT(*) FILTER (WHERE status IN ('under_negotiation','negotiation'))::int AS negotiation_count,
+        COUNT(*) FILTER (WHERE status IN ('rejected','expired','cancelled'))::int AS lost_count,
+        COALESCE(SUM(total) FILTER (WHERE status = 'draft'), 0)::numeric AS draft_stage_value,
+        COALESCE(SUM(total) FILTER (WHERE status = 'internal_review'), 0)::numeric AS review_stage_value,
+        COALESCE(SUM(total) FILTER (WHERE status = 'approved'), 0)::numeric AS approved_stage_value,
+        COALESCE(SUM(total) FILTER (WHERE status = 'sent'), 0)::numeric AS sent_stage_value,
+        COALESCE(SUM(total) FILTER (WHERE status IN ('under_negotiation','negotiation')), 0)::numeric AS negotiation_stage_value,
+        COALESCE(SUM(total) FILTER (WHERE status = 'accepted'), 0)::numeric AS accepted_stage_value,
+        COALESCE(SUM(total) FILTER (WHERE status IN ('rejected','expired','cancelled')), 0)::numeric AS lost_stage_value
+       FROM public.aura_crm_quotations ${whereSql}`,
+      params,
+    );
+    const r = res.rows[0];
+    const n = (v: string | undefined): number => Number(v ?? 0);
+    return {
+      total: n(r?.total), totalValue: n(r?.total_value), draftValue: n(r?.draft_value), openValue: n(r?.open_value),
+      acceptedValue: n(r?.accepted_value), lostValue: n(r?.lost_value), acceptedCount: n(r?.accepted_count), decidedCount: n(r?.decided_count),
+      expiringSoon: n(r?.expiring_soon), pendingApproval: n(r?.pending_approval),
+      stage: {
+        draft: { count: n(r?.draft_count), value: n(r?.draft_stage_value) }, review: { count: n(r?.review_count), value: n(r?.review_stage_value) },
+        approved: { count: n(r?.approved_count), value: n(r?.approved_stage_value) }, sent: { count: n(r?.sent_count), value: n(r?.sent_stage_value) },
+        negotiation: { count: n(r?.negotiation_count), value: n(r?.negotiation_stage_value) }, accepted: { count: n(r?.accepted_count), value: n(r?.accepted_stage_value) },
+        lost: { count: n(r?.lost_count), value: n(r?.lost_stage_value) },
+      },
+      sources: { opportunity: n(r?.opportunity_count), tender: n(r?.tender_count), direct: n(r?.direct_count) },
+    };
   }
 }

@@ -23,7 +23,23 @@ export interface Quotation {
   exclusions?: string[]; paymentConditions?: string | null; deliveryTerms?: string | null;
   sourceTenderId: string | null; sourceOpportunityId: string | null; convertedContractId: string | null;
   issueDate: string; validUntil: string | null; lines: Line[]; subtotal: number; vatTotal: number; total: number;
-  pricing: { unitCosts: number[] } | null;
+  pricing: { unitCosts?: number[]; lines?: unknown[] } | null;
+}
+
+export interface QuotationPricingView {
+  rows: Array<{
+    description: string;
+    quantity: number;
+    unitCostTotal: number;
+    costTotal: number;
+    unitPrice: number;
+    sellTotal: number;
+    profit: number;
+    marginPercent: number | null;
+  }>;
+  totalCost: number;
+  profit: number;
+  marginPercent: number | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -42,7 +58,7 @@ const money = (n: number): string => `AED ${Number(n).toLocaleString('en-AE', { 
 const aed0 = (n: number): string => `AED ${Number(n).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const pct = (n: number): string => `${n.toFixed(1)}%`;
 
-export default function Quotation360Client({ quotation: q, revisions }: { quotation: Quotation; revisions: Quotation[] }) {
+export default function Quotation360Client({ quotation: q, revisions, pricingView }: { quotation: Quotation; revisions: Quotation[]; pricingView?: QuotationPricingView | null }) {
   const router = useRouter();
   const [tab, setTab] = useTab('overview');
   const [busy, setBusy] = useState(false);
@@ -53,17 +69,23 @@ export default function Quotation360Client({ quotation: q, revisions }: { quotat
 
   // ── Pricing composition (quotation sheet ↔ pricing engine) ──────────────────
   const pricing = useMemo(() => {
-    const costs = q.pricing?.unitCosts;
-    if (!costs || costs.length !== q.lines.length) return null;
-    const rows = q.lines.map((l, i) => {
-      const lineCost = l.quantity * costs[i];
-      const margin = l.lineNet - lineCost;
-      return { ...l, unitCost: costs[i], lineCost, margin, marginPct: l.lineNet > 0 ? (margin / l.lineNet) * 100 : 0 };
-    });
-    const totalCost = rows.reduce((s, r) => s + r.lineCost, 0);
-    const totalMargin = q.subtotal - totalCost;
-    return { rows, totalCost, totalMargin, marginPct: q.subtotal > 0 ? (totalMargin / q.subtotal) * 100 : 0 };
-  }, [q]);
+    if (!pricingView) return null;
+    return {
+      rows: pricingView.rows.map((r) => ({
+        description: r.description,
+        quantity: r.quantity,
+        unitCost: r.unitCostTotal,
+        lineCost: r.costTotal,
+        unitPrice: r.unitPrice,
+        lineNet: r.sellTotal,
+        margin: r.profit,
+        marginPct: r.marginPercent ?? 0,
+      })),
+      totalCost: pricingView.totalCost,
+      totalMargin: pricingView.profit,
+      marginPct: pricingView.marginPercent ?? 0,
+    };
+  }, [pricingView]);
 
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);

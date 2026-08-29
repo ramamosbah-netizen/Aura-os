@@ -33,9 +33,12 @@ test.describe('CRM Activities release proof', () => {
     await expect(page).toHaveURL(new RegExp(`/crm/activities\\?relatedType=opportunity&record=${opportunityId}`));
     await expect(page.getByRole('heading', { name: 'Opportunity Activity Timeline' })).toBeVisible();
 
+    console.log(`activities-proof create button count: ${await page.getByTestId('create-activity').count()}`);
     await page.getByTestId('create-activity').click();
     const drawer = page.getByTestId('drawer-activity');
+    console.log(`activities-proof drawer count after click: ${await drawer.count()}`);
     await expect(drawer).toBeVisible();
+    console.log(`activities-proof drawer fields: type=${await drawer.getByLabel('Type').count()} subject=${await drawer.getByLabel('Subject').count()} assignee=${await drawer.getByLabel('Assignee').count()}`);
     await drawer.getByLabel('Type').selectOption('follow_up');
     await drawer.getByLabel('Subject').fill(scoped('Send revised quotation'));
     await expect(drawer.getByLabel('Related type')).toHaveValue('opportunity');

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   makeSignal, advanceSignal, promoteSignal, dismissSignal,
   SIGNAL_OPEN_STATUSES, SIGNAL_TERMINAL_STATUSES,
+  SIGNAL_DISMISS_REASON_CODES,
 } from './signal';
 
 const base = () => makeSignal({ tenantId: 't1', title: 'New hospital CCTV', source: 'MARKET', type: 'NEW_PROJECT' });
@@ -21,9 +22,15 @@ describe('makeSignal', () => {
 });
 
 describe('advanceSignal', () => {
+  it('rejects skipping review and repeating/backtracking a triage step', () => {
+    expect(() => advanceSignal(base(), 'RESEARCHING')).toThrow(/invalid signal transition/);
+    expect(() => advanceSignal(advanceSignal(base(), 'REVIEWING'), 'REVIEWING')).toThrow(/invalid signal transition/);
+  });
   it('moves NEW → REVIEWING → RESEARCHING', () => {
-    const r = advanceSignal(advanceSignal(base(), 'REVIEWING'), 'RESEARCHING');
+    const r = advanceSignal(advanceSignal(base(), 'REVIEWING', 'u1'), 'RESEARCHING', 'u1');
     expect(r.status).toBe('RESEARCHING');
+    expect(r.reviewedBy).toBe('u1');
+    expect(r.reviewedAt).toBeTruthy();
   });
   it('refuses to advance a terminal signal', () => {
     const promoted = promoteSignal(base(), 'lead-1');
@@ -50,15 +57,20 @@ describe('promoteSignal', () => {
 
 describe('dismissSignal', () => {
   it('records the reason + DISMISSED', () => {
-    const d = dismissSignal(base(), 'budget frozen');
+    const d = dismissSignal(base(), 'LOW_POTENTIAL', false, 'Budget frozen');
     expect(d.status).toBe('DISMISSED');
-    expect(d.dismissalReason).toBe('budget frozen');
+    expect(d.dismissalReasonCode).toBe('LOW_POTENTIAL');
+    expect(d.dismissalNote).toBe('Budget frozen');
+    expect(SIGNAL_DISMISS_REASON_CODES).toContain(d.dismissalReasonCode);
   });
   it('supports marking as DUPLICATE', () => {
-    expect(dismissSignal(base(), 'dup of #12', true).status).toBe('DUPLICATE');
+    const d = dismissSignal(base(), 'DUPLICATE', true, 'Existing lead #12');
+    expect(d.status).toBe('DUPLICATE');
+    expect(d.dismissalReasonCode).toBe('DUPLICATE');
+    expect(d.dismissalNote).toBe('Existing lead #12');
   });
   it('cannot dismiss a promoted signal', () => {
     const p = promoteSignal(base(), 'lead-1');
-    expect(() => dismissSignal(p, 'oops')).toThrow(/already promoted/);
+    expect(() => dismissSignal(p, 'oops')).toThrow(/can no longer change/);
   });
 });

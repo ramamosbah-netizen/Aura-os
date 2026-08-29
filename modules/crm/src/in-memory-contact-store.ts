@@ -20,6 +20,10 @@ export class InMemoryContactStore implements ContactStore {
     const c = this.contacts.get(id);
     return c ? { ...c } : null;
   }
+  async getForTenant(tenantId: string, id: Id): Promise<Contact | null> {
+    const c = this.contacts.get(id);
+    return c && c.tenantId === tenantId ? { ...c } : null;
+  }
 
   async list(filter: ContactFilter = {}): Promise<Contact[]> {
     let out = [...this.contacts.values()];

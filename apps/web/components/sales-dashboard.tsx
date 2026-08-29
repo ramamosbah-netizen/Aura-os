@@ -53,6 +53,7 @@ export interface SalesOpportunity {
   winProbability: number;
   closeDate: string | null;
 }
+export interface SalesRadarSummary { total: number; open: number; new: number; reviewing: number; researching: number; promoted: number; dismissed: number; highPotential: number }
 
 /** Sales Home is a cockpit, not an activity manager: each shortcut has one clear job in the sell cycle. */
 const SHORTCUTS: SuiteShortcut[] = [
@@ -78,12 +79,14 @@ export default function SalesDashboard({
   quotes,
   opportunities,
   leadCount,
+  radarSummary,
 }: {
   userName: string;
   pipeline: SalesPipeline | null;
   quotes: SalesQuote[] | null;
   opportunities: SalesOpportunity[] | null;
   leadCount: number | null;
+  radarSummary: SalesRadarSummary | null;
 }) {
   const kpis = pipeline?.kpis ?? null;
   const atRisk = (pipeline?.atRisk ?? []).slice(0, 5);
@@ -132,6 +135,7 @@ export default function SalesDashboard({
     if (kpis && kpis.weighted > 0) briefParts.push(`${aed(kpis.weighted)} weighted pipeline may close.`);
     if (sentNoResponse > 0) briefParts.push(`${sentNoResponse} quotation${sentNoResponse === 1 ? ' has' : 's have'} received no client response.`);
     if (noNextActivity > 0) briefParts.push(`${noNextActivity} deal${noNextActivity === 1 ? ' has' : 's have'} no next activity.`);
+    if (radarSummary) briefParts.push(`${radarSummary.new} new sales signal${radarSummary.new === 1 ? '' : 's'} and ${radarSummary.highPotential} high-potential signal${radarSummary.highPotential === 1 ? '' : 's'} await triage.`);
   }
   const briefBody = offline
     ? 'The sales feed could not be loaded. I can still help you search AURA and prepare your next commercial move.'
@@ -174,7 +178,7 @@ export default function SalesDashboard({
         kicker: 'Live sales signals',
         title: 'AURA Sales brief',
         body: briefBody,
-        cta: { href: '/crm/pipeline?view=board', label: 'Review opportunities', tabTitle: 'Opportunities', tabType: 'Sales' },
+        cta: { href: radarSummary?.new ? '/crm/radar' : '/crm/pipeline?view=board', label: radarSummary?.new ? 'Open Radar' : 'Review opportunities', tabTitle: radarSummary?.new ? 'Radar' : 'Opportunities', tabType: 'Sales' },
       }}
       ownership={<>
         <FileText aria-hidden />

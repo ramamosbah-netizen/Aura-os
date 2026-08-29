@@ -83,6 +83,14 @@ export class PostgresContactStore implements ContactStore {
     return res.rows.length ? rowToContact(res.rows[0]) : null;
   }
 
+  async getForTenant(tenantId: string, id: Id): Promise<Contact | null> {
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_contacts WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id],
+    );
+    return res.rows.length ? rowToContact(res.rows[0]) : null;
+  }
+
   private buildWhere(filter: ContactFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];

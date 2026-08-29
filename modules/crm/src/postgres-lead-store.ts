@@ -171,6 +171,22 @@ export class PostgresLeadStore implements LeadStore {
     return res.rows.length ? rowToLead(res.rows[0]) : null;
   }
 
+  async getForTenant(tenantId: string, id: Id): Promise<Lead | null> {
+    const res = await this.pool.query<LeadRow>(
+      `SELECT ${COLS} FROM public.aura_crm_leads WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id],
+    );
+    return res.rows.length ? rowToLead(res.rows[0]) : null;
+  }
+
+  async findBySignalId(tenantId: string, signalId: Id): Promise<Lead | null> {
+    const res = await this.pool.query<LeadRow>(
+      `SELECT ${COLS} FROM public.aura_crm_leads WHERE tenant_id = $1 AND signal_id = $2 LIMIT 1`,
+      [tenantId, signalId],
+    );
+    return res.rows.length ? rowToLead(res.rows[0]) : null;
+  }
+
   async getForUpdateWithClient(tx: TxHandle | null, id: Id): Promise<Lead | null> {
     if (tx === null) return this.get(id);
     // FOR UPDATE: hold a row lock for the life of the transaction so a concurrent qualify blocks

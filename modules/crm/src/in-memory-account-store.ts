@@ -28,6 +28,10 @@ export class InMemoryAccountStore implements AccountStore {
     const a = this.accounts.get(id);
     return a ? { ...a } : null;
   }
+  async getForTenant(tenantId: string, id: Id): Promise<Account | null> {
+    const a = this.accounts.get(id);
+    return a && a.tenantId === tenantId ? { ...a } : null;
+  }
 
   async list(filter: AccountFilter = {}): Promise<Account[]> {
     let out = [...this.accounts.values()];

@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useTransition, type CSSProperties } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { SIGNAL_SOURCES, SIGNAL_TYPES } from '@aura/shared';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import SaveViewButton from './save-view-button';
 
-// Signals Radar — the acquisition triage board, redesigned as a visual command surface.
-// Every signal is a CARD that answers at a glance: what is it (scope), where did it come
-// from (source), how strong is it (scoring ring) and what should I do (AI read). Clicking
-// a card opens the full summary drawer; Promote / Advance / Dismiss act inline.
+// Signals Radar — one server-backed acquisition dataset with Cards/List presentation modes.
+// Cards answer at a glance what/where/how strong; List supports operational scanning. Both
+// use the same URL query, permissions and lifecycle actions.
 
 interface RadarSignal {
   id: string;
@@ -24,6 +25,11 @@ interface RadarSignal {
   description?: string | null;
   contextType?: string | null;
   contextId?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  dismissalReasonCode?: string | null;
+  dismissalNote?: string | null;
+  promotedLeadId?: string | null;
 }
 interface Tally { key: string; count: number }
 export interface RadarData {
@@ -31,10 +37,12 @@ export interface RadarData {
   bySource: Tally[];
   byType: Tally[];
   signals: RadarSignal[];
+  page?: { items: RadarSignal[]; total: number; limit: number; offset: number; hasMore: boolean };
+  summary?: { total: number; open: number; new: number; reviewing: number; researching: number; promoted: number; dismissed: number; highPotential: number; bySource: Tally[]; byType: Tally[] };
 }
 
-const SOURCES = ['MANUAL', 'INBOUND', 'REFERRAL', 'MARKET', 'RELATIONSHIP', 'ACCOUNT_GROWTH', 'TENDER_DISCOVERY', 'INTELLIGENCE'];
-const TYPES = ['NEW_PROJECT', 'RFQ_RECEIVED', 'TENDER_DETECTED', 'RENEWAL_DUE', 'CROSS_SELL', 'UPSELL', 'EXPANSION', 'REFERRAL', 'MARKET_EVENT', 'OTHER'];
+const SOURCES = [...SIGNAL_SOURCES];
+const TYPES = [...SIGNAL_TYPES];
 const SYSTEM_SOURCES = new Set(['ACCOUNT_GROWTH', 'TENDER_DISCOVERY', 'INTELLIGENCE']);
 const TIMEBOUND_TYPES = new Set(['RENEWAL_DUE', 'RFQ_RECEIVED', 'TENDER_DETECTED']);
 
@@ -50,10 +58,10 @@ const band = (c: number): { name: string; color: string } =>
     : c >= 40 ? { name: 'Moderate', color: 'var(--warn, var(--warn))' }
       : { name: 'Weak', color: 'var(--bad)' };
 
-// ── AI read — heuristic composition over the signal's own facts (source reliability,
+// ── Advisory read — heuristic composition over the signal's own facts (source reliability,
 // confidence band, account linkage, urgency of the type, freshness). Pure & explainable.
-interface AiRead { verdict: 'PROMOTE' | 'INVESTIGATE' | 'VERIFY'; tone: string; reasons: string[]; action: string }
-function analyzeSignal(s: RadarSignal): AiRead {
+interface AdvisoryRead { verdict: 'PROMOTE' | 'INVESTIGATE' | 'VERIFY'; tone: string; reasons: string[]; action: string }
+function analyzeSignal(s: RadarSignal): AdvisoryRead {
   const reasons: string[] = [];
   const age = daysSince(s.detectedAt);
   const b = band(s.confidence);
@@ -145,27 +153,45 @@ function TallyBars({ title, rows, total }: { title: string; rows: Tally[]; total
 }
 
 // ── The board ────────────────────────────────────────────────────────────────────
-export default function SignalsRadar({ data }: { data: RadarData | null }) {
+export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarData | null; initialQuery?: Record<string, string> }) {
   const router = useRouter();
+  const params = useSearchParams();
+  const [, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [search, setSearch] = useState('');
-  const [sourceFilter, setSourceFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [form, setForm] = useState({ title: '', source: 'MANUAL', type: 'NEW_PROJECT', accountName: '', confidence: 50, evidence: '' });
+  const [promoteId, setPromoteId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ lead: { name: string; companyName: string | null; source: string | null; assignedTo: string | null; accountId: string | null; requirement: string | null }; matches: Array<{ kind: string; id: string; label: string; exact: boolean }> } | null>(null);
+  const [createdLead, setCreatedLead] = useState<{ id: string; name: string } | null>(null);
 
-  const counts = data?.counts ?? { open: 0, new: 0, reviewing: 0, researching: 0, promoted: 0, dismissed: 0 };
-  const signals = data?.signals ?? [];
-  const filteredSignals = signals.filter((signal) => {
-    const haystack = `${signal.title} ${signal.accountName ?? ''} ${signal.evidence ?? ''} ${signal.description ?? ''}`.toLowerCase();
-    return (!search || haystack.includes(search.trim().toLowerCase()))
-      && (!sourceFilter || signal.source === sourceFilter)
-      && (!typeFilter || signal.type === typeFilter)
-      && (!statusFilter || signal.status === statusFilter);
-  });
+  const queryValue = (key: string): string => params.get(key) ?? initialQuery[key] ?? '';
+  const search = queryValue('search');
+  const sourceFilter = queryValue('source');
+  const typeFilter = queryValue('type');
+  const statusFilter = queryValue('status');
+  const ownerFilter = queryValue('ownerId');
+  const accountFilter = queryValue('accountId');
+  const detectedFrom = queryValue('detectedFrom');
+  const detectedTo = queryValue('detectedTo');
+  const confidenceMin = queryValue('confidenceMin');
+  const confidenceMax = queryValue('confidenceMax');
+  const sort = queryValue('sort');
+  const view = queryValue('view') === 'list' ? 'list' : 'cards';
+  const counts = data?.summary ? { open: data.summary.open, new: data.summary.new, reviewing: data.summary.reviewing, researching: data.summary.researching, promoted: data.summary.promoted, dismissed: data.summary.dismissed } : (data?.counts ?? { open: 0, new: 0, reviewing: 0, researching: 0, promoted: 0, dismissed: 0 });
+  const signals = data?.page?.items ?? data?.signals ?? [];
+  const total = data?.page?.total ?? signals.length;
+  const offset = data?.page?.offset ?? Number(queryValue('offset') || 0);
+  const limit = data?.page?.limit ?? Number(queryValue('limit') || 50);
+  const hasMore = data?.page?.hasMore ?? false;
+  const hasFilters = Boolean(search || sourceFilter || typeFilter || statusFilter || ownerFilter || accountFilter || detectedFrom || detectedTo || confidenceMin || confidenceMax);
+  const updateQuery = (updates: Record<string, string | undefined>): void => {
+    const next = new URLSearchParams(params.toString());
+    for (const [key, value] of Object.entries(updates)) { if (value) next.set(key, value); else next.delete(key); }
+    if (Object.keys(updates).some((key) => ['search', 'source', 'type', 'status', 'ownerId', 'accountId', 'detectedFrom', 'detectedTo', 'confidenceMin', 'confidenceMax', 'sort'].includes(key))) next.delete('offset');
+    startTransition(() => router.push(`/crm/radar${next.toString() ? `?${next.toString()}` : ''}`));
+  };
   const call = async (id: string, path: string, method: string, body?: unknown): Promise<void> => {
     setBusy(id); setErr(null);
     try {
@@ -179,9 +205,27 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
       router.refresh();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
   };
-  const promote = (id: string) => call(id, 'promote', 'POST');
+  const reviewPromotion = async (id: string): Promise<void> => {
+    setPromoteId(id); setPreview(null); setErr(null);
+    try {
+      const res = await fetch(`/api/crm/signals/${id}/promotion-preview`, { cache: 'no-store' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || body.error || 'Could not prepare Lead review');
+      setPreview(body);
+    } catch (e) { setErr((e as Error).message); setPromoteId(null); }
+  };
+  const promote = async (id: string): Promise<void> => {
+    setBusy(id); setErr(null);
+    try {
+      const res = await fetch(`/api/crm/signals/${id}/promote`, { method: 'POST', headers: { 'content-type': 'application/json' } });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || body.error || 'Action failed');
+      if (body.lead) setCreatedLead({ id: body.lead.id, name: body.lead.name });
+      setPromoteId(null); setPreview(null); setOpenId(null); router.refresh();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
+  };
   const advance = (id: string, to: 'REVIEWING' | 'RESEARCHING') => call(id, 'advance', 'PATCH', { to });
-  const dismiss = (id: string) => call(id, 'dismiss', 'POST', { reason: 'not pursuing' });
+  const dismiss = (id: string, asDuplicate = false) => call(id, 'dismiss', 'POST', { reasonCode: asDuplicate ? 'DUPLICATE' : 'NOT_RELEVANT', note: asDuplicate ? 'Matched an existing business record' : undefined, asDuplicate });
 
   const addSignal = async (): Promise<void> => {
     if (!form.title.trim()) return;
@@ -209,12 +253,13 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
       {/* ── Radar summary strip ── */}
       <div style={st.summary}>
         <FunnelStrip counts={counts} />
-        <TallyBars title="By source" rows={data?.bySource ?? []} total={counts.open} />
-        <TallyBars title="By type" rows={data?.byType ?? []} total={counts.open} />
+        <TallyBars title="By source" rows={data?.summary?.bySource ?? data?.bySource ?? []} total={data?.summary?.total ?? counts.open} />
+        <TallyBars title="By type" rows={data?.summary?.byType ?? data?.byType ?? []} total={data?.summary?.total ?? counts.open} />
         <button style={st.addBtn} onClick={() => setAdding((v) => !v)}>{adding ? '✕ Cancel' : '+ Detect signal'}</button>
       </div>
 
       {err && <div style={st.err}>{err}</div>}
+      {createdLead && <div style={st.success}>Lead created: <a href={`/crm/leads/${createdLead.id}`} style={st.ctxLink}>{createdLead.name}</a> · <a href={`/crm/leads/${createdLead.id}`} style={st.ctxLink}>Open Lead →</a></div>}
 
       {adding && (
         <div style={st.form}>
@@ -240,30 +285,38 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
       )}
 
       <div style={st.filters} data-testid="radar-filters">
-        <input style={{ ...st.input, flex: '1 1 260px' }} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search signals, accounts or evidence…" aria-label="Search radar" />
-        <select style={st.input} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} aria-label="Filter radar by source">
+        <input style={{ ...st.input, flex: '1 1 260px' }} value={search} onChange={(e) => updateQuery({ search: e.target.value })} placeholder="Search signals, accounts or evidence…" aria-label="Search radar" />
+        <select style={st.input} value={sourceFilter} onChange={(e) => updateQuery({ source: e.target.value })} aria-label="Filter radar by source">
           <option value="">All sources</option>{SOURCES.map((source) => <option key={source} value={source}>{label(source)}</option>)}
         </select>
-        <select style={st.input} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter radar by type">
-          <option value="">All signal types</option>{TYPES.map((type) => <option key={type} value={type}>{label(type)}</option>)}
+        <select style={st.input} value={typeFilter} onChange={(e) => updateQuery({ type: e.target.value })} aria-label="Filter radar by type">
+          <option value="">All signal types</option>{TYPES.map((type) => <option key={type} value={type}>{TYPE_ICON[type] ?? '•'} {label(type)}</option>)}
         </select>
-        <select style={st.input} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter radar by status">
-          <option value="">All statuses</option>{['NEW', 'REVIEWING', 'RESEARCHING'].map((status) => <option key={status} value={status}>{label(status)}</option>)}
+        <select style={st.input} value={statusFilter} onChange={(e) => updateQuery({ status: e.target.value })} aria-label="Filter radar by status">
+          <option value="">Open statuses</option>{['NEW', 'REVIEWING', 'RESEARCHING'].map((status) => <option key={status} value={status}>{label(status)}</option>)}
         </select>
-        {(search || sourceFilter || typeFilter || statusFilter) && <button type="button" style={st.linkBtn} onClick={() => { setSearch(''); setSourceFilter(''); setTypeFilter(''); setStatusFilter(''); }}>Clear filters</button>}
-        <span style={st.filterCount}>{filteredSignals.length} of {signals.length} open signals</span>
+        <input style={{ ...st.input, width: 125 }} value={ownerFilter} onChange={(e) => updateQuery({ ownerId: e.target.value })} placeholder="Owner ID" aria-label="Filter radar by owner" />
+        <input style={{ ...st.input, width: 125 }} value={accountFilter} onChange={(e) => updateQuery({ accountId: e.target.value })} placeholder="Account ID" aria-label="Filter radar by account" />
+        <input style={st.input} type="date" value={detectedFrom} onChange={(e) => updateQuery({ detectedFrom: e.target.value })} aria-label="Signals detected from" />
+        <input style={st.input} type="date" value={detectedTo} onChange={(e) => updateQuery({ detectedTo: e.target.value })} aria-label="Signals detected to" />
+        <input style={{ ...st.input, width: 72 }} type="number" min={0} max={100} value={confidenceMin} onChange={(e) => updateQuery({ confidenceMin: e.target.value })} placeholder="Min %" aria-label="Minimum confidence" />
+        <input style={{ ...st.input, width: 72 }} type="number" min={0} max={100} value={confidenceMax} onChange={(e) => updateQuery({ confidenceMax: e.target.value })} placeholder="Max %" aria-label="Maximum confidence" />
+        <select style={st.input} value={sort} onChange={(e) => updateQuery({ sort: e.target.value })} aria-label="Sort radar"><option value="">Newest</option><option value="confidence">Confidence</option><option value="title">Title</option></select>
+        <select style={st.input} value={view} onChange={(e) => updateQuery({ view: e.target.value })} aria-label="Radar display mode"><option value="cards">Cards</option><option value="list">List</option></select>
+        {(search || sourceFilter || typeFilter || statusFilter || ownerFilter || accountFilter || detectedFrom || detectedTo || confidenceMin || confidenceMax || sort) && <button type="button" style={st.linkBtn} onClick={() => updateQuery({ search: undefined, source: undefined, type: undefined, status: undefined, ownerId: undefined, accountId: undefined, detectedFrom: undefined, detectedTo: undefined, confidenceMin: undefined, confidenceMax: undefined, sort: undefined, offset: undefined })}>Clear filters</button>}
+        <button type="button" style={st.ghostBtn} onClick={() => { const qs = new URLSearchParams(params.toString()); qs.delete('offset'); window.location.href = `/api/crm/signals/radar/export${qs.toString() ? `?${qs}` : ''}`; }}>Export CSV</button>
+        <SaveViewButton excludeParams={['offset', 'limit']} />
+        <span style={st.filterCount}>{total} open signals · page {total ? Math.floor(offset / limit) + 1 : 0}</span>
       </div>
 
       {/* ── Cards ── */}
       {data === null ? (
         <p style={st.empty}>Radar unavailable.</p>
       ) : signals.length === 0 ? (
-        <p style={st.empty}>No open signals — the radar is clear. New business events (renewals due, expansions, tenders detected) land here automatically.</p>
-      ) : filteredSignals.length === 0 ? (
-        <p style={st.empty}>No signals match these filters. Clear the filters to return to the open radar.</p>
+        <p style={st.empty}>{hasFilters ? 'No signals match these filters. Clear or adjust the filters to continue.' : 'No open signals — the radar is clear. New business events (renewals due, expansions, tenders detected) land here automatically.'}</p>
       ) : (
-        <div style={st.grid}>
-          {filteredSignals.map((s) => {
+        <>
+        {view === 'list' ? <div style={st.tableWrap}><table style={st.table}><thead><tr><th style={st.th}>Signal</th><th style={st.th}>Account</th><th style={st.th}>Type</th><th style={st.th}>Source</th><th style={st.th}>Status</th><th style={st.th}>Confidence</th><th style={st.th}>Detected</th><th style={st.th}>Actions</th></tr></thead><tbody>{signals.map((s) => <tr key={s.id} onClick={() => setOpenId(openId === s.id ? null : s.id)} style={{ cursor: 'pointer' }}><td style={st.td}><b>{TYPE_ICON[s.type] ?? '•'} {s.title}</b></td><td style={st.td}>{s.accountName ?? '—'}</td><td style={st.td}>{label(s.type)}</td><td style={st.td}>{label(s.source)}</td><td style={st.td}>{label(s.status)}</td><td style={st.td}><span style={{ color: band(s.confidence).color, fontWeight: 700 }}>{s.confidence}</span></td><td style={st.td}>{new Date(s.detectedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</td><td style={st.td} onClick={(e) => e.stopPropagation()}><button style={st.linkBtn} onClick={() => void reviewPromotion(s.id)}>Lead</button>{s.status === 'NEW' && <button style={st.linkBtn} onClick={() => void advance(s.id, 'REVIEWING')}>Review</button>}{s.status === 'REVIEWING' && <button style={st.linkBtn} onClick={() => void advance(s.id, 'RESEARCHING')}>Research</button>}<button style={st.linkBtn} onClick={() => void dismiss(s.id)}>Dismiss</button></td></tr>)}</tbody></table></div> : <div style={st.grid}>{signals.map((s) => {
             const ai = analyzeSignal(s);
             const age = daysSince(s.detectedAt);
             return (
@@ -294,16 +347,30 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
                 </div>
 
                 <div style={st.cardActions} onClick={(e) => e.stopPropagation()}>
-                  <button style={st.primaryBtn} disabled={busy === s.id} onClick={() => void promote(s.id)}>Promote → Lead</button>
+                  <button style={st.primaryBtn} disabled={busy === s.id} onClick={() => void reviewPromotion(s.id)}>Review Lead →</button>
                   {s.status === 'NEW' && (
                     <button style={st.ghostBtn} disabled={busy === s.id} onClick={() => void advance(s.id, 'REVIEWING')}>Review</button>
                   )}
-                  {(s.status === 'NEW' || s.status === 'REVIEWING') && (
+                  {s.status === 'REVIEWING' && (
                     <button style={st.ghostBtn} disabled={busy === s.id} onClick={() => void advance(s.id, 'RESEARCHING')}>Research</button>
                   )}
                   <span style={{ flex: 1 }} />
                   <button style={st.linkBtn} disabled={busy === s.id} onClick={() => void dismiss(s.id)}>Dismiss</button>
+                  <button style={st.linkBtn} disabled={busy === s.id} onClick={() => void dismiss(s.id, true)}>Duplicate</button>
                 </div>
+
+                {promoteId === s.id && (
+                  <div style={st.reviewBox} onClick={(e) => e.stopPropagation()}>
+                    <div style={st.detailTitle}>Review Lead before creation</div>
+                    {preview ? <>
+                      <p style={st.detailText}><b>{preview.lead.name}</b>{preview.lead.companyName ? ` · ${preview.lead.companyName}` : ''}</p>
+                      <p style={st.detailText}>Source: {preview.lead.source ?? '—'} · Owner: {preview.lead.assignedTo ?? 'Unassigned'}</p>
+                      {preview.lead.requirement && <p style={{ ...st.detailText, color: 'var(--muted)' }}>Requirement: {preview.lead.requirement}</p>}
+                      {preview.matches.length > 0 && <p style={{ ...st.detailText, color: 'var(--warn, var(--warn))' }}>Possible matches found: {preview.matches.map((m) => `${m.kind} · ${m.label}`).join(', ')}. Review before confirming.</p>}
+                      <div style={st.cardActions}><button style={st.primaryBtn} disabled={busy === s.id} onClick={() => void promote(s.id)}>Confirm & create Lead</button><button style={st.linkBtn} onClick={() => { setPromoteId(null); setPreview(null); }}>Cancel</button></div>
+                    </> : <p style={st.detailText}>Preparing a validated Lead preview…</p>}
+                  </div>
+                )}
 
                 {/* ── Expanded summary (the drawer, inline) ── */}
                 {openId === s.id && (
@@ -322,23 +389,25 @@ export default function SignalsRadar({ data }: { data: RadarData | null }) {
                           : `Captured from ${label(s.source)}`}
                         {' '}on {new Date(s.detectedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })} · owner {s.ownerId ?? 'unassigned'}
                       </p>
+                      {s.reviewedAt && <p style={{ ...st.detailText, color: 'var(--muted)' }}>Last reviewed {new Date(s.reviewedAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}{s.reviewedBy ? ` by ${s.reviewedBy}` : ''}</p>}
                     </DetailSection>
                     <DetailSection title="Scoring">
                       <div style={st.scoreLine}>
                         <span style={st.scoreTrack}><span style={{ ...st.scoreFill, width: `${s.confidence}%`, background: band(s.confidence).color }} /></span>
                         <b style={{ color: band(s.confidence).color, fontSize: 12.5 }}>{s.confidence} · {band(s.confidence).name}</b>
                       </div>
-                      <p style={{ ...st.detailText, color: 'var(--muted)' }}>0–100 confidence the signal is worth pursuing; ≥70 promotes cleanly, 40–69 needs research, &lt;40 needs verification.</p>
+                      <p style={{ ...st.detailText, color: 'var(--muted)' }}>Heuristic advisory score based on available signal evidence; it is not an AI probability, opportunity probability, or forecast confidence.</p>
                     </DetailSection>
-                    <DetailSection title="AI analysis">
+                    <DetailSection title="Evidence analysis">
                       {ai.reasons.map((r, i) => <p key={i} style={{ ...st.detailText, margin: '0 0 4px' }}>· {r}</p>)}
                     </DetailSection>
                   </div>
                 )}
               </div>
             );
-          })}
-        </div>
+          })}</div>}
+          <div style={st.pagination}><button style={st.ghostBtn} disabled={offset === 0} onClick={() => updateQuery({ offset: String(Math.max(0, offset - limit)) })}>← Previous</button><span style={st.filterCount}>{offset + 1}–{Math.min(offset + signals.length, total)} of {total}</span><button style={st.ghostBtn} disabled={!hasMore} onClick={() => updateQuery({ offset: String(offset + limit) })}>Next →</button></div>
+        </>
       )}
     </div>
   );
@@ -369,6 +438,8 @@ const st: Record<string, CSSProperties> = {
   tallyEmpty: { color: 'var(--muted)', fontSize: 12 },
   addBtn: { alignSelf: 'center', fontSize: 13, fontWeight: 600, padding: '10px 16px', borderRadius: 10, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', cursor: 'pointer', whiteSpace: 'nowrap' },
   err: { border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 10, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 12 },
+  success: { border: '1px solid var(--good)', color: 'var(--good)', borderRadius: 10, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 12 },
+  reviewBox: { border: '1px solid var(--accent)', borderRadius: 10, padding: 12, marginTop: 10, background: 'var(--panel-2)' },
   form: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', border: '1px dashed var(--border)', borderRadius: 12, padding: 12, marginBottom: 16, background: 'var(--panel)' },
   filters: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 12, padding: 10, marginBottom: 16, background: 'var(--panel)' },
   filterCount: { color: 'var(--muted)', fontSize: 11.5, marginLeft: 'auto', whiteSpace: 'nowrap' },
@@ -379,6 +450,11 @@ const st: Record<string, CSSProperties> = {
   linkBtn: { fontSize: 12, padding: '4px 6px', border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', textDecoration: 'underline' },
   empty: { color: 'var(--muted)', fontSize: 13.5, border: '1px dashed var(--border)', borderRadius: 12, padding: '22px 18px', textAlign: 'center' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14, alignItems: 'start' },
+  tableWrap: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)' },
+  table: { width: '100%', borderCollapse: 'collapse', minWidth: 860 },
+  th: { textAlign: 'left', padding: '10px 12px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' },
+  td: { padding: '10px 12px', fontSize: 12, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' },
+  pagination: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 14 },
   card: { borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 14, background: 'var(--panel)', padding: 14, cursor: 'pointer' },
   cardOpen: { borderColor: 'var(--accent)', gridColumn: '1 / -1' },
   cardTop: { display: 'flex', gap: 12, alignItems: 'flex-start' },

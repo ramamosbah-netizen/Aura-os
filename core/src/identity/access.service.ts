@@ -108,7 +108,7 @@ export class AccessService implements OnModuleInit {
       {
         id: 'r-sales',
         name: 'Sales Representative',
-        permissions: ['crm.lead.*', 'crm.opportunity.*', 'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update', 'crm.activity.*', COMMS],
+        permissions: ['crm.lead.*', 'crm.opportunity.*', 'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update', 'crm.activity.*', 'crm.signal.*', COMMS],
       },
       {
         id: 'r-sales-manager',

@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 // Comms in Communication, Approvals in My Work — shown in context here, never re-owned.
 
 interface LeadLite { id: string }
+interface RadarSummary { total: number; open: number; new: number; reviewing: number; researching: number; promoted: number; dismissed: number; highPotential: number }
 
 function displayName(subject: string | undefined): string {
   const base = subject?.replace(/^u-/, '').replace(/[-_.]+/g, ' ').trim();
@@ -20,11 +21,12 @@ function displayName(subject: string | undefined): string {
 
 export default async function SalesHomePage() {
   const user = await currentUser();
-  const [pipeline, quotes, opportunities, leads] = await Promise.all([
+  const [pipeline, quotes, opportunities, leads, radar] = await Promise.all([
     getJson<SalesPipeline>('/api/crm/opportunities/pipeline'),
     getJson<SalesQuote[]>('/api/crm/quotations'),
     getJson<SalesOpportunity[]>('/api/crm/opportunities'),
     getJson<LeadLite[]>('/api/crm/leads'),
+    getJson<{ summary: RadarSummary }>('/api/crm/signals/radar/summary'),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function SalesHomePage() {
       quotes={quotes}
       opportunities={opportunities}
       leadCount={leads ? leads.length : null}
+      radarSummary={radar?.summary ?? null}
     />
   );
 }

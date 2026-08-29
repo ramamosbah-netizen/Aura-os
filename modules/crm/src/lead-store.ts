@@ -18,6 +18,9 @@ export interface LeadStore {
   /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
   updateWithClient(tx: TxHandle | null, lead: Lead): Promise<void>;
   get(id: Id): Promise<Lead | null>;
+  getForTenant(tenantId: string, id: Id): Promise<Lead | null>;
+  /** Exact Signal → Lead lineage lookup, constrained by tenant. */
+  findBySignalId(tenantId: string, signalId: Id): Promise<Lead | null>;
   /**
    * Read a lead FOR UPDATE on a caller-owned transaction — the row is locked until the tx commits,
    * so the read gives authoritative pre-transition state (status + qualification evidence live on

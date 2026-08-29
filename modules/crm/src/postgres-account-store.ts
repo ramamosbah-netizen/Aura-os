@@ -91,6 +91,14 @@ export class PostgresAccountStore implements AccountStore {
     return res.rows.length ? rowToAccount(res.rows[0]) : null;
   }
 
+  async getForTenant(tenantId: string, id: Id): Promise<Account | null> {
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_crm_accounts WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id],
+    );
+    return res.rows.length ? rowToAccount(res.rows[0]) : null;
+  }
+
   private buildWhere(filter: AccountFilter): { whereSql: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];

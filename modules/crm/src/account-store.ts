@@ -22,6 +22,7 @@ export interface AccountStore {
   /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
   updateWithClient(tx: TxHandle | null, account: Account): Promise<void>;
   get(id: Id): Promise<Account | null>;
+  getForTenant(tenantId: string, id: Id): Promise<Account | null>;
   list(filter?: AccountFilter): Promise<Account[]>;
   listPaged(filter: AccountFilter, page: PageParams): Promise<Page<Account>>;
 }

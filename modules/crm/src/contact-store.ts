@@ -34,6 +34,7 @@ export interface ContactStore {
   /** Save on a caller-owned transaction (atomic with its event); null tx falls back to save. */
   saveWithClient(tx: TxHandle | null, contact: Contact): Promise<void>;
   get(id: Id): Promise<Contact | null>;
+  getForTenant(tenantId: string, id: Id): Promise<Contact | null>;
   list(filter?: ContactFilter): Promise<Contact[]>;
   /** Full filtered register for controlled exports; unlike list(), never applies the UI preview limit. */
   listAll(filter: ContactFilter): Promise<Contact[]>;

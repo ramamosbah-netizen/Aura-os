@@ -42,17 +42,22 @@ export class AuthSeeder implements OnModuleInit {
       name: 'Platform Admin (dev)',
       permissions: ['*'],
     });
+    // Keep the dev grant scope aligned with the explicitly selected disposable/dev tenant. The
+    // previous hardcoded `dev-tenant` scope caused authenticated release-proof jobs that use an
+    // isolated tenant to receive a legitimate 403 despite having the intended dev role.
+    const devTenant =
+      process.env.AUTH_DEV_ADMIN_TENANT?.trim() || process.env.AUTH_DEFAULT_TENANT?.trim() || 'dev-tenant';
     this.access.grant({
       userId: 'u-admin',
       roleId: 'dealChainAdmin',
-      scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
+      scope: { kind: 'org', level: 'tenant', id: devTenant },
     });
     // A second granted admin so maker-checker flows (e.g. quotation approval, where the
     // preparer may not approve their own) have a distinct, authorised checker in dev.
     this.access.grant({
       userId: 'u-approver',
       roleId: 'dealChainAdmin',
-      scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
+      scope: { kind: 'org', level: 'tenant', id: devTenant },
     });
     // Tiered approvers demonstrate the value-threshold approval matrix (P0-3): the same wildcard
     // permissions, but capped by an `approvalLimit` on the grant. An amount-bearing authorisation
@@ -62,13 +67,13 @@ export class AuthSeeder implements OnModuleInit {
     this.access.grant({
       userId: 'u-manager',
       roleId: 'dealChainAdmin',
-      scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
+      scope: { kind: 'org', level: 'tenant', id: devTenant },
       attributes: { approvalLimit: 50_000 },
     });
     this.access.grant({
       userId: 'u-director',
       roleId: 'dealChainAdmin',
-      scope: { kind: 'org', level: 'tenant', id: 'dev-tenant' },
+      scope: { kind: 'org', level: 'tenant', id: devTenant },
       attributes: { approvalLimit: 500_000 },
     });
     this.logger.log('Seeded approval matrix: u-admin/u-approver (unlimited) · u-director (≤500k) · u-manager (≤50k) in dev-tenant.');

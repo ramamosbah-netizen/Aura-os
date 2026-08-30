@@ -792,6 +792,27 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}
 
+      - name: Sales browser surface proof (existing Playwright specs)
+        # Run only the existing Sales-facing browser coverage before the broad smoke suite. This
+        # keeps Sales evidence observable even when an unrelated downstream smoke spec fails.
+        # No Project Delivery specs are selected here, and the same disposable DB/API credentials
+        # and global safety gate are used as the full TIER-3 run.
+        run: >-
+          pnpm --filter @aura/web exec playwright test
+          global-shell-home.spec.ts home-workspace-launcher.spec.ts customers-workspace.spec.ts
+          favorites-toggle.spec.ts spine-journey.spec.ts --project=chromium
+          --grep "Sales|suite launcher|Customers workspace|favourit|account: create|opportunity: create|quotation: create|contract: create"
+        env:
+          CI: 'true'
+          AURA_API_URL: http://localhost:4000
+          E2E_USERNAME: u-admin
+          E2E_PASSWORD: e2e-password
+          E2E_ALT_USERNAME: u-e2e-checker
+          E2E_VIEWER_USERNAME: u-e2e-viewer
+          E2E_DISPOSABLE_DB: '1'
+          E2E_EXPECT_TIMEOUT: '30000'
+          E2E_TEST_TIMEOUT: '120000'
+
       - name: Smoke
         run: pnpm --filter @aura/web e2e
         env:

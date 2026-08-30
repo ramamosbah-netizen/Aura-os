@@ -77,6 +77,17 @@ const params = (s: Signal): unknown[] => [
   s.reviewedBy, s.reviewedAt, s.dismissalReasonCode, s.dismissalNote,
 ];
 
+// UPDATE does not write the immutable created_at value (and stamps updated_at in SQL), so its
+// parameter list must not carry those unused placeholders. Passing the full insert list made
+// PostgreSQL reject a nullable parameter whose type could not be inferred (notably during signal
+// promotion), even though the corresponding value was not part of the UPDATE statement.
+const updateParams = (s: Signal): unknown[] => [
+  s.id, s.tenantId, s.companyId, s.title, s.description, s.source, s.type, s.accountId, s.accountName,
+  s.contactId, s.contextType, s.contextId, s.evidence, s.confidence, s.detectedAt, s.ownerId, s.status,
+  s.promotedLeadId, s.dismissalReason, s.dedupeKey, s.reviewedBy, s.reviewedAt,
+  s.dismissalReasonCode, s.dismissalNote,
+];
+
 export class PostgresSignalStore implements SignalStore {
   constructor(private readonly pool: Pool) {}
 
@@ -105,9 +116,9 @@ export class PostgresSignalStore implements SignalStore {
          contact_id = $10, context_type = $11, context_id = $12, evidence = $13, confidence = $14,
          detected_at = $15, owner_id = $16, status = $17, promoted_lead_id = $18,
          dismissal_reason = $19, dedupe_key = $20, updated_at = now(),
-         reviewed_by = $23, reviewed_at = $24, dismissal_reason_code = $25, dismissal_note = $26
+         reviewed_by = $21, reviewed_at = $22, dismissal_reason_code = $23, dismissal_note = $24
        WHERE id = $1 AND tenant_id = $2 AND company_id IS NOT DISTINCT FROM $3`,
-      params(s),
+      updateParams(s),
     );
   }
 

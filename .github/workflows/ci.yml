@@ -893,6 +893,7 @@ jobs:
       RADAR_PROOF_SIGNAL_COUNT: 6001
       AUTH_DEV_PASSWORD: e2e-password
       AUTH_DEV_ADMIN_USER: u-admin,u-viewer
+      AUTH_DEV_ADMIN_TENANT: radar-proof-a
       AUTH_DEFAULT_TENANT: radar-proof-a
     steps:
       - uses: actions/checkout@v4

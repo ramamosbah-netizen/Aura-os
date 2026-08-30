@@ -140,6 +140,22 @@ async function main() {
         issueDate: new Date().toISOString().slice(0, 10),
         lines: [{ description: title, quantity: 1, unitPrice: value, vatRate: 5 }],
       });
+      // New quotations are governed by default. Seed the same persisted commercial evidence
+      // checklist a real user must complete before the maker-checker approval step; never weaken
+      // the approval gate just to keep demo data green.
+      const requirements = await post('/document-requirements/seed', {
+        entityType: 'crm.quotation',
+        entityId: quote.id,
+      });
+      for (const requirement of requirements ?? []) {
+        if (requirement.status !== 'REQUIRED') continue;
+        for (let i = 0; i < requirement.requiredCount; i++) {
+          await post(`/document-requirements/${requirement.id}/evidence`, {
+            type: 'MANUAL_CONFIRMATION',
+            reference: `seed-${quote.id}-${requirement.type}-${i + 1}`,
+          });
+        }
+      }
       // Maker-checker: a different authorised user approves the quotation the preparer raised.
       await patch(`/crm/quotations/${quote.id}/status`, { action: 'approve' }, approverToken);
       await patch(`/crm/quotations/${quote.id}/status`, { action: 'send' });

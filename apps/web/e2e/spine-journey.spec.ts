@@ -194,7 +194,8 @@ test('opportunity: create → read in the pipeline list', async ({ page }) => {
 });
 
 test('quotation: create → read in the workspace', async ({ page }) => {
-  await page.goto('/crm/quotations', { waitUntil: 'domcontentloaded' });
+  // Authoring lives in the operational register; Overview is read/analytics-only in the Sales IA.
+  await page.goto('/crm/quotations/register?view=list', { waitUntil: 'domcontentloaded' });
 
   // Quotation authoring is deliberately two-step and does NOT use the shared drawer: step one
   // captures customer + subject, then redirects to the pricing sheet to author the lines.

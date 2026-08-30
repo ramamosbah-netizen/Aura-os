@@ -139,6 +139,17 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+
+  // `router.refresh()` replaces the server-provided portfolio after a create/update, but this
+  // client component intentionally owns its own paging/filter state. Keep the local snapshot in
+  // step with the refreshed server contract so a successful mutation is visible immediately (and
+  // does not leave the user looking at the pre-mutation empty state).
+  useEffect(() => {
+    setPage(seedPage);
+  // The server snapshot is the refresh signal; filter-driven refetches below remain authoritative
+  // once the client starts interacting with the portfolio.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPage]);
   // Ownership is a workspace username; "me" comes from /workspace/me (the session
   // `sub` passed from the server need not equal the username and is null in dev).
   const [me, setMe] = useState<TeamUser | null>(null);

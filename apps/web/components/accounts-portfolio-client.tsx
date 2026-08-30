@@ -121,7 +121,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
   const router = useRouter();
   const [view, setView] = useState<ViewKey>('all');
   const [q, setQ] = useState('');
-  const seedPage: PortfolioPage | null = initialPage ?? (rows ? {
+  const seedPage: PortfolioPage | null = useMemo(() => initialPage ?? (rows ? {
     items: rows, total: rows.length, limit: Math.max(rows.length, 1), offset: 0, hasMore: false,
     summary: {
       totalAccounts: rows.length,
@@ -134,7 +134,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
       contractedValue: rows.reduce((sum, r) => sum + r.contractedValue, 0),
       outstandingAR: rows.reduce((sum, r) => sum + r.outstandingAR, 0),
     },
-  } : null);
+  } : null), [initialPage, rows]);
   const [page, setPage] = useState<PortfolioPage | null>(seedPage);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -148,8 +148,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
     setPage(seedPage);
   // The server snapshot is the refresh signal; filter-driven refetches below remain authoritative
   // once the client starts interacting with the portfolio.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPage]);
+  }, [seedPage]);
   // Ownership is a workspace username; "me" comes from /workspace/me (the session
   // `sub` passed from the server need not equal the username and is null in dev).
   const [me, setMe] = useState<TeamUser | null>(null);

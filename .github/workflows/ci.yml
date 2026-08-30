@@ -57,7 +57,9 @@ jobs:
         run: pnpm --filter @aura/web test -- --run crm-sales-route-ownership.fitness.test.ts crm-lead-parity.fitness.test.ts commercial-source-truth.fitness.test.ts components/commercial-ownership.fitness.test.ts
 
       - name: API HTTP e2e (Supertest — TIER-2 #39/#40)
-        run: pnpm --filter @aura/api test:e2e
+        # The release-proof suite below is explicitly database-backed and must not run against
+        # this tier's forced in-memory adapters. It runs in web-smoke-postgres after migrations.
+        run: pnpm --filter @aura/api exec vitest run --config vitest.config.e2e.ts --exclude test/sales-mutation-release-proof.e2e-spec.ts
 
       # Blocking: the production graph is expected to stay at zero known advisories. SheetJS is
       # pinned to its official patched distribution and DOMPurify is overridden to a fixed release.
@@ -779,6 +781,16 @@ jobs:
             -H "Authorization: Bearer $token")
           echo "negative (admin read): $refused"
           test "$refused" = "403" || { echo "::error::the limited actor was not refused an admin-only action (got $refused)"; exit 1; }
+
+      - name: Sales mutation release proof (DB-backed PostgreSQL)
+        # This suite is intentionally opt-in: it creates namespaced tenants/actors, proves the
+        # canonical Sales mutation journeys against the migrated disposable database, and cleans
+        # only its own run. Keep it beside the real PostgreSQL/browser proof, never in TIER-2's
+        # in-memory API e2e job.
+        run: pnpm --filter @aura/api exec vitest run --config vitest.config.e2e-db.ts test/sales-mutation-release-proof.e2e-spec.ts
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}
 
       - name: Smoke
         run: pnpm --filter @aura/web e2e

@@ -7,7 +7,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -29,6 +29,8 @@ describe('C4 my day (HTTP)', () => {
       // and its refusal-when-nobody path are asserted below.
       tenant.run({ tenantId: 'c4-tenant', companyId: null, actorId: null, correlationId: 'e2e-c4' }, () => next()),
     );
+    const users = app.get(UsersService);
+    for (const userId of ['rep-a', 'rep-b']) users.save({ tenantId: 'c4-tenant', userId, displayName: userId, active: true });
     await app.init();
     http = request(app.getHttpServer());
   });

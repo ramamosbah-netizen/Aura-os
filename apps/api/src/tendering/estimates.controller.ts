@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { type CostComponent, type RateBuildUp, type TenderEstimate, EstimateService } from '@aura/tendering';
+import { isQuotationCommitted, QuotationService } from '@aura/crm';
 
 interface BuildRateDto {
   boqItemId: string;
@@ -22,6 +23,7 @@ export class EstimatesController {
   constructor(
     private readonly estimates: EstimateService,
     private readonly tenant: TenantContext,
+    private readonly quotations: QuotationService,
   ) {}
 
   @Post()
@@ -31,6 +33,17 @@ export class EstimatesController {
       throw new BadRequestException('at least one cost component is required');
     }
     const ctx = this.tenant.get();
+    // This legacy composition endpoint must obey the same freeze boundary as the canonical
+    // pricing workspace. Once a tender-generated quotation is committed, rebuilding a rate here
+    // would silently change the cost evidence behind an issued offer. Re-price through a new
+    // quotation revision instead.
+    const tenderId = await this.estimates.tenderIdForBoqItem(ctx.tenantId, dto.boqItemId);
+    if (tenderId) {
+      const committed = (await this.quotations.listBySourceTender(ctx.tenantId, tenderId)).filter(isQuotationCommitted);
+      if (committed.length > 0) {
+        throw new ConflictException('tender estimate is locked by a committed quotation; raise a quotation revision to re-price');
+      }
+    }
     try {
       return await this.estimates.buildRate(
         {

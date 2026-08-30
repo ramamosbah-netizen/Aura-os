@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { PERMISSIONS_KEY } from '@aura/core';
+import { classifyDomainMessage } from '../common/all-exceptions.filter';
 import { permissionMatches } from '@aura/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { ELV_ROLE_MATRIX } from '../auth/elv-roles';
@@ -43,5 +44,35 @@ describe('CRM quotation authorization contract', () => {
 
     await CrmQuotationsController.prototype.revisions.call(controller, 'quotation-from-tenant-a');
     expect(listRevisions).toHaveBeenCalledWith('tenant-b', 'quotation-from-tenant-a');
+  });
+
+  it('passes the authenticated actor to the canonical approval command', async () => {
+    const changeStatus = vi.fn().mockResolvedValue({ id: 'q-1', status: 'approved' });
+    const controller = {
+      quotations: { changeStatus },
+      tenant: { get: () => ({ tenantId: 'tenant-a', actorId: 'approver-a' }) },
+    } as unknown as CrmQuotationsController;
+
+    await CrmQuotationsController.prototype.changeStatus.call(controller, 'q-1', { action: 'approve' });
+
+    expect(changeStatus).toHaveBeenCalledWith('q-1', 'approve', 'approver-a');
+  });
+
+  it('rejects unknown lifecycle actions before reaching the mutation service', async () => {
+    const changeStatus = vi.fn();
+    const controller = {
+      quotations: { changeStatus },
+      tenant: { get: () => ({ tenantId: 'tenant-a', actorId: 'approver-a' }) },
+    } as unknown as CrmQuotationsController;
+
+    await expect(
+      CrmQuotationsController.prototype.changeStatus.call(controller, 'q-1', { action: 'delete' as never }),
+    ).rejects.toThrow(/action must be one of/i);
+    expect(changeStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps readiness failures machine-readable as conflicts', () => {
+    expect(classifyDomainMessage('quotation QT-1 approval blocked: readiness checklist is not configured'))
+      .toMatchObject({ status: 409, code: 'CONFLICT' });
   });
 });

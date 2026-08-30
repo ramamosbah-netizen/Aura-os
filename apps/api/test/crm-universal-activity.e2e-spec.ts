@@ -11,7 +11,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -39,6 +39,7 @@ describe('G1 universal activity + G2 next-action projection (HTTP)', () => {
       // exercise the projection rule rather than the access-control layer (covered elsewhere).
       tenant.run({ tenantId: 'ua-tenant', companyId: null, actorId: null, correlationId: 'e2e-ua' }, () => next()),
     );
+    app.get(UsersService).save({ tenantId: 'ua-tenant', userId: 'u-tester', displayName: 'u-tester', active: true });
     await app.init();
     http = request(app.getHttpServer());
   });

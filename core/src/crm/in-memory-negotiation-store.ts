@@ -21,7 +21,9 @@ export class InMemoryNegotiationStore implements NegotiationStore {
       .map((e) => ({ ...e }));
   }
 
-  async remove(id: Id): Promise<boolean> {
+  async remove(id: Id, tenantId: Id): Promise<boolean> {
+    const entry = this.rows.get(id);
+    if (!entry || entry.tenantId !== tenantId) return false;
     return this.rows.delete(id);
   }
 }

@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -24,6 +24,10 @@ describe('My Work items (HTTP)', () => {
       actorId: req.headers['x-test-actor'] ?? null,
       correlationId: 'e2e-work-items',
     }, () => next()));
+    const users = app.get(UsersService);
+    for (const userId of ['user-a', 'user-b', 'user-task-owner', 'user-reminder-owner']) {
+      users.save({ tenantId: 'work-tenant-a', userId, displayName: userId, active: true });
+    }
     await app.init();
     http = request(app.getHttpServer());
   });
@@ -35,9 +39,12 @@ describe('My Work items (HTTP)', () => {
   });
 
   it('returns only the current user projection and denies another user quick actions', async () => {
+    const project = (await http.post('/api/v1/projects/projects')
+      .send({ title: 'ABC Project', value: 1000 })
+      .expect(201)).body as { id: string };
     const activity = (await http.post('/api/v1/crm/activities')
       .set('x-test-actor', 'user-a')
-      .send({ type: 'task', subject: 'Prepare CCTV inspection', relatedType: 'project', relatedId: '11111111-1111-4111-8111-111111111111', relatedName: 'ABC Project', dueDate: '2026-08-17' })
+      .send({ type: 'task', subject: 'Prepare CCTV inspection', relatedType: 'project', relatedId: project.id, relatedName: 'ABC Project', dueDate: '2026-08-17' })
       .expect(201)).body as { id: string };
 
     const mine = (await http.get('/api/v1/work-items').set('x-test-actor', 'user-a').expect(200)).body as { items: Array<{ sourceId: string; status: string; origin: string }> };

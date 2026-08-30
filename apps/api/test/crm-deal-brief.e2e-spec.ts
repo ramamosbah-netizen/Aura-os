@@ -8,7 +8,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AiService, TenantContext } from '@aura/core';
+import { AiService, TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -28,6 +28,7 @@ describe('C8 CRM AI — deal brief & drafts (HTTP)', () => {
     app.use((_req: unknown, _res: unknown, next: () => void) =>
       tenant.run({ tenantId: 'c8-tenant', companyId: null, actorId: null, correlationId: 'e2e-c8' }, () => next()),
     );
+    app.get(UsersService).save({ tenantId: 'c8-tenant', userId: 'rep-a', displayName: 'rep-a', active: true });
     await app.init();
     http = request(app.getHttpServer());
     // Read the seam rather than assuming: a developer running this WITH a key must not see a

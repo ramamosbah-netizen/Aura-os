@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import type { CommQuotation, CommContract } from './commercial-workspace';
 import DecisionReadiness, { readinessFor, type EvidenceDoc, type StoredRequirement } from './decision-readiness';
 
-// The Decision Queue — list on the left, preview on the right, decide without leaving.
+// The Decision Queue — list on the left, preview on the right, prioritize without owning the
+// quotation command. Approval/cancellation are executed on the canonical Quotation 360 record.
 //
 // This is NOT a second Quotation 360. The discriminator is context, not content: 360 answers
 // "what is the state of THIS quote", the queue answers "which of these do I act on first, and
@@ -49,8 +50,6 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
   const [selectedId, setSelectedId] = useState<string | null>(queue[0]?.id ?? null);
   const [pending, setPending] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [done, setDone] = useState<Record<string, string>>({});
-
   const selected = queue.find((q) => q.id === selectedId) ?? null;
 
   /** Create the evidence checklist on a record so its requirements become decidable — waivable,
@@ -60,7 +59,7 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
     setPending(quotationId);
     setErr(null);
     try {
-      const res = await fetch('/api/document-requirements', {
+      const res = await fetch('/api/document-requirements/seed', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ entityType: 'crm.quotation', entityId: quotationId }),
@@ -72,30 +71,6 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
       router.refresh();
     } catch {
       setErr('Could not reach the server — no checklist was created.');
-    } finally {
-      setPending(null);
-    }
-  }
-
-  async function decide(q: CommQuotation, action: 'approve' | 'cancel'): Promise<void> {
-    if (pending) return;
-    setPending(q.id);
-    setErr(null);
-    try {
-      const res = await fetch(`/api/crm/quotations/${q.id}/status`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
-        setErr(d.message ?? d.error ?? `Could not ${action} ${q.quoteNumber}.`);
-        return;
-      }
-      setDone((s) => ({ ...s, [q.id]: action === 'approve' ? 'Approved' : 'Cancelled' }));
-      router.refresh();
-    } catch {
-      setErr('Could not reach the server — nothing was changed.');
     } finally {
       setPending(null);
     }
@@ -115,12 +90,11 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
       <ul style={st.list}>
         {queue.map((q) => {
           const active = q.id === selectedId;
-          const settled = done[q.id];
           return (
             <li key={q.id}>
               <button
                 type="button"
-                style={{ ...st.row, ...(active ? st.rowOn : {}), ...(settled ? st.rowDone : {}) }}
+                style={{ ...st.row, ...(active ? st.rowOn : {}) }}
                 aria-current={active}
                 onClick={() => setSelectedId(q.id)}
               >
@@ -130,21 +104,17 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
                 </span>
                 <span style={st.rowSub}>{q.customerName}</span>
                 <span style={st.rowFlags}>
-                  {settled ? (
-                    <span style={{ ...st.flag, color: 'var(--good)', borderColor: 'var(--good)' }}>{settled}</span>
-                  ) : (
-                    <>
-                      {(() => {
-                        const r = readinessFor(docsFor(q.id), reqsFor(q.id));
-                        return r.verdict === 'READY' ? null : (
-                          <span style={{ ...st.flag, color: 'var(--bad)', borderColor: 'var(--bad)' }}>
-                            evidence {r.score}%
-                          </span>
-                        );
-                      })()}
-                      {flagsFor(q).slice(0, 2).map((f) => <span key={f} style={st.flag}>{f}</span>)}
-                    </>
-                  )}
+                  <>
+                    {(() => {
+                      const r = readinessFor(docsFor(q.id), reqsFor(q.id));
+                      return r.verdict === 'READY' ? null : (
+                        <span style={{ ...st.flag, color: 'var(--bad)', borderColor: 'var(--bad)' }}>
+                          evidence {r.score}%
+                        </span>
+                      );
+                    })()}
+                    {flagsFor(q).slice(0, 2).map((f) => <span key={f} style={st.flag}>{f}</span>)}
+                  </>
                 </span>
               </button>
             </li>
@@ -201,29 +171,10 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
             {err && <p style={st.err}>{err}</p>}
 
             <div style={st.actions}>
-              {done[selected.id] ? (
-                <span style={st.settled}>{done[selected.id]} — refreshing the queue…</span>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    style={pending ? { ...st.approve, opacity: 0.6 } : st.approve}
-                    disabled={!!pending}
-                    aria-busy={pending === selected.id}
-                    onClick={() => void decide(selected, 'approve')}
-                  >
-                    {pending === selected.id ? 'Approving…' : 'Approve ✓'}
-                  </button>
-                  <button
-                    type="button"
-                    style={pending ? { ...st.ghost, opacity: 0.6 } : st.ghost}
-                    disabled={!!pending}
-                    onClick={() => void decide(selected, 'cancel')}
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
+              <a href={`/crm/quotations/${selected.id}?focus=approval`} style={st.approve}>
+                Open Quotation 360 →
+              </a>
+              <span style={st.actionNote}>Approval and cancellation are executed on the quotation record.</span>
               <a href={`/crm/quotations/${selected.id}`} style={st.openLink}>Open quote →</a>
               <a href={`/crm/quotations/${selected.id}/pricing`} style={st.openLink}>Pricing sheet →</a>
             </div>
@@ -269,6 +220,7 @@ const st = {
   chain: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontSize: 12.5, margin: '0 0 14px', paddingTop: 12, borderTop: '1px solid var(--border)' } as CSSProperties,
   arrow: { color: 'var(--muted)' } as CSSProperties,
   actions: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' } as CSSProperties,
+  actionNote: { color: 'var(--muted)', fontSize: 11.5, flex: '1 1 220px' } as CSSProperties,
   approve: { background: 'var(--good)', border: 'none', borderRadius: 8, color: '#04210f', padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   ghost: { background: 'var(--panel-2)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text)', padding: '8px 14px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   settled: { color: 'var(--good)', fontSize: 13 } as CSSProperties,

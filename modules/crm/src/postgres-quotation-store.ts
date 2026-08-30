@@ -34,13 +34,14 @@ interface Row {
   pricing: QuotationPricingInput | string | null;
   estimation: unknown[] | string | null;
   status: string;
+  approval_readiness_mode: 'governed' | 'legacy' | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
   'id, tenant_id, company_id, quote_number, customer_name, account_id, subject, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, exclusions, payment_conditions, delivery_terms, revision, parent_quotation_id, converted_contract_id, ' +
-  'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, pricing, estimation, status, created_by, created_at';
+  'issue_date::text AS issue_date, valid_until::text AS valid_until, lines, subtotal, vat_total, total, pricing, estimation, status, approval_readiness_mode, created_by, created_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 function rowTo(r: Row): Quotation {
@@ -74,6 +75,10 @@ function rowTo(r: Row): Quotation {
     estimation: r.estimation == null ? null
       : (typeof r.estimation === 'string' ? (JSON.parse(r.estimation) as EstimationLineInput[]) : (r.estimation as EstimationLineInput[])),
     status: r.status as Quotation['status'],
+    // The migration backfills existing rows to an explicit legacy marker and makes the column
+    // NOT NULL. If this reader ever sees NULL (for example before the migration is applied), fail
+    // closed as governed rather than turning an unclassified row into a readiness bypass.
+    approvalReadinessMode: r.approval_readiness_mode === 'legacy' ? 'legacy' : 'governed',
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
   };
@@ -94,8 +99,8 @@ export class PostgresQuotationStore implements QuotationStore {
   private async upsert(executor: Pool | PoolClient, q: Quotation): Promise<void> {
     await executor.query(
       `INSERT INTO public.aura_crm_quotations
-        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, exclusions, payment_conditions, delivery_terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, pricing, status, created_by, created_at, subject, estimation)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+        (id, tenant_id, company_id, quote_number, customer_name, account_id, contact_name, source_tender_id, source_opportunity_id, owner_id, terms, exclusions, payment_conditions, delivery_terms, revision, parent_quotation_id, converted_contract_id, issue_date, valid_until, lines, subtotal, vat_total, total, pricing, status, approval_readiness_mode, created_by, created_at, subject, estimation)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, terms = EXCLUDED.terms, owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, estimation = EXCLUDED.estimation,
          exclusions = EXCLUDED.exclusions, payment_conditions = EXCLUDED.payment_conditions, delivery_terms = EXCLUDED.delivery_terms,
@@ -107,7 +112,7 @@ export class PostgresQuotationStore implements QuotationStore {
          lines = EXCLUDED.lines, subtotal = EXCLUDED.subtotal, vat_total = EXCLUDED.vat_total, total = EXCLUDED.total`,
       [
         q.id, q.tenantId, q.companyId, q.quoteNumber, q.customerName, q.accountId, q.contactName, q.sourceTenderId, q.sourceOpportunityId, q.ownerId, q.terms, JSON.stringify(q.exclusions ?? []), q.paymentConditions, q.deliveryTerms, q.revision, q.parentQuotationId, q.convertedContractId, q.issueDate, q.validUntil,
-        JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.pricing ? JSON.stringify(q.pricing) : null, q.status, q.createdBy, q.createdAt, q.subject,
+        JSON.stringify(q.lines), q.subtotal, q.vatTotal, q.total, q.pricing ? JSON.stringify(q.pricing) : null, q.status, q.approvalReadinessMode, q.createdBy, q.createdAt, q.subject,
         q.estimation ? JSON.stringify(q.estimation) : null,
       ],
     );

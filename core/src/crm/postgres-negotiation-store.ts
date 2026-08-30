@@ -67,8 +67,11 @@ export class PostgresNegotiationStore implements NegotiationStore {
     return res.rows.map(rowTo);
   }
 
-  async remove(id: Id): Promise<boolean> {
-    const res = await this.pool.query('delete from public.aura_crm_negotiation_entries where id = $1', [id]);
+  async remove(id: Id, tenantId: Id): Promise<boolean> {
+    const res = await this.pool.query(
+      'delete from public.aura_crm_negotiation_entries where id = $1 and tenant_id = $2',
+      [id, tenantId],
+    );
     return (res.rowCount ?? 0) > 0;
   }
 }

@@ -21,6 +21,10 @@ export type QuotationStatus =
   | 'expired'
   | 'cancelled';
 
+/** Whether approval-readiness governance applies to this quotation. Existing rows are explicitly
+ * marked legacy during migration; every quotation created by the current domain is governed. */
+export type ApprovalReadinessMode = 'governed' | 'legacy';
+
 /** Statuses a quotation can still move out of (everything else is terminal). */
 export const OPEN_QUOTATION_STATUSES: readonly QuotationStatus[] = [
   'draft',
@@ -142,6 +146,8 @@ export interface Quotation {
    */
   estimation: EstimationLineInput[] | null;
   status: QuotationStatus;
+  /** Explicit migration marker; null/absent must never be interpreted as a new quote exemption. */
+  approvalReadinessMode: ApprovalReadinessMode;
   createdAt: string;
   createdBy: Id | null;
 }
@@ -260,6 +266,7 @@ export function makeQuotation(input: NewQuotation): Quotation {
     pricing: input.pricing ?? { lines: lines.map(() => emptyPricingLine()) },
     estimation: input.estimation ?? null,
     status: 'draft',
+    approvalReadinessMode: 'governed',
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };

@@ -25,13 +25,17 @@ export class QuotationReferenceService {
 
   async validate(input: QuotationReferenceInput): Promise<{ accountId: string | null }> {
     const tenantId = this.tenant?.get().tenantId ?? null;
-    const account = input.accountId ? await this.accounts.get(input.accountId) : null;
+    // PostgreSQL UUID-backed stores reject a syntactically invalid reference before returning an
+    // empty result (22P02). Treat that exactly like any other missing reference at this boundary;
+    // callers must receive the documented 400 rather than an infrastructure-shaped 500. The
+    // helper deliberately rethrows every other database error.
+    const account = input.accountId ? await this.safeGet(() => this.accounts.get(input.accountId!)) : null;
     if (input.accountId && (!account || !this.belongsToTenant(account, tenantId))) throw new BadRequestException('account not found');
 
-    const opportunity = input.sourceOpportunityId ? await this.opportunities.get(input.sourceOpportunityId) : null;
+    const opportunity = input.sourceOpportunityId ? await this.safeGet(() => this.opportunities.get(input.sourceOpportunityId!)) : null;
     if (input.sourceOpportunityId && (!opportunity || !this.belongsToTenant(opportunity, tenantId))) throw new BadRequestException('opportunity not found');
 
-    const tender = input.sourceTenderId ? await this.tenders.get(input.sourceTenderId) : null;
+    const tender = input.sourceTenderId ? await this.safeGet(() => this.tenders.get(input.sourceTenderId!)) : null;
     if (input.sourceTenderId && (!tender || !this.belongsToTenant(tender, tenantId))) throw new BadRequestException('tender not found');
 
     if (opportunity && tender && tender.sourceOpportunityId !== opportunity.id) {
@@ -55,5 +59,14 @@ export class QuotationReferenceService {
     // Accepting `undefined` here turns an accidentally unscoped repository response into a
     // cross-tenant reference bypass. Unbound/system callers retain the legacy unrestricted path.
     return !tenantId || record.tenantId === tenantId;
+  }
+
+  private async safeGet<T>(read: () => Promise<T | null>): Promise<T | null> {
+    try {
+      return await read();
+    } catch (error) {
+      if ((error as { code?: string })?.code === '22P02') return null;
+      throw error;
+    }
   }
 }

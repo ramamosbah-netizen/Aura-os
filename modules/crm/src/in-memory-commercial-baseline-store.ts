@@ -7,10 +7,19 @@ import type { CommercialBaselineStore } from './commercial-baseline-store';
 export class InMemoryCommercialBaselineStore implements CommercialBaselineStore {
   private readonly rows = new Map<string, CommercialBaseline>();
 
+  private static copy(b: CommercialBaseline): CommercialBaseline {
+    return {
+      ...b,
+      lines: b.lines.map((l) => ({ ...l })),
+      pricing: b.pricing ? { lines: b.pricing.lines.map((l) => ({ ...l })) } : null,
+      estimation: b.estimation ? b.estimation.map((e) => ({ ...e })) : null,
+    };
+  }
+
   async save(b: CommercialBaseline): Promise<void> {
     const existing = [...this.rows.values()].find((row) => row.tenantId === b.tenantId && row.quotationId === b.quotationId);
     if (existing && existing.id !== b.id) return;
-    this.rows.set(b.id, { ...b, lines: b.lines.map((l) => ({ ...l })) });
+    this.rows.set(b.id, InMemoryCommercialBaselineStore.copy(b));
   }
   async saveWithClient(_tx: TxHandle | null, b: CommercialBaseline): Promise<boolean> {
     const existing = [...this.rows.values()].find((row) => row.tenantId === b.tenantId && row.quotationId === b.quotationId);
@@ -20,14 +29,14 @@ export class InMemoryCommercialBaselineStore implements CommercialBaselineStore 
   }
   async get(id: Id): Promise<CommercialBaseline | null> {
     const b = this.rows.get(id);
-    return b ? { ...b, lines: b.lines.map((l) => ({ ...l })) } : null;
+    return b ? InMemoryCommercialBaselineStore.copy(b) : null;
   }
   async list(tenantId: Id, limit = 5000): Promise<CommercialBaseline[]> {
     return [...this.rows.values()]
       .filter((b) => b.tenantId === tenantId)
       .sort((a, b) => (a.lockedAt < b.lockedAt ? 1 : -1))
       .slice(0, limit)
-      .map((b) => ({ ...b, lines: b.lines.map((l) => ({ ...l })) }));
+      .map(InMemoryCommercialBaselineStore.copy);
   }
 
   async getByQuotation(tenantId: Id, quotationId: Id): Promise<CommercialBaseline | null> {
@@ -35,6 +44,6 @@ export class InMemoryCommercialBaselineStore implements CommercialBaselineStore 
       .filter((b) => b.tenantId === tenantId && b.quotationId === quotationId)
       .sort((a, b) => (a.lockedAt < b.lockedAt ? 1 : -1));
     const b = matches[0];
-    return b ? { ...b, lines: b.lines.map((l) => ({ ...l })) } : null;
+    return b ? InMemoryCommercialBaselineStore.copy(b) : null;
   }
 }

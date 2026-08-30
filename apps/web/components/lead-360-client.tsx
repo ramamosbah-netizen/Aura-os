@@ -262,9 +262,57 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'qualification', label: 'Qualification' },
+    { id: 'conversion', label: 'Conversion' },
     { id: 'communication', label: 'Communication' },
     { id: 'documents', label: 'Documents' },
   ];
+
+  // Canonical conversion context. It is rendered from the Overview for continuity and from the
+  // dedicated Conversion tab so every readiness/action entry point lands on a real panel.
+  const conversionContext = (
+    <div style={{ marginTop: 14 }}>
+      <RecordCard title={converted ? 'Conversion' : 'Qualify & Convert'}>
+        {converted ? (
+          <div>
+            <p style={s.muted}>This lead was converted {d(lead.convertedAt)} — it is terminal and cannot convert again. Traceability is preserved: Lead → Opportunity → Quote/Tender → Won → Project.</p>
+            <a href={`/crm/opportunities/${lead.convertedOpportunityId}`} style={{ ...s.link, fontWeight: 600 }}>Open Opportunity 360 →</a>
+          </div>
+        ) : (
+          <div>
+            <div style={s.readyBox}>
+              <div style={s.readyTitle}>Conversion readiness</div>
+              <ReadyRow label="Lifecycle status" ok={lead.status === 'qualified'} text={`${STATUS_LABEL[lead.status] ?? lead.status}${lead.status === 'qualified' ? ' — required to convert' : ' — must be Qualified to convert'}`} />
+              <ReadyRow label="Qualification assessment" text={assessed ? `${a!.recommendation} · ${a!.coverage.rated}/${a!.coverage.total} dimensions rated` : 'Not assessed (advisory — does not block convert)'} />
+              <ReadyRow label="Customer identity" text={idText(preview?.account.best)} />
+              <ReadyRow label="Contact identity" text={idText(preview?.contact.best)} />
+            </div>
+            <p style={{ ...s.muted, margin: '8px 0 0', fontSize: 11.5 }}>The engine recommends; a human qualifies. Convert is gated by the lifecycle status (backend-enforced), not by the assessment.</p>
+            {preview && (preview.account.matches.length > 0 || preview.contact.matches.length > 0) && (
+              <div style={s.dupBox}>
+                <div style={s.subhead}>Possible duplicate</div>
+                {preview.account.matches.map((m) => (
+                  <div key={`a-${m.id}`} style={s.dupRow}>
+                    <span><b>{accounts.find((x) => x.id === m.id)?.name ?? 'Customer'}</b> <span style={s.dupType}>Account · {m.confidence}</span></span>
+                    <a href={`/crm/accounts/${m.id}`} style={s.link}>Open Customer →</a>
+                  </div>
+                ))}
+                {preview.contact.matches.map((m) => (
+                  <div key={`c-${m.id}`} style={s.dupRow}>
+                    <span><b>Contact match</b> <span style={s.dupType}>Contact · {m.confidence}</span></span>
+                    <a href={`/crm/contacts/${m.id}`} style={s.link}>Open Contact →</a>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p style={{ ...s.muted, margin: '12px 0' }}>
+              Converting links this lead to an <b style={{ color: 'var(--text)' }}>Account</b> and a <b style={{ color: 'var(--text)' }}>Primary Contact</b> (linking an existing match or creating fresh), then opens the <b style={{ color: 'var(--text)' }}>Opportunity</b> — one transactional step, lineage preserved. The backend decides eligibility; if it refuses, the reason shows above.
+            </p>
+            <LeadConvertDrawer lead={lead} accounts={accounts} onDone={() => { setMsg('Converted to an opportunity.'); router.refresh(); }} />
+          </div>
+        )}
+      </RecordCard>
+    </div>
+  );
 
   // ── Insights rail (derived, honest — no black box) ─────────────────────────
   const insights: Insight[] = [];
@@ -272,7 +320,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
     insights.push({ tone: 'good', title: 'Converted', detail: `Became an opportunity ${d(lead.convertedAt)}.`, action: { label: 'Open the opportunity', href: `/crm/opportunities/${lead.convertedOpportunityId}` } });
   } else {
     if (!assessed) insights.push({ tone: 'warn', title: 'Not qualified yet', detail: 'Score the eight dimensions to get a verdict.', action: { label: 'Assess now', onClick: () => { setTab('qualification'); setAssessing(true); } } });
-    else if (a!.recommendation === 'QUALIFY') insights.push({ tone: 'good', title: 'Ready to convert', detail: `Score ${a!.score} · the engine recommends QUALIFY.`, action: { label: 'Qualify & convert', onClick: () => setTab('convert') } });
+    else if (a!.recommendation === 'QUALIFY') insights.push({ tone: 'good', title: 'Ready to convert', detail: `Score ${a!.score} · the engine recommends QUALIFY.`, action: { label: 'Qualify & convert', onClick: () => setTab('conversion') } });
     else if (a!.recommendation === 'DISQUALIFY') insights.push({ tone: 'bad', title: 'Weak fit', detail: `Score ${a!.score} · consider disqualifying.` });
     if (assessed && a!.gaps.length) insights.push({ tone: 'warn', title: 'Go find out', detail: a!.gaps.map((g) => g.label).join(', '), action: { label: 'Update assessment', onClick: () => { setTab('qualification'); setAssessing(true); } } });
     if (!lead.email && !lead.phone) insights.push({ tone: 'warn', title: 'No contact channel', detail: 'No email or phone captured yet.' });
@@ -313,7 +361,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   let nba: NextBestAction | undefined;
   if (converted) nba = { label: 'Open the opportunity →', href: `/crm/opportunities/${lead.convertedOpportunityId}` };
   else if (!assessed) nba = { label: 'Assess this lead', hint: 'Score the eight dimensions', onClick: () => { setTab('qualification'); setAssessing(true); } };
-  else if (a!.recommendation === 'QUALIFY') nba = { label: 'Qualify & convert', hint: `Score ${a!.score} — engine says QUALIFY`, onClick: () => setTab('convert') };
+  else if (a!.recommendation === 'QUALIFY') nba = { label: 'Qualify & convert', hint: `Score ${a!.score} — engine says QUALIFY`, onClick: () => setTab('conversion') };
   else nba = { label: 'Update assessment', hint: a!.gaps.length ? `Find out: ${a!.gaps.map((g) => g.label).join(', ')}` : undefined, onClick: () => { setTab('qualification'); setAssessing(true); } };
 
   // Outcome Loop — writes a real activity linked to this lead (§17 activity stream).
@@ -379,57 +427,11 @@ export default function Lead360Client({ lead, qualification, accounts }: {
               <InfoRow label="Timeline" value={lead.expectedTimeline ?? '—'} />
             </RecordCard>
           </CardGrid>
-          {/* Qualify & Convert lives WITH the Overview — the primary outcome of a lead, next to its
-              context. It shows conversion readiness (backend owns eligibility) and the convert action. */}
-          <div style={{ marginTop: 14 }}>
-            <RecordCard title={converted ? 'Conversion' : 'Qualify & Convert'}>
-              {converted ? (
-                <div>
-                  <p style={s.muted}>This lead was converted {d(lead.convertedAt)} — it is terminal and cannot convert again. Traceability is preserved: Lead → Opportunity → Quote/Tender → Won → Project.</p>
-                  <a href={`/crm/opportunities/${lead.convertedOpportunityId}`} style={{ ...s.link, fontWeight: 600 }}>Open Opportunity 360 →</a>
-                </div>
-              ) : (
-                <div>
-                  {/* Conversion readiness — the BACKEND owns eligibility; this only SHOWS the signals it
-                      will evaluate. On convert the API decides (qualified? already converted? identity
-                      match? allowed?) and, if it refuses, returns the reason. React never gates. */}
-                  <div style={s.readyBox}>
-                    <div style={s.readyTitle}>Conversion readiness</div>
-                    <ReadyRow label="Lifecycle status" ok={lead.status === 'qualified'} text={`${STATUS_LABEL[lead.status] ?? lead.status}${lead.status === 'qualified' ? ' — required to convert' : ' — must be Qualified to convert'}`} />
-                    <ReadyRow label="Qualification assessment" text={assessed ? `${a!.recommendation} · ${a!.coverage.rated}/${a!.coverage.total} dimensions rated` : 'Not assessed (advisory — does not block convert)'} />
-                    <ReadyRow label="Customer identity" text={idText(preview?.account.best)} />
-                    <ReadyRow label="Contact identity" text={idText(preview?.contact.best)} />
-                  </div>
-                  <p style={{ ...s.muted, margin: '8px 0 0', fontSize: 11.5 }}>The engine recommends; a human qualifies. Convert is gated by the lifecycle status (backend-enforced), not by the assessment.</p>
-
-                  {preview && (preview.account.matches.length > 0 || preview.contact.matches.length > 0) && (
-                    <div style={s.dupBox}>
-                      <div style={s.subhead}>Possible duplicate</div>
-                      {preview.account.matches.map((m) => (
-                        <div key={`a-${m.id}`} style={s.dupRow}>
-                          <span><b>{accounts.find((x) => x.id === m.id)?.name ?? 'Customer'}</b> <span style={s.dupType}>Account · {m.confidence}</span></span>
-                          <a href={`/crm/accounts/${m.id}`} style={s.link}>Open Customer →</a>
-                        </div>
-                      ))}
-                      {preview.contact.matches.map((m) => (
-                        <div key={`c-${m.id}`} style={s.dupRow}>
-                          <span><b>Contact match</b> <span style={s.dupType}>Contact · {m.confidence}</span></span>
-                          <a href={`/crm/contacts/${m.id}`} style={s.link}>Open Contact →</a>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <p style={{ ...s.muted, margin: '12px 0' }}>
-                    Converting links this lead to an <b style={{ color: 'var(--text)' }}>Account</b> and a <b style={{ color: 'var(--text)' }}>Primary Contact</b> (linking an existing match or creating fresh), then opens the <b style={{ color: 'var(--text)' }}>Opportunity</b> — one transactional step, lineage preserved. The backend decides eligibility; if it refuses, the reason shows above.
-                  </p>
-                  <LeadConvertDrawer lead={lead} accounts={accounts} onDone={() => { setMsg('Converted to an opportunity.'); router.refresh(); }} />
-                </div>
-              )}
-            </RecordCard>
-          </div>
+          {conversionContext}
         </>
       )}
+
+      {tab === 'conversion' && conversionContext}
 
       {tab === 'qualification' && (
         <RecordCard title="Qualification" action={!converted ? <button style={s.linkBtn} onClick={() => setAssessing((v) => !v)}>{assessing ? 'Cancel' : assessed ? 'Update assessment' : 'Assess this lead'}</button> : undefined}>

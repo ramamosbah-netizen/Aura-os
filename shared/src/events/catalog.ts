@@ -43,6 +43,7 @@ export const EVENT_CATALOG: EventTypeDef[] = [
   { type: 'crm.opportunity.pursuit_decided', module: 'crm', description: 'Pursue / No-Pursue decision recorded on a CRM opportunity', severity: 'INFO' },
   { type: 'crm.forecast.snapshot_captured', module: 'crm', description: 'Weighted pipeline forecast captured as an immutable snapshot', severity: 'INFO' },
   { type: 'crm.commercial_baseline.locked', module: 'crm', description: 'Immutable approved-price baseline locked on quotation approval', severity: 'INFO' },
+  { type: 'crm.negotiation.deleted', module: 'crm', description: 'Negotiation log entry removed as an auditable correction', severity: 'INFO' },
   { type: 'crm.requirement.added', module: 'crm', description: 'Pre-award requirement captured on an opportunity', severity: 'INFO' },
   { type: 'crm.solution_scope.created', module: 'crm', description: 'Pre-award solution scope created on an opportunity', severity: 'INFO' },
   { type: 'crm.solution_scope.approved', module: 'crm', description: 'Solution scope approved — priceable baseline for the direct-sale path', severity: 'INFO' },

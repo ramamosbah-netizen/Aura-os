@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SIGNAL_SOURCES, SIGNAL_TYPES } from '@aura/shared';
+import { SIGNAL_DISMISS_REASON_CODES, SIGNAL_SOURCES, SIGNAL_TYPES, SIGNAL_STATUSES } from '@aura/shared';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import SaveViewButton from './save-view-button';
 
@@ -18,6 +18,7 @@ interface RadarSignal {
   status: string;
   accountId: string | null;
   accountName: string | null;
+  contactId?: string | null;
   confidence: number;
   detectedAt: string;
   ownerId: string | null;
@@ -40,6 +41,7 @@ export interface RadarData {
   page?: { items: RadarSignal[]; total: number; limit: number; offset: number; hasMore: boolean };
   summary?: { total: number; open: number; new: number; reviewing: number; researching: number; promoted: number; dismissed: number; highPotential: number; bySource: Tally[]; byType: Tally[] };
 }
+interface RadarOwner { username: string; roleLabel: string; }
 
 const SOURCES = [...SIGNAL_SOURCES];
 const TYPES = [...SIGNAL_TYPES];
@@ -91,6 +93,7 @@ function analyzeSignal(s: RadarSignal): AdvisoryRead {
 const contextHref = (t: string | null | undefined, id: string | null | undefined): string | null => {
   if (!t || !id) return null;
   const map: Record<string, string> = {
+    account: `/crm/accounts/${id}`, contact: `/crm/contacts/${id}`, lead: `/crm/leads/${id}`, quotation: `/crm/quotations/${id}`,
     project: `/project/${id}`, contract: `/contracts/contracts/${id}`,
     tender: `/tendering/tenders/${id}`, opportunity: `/crm/opportunities/${id}`,
   };
@@ -153,7 +156,7 @@ function TallyBars({ title, rows, total }: { title: string; rows: Tally[]; total
 }
 
 // ── The board ────────────────────────────────────────────────────────────────────
-export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarData | null; initialQuery?: Record<string, string> }) {
+export default function SignalsRadar({ data, owners = [], initialQuery = {} }: { data: RadarData | null; owners?: RadarOwner[]; initialQuery?: Record<string, string> }) {
   const router = useRouter();
   const params = useSearchParams();
   const [, startTransition] = useTransition();
@@ -161,10 +164,13 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
   const [err, setErr] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ title: '', source: 'MANUAL', type: 'NEW_PROJECT', accountName: '', confidence: 50, evidence: '' });
+  const [form, setForm] = useState({ title: '', source: 'MANUAL', type: 'NEW_PROJECT', accountName: '', confidence: 50, evidence: '', ownerId: '' });
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ lead: { name: string; companyName: string | null; source: string | null; assignedTo: string | null; accountId: string | null; requirement: string | null }; matches: Array<{ kind: string; id: string; label: string; exact: boolean }> } | null>(null);
   const [createdLead, setCreatedLead] = useState<{ id: string; name: string } | null>(null);
+  const [dismissForm, setDismissForm] = useState<{ id: string; duplicate: boolean } | null>(null);
+  const [dismissReason, setDismissReason] = useState('NOT_RELEVANT');
+  const [dismissNote, setDismissNote] = useState('');
 
   const queryValue = (key: string): string => params.get(key) ?? initialQuery[key] ?? '';
   const search = queryValue('search');
@@ -179,6 +185,11 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
   const confidenceMax = queryValue('confidenceMax');
   const sort = queryValue('sort');
   const view = queryValue('view') === 'list' ? 'list' : 'cards';
+  const ownerLabel = (ownerId: string | null | undefined): string => {
+    if (!ownerId) return 'Unassigned';
+    const owner = owners.find((candidate) => candidate.username === ownerId);
+    return owner ? owner.username.replace(/^u-/, '').replace(/[-_.]+/g, ' ') : ownerId;
+  };
   const counts = data?.summary ? { open: data.summary.open, new: data.summary.new, reviewing: data.summary.reviewing, researching: data.summary.researching, promoted: data.summary.promoted, dismissed: data.summary.dismissed } : (data?.counts ?? { open: 0, new: 0, reviewing: 0, researching: 0, promoted: 0, dismissed: 0 });
   const signals = data?.page?.items ?? data?.signals ?? [];
   const total = data?.page?.total ?? signals.length;
@@ -192,7 +203,18 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
     if (Object.keys(updates).some((key) => ['search', 'source', 'type', 'status', 'ownerId', 'accountId', 'detectedFrom', 'detectedTo', 'confidenceMin', 'confidenceMax', 'sort'].includes(key))) next.delete('offset');
     startTransition(() => router.push(`/crm/radar${next.toString() ? `?${next.toString()}` : ''}`));
   };
-  const call = async (id: string, path: string, method: string, body?: unknown): Promise<void> => {
+  const responseError = async (res: Response, fallback: string): Promise<Error> => {
+    const body = await res.json().catch(() => ({})) as { message?: string; error?: string };
+    const detail = body.message || body.error;
+    if (res.status === 401) return new Error('Authentication required. Please sign in again.');
+    if (res.status === 403) return new Error('Access denied. You do not have permission for this action.');
+    if (res.status === 404) return new Error('Signal not found or no longer available.');
+    if (res.status === 409) return new Error(detail ? `Conflict: ${detail}` : 'Conflict: this signal changed. Refresh and try again.');
+    if (res.status === 422 || res.status === 400) return new Error(detail ? `Validation failed: ${detail}` : 'Validation failed. Check the signal details and try again.');
+    if (res.status >= 500 || res.status === 0) return new Error('Service temporarily unavailable. Retry in a moment.');
+    return new Error(detail || fallback);
+  };
+  const call = async (id: string, path: string, method: string, body?: unknown): Promise<boolean> => {
     setBusy(id); setErr(null);
     try {
       const res = await fetch(`/api/crm/signals/${id}/${path}`, {
@@ -200,17 +222,18 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
         headers: { 'content-type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined,
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || d.error || 'Action failed'); }
+      if (!res.ok) throw await responseError(res, 'Action failed.');
       setOpenId(null);
       router.refresh();
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
+      return true;
+    } catch (e) { setErr((e as Error).message); return false; } finally { setBusy(null); }
   };
   const reviewPromotion = async (id: string): Promise<void> => {
     setPromoteId(id); setPreview(null); setErr(null);
     try {
       const res = await fetch(`/api/crm/signals/${id}/promotion-preview`, { cache: 'no-store' });
+      if (!res.ok) throw await responseError(res, 'Could not prepare Lead review.');
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message || body.error || 'Could not prepare Lead review');
       setPreview(body);
     } catch (e) { setErr((e as Error).message); setPromoteId(null); }
   };
@@ -218,14 +241,30 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
     setBusy(id); setErr(null);
     try {
       const res = await fetch(`/api/crm/signals/${id}/promote`, { method: 'POST', headers: { 'content-type': 'application/json' } });
+      if (!res.ok) throw await responseError(res, 'Lead promotion failed.');
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message || body.error || 'Action failed');
       if (body.lead) setCreatedLead({ id: body.lead.id, name: body.lead.name });
       setPromoteId(null); setPreview(null); setOpenId(null); router.refresh();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
   };
   const advance = (id: string, to: 'REVIEWING' | 'RESEARCHING') => call(id, 'advance', 'PATCH', { to });
-  const dismiss = (id: string, asDuplicate = false) => call(id, 'dismiss', 'POST', { reasonCode: asDuplicate ? 'DUPLICATE' : 'NOT_RELEVANT', note: asDuplicate ? 'Matched an existing business record' : undefined, asDuplicate });
+  const requestDismiss = (id: string, asDuplicate = false): void => {
+    setDismissForm({ id, duplicate: asDuplicate });
+    setDismissReason(asDuplicate ? 'DUPLICATE' : 'NOT_RELEVANT');
+    setDismissNote(asDuplicate ? 'Matched an existing business record' : '');
+    setErr(null);
+  };
+  // Keep the action call-sites shared between Cards and List; the actual mutation is confirmed below.
+  const dismiss = (id: string, asDuplicate = false): void => requestDismiss(id, asDuplicate);
+  const confirmDismiss = async (): Promise<void> => {
+    if (!dismissForm) return;
+    const ok = await call(dismissForm.id, 'dismiss', 'POST', {
+      reasonCode: dismissForm.duplicate ? 'DUPLICATE' : dismissReason,
+      note: dismissNote.trim() || undefined,
+      asDuplicate: dismissForm.duplicate,
+    });
+    if (ok) { setDismissForm(null); setDismissNote(''); }
+  };
 
   const addSignal = async (): Promise<void> => {
     if (!form.title.trim()) return;
@@ -238,11 +277,12 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
           ...form,
           confidence: Number(form.confidence),
           accountName: form.accountName || undefined,
+          ownerId: form.ownerId || undefined,
           evidence: form.evidence || undefined,
         }),
       });
-      if (!res.ok) throw new Error('Could not create the signal');
-      setForm({ title: '', source: 'MANUAL', type: 'NEW_PROJECT', accountName: '', confidence: 50, evidence: '' });
+      if (!res.ok) throw await responseError(res, 'Could not create the signal.');
+      setForm({ title: '', source: 'MANUAL', type: 'NEW_PROJECT', accountName: '', confidence: 50, evidence: '', ownerId: '' });
       setAdding(false);
       router.refresh();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
@@ -261,6 +301,23 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
       {err && <div style={st.err}>{err}</div>}
       {createdLead && <div style={st.success}>Lead created: <a href={`/crm/leads/${createdLead.id}`} style={st.ctxLink}>{createdLead.name}</a> · <a href={`/crm/leads/${createdLead.id}`} style={st.ctxLink}>Open Lead →</a></div>}
 
+      {dismissForm && (
+        <div style={st.dismissBox} role="dialog" aria-label={dismissForm.duplicate ? 'Mark signal as duplicate' : 'Dismiss signal'}>
+          <div style={st.detailTitle}>{dismissForm.duplicate ? 'Mark as duplicate' : 'Dismiss signal'}</div>
+          <div style={st.dismissFields}>
+            <label style={st.fieldLabel}>Reason
+              <select style={st.input} value={dismissReason} disabled={dismissForm.duplicate} onChange={(e) => setDismissReason(e.target.value)}>
+                {SIGNAL_DISMISS_REASON_CODES.filter((reason) => reason !== 'DUPLICATE').map((reason) => <option key={reason} value={reason}>{label(reason)}</option>)}
+              </select>
+            </label>
+            <label style={{ ...st.fieldLabel, flex: '1 1 260px' }}>Note (optional)
+              <input style={{ ...st.input, width: '100%' }} value={dismissNote} onChange={(e) => setDismissNote(e.target.value)} placeholder="Add context for the decision" />
+            </label>
+          </div>
+          <div style={st.cardActions}><button type="button" style={st.primaryBtn} disabled={busy === dismissForm.id} onClick={() => void confirmDismiss()}>{dismissForm.duplicate ? 'Confirm duplicate' : 'Confirm dismiss'}</button><button type="button" style={st.linkBtn} onClick={() => setDismissForm(null)}>Cancel</button></div>
+        </div>
+      )}
+
       {adding && (
         <div style={st.form}>
           <input style={{ ...st.input, flex: '1 1 260px' }} placeholder="What happened? (signal title)" value={form.title}
@@ -272,6 +329,9 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
           </select>
           <select style={st.input} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
             {TYPES.map((t) => <option key={t} value={t}>{TYPE_ICON[t]} {label(t)}</option>)}
+          </select>
+          <select style={st.input} value={form.ownerId} onChange={(e) => setForm({ ...form, ownerId: e.target.value })} aria-label="Assign signal owner">
+            <option value="">Unassigned</option>{owners.map((owner) => <option key={owner.username} value={owner.username}>{ownerLabel(owner.username)}</option>)}
           </select>
           <label style={st.slider}>
             confidence <b style={{ color: band(form.confidence).color }}>{form.confidence}</b>
@@ -293,9 +353,13 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
           <option value="">All signal types</option>{TYPES.map((type) => <option key={type} value={type}>{TYPE_ICON[type] ?? '•'} {label(type)}</option>)}
         </select>
         <select style={st.input} value={statusFilter} onChange={(e) => updateQuery({ status: e.target.value })} aria-label="Filter radar by status">
-          <option value="">Open statuses</option>{['NEW', 'REVIEWING', 'RESEARCHING'].map((status) => <option key={status} value={status}>{label(status)}</option>)}
+          <option value="">All statuses (open by default)</option>{SIGNAL_STATUSES.map((status) => <option key={status} value={status}>{label(status)}</option>)}
         </select>
-        <input style={{ ...st.input, width: 125 }} value={ownerFilter} onChange={(e) => updateQuery({ ownerId: e.target.value })} placeholder="Owner ID" aria-label="Filter radar by owner" />
+        <select style={{ ...st.input, width: 170 }} value={ownerFilter} onChange={(e) => updateQuery({ ownerId: e.target.value })} aria-label="Filter radar by owner">
+          <option value="">All owners</option>
+          {owners.map((owner) => <option key={owner.username} value={owner.username}>{ownerLabel(owner.username)} · {owner.roleLabel}</option>)}
+          {ownerFilter && !owners.some((owner) => owner.username === ownerFilter) ? <option value={ownerFilter}>{ownerFilter}</option> : null}
+        </select>
         <input style={{ ...st.input, width: 125 }} value={accountFilter} onChange={(e) => updateQuery({ accountId: e.target.value })} placeholder="Account ID" aria-label="Filter radar by account" />
         <input style={st.input} type="date" value={detectedFrom} onChange={(e) => updateQuery({ detectedFrom: e.target.value })} aria-label="Signals detected from" />
         <input style={st.input} type="date" value={detectedTo} onChange={(e) => updateQuery({ detectedTo: e.target.value })} aria-label="Signals detected to" />
@@ -306,7 +370,7 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
         {(search || sourceFilter || typeFilter || statusFilter || ownerFilter || accountFilter || detectedFrom || detectedTo || confidenceMin || confidenceMax || sort) && <button type="button" style={st.linkBtn} onClick={() => updateQuery({ search: undefined, source: undefined, type: undefined, status: undefined, ownerId: undefined, accountId: undefined, detectedFrom: undefined, detectedTo: undefined, confidenceMin: undefined, confidenceMax: undefined, sort: undefined, offset: undefined })}>Clear filters</button>}
         <button type="button" style={st.ghostBtn} onClick={() => { const qs = new URLSearchParams(params.toString()); qs.delete('offset'); window.location.href = `/api/crm/signals/radar/export${qs.toString() ? `?${qs}` : ''}`; }}>Export CSV</button>
         <SaveViewButton excludeParams={['offset', 'limit']} />
-        <span style={st.filterCount}>{total} open signals · page {total ? Math.floor(offset / limit) + 1 : 0}</span>
+        <span style={st.filterCount}>{total} {statusFilter ? label(statusFilter) : 'open'} signals · page {total ? Math.floor(offset / limit) + 1 : 0}</span>
       </div>
 
       {/* ── Cards ── */}
@@ -378,6 +442,8 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
                     <DetailSection title="Scope">
                       <p style={st.detailText}>{s.description ?? s.title}</p>
                       {s.evidence && <p style={{ ...st.detailText, color: 'var(--muted)' }}>Evidence: {s.evidence}</p>}
+                      {s.accountId && <a href={`/crm/accounts/${s.accountId}`} style={st.ctxLink}>Account 360: {s.accountName ?? s.accountId} →</a>}
+                      {s.contactId && <a href={`/crm/contacts/${s.contactId}`} style={st.ctxLink}>Contact 360: {s.contactId} →</a>}
                       {contextHref(s.contextType, s.contextId) && (
                         <a href={contextHref(s.contextType, s.contextId)!} style={st.ctxLink}>Origin: {s.contextType} record →</a>
                       )}
@@ -387,7 +453,7 @@ export default function SignalsRadar({ data, initialQuery = {} }: { data: RadarD
                         {SYSTEM_SOURCES.has(s.source)
                           ? `Emitted automatically by the ${label(s.source)} reactor`
                           : `Captured from ${label(s.source)}`}
-                        {' '}on {new Date(s.detectedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })} · owner {s.ownerId ?? 'unassigned'}
+                        {' '}on {new Date(s.detectedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })} · owner {ownerLabel(s.ownerId)}
                       </p>
                       {s.reviewedAt && <p style={{ ...st.detailText, color: 'var(--muted)' }}>Last reviewed {new Date(s.reviewedAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}{s.reviewedBy ? ` by ${s.reviewedBy}` : ''}</p>}
                     </DetailSection>
@@ -439,6 +505,9 @@ const st: Record<string, CSSProperties> = {
   addBtn: { alignSelf: 'center', fontSize: 13, fontWeight: 600, padding: '10px 16px', borderRadius: 10, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', cursor: 'pointer', whiteSpace: 'nowrap' },
   err: { border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 10, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 12 },
   success: { border: '1px solid var(--good)', color: 'var(--good)', borderRadius: 10, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 12 },
+  dismissBox: { border: '1px solid var(--accent)', borderRadius: 10, padding: 12, marginBottom: 14, background: 'var(--panel)' },
+  dismissFields: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end' },
+  fieldLabel: { display: 'flex', flexDirection: 'column', gap: 5, color: 'var(--muted)', fontSize: 11.5, minWidth: 190 },
   reviewBox: { border: '1px solid var(--accent)', borderRadius: 10, padding: 12, marginTop: 10, background: 'var(--panel-2)' },
   form: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', border: '1px dashed var(--border)', borderRadius: 12, padding: 12, marginBottom: 16, background: 'var(--panel)' },
   filters: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 12, padding: 10, marginBottom: 16, background: 'var(--panel)' },

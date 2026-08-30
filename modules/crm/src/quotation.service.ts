@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { assertSameTenant, diffFields, estimateLine, type DomainEvent, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
-import { EVENT_STORE, TX_RUNNER, type EventStore, type TxHandle, type TxRunner, AccessService, TenantContext } from '@aura/core';
+import { assertSameTenant, decisionReadiness, diffFields, estimateLine, type DomainEvent, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { DOCUMENT_REQUIREMENT_STORE, EVENT_STORE, TX_RUNNER, type DocumentRequirementStore, type EventStore, type TxHandle, type TxRunner, AccessService, TenantContext } from '@aura/core';
 import {
   QUOTATION_EVENT,
   QUOTATION_ACTIONS,
@@ -23,6 +23,18 @@ import type { QuotationSummary } from './quotation-store';
 
 export { QUOTATION_ACTIONS, type QuotationAction };
 
+export interface CommercialPricingSummaryRow {
+  quotationId: Id;
+  quoteNumber: string;
+  revision: number;
+  status: Quotation['status'];
+  total: number;
+  totalCost: number | null;
+  profit: number | null;
+  marginPercent: number | null;
+  pricingKnown: boolean;
+}
+
 /**
  * Quotation service — owns `aura_crm_quotations`, emits `crm.quotation.*` on the spine.
  * The pre-sales quote that precedes a Contract / Customer Invoice.
@@ -38,6 +50,9 @@ export class QuotationService {
     private readonly access: AccessService,
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
     @Optional() @Inject(TX_RUNNER) private readonly tx: TxRunner | null = null,
+    // Optional to keep the in-memory/domain harness usable. In the application this is wired by
+    // CoreModule; governed quotations require a persisted commercial checklist at approval.
+    @Optional() @Inject(DOCUMENT_REQUIREMENT_STORE) private readonly requirements: DocumentRequirementStore | null = null,
   ) {}
 
   /** Keep the no-DB test/dev path usable while making PostgreSQL writes atomic in production. */
@@ -137,6 +152,7 @@ export class QuotationService {
           `quotation ${q.quoteNumber} approval`,
         );
       }
+      if (action === 'approve') await this.assertApprovalReadiness(q);
       updated = applyQuotationAction(q, action);
       const eventType = action === 'send' ? QUOTATION_EVENT.sent : action === 'accept' ? QUOTATION_EVENT.accepted : QUOTATION_EVENT.statusChanged;
       const events: DomainEvent[] = [makeEvent({
@@ -168,6 +184,29 @@ export class QuotationService {
       this.logger.log(`Commercial baseline locked for ${updated.quoteNumber}: total ${lockedBaseline.total} (${lockedBaseline.id})`);
     }
     return updated;
+  }
+
+  /**
+   * Evidence readiness is a domain rule for every governed quotation. Only rows explicitly marked
+   * legacy by the migration marker retain the no-checklist compatibility path; a missing checklist
+   * on a new quotation is a governance failure, not an exemption. Every caller (register,
+   * Commercial queue, API or Quotation 360) receives the same server decision.
+   * A UI warning is never sufficient to authorize an approval.
+   */
+  private async assertApprovalReadiness(q: Quotation): Promise<void> {
+    if (!this.requirements) return;
+    if (q.approvalReadinessMode === 'legacy') return;
+    const rows = await this.requirements.list({ tenantId: q.tenantId, entityType: 'crm.quotation', entityId: q.id });
+    if (rows.length === 0) {
+      throw new Error(`quotation ${q.quoteNumber} approval blocked: readiness checklist is not configured`);
+    }
+    const readiness = decisionReadiness(rows);
+    if (readiness.verdict === 'READY') return;
+    const missing = readiness.missing.map((m) => `${m.type} (${m.have}/${m.need})`).join(', ');
+    throw new Error(
+      `quotation ${q.quoteNumber} approval blocked: decision readiness is ${readiness.verdict}` +
+      (missing ? `; missing evidence: ${missing}` : ''),
+    );
   }
 
   /** The locked approved-price baseline for a quotation (null until it has been approved). */
@@ -394,5 +433,42 @@ export class QuotationService {
 
   summary(filter: QuotationFilter): Promise<QuotationSummary> {
     return this.store.summary(filter);
+  }
+
+  /**
+   * Canonical read model for the Commercial Control Center. Financial fields come from the same
+   * pricing projection used by Quotation 360; the quotation line payload is never treated as a
+   * cost contract. Missing cost stays null/unknown rather than becoming a fabricated zero.
+   */
+  async commercialPricingSummary(filter: QuotationFilter = {}): Promise<{ rows: CommercialPricingSummaryRow[] }> {
+    const quotes = await this.store.list({ ...filter, limit: filter.limit ?? 500 });
+    const rows = await Promise.all(quotes.map(async (q): Promise<CommercialPricingSummaryRow> => {
+      // Once approved, the immutable baseline is the only accepted commercial truth. Never fall
+      // back to a mutable quotation pricing draft for historical reporting.
+      const baseline = ['approved', 'sent', 'under_negotiation', 'accepted'].includes(q.status)
+        ? await this.getBaseline(q.tenantId, q.id)
+        : null;
+      const source = baseline
+        ? { lines: baseline.lines, pricing: baseline.pricing, estimation: baseline.estimation }
+        : { lines: q.lines, pricing: q.pricing, estimation: q.estimation };
+      const pricing = baseline && !baseline.pricing && !baseline.estimation
+        ? null
+        : source.estimation && source.estimation.length > 0
+          ? computeEstimationPricing(source.lines, source.estimation)
+          : computeQuotationPricing(source.lines, source.pricing);
+      const pricingKnown = pricing !== null && pricing.totalCost > 0;
+      return {
+        quotationId: q.id,
+        quoteNumber: q.quoteNumber,
+        revision: q.revision,
+        status: q.status,
+        total: q.total,
+        totalCost: pricingKnown ? pricing!.totalCost : null,
+        profit: pricingKnown ? pricing!.profit : null,
+        marginPercent: pricingKnown ? pricing!.marginPercent : null,
+        pricingKnown,
+      };
+    }));
+    return { rows };
   }
 }

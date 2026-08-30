@@ -2,6 +2,8 @@ import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { QuotationLine } from './domain/quotation';
+import type { EstimationLineInput } from '@aura/shared';
+import type { QuotationPricingInput } from './domain/quotation-pricing';
 import type { CommercialBaseline } from './domain/commercial-baseline';
 import type { CommercialBaselineStore } from './commercial-baseline-store';
 
@@ -17,6 +19,8 @@ interface Row {
   source_opportunity_id: string | null;
   source_tender_id: string | null;
   lines: QuotationLine[];
+  pricing: QuotationPricingInput | string | null;
+  estimation: EstimationLineInput[] | string | null;
   subtotal: string;
   vat_total: string;
   total: string;
@@ -27,7 +31,7 @@ interface Row {
 
 const COLS =
   'id, tenant_id, company_id, quotation_id, quote_number, revision, customer_name, account_id, ' +
-  'source_opportunity_id, source_tender_id, lines, subtotal, vat_total, total, locked_by, locked_at, created_at';
+  'source_opportunity_id, source_tender_id, lines, pricing, estimation, subtotal, vat_total, total, locked_by, locked_at, created_at';
 
 function rowTo(r: Row): CommercialBaseline {
   return {
@@ -42,6 +46,9 @@ function rowTo(r: Row): CommercialBaseline {
     sourceOpportunityId: r.source_opportunity_id,
     sourceTenderId: r.source_tender_id,
     lines: r.lines ?? [],
+    pricing: typeof r.pricing === 'string' ? (JSON.parse(r.pricing) as QuotationPricingInput) : (r.pricing ?? null),
+    estimation: r.estimation == null ? null
+      : (typeof r.estimation === 'string' ? (JSON.parse(r.estimation) as EstimationLineInput[]) : r.estimation),
     subtotal: Number(r.subtotal),
     vatTotal: Number(r.vat_total),
     total: Number(r.total),
@@ -65,11 +72,12 @@ export class PostgresCommercialBaselineStore implements CommercialBaselineStore 
   private async insert(executor: Pool | PoolClient, b: CommercialBaseline): Promise<boolean> {
     const result = await executor.query(
       `INSERT INTO public.aura_crm_commercial_baselines (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (tenant_id, quotation_id) DO NOTHING`,
       [
         b.id, b.tenantId, b.companyId, b.quotationId, b.quoteNumber, b.revision, b.customerName,
         b.accountId, b.sourceOpportunityId, b.sourceTenderId, JSON.stringify(b.lines),
+        b.pricing ? JSON.stringify(b.pricing) : null, b.estimation ? JSON.stringify(b.estimation) : null,
         b.subtotal, b.vatTotal, b.total, b.lockedBy, b.lockedAt, b.createdAt,
       ],
     );

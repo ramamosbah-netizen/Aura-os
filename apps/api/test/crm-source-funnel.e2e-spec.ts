@@ -39,6 +39,20 @@ describe('C5 source-to-margin funnel (HTTP)', () => {
 
   const funnel = async () => (await http.get('/api/v1/crm/source-funnel').expect(200)).body;
   const find = (f: { sources: Array<{ source: string }> }, s: string) => f.sources.find((x) => x.source === s);
+  const makeApprovalReady = async (quoteId: string): Promise<void> => {
+    await http.post('/api/v1/document-requirements/seed')
+      .send({ entityType: 'crm.quotation', entityId: quoteId }).expect(201);
+    const result = (await http.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${quoteId}`).expect(200)).body as {
+      requirements: Array<{ id: string; type: string; requiredCount: number }>;
+    };
+    for (const requirement of result.requirements) {
+      for (let i = 0; i < requirement.requiredCount; i++) {
+        await http.post(`/api/v1/document-requirements/${requirement.id}/evidence`)
+          .send({ type: requirement.type === 'VENDOR_QUOTE' ? 'EXTERNAL_REFERENCE' : 'DOCUMENT_ID', reference: `${requirement.type}-${i + 1}` })
+          .expect(201);
+      }
+    }
+  };
 
   it('walks lead source → won deal → contract → project cost → actual margin', async () => {
     const account = (await http.post('/api/v1/crm/accounts').send({ name: 'Emaar FM' }).expect(201)).body;
@@ -70,6 +84,7 @@ describe('C5 source-to-margin funnel (HTTP)', () => {
         lines: [{ description: 'Cameras + install', quantity: 1, unitPrice: 500_000 }],
       })
       .expect(201)).body;
+    await makeApprovalReady(quote.id);
     // R3 governance: approve locks the baseline, and only an approved quote can be sent.
     const status = async (action: string) =>
       await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action }).expect(200);
@@ -120,6 +135,7 @@ describe('C5 source-to-margin funnel (HTTP)', () => {
         sourceOpportunityId: opp.id, lines: [{ description: 'BMS', quantity: 1, unitPrice: 200_000 }],
       })
       .expect(201)).body;
+    await makeApprovalReady(quote.id);
     for (const action of ['approve', 'send', 'accept']) {
       await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action }).expect(200);
     }

@@ -20,6 +20,22 @@ async function eventually<T>(fetcher: () => Promise<T[]>, tries = 20): Promise<T
   return fetcher();
 }
 
+/** New quotations are governed by default; satisfy the persisted checklist before approval. */
+async function makeApprovalReady(http: ReturnType<typeof request>, quoteId: string): Promise<void> {
+  await http.post('/api/v1/document-requirements/seed')
+    .send({ entityType: 'crm.quotation', entityId: quoteId }).expect(201);
+  const result = (await http.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${quoteId}`).expect(200)).body as {
+    requirements: Array<{ id: string; type: string; requiredCount: number }>;
+  };
+  for (const requirement of result.requirements) {
+    for (let i = 0; i < requirement.requiredCount; i++) {
+      await http.post(`/api/v1/document-requirements/${requirement.id}/evidence`)
+        .send({ type: requirement.type === 'VENDOR_QUOTE' ? 'EXTERNAL_REFERENCE' : 'DOCUMENT_ID', reference: `${requirement.type}-${i + 1}` })
+        .expect(201);
+    }
+  }
+}
+
 describe('business-chain e2e (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
@@ -83,6 +99,7 @@ describe('business-chain e2e (HTTP)', () => {
       .expect(201);
     const quote = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
     expect(quote.sourceTenderId).toBe(tender.id);
+    await makeApprovalReady(http, quote.id);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'submit_review' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);
 

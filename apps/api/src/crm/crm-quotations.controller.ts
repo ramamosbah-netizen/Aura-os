@@ -210,6 +210,23 @@ export class CrmQuotationsController {
     return this.quotations.summary({ tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo });
   }
 
+  /** Commercial Control Center read model. Margin is sourced from the quotation pricing projection,
+   * never inferred from the customer-facing line payload. */
+  @Permissions('crm.quotation.read')
+  @Get('commercial-pricing-summary')
+  commercialPricingSummary(
+    @Query('status') status?: Quotation['status'],
+    @Query('accountId') accountId?: string,
+    @Query('search') search?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('issueDateFrom') issueDateFrom?: string,
+    @Query('issueDateTo') issueDateTo?: string,
+  ) {
+    return this.quotations.commercialPricingSummary({
+      tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo,
+    });
+  }
+
   /** Complete, tenant-scoped CSV export. Streams in bounded batches rather than exporting the UI page. */
   @Permissions('crm.quotation.read')
   @Get('export.csv')

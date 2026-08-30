@@ -17,6 +17,7 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 interface Tender { id: string }
 interface BOQItem { id: string }
 interface Quotation { id: string; quoteNumber: string; status: string }
+interface Requirement { id: string; type: string; requiredCount: number }
 
 describe('tender pricing governance e2e (HTTP)', () => {
   let app: INestApplication;
@@ -59,6 +60,22 @@ describe('tender pricing governance e2e (HTTP)', () => {
   const generateQuote = async (tenderId: string): Promise<Quotation> =>
     (await http.post(`/api/v1/tendering/tenders/${tenderId}/quotation`).send({}).expect(201)).body as Quotation;
 
+  /** New quotations are governed by default; seed and satisfy the persisted checklist before approval. */
+  const makeApprovalReady = async (quoteId: string): Promise<void> => {
+    await http.post('/api/v1/document-requirements/seed')
+      .send({ entityType: 'crm.quotation', entityId: quoteId }).expect(201);
+    const result = (await http.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${quoteId}`).expect(200)).body as {
+      requirements: Requirement[];
+    };
+    for (const requirement of result.requirements) {
+      for (let i = 0; i < requirement.requiredCount; i++) {
+        await http.post(`/api/v1/document-requirements/${requirement.id}/evidence`)
+          .send({ type: requirement.type === 'VENDOR_QUOTE' ? 'EXTERNAL_REFERENCE' : 'DOCUMENT_ID', reference: `${requirement.type}-${i + 1}` })
+          .expect(201);
+      }
+    }
+  };
+
   it('stays editable while the generated quotation is still a draft', async () => {
     const { tender, item } = await pricedTender('TPG editable');
     await generateQuote(tender.id);
@@ -72,6 +89,7 @@ describe('tender pricing governance e2e (HTTP)', () => {
   it('locks the estimate once the generated quotation is approved, and refuses with 409', async () => {
     const { tender, item } = await pricedTender('TPG approved');
     const quote = await generateQuote(tender.id);
+    await makeApprovalReady(quote.id);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);
 
     const res = await http.post(`/api/v1/tendering/tenders/${tender.id}/pricing/items/${item.id}`).send({
@@ -84,6 +102,7 @@ describe('tender pricing governance e2e (HTTP)', () => {
   it('stays locked through sent and accepted — the reported hole', async () => {
     const { tender, item } = await pricedTender('TPG accepted');
     const quote = await generateQuote(tender.id);
+    await makeApprovalReady(quote.id);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'send' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'accept' }).expect(200);
@@ -105,6 +124,7 @@ describe('tender pricing governance e2e (HTTP)', () => {
   it('reopens once the committed quote is superseded by a revision', async () => {
     const { tender, item } = await pricedTender('TPG revised');
     const quote = await generateQuote(tender.id);
+    await makeApprovalReady(quote.id);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'send' }).expect(200);
     await http.post(`/api/v1/tendering/tenders/${tender.id}/pricing/items/${item.id}`)
@@ -121,6 +141,7 @@ describe('tender pricing governance e2e (HTTP)', () => {
   it('an accepted quote points at a variation, not a revision (which would be refused)', async () => {
     const { tender, item } = await pricedTender('TPG accepted-route');
     const quote = await generateQuote(tender.id);
+    await makeApprovalReady(quote.id);
     for (const action of ['approve', 'send', 'accept']) {
       await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action }).expect(200);
     }
@@ -135,6 +156,7 @@ describe('tender pricing governance e2e (HTTP)', () => {
   it('a dead quote (rejected) holds no commitment — the estimate stays open for the next bid', async () => {
     const { tender, item } = await pricedTender('TPG rejected');
     const quote = await generateQuote(tender.id);
+    await makeApprovalReady(quote.id);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'send' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'reject' }).expect(200);

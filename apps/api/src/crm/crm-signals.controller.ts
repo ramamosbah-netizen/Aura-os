@@ -94,7 +94,7 @@ export class CrmSignalsController {
       sort, direction };
     const [page, summary] = await Promise.all([
       this.signals.listPaged(filter, parsePageParams(limit, offset), ctx.actorId),
-      this.signals.summary({ tenantId, source, type, ownerId, accountId, contextType, contextId, search, detectedFrom, detectedTo,
+      this.signals.summary({ tenantId, status, source, type, ownerId, accountId, contextType, contextId, search, detectedFrom, detectedTo,
         confidenceMin: Number.isFinite(parsedMin) ? parsedMin : undefined, confidenceMax: Number.isFinite(parsedMax) ? parsedMax : undefined }, ctx.actorId),
     ]);
     return {
@@ -140,7 +140,7 @@ export class CrmSignalsController {
   }
 
   private readonly radarRow = (s: Signal) => ({
-    id: s.id, title: s.title, source: s.source, type: s.type, status: s.status, accountId: s.accountId, accountName: s.accountName,
+    id: s.id, title: s.title, source: s.source, type: s.type, status: s.status, accountId: s.accountId, accountName: s.accountName, contactId: s.contactId,
     confidence: s.confidence, detectedAt: s.detectedAt, ownerId: s.ownerId, evidence: s.evidence, description: s.description,
     contextType: s.contextType, contextId: s.contextId, reviewedBy: s.reviewedBy, reviewedAt: s.reviewedAt,
     dismissalReasonCode: s.dismissalReasonCode, dismissalNote: s.dismissalNote, promotedLeadId: s.promotedLeadId,

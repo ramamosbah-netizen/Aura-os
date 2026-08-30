@@ -51,6 +51,22 @@ describe('G5 stage gates (HTTP)', () => {
   const move = async (id: string, body: Record<string, unknown>): Promise<request.Response> =>
     http.patch(`/api/v1/crm/opportunities/${id}`).send(body);
 
+  /** New quotations are governed by default; satisfy the persisted checklist before approval. */
+  const makeApprovalReady = async (quoteId: string): Promise<void> => {
+    await http.post('/api/v1/document-requirements/seed')
+      .send({ entityType: 'crm.quotation', entityId: quoteId }).expect(201);
+    const result = (await http.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${quoteId}`).expect(200)).body as {
+      requirements: Array<{ id: string; type: string; requiredCount: number }>;
+    };
+    for (const requirement of result.requirements) {
+      for (let i = 0; i < requirement.requiredCount; i++) {
+        await http.post(`/api/v1/document-requirements/${requirement.id}/evidence`)
+          .send({ type: requirement.type === 'VENDOR_QUOTE' ? 'EXTERNAL_REFERENCE' : 'DOCUMENT_ID', reference: `${requirement.type}-${i + 1}` })
+          .expect(201);
+      }
+    }
+  };
+
   // ── the gate refuses, and refuses as a CONFLICT ────────────────────────────────────────────────
   it('→ proposal is refused when the need is unconfirmed and nobody is mapped', async () => {
     const bare = (await http.post('/api/v1/crm/opportunities').send({ title: 'Nobody', value: 100 }).expect(201)).body;
@@ -93,6 +109,7 @@ describe('G5 stage gates (HTTP)', () => {
     expect(drafted.body.message).toMatch(/a draft is not a proposal/i);
 
     // Approve + send it, and the gate opens.
+    await makeApprovalReady(quote.id);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'send' }).expect(200);
     await move(opp.id, { stage: 'negotiation' }).then((r) => expect(r.status).toBe(200));

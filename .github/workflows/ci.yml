@@ -45,6 +45,17 @@ jobs:
       - name: Unit + module tests (coverage — TIER-2 #42)
         run: pnpm test:coverage
 
+      # Sales IA remediation gates. Keep these explicit so ownership regressions remain visible
+      # even when the broader workspace test command is reorganized.
+      - name: Sales ownership fitness — API permissions, readiness and tenant audit
+        run: pnpm --filter @aura/api test -- --run src/crm/negotiation.controller.test.ts src/crm/crm-quotations.security.test.ts src/crm/lead-pipeline-ownership.security.test.ts src/crm/quotation-readiness-migration.fitness.test.ts
+
+      - name: Sales ownership fitness — CRM pricing/baseline lineage
+        run: pnpm --filter @aura/crm test -- --run src/quotation.service.test.ts
+
+      - name: Sales ownership fitness — web route, queue and Lead/Pipeline parity
+        run: pnpm --filter @aura/web test -- --run crm-sales-route-ownership.fitness.test.ts crm-lead-parity.fitness.test.ts commercial-source-truth.fitness.test.ts components/commercial-ownership.fitness.test.ts
+
       - name: API HTTP e2e (Supertest — TIER-2 #39/#40)
         run: pnpm --filter @aura/api test:e2e
 

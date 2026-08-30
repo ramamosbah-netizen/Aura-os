@@ -19,7 +19,7 @@ const norm = (s: string): string => s.trim().toLowerCase();
 
 export default function LeadCapture({ onSaved, buttonLabel = '+ New Lead' }: { onSaved: () => void; buttonLabel?: string }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ companyName: '', name: '', phone: '', email: '', requirement: '', source: 'website', assignedTo: '' });
+  const [form, setForm] = useState({ companyName: '', name: '', phone: '', email: '', requirement: '', source: 'website' });
   const [dup, setDup] = useState<DupPreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -67,11 +67,10 @@ export default function LeadCapture({ onSaved, buttonLabel = '+ New Lead' }: { o
         body: JSON.stringify({
           name: form.name.trim(), companyName: form.companyName.trim() || null, phone: form.phone.trim() || null,
           email: form.email.trim() || null, requirement: form.requirement.trim() || null, source: form.source,
-          assignedTo: form.assignedTo.trim() || null,
         }),
       });
       if (!res.ok) { const e = (await res.json().catch(() => ({}))) as { message?: string; error?: string }; setErr(e.message ?? e.error ?? 'Could not save the lead.'); return; }
-      setForm({ companyName: '', name: '', phone: '', email: '', requirement: '', source: 'website', assignedTo: '' });
+      setForm({ companyName: '', name: '', phone: '', email: '', requirement: '', source: 'website' });
       setDup(null);
       setOpen(false);
       onSaved();
@@ -87,7 +86,7 @@ export default function LeadCapture({ onSaved, buttonLabel = '+ New Lead' }: { o
             <div style={st.drawerHead}>
               <div>
                 <h3 style={st.drawerTitle}>New Lead</h3>
-                <p style={st.drawerSub}>Quick capture — value, close date and quotation come later, after qualification.</p>
+                <p style={st.drawerSub}>Quick capture — value, owner, close date and quotation come later, after qualification. Assign the lead from Lead 360.</p>
               </div>
               <button type="button" onClick={() => setOpen(false)} style={st.closeBtn} aria-label="Close">✕</button>
             </div>
@@ -99,7 +98,6 @@ export default function LeadCapture({ onSaved, buttonLabel = '+ New Lead' }: { o
               <Field label="Email"><input value={form.email} onChange={set('email')} placeholder="name@company.com" style={st.input} /></Field>
               <Field label="Interest / requirement" span2><textarea value={form.requirement} onChange={set('requirement')} placeholder="e.g. CCTV + Access Control for a new villa" style={{ ...st.input, minHeight: 60, resize: 'vertical' }} /></Field>
               <Field label="Source"><select value={form.source} onChange={set('source')} style={st.input}>{['website', 'referral', 'campaign', 'cold_call', 'other'].map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></Field>
-              <Field label="Owner"><input value={form.assignedTo} onChange={set('assignedTo')} placeholder="e.g. u-sales" style={st.input} /></Field>
             </div>
 
             {matches.length > 0 && (

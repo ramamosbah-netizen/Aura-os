@@ -1,8 +1,11 @@
 'use client';
 
-import { type CSSProperties, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Timeline from './timeline';
+import { QuotationNegotiationPanel } from './negotiation-tab';
+import QuotationApprovalReadiness from './quotation-approval-readiness';
+import QuotationDocumentsPanel from './quotation-documents-panel';
 import type { AssessmentInput } from '@aura/shared';
 import DataStateNotice from './ui/data-state';
 import type { DataError } from '@/lib/data-error';
@@ -16,7 +19,8 @@ import {
 
 // Quotation 360 — the commercial document command center on the shared CRM
 // record-shell: Header + lifecycle Actions, KPIs (value/margin/validity), fixed
-// Tabs (Overview / Pricing / Revisions / Activity), Insights rail, Timeline foot.
+// Tabs (Overview / Pricing / Revisions / Terms / Negotiation / Approval / Documents / Activity),
+// Insights rail, Timeline foot. The quotation record is the canonical command center.
 
 interface Line { description: string; quantity: number; unitPrice: number; vatRate: number; lineNet: number; lineVat: number }
 export interface Quotation {
@@ -74,6 +78,11 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const operationKeys = useRef<Record<string, string>>({});
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const focus = new URLSearchParams(window.location.search).get('focus');
+    if (focus === 'approval' || focus === 'negotiation' || focus === 'documents') setTab(focus);
+  }, [setTab]);
   const operationKey = (name: string): string => {
     const existing = operationKeys.current[name];
     if (existing) return existing;
@@ -314,6 +323,10 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
     { id: 'overview', label: 'Overview' },
     { id: 'pricing', label: 'Pricing & margin' },
     { id: 'revisions', label: 'Revisions', count: revisions.length > 1 ? revisions.length : undefined },
+    { id: 'terms', label: 'Terms' },
+    { id: 'negotiation', label: 'Negotiation' },
+    { id: 'approval', label: 'Approval' },
+    { id: 'documents', label: 'Documents' },
     { id: 'activity', label: 'Activity' },
   ];
 
@@ -459,6 +472,30 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
               ))}
             </div>
           )}
+        </RecordCard>
+      )}
+
+      {tab === 'terms' && (
+        <RecordCard title="Commercial terms">
+          <CommercialTerms q={q} editable={q.status === 'draft' || q.status === 'internal_review'} onSaved={() => router.refresh()} />
+        </RecordCard>
+      )}
+
+      {tab === 'negotiation' && (
+        <RecordCard title="Negotiation">
+          <QuotationNegotiationPanel quotationId={q.id} quoteNumber={q.quoteNumber} customerName={q.customerName} total={q.total} />
+        </RecordCard>
+      )}
+
+      {tab === 'approval' && (
+        <RecordCard title="Approval context">
+          <QuotationApprovalReadiness quotationId={q.id} />
+        </RecordCard>
+      )}
+
+      {tab === 'documents' && (
+        <RecordCard title="Quotation documents">
+          <QuotationDocumentsPanel quotationId={q.id} />
         </RecordCard>
       )}
 

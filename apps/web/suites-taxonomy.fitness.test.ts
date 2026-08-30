@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AURA_SUITES, activeSuite, suiteSections } from '@/lib/suites';
+import { AURA_SUITES, activeSuite, suiteFunctions, suiteSections } from '@/lib/suites';
 import { defaultWorkspaceConfig, visibleFunctionIds } from '@aura/shared';
 
 // The suite taxonomy is the backbone of the sidebar IA (Sidebar → Suite Home → Functions). These
@@ -35,6 +35,14 @@ describe('AURA suite taxonomy', () => {
   it('routes variations to Commercial, not Project Delivery', () => {
     expect(activeSuite('/projects/variations')?.id).toBe('commercial');
     expect(activeSuite('/projects/dashboard')?.id).toBe('project-delivery');
+  });
+
+  it('exposes Radar from the Sales suite without creating a second owner', () => {
+    const sales = AURA_SUITES.find((suite) => suite.id === 'sales');
+    expect(sales).toBeDefined();
+    expect(suiteFunctions(sales!).some((item) => item.href === '/crm/radar')).toBe(true);
+    expect(sales?.capabilities).toEqual(expect.arrayContaining([{ label: 'Sales Radar', status: 'IMPLEMENTED' }]));
+    expect(activeSuite('/crm/radar')?.id).toBe('sales');
   });
 
   it('owns the canonical route in Control and leaves the legacy My Work path unowned', () => {

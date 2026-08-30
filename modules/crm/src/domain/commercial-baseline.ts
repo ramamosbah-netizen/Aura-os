@@ -1,5 +1,7 @@
 import { type Id, newId, moneyNumber as round2 } from '@aura/shared';
 import type { Quotation, QuotationLine } from './quotation';
+import type { QuotationPricingInput } from './quotation-pricing';
+import type { EstimationLineInput } from '@aura/shared';
 
 /**
  * Commercial Baseline (R3 / G-P1-1) — the immutable, point-in-time snapshot of the price a
@@ -26,6 +28,10 @@ export interface CommercialBaseline {
   sourceTenderId: Id | null;
   /** Frozen copy of the approved lines + totals. */
   lines: QuotationLine[];
+  /** Frozen pricing projection used to derive approved cost/profit/margin. */
+  pricing: QuotationPricingInput | null;
+  /** Frozen estimation projection when the quote was priced from the estimation engine. */
+  estimation: EstimationLineInput[] | null;
   subtotal: number;
   vatTotal: number;
   total: number;
@@ -53,6 +59,8 @@ export function makeCommercialBaseline(q: Quotation, lockedBy: Id | null): Comme
     sourceOpportunityId: q.sourceOpportunityId,
     sourceTenderId: q.sourceTenderId,
     lines: q.lines.map((l) => ({ ...l })),
+    pricing: q.pricing ? { lines: q.pricing.lines.map((l) => ({ ...l })) } : null,
+    estimation: q.estimation ? q.estimation.map((e) => ({ ...e })) : null,
     subtotal: q.subtotal,
     vatTotal: q.vatTotal,
     total: q.total,

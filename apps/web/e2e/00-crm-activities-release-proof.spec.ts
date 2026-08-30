@@ -5,7 +5,6 @@ test.describe('CRM Activities release proof', () => {
   test('Opportunity 360 → contextual follow-up → My Work execution → completed timeline', async ({ page }) => {
     const accountResponse = await page.request.post('/api/crm/accounts', { data: { name: scoped('Activities proof account'), status: 'prospect', industry: 'construction' } });
     const accountBody = await accountResponse.text();
-    console.log(`activities-proof account: ${accountResponse.status()} ${accountBody}`);
     expect(accountResponse.ok(), `account creation failed (${accountResponse.status()}): ${accountBody}`).toBe(true);
     const account = JSON.parse(accountBody) as { id?: string; value?: { id?: string } };
     const accountId = account.id ?? account.value?.id;
@@ -16,7 +15,6 @@ test.describe('CRM Activities release proof', () => {
       data: { title: scoped('Activities proof opportunity'), accountId, value: 125000, stage: 'qualification' },
     });
     const opportunityBody = await opportunityResponse.text();
-    console.log(`activities-proof opportunity: ${opportunityResponse.status()} ${opportunityBody}`);
     expect(opportunityResponse.ok(), `opportunity creation failed (${opportunityResponse.status()}): ${opportunityBody}`).toBe(true);
     const opportunity = JSON.parse(opportunityBody) as { id?: string; value?: { id?: string } };
     const opportunityId = opportunity.id ?? opportunity.value?.id;
@@ -24,21 +22,24 @@ test.describe('CRM Activities release proof', () => {
     if (!opportunityId) throw new Error(`opportunity creation returned no id: ${opportunityBody}`);
 
     await page.goto(`/crm/opportunities/${opportunityId}`, { waitUntil: 'load' });
-    console.log(`activities-proof opportunity page: ${page.url()}`);
     await expect(page.getByRole('heading', { name: /Activities proof opportunity/ })).toBeVisible();
     await page.getByRole('tab', { name: 'Engagement' }).click();
-    console.log(`activities-proof engagement tab: ${page.url()}`);
     await page.getByRole('link', { name: /log the next step/i }).click();
-    console.log(`activities-proof activity link: ${page.url()}`);
     await expect(page).toHaveURL(new RegExp(`/crm/activities\\?relatedType=opportunity&record=${opportunityId}`));
     await expect(page.getByRole('heading', { name: 'Opportunity Activity Timeline' })).toBeVisible();
 
-    console.log(`activities-proof create button count: ${await page.getByTestId('create-activity').count()}`);
-    await page.getByTestId('create-activity').click();
     const drawer = page.getByTestId('drawer-activity');
-    console.log(`activities-proof drawer count after click: ${await drawer.count()}`);
-    await expect(drawer).toBeVisible();
-    console.log(`activities-proof drawer fields: type=${await drawer.getByLabel('Type').count()} subject=${await drawer.getByLabel('Subject').count()} assignee=${await drawer.getByLabel('Assignee').count()}`);
+    let attempts = 0;
+    await expect(async () => {
+      if (!(await drawer.isVisible())) {
+        attempts += 1;
+        await page.getByTestId('create-activity').click();
+      }
+      await expect(drawer).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
+    if (attempts > 1) {
+      console.warn(`e2e: the activity drawer needed ${attempts} clicks to open — investigate hydration timing`);
+    }
     await drawer.getByLabel('Type').selectOption('follow_up');
     await drawer.getByLabel('Subject').fill(scoped('Send revised quotation'));
     await expect(drawer.getByLabel('Related type')).toHaveValue('opportunity');

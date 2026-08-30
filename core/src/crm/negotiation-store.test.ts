@@ -57,8 +57,15 @@ describe('InMemoryNegotiationStore', () => {
   it('removes a mis-recorded entry, and reports when there was nothing to remove', async () => {
     const e = at('2026-03-01T00:00:00.000Z');
     await store.append(e);
-    expect(await store.remove(e.id)).toBe(true);
-    expect(await store.remove(e.id)).toBe(false);
+    expect(await store.remove(e.id, 't1')).toBe(true);
+    expect(await store.remove(e.id, 't1')).toBe(false);
     expect(await store.list({ tenantId: 't1' })).toHaveLength(0);
+  });
+
+  it('cannot remove another tenant\'s entry by id', async () => {
+    const e = at('2026-03-01T00:00:00.000Z', { tenantId: 't2' });
+    await store.append(e);
+    expect(await store.remove(e.id, 't1')).toBe(false);
+    expect(await store.list({ tenantId: 't2' })).toHaveLength(1);
   });
 });

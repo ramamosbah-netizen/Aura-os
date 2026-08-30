@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const WEB = resolve(__dirname);
@@ -43,9 +43,51 @@ describe('CRM Sales route ownership', () => {
     expect(nav).not.toContain("{ label: 'Pipeline & Opportunities', href: '/crm/leads'");
   });
 
+  it('exposes the additive Sales & Commercial envelope without inventing new writers', () => {
+    const nav = read('components/nav.ts');
+    for (const destination of [
+      "{ label: 'Tenders', href: '/tendering/tenders'",
+      "{ label: 'Estimation', href: '/tendering/pricing'",
+      "{ label: 'Commercial Decisions', href: '/crm/commercial'",
+      "{ label: 'Contracts', href: '/contracts/contracts'",
+      "{ label: 'Reports', href: '/crm/reports'",
+    ]) expect(nav).toContain(destination);
+    expect(nav).toContain('Current costing workspace — Tender pricing adapter');
+    expect(nav).not.toContain("{ label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Bids & proposals");
+    expect(nav).not.toContain("{ label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Awarded engagements'");
+  });
+
   it('routes legacy reports to the canonical Analytics view', () => {
     const reports = read('app/crm/reports/page.tsx');
     expect(reports).toContain("redirect('/crm/analytics?view=performance')");
+  });
+
+  it('keeps canonical record, print and pricing routes available during remediation', () => {
+    for (const route of [
+      'app/crm/quotations/page.tsx',
+      'app/crm/quotations/register/page.tsx',
+      'app/crm/quotations/[id]/page.tsx',
+      'app/crm/quotations/[id]/pricing/page.tsx',
+      'app/crm/quotations/[id]/print/page.tsx',
+      'app/crm/quotations/[id]/pricing/print/page.tsx',
+      'app/crm/accounts/[id]/page.tsx',
+      'app/crm/accounts/[id]/print/page.tsx',
+      'app/crm/contacts/[id]/page.tsx',
+      'app/crm/leads/[id]/page.tsx',
+      'app/crm/opportunities/[id]/page.tsx',
+    ]) {
+      expect(existsSync(resolve(WEB, route)), `${route} must remain deep-linkable`).toBe(true);
+    }
+  });
+
+  it('preserves the canonical deep-link destinations for queue, leads and opportunities', () => {
+    const queue = read('components/commercial-decision-queue.tsx');
+    const capture = read('components/lead-capture.tsx');
+    const pipeline = read('components/crm-pipeline-client.tsx');
+    expect(queue).toContain('/crm/quotations/${selected.id}?focus=approval');
+    expect(capture).toContain("add(dup.lead, 'Lead', '/crm/leads')");
+    expect(pipeline).toContain('/crm/leads/${l.id}');
+    expect(pipeline).toContain('/crm/opportunities/${d.id}');
   });
 
   it('keeps the operational summary scoped to Opportunities display modes', () => {

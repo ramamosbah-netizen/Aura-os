@@ -97,6 +97,7 @@ export class InstalledBaseService {
         accountId: account.id,
         accountName: account.name,
         contextType: 'installed_base',
+        contextId: account.id,
         evidence: f.reason,
         confidence: 70,
         ownerId: actorId ?? null,

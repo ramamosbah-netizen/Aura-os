@@ -1,17 +1,14 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import type { CommQuotation, CommContract } from './commercial-workspace';
+import type { CommQuotation, CommContract, CommercialPricingSummaryRow } from './commercial-workspace';
 
 // Portfolio-level financials and risk — the aggregate view. Quotation 360 answers
 // "what is this quote worth"; this answers "what is the desk carrying, and what is
 // stopping it". Same data, different question.
 //
-// WHAT IS DELIBERATELY ABSENT: expected profit, gross margin and margin %. They are
-// the first things a commercial summary usually shows, and they cannot be computed
-// here — measured on this tenant, ZERO of ten open quotations carry any unitCost.
-// Rendering "AED 0 profit" against AED 5.5M of live quotes would be a confident lie.
-// Instead, margin coverage is reported as what it is: a gap, sized.
+// Financial fields come from the canonical quotation pricing/baseline read model. This component
+// never infers cost from the customer-facing quotation line payload.
 
 const aed = (n: number): string => 'AED ' + (n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const OPEN = ['draft', 'internal_review', 'approved', 'sent', 'under_negotiation'];
@@ -22,22 +19,21 @@ const daysSince = (iso: string): number => {
   const ms = Date.now() - new Date(iso).getTime();
   return Number.isNaN(ms) ? 0 : Math.max(0, Math.floor(ms / 86400000));
 };
-const lineCost = (q: CommQuotation): number =>
-  (q.lines ?? []).reduce((s, l) => s + ((l as { unitCost?: number }).unitCost ?? 0) * ((l as { quantity?: number }).quantity ?? 0), 0);
-const isCosted = (q: CommQuotation): boolean => lineCost(q) > 0;
-
-export function CommercialFinancials({ quotations, contracts }: {
-  quotations: CommQuotation[]; contracts: CommContract[];
+export function CommercialFinancials({ quotations, contracts, pricingSummary }: {
+  quotations: CommQuotation[]; contracts: CommContract[]; pricingSummary?: CommercialPricingSummaryRow[];
 }) {
   const open = quotations.filter((q) => OPEN.includes(q.status));
   const awaiting = open.filter((q) => q.status === 'internal_review');
   const accepted = quotations.filter((q) => q.status === 'accepted');
   const activeContracts = contracts.filter((c) => c.status !== 'cancelled');
   const sum = (list: CommQuotation[]): number => list.reduce((s, q) => s + (q.total ?? 0), 0);
+  const pricingById = new Map((pricingSummary ?? []).map((row) => [row.quotationId, row]));
+  const isCosted = (q: CommQuotation): boolean => pricingById.get(q.id)?.pricingKnown === true;
 
   const costed = open.filter(isCosted);
   const coverage = open.length ? Math.round((costed.length / open.length) * 100) : 0;
   const uncostedValue = sum(open.filter((q) => !isCosted(q)));
+  const knownProfit = open.reduce((s, q) => s + (pricingById.get(q.id)?.profit ?? 0), 0);
 
   return (
     <>
@@ -46,21 +42,21 @@ export function CommercialFinancials({ quotations, contracts }: {
         <Money label="Awaiting approval" value={aed(sum(awaiting))} sub={`${awaiting.length} quote${awaiting.length === 1 ? '' : 's'}`} tone={awaiting.length ? 'warn' : undefined} />
         <Money label="Accepted (not yet contracted)" value={aed(sum(accepted.filter((q) => !q.convertedContractId)))} sub={`${accepted.filter((q) => !q.convertedContractId).length} to convert`} tone="good" />
         <Money label="Contracted" value={aed(activeContracts.reduce((s, c) => s + (c.value ?? 0), 0))} sub={`${activeContracts.length} active`} tone="good" />
+        <Money label="Expected profit (known)" value={aed(knownProfit)} sub={`${costed.length} priced quote${costed.length === 1 ? '' : 's'}`} tone="good" />
       </div>
 
       {/* The margin gap, stated rather than faked. */}
-      <div style={{ ...st.panel, borderColor: coverage === 0 ? 'var(--bad)' : coverage < 60 ? 'var(--warn)' : 'var(--border)' }}>
+      <div style={{ ...st.panel, borderColor: pricingSummary === undefined ? 'var(--warn)' : coverage === 0 ? 'var(--bad)' : coverage < 60 ? 'var(--warn)' : 'var(--border)' }}>
         <div style={st.panelHead}>
           <b>Margin visibility</b>
-          <span style={st.panelNum}>{coverage}% of open quotes costed</span>
+          <span style={st.panelNum}>{pricingSummary === undefined ? 'Unavailable' : `${coverage}% of open quotes costed`}</span>
         </div>
-        <p style={st.panelBody}>
-          {costed.length} of {open.length} open quotations carry a unit cost, so profit and margin
-          cannot be computed for the other {open.length - costed.length} — <b>{aed(uncostedValue)}</b>{' '}of
-          live quotes whose margin is unknown. Expected profit is deliberately not shown here rather
-          than shown as zero. Build the cost-up on a quote&apos;s pricing sheet and it becomes
-          measurable.
-        </p>
+        <p style={st.panelBody}>{pricingSummary === undefined
+          ? 'The canonical quotation pricing summary could not be loaded. Margin and expected profit are not asserted until the source is available.'
+          : <>{costed.length} of {open.length} open quotations carry a canonical unit cost, so profit and margin
+            cannot be computed for the other {open.length - costed.length} — <b>{aed(uncostedValue)}</b>{' '}of
+            live quotes whose margin is unknown. Expected profit is deliberately not shown here rather
+            than shown as zero. Build the cost-up on a quote&apos;s pricing sheet and it becomes measurable.</>}</p>
       </div>
     </>
   );
@@ -69,8 +65,9 @@ export function CommercialFinancials({ quotations, contracts }: {
 export interface RiskBucket { key: string; label: string; count: number; value: number; tone: 'bad' | 'warn' | 'muted'; detail: string }
 
 /** Aggregate risk across the desk — counts and money, never a score. */
-export function commercialRisks(quotations: CommQuotation[]): RiskBucket[] {
+export function commercialRisks(quotations: CommQuotation[], pricingSummary?: CommercialPricingSummaryRow[]): RiskBucket[] {
   const open = quotations.filter((q) => OPEN.includes(q.status));
+  const pricingById = new Map((pricingSummary ?? []).map((row) => [row.quotationId, row]));
   const t = today();
   const soon = inDays(7);
   const val = (l: CommQuotation[]): number => l.reduce((s, q) => s + (q.total ?? 0), 0);
@@ -78,7 +75,7 @@ export function commercialRisks(quotations: CommQuotation[]): RiskBucket[] {
   const lapsed = open.filter((q) => q.validUntil && q.validUntil < t);
   const expiring = open.filter((q) => q.validUntil && q.validUntil >= t && q.validUntil <= soon);
   const noValidity = open.filter((q) => !q.validUntil);
-  const noCost = open.filter((q) => !isCosted(q));
+  const noCost = pricingSummary === undefined ? [] : open.filter((q) => pricingById.get(q.id)?.pricingKnown !== true);
   const stalledApproval = open.filter((q) => q.status === 'internal_review' && daysSince(q.issueDate) >= 3);
   const noLines = open.filter((q) => !(q.lines ?? []).length);
 
@@ -93,8 +90,8 @@ export function commercialRisks(quotations: CommQuotation[]): RiskBucket[] {
   return buckets.filter((b) => b.count > 0);
 }
 
-export function CommercialRisks({ quotations }: { quotations: CommQuotation[] }) {
-  const buckets = commercialRisks(quotations);
+export function CommercialRisks({ quotations, pricingSummary }: { quotations: CommQuotation[]; pricingSummary?: CommercialPricingSummaryRow[] }) {
+  const buckets = commercialRisks(quotations, pricingSummary);
   if (buckets.length === 0) {
     return <p style={st.clear}>No commercial risk on the open desk — every live quote is costed, dated and moving.</p>;
   }

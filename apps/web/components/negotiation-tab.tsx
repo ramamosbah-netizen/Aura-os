@@ -138,6 +138,47 @@ export default function NegotiationTab({ quotations }: { quotations: CommQuotati
   );
 }
 
+/** Record-scoped negotiation surface used by Quotation 360. The portfolio tab above remains a
+ * triage view; this component owns the same log for one canonical quotation without duplicating
+ * the API or the recording controls. */
+export function QuotationNegotiationPanel({ quotationId, quoteNumber, customerName, total }: {
+  quotationId: string; quoteNumber: string; customerName: string; total: number;
+}) {
+  const [data, setData] = useState<{ entries: Entry[]; moves: Move[]; summary: Summary } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/crm/negotiation?quotationId=${encodeURIComponent(quotationId)}`, { cache: 'no-store' });
+      if (!res.ok) { setErr('Could not load the negotiation log.'); setData(null); return; }
+      setData(await res.json());
+    } catch {
+      setErr('Could not reach the server — the log may be out of date.');
+    } finally {
+      setLoading(false);
+    }
+  }, [quotationId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <div>
+      <div style={st.head}>
+        <div><b>{quoteNumber}</b><span style={st.headSub}> · {customerName} · {aed(total)}</span></div>
+        <span style={st.muted}>Quotation 360 owns the negotiation record</span>
+      </div>
+      {err && <p style={st.err}>{err}</p>}
+      {loading && !data && <p style={st.muted}>Loading the log…</p>}
+      {data && <Summaries summary={data.summary} moves={data.moves} />}
+      {data && <Recorder quotationId={quotationId} onRecorded={() => void load()} />}
+      {data && <Log entries={data.entries} moves={data.moves} />}
+    </div>
+  );
+}
+
 function Summaries({ summary, moves }: { summary: Summary; moves: Move[] }) {
   // With one revision there is no movement to report — saying "0% conceded" would read as a
   // decision to hold firm rather than an absence of revisions.

@@ -32,6 +32,11 @@ export const NEGOTIATION_ENTRY_TYPES: readonly NegotiationEntryType[] = [
   'CUSTOMER_COMMENT', 'COMPETITOR_NOTED', 'SCOPE_CHANGED',
 ];
 
+/** Audit events for the quotation-owned negotiation log. */
+export const NEGOTIATION_EVENT = {
+  deleted: 'crm.negotiation.deleted',
+} as const;
+
 /** Who moved. A negotiation has two sides and a log that cannot tell them apart is not a log. */
 export type NegotiationParty = 'CUSTOMER' | 'US' | 'COMPETITOR';
 

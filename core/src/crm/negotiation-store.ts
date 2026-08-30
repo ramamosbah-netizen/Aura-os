@@ -22,6 +22,6 @@ export interface NegotiationFilter {
 export interface NegotiationStore {
   append(entry: NegotiationEntry): Promise<void>;
   list(filter: NegotiationFilter): Promise<NegotiationEntry[]>;
-  /** Removes a mis-recorded entry. Deletion, never mutation — see above. */
-  remove(id: Id): Promise<boolean>;
+  /** Removes a mis-recorded entry inside its tenant. Deletion, never mutation — see above. */
+  remove(id: Id, tenantId: Id): Promise<boolean>;
 }

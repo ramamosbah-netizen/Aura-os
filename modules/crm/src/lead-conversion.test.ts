@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { NullTxRunner, type AccessService, type EventStore } from '@aura/core';
 import { makeLead } from '@aura/shared';
 import { makeAccount } from './domain/account';
+import { makeContact } from './domain/contact';
 import { InMemoryLeadStore } from './in-memory-lead-store';
 import { InMemoryAccountStore } from './in-memory-account-store';
 import { InMemoryContactStore } from './in-memory-contact-store';
@@ -103,6 +104,38 @@ describe('LeadConversionService', () => {
     expect(res.account.id).toBe(existing.id);
     expect(res.opportunity.accountId).toBe(existing.id);
     expect((await accounts.list({ tenantId: 't1' })).length).toBe(1); // no duplicate account
+  });
+
+  it('links an explicitly selected account/contact and carries value, path and source lineage', async () => {
+    const { svc, leads, accounts, contacts } = harness();
+    const account = makeAccount({ tenantId: 't1', name: 'Mapped Account' });
+    await accounts.create(account);
+    const contact = makeContact({ tenantId: 't1', accountId: account.id, accountName: account.name, name: 'Mapped Contact' });
+    await contacts.save(contact);
+    const lead = makeLead({
+      tenantId: 't1', name: 'Inbound Buyer', companyName: 'Other Name', source: 'campaign', status: 'qualified', estimatedValue: 125000,
+    });
+    await leads.create(lead);
+
+    const res = await svc.convert(lead.id, {
+      actorId: 'u1', accountId: account.id, contactId: contact.id,
+      opportunity: { requiresTender: false, closeDate: '2026-12-01' },
+    });
+
+    expect(res.account).toMatchObject({ action: 'linked', id: account.id });
+    expect(res.contact).toMatchObject({ action: 'linked', id: contact.id });
+    expect(res.opportunity).toMatchObject({ accountId: account.id, value: 125000, source: 'campaign', requiresTender: false, closeDate: '2026-12-01', leadId: lead.id });
+  });
+
+  it('rejects explicit cross-tenant account/contact links without mutating the lead', async () => {
+    const { svc, leads, accounts } = harness();
+    const foreign = makeAccount({ tenantId: 't2', name: 'Foreign' });
+    await accounts.create(foreign);
+    const lead = makeLead({ tenantId: 't1', name: 'Buyer', companyName: 'Local', status: 'qualified' });
+    await leads.create(lead);
+
+    await expect(svc.convert(lead.id, { actorId: 'u1', accountId: foreign.id })).rejects.toThrow(/account .* not found/i);
+    expect((await leads.get(lead.id))?.status).toBe('qualified');
   });
 
   it('honours createNewAccount to override a match (user said "not a duplicate")', async () => {

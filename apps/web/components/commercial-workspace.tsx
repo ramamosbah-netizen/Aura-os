@@ -30,11 +30,15 @@ export interface CommSheet {
   tenderId: string; tenderTitle: string; reference: string | null; client: string | null; status: string;
   pricedItems: number; boqItems: number; directCost: number; sellingValue: number; tenderValue: number; marginPercent: number;
 }
+export interface CommercialPricingSummaryRow {
+  quotationId: string; quoteNumber: string; revision: number; status: string; total: number;
+  totalCost: number | null; profit: number | null; marginPercent: number | null; pricingKnown: boolean;
+}
 
 type Tab = 'overview' | 'quotations' | 'pricing' | 'approvals' | 'margins' | 'queue' | 'financials' | 'risks' | 'negotiation' | 'documents';
 const TAB_DEFS: Array<{ id: Tab; label: string; icon: string; hint: string }> = [
   { id: 'overview', label: 'Overview', icon: '◎', hint: 'The commercial picture + what needs a decision now' },
-  { id: 'queue', label: 'Decision Queue', icon: '📋', hint: 'Quotes awaiting a commercial decision — review and clear them here' },
+  { id: 'queue', label: 'Decision Queue', icon: '📋', hint: 'Quotes awaiting a commercial decision — prioritize here, then open the source record' },
   { id: 'quotations', label: 'Quotations', icon: '✎', hint: 'Customer quotes (owned by CRM)' },
   { id: 'pricing', label: 'Pricing', icon: '⊞', hint: 'Internal cost & margin sheets (owned by Tendering)' },
   { id: 'financials', label: 'Financials', icon: '📊', hint: 'What the desk is carrying — and how much of it has a known margin' },
@@ -50,9 +54,9 @@ const aed = (n: number): string => 'AED ' + (n || 0).toLocaleString(undefined, {
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 const cap = (s: string): string => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
-export default function CommercialWorkspace({ quotations, contracts, sheets, evidence = [], requirements = [], apiDown }: {
+export default function CommercialWorkspace({ quotations, contracts, sheets, evidence = [], requirements = [], pricingSummary, apiDown }: {
   quotations: CommQuotation[]; contracts: CommContract[]; sheets: CommSheet[];
-  evidence?: EvidenceDoc[]; requirements?: StoredRequirement[]; apiDown: boolean;
+  evidence?: EvidenceDoc[]; requirements?: StoredRequirement[]; pricingSummary?: CommercialPricingSummaryRow[]; apiDown: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('overview');
 
@@ -72,7 +76,7 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, evi
     };
   }, [quotations, contracts]);
 
-  const riskCount = useMemo(() => commercialRisks(quotations).length, [quotations]);
+  const riskCount = useMemo(() => commercialRisks(quotations, pricingSummary).length, [quotations, pricingSummary]);
 
   const approvals = useMemo(() => quotations.filter((q) => q.status === 'internal_review'), [quotations]);
 
@@ -116,9 +120,9 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, evi
       {tab === 'documents' && <DocumentsTab quotations={quotations} />}
       {tab === 'queue' && <CommercialDecisionQueue quotations={quotations} contracts={contracts} evidence={evidence} requirements={requirements} />}
 
-      {tab === 'financials' && <CommercialFinancials quotations={quotations} contracts={contracts} />}
+      {tab === 'financials' && <CommercialFinancials quotations={quotations} contracts={contracts} pricingSummary={pricingSummary} />}
 
-      {tab === 'risks' && <CommercialRisks quotations={quotations} />}
+      {tab === 'risks' && <CommercialRisks quotations={quotations} pricingSummary={pricingSummary} />}
 
       {tab === 'quotations' && <QuotationsClient initialQuotations={quotations} />}
 
@@ -135,7 +139,7 @@ export default function CommercialWorkspace({ quotations, contracts, sheets, evi
 
       {tab === 'approvals' && (
         <LinkedTable
-          note="Quotes in internal review — open each to approve or send back. Approval locks the commercial baseline the contract will inherit."
+          note="Quotes in internal review — open each in Quotation 360 to approve or send back. Approval locks the commercial baseline the contract will inherit."
           head={['Quote', 'Customer', 'Value', 'Issued']}
           rows={approvals.map((q) => ({
             key: q.id, href: `/crm/quotations/${q.id}`,

@@ -102,6 +102,14 @@ export class EstimateService {
     return this.store.getByBoqItem(tenantId, boqItemId);
   }
 
+  /** Resolve the owning tender for a BOQ item without exposing the BOQ store to API composition. */
+  async tenderIdForBoqItem(tenantId: Id, boqItemId: Id): Promise<Id | null> {
+    const item = await this.boqStore.getBOQItem(tenantId, boqItemId);
+    if (!item) return null;
+    const boq = await this.boqStore.findBOQ(tenantId, item.boqId);
+    return boq?.tenderId ?? null;
+  }
+
   listByTender(tenantId: Id, tenderId: Id): Promise<RateBuildUp[]> {
     return this.store.listByTender(tenantId, tenderId);
   }

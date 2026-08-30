@@ -6,7 +6,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -25,6 +25,8 @@ describe('C7 CRM automation (HTTP)', () => {
     app.use((_req: unknown, _res: unknown, next: () => void) =>
       tenant.run({ tenantId: 'c7-tenant', companyId: null, actorId: null, correlationId: 'e2e-c7' }, () => next()),
     );
+    const users = app.get(UsersService);
+    for (const userId of ['rep-a', 'rep-owner']) users.save({ tenantId: 'c7-tenant', userId, displayName: userId, active: true });
     await app.init();
     http = request(app.getHttpServer());
   });

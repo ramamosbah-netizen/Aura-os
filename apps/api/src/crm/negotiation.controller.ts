@@ -3,6 +3,7 @@ import { IsIn, IsISO8601, IsNumber, IsOptional, IsString, Max, Min } from 'class
 import {
   NEGOTIATION_ENTRY_TYPES,
   makeNegotiationEntry,
+  makeEvent,
   summariseNegotiation,
   type NegotiationEntry,
   type NegotiationEntryType,
@@ -10,10 +11,11 @@ import {
   type NegotiationSummary,
   type PriceMove,
 } from '@aura/shared';
-import { NEGOTIATION_STORE, ParseUuidOr404Pipe, TenantContext, type NegotiationStore } from '@aura/core';
+import { EVENT_STORE, NEGOTIATION_STORE, ParseUuidOr404Pipe, Permissions, TenantContext, type EventStore, type NegotiationStore } from '@aura/core';
 import { QuotationService } from '@aura/crm';
 
 const PARTIES = ['CUSTOMER', 'US', 'COMPETITOR'];
+const NEGOTIATION_DELETED_EVENT = 'crm.negotiation.deleted';
 
 class CreateEntryDto {
   @IsString() quotationId!: string;
@@ -39,11 +41,13 @@ class CreateEntryDto {
 export class NegotiationController {
   constructor(
     @Inject(NEGOTIATION_STORE) private readonly store: NegotiationStore,
+    @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly quotations: QuotationService,
     private readonly tenant: TenantContext,
   ) {}
 
   /** The log for one quotation, with the summary the Negotiation tab renders. */
+  @Permissions('crm.quotation.read')
   @Get()
   async list(
     @Query('quotationId') quotationId?: string,
@@ -57,6 +61,7 @@ export class NegotiationController {
   }
 
   @Post()
+  @Permissions('crm.quotation.update')
   async create(@Body() dto: CreateEntryDto): Promise<NegotiationEntry> {
     const tenantId = this.tenant.get().tenantId;
     const quote = await this.quotations.get(dto.quotationId);
@@ -79,10 +84,22 @@ export class NegotiationController {
   }
 
   /** Remove a mis-recorded entry. Deletion, never mutation — an edited entry stops being evidence. */
+  @Permissions('crm.quotation.update')
   @Delete(':id')
   async remove(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ removed: boolean }> {
-    const removed = await this.store.remove(id);
+    const ctx = this.tenant.get();
+    const removed = await this.store.remove(id, ctx.tenantId);
     if (!removed) throw new NotFoundException('negotiation entry not found');
+    // A correction remains visible in the append-only event ledger. The entry id is the aggregate
+    // id because the store deliberately exposes no update path and deletion is its only mutation.
+    await this.events.append([makeEvent({
+      type: NEGOTIATION_DELETED_EVENT,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      aggregateType: 'crm.negotiation_entry',
+      aggregateId: id,
+      payload: { entryId: id, reason: 'correction' },
+    })]);
     return { removed };
   }
 

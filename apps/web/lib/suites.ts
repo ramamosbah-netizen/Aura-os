@@ -68,7 +68,7 @@ export const AURA_SUITES: AuraSuite[] = [
     id: 'sales', name: 'Sales', shortName: 'Sales', glyph: '◎', section: 'business',
     description: 'Lead → Opportunity → Client → Quote → Win/Loss. Direct commercial sales before award.',
     entryHref: '/crm/overview', gate: 'suite.dealChain',
-    capabilities: [{ label: 'Leads & Opportunities', status: 'IMPLEMENTED' }, { label: 'Clients & Contacts', status: 'IMPLEMENTED' }, { label: 'Quotations', status: 'IMPLEMENTED' }, { label: 'Pipeline & Forecast', status: 'IMPLEMENTED' }],
+    capabilities: [{ label: 'Sales Radar', status: 'IMPLEMENTED' }, { label: 'Leads & Opportunities', status: 'IMPLEMENTED' }, { label: 'Clients & Contacts', status: 'IMPLEMENTED' }, { label: 'Quotations', status: 'IMPLEMENTED' }, { label: 'Pipeline & Forecast', status: 'IMPLEMENTED' }],
     owns: starts('/crm'),
   },
   {

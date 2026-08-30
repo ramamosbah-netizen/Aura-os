@@ -1,4 +1,4 @@
-import { BarChart3, Building2, FileText, Target, TrendingUp, Trophy, Workflow } from 'lucide-react';
+import { BarChart3, Building2, FileText, Radar, Target, TrendingUp, Trophy, Workflow } from 'lucide-react';
 import SuiteDashboardShell, {
   type SuiteAttentionItem,
   type SuiteMetric,
@@ -57,6 +57,7 @@ export interface SalesRadarSummary { total: number; open: number; new: number; r
 
 /** Sales Home is a cockpit, not an activity manager: each shortcut has one clear job in the sell cycle. */
 const SHORTCUTS: SuiteShortcut[] = [
+  { label: 'Radar', description: 'Discover and triage early commercial signals', href: '/crm/radar', icon: Radar, tone: 'cyan' },
   { label: 'Opportunities', description: 'Deals by stage — switch between Board and List', href: '/crm/pipeline?view=board', icon: Workflow, tone: 'teal' },
   { label: 'Customers', description: 'Accounts, contacts & relationship 360', href: '/crm/customers', icon: Building2, tone: 'cyan' },
   { label: 'Quotations', description: 'Draft → review → sent → won', href: '/crm/quotations', icon: FileText, tone: 'amber' },
@@ -159,7 +160,7 @@ export default function SalesDashboard({
           stages={stages}
         />
       ) : undefined}
-      continueWorking={<ContinueWorking match={['/crm/opportunities', '/crm/quotations', '/crm/accounts', '/crm/contacts', '/crm/leads']} />}
+      continueWorking={<ContinueWorking match={['/crm/radar', '/crm/opportunities', '/crm/quotations', '/crm/accounts', '/crm/contacts', '/crm/leads']} />}
       attention={{
         kicker: 'Pipeline engine · most valuable first',
         title: 'Needs your attention',

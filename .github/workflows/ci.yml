@@ -549,6 +549,13 @@ jobs:
           curl -sf http://localhost:4000/api/v1/auth/status | grep -q '"enabled":true' \
             || { echo "::error::auth did not engage - the suite would run unauthenticated"; cat api.log; exit 1; }
 
+      - name: Build the web app for the E2E servers
+        # T23-3G: the suite runs against `next start`, which serves this build instead of compiling
+        # routes on demand -- that is what removes the 14.1 GB `next dev` footprint that was
+        # cancelling this job. NEXT_DIST_DIR is deliberately unset: ONE build serves both the
+        # gate-off and gate-on servers, because WEB_AUTH_REQUIRED is read per request by proxy.ts
+        # rather than inlined at build time (verified: one build served :3100 and :3101 at once).
+        run: pnpm --filter @aura/web build
       - name: Smoke
         # T23-3D: two sequential phases so only ONE next dev runs at a time. Phase 1 = gate-off
         # (:3100, the 82-spec chromium project) — the heavy phase whose dual-server memory peak
@@ -581,10 +588,8 @@ jobs:
           echo "phase results: gate-off=$off gate-on=$on"
           [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
-          # T23-3F ISOLATION RUN ONLY -- remove once the memory owner is identified. `retain-on-failure`
-          # records a trace for every test and discards it on pass; this run answers whether that
-          # recording is what drives the climb. Failure traces are deliberately sacrificed here.
-          E2E_TRACE: 'off'
+          # T23-3G: run against the prebuilt production server, not `next dev`.
+          E2E_WEB_START: '1'
           CI: 'true'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin
@@ -830,6 +835,13 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}
 
+      - name: Build the web app for the E2E servers
+        # T23-3G: the suite runs against `next start`, which serves this build instead of compiling
+        # routes on demand -- that is what removes the 14.1 GB `next dev` footprint that was
+        # cancelling this job. NEXT_DIST_DIR is deliberately unset: ONE build serves both the
+        # gate-off and gate-on servers, because WEB_AUTH_REQUIRED is read per request by proxy.ts
+        # rather than inlined at build time (verified: one build served :3100 and :3101 at once).
+        run: pnpm --filter @aura/web build
       - name: Sales browser surface proof (existing Playwright specs)
         # Run only the existing Sales-facing browser coverage before the broad smoke suite. This
         # keeps Sales evidence observable even when an unrelated downstream smoke spec fails.
@@ -842,6 +854,8 @@ jobs:
           --grep "Sales|suite launcher|Customers workspace|favourit|account: create|opportunity: create|quotation: create|contract: create"
         env:
           CI: 'true'
+          # T23-3G: this step also drives the main config, so it uses the same prebuilt server.
+          E2E_WEB_START: '1'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin
           E2E_PASSWORD: e2e-password
@@ -880,10 +894,8 @@ jobs:
           echo "phase results: gate-off=$off gate-on=$on"
           [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
-          # T23-3F ISOLATION RUN ONLY -- remove once the memory owner is identified. `retain-on-failure`
-          # records a trace for every test and discards it on pass; this run answers whether that
-          # recording is what drives the climb. Failure traces are deliberately sacrificed here.
-          E2E_TRACE: 'off'
+          # T23-3G: run against the prebuilt production server, not `next dev`.
+          E2E_WEB_START: '1'
           CI: 'true'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin

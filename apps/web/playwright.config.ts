@@ -38,6 +38,21 @@ const PROGRESS: ReporterDescription[] = process.env.CI
 // as argued below. Unset everywhere except the isolation run.
 const TRACE = (process.env.E2E_TRACE ?? 'retain-on-failure') as 'off' | 'on' | 'retain-on-failure';
 
+// T23-3G — `next dev` was the memory owner behind the cancelled Smoke steps: 14.1 GB of a 16 GB
+// runner, in BOTH tiers, with chromium at ~0.4 GB and postgres at ~0.2 GB. `next start` serves a
+// prebuilt app instead of compiling on demand — measured at 126-172 MB and FLAT across 72 route
+// loads. CI therefore drives the suite against the production server, which is also what a
+// release-proof gate should assert. Local keeps `next dev`: HMR, and no build step to run first.
+const START = process.env.E2E_WEB_START === '1';
+const webCommand = (port: number) =>
+  `node ./node_modules/next/dist/bin/next ${START ? 'start' : 'dev'} -p ${port}`;
+// WEB_AUTH_REQUIRED is read per REQUEST by proxy.ts and is NOT inlined into the build: a single
+// build served :3100 gate-off and :3101 gate-on at once, and the gate-on server still answered 307
+// -> /login though the build was made without the variable. So `next start` needs no dist dir at
+// all — that only ever existed to stop two `next dev` processes fighting over one build directory.
+const serverEnv = (authRequired: 'true' | 'false', distDir: string): Record<string, string> =>
+  START ? { WEB_AUTH_REQUIRED: authRequired } : { WEB_AUTH_REQUIRED: authRequired, NEXT_DIST_DIR: distDir };
+
 export default defineConfig({
   testDir: './e2e',
   // TIER-3 drives the same specs against a real database, where every assertion sits behind SQL
@@ -97,21 +112,22 @@ export default defineConfig({
   // writes WEB_AUTH_REQUIRED=true there, which silently flipped the spine suite's assumption and
   // cost a wrong "pre-existing failure" call; an explicit env is what stops that recurring.
   //
-  // Separate NEXT_DIST_DIR per server: Next refuses a second `next dev` sharing a build directory.
+  // Separate NEXT_DIST_DIR per server applies to `next dev` ONLY: Next refuses a second `next dev`
+  // sharing a build directory. Two `next start` processes only READ the build, so they share one.
   webServer: [
     {
       // Invoke Next's bin via node directly — `pnpm exec` forces an implicit install that
       // trips the ignored-build guard in this workspace and exits non-zero.
-      command: `node ./node_modules/next/dist/bin/next dev -p ${PORT}`,
+      command: webCommand(PORT),
       url: BASE_URL,
-      env: { WEB_AUTH_REQUIRED: 'false', NEXT_DIST_DIR: '.next-e2e' },
+      env: serverEnv('false', '.next-e2e'),
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: `node ./node_modules/next/dist/bin/next dev -p ${AUTH_GATE_PORT}`,
+      command: webCommand(AUTH_GATE_PORT),
       url: AUTH_GATE_BASE_URL,
-      env: { WEB_AUTH_REQUIRED: 'true', NEXT_DIST_DIR: '.next-e2e-auth' },
+      env: serverEnv('true', '.next-e2e-auth'),
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },

@@ -24,8 +24,10 @@ coverage/
 **/src/**/*.d.ts.map
 
 # Playwright
-/apps/web/playwright-report/
-/apps/web/test-results/
+# T23-3D added per-phase suffixes (-gate-off / -gate-on); the bare names did not cover them,
+# so a local run left committable junk. Globs so a new phase suffix is ignored automatically.
+/apps/web/playwright-report*/
+/apps/web/test-results*/
 .claude/
 
 # Operational recovery artifacts from scripts/merge-duplicate-accounts.mjs — specific to one

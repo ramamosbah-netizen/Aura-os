@@ -32,6 +32,12 @@ const PROGRESS: ReporterDescription[] = process.env.CI
   ? [['./e2e/reporters/progress-reporter.ts']]
   : [];
 
+// T23-3F — memory-isolation knob. `retain-on-failure` RECORDS a trace for EVERY test and throws it
+// away when the test passes, so it is a live suspect for the monotonic climb that exhausts the
+// runner. E2E_TRACE lets one CI run answer that without editing the default, which stays exactly
+// as argued below. Unset everywhere except the isolation run.
+const TRACE = (process.env.E2E_TRACE ?? 'retain-on-failure') as 'off' | 'on' | 'retain-on-failure';
+
 export default defineConfig({
   testDir: './e2e',
   // TIER-3 drives the same specs against a real database, where every assertion sits behind SQL
@@ -66,7 +72,7 @@ export default defineConfig({
     // recorded nothing — every CI-only browser failure died with just its one-line assertion. This
     // keeps the trace AND a screenshot from the actual failing attempt. Video stays off (Playwright
     // default): trace + screenshot have been sufficient; revisit only if evidence shows otherwise.
-    trace: 'retain-on-failure',
+    trace: TRACE,
     screenshot: 'only-on-failure',
     storageState: STORAGE_STATE,
   },

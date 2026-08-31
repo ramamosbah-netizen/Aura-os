@@ -564,6 +564,10 @@ jobs:
           # readable against the exact test in flight. TIER-2 carries it as the surviving baseline.
           ( while :; do
               echo "[res] $(date -u +%H:%M:%S) mem=$(free -m | awk '/^Mem:/{print $3"/"$2"MB used, "$7"MB avail"}') disk=$(df -Pm . | awk 'NR==2{print $4"MB free"}')"
+              # T23-3F: and WHICH processes hold it, summed by process name -- chromium and next
+              # dev both fan out into many pids, so a flat top-N would hide the real owner. This is
+              # what makes a single run name the consumer instead of only showing the total climb.
+              echo "[top] $(ps -eo rss=,comm= | awk '{a[$2]+=$1} END {for (k in a) printf "%d %s\n", a[k]/1024, k}' | sort -nr | head -6 | awk '{printf "%s=%sMB ", $2, $1}')"
               sleep 5
             done ) &
           SAMPLER=$!
@@ -577,6 +581,10 @@ jobs:
           echo "phase results: gate-off=$off gate-on=$on"
           [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
+          # T23-3F ISOLATION RUN ONLY -- remove once the memory owner is identified. `retain-on-failure`
+          # records a trace for every test and discards it on pass; this run answers whether that
+          # recording is what drives the climb. Failure traces are deliberately sacrificed here.
+          E2E_TRACE: 'off'
           CI: 'true'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin
@@ -855,6 +863,10 @@ jobs:
           # readable against the exact test in flight. TIER-2 carries it as the surviving baseline.
           ( while :; do
               echo "[res] $(date -u +%H:%M:%S) mem=$(free -m | awk '/^Mem:/{print $3"/"$2"MB used, "$7"MB avail"}') disk=$(df -Pm . | awk 'NR==2{print $4"MB free"}')"
+              # T23-3F: and WHICH processes hold it, summed by process name -- chromium and next
+              # dev both fan out into many pids, so a flat top-N would hide the real owner. This is
+              # what makes a single run name the consumer instead of only showing the total climb.
+              echo "[top] $(ps -eo rss=,comm= | awk '{a[$2]+=$1} END {for (k in a) printf "%d %s\n", a[k]/1024, k}' | sort -nr | head -6 | awk '{printf "%s=%sMB ", $2, $1}')"
               sleep 5
             done ) &
           SAMPLER=$!
@@ -868,6 +880,10 @@ jobs:
           echo "phase results: gate-off=$off gate-on=$on"
           [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
+          # T23-3F ISOLATION RUN ONLY -- remove once the memory owner is identified. `retain-on-failure`
+          # records a trace for every test and discards it on pass; this run answers whether that
+          # recording is what drives the climb. Failure traces are deliberately sacrificed here.
+          E2E_TRACE: 'off'
           CI: 'true'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin

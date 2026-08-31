@@ -1,7 +1,7 @@
 // AURA OS — Playwright smoke config (TIER-2 #41).
 // Boots `next dev` on a scratch port and runs headless chromium smoke checks.
 // The API is optional: the web shell degrades gracefully when it is unreachable.
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices, type ReporterDescription } from '@playwright/test';
 import { STORAGE_STATE } from './e2e/global-setup';
 
 const PORT = Number(process.env.WEB_PORT ?? 3100);
@@ -25,6 +25,13 @@ const AUTH_GATE_BASE_URL = `http://localhost:${AUTH_GATE_PORT}`;
 const SERVER = process.env.E2E_SERVER; // 'gate-off' | 'gate-on' | undefined (both)
 const SUFFIX = SERVER ? `-${SERVER}` : '';
 
+// T23-3E — under CI, name each test as it STARTS. A SIGTERM'd step skips every later step,
+// `always()` included, so stdout is the only evidence that survives; `list` prints on finish and
+// therefore never names the test that was actually running. Local output is unchanged.
+const PROGRESS: ReporterDescription[] = process.env.CI
+  ? [['./e2e/reporters/progress-reporter.ts']]
+  : [];
+
 export default defineConfig({
   testDir: './e2e',
   // TIER-3 drives the same specs against a real database, where every assertion sits behind SQL
@@ -46,7 +53,7 @@ export default defineConfig({
   // `list` keeps the live console output CI streams line-by-line; `html` writes a self-contained
   // report into the artifact so a CI-only failure can be inspected offline. `open: 'never'` stops
   // Playwright trying to launch a browser on the runner.
-  reporter: [['list'], ['html', { open: 'never', outputFolder: `playwright-report${SUFFIX}` }]],
+  reporter: [...PROGRESS, ['list'], ['html', { open: 'never', outputFolder: `playwright-report${SUFFIX}` }]],
   // Per-phase output dir so a Phase-2 run never wipes Phase-1's trace/screenshot (see SUFFIX above).
   outputDir: `test-results${SUFFIX}`,
   // Signs in once through the real login form and saves the session (G-03). When the API runs with

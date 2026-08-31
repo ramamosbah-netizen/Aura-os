@@ -556,11 +556,24 @@ jobs:
         # the first fails (per-phase output dirs keep each phase's diagnostics); the step fails if
         # EITHER phase failed.
         run: |
+          # T23-3E: sample memory AND disk to STDOUT every 5s. A cancelled Smoke step skips every
+          # later step, `if: always()` included -- the upload step reports `skipped` with a
+          # zero-second span in all three cancelled runs -- so no uploaded artifact can ever
+          # explain this failure. The job log is the only channel that survives the signal, and
+          # these lines interleave with the [begin]/result stream so the resource state is
+          # readable against the exact test in flight. TIER-2 carries it as the surviving baseline.
+          ( while :; do
+              echo "[res] $(date -u +%H:%M:%S) mem=$(free -m | awk '/^Mem:/{print $3"/"$2"MB used, "$7"MB avail"}') disk=$(df -Pm . | awk 'NR==2{print $4"MB free"}')"
+              sleep 5
+            done ) &
+          SAMPLER=$!
           set +e
           E2E_SERVER=gate-off pnpm --filter @aura/web exec playwright test --project=chromium
           off=$?
           E2E_SERVER=gate-on pnpm --filter @aura/web exec playwright test --project=auth-gate
           on=$?
+          kill "$SAMPLER" 2>/dev/null || true
+          wait "$SAMPLER" 2>/dev/null || true
           echo "phase results: gate-off=$off gate-on=$on"
           [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
@@ -834,11 +847,24 @@ jobs:
         # T23-3D: same two sequential phases as TIER-2 (see that job) — gate-off (:3100) then
         # gate-on (:3101), one next dev at a time. Both run; the step fails if either phase failed.
         run: |
+          # T23-3E: sample memory AND disk to STDOUT every 5s. A cancelled Smoke step skips every
+          # later step, `if: always()` included -- the upload step reports `skipped` with a
+          # zero-second span in all three cancelled runs -- so no uploaded artifact can ever
+          # explain this failure. The job log is the only channel that survives the signal, and
+          # these lines interleave with the [begin]/result stream so the resource state is
+          # readable against the exact test in flight. TIER-2 carries it as the surviving baseline.
+          ( while :; do
+              echo "[res] $(date -u +%H:%M:%S) mem=$(free -m | awk '/^Mem:/{print $3"/"$2"MB used, "$7"MB avail"}') disk=$(df -Pm . | awk 'NR==2{print $4"MB free"}')"
+              sleep 5
+            done ) &
+          SAMPLER=$!
           set +e
           E2E_SERVER=gate-off pnpm --filter @aura/web exec playwright test --project=chromium
           off=$?
           E2E_SERVER=gate-on pnpm --filter @aura/web exec playwright test --project=auth-gate
           on=$?
+          kill "$SAMPLER" 2>/dev/null || true
+          wait "$SAMPLER" 2>/dev/null || true
           echo "phase results: gate-off=$off gate-on=$on"
           [ $off -eq 0 ] && [ $on -eq 0 ]
         env:

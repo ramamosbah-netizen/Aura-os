@@ -30,7 +30,7 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // 409 — state-transition guards: the request is well-formed but the aggregate's current
   // state forbids it ("only a draft agreement can be activated", "is already disposed", …).
   if (
-    /\balready\b|\blineage\b.*\bwithout\b|is closed|is inactive|is not (in|active|approved)|\bonly\b.*\bcan\b|can only\b|requires approval|approval blocked|readiness checklist|below the required|insufficient|outside its validity|belongs to another/i.test(m)
+    /\balready\b|\blineage\b.*\bwithout\b|is closed|is inactive|is not (in|active|approved)|is not a locked|immutable after handover|require(?:s)? a signed contract|\bonly\b.*\bcan\b|can only\b|requires approval|approval blocked|readiness checklist|below the required|insufficient|outside its validity|belongs to another/i.test(m)
   ) {
     return { status: 409, code: 'CONFLICT' };
   }

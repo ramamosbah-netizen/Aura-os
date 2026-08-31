@@ -564,8 +564,11 @@ jobs:
       # Without this they die with the runner, so a browser failure that only happens in CI — the
       # ones that matter most, because they cannot be reproduced locally — could only be guessed at
       # from the one-line assertion in the log.
+      # always(), not failure(): the Smoke step can end on SIGTERM and be recorded as `cancelled`
+      # rather than `failed`, which skipped this upload and left TIER-2 undiagnosable. always()
+      # captures the trace/screenshot/report whether the step failed OR was cancelled.
       - name: Playwright failure artifacts
-        if: failure()
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failures
@@ -830,8 +833,10 @@ jobs:
           E2E_EXPECT_TIMEOUT: '30000'
           E2E_TEST_TIMEOUT: '120000'
 
+      # always(), not failure(): see the TIER-2 note — a SIGTERM'd Smoke step is `cancelled`, not
+      # `failed`, so failure() skipped this and left TIER-3 undiagnosable.
       - name: Playwright failure artifacts
-        if: failure()
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failures-postgres

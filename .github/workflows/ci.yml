@@ -549,9 +549,47 @@ jobs:
           curl -sf http://localhost:4000/api/v1/auth/status | grep -q '"enabled":true' \
             || { echo "::error::auth did not engage - the suite would run unauthenticated"; cat api.log; exit 1; }
 
+      - name: Build the web app for the E2E servers
+        # T23-3G: the suite runs against `next start`, which serves this build instead of compiling
+        # routes on demand -- that is what removes the 14.1 GB `next dev` footprint that was
+        # cancelling this job. NEXT_DIST_DIR is deliberately unset: ONE build serves both the
+        # gate-off and gate-on servers, because WEB_AUTH_REQUIRED is read per request by proxy.ts
+        # rather than inlined at build time (verified: one build served :3100 and :3101 at once).
+        run: pnpm --filter @aura/web build
       - name: Smoke
-        run: pnpm --filter @aura/web e2e
+        # T23-3D: two sequential phases so only ONE next dev runs at a time. Phase 1 = gate-off
+        # (:3100, the 82-spec chromium project) — the heavy phase whose dual-server memory peak
+        # forced the job teardown. Phase 2 = gate-on (:3101, web-auth-gate). Both phases run even if
+        # the first fails (per-phase output dirs keep each phase's diagnostics); the step fails if
+        # EITHER phase failed.
+        run: |
+          # T23-3E: sample memory AND disk to STDOUT every 5s. A cancelled Smoke step skips every
+          # later step, `if: always()` included -- the upload step reports `skipped` with a
+          # zero-second span in all three cancelled runs -- so no uploaded artifact can ever
+          # explain this failure. The job log is the only channel that survives the signal, and
+          # these lines interleave with the [begin]/result stream so the resource state is
+          # readable against the exact test in flight. TIER-2 carries it as the surviving baseline.
+          ( while :; do
+              echo "[res] $(date -u +%H:%M:%S) mem=$(free -m | awk '/^Mem:/{print $3"/"$2"MB used, "$7"MB avail"}') disk=$(df -Pm . | awk 'NR==2{print $4"MB free"}')"
+              # T23-3F: and WHICH processes hold it, summed by process name -- chromium and next
+              # dev both fan out into many pids, so a flat top-N would hide the real owner. This is
+              # what makes a single run name the consumer instead of only showing the total climb.
+              echo "[top] $(ps -eo rss=,comm= | awk '{a[$2]+=$1} END {for (k in a) printf "%d %s\n", a[k]/1024, k}' | sort -nr | head -6 | awk '{printf "%s=%sMB ", $2, $1}')"
+              sleep 5
+            done ) &
+          SAMPLER=$!
+          set +e
+          E2E_SERVER=gate-off pnpm --filter @aura/web exec playwright test --project=chromium
+          off=$?
+          E2E_SERVER=gate-on pnpm --filter @aura/web exec playwright test --project=auth-gate
+          on=$?
+          kill "$SAMPLER" 2>/dev/null || true
+          wait "$SAMPLER" 2>/dev/null || true
+          echo "phase results: gate-off=$off gate-on=$on"
+          [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
+          # T23-3G: run against the prebuilt production server, not `next dev`.
+          E2E_WEB_START: '1'
           CI: 'true'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin
@@ -564,14 +602,19 @@ jobs:
       # Without this they die with the runner, so a browser failure that only happens in CI — the
       # ones that matter most, because they cannot be reproduced locally — could only be guessed at
       # from the one-line assertion in the log.
+      # always(), not failure(): the Smoke step can end on SIGTERM and be recorded as `cancelled`
+      # rather than `failed`, which skipped this upload and left TIER-2 undiagnosable. always()
+      # captures the trace/screenshot/report whether the step failed OR was cancelled.
       - name: Playwright failure artifacts
-        if: failure()
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failures
+          # Glob: T23-3D writes per-phase dirs (test-results-gate-off / -gate-on) so neither phase
+          # overwrites the other's diagnostics.
           path: |
-            apps/web/test-results
-            apps/web/playwright-report
+            apps/web/test-results*
+            apps/web/playwright-report*
           retention-days: 7
           if-no-files-found: ignore
 
@@ -792,6 +835,13 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}
 
+      - name: Build the web app for the E2E servers
+        # T23-3G: the suite runs against `next start`, which serves this build instead of compiling
+        # routes on demand -- that is what removes the 14.1 GB `next dev` footprint that was
+        # cancelling this job. NEXT_DIST_DIR is deliberately unset: ONE build serves both the
+        # gate-off and gate-on servers, because WEB_AUTH_REQUIRED is read per request by proxy.ts
+        # rather than inlined at build time (verified: one build served :3100 and :3101 at once).
+        run: pnpm --filter @aura/web build
       - name: Sales browser surface proof (existing Playwright specs)
         # Run only the existing Sales-facing browser coverage before the broad smoke suite. This
         # keeps Sales evidence observable even when an unrelated downstream smoke spec fails.
@@ -804,6 +854,8 @@ jobs:
           --grep "Sales|suite launcher|Customers workspace|favourit|account: create|opportunity: create|quotation: create|contract: create"
         env:
           CI: 'true'
+          # T23-3G: this step also drives the main config, so it uses the same prebuilt server.
+          E2E_WEB_START: '1'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin
           E2E_PASSWORD: e2e-password
@@ -814,8 +866,36 @@ jobs:
           E2E_TEST_TIMEOUT: '120000'
 
       - name: Smoke
-        run: pnpm --filter @aura/web e2e
+        # T23-3D: same two sequential phases as TIER-2 (see that job) — gate-off (:3100) then
+        # gate-on (:3101), one next dev at a time. Both run; the step fails if either phase failed.
+        run: |
+          # T23-3E: sample memory AND disk to STDOUT every 5s. A cancelled Smoke step skips every
+          # later step, `if: always()` included -- the upload step reports `skipped` with a
+          # zero-second span in all three cancelled runs -- so no uploaded artifact can ever
+          # explain this failure. The job log is the only channel that survives the signal, and
+          # these lines interleave with the [begin]/result stream so the resource state is
+          # readable against the exact test in flight. TIER-2 carries it as the surviving baseline.
+          ( while :; do
+              echo "[res] $(date -u +%H:%M:%S) mem=$(free -m | awk '/^Mem:/{print $3"/"$2"MB used, "$7"MB avail"}') disk=$(df -Pm . | awk 'NR==2{print $4"MB free"}')"
+              # T23-3F: and WHICH processes hold it, summed by process name -- chromium and next
+              # dev both fan out into many pids, so a flat top-N would hide the real owner. This is
+              # what makes a single run name the consumer instead of only showing the total climb.
+              echo "[top] $(ps -eo rss=,comm= | awk '{a[$2]+=$1} END {for (k in a) printf "%d %s\n", a[k]/1024, k}' | sort -nr | head -6 | awk '{printf "%s=%sMB ", $2, $1}')"
+              sleep 5
+            done ) &
+          SAMPLER=$!
+          set +e
+          E2E_SERVER=gate-off pnpm --filter @aura/web exec playwright test --project=chromium
+          off=$?
+          E2E_SERVER=gate-on pnpm --filter @aura/web exec playwright test --project=auth-gate
+          on=$?
+          kill "$SAMPLER" 2>/dev/null || true
+          wait "$SAMPLER" 2>/dev/null || true
+          echo "phase results: gate-off=$off gate-on=$on"
+          [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
+          # T23-3G: run against the prebuilt production server, not `next dev`.
+          E2E_WEB_START: '1'
           CI: 'true'
           AURA_API_URL: http://localhost:4000
           E2E_USERNAME: u-admin
@@ -830,14 +910,17 @@ jobs:
           E2E_EXPECT_TIMEOUT: '30000'
           E2E_TEST_TIMEOUT: '120000'
 
+      # always(), not failure(): see the TIER-2 note — a SIGTERM'd Smoke step is `cancelled`, not
+      # `failed`, so failure() skipped this and left TIER-3 undiagnosable.
       - name: Playwright failure artifacts
-        if: failure()
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failures-postgres
+          # Glob: per-phase dirs (test-results-gate-off / -gate-on), same as TIER-2.
           path: |
-            apps/web/test-results
-            apps/web/playwright-report
+            apps/web/test-results*
+            apps/web/playwright-report*
           retention-days: 7
           if-no-files-found: ignore
 
@@ -978,6 +1061,19 @@ jobs:
           E2E_PASSWORD: e2e-password
           E2E_TEST_TIMEOUT: '120000'
           E2E_EXPECT_TIMEOUT: '30000'
+      # Radar was the one browser gate with NO Playwright evidence upload — a failure left only the
+      # API log. Same failure-safe upload as web-smoke / web-smoke-postgres so a red radar gate is
+      # diagnosable from its trace + screenshot + error-context instead of guessed at.
+      - name: Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures-radar
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
       - name: API log on failure
         if: failure()
         run: cat apps/api/radar-api.log || true

@@ -550,7 +550,19 @@ jobs:
             || { echo "::error::auth did not engage - the suite would run unauthenticated"; cat api.log; exit 1; }
 
       - name: Smoke
-        run: pnpm --filter @aura/web e2e
+        # T23-3D: two sequential phases so only ONE next dev runs at a time. Phase 1 = gate-off
+        # (:3100, the 82-spec chromium project) — the heavy phase whose dual-server memory peak
+        # forced the job teardown. Phase 2 = gate-on (:3101, web-auth-gate). Both phases run even if
+        # the first fails (per-phase output dirs keep each phase's diagnostics); the step fails if
+        # EITHER phase failed.
+        run: |
+          set +e
+          E2E_SERVER=gate-off pnpm --filter @aura/web exec playwright test --project=chromium
+          off=$?
+          E2E_SERVER=gate-on pnpm --filter @aura/web exec playwright test --project=auth-gate
+          on=$?
+          echo "phase results: gate-off=$off gate-on=$on"
+          [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
           CI: 'true'
           AURA_API_URL: http://localhost:4000
@@ -572,9 +584,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failures
+          # Glob: T23-3D writes per-phase dirs (test-results-gate-off / -gate-on) so neither phase
+          # overwrites the other's diagnostics.
           path: |
-            apps/web/test-results
-            apps/web/playwright-report
+            apps/web/test-results*
+            apps/web/playwright-report*
           retention-days: 7
           if-no-files-found: ignore
 
@@ -817,7 +831,16 @@ jobs:
           E2E_TEST_TIMEOUT: '120000'
 
       - name: Smoke
-        run: pnpm --filter @aura/web e2e
+        # T23-3D: same two sequential phases as TIER-2 (see that job) — gate-off (:3100) then
+        # gate-on (:3101), one next dev at a time. Both run; the step fails if either phase failed.
+        run: |
+          set +e
+          E2E_SERVER=gate-off pnpm --filter @aura/web exec playwright test --project=chromium
+          off=$?
+          E2E_SERVER=gate-on pnpm --filter @aura/web exec playwright test --project=auth-gate
+          on=$?
+          echo "phase results: gate-off=$off gate-on=$on"
+          [ $off -eq 0 ] && [ $on -eq 0 ]
         env:
           CI: 'true'
           AURA_API_URL: http://localhost:4000
@@ -840,9 +863,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failures-postgres
+          # Glob: per-phase dirs (test-results-gate-off / -gate-on), same as TIER-2.
           path: |
-            apps/web/test-results
-            apps/web/playwright-report
+            apps/web/test-results*
+            apps/web/playwright-report*
           retention-days: 7
           if-no-files-found: ignore
 

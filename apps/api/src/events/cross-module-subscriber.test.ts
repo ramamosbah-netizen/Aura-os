@@ -47,7 +47,7 @@ const tenantId = 'tenant-e2e';
  * tender→contract reactor's R3 inheritance (G-50) can be exercised. Omitted → no quotes, which is
  * the "awarded straight off the estimate" path every other test here uses.
  */
-function buildHarness(pricedQuote?: { id: string; status: string; baselineId: string; total: number }) {
+function buildHarness(pricedQuote?: { id: string; status: string; baselineId: string; total: number; cost?: number }) {
   let quotationsStub: Record<string, unknown> = {};
   const linkedContracts: Array<{ quotationId: string; contractId: string }> = [];
   const bus = new EventBus();
@@ -208,7 +208,14 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
       // The locked event names the baseline as its aggregate, so the deferred reactor reads it by id.
       getBaselineById: async (_t: string, bid: string) =>
         pricedQuote && bid === pricedQuote.baselineId
-          ? { id: pricedQuote.baselineId, quotationId: pricedQuote.id, total: pricedQuote.total,
+          ? { id: pricedQuote.baselineId, quotationId: pricedQuote.id, revision: 0, total: pricedQuote.total,
+              lines: [{ description: 'Frozen line', quantity: 1, unitPrice: pricedQuote.total, lineNet: pricedQuote.total, vatRate: 0 }],
+              // Deliberately leave the compatibility pricing shape costless: the assertion below
+              // proves the canonical estimation build-up wins when both projections are present.
+              pricing: pricedQuote.cost !== undefined ? { lines: [{ supplyUnitPrice: 0, wastagePercent: 0, accessories: 0, technician: { count: 0, hours: 0, rate: 0 }, engineer: { count: 0, hours: 0, rate: 0 }, projectManager: { count: 0, hours: 0, rate: 0 }, transport: 0, equipmentRent: 0, subcontract: 0, otherDirect: 0, indirectPercent: 0 }] } : null,
+              // Pricing-sheet authored quotations carry both a compatibility pricing shape and
+              // the canonical estimation build-up. The reactor must prefer estimation for cost.
+              estimation: pricedQuote.cost !== undefined ? [{ description: 'Frozen line', quantity: 1, materialUnitCost: pricedQuote.cost, wastagePercent: 0, labour: { hoursPerUnit: 0, crewSize: 1, hourlyRate: 0 }, equipmentUnitCost: 0, consumablesUnitCost: 0, subcontractUnitCost: 0, overheadPercent: 0, riskPercent: 0, warrantyPercent: 0, contingencyPercent: 0, targetMarginPercent: 0 }] : null,
               sourceTenderId: (globalThis as Record<string, unknown>).__deferredTenderId ?? null,
               lockedAt: '2026-08-22T09:00:00.000Z' }
           : null,
@@ -408,6 +415,26 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(projects[0].value).toBe(900_000);
   });
 
+  it('seeds one locked CBS opening node only from frozen baseline cost evidence', async () => {
+    const priced = buildHarness({ id: 'q-cbs-seed', status: 'accepted', baselineId: 'baseline-cbs-seed', total: 900_000, cost: 600_000 });
+    const opp = await priced.opportunities.create({ tenantId, title: 'CBS seeded job', value: 900_000 });
+    const tender = await priced.tenders.create({ tenantId, title: 'Tender: CBS seeded job', value: 900_000 });
+    await priced.tenders.linkOpportunity(tender.id, opp.id);
+    await makeTenderSubmittable(priced, tender.id);
+    await awardTender(priced, tender.id);
+    const [contract] = await priced.contracts.list({ tenderId: tender.id });
+    await priced.contracts.changeStatus(contract.id, 'active');
+
+    const project = (await priced.projects.list({ contractId: contract.id }))[0];
+    const nodes = await priced.cbs.list({ projectId: project.id });
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({ budgetAmount: 600_000, forecastAmount: 600_000, handoverLocked: true, sourceRevisionId: 'baseline-cbs-seed' });
+
+    // The replay guard must not create a second opening baseline.
+    await priced.contracts.changeStatus(contract.id, 'active');
+    expect(await priced.cbs.list({ projectId: project.id })).toHaveLength(1);
+  });
+
   // G-50 — path-asymmetry. The DIRECT path locks a commercial baseline on quotation approval and
   // the contract inherits it. The tender path used to take the tender's own ESTIMATE and leave the
   // baseline null: same business intent, weaker governance, purely because of which route the deal
@@ -596,8 +623,13 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
     // Sign the contract twice.
     await h.contracts.changeStatus(contract.id, 'active');
+    const firstProject = (await h.projects.list({ contractId: contract.id }))[0];
     await h.contracts.changeStatus(contract.id, 'active');
-    expect(await h.projects.list({ contractId: contract.id })).toHaveLength(1);
+    const replayedProjects = await h.projects.list({ contractId: contract.id });
+    expect(replayedProjects).toHaveLength(1);
+    expect(replayedProjects[0].handoverId).toBe(firstProject.handoverId);
+    expect(replayedProjects[0].handoverSnapshotHash).toBe(firstProject.handoverSnapshotHash);
+    expect(replayedProjects[0].handoverSnapshot).toEqual(firstProject.handoverSnapshot);
 
     // Re-awarding must not spawn a second contract, and only the one started tender exists.
     expect(await h.tenders.list()).toHaveLength(1);
@@ -702,7 +734,7 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(h.createdRas).toHaveLength(1);
   });
 
-  it('seeds the auto-created project with a root WBS node + CBS from the tender BOQ', async () => {
+  it('creates only a root WBS when no immutable BOQ revision is present', async () => {
     // G5: value 0 was fine when nothing checked it; the win gate now refuses it (a win of 0 is not
     // a win). The BOQ/CBS assertions below are about the tender's items, not this figure.
     const opp = await h.opportunities.create({ tenantId, title: 'BOQ Job', value: 250_000 });
@@ -730,10 +762,10 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(wbsNodes.length).toBeGreaterThanOrEqual(1);
     expect(wbsNodes.some((n) => n.code === '1')).toBe(true);
 
+    // Gate A: a live Tender BOQ is not a Project baseline. Until an immutable BOQ revision
+    // snapshot is supplied, no CBS nodes are seeded from the mutable Tender aggregate.
     const cbsNodes = await h.cbs.list({ projectId: project.id });
-    expect(cbsNodes.length).toBeGreaterThanOrEqual(1);
-    const earthworks = cbsNodes.find((n) => n.code === '1');
-    expect(earthworks?.budgetAmount).toBe(5000); // 100 × 50
+    expect(cbsNodes).toHaveLength(0);
 
     // Re-signing must not double-seed the breakdown.
     await h.contracts.changeStatus(contract.id, 'active');

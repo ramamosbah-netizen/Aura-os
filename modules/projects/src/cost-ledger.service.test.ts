@@ -11,11 +11,12 @@ const tenantId = 'tenant-ledger';
 
 /** A CbsService stand-in that only counts the balance moves — the ledger service must call it once. */
 function countingCbs() {
-  const calls = { committed: 0, actual: 0, budget: 0 };
+  const calls = { committed: 0, actual: 0, budget: 0, variationBudget: 0 };
   const cbs = {
     recordCommittedCost: vi.fn(async () => { calls.committed += 1; }),
     recordActualCost: vi.fn(async () => { calls.actual += 1; }),
     recordBudget: vi.fn(async () => { calls.budget += 1; }),
+    recordApprovedVariationBudget: vi.fn(async () => { calls.variationBudget += 1; }),
   } as unknown as CbsService;
   return { cbs, calls };
 }
@@ -74,5 +75,18 @@ describe('CostLedgerService.post — durable idempotency on dedupeKey', () => {
 
     expect(await store.list({ tenantId })).toHaveLength(1);
     expect(await store.list({ tenantId: 'tenant-other' })).toHaveLength(1);
+  });
+
+  it('routes an approved variation budget entry through the explicit locked-baseline path', async () => {
+    const store = new InMemoryCostLedgerStore();
+    const { cbs, calls } = countingCbs();
+    const svc = new CostLedgerService(store, cbs);
+
+    await svc.post({ tenantId, projectId: 'p1', cbsNodeId: 'cbs1', type: 'budget', amount: 7000, source: 'variation', dedupeKey: 'variation:approved-1' });
+    await svc.post({ tenantId, projectId: 'p1', cbsNodeId: 'cbs1', type: 'budget', amount: 7000, source: 'variation', dedupeKey: 'variation:approved-1' });
+
+    expect(calls.variationBudget).toBe(1);
+    expect(calls.budget).toBe(0);
+    expect(await store.list({ tenantId })).toHaveLength(1);
   });
 });

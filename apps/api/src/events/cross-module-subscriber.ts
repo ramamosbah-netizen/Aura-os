@@ -1,14 +1,14 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
-import { ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, VariationService } from '@aura/projects';
+import { ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, VariationService, hashHandoverSnapshot } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService, type Tender } from '@aura/tendering';
-import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted } from '@aura/crm';
+import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted, computeQuotationPricing, computeEstimationPricing } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { AmcService } from '@aura/amc';
-import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney } from '@aura/shared';
+import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney, newId } from '@aura/shared';
 
 /**
  * Cross-module event subscriber — the reactor that wires the deal chain.
@@ -157,7 +157,22 @@ export class CrossModuleSubscriber implements OnModuleInit {
         // The approved offer, VAT-inclusive (`baseline.total`) — the Contract Value measure, and a
         // different thing from the deal's Award Value (excl. VAT) and the tender's estimate.
         value: basis.value,
+        // Carry the award's explicit currency into the contractual commercial snapshot. The
+        // baseline stores the amount, while the governed award evidence is the authoritative
+        // currency source for a tender-created contract; never leave the handover currency null
+        // when the award supplied it.
+        currency: tender.awardEvidence?.currency ?? null,
         commercialBaselineId: basis.baselineId,
+        sourceOpportunityId: tender.sourceOpportunityId,
+        acceptedQuotationId: basis.quotationId,
+        // Each quotation revision is a durable row. The basis pins that exact row and therefore
+        // supplies both the accepted quotation and accepted revision identity.
+        acceptedQuotationRevisionId: basis.quotationId,
+        awardAcceptanceType: 'tender_award',
+        awardAcceptanceEvidence: {
+          award: tender.awardEvidence,
+          commercialBasis: basis,
+        } as Record<string, unknown>,
         status: 'draft',
       },
       // Same key on both paths: an award and a later baseline link can never both produce a contract.
@@ -582,6 +597,69 @@ export class CrossModuleSubscriber implements OnModuleInit {
         const p = e.payload as Record<string, unknown>;
         const account = p.account as { id: string; name: string } | null;
         const tender = p.tender as { id: string; title: string | null } | null;
+        const originalContractValue = typeof p.value === 'number' && Number.isFinite(p.value) ? p.value : null;
+        // The contract event carries the exact locked baseline identity.  Rehydrate that row once
+        // at handover time so the project snapshot can stand alone after Sales records evolve.
+        // This is a frozen read, never a "latest" lookup and never a read from live Tender/BOQ state.
+        const baseline = (p.commercialBaselineId as string | null)
+          ? await this.quotations.getBaselineById(e.tenantId, p.commercialBaselineId as string)
+          : null;
+        const pricingInput = baseline?.pricing && Array.isArray(baseline.pricing.lines) ? baseline.pricing : null;
+        const estimationInput = Array.isArray(baseline?.estimation) ? baseline.estimation : null;
+        // Pricing-sheet authored quotations persist both the legacy pricing shape and the
+        // canonical estimation build-up.  The estimation projection is the authoritative cost
+        // source in that case; choosing `pricingInput` first would silently turn a real frozen
+        // cost into zero because the legacy compatibility shape has no cost fields.
+        const computedFrozenPricing = baseline?.lines?.length && estimationInput
+          ? computeEstimationPricing(baseline.lines, estimationInput)
+          : baseline?.lines?.length && pricingInput
+            ? computeQuotationPricing(baseline.lines, pricingInput)
+            : null;
+        // Some current Tender fixtures persist an explicit frozen cost evidence object rather
+        // than the unified estimation array.  It is still authoritative evidence when present.
+        const explicitFrozenCost = baseline?.estimation && !Array.isArray(baseline.estimation)
+          && typeof (baseline.estimation as Record<string, unknown>).cost === 'number'
+          ? Number((baseline.estimation as Record<string, unknown>).cost)
+          : null;
+        const candidateFrozenCost = explicitFrozenCost ?? computedFrozenPricing?.totalCost ?? null;
+        // A zero result from an empty/legacy projection is unknown, not a real cost baseline.
+        const frozenCost = candidateFrozenCost !== null && Number.isFinite(candidateFrozenCost) && candidateFrozenCost > 0
+          ? candidateFrozenCost
+          : null;
+        const sourceBundle = {
+          contractId: e.aggregateId,
+          tenantId: e.tenantId,
+          sourceOpportunityId: (p.sourceOpportunityId as string | null) ?? null,
+          sourceTenderId: (p.sourceTenderId as string | null) ?? tender?.id ?? null,
+          commercialScopeRevisionId: (p.commercialScopeRevisionId as string | null) ?? null,
+          boqRevisionId: (p.boqRevisionId as string | null) ?? null,
+          estimateRevisionId: (p.estimateRevisionId as string | null) ?? null,
+          acceptedQuotationId: (p.acceptedQuotationId as string | null) ?? null,
+          acceptedQuotationRevisionId: (p.acceptedQuotationRevisionId as string | null) ?? null,
+          commercialBaselineId: (p.commercialBaselineId as string | null) ?? null,
+          originalContractValue,
+          currency: (p.currency as string | null) ?? null,
+          awardAcceptanceType: (p.awardAcceptanceType as string | null) ?? null,
+          awardAcceptanceEvidence: p.awardAcceptanceEvidence ?? null,
+          // Full frozen baseline evidence is intentionally copied by value.  It is optional for
+          // legacy/tender paths that have no quotation baseline, and absent cost remains explicit.
+          frozenCommercialBaseline: baseline ? {
+            id: baseline.id,
+            quotationId: baseline.quotationId,
+            revision: baseline.revision,
+            sourceOpportunityId: baseline.sourceOpportunityId,
+            sourceTenderId: baseline.sourceTenderId,
+            lines: baseline.lines,
+            pricing: baseline.pricing,
+            estimation: baseline.estimation,
+            subtotal: baseline.subtotal,
+            vatTotal: baseline.vatTotal,
+            total: baseline.total,
+            lockedAt: baseline.lockedAt,
+          } : null,
+        };
+        const handoverId = newId();
+        const handoverSnapshotHash = hashHandoverSnapshot(sourceBundle);
         const project = await this.projects.create(
           {
             tenantId: e.tenantId,
@@ -591,7 +669,24 @@ export class CrossModuleSubscriber implements OnModuleInit {
             contractTitle: (p.title as string) ?? null,
             accountId: account?.id ?? null,
             accountName: account?.name ?? null,
-            value: (p.value as number) ?? 0,
+            value: originalContractValue ?? 0,
+            handoverId,
+            handoverSnapshotHash,
+            handoverSnapshot: sourceBundle,
+            handoverLockedAt: new Date().toISOString(),
+            origin: 'commercial_handover',
+            sourceOpportunityId: sourceBundle.sourceOpportunityId,
+            sourceTenderId: sourceBundle.sourceTenderId,
+            commercialScopeRevisionId: sourceBundle.commercialScopeRevisionId,
+            boqRevisionId: sourceBundle.boqRevisionId,
+            estimateRevisionId: sourceBundle.estimateRevisionId,
+            acceptedQuotationId: sourceBundle.acceptedQuotationId,
+            acceptedQuotationRevisionId: sourceBundle.acceptedQuotationRevisionId,
+            commercialBaselineId: sourceBundle.commercialBaselineId,
+            originalContractValue,
+            currency: sourceBundle.currency,
+            awardAcceptanceType: sourceBundle.awardAcceptanceType as 'quotation_acceptance' | 'tender_award' | 'manual' | null,
+            awardAcceptanceEvidence: sourceBundle.awardAcceptanceEvidence as Record<string, unknown> | null,
             status: 'planned',
           },
           // Idempotency: re-signing the same contract (or an outbox retry) must not
@@ -619,15 +714,29 @@ export class CrossModuleSubscriber implements OnModuleInit {
                 title: project.title,
                 plannedValue: project.value,
               });
-              if (tender?.id) {
-                const { items } = await this.tenders.getOrCreateBOQ(e.tenantId, e.companyId, tender.id);
-                if (items.length > 0) {
-                  await this.cbs.syncFromBoq(project.id, e.tenantId, items);
-                  this.logger.log(
-                    `⚡ contract.signed → seeded root WBS + ${items.length} CBS node(s) on Project ${project.id} from tender ${tender.id} BOQ`,
-                  );
-                }
-              }
+            }
+            const existingCbs = await this.cbs.list({ projectId: project.id });
+            // Seed one locked opening CBS node only when a frozen pricing/estimation projection
+            // supplied a real cost. Contract/customer value is not a cost proxy; when unavailable,
+            // leave CBS unseeded and keep the gap explicit rather than writing zero/default data.
+            if (existingCbs.length === 0 && frozenCost !== null && baseline) {
+              await this.cbs.createHandoverBaseline({
+                tenantId: e.tenantId,
+                projectId: project.id,
+                code: '1',
+                title: `${project.title} — frozen commercial cost baseline`,
+                category: 'direct',
+                budgetAmount: frozenCost,
+                forecastAmount: frozenCost,
+                currency: sourceBundle.currency ?? 'AED',
+                sourceRevisionId: sourceBundle.estimateRevisionId ?? baseline.id,
+                handoverLocked: true,
+                notes: JSON.stringify({
+                  handoverId: sourceBundle.contractId,
+                  commercialBaselineId: baseline.id,
+                  source: sourceBundle.estimateRevisionId ? 'estimate_revision' : 'commercial_baseline',
+                }),
+              });
             }
           },
         );
@@ -1410,11 +1519,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
         for (const contract of contractsList) {
           const projectsList = await this.projects.list({ contractId: contract.id });
           for (const proj of projectsList) {
-            const { items } = await this.tenders.getOrCreateBOQ(e.tenantId, e.companyId, tenderId);
-            if (items && items.length > 0) {
-              await this.cbs.syncFromBoq(proj.id, e.tenantId, items);
-              this.logger.log(`⚡ BOQ updated for Tender ${tenderId} → auto-synced ${items.length} CBS nodes on Project ${proj.id}`);
-            }
+            // Handover-locked Projects are intentionally not resynchronised from live Tender BOQ.
+            // Legacy projects without a handover identity remain untouched until an explicit,
+            // governed rebaseline path is designed.
+            if (proj.handoverLockedAt) continue;
           }
         }
       }),
@@ -1575,4 +1683,3 @@ export class CrossModuleSubscriber implements OnModuleInit {
     this.logger.log('Cross-module event subscribers registered (CRM → Tender → Contract → Project deal chain + operate loop)');
   }
 }
-

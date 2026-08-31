@@ -1,4 +1,5 @@
 import { type Id, newId } from '@aura/shared';
+import type { HandoverSnapshot } from './handover';
 
 // Projects domain — framework-free. A Project is the delivery/execution of a signed
 // contract: the final link in the deal chain (CRM → Tender → Contract → Project). It
@@ -6,6 +7,7 @@ import { type Id, newId } from '@aura/shared';
 // arrives at delivery still by reference, never a DB join.
 
 export type ProjectStatus = 'planned' | 'active' | 'completed' | 'cancelled';
+export type ProjectOrigin = 'commercial_handover' | 'internal' | 'legacy';
 
 export interface Project {
   id: Id;
@@ -22,6 +24,24 @@ export interface Project {
   status: ProjectStatus;
   /** Project budget (carried from the contract value). */
   value: number;
+  origin: ProjectOrigin;
+  /** Immutable Contract → Project handover identity and commercial lineage. */
+  handoverId: Id | null;
+  handoverSnapshotHash: string | null;
+  handoverSnapshot: HandoverSnapshot | null;
+  handoverLockedAt: string | null;
+  sourceOpportunityId: Id | null;
+  sourceTenderId: Id | null;
+  commercialScopeRevisionId: Id | null;
+  boqRevisionId: Id | null;
+  estimateRevisionId: Id | null;
+  acceptedQuotationId: Id | null;
+  acceptedQuotationRevisionId: Id | null;
+  commercialBaselineId: Id | null;
+  originalContractValue: number | null;
+  currency: string | null;
+  awardAcceptanceType: 'quotation_acceptance' | 'tender_award' | 'manual' | null;
+  awardAcceptanceEvidence: Record<string, unknown> | null;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -38,6 +58,23 @@ export interface NewProject {
   accountName?: string | null;
   status?: ProjectStatus;
   value?: number;
+  origin?: ProjectOrigin;
+  handoverId?: Id | null;
+  handoverSnapshotHash?: string | null;
+  handoverSnapshot?: HandoverSnapshot | null;
+  handoverLockedAt?: string | null;
+  sourceOpportunityId?: Id | null;
+  sourceTenderId?: Id | null;
+  commercialScopeRevisionId?: Id | null;
+  boqRevisionId?: Id | null;
+  estimateRevisionId?: Id | null;
+  acceptedQuotationId?: Id | null;
+  acceptedQuotationRevisionId?: Id | null;
+  commercialBaselineId?: Id | null;
+  originalContractValue?: number | null;
+  currency?: string | null;
+  awardAcceptanceType?: Project['awardAcceptanceType'];
+  awardAcceptanceEvidence?: Record<string, unknown> | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
@@ -55,6 +92,23 @@ export function makeProject(input: NewProject): Project {
     accountName: input.accountName ?? null,
     status: input.status ?? 'planned',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    origin: input.origin ?? (input.handoverLockedAt ? 'commercial_handover' : 'internal'),
+    handoverId: input.handoverId ?? null,
+    handoverSnapshotHash: input.handoverSnapshotHash ?? null,
+    handoverSnapshot: input.handoverSnapshot ?? null,
+    handoverLockedAt: input.handoverLockedAt ?? null,
+    sourceOpportunityId: input.sourceOpportunityId ?? null,
+    sourceTenderId: input.sourceTenderId ?? null,
+    commercialScopeRevisionId: input.commercialScopeRevisionId ?? null,
+    boqRevisionId: input.boqRevisionId ?? null,
+    estimateRevisionId: input.estimateRevisionId ?? null,
+    acceptedQuotationId: input.acceptedQuotationId ?? null,
+    acceptedQuotationRevisionId: input.acceptedQuotationRevisionId ?? null,
+    commercialBaselineId: input.commercialBaselineId ?? null,
+    originalContractValue: input.originalContractValue ?? (Number.isFinite(input.value) ? Number(input.value) : null),
+    currency: input.currency?.trim().toUpperCase() || null,
+    awardAcceptanceType: input.awardAcceptanceType ?? null,
+    awardAcceptanceEvidence: input.awardAcceptanceEvidence ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

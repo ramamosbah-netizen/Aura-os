@@ -34,6 +34,9 @@ export class ProjectService implements OnModuleInit {
       permission: 'projects.project.create',
       validate: (input) => {
         if (!input.title || !input.title.trim()) throw new Error('project title is required');
+        if (input.origin === 'commercial_handover' && (!input.contractId || !input.handoverLockedAt || !input.handoverSnapshotHash || !input.handoverSnapshot)) {
+          throw new Error('commercial handover projects require a signed contract and immutable handover evidence');
+        }
       },
       handler: async (command, tx) => {
         const project = makeProject(command.payload);
@@ -76,7 +79,7 @@ export class ProjectService implements OnModuleInit {
     });
   }
 
-  /** Update mutable fields on a project (title, reference, status, value). */
+  /** Update descriptive/value fields on a project. Lifecycle status changes use changeStatus(). */
   /**
    * Guarded execution lifecycle: planned → active (STARTED) → completed
    * (COMPLETED — the reactor completes the source contract, closing the deal
@@ -114,6 +117,12 @@ export class ProjectService implements OnModuleInit {
 
   async update(id: Id, patch: Partial<Pick<Project, 'title' | 'reference' | 'status' | 'value'>>): Promise<Project> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'project', id);
+    if (patch.status !== undefined) {
+      throw new Error('project status changes must use the governed status command');
+    }
+    if (existing.handoverLockedAt && patch.value !== undefined && patch.value !== existing.value) {
+      throw new Error(`project ${id} original contract value is immutable after handover; use an approved variation`);
+    }
     const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     const updated: Project = { ...existing, ...defined };
     const event = makeEvent({

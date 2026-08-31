@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -277,22 +277,26 @@ export class ProjectsController {
   // ── CBS (COST BREAKDOWN STRUCTURE) ───────────────────────────────────────
 
   @Post('cbs')
-  createCbsNode(@Body() dto: CreateCbsNodeDto): Promise<CbsNode> {
+  async createCbsNode(@Body() dto: CreateCbsNodeDto): Promise<CbsNode> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.code?.trim()) throw new BadRequestException('code is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
-    return this.cbs.create({
-      tenantId: ctx.tenantId,
-      projectId: dto.projectId,
-      parentId: dto.parentId ?? null,
-      code: dto.code,
-      title: dto.title,
-      category: dto.category,
-      budgetAmount: dto.budgetAmount,
-      currency: dto.currency,
-      notes: dto.notes,
-    });
+    try {
+      return await this.cbs.create({
+        tenantId: ctx.tenantId,
+        projectId: dto.projectId,
+        parentId: dto.parentId ?? null,
+        code: dto.code,
+        title: dto.title,
+        category: dto.category,
+        budgetAmount: dto.budgetAmount,
+        currency: dto.currency,
+        notes: dto.notes,
+      });
+    } catch (error) {
+      throw this.mapCbsError(error);
+    }
   }
 
   @Get('cbs')
@@ -358,13 +362,28 @@ export class ProjectsController {
     @Param('id') id: string,
     @Body() dto: Partial<Pick<CbsNode, 'title' | 'category' | 'budgetAmount' | 'committedAmount' | 'actualAmount' | 'forecastAmount' | 'notes'>>,
   ): Promise<CbsNode> {
-    return this.cbs.update(id, dto);
+    try {
+      return await this.cbs.update(id, dto);
+    } catch (error) {
+      throw this.mapCbsError(error);
+    }
   }
 
   @Delete('cbs/:id')
   async deleteCbsNode(@Param('id') id: string): Promise<{ deleted: true }> {
-    await this.cbs.delete(id);
-    return { deleted: true };
+    try {
+      await this.cbs.delete(id);
+      return { deleted: true };
+    } catch (error) {
+      throw this.mapCbsError(error);
+    }
+  }
+
+  private mapCbsError(error: unknown): Error {
+    const message = error instanceof Error ? error.message : 'CBS operation failed';
+    if (message.includes('immutable after handover')) return new ConflictException(message);
+    if (message.includes('not found')) return new NotFoundException(message);
+    return new BadRequestException(message);
   }
 
   // ── DELAY ANALYSIS ───────────────────────────────────────────────────────

@@ -18,11 +18,13 @@ interface Row {
   variance: string | number;
   currency: string;
   notes: string | null;
+  source_revision_id: string | null;
+  handover_locked: boolean;
   created_at: Date | string;
 }
 
 const COLS =
-  'id, tenant_id, project_id, parent_id, code, title, category, budget_amount, committed_amount, actual_amount, forecast_amount, variance, currency, notes, created_at';
+  'id, tenant_id, project_id, parent_id, code, title, category, budget_amount, committed_amount, actual_amount, forecast_amount, variance, currency, notes, source_revision_id, handover_locked, created_at';
 
 function rowToNode(r: Row): CbsNode {
   return {
@@ -40,6 +42,8 @@ function rowToNode(r: Row): CbsNode {
     variance: Number(r.variance),
     currency: r.currency,
     notes: r.notes,
+    sourceRevisionId: r.source_revision_id,
+    handoverLocked: r.handover_locked,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
 }
@@ -50,12 +54,12 @@ export class PostgresCbsStore implements CbsStore {
   async create(n: CbsNode): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_projects_cbs_nodes
-        (id, tenant_id, project_id, parent_id, code, title, category, budget_amount, committed_amount, actual_amount, forecast_amount, currency, notes, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        (id, tenant_id, project_id, parent_id, code, title, category, budget_amount, committed_amount, actual_amount, forecast_amount, currency, notes, source_revision_id, handover_locked, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [
         n.id, n.tenantId, n.projectId, n.parentId, n.code, n.title,
         n.category, n.budgetAmount, n.committedAmount, n.actualAmount,
-        n.forecastAmount, n.currency, n.notes, n.createdAt,
+       n.forecastAmount, n.currency, n.notes, n.sourceRevisionId, n.handoverLocked, n.createdAt,
       ],
     );
   }
@@ -64,10 +68,10 @@ export class PostgresCbsStore implements CbsStore {
     await this.pool.query(
       `UPDATE public.aura_projects_cbs_nodes
        SET code=$2, title=$3, category=$4, budget_amount=$5, committed_amount=$6,
-           actual_amount=$7, forecast_amount=$8, currency=$9, notes=$10
+           actual_amount=$7, forecast_amount=$8, currency=$9, notes=$10, source_revision_id=$11, handover_locked=$12
        WHERE id=$1`,
-      [n.id, n.code, n.title, n.category, n.budgetAmount, n.committedAmount,
-       n.actualAmount, n.forecastAmount, n.currency, n.notes],
+       [n.id, n.code, n.title, n.category, n.budgetAmount, n.committedAmount,
+       n.actualAmount, n.forecastAmount, n.currency, n.notes, n.sourceRevisionId, n.handoverLocked],
     );
   }
 

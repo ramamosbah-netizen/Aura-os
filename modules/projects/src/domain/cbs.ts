@@ -21,6 +21,9 @@ export interface CbsNode {
   variance: number;        // budget - forecast (computed)
   currency: string;
   notes: string | null;
+  /** Source revision used for the opening delivery baseline. */
+  sourceRevisionId: Id | null;
+  handoverLocked: boolean;
   createdAt: string;
 }
 
@@ -37,6 +40,8 @@ export interface NewCbsNode {
   forecastAmount?: number;
   currency?: string;
   notes?: string | null;
+  sourceRevisionId?: Id | null;
+  handoverLocked?: boolean;
 }
 
 export function makeCbsNode(input: NewCbsNode): CbsNode {
@@ -58,6 +63,8 @@ export function makeCbsNode(input: NewCbsNode): CbsNode {
     variance: Number((budget - forecast).toFixed(2)),
     currency: input.currency ?? 'AED',
     notes: input.notes ?? null,
+    sourceRevisionId: input.sourceRevisionId ?? null,
+    handoverLocked: input.handoverLocked ?? false,
     createdAt: new Date().toISOString(),
   };
 }

@@ -17,6 +17,15 @@ interface Row {
   account_name: string | null;
   status: string;
   value: string | number;
+  source_opportunity_id: string | null;
+  currency: string | null;
+  commercial_scope_revision_id: string | null;
+  boq_revision_id: string | null;
+  estimate_revision_id: string | null;
+  accepted_quotation_id: string | null;
+  accepted_quotation_revision_id: string | null;
+  award_acceptance_type: string | null;
+  award_acceptance_evidence: Record<string, unknown> | null;
   commercial_baseline_id: string | null;
   owner_id: string | null;
   created_by: string | null;
@@ -24,7 +33,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, title, reference, tender_id, tender_title, account_id, account_name, status, value, commercial_baseline_id, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, title, reference, tender_id, tender_title, account_id, account_name, status, value, commercial_baseline_id, source_opportunity_id, currency, commercial_scope_revision_id, boq_revision_id, estimate_revision_id, accepted_quotation_id, accepted_quotation_revision_id, award_acceptance_type, award_acceptance_evidence, owner_id, created_by, created_at';
 
 function rowToContract(r: Row): Contract {
   return {
@@ -40,6 +49,15 @@ function rowToContract(r: Row): Contract {
     status: r.status as Contract['status'],
     value: Number(r.value),
     commercialBaselineId: r.commercial_baseline_id,
+    sourceOpportunityId: r.source_opportunity_id,
+    currency: r.currency,
+    commercialScopeRevisionId: r.commercial_scope_revision_id,
+    boqRevisionId: r.boq_revision_id,
+    estimateRevisionId: r.estimate_revision_id,
+    acceptedQuotationId: r.accepted_quotation_id,
+    acceptedQuotationRevisionId: r.accepted_quotation_revision_id,
+    awardAcceptanceType: (r.award_acceptance_type as Contract['awardAcceptanceType']) ?? null,
+    awardAcceptanceEvidence: r.award_acceptance_evidence,
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
@@ -61,8 +79,8 @@ export class PostgresContractStore implements ContractStore {
 
   private insert(executor: Pool | PoolClient, c: Contract): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_contracts_contracts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [c.id, c.tenantId, c.companyId, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.commercialBaselineId, c.ownerId, c.createdBy, c.createdAt],
+      `INSERT INTO public.aura_contracts_contracts (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+      [c.id, c.tenantId, c.companyId, c.title, c.reference, c.tenderId, c.tenderTitle, c.accountId, c.accountName, c.status, c.value, c.commercialBaselineId, c.sourceOpportunityId, c.currency, c.commercialScopeRevisionId, c.boqRevisionId, c.estimateRevisionId, c.acceptedQuotationId, c.acceptedQuotationRevisionId, c.awardAcceptanceType, c.awardAcceptanceEvidence ? JSON.stringify(c.awardAcceptanceEvidence) : null, c.ownerId, c.createdBy, c.createdAt],
     );
   }
 

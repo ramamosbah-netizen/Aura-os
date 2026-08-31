@@ -1,5 +1,6 @@
 // @aura/projects — the Projects business module (deal chain: … → Contract → Project).
 export * from './domain/project';
+export * from './domain/handover';
 export * from './domain/wbs';
 export * from './domain/cbs';
 export * from './domain/delay-eot';

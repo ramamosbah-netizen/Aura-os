@@ -17,13 +17,30 @@ interface Row {
   account_name: string | null;
   status: string;
   value: string | number;
+  origin: string | null;
+  handover_id: string | null;
+  handover_snapshot_hash: string | null;
+  handover_snapshot: Record<string, unknown> | null;
+  handover_locked_at: Date | string | null;
+  source_opportunity_id: string | null;
+  source_tender_id: string | null;
+  commercial_scope_revision_id: string | null;
+  boq_revision_id: string | null;
+  estimate_revision_id: string | null;
+  accepted_quotation_id: string | null;
+  accepted_quotation_revision_id: string | null;
+  commercial_baseline_id: string | null;
+  original_contract_value: string | number | null;
+  currency: string | null;
+  award_acceptance_type: string | null;
+  award_acceptance_evidence: Record<string, unknown> | null;
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
-  'id, tenant_id, company_id, title, reference, contract_id, contract_title, account_id, account_name, status, value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, title, reference, contract_id, contract_title, account_id, account_name, status, value, origin, handover_id, handover_snapshot_hash, handover_snapshot, handover_locked_at, source_opportunity_id, source_tender_id, commercial_scope_revision_id, boq_revision_id, estimate_revision_id, accepted_quotation_id, accepted_quotation_revision_id, commercial_baseline_id, original_contract_value, currency, award_acceptance_type, award_acceptance_evidence, owner_id, created_by, created_at';
 
 function rowToProject(r: Row): Project {
   return {
@@ -38,6 +55,23 @@ function rowToProject(r: Row): Project {
     accountName: r.account_name,
     status: r.status as Project['status'],
     value: Number(r.value),
+    origin: (r.origin as Project['origin']) ?? 'legacy',
+    handoverId: r.handover_id,
+    handoverSnapshotHash: r.handover_snapshot_hash,
+    handoverSnapshot: r.handover_snapshot,
+    handoverLockedAt: r.handover_locked_at ? (r.handover_locked_at instanceof Date ? r.handover_locked_at.toISOString() : String(r.handover_locked_at)) : null,
+    sourceOpportunityId: r.source_opportunity_id,
+    sourceTenderId: r.source_tender_id,
+    commercialScopeRevisionId: r.commercial_scope_revision_id,
+    boqRevisionId: r.boq_revision_id,
+    estimateRevisionId: r.estimate_revision_id,
+    acceptedQuotationId: r.accepted_quotation_id,
+    acceptedQuotationRevisionId: r.accepted_quotation_revision_id,
+    commercialBaselineId: r.commercial_baseline_id,
+    originalContractValue: r.original_contract_value == null ? null : Number(r.original_contract_value),
+    currency: r.currency,
+    awardAcceptanceType: (r.award_acceptance_type as Project['awardAcceptanceType']) ?? null,
+    awardAcceptanceEvidence: r.award_acceptance_evidence,
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
@@ -59,8 +93,8 @@ export class PostgresProjectStore implements ProjectStore {
 
   private insert(executor: Pool | PoolClient, p: Project): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_projects_projects (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [p.id, p.tenantId, p.companyId, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.ownerId, p.createdBy, p.createdAt],
+      `INSERT INTO public.aura_projects_projects (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)`,
+      [p.id, p.tenantId, p.companyId, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.origin, p.handoverId, p.handoverSnapshotHash, p.handoverSnapshot ? JSON.stringify(p.handoverSnapshot) : null, p.handoverLockedAt, p.sourceOpportunityId, p.sourceTenderId, p.commercialScopeRevisionId, p.boqRevisionId, p.estimateRevisionId, p.acceptedQuotationId, p.acceptedQuotationRevisionId, p.commercialBaselineId, p.originalContractValue, p.currency, p.awardAcceptanceType, p.awardAcceptanceEvidence ? JSON.stringify(p.awardAcceptanceEvidence) : null, p.ownerId, p.createdBy, p.createdAt],
     );
   }
 

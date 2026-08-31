@@ -22,6 +22,16 @@ export interface Contract {
   status: ContractStatus;
   /** Awarded contract value. */
   value: number;
+  /** Immutable commercial lineage captured at contract creation/signing. */
+  sourceOpportunityId: Id | null;
+  currency: string | null;
+  commercialScopeRevisionId: Id | null;
+  boqRevisionId: Id | null;
+  estimateRevisionId: Id | null;
+  acceptedQuotationId: Id | null;
+  acceptedQuotationRevisionId: Id | null;
+  awardAcceptanceType: 'quotation_acceptance' | 'tender_award' | 'manual' | null;
+  awardAcceptanceEvidence: Record<string, unknown> | null;
   /** The locked Commercial Baseline (approved-price snapshot) this contract was created from —
    * reference, not join. Present when the contract came from an approved quotation (R3). */
   commercialBaselineId: Id | null;
@@ -41,6 +51,15 @@ export interface NewContract {
   accountName?: string | null;
   status?: ContractStatus;
   value?: number;
+  sourceOpportunityId?: Id | null;
+  currency?: string | null;
+  commercialScopeRevisionId?: Id | null;
+  boqRevisionId?: Id | null;
+  estimateRevisionId?: Id | null;
+  acceptedQuotationId?: Id | null;
+  acceptedQuotationRevisionId?: Id | null;
+  awardAcceptanceType?: Contract['awardAcceptanceType'];
+  awardAcceptanceEvidence?: Record<string, unknown> | null;
   commercialBaselineId?: Id | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
@@ -59,6 +78,15 @@ export function makeContract(input: NewContract): Contract {
     accountName: input.accountName ?? null,
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    sourceOpportunityId: input.sourceOpportunityId ?? null,
+    currency: input.currency?.trim().toUpperCase() || null,
+    commercialScopeRevisionId: input.commercialScopeRevisionId ?? null,
+    boqRevisionId: input.boqRevisionId ?? null,
+    estimateRevisionId: input.estimateRevisionId ?? null,
+    acceptedQuotationId: input.acceptedQuotationId ?? null,
+    acceptedQuotationRevisionId: input.acceptedQuotationRevisionId ?? null,
+    awardAcceptanceType: input.awardAcceptanceType ?? null,
+    awardAcceptanceEvidence: input.awardAcceptanceEvidence ?? null,
     commercialBaselineId: input.commercialBaselineId ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),

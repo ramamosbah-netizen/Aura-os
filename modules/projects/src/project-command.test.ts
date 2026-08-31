@@ -39,4 +39,37 @@ describe('Projects create via CommandBus', () => {
       service.create({ tenantId: 't1', title: '  ' } as unknown as Parameters<typeof service.create>[0]),
     ).rejects.toThrow('project title is required');
   });
+
+  it('blocks generic status updates so completion uses the governed command', async () => {
+    const { service } = buildService();
+    const project = await service.create({ tenantId: 't1', title: 'Lifecycle proof', status: 'active', contractId: 'contract-1' });
+
+    await expect(service.update(project.id, { status: 'completed' })).rejects.toThrow('governed status command');
+  });
+
+  it('preserves the governed completion event path', async () => {
+    const { service, events } = buildService();
+    const project = await service.create({ tenantId: 't1', title: 'Lifecycle proof', status: 'active', contractId: 'contract-1' });
+
+    const updated = await service.changeStatus(project.id, 'completed');
+    expect(updated.status).toBe('completed');
+    const appendCalls = (events.append as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const lastEvent = appendCalls.at(-1)?.[0] as Array<{ type?: string }>;
+    expect(lastEvent?.[0]?.type).toBe('projects.project.completed');
+  });
+
+  it('rejects original contract value changes after an immutable handover', async () => {
+    const { service } = buildService();
+    const project = await service.create({
+      tenantId: 't1',
+      title: 'Handed over project',
+      value: 1_000,
+      originalContractValue: 1_000,
+      handoverId: 'handover-1',
+      handoverSnapshotHash: 'hash-1',
+      handoverLockedAt: new Date().toISOString(),
+    });
+
+    await expect(service.update(project.id, { value: 1_100 })).rejects.toThrow('immutable after handover');
+  });
 });

@@ -59,4 +59,62 @@ describe('CbsService.syncFromBoq', () => {
     expect(node11.parentId).toBe(node1.id);
     expect(node12.parentId).toBe(node1.id);
   });
+
+  it('rejects budget mutations on a handover-locked CBS baseline', async () => {
+    const node = {
+      id: 'cbs-locked', tenantId: 'tenant-456', projectId: 'proj-123', parentId: null,
+      code: '1', title: 'Locked baseline', category: 'direct', budgetAmount: 100,
+      committedAmount: 0, actualAmount: 0, forecastAmount: 100, variance: 0,
+      currency: 'AED', notes: null, sourceRevisionId: 'boq-r1', handoverLocked: true,
+      createdAt: new Date().toISOString(),
+    } as any;
+    const mockStore = {
+      get: vi.fn(async () => node),
+      update: vi.fn(),
+      list: vi.fn(async () => [node]),
+    } as unknown as CbsStore;
+    const service = new CbsService(mockStore, { append: vi.fn() } as unknown as EventStore);
+
+    await expect(service.recordBudget(node.id, 25)).rejects.toThrow('immutable after handover');
+    expect(mockStore.update).not.toHaveBeenCalled();
+  });
+
+  it('allows only the explicit approved-variation budget path on a locked baseline', async () => {
+    const node = {
+      id: 'cbs-variation', tenantId: 'tenant-456', projectId: 'proj-123', parentId: null,
+      code: '1', title: 'Locked baseline', category: 'direct', budgetAmount: 100,
+      committedAmount: 0, actualAmount: 0, forecastAmount: 100, variance: 0,
+      currency: 'AED', notes: null, sourceRevisionId: 'boq-r1', handoverLocked: true,
+      createdAt: new Date().toISOString(),
+    } as any;
+    const mockStore = {
+      get: vi.fn(async () => node),
+      update: vi.fn(async (updated) => Object.assign(node, updated)),
+      list: vi.fn(async () => [node]),
+    } as unknown as CbsStore;
+    const service = new CbsService(mockStore, { append: vi.fn() } as unknown as EventStore);
+
+    const updated = await service.recordApprovedVariationBudget(node.id, 25);
+    expect(updated.budgetAmount).toBe(125);
+    expect(updated.handoverLocked).toBe(true);
+    expect(mockStore.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not seed a handover-locked project from a live BOQ', async () => {
+    const mockStore = {
+      list: vi.fn(async () => []),
+      create: vi.fn(),
+      update: vi.fn(),
+      get: vi.fn(async () => null),
+    } as unknown as CbsStore;
+    const projectStore = {
+      get: vi.fn(async () => ({ tenantId: 'tenant-456', handoverLockedAt: new Date().toISOString() })),
+    } as any;
+    const service = new CbsService(mockStore, { append: vi.fn() } as unknown as EventStore, projectStore);
+
+    await expect(service.syncFromBoq('proj-123', 'tenant-456', [
+      { itemCode: '1', description: 'Mutable item', unit: 'LS', quantity: 1, rate: 10, totalAmount: 10 },
+    ])).rejects.toThrow('immutable after handover');
+    expect(mockStore.create).not.toHaveBeenCalled();
+  });
 });

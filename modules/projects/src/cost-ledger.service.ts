@@ -32,7 +32,12 @@ export class CostLedgerService {
     if (stored.cbsNodeId && stored.amount !== 0) {
       try {
         if (stored.type === 'committed') await this.cbs.recordCommittedCost(stored.cbsNodeId, stored.amount);
-        else if (stored.type === 'budget') await this.cbs.recordBudget(stored.cbsNodeId, stored.amount);
+        else if (stored.type === 'budget') {
+          // Only the append-only, idempotent approved-variation source may adjust a locked
+          // handover baseline. All other budget writers retain the generic immutable guard.
+          if (stored.source === 'variation') await this.cbs.recordApprovedVariationBudget(stored.cbsNodeId, stored.amount);
+          else await this.cbs.recordBudget(stored.cbsNodeId, stored.amount);
+        }
         else await this.cbs.recordActualCost(stored.cbsNodeId, stored.amount);
       } catch (err) {
         // The ledger entry stands regardless — the CBS cache can be rebuilt from it.

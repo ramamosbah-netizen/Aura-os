@@ -3,6 +3,7 @@ import { assertSameTenant, type Id, makeEvent, sameTenantOrNull } from '@aura/sh
 import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { type CbsNode, type NewCbsNode, makeCbsNode, calculateCbsSummary, type CbsSummary } from './domain/cbs';
 import { CBS_STORE, type CbsNodeFilter, type CbsStore } from './cbs-store';
+import { PROJECT_STORE, type ProjectStore } from './project-store';
 
 @Injectable()
 export class CbsService {
@@ -11,13 +12,33 @@ export class CbsService {
   constructor(
     @Inject(CBS_STORE) private readonly store: CbsStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Optional() @Inject(PROJECT_STORE) private readonly projects: ProjectStore | null = null,
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewCbsNode): Promise<CbsNode> {
-    const node = makeCbsNode(input);
+    await this.assertProjectBaselineWritable(input.projectId, input.tenantId);
+    return this.persistNode(makeCbsNode(input));
+  }
+
+  /**
+   * Seed the opening CBS baseline from a signed Contract handover.  This is deliberately a
+   * separate, non-controller method: generic CBS writers remain blocked once the project is locked,
+   * while the contract reactor may persist one immutable opening node when it has a real frozen cost
+   * source.  The method refuses an untraceable seed rather than treating a missing cost as zero.
+   */
+  async createHandoverBaseline(input: NewCbsNode): Promise<CbsNode> {
+    if (!input.sourceRevisionId) throw new Error('handover CBS baseline requires frozen source evidence');
+    const project = this.projects ? await this.projects.get(input.projectId) : null;
+    if (this.projects && (!project || project.tenantId !== input.tenantId || !project.handoverLockedAt)) {
+      throw new Error(`project ${input.projectId} is not a locked commercial handover`);
+    }
+    return this.persistNode(makeCbsNode({ ...input, handoverLocked: true }));
+  }
+
+  private async persistNode(node: CbsNode): Promise<CbsNode> {
     await this.store.create(node);
     this.logger.log(`CBS Node created: ${node.code} - ${node.title} (project=${node.projectId})`);
 
@@ -41,6 +62,9 @@ export class CbsService {
 
   async update(id: Id, patch: Partial<Pick<CbsNode, 'title' | 'category' | 'budgetAmount' | 'committedAmount' | 'actualAmount' | 'forecastAmount' | 'notes'>>): Promise<CbsNode> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    if (existing.handoverLocked && (patch.title !== undefined || patch.category !== undefined || patch.budgetAmount !== undefined || patch.notes !== undefined)) {
+      throw new Error(`CBS baseline node ${id} is immutable after handover; use an approved variation`);
+    }
 
     const budget = patch.budgetAmount ?? existing.budgetAmount;
     const forecast = patch.forecastAmount ?? existing.forecastAmount;
@@ -64,6 +88,24 @@ export class CbsService {
    *  (addition +, omission −). Variance (budget − forecast) is recomputed. */
   async recordBudget(id: Id, amount: number): Promise<CbsNode> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    if (existing.handoverLocked) {
+      throw new Error(`CBS baseline node ${id} budget is immutable after handover; use an approved variation`);
+    }
+
+    return this.applyBudgetDelta(existing, amount);
+  }
+
+  /**
+   * The sole governed exception to the handover budget lock. The approved-variation event is
+   * already append-only and idempotent in CostLedgerService; this method is deliberately separate
+   * from recordBudget so generic CBS writers can never opt into the exception accidentally.
+   */
+  async recordApprovedVariationBudget(id: Id, amount: number): Promise<CbsNode> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    return this.applyBudgetDelta(existing, amount);
+  }
+
+  private async applyBudgetDelta(existing: CbsNode, amount: number): Promise<CbsNode> {
 
     const budget = Number((existing.budgetAmount + amount).toFixed(2));
     const updated: CbsNode = {
@@ -129,6 +171,8 @@ export class CbsService {
   }
 
   async delete(id: Id): Promise<void> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    if (existing.handoverLocked) throw new Error(`CBS baseline node ${id} is immutable after handover`);
     await this.store.delete(id);
     this.logger.log(`CBS Node deleted: ${id}`);
   }
@@ -164,6 +208,7 @@ export class CbsService {
   }
 
   async syncFromBoq(projectId: Id, tenantId: Id, items: Array<{ itemCode: string; description: string; unit: string; quantity: number; rate: number; totalAmount: number }>): Promise<void> {
+    await this.assertProjectBaselineWritable(projectId, tenantId);
     this.logger.log(`Syncing CBS from BOQ for project=${projectId} items=${items.length}`);
     
     const existing = await this.store.list({ projectId });
@@ -211,6 +256,20 @@ export class CbsService {
         });
         codeToIdMap.set(code, node.id);
       }
+    }
+  }
+
+  /**
+   * CBS creation/synchronisation is a baseline writer. Once the Project handover is locked,
+   * delivery changes must come through Variation/rebaseline commands rather than a live BOQ feed.
+   * The optional store keeps small in-memory unit tests source-compatible while the application
+   * module always provides the durable Project store.
+   */
+  private async assertProjectBaselineWritable(projectId: Id, tenantId: Id): Promise<void> {
+    if (!this.projects) return;
+    const project = await this.projects.get(projectId);
+    if (project && project.tenantId === tenantId && project.handoverLockedAt) {
+      throw new Error(`project ${projectId} CBS baseline is immutable after handover; use an approved variation`);
     }
   }
 }

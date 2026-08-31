@@ -978,6 +978,19 @@ jobs:
           E2E_PASSWORD: e2e-password
           E2E_TEST_TIMEOUT: '120000'
           E2E_EXPECT_TIMEOUT: '30000'
+      # Radar was the one browser gate with NO Playwright evidence upload — a failure left only the
+      # API log. Same failure-safe upload as web-smoke / web-smoke-postgres so a red radar gate is
+      # diagnosable from its trace + screenshot + error-context instead of guessed at.
+      - name: Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures-radar
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
       - name: API log on failure
         if: failure()
         run: cat apps/api/radar-api.log || true

@@ -30,14 +30,25 @@ export default defineConfig({
   // have, because Playwright already defaults to one worker under CI. Same number in both places
   // is worth more than the minute it saves.
   workers: 1,
-  reporter: [['list']],
+  // Zero retries, on purpose: a flaky test must stay a VISIBLE failure, never be masked by a
+  // passing retry. Diagnostics therefore capture the first (only) attempt — see `trace` below.
+  retries: 0,
+  // `list` keeps the live console output CI streams line-by-line; `html` writes a self-contained
+  // report into the artifact so a CI-only failure can be inspected offline. `open: 'never'` stops
+  // Playwright trying to launch a browser on the runner.
+  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   // Signs in once through the real login form and saves the session (G-03). When the API runs with
   // a verifier configured, PermissionsGuard engages on every route, so without a shared session the
   // whole suite is refused. No-ops when auth is off, so the local setup is unchanged.
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    // retain-on-failure, NOT on-first-retry: with retries:0 there is no retry, so on-first-retry
+    // recorded nothing — every CI-only browser failure died with just its one-line assertion. This
+    // keeps the trace AND a screenshot from the actual failing attempt. Video stays off (Playwright
+    // default): trace + screenshot have been sufficient; revisit only if evidence shows otherwise.
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     storageState: STORAGE_STATE,
   },
   projects: [

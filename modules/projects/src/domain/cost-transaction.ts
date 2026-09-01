@@ -35,6 +35,20 @@ export interface CostTransaction {
   type: CostTxnType;
   /** AED. May be negative (credit note, reversal, return). */
   amount: number;
+  /** Original source amount before conversion to the project/company base currency. */
+  sourceAmount?: number | null;
+  /** ISO currency of the originating source fact. */
+  sourceCurrency?: string | null;
+  /** Source-to-base conversion rate captured at recognition time. */
+  exchangeRate?: number | null;
+  /** Effective date of the captured FX rate. */
+  rateDate?: string | null;
+  /** Provenance for the captured FX rate (provider, document, or policy). */
+  rateSource?: string | null;
+  /** Monetary amount in the project/company base currency; null means unknown. */
+  baseAmount?: number | null;
+  /** Project/company accounting currency; null means unknown. */
+  baseCurrency?: string | null;
   /** Optional quantity movement carried alongside the cost (for the quantity ledger). */
   quantity: number | null;
   source: CostTxnSource;
@@ -59,6 +73,13 @@ export interface NewCostTransaction {
   wbsNodeId?: Id | null;
   type: CostTxnType;
   amount: number;
+  sourceAmount?: number | null;
+  sourceCurrency?: string | null;
+  exchangeRate?: number | null;
+  rateDate?: string | null;
+  rateSource?: string | null;
+  baseAmount?: number | null;
+  baseCurrency?: string | null;
   quantity?: number | null;
   source: CostTxnSource;
   sourceRef?: string | null;
@@ -71,6 +92,18 @@ export interface NewCostTransaction {
 
 export function makeCostTransaction(input: NewCostTransaction): CostTransaction {
   const now = new Date().toISOString();
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount)) throw new Error('cost transaction amount must be finite');
+  const sourceAmount = input.sourceAmount == null ? amount : Number(input.sourceAmount);
+  if (!Number.isFinite(sourceAmount)) throw new Error('cost transaction sourceAmount must be finite');
+  const sourceCurrency = input.sourceCurrency?.trim().toUpperCase() || null;
+  const baseCurrency = input.baseCurrency?.trim().toUpperCase() || null;
+  const exchangeRate = input.exchangeRate == null ? null : Number(input.exchangeRate);
+  if (exchangeRate != null && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
+    throw new Error('cost transaction exchangeRate must be positive and finite');
+  }
+  const baseAmount = input.baseAmount == null ? null : Number(input.baseAmount);
+  if (baseAmount != null && !Number.isFinite(baseAmount)) throw new Error('cost transaction baseAmount must be finite');
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -79,7 +112,14 @@ export function makeCostTransaction(input: NewCostTransaction): CostTransaction 
     cbsNodeId: input.cbsNodeId ?? null,
     wbsNodeId: input.wbsNodeId ?? null,
     type: input.type,
-    amount: Number(input.amount) || 0,
+    amount,
+    sourceAmount,
+    sourceCurrency,
+    exchangeRate,
+    rateDate: input.rateDate ?? null,
+    rateSource: input.rateSource?.trim() || null,
+    baseAmount,
+    baseCurrency,
     quantity: input.quantity != null ? Number(input.quantity) : null,
     source: input.source,
     sourceRef: input.sourceRef?.trim() || null,
@@ -92,12 +132,14 @@ export function makeCostTransaction(input: NewCostTransaction): CostTransaction 
 }
 
 /** Roll a set of ledger entries into committed / actual totals — the CBS balance IS this sum. */
-export function ledgerTotals(txns: CostTransaction[]): { committed: number; actual: number } {
+export function ledgerTotals(txns: CostTransaction[]): { budget: number; committed: number; actual: number } {
   let committed = 0;
+  let budget = 0;
   let actual = 0;
   for (const t of txns) {
     if (t.type === 'committed') committed += t.amount;
-    else actual += t.amount;
+    else if (t.type === 'budget') budget += t.amount;
+    else if (t.type === 'actual') actual += t.baseAmount ?? t.amount;
   }
-  return { committed: round2(committed), actual: round2(actual) };
+  return { budget: round2(budget), committed: round2(committed), actual: round2(actual) };
 }

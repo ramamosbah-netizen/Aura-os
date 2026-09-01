@@ -3,6 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TenderCreate, { TenderEdit } from './tender-create';
+import TenderAwardDialog from './tender-award-dialog';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // Tendering · Tenders — the bid register. Every tender shows its urgency
@@ -215,7 +216,7 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
                           {ACTIVE_STATUSES.includes(t.status) && <button className="btn btn-primary" style={st.smBtn} disabled={busy} onClick={() => void setStatus(t, 'submitted')} title="Runs the submission gate — bid decision, priced estimate and value must be on record">Submit →</button>}
                           {t.status === 'submitted' && (
                             <>
-                              <button className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} disabled={busy} onClick={() => void setStatus(t, 'won')}>Won ✓</button>
+                              <TenderAwardDialog tenderId={t.id} tenderTitle={t.title} compact disabled={busy} onAwarded={() => router.refresh()} />
                               <button className="btn" style={{ ...st.smBtn, color: 'var(--bad)' }} disabled={busy} onClick={() => void setStatus(t, 'lost')}>Lost ✗</button>
                             </>
                           )}

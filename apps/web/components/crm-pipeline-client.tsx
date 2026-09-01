@@ -42,7 +42,7 @@ const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, {
 // PR #213; reconcile there.
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
-export type View = 'command' | 'board' | 'forecast' | 'analytics' | 'sources' | 'executive' | 'list';
+export type View = 'command' | 'board' | 'forecast' | 'analytics' | 'sources' | 'executive' | 'allAnalytics' | 'list';
 
 /** C5 / G15 (§29) — Source → Wins → Contract Value → Actual Margin. Every money field names the
  * subset it was measured over; nulls mean "not measured yet", never zero. */
@@ -141,7 +141,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [onlySoon, setOnlySoon] = useState(false);
 
   useEffect(() => {
-    if (!['command', 'forecast', 'analytics'].includes(view) || command) return;
+    if (!['command', 'forecast', 'analytics', 'allAnalytics'].includes(view) || command) return;
     void fetch('/api/crm/opportunities/pipeline', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setCommand(d))
@@ -155,7 +155,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       .catch(() => setFcast(null));
   };
   useEffect(() => {
-    if (view !== 'executive') return;
+    if (view !== 'executive' && view !== 'allAnalytics') return;
     setExecData(null);
     void fetch(`/api/crm/executive?days=${execDays}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -164,7 +164,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   }, [view, execDays]);
 
   useEffect(() => {
-    if (view !== 'sources' || funnel) return;
+    if ((view !== 'sources' && view !== 'allAnalytics') || funnel) return;
     void fetch('/api/crm/source-funnel', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setFunnel(d))
@@ -591,7 +591,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       )}
 
       {/* ── ANALYTICS ── historical and explanatory performance read */}
-      {view === 'analytics' && (
+      {(view === 'analytics' || view === 'allAnalytics') && (
         command === null ? <p style={s.muted}>Loading analytics…</p> : (
           <div style={s.cmdGrid}>
             {/* Pipeline aging */}
@@ -645,7 +645,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       )}
 
       {/* ── EXECUTIVE (C6, §7) ── */}
-      {view === 'executive' && (
+      {(view === 'executive' || view === 'allAnalytics') && (
         execData === null ? <p style={s.muted}>Loading the executive read…</p> : (
           <div style={s.cmdGrid}>
             <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
@@ -785,7 +785,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
       )}
 
       {/* ── SOURCES → MARGIN (C5 / G15, §29) ── */}
-      {view === 'sources' && (
+      {(view === 'sources' || view === 'allAnalytics') && (
         funnel === null ? <p style={s.muted}>Loading the source funnel…</p> : (
           <div style={s.cmdGrid}>
             <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>

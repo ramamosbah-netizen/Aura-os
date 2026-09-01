@@ -21,7 +21,7 @@ class AddIpcLineDto {
   @IsString() boqItemId!: string;
   @IsString() description!: string;
   @IsNumber() quantity!: number;
-  @IsOptional() @IsString() unit?: string;
+  @IsString() unit!: string;
   @IsOptional() @IsNumber() rate?: number;
 }
 
@@ -96,6 +96,7 @@ export class PaymentCertificatesController {
     if (!dto?.boqItemId) throw new BadRequestException('boqItemId is required');
     if (!dto?.description?.trim()) throw new BadRequestException('description is required');
     if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
+    if (!dto?.unit?.trim()) throw new BadRequestException('unit is required; certification unit evidence cannot be inferred');
     return this.certificates.addLine({
       certificateId: id,
       projectId: dto.projectId,

@@ -81,7 +81,7 @@ test('project and operations share one usable delivery context', async ({ page, 
   const variationsTab = page.getByRole('tab', { name: /Variations/ });
   await variationsTab.focus();
   await variationsTab.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: /Delays & EOT/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /WBS \/ CBS/ })).toHaveAttribute('aria-selected', 'true');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('project-controls')).toBeVisible();
 

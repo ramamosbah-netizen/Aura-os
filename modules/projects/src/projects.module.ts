@@ -48,6 +48,10 @@ import { SCHEDULE_STORE } from './schedule-store';
 import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { PostgresScheduleStore } from './postgres-schedule-store';
 import { ScheduleService } from './schedule.service';
+import { DELIVERY_ITEM_MAP_STORE } from './delivery-item-map-store';
+import { InMemoryDeliveryItemMapStore } from './in-memory-delivery-item-map-store';
+import { PostgresDeliveryItemMapStore } from './postgres-delivery-item-map-store';
+import { DeliveryItemMapService } from './delivery-item-map.service';
 
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
@@ -108,6 +112,12 @@ import { ScheduleService } from './schedule.service';
         pool ? new PostgresScheduleStore(pool) : new InMemoryScheduleStore(),
     },
     {
+      provide: DELIVERY_ITEM_MAP_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDeliveryItemMapStore(pool) : new InMemoryDeliveryItemMapStore(),
+    },
+    {
       provide: COST_LEDGER_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -129,7 +139,8 @@ import { ScheduleService } from './schedule.service';
     CloseoutService,
     CashflowForecastService,
     ScheduleService,
+    DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService],
 })
 export class ProjectsModule {}

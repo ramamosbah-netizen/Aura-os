@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../components/record-chrome';
 import Opportunity360Client from '../../../../components/opportunity-360-client';
+import Sales360Journey from '../../../../components/sales-360-journey';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   return (
     <div style={st.container}>
       <RecordChrome type="Opportunity" title={opp.title} />
+      <Sales360Journey current="opportunity" />
       <div style={st.navRow}>
         <a href="/crm/pipeline" style={st.link}>← Back to Pipeline</a>
       </div>

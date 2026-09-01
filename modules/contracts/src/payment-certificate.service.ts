@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
+import { AccessService, AuditService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import {
   CERTIFICATE_EVENT,
   type CertificateStatus,
@@ -54,6 +54,7 @@ export class PaymentCertificateService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
   ) {}
 
   /** Add a valuation line to a draft IPC — a BOQ item's certified quantity × rate. On certification
@@ -61,6 +62,7 @@ export class PaymentCertificateService {
   async addLine(input: { certificateId: Id; projectId: Id; boqItemId: Id; description: string; quantity: number; unit?: string | null; rate?: number }): Promise<IpcLine> {
     const cert = await this.store.get(input.certificateId);
     if (!cert) throw new Error(`payment certificate ${input.certificateId} not found`);
+    if (!input.unit?.trim()) throw new Error('unit is required; certification unit evidence cannot be inferred');
     const line = makeIpcLine({
       tenantId: cert.tenantId,
       companyId: cert.companyId,
@@ -169,6 +171,17 @@ export class PaymentCertificateService {
    */
   async changeStatus(id: Id, status: CertificateStatus, actorId?: Id): Promise<PaymentCertificate> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'payment certificate', id);
+    // A certified/paid certificate is historical evidence. It may not be moved backwards or
+    // silently re-certified with a new timestamp; a future correction must use an explicit governed
+    // compensating command, which this bounded slice does not invent.
+    if (existing.status === 'certified' || existing.status === 'paid') {
+      if (status === existing.status) return existing;
+      if (existing.status === 'certified' && status === 'paid') {
+        // Paid is the valid downstream settlement transition; it does not erase certification.
+      } else {
+      throw new Error(`certified payment certificate ${id} is immutable; use a governed correction command`);
+      }
+    }
     const certifying = status === 'certified';
     // Segregation of duties: the preparer may not certify their own IPC (a different, authorised
     // certifier must). Skipped for system/auto transitions (no actor). Mirrors quotation approval.
@@ -204,7 +217,7 @@ export class PaymentCertificateService {
     // certified quantity as INVOICED (the last link in the delivery chain).
     const lines = certifying
       ? (await this.lineStore.listByCertificate(updated.id, updated.tenantId)).map((l) => ({
-          projectId: l.projectId, boqItemId: l.boqItemId, quantity: l.quantity, unit: l.unit, description: l.description,
+          ipcLineId: l.id, projectId: l.projectId, boqItemId: l.boqItemId, quantity: l.quantity, unit: l.unit, description: l.description,
         }))
       : [];
 
@@ -230,6 +243,27 @@ export class PaymentCertificateService {
       await this.store.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
+    if (certifying && this.audit) {
+      const context = this.tenant?.get();
+      await this.audit.log(
+        updated.tenantId,
+        updated.companyId,
+        actorId ?? null,
+        'contracts',
+        'payment_certificate',
+        updated.id,
+        'certified',
+        {
+          status: updated.status,
+          certificateId: updated.id,
+          contractId: updated.contractId,
+          certifiedAt: updated.certifiedAt,
+          lines,
+        },
+        { source: CERTIFICATE_EVENT.certified, contractId: updated.contractId, lineCount: lines.length },
+        context?.correlationId ?? null,
+      );
+    }
     this.logger.log(`IPC ${updated.reference} (${updated.id}) → ${status}`);
     return updated;
   }

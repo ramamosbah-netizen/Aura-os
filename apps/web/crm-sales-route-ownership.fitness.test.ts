@@ -19,10 +19,10 @@ describe('CRM Sales route ownership', () => {
     expect(forecast).toContain("SalesInsightWorkspace kind=\"forecast\"");
   });
 
-  it('exposes distinct Forecast and Analytics destinations from Sales', () => {
+  it('exposes Forecast plus the Reports compatibility destination from Sales', () => {
     const dashboard = read('components/sales-dashboard.tsx');
     expect(dashboard).toContain("href: '/crm/forecast'");
-    expect(dashboard).toContain("href: '/crm/analytics?view=performance'");
+    expect(dashboard).toContain("href: '/crm/reports'");
   });
 
   it('defines all canonical Pipeline views and URL synchronization', () => {

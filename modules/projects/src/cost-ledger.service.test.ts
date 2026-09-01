@@ -11,10 +11,11 @@ const tenantId = 'tenant-ledger';
 
 /** A CbsService stand-in that only counts the balance moves — the ledger service must call it once. */
 function countingCbs() {
-  const calls = { committed: 0, actual: 0, budget: 0, variationBudget: 0 };
+  const calls = { committed: 0, reconciled: 0, budget: 0, variationBudget: 0 };
   const cbs = {
     recordCommittedCost: vi.fn(async () => { calls.committed += 1; }),
-    recordActualCost: vi.fn(async () => { calls.actual += 1; }),
+    list: vi.fn(async () => []),
+    reconcileActualProjection: vi.fn(async () => { calls.reconciled += 1; }),
     recordBudget: vi.fn(async () => { calls.budget += 1; }),
     recordApprovedVariationBudget: vi.fn(async () => { calls.variationBudget += 1; }),
   } as unknown as CbsService;
@@ -36,7 +37,7 @@ describe('CostLedgerService.post — durable idempotency on dedupeKey', () => {
 
     const rows = await store.list({ tenantId });
     expect(rows).toHaveLength(1);            // one ledger entry, not two
-    expect(calls.actual).toBe(1);            // CBS balance moved exactly once
+    expect(calls.reconciled).toBe(0);       // no CBS nodes in this lightweight adapter; replay still reconciles safely
     expect(second.id).toBe(first.id);        // the replay returns the original transaction
   });
 
@@ -49,7 +50,7 @@ describe('CostLedgerService.post — durable idempotency on dedupeKey', () => {
     await svc.post({ tenantId, projectId: 'p1', cbsNodeId: 'cbs1', type: 'actual', amount: 200, source: 'plant_usage', dedupeKey: 'plant:b' });
 
     expect(await store.list({ tenantId })).toHaveLength(2);
-    expect(calls.actual).toBe(2);
+    expect(calls.reconciled).toBe(0);
   });
 
   it('an UNKEYED post keeps the legacy always-append behaviour (no accidental dedupe)', async () => {

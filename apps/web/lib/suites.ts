@@ -15,6 +15,8 @@ export interface AuraSuite {
   section: SuiteSection;
   gate: string | null;
   adminOnly?: boolean;
+  /** Compatibility metadata for domains that remain routable but are no longer primary products. */
+  hiddenFromPrimary?: boolean;
   capabilities: Array<{ label: string; status: CapabilityStatus }>;
   featured?: Array<{ label: string; description: string; href?: string; status: CapabilityStatus; glyph: string }>;
   owns: (href: string) => boolean;
@@ -26,12 +28,13 @@ const exact = (...routes: string[]) => (href: string) => routes.includes(href);
 /**
  * AURA OS navigation taxonomy — the single source of truth for the sidebar.
  *
- * Two work centers (My Work, Communication), one cross-suite control center, nine business suites
- * in a fixed order, and one system area (Admin). Each entry is a front door: `entryHref` opens the
+ * Two work centers (My Work, Communication), one cross-suite control center, business suites in a
+ * fixed order, and one system area (Admin). Each entry is a front door: `entryHref` opens the
  * suite's real Home; `owns(pathname)` decides which suite stays highlighted even on a deep record
- * page (e.g. `/tendering/tenders/123/pricing` keeps Pre-Award active). `owns` sets are kept mutually
- * exclusive so exactly one suite claims any path — that is what makes deep-page highlighting correct
- * (note Project Delivery owns `/projects/*` EXCEPT `/projects/variations`, which is Commercial).
+ * page. Sales & Commercial intentionally owns the CRM, Tendering and post-award commercial paths;
+ * the legacy Pre-Award and Commercial suite records remain routable compatibility metadata but are
+ * hidden from primary discovery. `owns` sets are kept mutually exclusive so exactly one suite claims
+ * any path — that is what makes deep-page highlighting correct.
  *
  * These compose existing routes and permissions; they are deliberately not backend modules and do
  * not own domain state.
@@ -65,18 +68,25 @@ export const AURA_SUITES: AuraSuite[] = [
 
   // ── Business suites (fixed order) ──
   {
-    id: 'sales', name: 'Sales', shortName: 'Sales', glyph: '◎', section: 'business',
-    description: 'Lead → Opportunity → Client → Quote → Win/Loss. Direct commercial sales before award.',
+    id: 'sales', name: 'Sales & Commercial', shortName: 'Sales & Commercial', glyph: '◎', section: 'business',
+    description: 'One commercial journey: signal → lead → opportunity/tender → estimate → quotation → contract.',
     entryHref: '/crm/overview', gate: 'suite.dealChain',
-    capabilities: [{ label: 'Sales Radar', status: 'IMPLEMENTED' }, { label: 'Leads & Opportunities', status: 'IMPLEMENTED' }, { label: 'Clients & Contacts', status: 'IMPLEMENTED' }, { label: 'Quotations', status: 'IMPLEMENTED' }, { label: 'Pipeline & Forecast', status: 'IMPLEMENTED' }],
-    owns: starts('/crm'),
+    capabilities: [
+      { label: 'Radar & Signals', status: 'IMPLEMENTED' },
+      { label: 'Leads & Opportunities', status: 'IMPLEMENTED' },
+      { label: 'Tenders & Estimation', status: 'IMPLEMENTED' },
+      { label: 'Quotations & Decisions', status: 'IMPLEMENTED' },
+      { label: 'Contracts & Reports', status: 'IMPLEMENTED' },
+    ],
+    owns: (href) => starts('/crm', '/tendering', '/contracts', '/subcontracts')(href) || starts('/projects/variations')(href),
   },
   {
     id: 'pre-award', name: 'Pre-Award', shortName: 'Pre-Award', glyph: '◳', section: 'business',
     description: 'Win the work: Tender → Bid/No-Bid → Estimation & Pricing → Submission → Win/Loss.',
     entryHref: '/tendering', gate: 'suite.dealChain',
+    hiddenFromPrimary: true,
     capabilities: [{ label: 'Tenders', status: 'IMPLEMENTED' }, { label: 'BOQ & Estimation', status: 'IMPLEMENTED' }, { label: 'Pricing & Margin', status: 'IMPLEMENTED' }, { label: 'Submissions & Outcomes', status: 'IMPLEMENTED' }],
-    owns: starts('/tendering'),
+    owns: () => false,
   },
   {
     id: 'project-delivery', name: 'Project Delivery', shortName: 'Delivery', glyph: '▥', section: 'business',
@@ -89,8 +99,9 @@ export const AURA_SUITES: AuraSuite[] = [
     id: 'commercial', name: 'Commercial', shortName: 'Commercial', glyph: '§', section: 'business',
     description: 'Post-award commercial control: contracts, variations, claims, certificates and subcontracts.',
     entryHref: '/contracts', gate: 'suite.dealChain',
+    hiddenFromPrimary: true,
     capabilities: [{ label: 'Contracts & clauses', status: 'IMPLEMENTED' }, { label: 'Variations & EOT', status: 'IMPLEMENTED' }, { label: 'Payment certificates', status: 'IMPLEMENTED' }, { label: 'Subcontracts & claims', status: 'IMPLEMENTED' }],
-    owns: (href) => starts('/contracts', '/subcontracts')(href) || starts('/projects/variations')(href),
+    owns: () => false,
   },
   {
     id: 'supply-chain', name: 'Supply Chain', shortName: 'Supply Chain', glyph: '◈', section: 'business',
@@ -141,6 +152,7 @@ export const AURA_SUITES: AuraSuite[] = [
 export function visibleSuites(allowed: string[] | null | undefined, isAdmin: boolean): AuraSuite[] {
   const gates = allowed == null ? null : new Set(allowed);
   return AURA_SUITES.filter((suite) => {
+    if (suite.hiddenFromPrimary) return false;
     if (suite.adminOnly && !isAdmin) return false;
     return isAdmin || !suite.gate || gates == null || gates.has(suite.gate);
   });

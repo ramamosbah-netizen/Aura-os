@@ -32,4 +32,14 @@ describe('Commercial Decisions composition boundary', () => {
     expect(documents).toContain('/share');
     expect(documents).toContain('/permissions/${permissionId}');
   });
+
+  it('does not present Quotation or Pricing as duplicate decision-workspace tabs', () => {
+    const workspace = read('components/commercial-workspace.tsx');
+    expect(workspace).toContain('Canonical execution owners');
+    expect(workspace).toContain('CRM owner');
+    expect(workspace).toContain('Tendering owner');
+    expect(workspace).not.toContain("id: 'quotations'");
+    expect(workspace).not.toContain("id: 'pricing'");
+    expect(workspace).not.toContain('<QuotationsClient');
+  });
 });

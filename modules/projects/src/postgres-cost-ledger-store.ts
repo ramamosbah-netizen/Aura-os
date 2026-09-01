@@ -5,18 +5,28 @@ import type { AppendResult, CostLedgerFilter, CostLedgerStore } from './cost-led
 interface Row {
   id: string; tenant_id: string; company_id: string | null; project_id: string;
   cbs_node_id: string | null; wbs_node_id: string | null; type: string; amount: string;
+  source_amount: string | null; source_currency: string | null; exchange_rate: string | null;
+  rate_date: Date | string | null; rate_source: string | null; base_amount: string | null; base_currency: string | null;
   quantity: string | null; source: string; source_ref: string | null;
   dimensions: Record<string, string> | null; dedupe_key: string | null;
   occurred_at: string; created_at: string; created_by: string | null;
 }
 
-const COLS = `id, tenant_id, company_id, project_id, cbs_node_id, wbs_node_id, type, amount, quantity,
-  source, source_ref, dimensions, dedupe_key, occurred_at::text, created_at::text, created_by`;
+const COLS = `id, tenant_id, company_id, project_id, cbs_node_id, wbs_node_id, type, amount,
+  source_amount, source_currency, exchange_rate, rate_date::text, rate_source, base_amount, base_currency,
+  quantity, source, source_ref, dimensions, dedupe_key, occurred_at::text, created_at::text, created_by`;
 
 function toTxn(r: Row): CostTransaction {
   return {
     id: r.id, tenantId: r.tenant_id, companyId: r.company_id, projectId: r.project_id,
     cbsNodeId: r.cbs_node_id, wbsNodeId: r.wbs_node_id, type: r.type as CostTxnType, amount: Number(r.amount),
+    sourceAmount: r.source_amount == null ? null : Number(r.source_amount),
+    sourceCurrency: r.source_currency,
+    exchangeRate: r.exchange_rate == null ? null : Number(r.exchange_rate),
+    rateDate: r.rate_date == null ? null : String(r.rate_date),
+    rateSource: r.rate_source,
+    baseAmount: r.base_amount == null ? null : Number(r.base_amount),
+    baseCurrency: r.base_currency,
     quantity: r.quantity != null ? Number(r.quantity) : null, source: r.source as CostTxnSource,
     sourceRef: r.source_ref, dimensions: r.dimensions ?? null, dedupeKey: r.dedupe_key ?? null,
     occurredAt: r.occurred_at, createdAt: r.created_at, createdBy: r.created_by,
@@ -29,15 +39,19 @@ export class PostgresCostLedgerStore implements CostLedgerStore {
   async append(t: CostTransaction): Promise<AppendResult> {
     // With a dedupe key, a replay of the same post conflicts on the partial unique index and writes
     // nothing (DO NOTHING → 0 rows returned); we then read back the transaction already on file so
-    // the caller can tell it apart from a fresh insert and skip moving the CBS balance a second time.
+    // the service can reconcile projections without applying an incremental delta twice.
     const inserted = await this.pool.query<Row>(
       `insert into public.aura_projects_cost_ledger
-        (id, tenant_id, company_id, project_id, cbs_node_id, wbs_node_id, type, amount, quantity, source, source_ref, dimensions, dedupe_key, occurred_at, created_at, created_by)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        (id, tenant_id, company_id, project_id, cbs_node_id, wbs_node_id, type, amount,
+         source_amount, source_currency, exchange_rate, rate_date, rate_source, base_amount, base_currency,
+         quantity, source, source_ref, dimensions, dedupe_key, occurred_at, created_at, created_by)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        on conflict (tenant_id, dedupe_key) where dedupe_key is not null do nothing
        returning ${COLS}`,
-      [t.id, t.tenantId, t.companyId, t.projectId, t.cbsNodeId, t.wbsNodeId, t.type, t.amount, t.quantity,
-       t.source, t.sourceRef, t.dimensions ? JSON.stringify(t.dimensions) : null, t.dedupeKey, t.occurredAt, t.createdAt, t.createdBy],
+      [t.id, t.tenantId, t.companyId, t.projectId, t.cbsNodeId, t.wbsNodeId, t.type, t.amount,
+       t.sourceAmount ?? null, t.sourceCurrency ?? null, t.exchangeRate ?? null, t.rateDate ?? null, t.rateSource ?? null,
+       t.baseAmount ?? null, t.baseCurrency ?? null, t.quantity, t.source, t.sourceRef,
+       t.dimensions ? JSON.stringify(t.dimensions) : null, t.dedupeKey, t.occurredAt, t.createdAt, t.createdBy],
     );
     if (inserted.rows.length > 0) return { txn: toTxn(inserted.rows[0]), inserted: true };
     // Conflict on the dedupe key — return the transaction already stored for this (tenant, key).

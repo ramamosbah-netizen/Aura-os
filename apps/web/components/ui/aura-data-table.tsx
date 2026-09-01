@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useId, type CSSProperties, type KeyboardEvent } from 'react';
+import React, { useState, useMemo, useEffect, useId, useRef, type CSSProperties, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useIsMobile } from '@/lib/use-media-query';
@@ -166,6 +166,7 @@ export default function AuraDataTable<T extends object>({
     () => new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key)),
   );
   const [colMenuOpen, setColMenuOpen] = useState(false);
+  const skipInitialUrlSync = useRef(true);
   const columnMenuId = useId();
   const registerLabel = ariaLabel ?? (typeof title === 'string' ? title : 'Data register');
 
@@ -176,7 +177,11 @@ export default function AuraDataTable<T extends object>({
     if (onQueryChange) {
       onQueryChange({ search, sortKey, sortDir, page, pageSize: effPageSize, filters: filterVals });
     }
-    if (urlKey) {
+    if (urlKey && skipInitialUrlSync.current) {
+      // Do not race an initial route transition with the first URL normalisation. The initial
+      // state is already represented by the current URL; subsequent user changes still persist.
+      skipInitialUrlSync.current = false;
+    } else if (urlKey) {
       const state: TableQueryState = { search, sortKey, sortDir, page, filters: filterVals };
       const next = serializeQuery(new URLSearchParams(Array.from(searchParams.entries())), urlKey, state, (filters ?? []).map((f) => f.key));
       const qs = next.toString();

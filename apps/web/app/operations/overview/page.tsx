@@ -19,13 +19,15 @@ interface Po { status?: string; value?: number; projectId?: string | null }
 interface Pr { status: string; value?: number; projectId?: string | null; title?: string; reference?: string | null }
 interface Stock { code?: string; name?: string; quantityOnHand?: number; avgCost?: number; reorderLevel?: number; reorderQty?: number }
 interface Evm {
-  plannedValue: number;
-  earnedValue: number;
-  actualCost: number;
-  costVariance: number;
-  scheduleVariance: number;
-  cpi: number;
-  spi: number;
+  budgetAtCompletion: number | null;
+  plannedValue: number | null;
+  earnedValue: number | null;
+  actualCost: number | null;
+  costVariance: number | null;
+  scheduleVariance: number | null;
+  cpi: number | null;
+  spi: number | null;
+  plannedValueStatus?: 'available' | 'unavailable';
 }
 interface PortfolioProject {
   id: string;
@@ -40,7 +42,7 @@ interface PortfolioProject {
 
 const CLOSED_PO = new Set(['received', 'closed', 'cancelled', 'completed']);
 const aed = (value: number): string => `AED ${Math.round(value).toLocaleString()}`;
-const indexTone = (value: number): string => value >= 1 ? styles.good : value >= 0.9 ? styles.warn : styles.bad;
+const indexTone = (value: number | null): string => value === null ? '' : value >= 1 ? styles.good : value >= 0.9 ? styles.warn : styles.bad;
 
 export default async function OperationsOverviewPage() {
   const [portfolioResult, poResult, prResult, stockResult] = await Promise.all([
@@ -121,8 +123,8 @@ export default async function OperationsOverviewPage() {
             {activeProjects.slice(0, 8).map((project) => {
               const projectOpenPos = openPos.filter((po) => po.projectId === project.id);
               const projectSubmittedPrs = submittedPrs.filter((pr) => pr.projectId === project.id);
-              const completion = project.evm.plannedValue > 0
-                ? Math.max(0, Math.min(100, (project.evm.earnedValue / project.evm.plannedValue) * 100))
+              const completion = project.evm.budgetAtCompletion !== null && project.evm.budgetAtCompletion > 0 && project.evm.earnedValue !== null
+                ? Math.max(0, Math.min(100, (project.evm.earnedValue / project.evm.budgetAtCompletion) * 100))
                 : null;
               return (
                 <Link key={project.id} href={`/project/${project.id}`} className={project.atRisk ? `${styles.projectCard} ${styles.projectCardRisk}` : styles.projectCard}>
@@ -147,8 +149,8 @@ export default async function OperationsOverviewPage() {
                     <span style={{ width: `${completion ?? 0}%` }} />
                   </div>
                   <div className={styles.projectSignals}>
-                    <span>SPI <b className={indexTone(project.evm.spi)}>{project.evm.spi.toFixed(2)}</b></span>
-                    <span>CPI <b className={indexTone(project.evm.cpi)}>{project.evm.cpi.toFixed(2)}</b></span>
+                    <span>SPI <b className={indexTone(project.evm.spi)}>{project.evm.spi === null ? 'Unavailable' : project.evm.spi.toFixed(2)}</b></span>
+                    <span>CPI <b className={indexTone(project.evm.cpi)}>{project.evm.cpi === null ? 'Unavailable' : project.evm.cpi.toFixed(2)}</b></span>
                     <span>Open PO <b>{projectOpenPos.length}</b></span>
                     <span>PR approval <b className={projectSubmittedPrs.length ? styles.warn : undefined}>{projectSubmittedPrs.length}</b></span>
                   </div>

@@ -4,6 +4,7 @@ import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { computeBidScore, recommendationFor, DEFAULT_BID_CRITERIA, type BidCriterion, type BidRecommendation } from '@aura/shared';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import TenderAwardDialog from './tender-award-dialog';
 
 interface Tender {
   id: string;
@@ -366,13 +367,17 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
             {statusBusy && <span style={s.spinnerSmall} />}
           </div>
           <div style={s.btnGroup}>
-            <button
-              disabled={tender.status === 'won' || statusBusy}
-              onClick={() => updateStatus('won')}
-              style={{ ...s.btnStatus, background: '#10b981', color: '#fff' }}
-            >
-              Mark Won (Awarded)
-            </button>
+            {tender.status !== 'won' && (
+              <TenderAwardDialog
+                tenderId={tender.id}
+                tenderTitle={tender.title}
+                disabled={statusBusy}
+                onAwarded={() => {
+                  router.refresh();
+                  window.location.reload();
+                }}
+              />
+            )}
             <button
               disabled={tender.status === 'lost' || statusBusy}
               onClick={() => updateStatus('lost')}

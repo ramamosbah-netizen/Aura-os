@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../components/record-chrome';
 import Lead360Client from '../../../../components/lead-360-client';
+import Sales360Journey from '../../../../components/sales-360-journey';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   return (
     <div style={st.container}>
       <RecordChrome type="Lead" title={lead.name} />
+      <Sales360Journey current="lead" />
       <div style={st.navRow}>
         <a href="/crm/leads" style={st.link}>← Back to Sales Pipeline</a>
       </div>

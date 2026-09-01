@@ -54,7 +54,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    title: 'Sales',
+    title: 'Sales & Commercial',
     glyph: '◎',
     items: [
       { label: 'Overview', href: '/crm/overview', glyph: '◎', desc: 'Sales cockpit — pipeline health, forecast, deals needing attention & the quote book' },
@@ -71,6 +71,7 @@ export const NAV: NavGroup[] = [
       { label: 'Commercial Decisions', href: '/crm/commercial', glyph: '⚖', desc: 'Decision workspace — prioritize commercial actions and open canonical records' },
       { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Accepted commercial agreements and downstream handoff context' },
       { label: 'Reports', href: '/crm/reports', glyph: '▤', desc: 'Sales report discovery — links to canonical analytics and read models' },
+      { label: 'Company Intelligence', href: '/intelligence', glyph: '✶', desc: 'Company-wide signals and governed decision support' },
       { label: 'Market Intelligence', href: '/crm/market-intelligence', glyph: '⊛', desc: 'The reference catalogue behind pricing — items, brands, benchmark cost/sell & install time' },
     ],
   },
@@ -283,7 +284,7 @@ export const ALL_ITEMS: NavItem[] = NAV.flatMap(groupAllItems);
 // front-door band — unmapped, so it always shows.
 export const GROUP_SUITE: Record<string, string> = {
   Control: 'suite.commandCenter',
-  Sales: 'suite.dealChain',
+  'Sales & Commercial': 'suite.dealChain',
   Delivery: 'suite.dealChain',
   Operations: 'suite.operate',
   Finance: 'suite.operate',

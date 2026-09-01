@@ -75,6 +75,10 @@ export function isQuotationCommitted(q: Pick<Quotation, 'status'>): boolean {
 export interface QuotationLine {
   description: string;
   quantity: number;
+  /** Frozen unit of measure when the upstream commercial source provides one. */
+  unit?: string | null;
+  /** Durable upstream item identity when the source exposes one (for example a Tender BOQ item). */
+  sourceItemId?: Id | null;
   unitPrice: number;
   vatRate: number; // percent
   lineNet: number;
@@ -84,6 +88,10 @@ export interface QuotationLine {
 export interface NewQuotationLine {
   description: string;
   quantity: number;
+  /** Unit of measure from the governed source; absent remains unavailable. */
+  unit?: string | null;
+  /** Durable upstream item identity when available; never synthesized by the quotation domain. */
+  sourceItemId?: Id | null;
   unitPrice: number;
   vatRate?: number;
 }
@@ -190,7 +198,16 @@ export function buildQuotationLine(input: NewQuotationLine): QuotationLine {
   if (!Number.isFinite(price) || price < 0) throw new Error('line unit price cannot be negative');
   if (!Number.isFinite(vatRate) || vatRate < 0) throw new Error('line vat rate cannot be negative');
   const lineNet = mulMoney(qty, price);
-  return { description: input.description.trim(), quantity: qty, unitPrice: price, vatRate, lineNet: Number(lineNet), lineVat: Number(vatOf(lineNet, vatRate)) };
+  return {
+    description: input.description.trim(),
+    quantity: qty,
+    ...(input.unit?.trim() ? { unit: input.unit.trim() } : {}),
+    ...(input.sourceItemId?.trim() ? { sourceItemId: input.sourceItemId.trim() } : {}),
+    unitPrice: price,
+    vatRate,
+    lineNet: Number(lineNet),
+    lineVat: Number(vatOf(lineNet, vatRate)),
+  };
 }
 
 export interface QuotationTotals {
@@ -365,7 +382,7 @@ export function reviseQuotation(q: Quotation, options: { actorId?: Id | null; is
     // A new revision must not inherit an already elapsed validity window. Preserve a future
     // commercial deadline, otherwise apply the same canonical default as a new quotation.
     validUntil: q.validUntil && q.validUntil >= issueDate ? q.validUntil : null,
-    lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, vatRate: l.vatRate })),
+    lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, ...(l.unit ? { unit: l.unit } : {}), ...(l.sourceItemId ? { sourceItemId: l.sourceItemId } : {}), unitPrice: l.unitPrice, vatRate: l.vatRate })),
     // Carry the internal build-up into the new revision — costs rarely reset between revisions.
     pricing: q.pricing ? { lines: q.pricing.lines.map((l) => ({ ...l })) } : null,
     // The estimation build-up carries into a revision — re-pricing starts from the last cost model.

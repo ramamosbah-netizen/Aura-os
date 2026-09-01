@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { assertSameTenant, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
-import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { type CbsNode, type NewCbsNode, makeCbsNode, calculateCbsSummary, type CbsSummary } from './domain/cbs';
 import { CBS_STORE, type CbsNodeFilter, type CbsStore } from './cbs-store';
 import { PROJECT_STORE, type ProjectStore } from './project-store';
@@ -13,13 +13,18 @@ export class CbsService {
     @Inject(CBS_STORE) private readonly store: CbsStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Optional() @Inject(PROJECT_STORE) private readonly projects: ProjectStore | null = null,
+    @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
-  async create(input: NewCbsNode): Promise<CbsNode> {
+  async create(input: NewCbsNode & { createdBy?: Id | null }): Promise<CbsNode> {
     await this.assertProjectBaselineWritable(input.projectId, input.tenantId);
+    if (input.createdBy && this.access) {
+      this.access.assert(input.createdBy, { permission: 'projects.project.update', orgPath: [{ level: 'tenant', id: input.tenantId }] });
+    }
+    await this.assertParentOwnership(input.parentId ?? null, input.projectId, input.tenantId);
     return this.persistNode(makeCbsNode(input));
   }
 
@@ -62,6 +67,10 @@ export class CbsService {
 
   async update(id: Id, patch: Partial<Pick<CbsNode, 'title' | 'category' | 'budgetAmount' | 'committedAmount' | 'actualAmount' | 'forecastAmount' | 'notes'>>): Promise<CbsNode> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    await this.assertProjectOwnership(existing.projectId, existing.tenantId);
+    if (patch.actualAmount !== undefined) {
+      throw new Error('CBS actual cost is Cost Ledger-owned; post a canonical CostTransaction and reconcile projections');
+    }
     if (existing.handoverLocked && (patch.title !== undefined || patch.category !== undefined || patch.budgetAmount !== undefined || patch.notes !== undefined)) {
       throw new Error(`CBS baseline node ${id} is immutable after handover; use an approved variation`);
     }
@@ -135,19 +144,25 @@ export class CbsService {
   }
 
   async recordActualCost(id: Id, amount: number): Promise<CbsNode> {
-    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    // Compatibility boundary only: actual cost is a rebuildable projection of the append-only
+    // Cost Ledger. Incremental writes here would create a second financial truth and double-count
+    // on event replay. CostLedgerService.reconcileProjections is the sole projection writer.
+    void id;
+    void amount;
+    throw new Error('CBS actual cost is Cost Ledger-owned; use CostLedgerService.post()');
+  }
 
-    const actual = Number((existing.actualAmount + amount).toFixed(2));
+  /** Set the rebuildable actual-cost projection from Cost Ledger truth. */
+  async reconcileActualProjection(id: Id, actualAmount: number): Promise<CbsNode> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    const actual = Number(actualAmount.toFixed(2));
     const updated: CbsNode = {
       ...existing,
       actualAmount: actual,
-      // Auto-adjust forecast: max of current forecast vs actuals (EAC = max(budget, actuals))
       forecastAmount: Math.max(existing.forecastAmount, actual),
       variance: Number((existing.budgetAmount - Math.max(existing.forecastAmount, actual)).toFixed(2)),
     };
     await this.store.update(updated);
-    this.logger.log(`CBS Node ${updated.code} actual cost +${amount} (total=${actual})`);
-
     if (updated.parentId) await this.rollup(updated.parentId);
     return updated;
   }
@@ -172,6 +187,7 @@ export class CbsService {
 
   async delete(id: Id): Promise<void> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'CBS Node', id);
+    await this.assertProjectOwnership(existing.projectId, existing.tenantId);
     if (existing.handoverLocked) throw new Error(`CBS baseline node ${id} is immutable after handover`);
     await this.store.delete(id);
     this.logger.log(`CBS Node deleted: ${id}`);
@@ -268,8 +284,23 @@ export class CbsService {
   private async assertProjectBaselineWritable(projectId: Id, tenantId: Id): Promise<void> {
     if (!this.projects) return;
     const project = await this.projects.get(projectId);
-    if (project && project.tenantId === tenantId && project.handoverLockedAt) {
+    if (!project || project.tenantId !== tenantId) throw new Error(`project ${projectId} not found`);
+    if (project.handoverLockedAt) {
       throw new Error(`project ${projectId} CBS baseline is immutable after handover; use an approved variation`);
+    }
+  }
+
+  private async assertProjectOwnership(projectId: Id, tenantId: Id): Promise<void> {
+    if (!this.projects) return;
+    const project = await this.projects.get(projectId);
+    if (!project || project.tenantId !== tenantId) throw new Error(`project ${projectId} not found`);
+  }
+
+  private async assertParentOwnership(parentId: Id | null, projectId: Id, tenantId: Id): Promise<void> {
+    if (!parentId) return;
+    const parent = await this.store.get(parentId);
+    if (!parent || parent.projectId !== projectId || parent.tenantId !== tenantId) {
+      throw new Error(`CBS parent ${parentId} does not belong to project ${projectId}`);
     }
   }
 }

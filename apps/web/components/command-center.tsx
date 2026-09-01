@@ -144,6 +144,7 @@ export default function CommandCenter({
   const draftInvoices = invoices.filter((i) => i.status === 'draft').length;
   const topAttention = attention.slice(0, 8);
   const quickActions = QUICK_ACTIONS.filter((a) => has(a.fn));
+  const showSalesSuite = has('suite.dealChain');
   const showLeft = has('panel.attention') || has('panel.nextActions');
   const showRightRail = has('panel.operations') || has('panel.financial') || has('panel.risk') || quickActions.length > 0 || has('panel.spine');
   const singleColumn = !showLeft || !showRightRail;
@@ -226,6 +227,38 @@ export default function CommandCenter({
                 : briefing?.text}
           </p>
         </div>
+      ) : null}
+
+      {showSalesSuite ? (
+        <section
+          data-testid="sales-commercial-discovery"
+          aria-labelledby="sales-commercial-discovery-title"
+          style={s.salesSuite}
+        >
+          <div style={s.salesSuiteHeader}>
+            <div>
+              <p style={s.salesSuiteEyebrow}>One connected journey</p>
+              <h2 id="sales-commercial-discovery-title" style={s.salesSuiteTitle}>Sales &amp; Commercial</h2>
+              <p style={s.salesSuiteCopy}>Signal, pursue, price, decide and contract from one suite. Each link opens the canonical owner for that work.</p>
+            </div>
+            <a href="/crm/overview" style={s.salesSuiteOpen}>Open cockpit →</a>
+          </div>
+          <nav aria-label="Sales and Commercial discovery" style={s.salesSuiteLinks}>
+            {[
+              ['Overview', '/crm/overview'],
+              ['Radar / Signals', '/crm/radar'],
+              ['Leads', '/crm/leads'],
+              ['Opportunities', '/crm/pipeline?view=board'],
+              ['Tenders', '/tendering/tenders'],
+              ['Quotations', '/crm/quotations'],
+              ['Commercial Decisions', '/crm/commercial'],
+              ['Contracts', '/contracts/contracts'],
+              ['Reports', '/crm/reports'],
+            ].map(([label, href]) => (
+              <a key={href} href={href} style={s.salesSuiteLink}>{label}</a>
+            ))}
+          </nav>
+        </section>
       ) : null}
 
       <div className="cc-grid" style={singleColumn ? { gridTemplateColumns: '1fr' } : undefined}>
@@ -444,4 +477,18 @@ const s = {
     whiteSpace: 'nowrap',
   } as CSSProperties,
   recReason: { fontSize: 12, color: 'var(--muted)', marginLeft: 'auto', whiteSpace: 'nowrap' } as CSSProperties,
+  salesSuite: {
+    margin: '0 0 22px',
+    padding: '18px 20px',
+    border: '1px solid color-mix(in srgb, var(--accent) 30%, var(--border))',
+    borderRadius: 16,
+    background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel))',
+  } as CSSProperties,
+  salesSuiteHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' } as CSSProperties,
+  salesSuiteEyebrow: { margin: 0, color: 'var(--accent)', fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' } as CSSProperties,
+  salesSuiteTitle: { margin: '4px 0 5px', fontSize: 21, letterSpacing: '-0.025em' } as CSSProperties,
+  salesSuiteCopy: { margin: 0, maxWidth: 680, color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.5 } as CSSProperties,
+  salesSuiteOpen: { color: 'var(--accent)', textDecoration: 'none', fontSize: 12.5, fontWeight: 750, whiteSpace: 'nowrap' } as CSSProperties,
+  salesSuiteLinks: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 15 } as CSSProperties,
+  salesSuiteLink: { display: 'inline-flex', alignItems: 'center', minHeight: 32, padding: '0 11px', borderRadius: 8, background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--text)', textDecoration: 'none', fontSize: 12, fontWeight: 650 } as CSSProperties,
 };

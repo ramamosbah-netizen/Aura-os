@@ -111,7 +111,7 @@ export default function PreAwardDashboard({
 
   const offline = tenders === null && analytics === null;
   const briefBody = offline
-    ? 'The Pre-Award feed could not be loaded. I can still help you search tenders and prepare your next bid.'
+    ? 'The tender feed could not be loaded. I can still help you search tenders and prepare your next bid.'
     : rows.length === 0
       ? 'No tenders yet. New bids appear here through qualification, estimation, pricing and submission.'
       : `${active.length} active tender${active.length === 1 ? '' : 's'} worth ${aed(activeValue)}. ${inProgress.length} being prepared${submitted.length > 0 ? `, ${submitted.length} awaiting client decision` : ''}.${winRate == null ? '' : ` Win rate ${winRate}%.`}`;
@@ -119,19 +119,19 @@ export default function PreAwardDashboard({
   return (
     <SuiteDashboardShell
       testId="pre-award-dashboard"
-      anchor={{ href: '/tendering', title: 'Pre-Award', type: 'Pre-Award' }}
+      anchor={{ href: '/tendering', title: 'Sales & Commercial', type: 'Sales & Commercial' }}
       hero={{
-        eyebrow: 'AURA OS / PRE-AWARD',
+        eyebrow: 'AURA OS / SALES & COMMERCIAL',
         title: <>{greeting()}, <span>{userName}</span></>,
-        lede: 'Your tenders, estimates and submissions — everything needed to win the work before award.',
+        lede: 'Tender operations inside Sales & Commercial — qualification, scope, estimation and submission in one connected journey.',
       }}
-      askAura={{ tabType: 'Pre-Award' }}
+      askAura={{ tabType: 'Sales & Commercial' }}
       metrics={metrics}
       continueWorking={<ContinueWorking match={['/tendering/tenders']} />}
       attention={{
         kicker: 'Tender lifecycle · most valuable first',
         title: 'Needs attention',
-        headerLink: { href: '/tendering/tenders', label: 'Open tenders', tabTitle: 'Tenders', tabType: 'Pre-Award' },
+        headerLink: { href: '/tendering/tenders', label: 'Open tenders', tabTitle: 'Tenders', tabType: 'Sales & Commercial' },
         items: attentionItems,
         unavailableLabel: 'Tender data is unavailable. Open Tenders to check the source.',
         emptyLabel: 'No tenders awaiting action — nothing in flight.',
@@ -139,22 +139,22 @@ export default function PreAwardDashboard({
         strip: submitted.length > 0 ? {
           icon: Send,
           text: `${submitted.length} tender${submitted.length === 1 ? '' : 's'} submitted, awaiting client decision`,
-          link: { href: '/tendering/tenders', label: 'Review', tabTitle: 'Tenders', tabType: 'Pre-Award' },
+          link: { href: '/tendering/tenders', label: 'Review', tabTitle: 'Tenders', tabType: 'Sales & Commercial' },
         } : null,
       }}
       brief={{
         kicker: 'Live pre-award signals',
-        title: 'AURA Pre-Award brief',
+        title: 'AURA Sales & Commercial brief',
         body: briefBody,
-        cta: { href: '/ai', label: 'Continue with AURA', tabTitle: 'AURA AI', tabType: 'Pre-Award' },
+        cta: { href: '/ai', label: 'Continue with AURA', tabTitle: 'AURA AI', tabType: 'Sales & Commercial' },
       }}
       shortcuts={{
-        kicker: 'Pre-Award workspace',
-        title: 'Pre-Award',
+        kicker: 'Tender operations',
+        title: 'Tender 360',
         itemTestId: 'pre-award-shortcut',
         items: SHORTCUTS,
       }}
-      ownership={<><ClipboardList aria-hidden /><span><strong>Pre-Award owns winning the work.</strong> Bid/no-bid, approvals and deadlines are workflow states inside each tender, not separate apps.</span></>}
+      ownership={<><ClipboardList aria-hidden /><span><strong>Tender operations live inside Sales & Commercial.</strong> Bid/no-bid, scope, pricing and deadlines remain workflow states inside each Tender 360 record.</span></>}
     />
   );
 }

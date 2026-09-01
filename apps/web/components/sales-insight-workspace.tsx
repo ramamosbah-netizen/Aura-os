@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { type CSSProperties } from 'react';
 import CrmPipelineClient, { type View } from './crm-pipeline-client';
 
@@ -15,6 +14,10 @@ export default function SalesInsightWorkspace({ kind, view, leads, opportunities
   leads: Lead[]; opportunities: Opportunity[]; accounts: Account[];
 }) {
   const analytics = kind === 'analytics';
+  // Analytics is a single read surface. Keep accepting the historical `?view=` values
+  // for saved links, but compose Performance, Sources & margin, and Executive below one
+  // page instead of making the user switch between competing tabs.
+  const composedView: View = analytics ? 'allAnalytics' : view;
   return (
     <section aria-labelledby={`${kind}-title`}>
       <div style={st.heading}>
@@ -25,13 +28,12 @@ export default function SalesInsightWorkspace({ kind, view, leads, opportunities
         </div>
       </div>
       {analytics && (
-        <nav style={st.subBar} aria-label="Analytics view">
-          <Link href="/crm/analytics?view=performance" style={{ ...st.subTab, ...(view === 'analytics' ? st.subTabOn : {}) }}>Performance</Link>
-          <Link href="/crm/analytics?view=sources" style={{ ...st.subTab, ...(view === 'sources' ? st.subTabOn : {}) }}>Sources &amp; margin</Link>
-          <Link href="/crm/analytics?view=executive" style={{ ...st.subTab, ...(view === 'executive' ? st.subTabOn : {}) }}>Executive</Link>
-        </nav>
+        <div style={st.surfaceNote} role="note">
+          <span style={st.surfaceDot} aria-hidden="true" />
+          One analytics view · performance, sources, margin and executive context are shown together.
+        </div>
       )}
-      <CrmPipelineClient initialLeads={leads} initialOpportunities={opportunities} initialAccounts={accounts} view={view} showAuthoring={false} />
+      <CrmPipelineClient initialLeads={leads} initialOpportunities={opportunities} initialAccounts={accounts} view={composedView} showAuthoring={false} />
     </section>
   );
 }
@@ -41,7 +43,6 @@ const st: Record<string, CSSProperties> = {
   eyebrow: { color: 'var(--accent)', fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2, marginBottom: 5 },
   title: { margin: 0, fontSize: 25, letterSpacing: -0.4 },
   subtitle: { margin: '5px 0 0', color: 'var(--muted)', fontSize: 13 },
-  subBar: { display: 'inline-flex', gap: 4, border: '1px solid var(--border)', borderRadius: 10, padding: 3, background: 'var(--panel)', marginBottom: 14 },
-  subTab: { color: 'var(--muted)', fontSize: 12.5, fontWeight: 700, padding: '6px 13px', borderRadius: 8, textDecoration: 'none' },
-  subTabOn: { color: 'var(--accent)', background: 'var(--panel-2)' },
+  surfaceNote: { display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', color: 'var(--muted)', fontSize: 12, marginBottom: 14, padding: '8px 11px', border: '1px solid var(--border)', borderRadius: 10, background: 'linear-gradient(135deg, var(--panel), var(--panel-2))' },
+  surfaceDot: { width: 7, height: 7, borderRadius: 999, background: 'var(--accent)', boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent)' },
 };

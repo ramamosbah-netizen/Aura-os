@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
-import type { VariationOrder } from './domain/variation';
+import type { VariationOrder, VariationStatus } from './domain/variation';
 import type { VariationFilter, VariationStore } from './variation-store';
 
 interface Row {
@@ -63,11 +63,15 @@ export class PostgresVariationStore implements VariationStore {
     );
   }
 
-  async update(v: VariationOrder): Promise<void> {
-    await this.pool.query(
-      `UPDATE public.aura_projects_variations SET status=$2, decided_by=$3, decided_at=$4 WHERE id=$1`,
-      [v.id, v.status, v.decidedBy, v.decidedAt],
+  async update(v: VariationOrder, expectedStatus?: VariationStatus): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE public.aura_projects_variations
+          SET status=$2, decided_by=$3, decided_at=$4
+        WHERE id=$1 AND tenant_id=$5
+          AND ($6::text IS NULL OR status=$6)`,
+      [v.id, v.status, v.decidedBy, v.decidedAt, v.tenantId, expectedStatus ?? null],
     );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async get(id: Id): Promise<VariationOrder | null> {

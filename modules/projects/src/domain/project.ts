@@ -9,6 +9,21 @@ import type { HandoverSnapshot } from './handover';
 export type ProjectStatus = 'planned' | 'active' | 'completed' | 'cancelled';
 export type ProjectOrigin = 'commercial_handover' | 'internal' | 'legacy';
 
+export interface WbsBaselineAllocation {
+  nodeId: Id;
+  code: string;
+  title: string;
+  plannedValue: number;
+}
+
+export interface WbsOpeningBaseline {
+  baselineId: Id;
+  approvedAt: string;
+  approvedBy: Id;
+  allocations: WbsBaselineAllocation[];
+  originalBac: number;
+}
+
 export interface Project {
   id: Id;
   tenantId: Id;
@@ -42,6 +57,11 @@ export interface Project {
   currency: string | null;
   awardAcceptanceType: 'quotation_acceptance' | 'tender_award' | 'manual' | null;
   awardAcceptanceEvidence: Record<string, unknown> | null;
+  /** Identified, immutable opening BAC baseline; current BAC remains this value until rebaseline. */
+  wbsBaselineId: Id | null;
+  wbsBaselineApprovedAt: string | null;
+  wbsBaselineApprovedBy: Id | null;
+  wbsBaselineSnapshot: WbsOpeningBaseline | null;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -75,6 +95,10 @@ export interface NewProject {
   currency?: string | null;
   awardAcceptanceType?: Project['awardAcceptanceType'];
   awardAcceptanceEvidence?: Record<string, unknown> | null;
+  wbsBaselineId?: Id | null;
+  wbsBaselineApprovedAt?: string | null;
+  wbsBaselineApprovedBy?: Id | null;
+  wbsBaselineSnapshot?: WbsOpeningBaseline | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
@@ -109,6 +133,10 @@ export function makeProject(input: NewProject): Project {
     currency: input.currency?.trim().toUpperCase() || null,
     awardAcceptanceType: input.awardAcceptanceType ?? null,
     awardAcceptanceEvidence: input.awardAcceptanceEvidence ?? null,
+    wbsBaselineId: input.wbsBaselineId ?? null,
+    wbsBaselineApprovedAt: input.wbsBaselineApprovedAt ?? null,
+    wbsBaselineApprovedBy: input.wbsBaselineApprovedBy ?? null,
+    wbsBaselineSnapshot: input.wbsBaselineSnapshot ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

@@ -354,6 +354,12 @@ a {
    workspace tab row already names the location), and collapse the company
    switcher to its dot — so search + company + theme all fit. */
 @media (max-width: 720px) {
+  .commercial-hero {
+    flex-direction: column !important;
+  }
+  .commercial-hero > :last-child {
+    align-items: flex-start !important;
+  }
   .app-topbar {
     padding-inline: 12px !important;
     gap: 8px !important;

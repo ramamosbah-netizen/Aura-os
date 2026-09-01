@@ -3,7 +3,7 @@ import { NAV } from './nav';
 
 describe('Sales navigation ownership', () => {
   it('keeps Activities out of primary Sales navigation while retaining contextual register access', () => {
-    const sales = NAV.find((group) => group.title === 'Sales');
+    const sales = NAV.find((group) => group.title === 'Sales & Commercial');
     expect(sales).toBeDefined();
     expect(sales?.items.some((item) => item.href === '/crm/activities')).toBe(false);
     expect(sales?.items.map((item) => item.href)).toEqual(expect.arrayContaining([

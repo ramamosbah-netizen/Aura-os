@@ -1,6 +1,6 @@
 import type { Id, Page, PageParams } from '@aura/shared';
 import { paginate } from '@aura/shared';
-import type { VariationOrder } from './domain/variation';
+import type { VariationOrder, VariationStatus } from './domain/variation';
 import type { VariationFilter, VariationStore } from './variation-store';
 
 /** Phase-0 variation store — keeps variation orders in memory (no-DB boots). */
@@ -11,8 +11,12 @@ export class InMemoryVariationStore implements VariationStore {
     this.rows.set(v.id, { ...v });
   }
 
-  async update(v: VariationOrder): Promise<void> {
+  async update(v: VariationOrder, expectedStatus?: VariationStatus): Promise<boolean> {
+    const current = this.rows.get(v.id);
+    if (!current) return false;
+    if (expectedStatus !== undefined && current.status !== expectedStatus) return false;
     this.rows.set(v.id, { ...v });
+    return true;
   }
 
   async get(id: Id): Promise<VariationOrder | null> {

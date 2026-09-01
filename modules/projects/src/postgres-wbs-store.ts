@@ -11,6 +11,7 @@ interface Row {
   code: string;
   title: string;
   planned_value: string | number;
+  planned_value_known: boolean;
   earned_value: string | number;
   actual_cost: string | number;
   progress: string | number;
@@ -20,7 +21,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, project_id, parent_id, code, title, planned_value, earned_value, actual_cost, progress, status, created_at, boq_item_id';
+  'id, tenant_id, project_id, parent_id, code, title, planned_value, planned_value_known, earned_value, actual_cost, progress, status, created_at, boq_item_id';
 
 function rowToNode(r: Row): WbsNode {
   return {
@@ -31,6 +32,7 @@ function rowToNode(r: Row): WbsNode {
     code: r.code,
     title: r.title,
     plannedValue: Number(r.planned_value),
+    plannedValueKnown: r.planned_value_known,
     earnedValue: Number(r.earned_value),
     actualCost: Number(r.actual_cost),
     progress: Number(r.progress),
@@ -45,7 +47,7 @@ export class PostgresWbsStore implements WbsStore {
 
   async create(n: WbsNode): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_projects_wbs_nodes (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      `INSERT INTO public.aura_projects_wbs_nodes (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [
         n.id,
         n.tenantId,
@@ -54,6 +56,7 @@ export class PostgresWbsStore implements WbsStore {
         n.code,
         n.title,
         n.plannedValue,
+        n.plannedValueKnown,
         n.earnedValue,
         n.actualCost,
         n.progress,
@@ -66,8 +69,8 @@ export class PostgresWbsStore implements WbsStore {
 
   async update(n: WbsNode): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_projects_wbs_nodes SET code=$2, title=$3, planned_value=$4, earned_value=$5, actual_cost=$6, progress=$7, status=$8 WHERE id=$1`,
-      [n.id, n.code, n.title, n.plannedValue, n.earnedValue, n.actualCost, n.progress, n.status],
+      `UPDATE public.aura_projects_wbs_nodes SET code=$2, title=$3, planned_value=$4, planned_value_known=$5, earned_value=$6, actual_cost=$7, progress=$8, status=$9 WHERE id=$1`,
+      [n.id, n.code, n.title, n.plannedValue, n.plannedValueKnown, n.earnedValue, n.actualCost, n.progress, n.status],
     );
   }
 

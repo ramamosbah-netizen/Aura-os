@@ -48,7 +48,9 @@ export async function POST(request: Request): Promise<Response> {
         parentId: typeof body.parentId === 'string' ? body.parentId : null,
         code,
         title,
-        plannedValue: typeof body.plannedValue === 'number' ? body.plannedValue : Number(body.plannedValue) || 0,
+        ...(body.plannedValue === undefined || body.plannedValue === null
+          ? {}
+          : { plannedValue: typeof body.plannedValue === 'number' ? body.plannedValue : Number(body.plannedValue) }),
       }),
       cache: 'no-store',
     });

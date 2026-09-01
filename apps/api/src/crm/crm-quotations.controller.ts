@@ -87,6 +87,19 @@ export class CrmQuotationsController {
         accountName: q.customerName,
         value: baseline ? baseline.total : q.total,
         commercialBaselineId: baseline?.id ?? null,
+        sourceOpportunityId: q.sourceOpportunityId,
+        tenderId: q.sourceTenderId,
+        acceptedQuotationId: q.id,
+        // Each quotation revision is its own immutable quotation row; preserve the exact accepted
+        // row identity rather than relying on a mutable "latest" lookup.
+        acceptedQuotationRevisionId: q.id,
+        awardAcceptanceType: 'quotation_acceptance',
+        awardAcceptanceEvidence: {
+          quotationId: q.id,
+          quoteNumber: q.quoteNumber,
+          revision: q.revision,
+          acceptedTotal: q.total,
+        },
         status: 'draft',
         createdBy: ctx.actorId,
       },

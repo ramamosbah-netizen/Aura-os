@@ -340,6 +340,8 @@ export class TenderPricingController {
       return {
         description: `[${item.itemCode}] ${item.description} (${item.unit})`,
         quantity: item.quantity,
+        unit: item.unit,
+        sourceItemId: item.id,
         unitPrice: b ? b.sellingRate : item.rate,
         ...(vatRate !== undefined ? { vatRate } : {}),
       };

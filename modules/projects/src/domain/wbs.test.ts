@@ -85,8 +85,8 @@ describe('Projects WBS & EVM', () => {
       expect(rolledParent?.progress).toBe(20);
       expect(rolledParent?.earnedValue).toBe(10000);
 
-      // Record spend of 5000 on child 2
-      await service.recordActualSpend(child2.id, 5000);
+      // Projection refreshes are driven by Cost Ledger truth, never by a direct WBS spend write.
+      await service.reconcileActualProjection(child2.id, 5000);
 
       // Check parent actualCost rolls up
       rolledParent = await service.get(parent.id);
@@ -105,10 +105,10 @@ describe('Projects WBS & EVM', () => {
       expect(evm.spi).toBe(0.8); // 8000 / 10000
     });
 
-    it('returns default 1.0 performance index when values are 0', () => {
+    it('keeps performance indices unavailable when denominators are 0', () => {
       const evm = calculateEvm(0, 0, 0);
-      expect(evm.cpi).toBe(1.0);
-      expect(evm.spi).toBe(1.0);
+      expect(evm.cpi).toBeNull();
+      expect(evm.spi).toBeNull();
     });
   });
 });

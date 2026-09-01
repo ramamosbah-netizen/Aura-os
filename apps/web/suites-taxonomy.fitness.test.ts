@@ -8,6 +8,7 @@ import { defaultWorkspaceConfig, visibleFunctionIds } from '@aura/shared';
 describe('AURA suite taxonomy', () => {
   it('every suite entryHref is owned by that same suite, so it self-highlights', () => {
     for (const suite of AURA_SUITES) {
+      if (suite.hiddenFromPrimary) continue;
       expect(activeSuite(suite.entryHref)?.id, `${suite.name} entryHref ${suite.entryHref}`).toBe(suite.id);
     }
   });
@@ -27,13 +28,13 @@ describe('AURA suite taxonomy', () => {
   });
 
   it('keeps the active suite highlighted on deep record pages', () => {
-    expect(activeSuite('/tendering/tenders/123/pricing')?.id).toBe('pre-award');
+    expect(activeSuite('/tendering/tenders/123/pricing')?.id).toBe('sales');
     expect(activeSuite('/crm/opportunities/abc')?.id).toBe('sales');
     expect(activeSuite('/project/xyz/quality')?.id).toBe('project-delivery');
   });
 
-  it('routes variations to Commercial, not Project Delivery', () => {
-    expect(activeSuite('/projects/variations')?.id).toBe('commercial');
+  it('routes variations to Sales & Commercial, not Project Delivery', () => {
+    expect(activeSuite('/projects/variations')?.id).toBe('sales');
     expect(activeSuite('/projects/dashboard')?.id).toBe('project-delivery');
   });
 
@@ -41,8 +42,10 @@ describe('AURA suite taxonomy', () => {
     const sales = AURA_SUITES.find((suite) => suite.id === 'sales');
     expect(sales).toBeDefined();
     expect(suiteFunctions(sales!).some((item) => item.href === '/crm/radar')).toBe(true);
-    expect(sales?.capabilities).toEqual(expect.arrayContaining([{ label: 'Sales Radar', status: 'IMPLEMENTED' }]));
+    expect(sales?.name).toBe('Sales & Commercial');
+    expect(sales?.capabilities).toEqual(expect.arrayContaining([{ label: 'Radar & Signals', status: 'IMPLEMENTED' }]));
     expect(activeSuite('/crm/radar')?.id).toBe('sales');
+    expect(activeSuite('/contracts/contracts')?.id).toBe('sales');
   });
 
   it('owns the canonical route in Control and leaves the legacy My Work path unowned', () => {
@@ -57,11 +60,15 @@ describe('AURA suite taxonomy', () => {
     }
   });
 
-  it('groups into work / control / business / system with nine business suites', () => {
+  it('groups into work / control / business / system with compatibility suites hidden', () => {
     const sections = suiteSections(null, true);
     expect(sections.map((s) => s.section)).toEqual(['work', 'control', 'business', 'system']);
     expect(sections.find((s) => s.section === 'control')?.suites.map((s) => s.id)).toEqual(['business-command-center']);
-    expect(sections.find((s) => s.section === 'business')?.suites).toHaveLength(9);
+    expect(sections.find((s) => s.section === 'business')?.suites.map((s) => s.id)).toEqual([
+      'sales', 'project-delivery', 'supply-chain', 'finance', 'assets-service', 'people', 'intelligence',
+    ]);
+    expect(sections.find((s) => s.section === 'business')?.suites.some((s) => s.id === 'pre-award')).toBe(false);
+    expect(sections.find((s) => s.section === 'business')?.suites.some((s) => s.id === 'commercial')).toBe(false);
     expect(sections.find((s) => s.section === 'work')?.suites.map((s) => s.id)).toEqual(['my-work', 'communication']);
   });
 

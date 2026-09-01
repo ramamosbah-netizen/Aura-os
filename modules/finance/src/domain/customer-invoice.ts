@@ -9,19 +9,40 @@ import { type Id, newId, mulMoney, vatOf, sumMoney, addMoney, subMoney, convertM
 export type CustomerInvoiceStatus = 'draft' | 'issued' | 'partially_paid' | 'paid' | 'cancelled';
 
 export interface CustomerInvoiceLine {
+  /** Stable identity within the invoice; legacy JSONB lines may omit it. */
+  lineId?: string;
   description: string;
   quantity: number;
+  /** Delivery-item unit when the line is eligible for item-level Billed projection. */
+  unit?: string | null;
   unitPrice: number;
   vatRate: number; // percent, e.g. 5
   lineNet: number; // quantity * unitPrice
   lineVat: number; // lineNet * vatRate/100
+  /** Optional immutable delivery lineage. Missing lineage remains UNKNOWN for Billed quantity. */
+  projectId?: Id | null;
+  contractId?: Id | null;
+  sourceIpcId?: Id | null;
+  sourceIpcLineId?: Id | null;
+  frozenItemKey?: string | null;
+  boqItemId?: Id | null;
+  sourceRef?: string | null;
 }
 
 export interface NewCustomerInvoiceLine {
+  lineId?: string;
   description: string;
   quantity: number;
+  unit?: string | null;
   unitPrice: number;
   vatRate?: number;
+  projectId?: Id | null;
+  contractId?: Id | null;
+  sourceIpcId?: Id | null;
+  sourceIpcLineId?: Id | null;
+  frozenItemKey?: string | null;
+  boqItemId?: Id | null;
+  sourceRef?: string | null;
 }
 
 export interface CustomerInvoice {
@@ -85,7 +106,22 @@ export function buildLine(input: NewCustomerInvoiceLine): CustomerInvoiceLine {
   if (!Number.isFinite(price) || price < 0) throw new Error('line unit price cannot be negative');
   if (!Number.isFinite(vatRate) || vatRate < 0) throw new Error('line vat rate cannot be negative');
   const lineNet = mulMoney(qty, price);
-  return { description: input.description.trim(), quantity: qty, unitPrice: price, vatRate, lineNet: Number(lineNet), lineVat: Number(vatOf(lineNet, vatRate)) };
+  return {
+    description: input.description.trim(),
+    quantity: qty,
+    ...(input.unit !== undefined ? { unit: input.unit?.trim() || null } : {}),
+    unitPrice: price,
+    vatRate,
+    lineNet: Number(lineNet),
+    lineVat: Number(vatOf(lineNet, vatRate)),
+    ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+    ...(input.contractId !== undefined ? { contractId: input.contractId } : {}),
+    ...(input.sourceIpcId !== undefined ? { sourceIpcId: input.sourceIpcId } : {}),
+    ...(input.sourceIpcLineId !== undefined ? { sourceIpcLineId: input.sourceIpcLineId } : {}),
+    ...(input.frozenItemKey !== undefined ? { frozenItemKey: input.frozenItemKey } : {}),
+    ...(input.boqItemId !== undefined ? { boqItemId: input.boqItemId } : {}),
+    ...(input.sourceRef !== undefined ? { sourceRef: input.sourceRef } : {}),
+  };
 }
 
 export interface InvoiceTotals {
@@ -105,7 +141,14 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
   if (!input.customerName?.trim()) throw new Error('customerName is required');
   if (!input.issueDate || !/^\d{4}-\d{2}-\d{2}$/.test(input.issueDate)) throw new Error('issueDate must be YYYY-MM-DD');
   if (!input.lines || input.lines.length === 0) throw new Error('at least one line item is required');
-  const lines = input.lines.map(buildLine);
+  const id = newId();
+  const lines = input.lines.map((line, index) => ({
+    ...buildLine(line),
+    lineId: line.lineId?.trim() || `${id}:line:${index + 1}`,
+  }));
+  if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
+    throw new Error('invoice lineId values must be unique within an invoice');
+  }
   const { subtotal, vatTotal, total } = computeTotals(lines);
   const currency = (input.currency ?? 'AED').trim().toUpperCase();
   const exchangeRate = input.exchangeRate === undefined ? 1 : Number(input.exchangeRate);
@@ -113,7 +156,7 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
   if (currency === 'AED' && exchangeRate !== 1) throw new Error('base-currency (AED) invoices must have exchangeRate 1');
   const baseTotal = Number(convertMoney(total, exchangeRate));
   return {
-    id: newId(),
+    id,
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
     invoiceNumber: input.invoiceNumber.trim(),

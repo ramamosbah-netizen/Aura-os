@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { AccessService, AuditService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   VARIATION_EVENT,
   type VariationOrder,
@@ -12,6 +12,7 @@ import {
 } from './domain/variation';
 import { VARIATION_STORE, type VariationFilter, type VariationStore } from './variation-store';
 import { ProjectService } from './project.service';
+import { CbsService } from './cbs.service';
 
 /**
  * Variation Orders service — contractual change orders against a project. Owns
@@ -30,9 +31,23 @@ export class VariationService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
+    @Optional() @Inject(CbsService) private readonly cbs: CbsService | null = null,
   ) {}
 
   async create(input: NewVariationOrder): Promise<VariationOrder> {
+    const project = await this.projects.get(input.projectId);
+    if (!project || project.tenantId !== input.tenantId) {
+      // Do not reveal whether an id exists in another tenant; the scoped getter deliberately
+      // collapses that case into the same not-found response.
+      throw new Error(`project ${input.projectId} not found`);
+    }
+    if (input.cbsNodeId && this.cbs) {
+      const cbsNode = await this.cbs.get(input.cbsNodeId);
+      if (!cbsNode || cbsNode.tenantId !== input.tenantId || cbsNode.projectId !== input.projectId) {
+        throw new Error(`CBS node ${input.cbsNodeId} not found`);
+      }
+    }
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -52,12 +67,50 @@ export class VariationService {
         payload: { projectId: vo.projectId, title: vo.title, type: vo.type, amount: vo.amount },
       }),
     ]);
+    await this.audit?.log(
+      vo.tenantId,
+      vo.companyId,
+      vo.createdBy,
+      'projects',
+      'variation',
+      vo.id,
+      'created',
+      { status: vo.status, amount: vo.amount, signedAmount: vo.signedAmount },
+      { projectId: vo.projectId, cbsNodeId: vo.cbsNodeId, source: 'projects.variation.created' },
+    );
     this.logger.log(`Variation created: ${vo.title} (${vo.type} ${vo.amount}) on project ${vo.projectId}`);
     return vo;
   }
 
   async changeStatus(id: Id, status: VariationStatus, actorId?: Id): Promise<VariationOrder> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'variation', id);
+    if (!existing) throw new Error(`variation ${id} not found`);
+    if (actorId) {
+      const permission = status === 'submitted'
+        ? 'projects.variation.submit'
+        : status === 'approved'
+          ? 'projects.variation.approve'
+          : status === 'rejected'
+            ? 'projects.variation.reject'
+            : 'projects.variation.update';
+      this.access.assert(actorId, { permission, orgPath: [{ level: 'tenant', id: existing.tenantId }] });
+    }
+    if (existing.status === status) return existing;
+    const allowed: Record<VariationStatus, VariationStatus[]> = {
+      draft: ['submitted', 'approved', 'rejected'],
+      submitted: ['approved', 'rejected'],
+      approved: [],
+      rejected: [],
+    };
+    if (!allowed[existing.status].includes(status)) {
+      throw new Error(`cannot move variation from ${existing.status} to ${status}`);
+    }
+    if (existing.cbsNodeId && this.cbs) {
+      const cbsNode = await this.cbs.get(existing.cbsNodeId);
+      if (!cbsNode || cbsNode.tenantId !== existing.tenantId || cbsNode.projectId !== existing.projectId) {
+        throw new Error(`CBS node ${existing.cbsNodeId} not found`);
+      }
+    }
     const decided = status === 'approved' || status === 'rejected';
     const updated: VariationOrder = {
       ...existing,
@@ -65,7 +118,12 @@ export class VariationService {
       decidedBy: decided ? (actorId ?? existing.decidedBy) : existing.decidedBy,
       decidedAt: decided ? new Date().toISOString() : existing.decidedAt,
     };
-    await this.store.update(updated);
+    const applied = await this.store.update(updated, existing.status);
+    if (!applied) {
+      const latest = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'variation', id);
+      if (latest && latest.status === status) return latest;
+      throw new Error(`variation ${id} is not in the expected status; it changed concurrently, retry against the current status`);
+    }
 
     const eventType =
       status === 'submitted' ? VARIATION_EVENT.submitted
@@ -82,9 +140,29 @@ export class VariationService {
         aggregateType: 'projects.variation',
         aggregateId: updated.id,
         // cbsNodeId + signedAmount let the cost engine post a BUDGET change to the cost line on approval.
-        payload: { projectId: updated.projectId, cbsNodeId: updated.cbsNodeId, title: updated.title, status, signedAmount: updated.signedAmount },
+        payload: {
+          projectId: updated.projectId,
+          cbsNodeId: updated.cbsNodeId,
+          title: updated.title,
+          status,
+          fromStatus: existing.status,
+          toStatus: status,
+          signedAmount: updated.signedAmount,
+          decidedAt: updated.decidedAt,
+        },
       }),
     ]);
+    await this.audit?.log(
+      updated.tenantId,
+      updated.companyId,
+      actorId ?? null,
+      'projects',
+      'variation',
+      updated.id,
+      status,
+      { fromStatus: existing.status, toStatus: status, amount: updated.amount, signedAmount: updated.signedAmount },
+      { projectId: updated.projectId, cbsNodeId: updated.cbsNodeId, source: `projects.variation.${status}` },
+    );
     this.logger.log(`Variation ${updated.title} (${updated.id}) → ${status}`);
     return updated;
   }

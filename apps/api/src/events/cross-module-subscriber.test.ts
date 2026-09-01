@@ -209,7 +209,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
       getBaselineById: async (_t: string, bid: string) =>
         pricedQuote && bid === pricedQuote.baselineId
           ? { id: pricedQuote.baselineId, quotationId: pricedQuote.id, revision: 0, total: pricedQuote.total,
-              lines: [{ description: 'Frozen line', quantity: 1, unitPrice: pricedQuote.total, lineNet: pricedQuote.total, vatRate: 0 }],
+              lines: [{ description: 'Frozen line', quantity: 1, unit: 'nr', sourceItemId: 'BOQ-FROZEN-1', unitPrice: pricedQuote.total, lineNet: pricedQuote.total, vatRate: 0 }],
               // Deliberately leave the compatibility pricing shape costless: the assertion below
               // proves the canonical estimation build-up wins when both projections are present.
               pricing: pricedQuote.cost !== undefined ? { lines: [{ supplyUnitPrice: 0, wastagePercent: 0, accessories: 0, technician: { count: 0, hours: 0, rate: 0 }, engineer: { count: 0, hours: 0, rate: 0 }, projectManager: { count: 0, hours: 0, rate: 0 }, transport: 0, equipmentRent: 0, subcontract: 0, otherDirect: 0, indirectPercent: 0 }] } : null,
@@ -235,7 +235,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
+  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, ledger, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
 }
 
 /**
@@ -364,6 +364,22 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     h = buildHarness({ id: 'q-default', status: 'approved', baselineId: 'baseline-default', total: 900_000 });
   });
 
+  it('does not recognize AP payment as project actual cost', async () => {
+    const paymentEvent = makeEvent({
+      type: 'finance.invoice.paid',
+      tenantId,
+      companyId: 'company-1',
+      actorId: 'actor-1',
+      aggregateType: 'finance.invoice',
+      aggregateId: 'ap-invoice-1',
+      payload: { value: 1250, projectId: 'project-1', currency: 'AED' },
+    });
+
+    await h.bus.publish(paymentEvent);
+
+    expect(await h.ledger.list({ tenantId, projectId: 'project-1' })).toHaveLength(0);
+  });
+
   it('auto-creates Tender → Contract → Project, carrying references down the chain', async () => {
     // 1. Opportunity (for a client account) won → Tender (draft), named after the
     //    opportunity and carrying the client snapshot down from the very first link.
@@ -426,6 +442,9 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     await priced.contracts.changeStatus(contract.id, 'active');
 
     const project = (await priced.projects.list({ contractId: contract.id }))[0];
+    const frozenItems = (project.handoverSnapshot as { sourceItems?: Array<{ frozenItemKey: string; sourceKind: string; sourceRevisionRef: string | null; soldQuantity: number | null; unit: string | null; sourceItemId: string | null }> }).sourceItems;
+    expect(frozenItems).toHaveLength(1);
+    expect(frozenItems?.[0]).toMatchObject({ sourceKind: 'TENDER', sourceRevisionRef: 'q-cbs-seed', soldQuantity: 1, unit: 'nr', sourceItemId: 'BOQ-FROZEN-1' });
     const nodes = await priced.cbs.list({ projectId: project.id });
     expect(nodes).toHaveLength(1);
     expect(nodes[0]).toMatchObject({ budgetAmount: 600_000, forecastAmount: 600_000, handoverLocked: true, sourceRevisionId: 'baseline-cbs-seed' });
@@ -630,6 +649,17 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(replayedProjects[0].handoverId).toBe(firstProject.handoverId);
     expect(replayedProjects[0].handoverSnapshotHash).toBe(firstProject.handoverSnapshotHash);
     expect(replayedProjects[0].handoverSnapshot).toEqual(firstProject.handoverSnapshot);
+    expect(replayedProjects[0].handoverSnapshot).toMatchObject({
+      schemaVersion: 1,
+      handoverId: firstProject.handoverId,
+      contractId: contract.id,
+      tenantId,
+      sourceKind: 'TENDER',
+      capturedAt: expect.any(String),
+    });
+    const frozenItems = (firstProject.handoverSnapshot as { sourceItems?: Array<{ frozenItemKey: string; sourceKind: string; sourceRevisionRef: string | null }> }).sourceItems;
+    expect(frozenItems).toHaveLength(1);
+    expect(frozenItems?.[0]).toMatchObject({ sourceKind: 'TENDER', sourceRevisionRef: 'q-default' });
 
     // Re-awarding must not spawn a second contract, and only the one started tender exists.
     expect(await h.tenders.list()).toHaveLength(1);

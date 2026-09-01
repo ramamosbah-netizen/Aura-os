@@ -370,6 +370,27 @@ export class TenderService implements OnModuleInit {
       await this.events.appendWithClient(handle, [event]);
     });
 
+    // Domain events drive integration; this immutable audit row records the governed customer
+    // award for human review. It is emitted only after the write commits and never on replay.
+    await this.audit.log(
+      updated.tenantId,
+      updated.companyId,
+      captured.capturedBy,
+      'tendering',
+      'tender',
+      updated.id,
+      'award',
+      {
+        status: updated.status,
+        awardedValue: captured.awardedValue,
+        currency: captured.currency,
+        awardedAt: captured.awardedAt,
+        awardReference: captured.awardReference,
+        evidenceDocumentId: captured.evidenceDocumentId,
+      },
+      { source: TENDER_EVENT.awarded, commercialBasisEstablished: atAward !== null },
+    );
+
     this.logger.log(
       `Tender ${updated.title} AWARDED — ${captured.currency} ${captured.awardedValue} (excl. VAT) at ${captured.awardedAt}` +
         (captured.awardReference ? `, ref ${captured.awardReference}` : ', no reference captured'),
@@ -486,6 +507,22 @@ export class TenderService implements OnModuleInit {
       await this.submissions.saveWithClient(handle, submission);
       await this.events.appendWithClient(handle, [event]);
     });
+    await this.audit.log(
+      updated.tenantId,
+      updated.companyId,
+      submission.submittedBy,
+      'tendering',
+      'tender',
+      updated.id,
+      'submit',
+      {
+        status: updated.status,
+        submittedValue: submission.submittedValue,
+        submissionId: submission.id,
+        submittedAt: submission.submittedAt,
+      },
+      { source: TENDER_EVENT.submitted, method: submission.method, reference: submission.reference },
+    );
     this.logger.log(`Tender ${updated.title} submitted (${submission.method}${submission.reference ? ` ref=${submission.reference}` : ''}) value=${submission.submittedValue}`);
     return { tender: updated, submission };
   }

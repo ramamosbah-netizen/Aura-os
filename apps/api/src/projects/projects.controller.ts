@@ -37,6 +37,8 @@ import {
   type PlanTaskInput,
   type SchedulePlan,
   ScheduleService,
+  type DeliveryItemMap,
+  DeliveryItemMapService,
 } from '@aura/projects';
 import { AccountService } from '@aura/crm';
 import { resolveAccountSnapshot } from '../common/account-snapshot';
@@ -79,6 +81,18 @@ class CreateCbsNodeDto {
   @IsOptional() @IsString() notes?: string;
 }
 
+class CreateDeliveryItemMapDto {
+  @IsString() projectId!: string;
+  @IsString() handoverId!: string;
+  @IsString() frozenItemKey!: string;
+  @IsString() sourceKind!: string;
+  @IsOptional() @IsString() sourceId?: string | null;
+  @IsOptional() @IsString() sourceRevisionRef?: string | null;
+  @IsOptional() @IsString() sourceItemId?: string | null;
+  @IsOptional() @IsString() wbsNodeId?: string | null;
+  @IsOptional() @IsString() cbsNodeId?: string | null;
+}
+
 class CreateDelayDto {
   @IsString() projectId!: string;
   @IsString() title!: string;
@@ -114,6 +128,7 @@ export class ProjectsController {
     private readonly closeouts: CloseoutService,
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
+    private readonly deliveryItemMaps: DeliveryItemMapService,
     private readonly accounts: AccountService,
     private readonly tenant: TenantContext,
   ) {}
@@ -160,7 +175,8 @@ export class ProjectsController {
     return Promise.all(
       projects.map(async (p) => {
         const evm = await this.wbs.getEvmMetrics(p.id);
-        const atRisk = p.status === 'active' && (evm.spi < 1 || evm.cpi < 1);
+        const atRisk = p.status === 'active'
+          && ((evm.spi !== null && evm.spi < 1) || (evm.cpi !== null && evm.cpi < 1));
         return { ...p, evm, atRisk };
       }),
     );
@@ -222,6 +238,46 @@ export class ProjectsController {
     return this.wbs.getEvmMetrics(id);
   }
 
+  // ── DELIVERY ITEM MAPPING (explicit post-handover governed step) ─────────
+
+  @Post('delivery-item-maps')
+  async createDeliveryItemMap(@Body() dto: CreateDeliveryItemMapDto): Promise<DeliveryItemMap> {
+    if (!dto?.projectId || !dto?.handoverId) throw new BadRequestException('projectId and handoverId are required');
+    if (!dto?.frozenItemKey?.trim()) throw new BadRequestException('frozenItemKey is required');
+    const ctx = this.tenant.get();
+    try {
+      return await this.deliveryItemMaps.create({
+        tenantId: ctx.tenantId,
+        projectId: dto.projectId,
+        handoverId: dto.handoverId,
+        frozenItemKey: dto.frozenItemKey,
+        sourceKind: dto.sourceKind as 'DIRECT' | 'TENDER',
+        sourceId: dto.sourceId ?? null,
+        sourceRevisionRef: dto.sourceRevisionRef ?? null,
+        sourceItemId: dto.sourceItemId ?? null,
+        wbsNodeId: dto.wbsNodeId ?? null,
+        cbsNodeId: dto.cbsNodeId ?? null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'delivery item mapping failed';
+      if (message.includes('conflicting immutable')) throw new ConflictException(message);
+      if (message.includes('not found')) throw new NotFoundException(message);
+      throw new BadRequestException(message);
+    }
+  }
+
+  @Get('delivery-item-maps')
+  listDeliveryItemMaps(@Query('projectId') projectId?: string, @Query('handoverId') handoverId?: string, @Query('frozenItemKey') frozenItemKey?: string): Promise<DeliveryItemMap[]> {
+    return this.deliveryItemMaps.list({ projectId, handoverId, frozenItemKey });
+  }
+
+  @Get('delivery-item-maps/:id')
+  async getDeliveryItemMap(@Param('id', ParseUuidOr404Pipe) id: string): Promise<DeliveryItemMap> {
+    const found = await this.deliveryItemMaps.get(id);
+    if (!found) throw new NotFoundException(`delivery item mapping ${id} not found`);
+    return found;
+  }
+
   // ── WBS (WORK BREAKDOWN STRUCTURE) ───────────────────────────────────────
 
   @Post('wbs')
@@ -237,10 +293,22 @@ export class ProjectsController {
       parentId: dto.parentId ?? null,
       code: dto.code,
       title: dto.title,
-      plannedValue: dto.plannedValue ?? 0,
+      plannedValue: dto.plannedValue,
       boqItemId: dto.boqItemId ?? null,
       createdBy: ctx.actorId,
     });
+  }
+
+  /** Approve the exact opening WBS BAC allocation set; later baseline-participating writes are rejected. */
+  @Post('projects/:id/wbs-baseline')
+  async approveWbsBaseline(@Param('id') id: string): Promise<unknown> {
+    const ctx = this.tenant.get();
+    if (!ctx.actorId) throw new BadRequestException('actor is required to approve a WBS baseline');
+    try {
+      return await this.wbs.approveOpeningBaseline(id, ctx.actorId);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'WBS baseline approval failed');
+    }
   }
 
   @Get('wbs')
@@ -270,8 +338,20 @@ export class ProjectsController {
     @Body() dto: { progress: number; status?: WbsNodeStatus },
   ): Promise<WbsNode> {
     if (dto?.progress === undefined) throw new BadRequestException('progress is required');
+    if (typeof dto.progress !== 'number' || !Number.isFinite(dto.progress)) {
+      throw new BadRequestException('progress must be a finite number');
+    }
     const ctx = this.tenant.get();
-    return this.wbs.updateProgress(id, dto.progress, dto.status, ctx.actorId ?? undefined);
+    try {
+      return await this.wbs.updateProgress(id, dto.progress, dto.status, ctx.actorId ?? undefined);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'WBS progress update failed';
+      // A mapped/derived node is a governed conflict, not an infrastructure failure. Keep the
+      // domain guard authoritative while exposing a stable HTTP boundary to delivery operators.
+      if (message.includes('manual progress is not allowed')) throw new ConflictException(message);
+      if (message.includes('not found')) throw new NotFoundException(message);
+      throw new BadRequestException(message);
+    }
   }
 
   // ── CBS (COST BREAKDOWN STRUCTURE) ───────────────────────────────────────
@@ -293,6 +373,7 @@ export class ProjectsController {
         budgetAmount: dto.budgetAmount,
         currency: dto.currency,
         notes: dto.notes,
+        createdBy: ctx.actorId,
       });
     } catch (error) {
       throw this.mapCbsError(error);
@@ -381,6 +462,7 @@ export class ProjectsController {
 
   private mapCbsError(error: unknown): Error {
     const message = error instanceof Error ? error.message : 'CBS operation failed';
+    if (message.includes('Cost Ledger-owned')) return new ConflictException(message);
     if (message.includes('immutable after handover')) return new ConflictException(message);
     if (message.includes('not found')) return new NotFoundException(message);
     return new BadRequestException(message);
@@ -405,6 +487,7 @@ export class ProjectsController {
       isConcurrent: dto.isConcurrent,
       linkedActivityCode: dto.linkedActivityCode,
       description: dto.description,
+      actorId: ctx.actorId,
     });
   }
 
@@ -447,6 +530,7 @@ export class ProjectsController {
       justification: dto.justification,
       originalCompletionDate: dto.originalCompletionDate,
       delayEventIds: dto.delayEventIds,
+      actorId: ctx.actorId,
     });
   }
 
@@ -457,7 +541,7 @@ export class ProjectsController {
 
   @Post('eot-claims/:id/submit')
   submitEotClaim(@Param('id') id: string): Promise<EotClaim> {
-    return this.delayEot.submitEotClaim(id);
+    return this.delayEot.submitEotClaim(id, this.tenant.get().actorId);
   }
 
   // ── VARIATION ORDERS (change orders) ─────────────────────────────────────

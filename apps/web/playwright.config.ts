@@ -15,6 +15,16 @@ const BASE_URL = `http://localhost:${PORT}`;
 const AUTH_GATE_PORT = PORT + 1;
 const AUTH_GATE_BASE_URL = `http://localhost:${AUTH_GATE_PORT}`;
 
+// T23-3D — sequential webServer phases. The two `next dev` servers are never needed at once: only
+// web-auth-gate.spec runs against the gate-ON server; every other spec (and global setup) uses the
+// gate-OFF server. E2E_SERVER selects a SINGLE phase so CI can run them one after the other, which
+// halves the peak `next dev` memory that was tipping the full run into a forced job teardown. Unset
+// (local/default) keeps BOTH servers and both projects — the original one-invocation behaviour, so
+// nothing local changes. A per-phase output suffix keeps each phase's failure diagnostics separate
+// (Playwright wipes outputDir at the start of a run, so a shared dir would let phase 2 erase phase 1).
+const SERVER = process.env.E2E_SERVER; // 'gate-off' | 'gate-on' | undefined (both)
+const SUFFIX = SERVER ? `-${SERVER}` : '';
+
 export default defineConfig({
   testDir: './e2e',
   // TIER-3 drives the same specs against a real database, where every assertion sits behind SQL
@@ -30,14 +40,27 @@ export default defineConfig({
   // have, because Playwright already defaults to one worker under CI. Same number in both places
   // is worth more than the minute it saves.
   workers: 1,
-  reporter: [['list']],
+  // Zero retries, on purpose: a flaky test must stay a VISIBLE failure, never be masked by a
+  // passing retry. Diagnostics therefore capture the first (only) attempt — see `trace` below.
+  retries: 0,
+  // `list` keeps the live console output CI streams line-by-line; `html` writes a self-contained
+  // report into the artifact so a CI-only failure can be inspected offline. `open: 'never'` stops
+  // Playwright trying to launch a browser on the runner.
+  reporter: [['list'], ['html', { open: 'never', outputFolder: `playwright-report${SUFFIX}` }]],
+  // Per-phase output dir so a Phase-2 run never wipes Phase-1's trace/screenshot (see SUFFIX above).
+  outputDir: `test-results${SUFFIX}`,
   // Signs in once through the real login form and saves the session (G-03). When the API runs with
   // a verifier configured, PermissionsGuard engages on every route, so without a shared session the
   // whole suite is refused. No-ops when auth is off, so the local setup is unchanged.
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    // retain-on-failure, NOT on-first-retry: with retries:0 there is no retry, so on-first-retry
+    // recorded nothing — every CI-only browser failure died with just its one-line assertion. This
+    // keeps the trace AND a screenshot from the actual failing attempt. Video stays off (Playwright
+    // default): trace + screenshot have been sufficient; revisit only if evidence shows otherwise.
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     storageState: STORAGE_STATE,
   },
   projects: [
@@ -49,7 +72,9 @@ export default defineConfig({
       testMatch: /web-auth-gate\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: AUTH_GATE_BASE_URL },
     },
-  ],
+    // T23-3D: a phase keeps only its own project; global setup reads projects[0].use.baseURL, so
+    // the gate-on phase (auth-gate first) correctly targets :3101, never the stopped :3100.
+  ].filter((project) => !SERVER || project.name === (SERVER === 'gate-on' ? 'auth-gate' : 'chromium')),
   // Two declared environments rather than one that inherits whatever the developer has.
   //
   // WEB_AUTH_REQUIRED changes a behaviour the suite asserts: with the gate off an anonymous read
@@ -77,5 +102,6 @@ export default defineConfig({
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },
-  ],
+    // T23-3D: index 0 = gate-off (:3100), index 1 = gate-on (:3101). A phase starts only its server.
+  ].filter((_server, index) => !SERVER || index === (SERVER === 'gate-on' ? 1 : 0)),
 });

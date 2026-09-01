@@ -14,11 +14,15 @@ const COLS = `id, tenant_id, company_id, project_id, boq_item_id, cbs_node_id, t
   source, source_ref, dimensions, dedupe_key, occurred_at::text, created_at::text, created_by`;
 
 function toTxn(r: Row): QuantityTransaction {
+  const dimensions = r.dimensions ?? null;
+  const semantic = dimensions?.semantic === 'sold' || dimensions?.semantic === 'certified' || dimensions?.semantic === 'billed'
+    ? dimensions.semantic
+    : null;
   return {
     id: r.id, tenantId: r.tenant_id, companyId: r.company_id, projectId: r.project_id,
     boqItemId: r.boq_item_id, cbsNodeId: r.cbs_node_id, type: r.type as QtyTxnType, quantity: Number(r.quantity),
     unit: r.unit, source: r.source as QtyTxnSource,
-    sourceRef: r.source_ref, dimensions: r.dimensions ?? null, dedupeKey: r.dedupe_key ?? null,
+    sourceRef: r.source_ref, dimensions, dedupeKey: r.dedupe_key ?? null, semantic,
     occurredAt: r.occurred_at, createdAt: r.created_at, createdBy: r.created_by,
   };
 }

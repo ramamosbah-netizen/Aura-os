@@ -33,6 +33,16 @@ describe('makeCustomerInvoice', () => {
     expect(inv.amountPaid).toBe(0);
   });
 
+  it('assigns stable line identities and preserves optional delivery lineage', () => {
+    const inv = makeCustomerInvoice({
+      ...base,
+      lines: [{ description: 'Mapped work', quantity: 2, unit: 'm', unitPrice: 50,
+        projectId: 'project-1', contractId: 'contract-1', frozenItemKey: 'DIRECT|quote|LINE|0',
+        sourceIpcId: 'ipc-1', sourceIpcLineId: 'ipc-line-1', boqItemId: 'BOQ-1', sourceRef: 'ipc:ipc-1:line:ipc-line-1' }],
+    });
+    expect(inv.lines[0]).toMatchObject({ lineId: `${inv.id}:line:1`, unit: 'm', projectId: 'project-1', contractId: 'contract-1', frozenItemKey: 'DIRECT|quote|LINE|0', sourceIpcLineId: 'ipc-line-1' });
+  });
+
   it('requires at least one line', () => {
     expect(() => makeCustomerInvoice({ ...base, lines: [] })).toThrow('at least one line');
   });

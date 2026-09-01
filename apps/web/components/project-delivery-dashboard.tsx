@@ -20,13 +20,14 @@ import ContinueWorking from './continue-working';
 
 /** Live earned-value health per project, from `/api/projects/projects/portfolio`. */
 export interface DeliveryEvm {
-  plannedValue: number;
-  earnedValue: number;
-  actualCost: number;
-  costVariance: number;
-  scheduleVariance: number;
-  cpi: number;
-  spi: number;
+  budgetAtCompletion: number | null;
+  plannedValue: number | null;
+  earnedValue: number | null;
+  actualCost: number | null;
+  costVariance: number | null;
+  scheduleVariance: number | null;
+  cpi: number | null;
+  spi: number | null;
 }
 
 export interface DeliveryProject {
@@ -66,8 +67,8 @@ const aed = (n: number): string => 'AED ' + Math.round(n).toLocaleString('en-AE'
 /** Why an active project is at risk — read straight from its earned-value figures, never invented. */
 function riskReason(project: DeliveryProject): string {
   const flags: string[] = [];
-  if (project.evm.spi < 1) flags.push('behind schedule');
-  if (project.evm.costVariance < 0) flags.push('over budget');
+  if (project.evm.spi !== null && project.evm.spi < 1) flags.push('behind schedule');
+  if (project.evm.costVariance !== null && project.evm.costVariance < 0) flags.push('over budget');
   return flags.length ? flags.join(' · ') : 'needs review';
 }
 
@@ -81,17 +82,16 @@ export default function ProjectDeliveryDashboard({
   const rows = projects ?? [];
   const active = rows.filter((project) => project.status === 'active');
   const atRisk = rows.filter((project) => project.atRisk);
-  const behindSchedule = active.filter((project) => project.evm.spi < 1);
+  const behindSchedule = active.filter((project) => project.evm.spi !== null && project.evm.spi < 1);
   const pendingApprovals = approvals?.length ?? 0;
 
-  const pv = rows.reduce((sum, project) => sum + project.evm.plannedValue, 0);
-  const ev = rows.reduce((sum, project) => sum + project.evm.earnedValue, 0);
-  const ac = rows.reduce((sum, project) => sum + project.evm.actualCost, 0);
-  const portfolioSpi = pv > 0 ? ev / pv : null;
+  const bac = rows.reduce((sum, project) => sum + (project.evm.budgetAtCompletion ?? 0), 0);
+  const ev = rows.reduce((sum, project) => sum + (project.evm.earnedValue ?? 0), 0);
+  const ac = rows.reduce((sum, project) => sum + (project.evm.actualCost ?? 0), 0);
   const portfolioCpi = ac > 0 ? ev / ac : null;
 
   // Worst-first: the deepest cost overrun, then the worst schedule performance.
-  const attentionSorted = [...atRisk].sort((a, b) => (a.evm.costVariance - b.evm.costVariance) || (a.evm.spi - b.evm.spi));
+  const attentionSorted = [...atRisk].sort((a, b) => ((a.evm.costVariance ?? 0) - (b.evm.costVariance ?? 0)) || ((a.evm.spi ?? 2) - (b.evm.spi ?? 2)));
   const worst = attentionSorted[0] ?? null;
 
   const metrics: SuiteMetric[] = [
@@ -110,12 +110,12 @@ export default function ProjectDeliveryDashboard({
     title: project.title,
     subtitle: `${project.accountName ?? 'No client'} · ${project.status}`,
     detailPrimary: riskReason(project),
-    detailSecondary: `SPI ${project.evm.spi.toFixed(2)} · CPI ${project.evm.cpi.toFixed(2)}`,
-    trailing: project.evm.costVariance < 0 ? `${aed(project.evm.costVariance)}` : aed(project.value),
+    detailSecondary: `SPI ${project.evm.spi === null ? 'Unavailable' : project.evm.spi.toFixed(2)} · CPI ${project.evm.cpi === null ? 'Unavailable' : project.evm.cpi.toFixed(2)}`,
+    trailing: project.evm.costVariance !== null && project.evm.costVariance < 0 ? `${aed(project.evm.costVariance)}` : aed(project.value),
     trailingStrong: true,
   }));
 
-  const spiText = portfolioSpi === null ? '—' : portfolioSpi.toFixed(2);
+  const spiText = 'Unavailable';
   const cpiText = portfolioCpi === null ? '—' : portfolioCpi.toFixed(2);
   const briefBody = projects === null
     ? 'The portfolio feed could not be loaded. I can still help you search projects and prepare your next delivery action.'

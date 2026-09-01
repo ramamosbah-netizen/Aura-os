@@ -108,11 +108,14 @@ describe('C5 source-to-margin funnel (HTTP)', () => {
     expect(noCost?.measured).toBe(0);
     expect(noCost?.measurementNote).toBe('1 contract(s) with no recorded cost — margin unknown');
 
-    // Now record real cost against the project's CBS.
+    // Now record real cost through the governed Site labour → Cost Ledger path. Direct CBS
+    // actualAmount patches are intentionally rejected by the C5 authority boundary.
     const node = (await http.post('/api/v1/projects/cbs')
       .send({ projectId: project.id, code: '01', title: 'Materials', category: 'direct', budgetAmount: 400_000 })
       .expect(201)).body;
-    await http.patch(`/api/v1/projects/cbs/${node.id}`).send({ actualAmount: 380_000 }).expect(200);
+    await http.post('/api/v1/site/labour')
+      .send({ projectId: project.id, cbsNodeId: node.id, date: '2026-08-03', trade: 'Installer', headcount: 1, hours: 1, costRate: 380_000 })
+      .expect(201);
 
     const measured = find(await funnel(), 'referral');
     expect(measured?.measured).toBe(1);
@@ -151,7 +154,9 @@ describe('C5 source-to-margin funnel (HTTP)', () => {
       .send({ projectId: project.id, parentId: parent.id, code: '01.01', title: 'Panels', category: 'direct', budgetAmount: 150_000 })
       .expect(201)).body;
     // Recording on the child rolls the same 90k up into the parent — two rows, one real cost.
-    await http.patch(`/api/v1/projects/cbs/${child.id}`).send({ actualAmount: 90_000 }).expect(200);
+    await http.post('/api/v1/site/labour')
+      .send({ projectId: project.id, cbsNodeId: child.id, date: '2026-08-03', trade: 'Installer', headcount: 1, hours: 1, costRate: 90_000 })
+      .expect(201);
 
     const s = find(await funnel(), 'campaign');
     expect(s?.actualCost).toBe(90_000); // not 180_000

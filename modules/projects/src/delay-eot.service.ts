@@ -1,12 +1,13 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { assertSameTenant, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
-import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { assertSameTenant, type Id, makeEvent, sameTenantOrNull, type AccessTarget, type OrgLevel } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   type DelayEvent, type NewDelayEvent, makeDelayEvent, type DelayStatus,
   type EotClaim, type NewEotClaim, makeEotClaim, type EotStatus,
   calculateDelayAnalysis, type DelayAnalysisSummary,
 } from './domain/delay-eot';
 import { DELAY_STORE, EOT_STORE, type DelayFilter, type DelayStore, type EotFilter, type EotStore } from './delay-eot-store';
+import { PROJECT_STORE, type ProjectStore } from './project-store';
 
 @Injectable()
 export class DelayEotService {
@@ -19,11 +20,14 @@ export class DelayEotService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(PROJECT_STORE) private readonly projects: ProjectStore | null = null,
+    @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
   ) {}
 
   // ── DELAY EVENTS ─────────────────────────────────────────────────────
 
-  async createDelay(input: NewDelayEvent): Promise<DelayEvent> {
+  async createDelay(input: NewDelayEvent & { actorId?: Id | null }): Promise<DelayEvent> {
+    await this.assertProjectAccess(input.projectId, input.tenantId, input.actorId);
     const event = makeDelayEvent(input);
     await this.delays.create(event);
     this.logger.log(`Delay event created: ${event.title} (${event.causeCategory}, ${event.delayDays}d)`);
@@ -45,6 +49,7 @@ export class DelayEotService {
 
   async updateDelayStatus(id: Id, status: DelayStatus): Promise<DelayEvent> {
     const existing = assertSameTenant(await this.delays.get(id), this.tenant?.boundTenantId(), 'Delay event', id);
+    await this.assertProjectOwnership(existing.projectId, existing.tenantId);
     const updated: DelayEvent = { ...existing, status };
     await this.delays.update(updated);
     this.logger.log(`Delay event ${id} status → ${status}`);
@@ -62,7 +67,8 @@ export class DelayEotService {
 
   // ── EOT CLAIMS ───────────────────────────────────────────────────────
 
-  async createEotClaim(input: NewEotClaim): Promise<EotClaim> {
+  async createEotClaim(input: NewEotClaim & { actorId?: Id | null }): Promise<EotClaim> {
+    await this.assertProjectAccess(input.projectId, input.tenantId, input.actorId);
     const claim = makeEotClaim(input);
     await this.eotClaims.create(claim);
     this.logger.log(`EOT Claim #${claim.claimNumber} created: ${claim.title} (${claim.submittedDays}d)`);
@@ -82,8 +88,9 @@ export class DelayEotService {
     return claim;
   }
 
-  async submitEotClaim(id: Id): Promise<EotClaim> {
+  async submitEotClaim(id: Id, actorId?: Id | null): Promise<EotClaim> {
     const existing = assertSameTenant(await this.eotClaims.get(id), this.tenant?.boundTenantId(), 'EOT Claim', id);
+    await this.assertProjectAccess(existing.projectId, existing.tenantId, actorId);
     if (existing.status !== 'draft') throw new Error(`EOT Claim ${id} is not in draft status`);
 
     const updated: EotClaim = {
@@ -103,6 +110,7 @@ export class DelayEotService {
     revisedCompletionDate?: string | null;
   }): Promise<EotClaim> {
     const existing = assertSameTenant(await this.eotClaims.get(id), this.tenant?.boundTenantId(), 'EOT Claim', id);
+    await this.assertProjectAccess(existing.projectId, existing.tenantId, decision.decidedBy);
 
     const updated: EotClaim = {
       ...existing,
@@ -147,5 +155,19 @@ export class DelayEotService {
       this.eotClaims.list({ projectId }),
     ]);
     return calculateDelayAnalysis(delays, eots);
+  }
+
+  private async assertProjectOwnership(projectId: Id, tenantId: Id): Promise<void> {
+    if (!this.projects) return;
+    const project = await this.projects.get(projectId);
+    if (!project || project.tenantId !== tenantId) throw new Error(`project ${projectId} not found`);
+  }
+
+  private async assertProjectAccess(projectId: Id, tenantId: Id, actorId?: Id | null): Promise<void> {
+    await this.assertProjectOwnership(projectId, tenantId);
+    if (actorId && this.access) {
+      const target: AccessTarget = { permission: 'projects.project.update', orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }] };
+      this.access.assert(actorId, target);
+    }
   }
 }

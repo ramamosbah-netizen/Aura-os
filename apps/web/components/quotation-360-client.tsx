@@ -34,7 +34,8 @@ export interface Quotation {
 }
 
 export interface QuotationPricingView {
-  rows: Array<{
+  /** The API serves the canonical pricing sheet under `lines` (not `rows`). */
+  lines: Array<{
     description: string;
     quantity: number;
     unitCostTotal: number;
@@ -96,8 +97,11 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   // ── Pricing composition (quotation sheet ↔ pricing engine) ──────────────────
   const pricing = useMemo(() => {
     if (!pricingView) return null;
+    // The canonical API contract is `lines`; keep the read path defensive because this is
+    // server-provided JSON and an older/malformed response must not crash the whole 360 page.
+    const lines = Array.isArray(pricingView.lines) ? pricingView.lines : [];
     return {
-      rows: pricingView.rows.map((r) => ({
+      rows: lines.map((r) => ({
         description: r.description,
         quantity: r.quantity,
         unitCost: r.unitCostTotal,

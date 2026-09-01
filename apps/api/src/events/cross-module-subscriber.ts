@@ -1,7 +1,18 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { EventBus, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
-import { ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, VariationService, hashHandoverSnapshot } from '@aura/projects';
+import {
+  ProjectService,
+  WbsService,
+  CbsService,
+  CostLedgerService,
+  QuantityLedgerService,
+  VariationService,
+  hashHandoverSnapshot,
+  frozenItemKey,
+  type FrozenDeliverySource,
+  HANDOVER_SNAPSHOT_SCHEMA_VERSION,
+} from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateSourcingService, type Tender } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted, computeQuotationPricing, computeEstimationPricing } from '@aura/crm';
@@ -24,13 +35,14 @@ import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mu
  *   └──────────────────────────────┘     └─────────────────────────┘     └──────────────────────────┘     └──────────────────────┘
  *
  *   contracts.ipc.certified         ──► (auto-draft client AR invoice for the net certified)
+ *   finance.customer_invoice.issued ──► (post item-level Billed quantity when frozen lineage is present)
  *   subcontracts.backcharge.recovered ──► (auto-draft a supplier AP debit note — negative invoice — reducing the subcontractor payable)
  *   procurement.po.created  ──► (log committed cost against project)
  *   inventory.grn.created   ──► (auto-transition PO to 'received' & suggest AP invoice)
  *   inventory.stock.movement_recorded ──► (low-stock crossing reorder level → auto-draft a replenishment PR)
  *   inventory.stock.movement_recorded ──► (perpetual-inventory GL: receipt Dr Inventory/Cr GRNI; issue Dr COGS/Cr Inventory)
  *   amc.workorder.completed ──► (auto-draft a client AR invoice for the billable service visit)
- *   finance.invoice.paid    ──► (log actual cost against project)
+ *   finance.invoice.paid    ──► (cash settlement only; never project AC)
  */
 @Injectable()
 export class CrossModuleSubscriber implements OnModuleInit {
@@ -626,11 +638,64 @@ export class CrossModuleSubscriber implements OnModuleInit {
         const frozenCost = candidateFrozenCost !== null && Number.isFinite(candidateFrozenCost) && candidateFrozenCost > 0
           ? candidateFrozenCost
           : null;
-        const sourceBundle = {
+        const handoverId = newId();
+        const sourceTenderId = (p.sourceTenderId as string | null) ?? tender?.id ?? null;
+        const rawAwardAcceptanceType = p.awardAcceptanceType;
+        const awardAcceptanceType = rawAwardAcceptanceType === 'quotation_acceptance'
+          || rawAwardAcceptanceType === 'tender_award'
+          || rawAwardAcceptanceType === 'manual'
+          ? rawAwardAcceptanceType
+          : null;
+        const awardAcceptanceEvidence = p.awardAcceptanceEvidence && typeof p.awardAcceptanceEvidence === 'object'
+          ? p.awardAcceptanceEvidence as Record<string, unknown>
+          : null;
+        // B2 captures only the immutable item evidence that is actually present in the locked
+        // commercial baseline.  A quotation line has no BOQ identity in the current model, so its
+        // deterministic line key is explicit evidence rather than a fabricated Tender/BOQ id.
+        const sourceRevisionRef = (p.acceptedQuotationRevisionId as string | null)
+          ?? baseline?.id
+          ?? null;
+        const sourceId = sourceTenderId ?? ((p.sourceOpportunityId as string | null) ?? null);
+        const sourceItems = baseline?.lines?.map((line, index) => ({
+          frozenItemKey: frozenItemKey({
+            sourceKind: sourceTenderId ? 'TENDER' : 'DIRECT',
+            sourceRevisionRef,
+            fallbackRef: baseline?.id ?? e.aggregateId,
+            lineIndex: index,
+          }),
+          sourceKind: sourceTenderId ? 'TENDER' as const : 'DIRECT' as const,
+          sourceId,
+          sourceRevisionRef,
+          // Tender quotation lines carry the durable BOQ item identity when the quotation was
+          // generated from the tender BOQ. Direct quotations legitimately remain null.
+          sourceItemId: line.sourceItemId ?? null,
+          itemCode: null,
+          description: line.description,
+           // The approved quotation line carries the unit frozen from its governed source
+           // (Tender BOQ or Direct scope). Preserve it by value; never infer a unit here.
+           unit: line.unit ?? null,
+          soldQuantity: line.quantity,
+          customerUnitPrice: line.unitPrice,
+          customerLineValue: line.lineNet,
+          costEvidence: null,
+          sourceSnapshot: {
+            description: line.description,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            vatRate: line.vatRate,
+            lineNet: line.lineNet,
+            lineVat: line.lineVat,
+          },
+          unavailableReason: null,
+        })) ?? [];
+        const sourceBundle: FrozenDeliverySource = {
+          schemaVersion: HANDOVER_SNAPSHOT_SCHEMA_VERSION,
+          handoverId,
           contractId: e.aggregateId,
           tenantId: e.tenantId,
           sourceOpportunityId: (p.sourceOpportunityId as string | null) ?? null,
-          sourceTenderId: (p.sourceTenderId as string | null) ?? tender?.id ?? null,
+          sourceTenderId,
+          sourceKind: sourceTenderId ? 'TENDER' : 'DIRECT',
           commercialScopeRevisionId: (p.commercialScopeRevisionId as string | null) ?? null,
           boqRevisionId: (p.boqRevisionId as string | null) ?? null,
           estimateRevisionId: (p.estimateRevisionId as string | null) ?? null,
@@ -639,8 +704,8 @@ export class CrossModuleSubscriber implements OnModuleInit {
           commercialBaselineId: (p.commercialBaselineId as string | null) ?? null,
           originalContractValue,
           currency: (p.currency as string | null) ?? null,
-          awardAcceptanceType: (p.awardAcceptanceType as string | null) ?? null,
-          awardAcceptanceEvidence: p.awardAcceptanceEvidence ?? null,
+          awardAcceptanceType,
+          awardAcceptanceEvidence,
           // Full frozen baseline evidence is intentionally copied by value.  It is optional for
           // legacy/tender paths that have no quotation baseline, and absent cost remains explicit.
           frozenCommercialBaseline: baseline ? {
@@ -657,8 +722,11 @@ export class CrossModuleSubscriber implements OnModuleInit {
             total: baseline.total,
             lockedAt: baseline.lockedAt,
           } : null,
+          sourceItems,
+          // Capture the event's stable occurrence time, not wall-clock time, so a
+          // redelivery reconstructs the same source envelope before idempotency.
+          capturedAt: e.occurredAt,
         };
-        const handoverId = newId();
         const handoverSnapshotHash = hashHandoverSnapshot(sourceBundle);
         const project = await this.projects.create(
           {
@@ -867,6 +935,73 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }),
     );
 
+    // ── Quantity Ledger (B4): an ISSUED AR invoice is the Billed authority ──
+    // Drafting an invoice from IPC certification is not Billed. Only an explicit issued invoice
+    // line carrying frozen delivery lineage can post a Billed quantity; lines without that
+    // evidence remain UNKNOWN rather than being inferred from the current IPC/BOQ state.
+    this.bus.subscribe('finance.customer_invoice.issued', (e: DomainEvent) =>
+      this.retryable('post billed quantity from customer_invoice.issued', e, async () => {
+        const invoice = await this.customerInvoices.get(e.aggregateId);
+        if (!invoice || invoice.status !== 'issued') return;
+        for (const line of invoice.lines) {
+          const projectId = line.projectId ?? invoice.projectId;
+          const contractId = line.contractId ?? invoice.contractRef;
+          if (!projectId || !line.frozenItemKey || !line.unit) {
+            this.logger.warn(`customer_invoice.issued → Billed UNKNOWN for invoice ${invoice.invoiceNumber} line ${line.lineId ?? 'legacy'} (missing frozen delivery lineage)`);
+            continue;
+          }
+          await this.quantityLedger.postBilled({
+            tenantId: invoice.tenantId,
+            companyId: invoice.companyId,
+            invoiceId: invoice.id,
+            invoiceLineId: line.lineId ?? `${invoice.id}:legacy-line`,
+            projectId,
+            contractId,
+            frozenItemKey: line.frozenItemKey,
+            boqItemId: line.boqItemId ?? null,
+            sourceIpcId: line.sourceIpcId ?? null,
+            sourceIpcLineId: line.sourceIpcLineId ?? null,
+            quantity: line.quantity,
+            unit: line.unit,
+            billedNet: line.lineNet,
+            issuedAt: e.occurredAt,
+            createdBy: e.actorId ?? null,
+          });
+        }
+      }),
+    );
+
+    // Cancellation is compensating evidence: the original Billed transaction remains immutable.
+    // A receipt/paid event intentionally has no quantity-ledger side effect (Paid != Billed).
+    this.bus.subscribe('finance.customer_invoice.cancelled', (e: DomainEvent) =>
+      this.retryable('reverse billed quantity from customer_invoice.cancelled', e, async () => {
+        const invoice = await this.customerInvoices.get(e.aggregateId);
+        if (!invoice) return;
+        for (const line of invoice.lines) {
+          const projectId = line.projectId ?? invoice.projectId;
+          const contractId = line.contractId ?? invoice.contractRef;
+          if (!projectId || !line.frozenItemKey || !line.unit) continue;
+          await this.quantityLedger.reverseBilled({
+            tenantId: invoice.tenantId,
+            companyId: invoice.companyId,
+            invoiceId: invoice.id,
+            invoiceLineId: line.lineId ?? `${invoice.id}:legacy-line`,
+            projectId,
+            contractId,
+            frozenItemKey: line.frozenItemKey,
+            boqItemId: line.boqItemId ?? null,
+            sourceIpcId: line.sourceIpcId ?? null,
+            sourceIpcLineId: line.sourceIpcLineId ?? null,
+            quantity: line.quantity,
+            unit: line.unit,
+            billedNet: line.lineNet,
+            cancelledAt: e.occurredAt,
+            createdBy: e.actorId ?? null,
+          });
+        }
+      }),
+    );
+
     // ── Subcontracting money-flow: back-charge recovered → auto-draft AP debit note ──
     // The mirror of ipc.certified → AR. A back-charge recovered from a subcontractor is the
     // signal to reduce what we owe them: we raise a DRAFT supplier (AP) invoice with a NEGATIVE
@@ -948,6 +1083,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
           cbsNodeId, type: 'committed', amount: -value, source: 'reversal',
           sourceRef: `${(p.title as string) ?? 'PO'} — cancelled`, dimensions: { poId: e.aggregateId, reverses: 'po' },
+          dedupeKey: `po-committed-reversal:${e.aggregateId}`,
         });
         this.logger.log(`↩ po.cancelled → reversed committed ${value} on CBS ${cbsNodeId} (PO ${e.aggregateId})`);
       }),
@@ -1043,6 +1179,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
           cbsNodeId, type: 'committed', amount: value, source: 'subcontract',
           sourceRef: `${(p.title as string) ?? 'Subcontract'} — awarded`, dimensions: { subcontractId: e.aggregateId },
+          dedupeKey: `subcontract-committed:${e.aggregateId}`,
         });
         this.logger.log(`⚡ subcontract active → committed ${value} on CBS ${cbsNodeId} (SC ${e.aggregateId})`);
       }),
@@ -1071,6 +1208,8 @@ export class CrossModuleSubscriber implements OnModuleInit {
           cbsNodeId, type: 'actual', amount: gross, source: 'subcontract_claim',
           sourceRef: `${(p.subcontractTitle as string) ?? 'Subcontract'} — claim #${p.claimNumber ?? ''}`.trim(),
           dimensions: { claimId: e.aggregateId, subcontractId: (p.subcontractId as string) ?? '' },
+          dedupeKey: `subcontract-claim-actual:${e.aggregateId}`,
+          occurredAt: e.occurredAt,
         });
         this.logger.log(`⚡ subcontract claim certified → actual ${gross} on CBS ${cbsNodeId} (claim ${e.aggregateId})`);
       }),
@@ -1096,6 +1235,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
           cbsNodeId, type: 'budget', amount: signedAmount, source: 'variation',
           sourceRef: `${(p.title as string) ?? 'Variation'} — approved`, dimensions: { variationId: e.aggregateId },
+          dedupeKey: `variation-budget:${e.aggregateId}`,
+          occurredAt: e.occurredAt,
+          createdBy: e.actorId ?? null,
         });
         this.logger.log(`⚡ variation approved → budget ${signedAmount >= 0 ? '+' : ''}${signedAmount} on CBS ${cbsNodeId} (VO ${e.aggregateId})`);
       }),
@@ -1215,9 +1357,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // signed `quantity`, which seeds the Quantity Ledger (issued/returned) with no extra plumbing.
     // Uncoded moves (plain warehouse receipts/GRNs) have no cbsNodeId → skipped; their cost lives on the PO.
     this.bus.subscribe('inventory.stock.movement_recorded', (e: DomainEvent) =>
-      // BEST-EFFORT: `ledger.post` appends unconditionally, so a retry would double-count material cost.
-      // Accepted here, never retried.
-      this.bestEffort('post material cost txn from stock.movement_recorded', e, 'ledger.post is not idempotent; a retry would double-count material cost', async () => {
+      // RETRYABLE: CostLedgerService.post dedupes on the stable movement identity and reconciles
+      // projections on a dedupe hit, so a failed projection can safely converge on replay.
+      this.retryable('post material cost txn from stock.movement_recorded', e, async () => {
         const p = e.payload as Record<string, unknown>;
         const cbsNodeId = p.cbsNodeId as string | null;
         const projectId = p.projectId as string | null;
@@ -1240,7 +1382,12 @@ export class CrossModuleSubscriber implements OnModuleInit {
           quantity: sign * quantity,
           source: direction === 'out' ? 'material_issue' : 'material_return',
           sourceRef: `${code} — material ${direction === 'out' ? 'issue' : 'return'}`,
-          dimensions: { movementId: e.aggregateId, itemCode: code, ...(boqItemId ? { boqItemId } : {}) },
+          // Stock aggregateId is the item id and is reused for every movement. Use the immutable
+          // event id for cost identity so an issue and a later return cannot collide, while replay
+          // of the same movement still dedupes to one canonical ledger fact.
+          dimensions: { movementId: e.id, itemCode: code, ...(boqItemId ? { boqItemId } : {}) },
+          dedupeKey: `material-cost:${e.id}`,
+          occurredAt: e.occurredAt,
         });
         this.logger.log(`⚡ material ${direction === 'out' ? 'issue' : 'return'} → posted actual ${sign * cost} (qty ${sign * quantity}) on CBS ${cbsNodeId} for ${code}`);
       }),
@@ -1294,20 +1441,26 @@ export class CrossModuleSubscriber implements OnModuleInit {
         const p = e.payload as Record<string, unknown>;
         const boqItemId = p.boqItemId as string | null;
         const projectId = p.projectId as string | null;
-        const quantity = Number(p.quantity) || 0;
-        if (!boqItemId || !projectId || quantity <= 0) return;
-        await this.quantityLedger.post({
-          tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
-          boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
-          type: 'installed', quantity, unit: (p.unit as string | null) ?? null,
-          source: 'installation', sourceRef: (p.description as string) ?? null,
-          dimensions: { installationId: e.aggregateId },
-          dedupeKey: `installed:${e.aggregateId}`,
+        const rawQuantity = p.quantity;
+        const quantity = typeof rawQuantity === 'number' ? rawQuantity : Number(rawQuantity);
+        if (!boqItemId || !projectId || !Number.isFinite(quantity) || quantity <= 0) return;
+        const stored = await this.quantityLedger.postInstalled({
+          tenantId: e.tenantId,
+          companyId: e.companyId ?? null,
+          projectId,
+          installationId: e.aggregateId,
+          boqItemId,
+          cbsNodeId: (p.cbsNodeId as string | null) ?? null,
+          quantity,
+          unit: (p.unit as string | null) ?? null,
+          occurredAt: e.occurredAt,
+          createdBy: e.actorId ?? null,
         });
-        this.logger.log(`📏 installation → posted installed ${quantity} on BOQ ${boqItemId}`);
+        if (!stored) return;
+        this.logger.log(`📏 installation → posted installed ${stored.quantity} on frozen item ${stored.boqItemId}`);
         // Progress Engine (Phase 3): installed quantity is physical progress — sync any WBS work
         // package linked to this BOQ item so its progress + earned value update automatically.
-        await this.wbs.syncProgressFromQuantity(e.tenantId, boqItemId);
+        await this.wbs.syncProgressFromQuantity(e.tenantId, boqItemId, projectId);
       }),
     );
 
@@ -1334,29 +1487,35 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }),
     );
 
-    // ── Quantity Ledger (Phase 2): IPC certified → post INVOICED quantity per valuation line ──
-    // The last link in the delivery chain. A remeasurement IPC certifies work per BOQ item; each
-    // valuation line's certified quantity becomes the item's Invoiced position. The gap Approved −
-    // Invoiced is work that is billable but not yet certified to the client.
+    // ── Quantity Ledger (B4): IPC certified → post CERTIFIED quantity per valuation line ──
+    // The existing `invoiced` bucket is retained for compatibility, but semantic=certified and
+    // durable IPC line provenance distinguish client certification from future AR billing.
     this.bus.subscribe('contracts.ipc.certified', async (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
-      const lines = (p.lines as Array<{ projectId?: string; boqItemId?: string; quantity?: number; unit?: string | null; description?: string }> | undefined) ?? [];
+      const lines = (p.lines as Array<{ ipcLineId?: string; projectId?: string; boqItemId?: string; quantity?: number; unit?: string | null; description?: string }> | undefined) ?? [];
       for (const line of lines) {
+        const ipcLineId = line.ipcLineId;
         const boqItemId = line.boqItemId;
         const projectId = line.projectId;
         const qty = Number(line.quantity) || 0;
-        if (!boqItemId || !projectId || qty <= 0) continue;
-        // BEST-EFFORT PER LINE: `quantityLedger.post` appends unconditionally, so a retry would
-        // double-count the invoiced position — and this event's AR-invoice sibling is guarded but would
-        // be re-run by a retry. Each line is accepted independently so one bad line never aborts the rest.
-        await this.bestEffort('post invoiced quantity from ipc.certified', e, 'quantityLedger.post is not idempotent; a retry would double-count the invoiced position', async () => {
-          await this.quantityLedger.post({
-            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
-            boqItemId, type: 'invoiced', quantity: qty, unit: line.unit ?? null,
-            source: 'ipc', sourceRef: `${(p.reference as string) ?? 'IPC'} — ${line.description ?? ''}`.trim(),
-            dimensions: { ipcId: e.aggregateId },
+        if (!ipcLineId || !boqItemId || !projectId || qty <= 0) {
+          throw new Error(`contracts.ipc.certified line is missing durable identity (${e.aggregateId})`);
+        }
+        await this.retryable('post certified quantity from ipc.certified', e, async () => {
+          await this.quantityLedger.postCertified({
+            tenantId: e.tenantId,
+            companyId: e.companyId ?? null,
+            contractId: p.contractId as string,
+            certificateId: e.aggregateId,
+            ipcLineId,
+            projectId,
+            boqItemId,
+            quantity: qty,
+            unit: line.unit ?? null,
+            certifiedAt: e.occurredAt,
+            createdBy: e.actorId ?? null,
           });
-          this.logger.log(`📏 ipc.certified → posted invoiced ${qty} on BOQ ${boqItemId} (IPC ${e.aggregateId})`);
+          this.logger.log(`📏 ipc.certified → posted certified ${qty} on frozen item ${boqItemId} (IPC ${e.aggregateId}, line ${ipcLineId})`);
         });
       }
     });
@@ -1380,8 +1539,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
           cbsNodeId, type: 'actual', amount: labourCost, quantity: manHours, source: 'labour_timesheet',
           sourceRef: `${(p.trade as string) ?? 'Labour'} — ${manHours}mh`,
-          dimensions: { labourId: e.aggregateId, trade: (p.trade as string) ?? '' },
-          dedupeKey: `labour:${e.aggregateId}`,
+           dimensions: { labourId: e.aggregateId, trade: (p.trade as string) ?? '' },
+           dedupeKey: `labour:${e.aggregateId}`,
+           occurredAt: e.occurredAt,
         });
         this.logger.log(`⚡ labour logged → posted actual ${labourCost} (${manHours}mh) on CBS ${cbsNodeId}`);
       }),
@@ -1405,8 +1565,9 @@ export class CrossModuleSubscriber implements OnModuleInit {
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
           cbsNodeId, type: 'actual', amount: cost, quantity: hours, source: 'plant_usage',
           sourceRef: `${(p.equipment as string) ?? 'Plant'} — ${hours}h`,
-          dimensions: { plantId: e.aggregateId, equipment: (p.equipment as string) ?? '' },
-          dedupeKey: `plant:${e.aggregateId}`,
+           dimensions: { plantId: e.aggregateId, equipment: (p.equipment as string) ?? '' },
+           dedupeKey: `plant:${e.aggregateId}`,
+           occurredAt: e.occurredAt,
         });
         this.logger.log(`⚡ plant logged → posted actual ${cost} (${hours}h) on CBS ${cbsNodeId}`);
       }),
@@ -1477,37 +1638,6 @@ export class CrossModuleSubscriber implements OnModuleInit {
         );
       }),
     );
-
-    // ── Operate: Invoice paid → accrue actual cost against the CBS cost line ────────
-    // Actual cost is money truly spent. Accrued to the CBS node it's coded to (source of truth,
-    // rolls up to the project summary), AND to the WBS node for earned-value. Both are optional
-    // codings — actual cost lands where the invoice is coded, never smeared across the project.
-    this.bus.subscribe('finance.invoice.paid', async (e: DomainEvent) => {
-      const p = e.payload as Record<string, unknown>;
-      const value = Number(p.value) || 0;
-
-      // BEST-EFFORT (two independent posts): both `ledger.post` and `wbs.recordActualSpend` accrue
-      // unconditionally, so a retry would double-count the actual spend. Each is accepted on its own so
-      // one failing coding never blocks the other, and neither is handed to the relay.
-      const cbsNodeId = p.cbsNodeId as string | null;
-      const project = p.project as { id: string; name: string } | null;
-      if (cbsNodeId && project?.id && value > 0) {
-        await this.bestEffort('post actual cost txn from finance.invoice.paid', e, 'ledger.post is not idempotent; a retry would double-count actual cost', async () => {
-          await this.ledger.post({
-            tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
-            cbsNodeId, type: 'actual', amount: value, source: 'invoice', sourceRef: (p.reference as string) ?? null,
-          });
-        });
-      }
-
-      const wbsNodeId = p.wbsNodeId as string | null;
-      if (wbsNodeId) {
-        await this.bestEffort('record spend against WBS node from finance.invoice.paid', e, 'recordActualSpend accrues unconditionally; a retry would double-count spend', async () => {
-          await this.wbs.recordActualSpend(wbsNodeId, (p.value as number) ?? 0);
-          this.logger.log(`⚡ Rolled up spend +$${p.value} against WBS Node ${wbsNodeId}`);
-        });
-      }
-    });
 
     // ── BOQ Cost Recalculation Engine: Tender BOQ updated → auto-update Project CBS totals ──
     this.bus.subscribe('tendering.tender.updated', (e: DomainEvent) =>

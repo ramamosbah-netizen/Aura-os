@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
-import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { AuditService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { BID_SCORE_EVENT, type BidScore, type NewBidScore, makeBidScore } from './domain/bid-score';
 import { BID_SCORE_STORE, type BidScoreFilter, type BidScoreStore } from './bid-score-store';
 
@@ -19,6 +19,7 @@ export class BidScoreService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
   ) {}
 
   async create(input: NewBidScore): Promise<BidScore> {
@@ -35,6 +36,19 @@ export class BidScoreService {
         payload: { tenderId: score.tenderId, totalScore: score.totalScore, recommendation: score.recommendation },
       }),
     ]);
+    if (this.audit) {
+      await this.audit.log(
+        score.tenantId,
+        score.companyId,
+        score.createdBy,
+        'tendering',
+        'bid_score',
+        score.id,
+        'decide',
+        { tenderId: score.tenderId, totalScore: score.totalScore, recommendation: score.recommendation },
+        { source: BID_SCORE_EVENT.scored },
+      );
+    }
     this.logger.log(`Bid scored for tender ${score.tenderId}: ${score.totalScore}/100 → ${score.recommendation}`);
     return score;
   }

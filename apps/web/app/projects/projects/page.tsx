@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { redirect } from 'next/navigation';
 import { fetchJson, getJson } from '@/lib/api';
 import DataStateNotice from '@/components/ui/data-state';
 import ProjectCreate, { ProjectEdit } from '../../../components/project-create';
@@ -31,32 +32,6 @@ function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-import ProjectDetail from '../../../components/project-detail';
-
-interface WbsNode {
-  id: string;
-  projectId: string;
-  parentId: string | null;
-  code: string;
-  title: string;
-  plannedValue: number;
-  earnedValue: number;
-  actualCost: number;
-  progress: number;
-  status: 'pending' | 'in_progress' | 'completed';
-  createdAt: string;
-}
-
-interface EvmMetrics {
-  plannedValue: number;
-  earnedValue: number;
-  actualCost: number;
-  costVariance: number;
-  scheduleVariance: number;
-  cpi: number;
-  spi: number;
-}
-
 export default async function ProjectsPage({
   searchParams,
 }: {
@@ -72,20 +47,10 @@ export default async function ProjectsPage({
     getJson<ActiveContract[]>('/api/contracts/contracts?status=active'),
   ]);
 
-  let selectedProject: Project | null = null;
-  let wbsNodes: WbsNode[] = [];
-  let evmMetrics: EvmMetrics | null = null;
-
-  if (projectId && projectsResult.ok) {
-    selectedProject = (projectsResult.data ?? []).find((p) => p.id === projectId) ?? null;
-    if (selectedProject) {
-      const [nodes, evm] = await Promise.all([
-        getJson<WbsNode[]>(`/api/projects/wbs?projectId=${projectId}`),
-        getJson<EvmMetrics>(`/api/projects/projects/${projectId}/evm`),
-      ]);
-      wbsNodes = nodes ?? [];
-      evmMetrics = evm;
-    }
+  // The old query-selected ProjectDetail was a second, stale workspace. Preserve deep links by
+  // sending them to the canonical Project 360 controls surface instead of rendering a duplicate.
+  if (projectId && projectsResult.ok && (projectsResult.data ?? []).some((p) => p.id === projectId)) {
+    redirect(`/project/${encodeURIComponent(projectId)}/controls`);
   }
 
   return (
@@ -152,14 +117,6 @@ export default async function ProjectsPage({
         )}
       </section>
 
-      {selectedProject && evmMetrics && (
-        <ProjectDetail
-          projectId={selectedProject.id}
-          projectTitle={selectedProject.title}
-          nodes={wbsNodes}
-          evm={evmMetrics}
-        />
-      )}
     </div>
   );
 }

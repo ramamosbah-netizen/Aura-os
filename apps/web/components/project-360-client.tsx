@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProjectTeam from './project-team';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
@@ -24,22 +24,56 @@ export interface Project360Project {
   status: string;
   value: number;
   createdAt: string;
+  origin?: string | null;
+  handoverId?: string | null;
+  handoverSnapshotHash?: string | null;
+  handoverLockedAt?: string | null;
+  handoverSnapshot?: {
+    schemaVersion?: number;
+    source?: Record<string, unknown>;
+    sourceItems?: Array<Record<string, unknown>>;
+    [key: string]: unknown;
+  } | null;
+  originalContractValue?: number | null;
+  currency?: string | null;
+  commercialBaselineId?: string | null;
+  wbsBaselineSnapshot?: { baselineId?: string; approvedAt?: string; originalBac?: number; allocations?: Array<{ nodeId: string; code: string; title: string; plannedValue: number }> } | null;
 }
 interface Variation { id: string; reference: string | null; title: string; kind: string; value: number; status: string; createdAt: string; }
 interface VariationImpact { originalValue: number; approvedAdditions: number; approvedOmissions: number; revisedValue: number; pendingValue: number; }
-interface EotClaim { id: string; title: string; daysRequested: number; daysGranted: number | null; status: string; createdAt: string; }
+interface DelayEvent { id: string; title: string; causeCategory: string; startDate: string; endDate: string | null; delayDays: number; isConcurrent: boolean; linkedActivityCode: string | null; status: string; createdAt: string; }
+interface EotClaim { id: string; title: string; submittedDays: number; approvedDays: number; status: string; createdAt: string; justification?: string | null; delayEventIds?: string[]; }
 interface CloseoutItem { label: string; done: boolean; }
 interface Closeout { id: string; status: string; items: CloseoutItem[]; handoverDate: string | null; dlpEndDate: string | null; }
-interface Evm { plannedValue: number; earnedValue: number; actualCost: number; spi: number; cpi: number; }
+interface Evm {
+  budgetAtCompletion: number | null;
+  plannedValue: number | null;
+  earnedValue: number | null;
+  actualCost: number | null;
+  costVariance: number | null;
+  scheduleVariance: number | null;
+  cpi: number | null;
+  spi: number | null;
+  plannedValueStatus: 'available' | 'unavailable';
+}
 interface CertSummary { grossCertifiedToDate: number; retentionHeld: number; percentComplete: number; }
 
-type Tab = 'variations' | 'eot' | 'closeout' | 'team';
+interface WbsNode { id: string; projectId: string; parentId: string | null; code: string; title: string; plannedValue: number; plannedValueKnown?: boolean; earnedValue: number; actualCost: number; progress: number; status: string; boqItemId: string | null; }
+interface CbsNode { id: string; projectId: string; parentId: string | null; code: string; title: string; category: string; budgetAmount: number; committedAmount: number; actualAmount: number; forecastAmount: number; currency: string; }
+interface DeliveryMap { id: string; projectId: string; handoverId: string; frozenItemKey: string; sourceKind: string; sourceId: string | null; sourceRevisionRef: string | null; sourceItemId: string | null; wbsNodeId: string | null; cbsNodeId: string | null; createdAt: string; }
+interface QuantityTxn { id: string; boqItemId: string; type: string; quantity: number; unit: string | null; source: string; sourceRef: string | null; semantic: string | null; occurredAt: string; dedupeKey: string | null; }
+interface CostTxn { id: string; cbsNodeId: string | null; wbsNodeId: string | null; type: 'budget' | 'committed' | 'actual'; amount: number; baseAmount?: number | null; baseCurrency?: string | null; source: string; sourceRef: string | null; occurredAt: string; dedupeKey: string | null; }
+
+type Tab = 'variations' | 'delivery' | 'quantities' | 'cost' | 'eot' | 'closeout' | 'team';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 const CONTROL_TABS: TabDef[] = [
   { id: 'variations', label: 'Variations' },
+  { id: 'delivery', label: 'WBS / CBS' },
+  { id: 'quantities', label: 'Quantities' },
+  { id: 'cost', label: 'Cost / EVM' },
   { id: 'eot', label: 'Delays & EOT' },
   { id: 'closeout', label: 'Closeout' },
   { id: 'team', label: 'Team' },
@@ -56,8 +90,8 @@ const VARIATION_COLUMNS: AuraColumn<Variation>[] = [
 
 const EOT_COLUMNS: AuraColumn<EotClaim>[] = [
   { key: 'title', label: 'Claim', priority: 'primary', sortable: true },
-  { key: 'daysRequested', label: 'Days requested', sortable: true },
-  { key: 'daysGranted', label: 'Days granted', sortable: true, render: (row) => row.daysGranted ?? '—' },
+  { key: 'submittedDays', label: 'Days requested', sortable: true },
+  { key: 'approvedDays', label: 'Days granted', sortable: true, render: (row) => row.approvedDays || '—' },
   { key: 'status', label: 'Status', sortable: true, render: (row) => <Status value={row.status} /> },
   { key: 'createdAt', label: 'Raised', priority: 'muted', sortable: true, render: (row) => fmt(row.createdAt) },
 ];
@@ -66,10 +100,16 @@ export default function Project360Client({ project }: { project: Project360Proje
   const router = useRouter();
   const [variations, setVariations] = useState<Variation[]>([]);
   const [impact, setImpact] = useState<VariationImpact | null>(null);
+  const [delays, setDelays] = useState<DelayEvent[]>([]);
   const [eots, setEots] = useState<EotClaim[]>([]);
   const [closeout, setCloseout] = useState<Closeout | null>(null);
   const [evm, setEvm] = useState<Evm | null>(null);
   const [certs, setCerts] = useState<CertSummary | null>(null);
+  const [wbs, setWbs] = useState<WbsNode[]>([]);
+  const [cbs, setCbs] = useState<CbsNode[]>([]);
+  const [maps, setMaps] = useState<DeliveryMap[]>([]);
+  const [quantities, setQuantities] = useState<QuantityTxn[]>([]);
+  const [costs, setCosts] = useState<CostTxn[]>([]);
   const [tab, setTab] = useState<Tab>('variations');
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
@@ -85,20 +125,32 @@ export default function Project360Client({ project }: { project: Project360Proje
         return (await r.json()) as T;
       } catch { failures += 1; return fallback; }
     };
-    const [vs, imp, eot, cls, evmData, certSummary] = await Promise.all([
+    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, mapData, quantityData, costData] = await Promise.all([
       j<Variation[]>(`/api/projects/variations?projectId=${project.id}`, []),
       j<{ impact: VariationImpact } | null>(`/api/projects/variations/summary/${project.id}`, null),
       j<EotClaim[]>(`/api/projects/eot-claims?projectId=${project.id}`, []),
+      j<DelayEvent[]>(`/api/projects/delays?projectId=${project.id}`, []),
       j<Closeout[]>(`/api/projects/closeouts?projectId=${project.id}`, []),
       j<Evm | null>(`/api/projects/projects/${project.id}/evm`, null),
       project.contractId ? j<{ summary: CertSummary } | null>(`/api/contracts/certificates/summary/${project.contractId}`, null) : Promise.resolve(null),
+      j<WbsNode[]>(`/api/projects/wbs?projectId=${project.id}`, []),
+      j<CbsNode[]>(`/api/projects/cbs?projectId=${project.id}`, []),
+      j<DeliveryMap[]>(`/api/projects/delivery-item-maps?projectId=${project.id}`, []),
+      j<QuantityTxn[]>(`/api/projects/quantity-ledger?projectId=${project.id}&limit=500`, []),
+      j<CostTxn[]>(`/api/projects/cost-ledger?projectId=${project.id}&limit=500`, []),
     ]);
     setVariations(Array.isArray(vs) ? vs : []);
     setImpact(imp?.impact ?? null);
     setEots(Array.isArray(eot) ? eot : []);
+    setDelays(Array.isArray(delayData) ? delayData : []);
     setCloseout((Array.isArray(cls) ? cls : [])[0] ?? null);
-    setEvm(evmData && Number.isFinite(evmData.earnedValue) ? evmData : null);
+    setEvm(evmData && (evmData.earnedValue === null || Number.isFinite(evmData.earnedValue)) ? evmData : null);
     setCerts(certSummary?.summary ?? null);
+    setWbs(Array.isArray(wbsData) ? wbsData : []);
+    setCbs(Array.isArray(cbsData) ? cbsData : []);
+    setMaps(Array.isArray(mapData) ? mapData : []);
+    setQuantities(Array.isArray(quantityData) ? quantityData : []);
+    setCosts(Array.isArray(costData) ? costData : []);
     setLoadFailures(failures);
   }, [project.id, project.contractId]);
 
@@ -181,9 +233,11 @@ export default function Project360Client({ project }: { project: Project360Proje
         <Stat label="Revised value" value={impact ? `AED ${aed(impact.revisedValue)}` : '—'} strong accent />
         <Stat label="Pending variations" value={impact ? `AED ${aed(impact.pendingValue)}` : '—'} />
         <Stat label="Certified to date" value={certs ? `AED ${aed(certs.grossCertifiedToDate)}` : '—'} />
-        <Stat label="Billing %" value={certs ? `${certs.percentComplete}%` : '—'} />
-        {evm && <Stat label="Earned value" value={`AED ${aed(evm.earnedValue)}`} />}
-        {evm && <Stat label="SPI / CPI" value={`${evm.spi} / ${evm.cpi}`} accent bad={evm.spi < 1 || evm.cpi < 1} />}
+        <Stat label="Certified %" value={certs ? `${certs.percentComplete}%` : '—'} />
+        {evm && <Stat label="BAC" value={evm.budgetAtCompletion === null ? 'Unavailable' : `AED ${aed(evm.budgetAtCompletion)}`} />}
+        {evm && <Stat label="Earned value" value={evm.earnedValue === null ? 'Unavailable' : `AED ${aed(evm.earnedValue)}`} />}
+        {evm && <Stat label="AC" value={evm.actualCost === null ? 'Unavailable' : `AED ${aed(evm.actualCost)}`} />}
+        {evm && <Stat label="CPI" value={evm.cpi === null ? 'Unavailable' : evm.cpi.toFixed(2)} accent bad={evm.cpi !== null && evm.cpi < 1} />}
         <Stat label="Closeout" value={closeout ? `${closeoutDone}/${closeout.items.length}${closeout.status === 'finalized' ? ' ✓' : ''}` : 'not started'} />
       </div>
 
@@ -227,6 +281,12 @@ export default function Project360Client({ project }: { project: Project360Proje
       </div>
 
       <section id="project-controls-panel" role="tabpanel" aria-labelledby={`project-controls-tab-${tab}`} tabIndex={0} className="panel">
+        {tab === 'delivery' && <DeliveryPanel project={project} wbs={wbs} cbs={cbs} maps={maps} busy={busy} call={call} />}
+
+        {tab === 'quantities' && <QuantityPanel quantities={quantities} maps={maps} />}
+
+        {tab === 'cost' && <CostPanel costs={costs} evm={evm} />}
+
         {tab === 'variations' && (
           <AuraDataTable
             ariaLabel="Project variations"
@@ -242,20 +302,7 @@ export default function Project360Client({ project }: { project: Project360Proje
           />
         )}
 
-        {tab === 'eot' && (
-          <AuraDataTable
-            ariaLabel="Project delay and EOT claims"
-            columns={EOT_COLUMNS}
-            data={eots}
-            keyExtractor={(row) => row.id}
-            searchFields={['title', 'status']}
-            searchPlaceholder="Search EOT claims…"
-            pageSize={10}
-            columnToggle
-            emptyTitle="No EOT claims"
-            emptyDescription="Time-impact claims from the project delay log will appear here."
-          />
-        )}
+        {tab === 'eot' && <DelayEotPanel projectId={project.id} delays={delays} eots={eots} busy={busy} call={call} />}
 
         {tab === 'closeout' && (
           !closeout ? <p style={st.muted}>Closeout not started — start the checklist to track handover: as-builts, O&M manuals, testing & commissioning certificates, DLP…</p> : (
@@ -308,6 +355,211 @@ function Status({ value }: { value: string }) {
       : 'badge';
   return <span className={tone}>{value.replace(/_/g, ' ')}</span>;
 }
+
+type Action = (url: string, method: string, body?: unknown, note?: string) => Promise<boolean>;
+
+function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Project360Project; wbs: WbsNode[]; cbs: CbsNode[]; maps: DeliveryMap[]; busy: boolean; call: Action }) {
+  const snapshot = project.handoverSnapshot;
+  const [wbsCode, setWbsCode] = useState('');
+  const [wbsTitle, setWbsTitle] = useState('');
+  const [wbsValue, setWbsValue] = useState('');
+  const [cbsCode, setCbsCode] = useState('');
+  const [cbsTitle, setCbsTitle] = useState('');
+  const [cbsBudget, setCbsBudget] = useState('');
+  const [cbsCategory, setCbsCategory] = useState('direct');
+  const [cbsNotes, setCbsNotes] = useState('');
+  const [editingCbs, setEditingCbs] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCategory, setEditCategory] = useState('direct');
+  const [editNotes, setEditNotes] = useState('');
+
+  const createWbs = async (): Promise<void> => {
+    if (!wbsCode.trim() || !wbsTitle.trim()) return;
+    const plannedValue = wbsValue.trim() ? Number(wbsValue) : undefined;
+    if (plannedValue !== undefined && !Number.isFinite(plannedValue)) return;
+    if (await call('/api/projects/wbs', 'POST', { projectId: project.id, code: wbsCode.trim(), title: wbsTitle.trim(), plannedValue }, 'WBS node created.')) {
+      setWbsCode(''); setWbsTitle(''); setWbsValue('');
+    }
+  };
+  const createCbs = async (): Promise<void> => {
+    if (!cbsCode.trim() || !cbsTitle.trim()) return;
+    const budget = cbsBudget.trim() ? Number(cbsBudget) : 0;
+    if (!Number.isFinite(budget) || budget < 0) return;
+    if (await call('/api/projects/cbs', 'POST', { projectId: project.id, code: cbsCode.trim(), title: cbsTitle.trim(), category: cbsCategory, budgetAmount: budget, notes: cbsNotes }, 'CBS node created.')) {
+      setCbsCode(''); setCbsTitle(''); setCbsBudget(''); setCbsNotes('');
+    }
+  };
+  const beginCbsEdit = (node: CbsNode): void => { setEditingCbs(node.id); setEditTitle(node.title); setEditCategory(node.category); setEditNotes(''); };
+  const saveCbsEdit = async (id: string): Promise<void> => {
+    if (!editTitle.trim()) return;
+    if (await call(`/api/projects/cbs/${id}`, 'PATCH', { title: editTitle.trim(), category: editCategory, notes: editNotes }, 'CBS metadata updated.')) setEditingCbs(null);
+  };
+  return (
+    <div style={{ display: 'grid', gap: 18 }} data-testid="project-delivery-panel">
+      <div>
+        <h2 style={panelTitle}>Commercial handover</h2>
+        <div style={detailGrid}>
+          <Detail label="Origin" value={project.origin ?? 'unknown'} />
+          <Detail label="Handover" value={project.handoverId ?? 'Unavailable'} mono />
+          <Detail label="Snapshot hash" value={project.handoverSnapshotHash ?? 'Unavailable'} mono />
+          <Detail label="Locked at" value={project.handoverLockedAt ? fmt(project.handoverLockedAt) : 'Unavailable'} />
+          <Detail label="Source items" value={snapshot?.sourceItems ? String(snapshot.sourceItems.length) : 'Unknown'} />
+          <Detail label="Commercial baseline" value={project.commercialBaselineId ?? 'Unavailable'} mono />
+        </div>
+      </div>
+      <div>
+        <h2 style={panelTitle}>Frozen item mapping</h2>
+        {maps.length === 0 ? <p style={st.muted}>No DeliveryItemMap rows yet. Mapping is an explicit governed step after handover.</p> : (
+          <SimpleTable ariaLabel="Frozen delivery item mappings" headers={['Frozen item', 'Source', 'WBS', 'CBS', 'Created']}>
+            {maps.map((row) => <tr key={row.id}><td style={cellMono}>{row.frozenItemKey}</td><td>{row.sourceKind}{row.sourceItemId ? ` · ${row.sourceItemId}` : ''}</td><td style={cellMono}>{row.wbsNodeId ?? '—'}</td><td style={cellMono}>{row.cbsNodeId ?? '—'}</td><td>{fmt(row.createdAt)}</td></tr>)}
+          </SimpleTable>
+        )}
+      </div>
+      <div>
+        <h2 style={panelTitle}>WBS / CBS structure</h2>
+        <div style={authoringGrid}>
+          <form data-testid="wbs-authoring-form" onSubmit={(e) => { e.preventDefault(); void createWbs(); }} style={authoringCard}>
+            <h3 style={formTitle}>Add WBS node</h3>
+            <input aria-label="WBS code" placeholder="Code (e.g. 1.1)" value={wbsCode} onChange={(e) => setWbsCode(e.target.value)} />
+            <input aria-label="WBS title" placeholder="Work package" value={wbsTitle} onChange={(e) => setWbsTitle(e.target.value)} />
+            <input aria-label="WBS planned value" type="number" min="0" step="0.01" placeholder="BAC allocation (optional)" value={wbsValue} onChange={(e) => setWbsValue(e.target.value)} />
+            <button className="btn btn-primary" type="submit" disabled={busy}>Create WBS</button>
+            <small style={st.muted}>Blank BAC remains Unknown; no progress or actual-cost editing is exposed here.</small>
+          </form>
+          <form data-testid="cbs-authoring-form" onSubmit={(e) => { e.preventDefault(); void createCbs(); }} style={authoringCard}>
+            <h3 style={formTitle}>Add CBS node</h3>
+            <input aria-label="CBS code" placeholder="Code (e.g. 01.01)" value={cbsCode} onChange={(e) => setCbsCode(e.target.value)} />
+            <input aria-label="CBS title" placeholder="Cost code" value={cbsTitle} onChange={(e) => setCbsTitle(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8 }}><select aria-label="CBS category" value={cbsCategory} onChange={(e) => setCbsCategory(e.target.value)}><option value="direct">Direct</option><option value="indirect">Indirect</option><option value="overhead">Overhead</option><option value="contingency">Contingency</option></select><input aria-label="CBS budget" type="number" min="0" step="0.01" placeholder="Budget" value={cbsBudget} onChange={(e) => setCbsBudget(e.target.value)} /></div>
+            <input aria-label="CBS notes" placeholder="Notes (optional)" value={cbsNotes} onChange={(e) => setCbsNotes(e.target.value)} />
+            <button className="btn btn-primary" type="submit" disabled={busy}>Create CBS</button>
+            <small style={st.muted}>Actual and committed values are Cost Ledger/commitment projections and are not editable.</small>
+          </form>
+        </div>
+        <SimpleTable ariaLabel="Project WBS and CBS" headers={['WBS', 'Work package', 'BAC', 'Progress', 'CBS nodes']}>
+          {wbs.length === 0 ? <tr><td colSpan={5} style={st.muted}>No WBS nodes.</td></tr> : wbs.map((node) => <tr key={node.id}><td style={cellMono}>{node.code}</td><td>{node.title}</td><td>{node.plannedValueKnown === false ? 'Unknown' : `AED ${aed(node.plannedValue)}`}</td><td>{node.progress.toFixed(1)}%</td><td>{cbs.filter((x) => x.projectId === node.projectId).length}</td></tr>)}
+        </SimpleTable>
+      </div>
+      <div>
+        <h3 style={panelTitle}>CBS metadata</h3>
+        {cbs.length === 0 ? <p style={st.muted}>No CBS nodes.</p> : <SimpleTable ariaLabel="Project CBS metadata" headers={['Code', 'Title', 'Category', 'Budget', 'Actual (ledger)', 'Actions']}>
+          {cbs.map((node) => editingCbs === node.id ? <tr key={node.id}><td style={cellMono}>{node.code}</td><td><input aria-label={`Edit ${node.code} title`} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} /></td><td><select aria-label={`Edit ${node.code} category`} value={editCategory} onChange={(e) => setEditCategory(e.target.value)}><option value="direct">Direct</option><option value="indirect">Indirect</option><option value="overhead">Overhead</option><option value="contingency">Contingency</option></select></td><td>AED {aed(node.budgetAmount)}</td><td>AED {aed(node.actualAmount)}</td><td><button className="btn btn-primary" disabled={busy} onClick={() => void saveCbsEdit(node.id)}>Save</button> <button className="btn btn-ghost" disabled={busy} onClick={() => setEditingCbs(null)}>Cancel</button></td></tr> : <tr key={node.id}><td style={cellMono}>{node.code}</td><td>{node.title}</td><td>{node.category}</td><td>AED {aed(node.budgetAmount)}</td><td>AED {aed(node.actualAmount)}</td><td><button className="btn btn-ghost" disabled={busy} onClick={() => beginCbsEdit(node)}>Edit metadata</button><button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/cbs/${node.id}`, 'DELETE', undefined, 'CBS node removed.')}>Delete</button></td></tr>)}
+        </SimpleTable>}
+      </div>
+    </div>
+  );
+}
+
+function DelayEotPanel({ projectId, delays, eots, busy, call }: { projectId: string; delays: DelayEvent[]; eots: EotClaim[]; busy: boolean; call: Action }) {
+  const [delayTitle, setDelayTitle] = useState('');
+  const [delayStart, setDelayStart] = useState('');
+  const [delayDays, setDelayDays] = useState('');
+  const [delayCause, setDelayCause] = useState('employer');
+  const [eotTitle, setEotTitle] = useState('');
+  const [eotDays, setEotDays] = useState('');
+  const [eotJustification, setEotJustification] = useState('');
+
+  const createDelay = async (): Promise<void> => {
+    if (!delayTitle.trim() || !delayStart) return;
+    const days = delayDays.trim() ? Number(delayDays) : undefined;
+    if (days !== undefined && (!Number.isFinite(days) || days < 0)) return;
+    if (await call('/api/projects/delays', 'POST', { projectId, title: delayTitle.trim(), causeCategory: delayCause, startDate: delayStart, delayDays: days }, 'Delay event logged.')) {
+      setDelayTitle(''); setDelayStart(''); setDelayDays('');
+    }
+  };
+  const createEot = async (): Promise<void> => {
+    const days = Number(eotDays);
+    if (!eotTitle.trim() || !Number.isFinite(days) || days <= 0) return;
+    if (await call('/api/projects/eot-claims', 'POST', { projectId, title: eotTitle.trim(), submittedDays: days, justification: eotJustification, delayEventIds: delays.map((d) => d.id) }, 'EOT claim drafted.')) {
+      setEotTitle(''); setEotDays(''); setEotJustification('');
+    }
+  };
+  return <div style={{ display: 'grid', gap: 18 }} data-testid="project-eot-panel">
+    <div style={authoringGrid}>
+      <form data-testid="delay-authoring-form" onSubmit={(e) => { e.preventDefault(); void createDelay(); }} style={authoringCard}>
+        <h3 style={formTitle}>Log delay event</h3>
+        <input aria-label="Delay title" placeholder="Delay title / cause" value={delayTitle} onChange={(e) => setDelayTitle(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8 }}><select aria-label="Delay cause" value={delayCause} onChange={(e) => setDelayCause(e.target.value)}><option value="employer">Employer</option><option value="contractor">Contractor</option><option value="neutral">Neutral</option><option value="force_majeure">Force majeure</option></select><input aria-label="Delay start" type="date" value={delayStart} onChange={(e) => setDelayStart(e.target.value)} /></div>
+        <input aria-label="Delay days" type="number" min="0" step="1" placeholder="Delay days (optional)" value={delayDays} onChange={(e) => setDelayDays(e.target.value)} />
+        <button className="btn btn-primary" type="submit" disabled={busy}>Log delay</button>
+        <small style={st.muted}>Delay status and schedule effects remain governed by the Projects domain.</small>
+      </form>
+      <form data-testid="eot-authoring-form" onSubmit={(e) => { e.preventDefault(); void createEot(); }} style={authoringCard}>
+        <h3 style={formTitle}>Draft EOT claim</h3>
+        <input aria-label="EOT title" placeholder="Claim title" value={eotTitle} onChange={(e) => setEotTitle(e.target.value)} />
+        <input aria-label="EOT days" type="number" min="1" step="1" placeholder="Days requested" value={eotDays} onChange={(e) => setEotDays(e.target.value)} />
+        <input aria-label="EOT justification" placeholder="Justification (optional)" value={eotJustification} onChange={(e) => setEotJustification(e.target.value)} />
+        <button className="btn btn-primary" type="submit" disabled={busy}>Create EOT draft</button>
+        <small style={st.muted}>{delays.length} delay event{delays.length === 1 ? '' : 's'} will be linked as supporting evidence.</small>
+      </form>
+    </div>
+    <div><h3 style={panelTitle}>Delay event ledger</h3>{delays.length === 0 ? <p style={st.muted}>No delay events.</p> : <SimpleTable ariaLabel="Project delay events" headers={['Title', 'Cause', 'Start', 'Days', 'Status']}>
+      {delays.map((d) => <tr key={d.id}><td>{d.title}</td><td>{d.causeCategory}</td><td>{d.startDate}</td><td>{d.delayDays}</td><td><Status value={d.status} /></td></tr>)}
+    </SimpleTable>}</div>
+    <div><h3 style={panelTitle}>EOT claim ledger</h3>{eots.length === 0 ? <p style={st.muted}>No EOT claims.</p> : <SimpleTable ariaLabel="Project EOT claims" headers={['Claim', 'Requested', 'Approved', 'Status', 'Actions']}>
+      {eots.map((claim) => <tr key={claim.id}><td>{claim.title}</td><td>{claim.submittedDays}</td><td>{claim.approvedDays || '—'}</td><td><Status value={claim.status} /></td><td>{claim.status === 'draft' && <button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/submit`, 'POST', undefined, 'EOT claim submitted.')}>Submit</button>}{(claim.status === 'submitted' || claim.status === 'under_review') && <><button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'approved', approvedDays: claim.submittedDays }, 'EOT claim approved.')}>Approve</button><button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'rejected', approvedDays: 0 }, 'EOT claim rejected.')}>Reject</button></>}</td></tr>)}
+    </SimpleTable>}</div>
+  </div>;
+}
+
+function QuantityPanel({ quantities, maps }: { quantities: QuantityTxn[]; maps: DeliveryMap[] }) {
+  const totals = quantities.reduce<Record<string, number>>((acc, row) => { acc[row.type] = (acc[row.type] ?? 0) + row.quantity; return acc; }, {});
+  const semantic = (key: string): string => key === 'boq' ? 'SOLD (explicit)' : key === 'installed' ? 'EXECUTED / installed' : key === 'invoiced' ? 'CERTIFIED or BILLED (see provenance)' : key;
+  return (
+    <div data-testid="project-quantities-panel">
+      <h2 style={panelTitle}>Quantity ledger</h2>
+      <div style={st.stats}>{Object.entries(totals).map(([key, value]) => <Stat key={key} label={semantic(key)} value={value.toLocaleString(undefined, { maximumFractionDigits: 2 })} />)}</div>
+      {quantities.length === 0 ? <p style={st.muted}>No quantity transactions recorded.</p> : (
+        <SimpleTable ariaLabel="Project quantity ledger" headers={['Date', 'Item', 'Type', 'Semantic', 'Quantity', 'Unit', 'Source']}>
+          {quantities.map((row) => <tr key={row.id}><td>{fmt(row.occurredAt)}</td><td style={cellMono}>{row.boqItemId}</td><td>{row.type}</td><td>{row.semantic ?? 'Legacy / unclassified'}</td><td>{row.quantity}</td><td>{row.unit ?? 'Unknown'}</td><td>{row.source}</td></tr>)}
+        </SimpleTable>
+      )}
+      {maps.length > 0 && <p style={st.muted}>Every mapped execution quantity must resolve through one of the {maps.length} immutable DeliveryItemMap record{maps.length === 1 ? '' : 's'}.</p>}
+    </div>
+  );
+}
+
+function CostPanel({ costs, evm }: { costs: CostTxn[]; evm: Evm | null }) {
+  const totals = costs.reduce((acc, row) => { const amount = row.baseAmount ?? row.amount; acc[row.type] += amount; return acc; }, { budget: 0, committed: 0, actual: 0 });
+  return (
+    <div data-testid="project-cost-panel">
+      <h2 style={panelTitle}>Cost Ledger and EVM</h2>
+      <div style={st.stats}>
+        <Stat label="Budget" value={`AED ${aed(totals.budget)}`} />
+        <Stat label="Committed" value={`AED ${aed(totals.committed)}`} />
+        <Stat label="Actual (ledger)" value={`AED ${aed(totals.actual)}`} />
+        <Stat label="BAC" value={evm?.budgetAtCompletion == null ? 'Unavailable' : `AED ${aed(evm.budgetAtCompletion)}`} />
+        <Stat label="EV" value={evm?.earnedValue == null ? 'Unavailable' : `AED ${aed(evm.earnedValue)}`} />
+        <Stat label="CV" value={evm?.costVariance == null ? 'Unavailable' : `AED ${aed(evm.costVariance)}`} />
+        <Stat label="CPI" value={evm?.cpi == null ? 'Unavailable' : evm.cpi.toFixed(2)} />
+        <Stat label="PV / SV / SPI" value="Unavailable — no time-phased baseline" />
+      </div>
+      {costs.length === 0 ? <p style={st.muted}>No Cost Ledger transactions recorded.</p> : (
+        <SimpleTable ariaLabel="Project cost ledger" headers={['Date', 'Type', 'Source', 'Amount', 'Currency', 'Source ref']}>
+          {costs.map((row) => <tr key={row.id}><td>{fmt(row.occurredAt)}</td><td>{row.type}</td><td>{row.source}</td><td>{aed(row.baseAmount ?? row.amount)}</td><td>{row.baseCurrency ?? 'Unknown'}</td><td style={cellMono}>{row.sourceRef ?? '—'}</td></tr>)}
+        </SimpleTable>
+      )}
+    </div>
+  );
+}
+
+function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return <div><div style={detailLabel}>{label}</div><div style={mono ? cellMono : undefined}>{value}</div></div>;
+}
+
+function SimpleTable({ ariaLabel, headers, children }: { ariaLabel: string; headers: string[]; children: ReactNode }) {
+  return <div style={{ overflowX: 'auto' }}><table aria-label={ariaLabel} style={tableStyle}><thead><tr>{headers.map((header) => <th key={header} style={thStyle}>{header}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
+}
+
+const panelTitle: CSSProperties = { margin: '0 0 10px', fontSize: 15, color: 'var(--accent)' };
+const formTitle: CSSProperties = { margin: 0, fontSize: 13, color: 'var(--text)' };
+const authoringGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12, marginBottom: 14 };
+const authoringCard: CSSProperties = { display: 'grid', gap: 8, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--panel)' };
+const detailGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, padding: 14, border: '1px solid var(--border)', borderRadius: 10 };
+const detailLabel: CSSProperties = { color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 };
+const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 };
+const thStyle: CSSProperties = { textAlign: 'left', padding: '8px 7px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap' };
+const cellMono: CSSProperties = { fontFamily: 'ui-monospace, monospace', fontSize: 11 };
 
 const st = {
   err: { padding: '10px 12px', border: '1px solid var(--bad)', borderRadius: 10, color: 'var(--bad)', marginBottom: 12, fontSize: 13 } as CSSProperties,

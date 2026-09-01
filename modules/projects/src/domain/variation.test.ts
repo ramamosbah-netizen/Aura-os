@@ -34,7 +34,7 @@ describe('VariationService', () => {
   const build = () => {
     const events = { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
     const access = { assert: vi.fn() } as unknown as AccessService;
-    const projects = { get: async () => ({ id: 'p1', title: 'Tower A', value: 1_000_000 }) } as unknown as ProjectService;
+    const projects = { get: async () => ({ id: 'p1', tenantId: 't1', title: 'Tower A', value: 1_000_000 }) } as unknown as ProjectService;
     return new VariationService(new InMemoryVariationStore(), events, projects, access);
   };
 
@@ -51,5 +51,29 @@ describe('VariationService', () => {
     const summary = await svc.getProjectSummary('t1', 'p1');
     expect(summary.impact.revisedValue).toBe(1_080_000);
     expect(summary.impact.approvedCount).toBe(1);
+  });
+
+  it('treats same-status replay as an immutable no-op and rejects terminal rewrites', async () => {
+    const svc = build();
+    const vo = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Replay-safe change', type: 'addition', amount: 10, createdBy: 'u1' });
+    await svc.changeStatus(vo.id, 'approved', 'mgr');
+    const replay = await svc.changeStatus(vo.id, 'approved', 'mgr');
+    expect(replay.status).toBe('approved');
+    await expect(svc.changeStatus(vo.id, 'draft', 'mgr')).rejects.toThrow('cannot move variation from approved');
+  });
+
+  it('converges duplicate approval races and rejects an approve/reject race', async () => {
+    const svc = build();
+    const duplicate = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Concurrent approval', type: 'addition', amount: 20 });
+    const approvals = await Promise.all([svc.changeStatus(duplicate.id, 'approved', 'mgr'), svc.changeStatus(duplicate.id, 'approved', 'mgr')]);
+    expect(approvals.every((v) => v.status === 'approved')).toBe(true);
+
+    const conflict = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Conflicting decision', type: 'addition', amount: 20 });
+    const outcomes = await Promise.allSettled([
+      svc.changeStatus(conflict.id, 'approved', 'mgr'),
+      svc.changeStatus(conflict.id, 'rejected', 'mgr'),
+    ]);
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((o) => o.status === 'rejected')).toHaveLength(1);
   });
 });

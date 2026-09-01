@@ -17,22 +17,25 @@ const events = () =>
 const access = { assert: () => {}, assertApprovalAuthority: () => {} } as unknown as AccessService;
 const commands = { register: () => {} } as unknown as never;
 
-async function harness(contractValue = 1_000_000) {
+async function harness(contractValue = 1_000_000, audit?: { log: ReturnType<typeof vi.fn> }) {
   const contractStore = new InMemoryContractStore();
   const contracts = new ContractService(contractStore, events(), tx, commands, access);
   // Seeded straight into the store: ContractService.create dispatches through the CommandBus,
   // which is not what these tests are about.
   const contract = makeContract({ tenantId: 't1', title: 'Mall ELV', value: contractValue, status: 'active' });
   await contractStore.create(contract);
+  const eventStore = events();
   const svc = new PaymentCertificateService(
     new InMemoryPaymentCertificateStore(),
     new InMemoryIpcLineStore(),
-    events(),
+    eventStore,
     tx,
     contracts,
     access,
+    undefined,
+    audit as any,
   );
-  return { svc, contract };
+  return { svc, contract, eventStore, audit };
 }
 
 const raise = (svc: PaymentCertificateService, contractId: string, cumulativeWorkDone: number) =>
@@ -118,5 +121,56 @@ describe('PaymentCertificateService — only one certificate open at a time', ()
     await svc.changeStatus(first.id, 'rejected');
     const retry = await raise(svc, contract.id, 500_000);
     expect(retry.netThisCertificate).toBe(450_000); // full amount — nothing was certified before it
+  });
+});
+
+describe('PaymentCertificateService — certified event line identity', () => {
+  it('carries each IPC line id into contracts.ipc.certified without collapsing lines', async () => {
+    const { svc, contract, eventStore } = await harness();
+    const ipc = await raise(svc, contract.id, 100);
+    const first = await svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-1', description: 'Cable', quantity: 4, unit: 'm', rate: 10 });
+    const second = await svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-2', description: 'Tray', quantity: 2, unit: 'm', rate: 20 });
+    await svc.changeStatus(ipc.id, 'submitted');
+    await svc.changeStatus(ipc.id, 'certified');
+    const calls = (eventStore.appendWithClient as any).mock.calls;
+    const emitted = calls.flatMap((call: any[]) => call[1] ?? []).find((event: any) => event.type === 'contracts.ipc.certified');
+    expect(emitted.payload.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ipcLineId: first.id, projectId: 'project-1', boqItemId: 'BOQ-1', quantity: 4 }),
+      expect.objectContaining({ ipcLineId: second.id, projectId: 'project-1', boqItemId: 'BOQ-2', quantity: 2 }),
+    ]));
+  });
+
+  it('does not allow a certified certificate to move backwards or be silently re-certified', async () => {
+    const { svc, contract } = await harness();
+    const ipc = await raise(svc, contract.id, 100);
+    await svc.changeStatus(ipc.id, 'submitted');
+    const certified = await svc.changeStatus(ipc.id, 'certified');
+    await expect(svc.changeStatus(ipc.id, 'rejected')).rejects.toThrow(/immutable/);
+    await expect(svc.changeStatus(ipc.id, 'draft')).rejects.toThrow(/immutable/);
+    expect(await svc.changeStatus(ipc.id, 'certified')).toEqual(certified);
+  });
+
+  it('rejects a missing certification unit instead of defaulting evidence', async () => {
+    const { svc, contract } = await harness();
+    const ipc = await raise(svc, contract.id, 100);
+    await expect(svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-1', description: 'Cable', quantity: 1, unit: null }))
+      .rejects.toThrow(/unit is required/);
+  });
+
+  it('records one tenant/actor/source audit for certification and none on replay', async () => {
+    const audit = { log: vi.fn().mockResolvedValue(undefined) };
+    const { svc, contract } = await harness(1_000_000, audit);
+    const ipc = await raise(svc, contract.id, 100);
+    const line = await svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-1', description: 'Cable', quantity: 2, unit: 'm', rate: 10 });
+    await svc.changeStatus(ipc.id, 'submitted');
+    const certified = await svc.changeStatus(ipc.id, 'certified', 'certifier-1');
+    await svc.changeStatus(ipc.id, 'certified', 'certifier-1');
+    expect(audit.log).toHaveBeenCalledTimes(1);
+    expect(audit.log).toHaveBeenCalledWith(
+      't1', null, 'certifier-1', 'contracts', 'payment_certificate', certified.id, 'certified',
+      expect.objectContaining({ certificateId: certified.id, contractId: contract.id, lines: [expect.objectContaining({ ipcLineId: line.id, unit: 'm', quantity: 2 })] }),
+      expect.objectContaining({ source: 'contracts.ipc.certified', contractId: contract.id }),
+      null,
+    );
   });
 });

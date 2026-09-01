@@ -8,9 +8,9 @@ import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
 // append-only QuantityTransaction, and a BOQ item's position is SUM(this) sliced by type. So a
 // return-to-store, a rejected delivery, or a reversal is simply a NEGATIVE entry.
 //
-// The seven positions track a unit of work down the delivery chain:
+// The operational positions track a unit of work down the delivery chain:
 //   BOQ (target) → Ordered (PO) → Received (GRN) → Issued (to site) → Installed (fixed) →
-//   Approved (inspected) → Invoiced (certified to the client).
+//   Approved (inspected) → Invoiced (certified or billed to the client).
 // The gaps between them are the operational signals: remaining-to-order, in-transit, on-site stock,
 // wastage (issued − installed), pending-approval, pending-billing.
 
@@ -21,7 +21,10 @@ export type QtyTxnType = 'boq' | 'ordered' | 'received' | 'issued' | 'installed'
 export type QtyTxnSource =
   | 'boq_baseline' | 'po' | 'grn' | 'material_issue' | 'material_return'
   | 'daily_report' | 'installation' | 'inspection' | 'ipc'
-  | 'reversal' | 'adjustment' | 'other';
+  | 'customer_invoice' | 'reversal' | 'adjustment' | 'other';
+
+/** Explicit semantic marker carried in the existing dimensions JSON. Missing means legacy. */
+export type QtyTxnSemantic = 'sold' | 'certified' | 'billed';
 
 export interface QuantityTransaction {
   id: Id;
@@ -46,6 +49,8 @@ export interface QuantityTransaction {
    * returns the first transaction — so an outbox event replay cannot double-count the position.
    * null = unkeyed (legacy behaviour: every post appends). */
   dedupeKey: string | null;
+  /** Explicit contractual meaning for a `boq` transaction; absent on legacy rows. */
+  semantic: QtyTxnSemantic | null;
   occurredAt: string;
   createdAt: string;
   createdBy: Id | null;
@@ -65,12 +70,17 @@ export interface NewQuantityTransaction {
   dimensions?: Record<string, string> | null;
   /** Durable idempotency key — see QuantityTransaction.dedupeKey. Omit for unkeyed (always-append). */
   dedupeKey?: string | null;
+  semantic?: QtyTxnSemantic | null;
   occurredAt?: string;
   createdBy?: Id | null;
 }
 
 export function makeQuantityTransaction(input: NewQuantityTransaction): QuantityTransaction {
   const now = new Date().toISOString();
+  let dimensions = input.dimensions && Object.keys(input.dimensions).length > 0 ? { ...input.dimensions } : null;
+  if (input.semantic) {
+    (dimensions ??= {}).semantic = input.semantic;
+  }
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -83,8 +93,9 @@ export function makeQuantityTransaction(input: NewQuantityTransaction): Quantity
     unit: input.unit?.trim() || null,
     source: input.source,
     sourceRef: input.sourceRef?.trim() || null,
-    dimensions: input.dimensions && Object.keys(input.dimensions).length > 0 ? input.dimensions : null,
+    dimensions,
     dedupeKey: input.dedupeKey?.trim() || null,
+    semantic: input.semantic ?? null,
     occurredAt: input.occurredAt ?? now,
     createdAt: now,
     createdBy: input.createdBy ?? null,
@@ -95,14 +106,24 @@ export function makeQuantityTransaction(input: NewQuantityTransaction): Quantity
 export interface QuantityPosition {
   boqItemId: Id;
   unit: string | null;
-  // The seven positions (each = SUM of that type's signed entries).
+  // The ledger positions (each = SUM of that type's signed entries).
   boq: number;
+  /** Contractual SOLD only; null means no explicit SOLD fact exists (UNKNOWN, not zero). */
+  sold: number | null;
+  /** Legacy/unclassified `boq` quantity, retained for compatibility and never reclassified. */
+  legacyBoq: number;
   ordered: number;
   received: number;
   issued: number;
   installed: number;
   approved: number;
   invoiced: number;
+  /** Client-certified quantity only; null means no explicit Certified fact exists. */
+  certified: number | null;
+  /** AR-invoiced quantity only; null means no explicit Billed fact exists. */
+  billed: number | null;
+  /** Legacy/unclassified invoiced quantity, retained for compatibility and never reclassified. */
+  legacyInvoiced: number;
   // Derived gaps — the operational signals.
   remainingToOrder: number; // boq − ordered
   inTransit: number;        // ordered − received (ordered, not yet delivered)
@@ -120,22 +141,35 @@ export function quantityPosition(boqItemId: Id, txns: QuantityTransaction[]): Qu
   const sum = (t: QtyTxnType): number => r2(txns.filter((x) => x.type === t).reduce((s, x) => s + x.quantity, 0));
   const unit = txns.find((x) => x.unit)?.unit ?? null;
   const boq = sum('boq');
+  const soldRows = txns.filter((x) => x.type === 'boq' && x.semantic === 'sold');
+  const sold = soldRows.length > 0 ? r2(soldRows.reduce((total, x) => total + x.quantity, 0)) : null;
+  const legacyBoq = r2(txns.filter((x) => x.type === 'boq' && x.semantic !== 'sold').reduce((total, x) => total + x.quantity, 0));
   const ordered = sum('ordered');
   const received = sum('received');
   const issued = sum('issued');
   const installed = sum('installed');
   const approved = sum('approved');
   const invoiced = sum('invoiced');
+  const certifiedRows = txns.filter((x) => x.type === 'invoiced' && x.semantic === 'certified');
+  const certified = certifiedRows.length > 0 ? r2(certifiedRows.reduce((total, x) => total + x.quantity, 0)) : null;
+  const billedRows = txns.filter((x) => x.type === 'invoiced' && x.semantic === 'billed');
+  const billed = billedRows.length > 0 ? r2(billedRows.reduce((total, x) => total + x.quantity, 0)) : null;
+  const legacyInvoiced = r2(txns.filter((x) => x.type === 'invoiced' && x.semantic !== 'certified' && x.semantic !== 'billed').reduce((total, x) => total + x.quantity, 0));
   return {
     boqItemId,
     unit,
     boq,
+    sold,
+    legacyBoq,
     ordered,
     received,
     issued,
     installed,
     approved,
     invoiced,
+    certified,
+    billed,
+    legacyInvoiced,
     remainingToOrder: r2(boq - ordered),
     inTransit: r2(ordered - received),
     onSite: r2(received - issued),

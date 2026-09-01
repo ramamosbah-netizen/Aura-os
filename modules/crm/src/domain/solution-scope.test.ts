@@ -62,6 +62,6 @@ describe('scopeLinesToQuotationLines', () => {
   it('maps scope lines to quotation lines, prefixing the discipline', () => {
     const scope = makeSolutionScope({ ...base, title: 'S', lines: [{ discipline: 'CCTV', description: 'Camera', quantity: 2, unitPrice: 500 }] });
     const [line] = scopeLinesToQuotationLines(scope);
-    expect(line).toEqual({ description: 'CCTV: Camera', quantity: 2, unitPrice: 500 });
+    expect(line).toEqual({ description: 'CCTV: Camera', quantity: 2, unit: 'lot', unitPrice: 500 });
   });
 });

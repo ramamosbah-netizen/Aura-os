@@ -7,7 +7,8 @@ import SuiteDashboardShell, { type SuiteShortcut } from '@/components/suite-dash
 
 export const dynamic = 'force-dynamic';
 
-// Commercial Home — post-award contracts, variations, claims and subcontracts, on the shared shell.
+// Contracts compatibility landing — post-award contracts, variations, claims and subcontracts,
+// presented inside the Sales & Commercial suite without changing the underlying domain routes.
 // Contract count/value from the live contracts list; the attention queue from the universal inbox
 // (subcontract & variation decisions). Every figure is read live.
 
@@ -43,9 +44,9 @@ export default async function CommercialHomePage() {
   return (
     <SuiteDashboardShell
       testId="commercial-dashboard"
-      anchor={{ href: '/contracts', title: 'Commercial', type: 'Commercial' }}
-      hero={{ eyebrow: 'AURA OS / COMMERCIAL', title: <>{greeting()}, <span>{displayName(user?.sub)}</span></>, lede: 'Post-award commercial control — contracts, variations, claims and subcontracts.' }}
-      askAura={{ tabType: 'Commercial' }}
+      anchor={{ href: '/contracts', title: 'Sales & Commercial', type: 'Sales & Commercial' }}
+      hero={{ eyebrow: 'AURA OS / SALES & COMMERCIAL', title: <>{greeting()}, <span>{displayName(user?.sub)}</span></>, lede: 'Contracts workspace inside Sales & Commercial — carry awarded value into governed delivery.' }}
+      askAura={{ tabType: 'Sales & Commercial' }}
       metrics={[
         { label: 'Active contracts', value: contracts ? String(active.length) : '—', sub: 'live engagements', href: '/contracts/contracts', icon: FileText, tone: 'teal' },
         { label: 'Contract value', value: contracts ? aed(activeValue) : '—', sub: 'active, awarded', href: '/contracts/contracts', icon: ReceiptText, tone: 'blue' },
@@ -56,7 +57,7 @@ export default async function CommercialHomePage() {
       attention={{
         kicker: 'Universal inbox · commercial decisions',
         title: 'Needs your attention',
-        headerLink: { href: '/contracts/contracts', label: 'Open contracts', tabTitle: 'Contracts', tabType: 'Commercial' },
+        headerLink: { href: '/contracts/contracts', label: 'Open contracts', tabTitle: 'Contracts', tabType: 'Sales & Commercial' },
         items: decisions === null ? null : inboxAttention(decisions),
         unavailableLabel: 'The decision feed is unavailable. Open Contracts to check the source.',
         emptyLabel: 'No commercial decisions waiting.',
@@ -64,14 +65,14 @@ export default async function CommercialHomePage() {
       }}
       brief={{
         kicker: 'Live commercial signals',
-        title: 'AURA Commercial brief',
+        title: 'AURA Contracts brief',
         body: !contracts && !inbox
           ? 'The commercial feed could not be loaded. I can still help you search contracts and subcontracts.'
           : `${active.length} active contract${active.length === 1 ? '' : 's'}${activeValue > 0 ? ` worth ${aed(activeValue)}` : ''}. ${pending} commercial decision${pending === 1 ? '' : 's'} waiting.`,
-        cta: { href: '/ai', label: 'Continue with AURA', tabTitle: 'AURA AI', tabType: 'Commercial' },
+        cta: { href: '/ai', label: 'Continue with AURA', tabTitle: 'AURA AI', tabType: 'Sales & Commercial' },
       }}
-      shortcuts={{ kicker: 'Commercial workspace', title: 'Commercial', itemTestId: 'commercial-shortcut', items: SHORTCUTS }}
-      ownership={<><FileText aria-hidden /><span><strong>Commercial owns the awarded value.</strong> Contract figures are read live; the attention queue is the same projection as My Work → Approvals.</span></>}
+      shortcuts={{ kicker: 'Contracts workspace', title: 'Contracts', itemTestId: 'commercial-shortcut', items: SHORTCUTS }}
+      ownership={<><FileText aria-hidden /><span><strong>Contracts carry awarded value forward.</strong> Contract figures are read live; the attention queue is the same projection as My Work → Approvals.</span></>}
     />
   );
 }

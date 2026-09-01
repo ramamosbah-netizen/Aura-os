@@ -32,7 +32,8 @@ export interface NewIpcLine {
   boqItemId: Id;
   description: string;
   quantity: number;
-  unit?: string | null;
+  /** Authoritative unit from the frozen delivery item. Certification must not infer/default it. */
+  unit: string;
   rate?: number;
 }
 
@@ -41,6 +42,7 @@ export function makeIpcLine(input: NewIpcLine): IpcLine {
   if (!input.projectId) throw new Error('projectId is required');
   if (!input.boqItemId) throw new Error('boqItemId is required');
   if (!input.description || !input.description.trim()) throw new Error('description is required');
+  if (!input.unit || !input.unit.trim()) throw new Error('unit is required; certification unit evidence cannot be inferred');
   const quantity = Number(input.quantity) || 0;
   if (quantity <= 0) throw new Error('certified quantity must be positive');
   const rate = Math.max(0, Number(input.rate) || 0);
@@ -53,7 +55,7 @@ export function makeIpcLine(input: NewIpcLine): IpcLine {
     boqItemId: input.boqItemId,
     description: input.description.trim(),
     quantity,
-    unit: input.unit?.trim() || 'nr',
+    unit: input.unit.trim(),
     rate,
     amount: Number(mulMoney(quantity, rate)),
     createdAt: new Date().toISOString(),

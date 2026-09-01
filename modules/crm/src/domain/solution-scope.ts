@@ -148,10 +148,11 @@ export function approveScope(scope: SolutionScope, approvedBy: Id | null): Solut
 }
 
 /** Map an approved scope's lines to quotation lines (the direct-sale bridge into R3). */
-export function scopeLinesToQuotationLines(scope: SolutionScope): Array<{ description: string; quantity: number; unitPrice: number }> {
+export function scopeLinesToQuotationLines(scope: SolutionScope): Array<{ description: string; quantity: number; unit?: string | null; unitPrice: number }> {
   return scope.lines.map((l) => ({
     description: l.discipline ? `${l.discipline}: ${l.description}` : l.description,
     quantity: l.quantity,
+    unit: l.unit,
     unitPrice: l.unitPrice,
   }));
 }

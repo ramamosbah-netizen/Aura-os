@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit, Optional } from '@nestjs
 import { assertSameTenant, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import { PROJECT_EVENT, type Project, type NewProject, makeProject } from './domain/project';
+import { isFrozenDeliverySource, verifyHandoverSnapshotHash } from './domain/handover';
 import { PROJECT_STORE, type ProjectFilter, type ProjectStore } from './project-store';
 
 const CREATE_PROJECT = 'projects.project.create';
@@ -34,7 +35,8 @@ export class ProjectService implements OnModuleInit {
       permission: 'projects.project.create',
       validate: (input) => {
         if (!input.title || !input.title.trim()) throw new Error('project title is required');
-        if (input.origin === 'commercial_handover' && (!input.contractId || !input.handoverLockedAt || !input.handoverSnapshotHash || !input.handoverSnapshot)) {
+        const origin = input.origin ?? (input.handoverLockedAt ? 'commercial_handover' : 'internal');
+        if (origin === 'commercial_handover' && (!input.contractId || !input.handoverLockedAt || !input.handoverSnapshotHash || !input.handoverSnapshot || !isFrozenDeliverySource(input.handoverSnapshot) || !verifyHandoverSnapshotHash(input.handoverSnapshot, input.handoverSnapshotHash))) {
           throw new Error('commercial handover projects require a signed contract and immutable handover evidence');
         }
       },

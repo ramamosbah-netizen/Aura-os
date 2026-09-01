@@ -25,7 +25,8 @@ const CREATE_INVOICE = 'finance.invoice.create';
  * Create dispatches through the kernel `CommandBus` (validate → authz → idempotency → one tx
  * → atomic row + outbox event), with the reference number generated inside the handler.
  * `changeStatus` keeps its inline atomic TX_RUNNER write — it runs the 3-way match gate first
- * and its invoice.paid event drives actual-cost logging.
+ * and its invoice.paid event records AP cash settlement; project AC is recognized from performed
+ * consumption/usage events, not supplier payment.
  */
 @Injectable()
 export class InvoiceService implements OnModuleInit {

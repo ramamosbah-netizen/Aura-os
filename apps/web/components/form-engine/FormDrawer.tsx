@@ -5,7 +5,7 @@
 // and plugin toolbar actions. Pure metadata in: pass a FormSchema and it does
 // the rest. The legacy CreateDrawer delegates here.
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { applyFormOverrides, buildFormPayload, hasOverrides, type FormOverrides, type FormSchema } from '@aura/shared';
 import FormRenderer, { useFormEngine } from './FormRenderer';
@@ -62,30 +62,40 @@ function fetchOverrides(schemaId: string): Promise<FormOverrides | null> {
  * key transitions base→patched at most once.
  */
 export default function FormDrawer(props: FormDrawerProps) {
-  const schemaId = props.schema.id;
-  const [resolvedOverrides, setResolvedOverrides] = useState<{ id: string; overrides: FormOverrides | null } | null>(null);
+  // Hold the PATCH, never a schema object.
+  //
+  // Both earlier versions of this keyed the remount on a schema value, and both were wrong in the
+  // same way. Keying on "the fetch resolved" remounted every drawer in the app for nothing.
+  // Keying on `effective !== props.schema` looked correct but is worse: `CreateDrawer` builds its
+  // schema with `useMemo` over an inline `fields={[...]}` array, so the parent hands down a NEW
+  // schema object on every render. `effective` then holds the previous object, the comparison flips
+  // true, and the drawer remounts — repeatedly, at any moment, driven by unrelated parent state.
+  //
+  // A remount resets FormDrawerImpl's `open` and `values`, so in practice a user typing into a
+  // drawer on a busy page had it close under them and lose their input. Tracking the patch instead
+  // removes the whole class: there is no object identity left to churn.
+  const [patch, setPatch] = useState<FormOverrides | null>(null);
 
+  // Keyed on the schema ID — a stable string — so parent re-renders cannot refire this.
   useEffect(() => {
     let live = true;
-    void fetchOverrides(schemaId).then((o) => {
-      if (live) setResolvedOverrides({ id: schemaId, overrides: hasOverrides(o) ? o : null });
+    void fetchOverrides(props.schema.id).then((o) => {
+      if (live) setPatch(hasOverrides(o) ? o : null);
     });
     return () => {
       live = false;
     };
-    // Deps are exhaustive: the effect reads only schemaId (props.schema's stable identity — the
-    // overridesCache is keyed by it too). The merge against props.schema happens in render, below,
-    // deliberately keeping this off props.schema's object identity so it can't refire per render.
-  }, [schemaId]);
+  }, [props.schema.id]);
 
-  // `patched` is a sticky boolean, decided once when the overrides resolve for this id — not a
-  // live object comparison — so the remount key cannot oscillate under a churning schema prop.
-  // The merge runs against the *current* props.schema so live enrichment (e.g. a select whose
-  // options grow as records are added) still flows through without a remount.
-  const ready = resolvedOverrides !== null && resolvedOverrides.id === schemaId;
-  const patched = ready && resolvedOverrides.overrides !== null;
-  const schema = patched ? applyFormOverrides(props.schema, resolvedOverrides.overrides!) : props.schema;
-  return <FormDrawerImpl key={patched ? `${schemaId}:fx` : `${schemaId}:base`} {...props} schema={schema} />;
+  const schema = useMemo(
+    () => (patch ? applyFormOverrides(props.schema, patch) : props.schema),
+    [props.schema, patch],
+  );
+
+  // Remount only when a real Form Designer patch exists, so `useFormEngine` re-initializes on the
+  // merged schema. With no overrides — the overwhelming majority — the key never changes and the
+  // drawer is never torn down.
+  return <FormDrawerImpl key={patch ? 'fx' : 'base'} {...props} schema={schema} />;
 }
 
 function FormDrawerImpl({

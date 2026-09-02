@@ -144,6 +144,28 @@ not started by this Gate.
   before the Project 360 navigation assertions ran. No product failure was inferred from this
   environment-level rejection and no shared database was touched.
 
+## Bounded contextual action wiring (2026-09-02)
+
+The Project 360 action center now exposes the canonical operational entry points without moving
+their domain ownership into Projects:
+
+- Plan & schedule → Projects Schedule/Gantt, scoped by `projectId` with project preselection.
+- Work instruction → Site Instructions, scoped by `projectId` with project preselection.
+- Daily report & photos → Site Daily Reports, scoped by `projectId` with project preselection.
+- Engineering evidence → Engineering Drawing Register, carrying the project context.
+- Quality action → Quality NCR register, scoped by `projectId` with project preselection.
+- Upload evidence → the project Documents/DMS context.
+
+The schedule, instruction, daily-report and NCR registers filter their readback to the selected
+project and initialise their governed forms with that project. No second writer, generic Project
+Notes store, direct projection mutation, or Procurement capability was introduced. Notes remain
+owned by the existing record/activity authorities until a separate ownership decision establishes
+a project-wide notes authority.
+
+The canonical runtime was rebuilt from `main` and browser-checked on `http://localhost:3000`:
+Project 360 showed the contextual actions above, while the primary launcher continued to omit the
+hidden legacy Pre-Award suite.
+
 ## Gate disposition
 
 The bounded Project 360 IA correction is implemented and verified at source, typecheck, build

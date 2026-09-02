@@ -166,6 +166,24 @@ The canonical runtime was rebuilt from `main` and browser-checked on `http://loc
 Project 360 showed the contextual actions above, while the primary launcher continued to omit the
 hidden legacy Pre-Award suite.
 
+## Project-centric navigation correction (2026-09-02)
+
+The Project 360 rail now leads with project questions rather than a second suite menu:
+
+```text
+Overview
+Plan & schedule
+Progress & execution
+Commercial & cost
+Evidence & documents
+Team & ownership
+```
+
+Specialist Engineering, Site, Quality, HSE, Commissioning and Documents links remain available
+under a clearly labelled `Delivery records` group. They are contextual links to the owning
+Delivery Operations records, not duplicate Project-owned writers. This preserves the gate's
+ownership rule while removing the previous ERP-inside-Project-360 impression.
+
 ## Gate disposition
 
 The bounded Project 360 IA correction is implemented and verified at source, typecheck, build

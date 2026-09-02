@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 
 const CLIENT = resolve(__dirname, 'components/project-360-client.tsx');
 const REGISTER = resolve(__dirname, 'app/projects/projects/page.tsx');
+const OVERVIEW = resolve(__dirname, 'app/project/[projectId]/page.tsx');
+const SCHEDULE = resolve(__dirname, 'app/projects/schedule/page.tsx');
 
 describe('Project 360 canonical delivery contract', () => {
   it('exposes delivery evidence in the canonical controls workspace', () => {
@@ -34,5 +36,22 @@ describe('Project 360 canonical delivery contract', () => {
     const source = readFileSync(REGISTER, 'utf8');
     expect(source).toContain('redirect(`/project/${encodeURIComponent(projectId)}/controls`)');
     expect(source).not.toContain("import ProjectDetail");
+  });
+
+  it('keeps Project 360 actions contextual while preserving domain ownership', () => {
+    const overview = readFileSync(OVERVIEW, 'utf8');
+    for (const marker of [
+      '/projects/schedule?projectId=',
+      '/site/instructions?projectId=',
+      '/site/daily-reports?projectId=',
+      '/engineering/drawings?projectId=',
+      '/quality/ncrs?projectId=',
+      'Upload evidence',
+    ]) {
+      expect(overview).toContain(marker);
+    }
+    const schedule = readFileSync(SCHEDULE, 'utf8');
+    expect(schedule).toContain('selectedProjectId={projectId}');
+    expect(schedule).toContain('scopedSchedules');
   });
 });

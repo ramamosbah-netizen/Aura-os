@@ -6,6 +6,7 @@ const CLIENT = resolve(__dirname, 'components/project-360-client.tsx');
 const REGISTER = resolve(__dirname, 'app/projects/projects/page.tsx');
 const OVERVIEW = resolve(__dirname, 'app/project/[projectId]/page.tsx');
 const SCHEDULE = resolve(__dirname, 'app/projects/schedule/page.tsx');
+const SHELL = resolve(__dirname, 'components/project-shell.tsx');
 
 describe('Project 360 canonical delivery contract', () => {
   it('exposes delivery evidence in the canonical controls workspace', () => {
@@ -53,5 +54,9 @@ describe('Project 360 canonical delivery contract', () => {
     const schedule = readFileSync(SCHEDULE, 'utf8');
     expect(schedule).toContain('selectedProjectId={projectId}');
     expect(schedule).toContain('scopedSchedules');
+    const shell = readFileSync(SHELL, 'utf8');
+    for (const label of ['Overview', 'Plan & schedule', 'Progress & execution', 'Commercial & cost', 'Evidence & documents', 'Team & ownership', 'Delivery records']) {
+      expect(shell).toContain(label);
+    }
   });
 });

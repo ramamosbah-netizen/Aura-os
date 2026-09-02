@@ -25,7 +25,8 @@ interface Bond { id: string; contractId: string; kind: string; expiryDate: strin
 interface ProjectLite { id: string; contractId: string | null; title: string; status: string; }
 interface TenderLite { id: string; title: string; accountId: string | null; accountName: string | null; value: number; }
 
-const money = (n: number): string => (n ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
+// A known zero is a real contractual amount; it must not be rendered as an unavailable value.
+const money = (n: number): string => (Number.isFinite(n) ? 'AED ' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'Unavailable');
 // Locale pinned: a bare toLocaleDateString() renders en-AE on the Node server and en-US in the
 // browser, so React discards the whole subtree on hydration and re-renders it — which reads as
 // an intermittently missing element to anything driving the page. Overlaps the wider sweep in
@@ -43,6 +44,7 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sort, setSort] = useState<'createdAt' | 'title' | 'value'>('createdAt');
 
   const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
@@ -78,8 +80,9 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
     if (statusFilter) out = out.filter((c) => c.status === statusFilter);
     const q = query.trim().toLowerCase();
     if (q) out = out.filter((c) => [c.title, c.reference, c.accountName].some((v) => v && v.toLowerCase().includes(q)));
+    out = [...out].sort((a, b) => sort === 'title' ? a.title.localeCompare(b.title) : sort === 'value' ? b.value - a.value : b.createdAt.localeCompare(a.createdAt));
     return out;
-  }, [contracts, query, statusFilter]);
+  }, [contracts, query, statusFilter, sort]);
 
   const setStatus = async (c: Contract, status: string): Promise<void> => {
     setBusy(true); setErr('');
@@ -123,6 +126,12 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
           <option value="">All statuses</option>
           {['draft', 'active', 'completed', 'cancelled'].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select style={st.search} value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort contracts">
+          <option value="createdAt">Newest first</option>
+          <option value="title">Title A–Z</option>
+          <option value="value">Highest value</option>
+        </select>
+        {(query || statusFilter) && <button type="button" className="btn btn-ghost" style={st.smBtn} onClick={() => { setQuery(''); setStatusFilter(''); }}>Reset filters</button>}
         {err && <span style={st.errTxt}>{err}</span>}
       </div>
 

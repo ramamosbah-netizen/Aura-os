@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { assertSameTenant, diffFields, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, AccessService, TenantContext } from '@aura/core';
-import { CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, makeContract } from './domain/contract';
+import { assertContractTransition, CONTRACT_EVENT, type Contract, type ContractStatus, type NewContract, makeContract } from './domain/contract';
 import { CONTRACT_STORE, type ContractFilter, type ContractStore } from './contract-store';
 
 const CREATE_CONTRACT = 'contracts.contract.create';
@@ -124,6 +124,11 @@ export class ContractService implements OnModuleInit {
    */
   async changeStatus(id: Id, status: ContractStatus, actorId?: Id): Promise<Contract> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'contract', id);
+    // Idempotent replay is safe, but every non-identical transition must follow
+    // the explicit lifecycle matrix. This prevents the generic status endpoint
+    // from becoming a backdoor around signing/completion/cancellation rules.
+    assertContractTransition(existing.status, status);
+    if (existing.status === status) return existing;
     // Segregation of duties: the preparer may not sign (activate) their own contract. Skipped for
     // system/auto transitions (no actor), so the deal-chain reactors are unaffected.
     if (status === 'active' && actorId && existing.createdBy && actorId === existing.createdBy) {

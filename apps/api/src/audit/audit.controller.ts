@@ -61,13 +61,15 @@ export class AuditController {
       conditions.push(`module = $${paramIdx++}`);
       params.push(module);
     }
-    if (entityType) {
-      conditions.push(`entity_type = $${paramIdx++}`);
-      params.push(entityType);
-    }
-    if (entityId) {
-      conditions.push(`entity_id = $${paramIdx++}`);
-      params.push(entityId);
+    if (entityType === 'contract' && entityId) {
+      // Contract 360 history is an aggregate view: child records (revisions,
+      // negotiation, shares, amendments and approvals) carry the contract id
+      // in metadata, while the contract header uses entity_type=contract.
+      conditions.push(`(entity_type = 'contract' AND entity_id = $${paramIdx} OR metadata->>'contractId' = $${paramIdx})`);
+      params.push(entityId); paramIdx++;
+    } else {
+      if (entityType) { conditions.push(`entity_type = $${paramIdx++}`); params.push(entityType); }
+      if (entityId) { conditions.push(`entity_id = $${paramIdx++}`); params.push(entityId); }
     }
     if (action) {
       conditions.push(`action = $${paramIdx++}`);

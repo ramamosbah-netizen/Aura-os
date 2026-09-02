@@ -98,11 +98,11 @@ export default async function ProjectOverviewPage({
         <div>
           <div className={styles.eyebrow}>
             <span className={styles.liveDot} aria-hidden />
-            Project command center
+            Project office
           </div>
           <h1>Delivery pulse</h1>
           <p>
-            One project context across engineering, field execution, quality, HSE and commissioning.
+            One project context for planning, coordination, delivery decisions and closeout.
             {discipline ? ` Currently focused on ${discipline.label}.` : ''}
           </p>
         </div>
@@ -136,8 +136,40 @@ export default async function ProjectOverviewPage({
           <strong className={highCount ? styles.toneBad : styles.toneGood}>{highCount}</strong>
         </div>
         <div className={styles.statusFact}>
-          <span>Project areas</span>
+          <span>Connected delivery areas</span>
           <strong>{PROJECT_AREAS.length}</strong>
+        </div>
+      </section>
+
+      <section className={styles.actionPanel} aria-label="Project actions">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.sectionKicker}>Project action center</span>
+            <h2>Move the project forward</h2>
+          </div>
+          <span className={styles.actionHint}>Actions open the owning domain; Project 360 keeps the context.</span>
+        </div>
+        <div className={styles.actionGrid}>
+          <Link href={`/project/${projectId}/controls`} className={styles.actionCard}>
+            <strong>Plan &amp; control</strong>
+            <span>WBS, CBS, quantities, cost, changes and closeout</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/project/${projectId}/site${scopeQuery}`} className={styles.actionCard}>
+            <strong>Progress &amp; execution</strong>
+            <span>Open the project-scoped Site delivery context</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/project/${projectId}/documents${scopeQuery}`} className={styles.actionCard}>
+            <strong>Evidence &amp; documents</strong>
+            <span>Open the controlled project record and its evidence</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/project/${projectId}/team${scopeQuery}`} className={styles.actionCard}>
+            <strong>Team &amp; ownership</strong>
+            <span>Review project roles and delivery responsibility</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
         </div>
       </section>
 
@@ -211,8 +243,8 @@ export default async function ProjectOverviewPage({
       <section className={styles.deliverySection}>
         <div className={styles.sectionHeading}>
           <div>
-            <span className={styles.sectionKicker}>Project delivery spine</span>
-            <h2>Move through the work, not through modules</h2>
+            <span className={styles.sectionKicker}>Connected delivery context</span>
+            <h2>Project signals by owning domain</h2>
           </div>
         </div>
         <div className={styles.areaGrid}>

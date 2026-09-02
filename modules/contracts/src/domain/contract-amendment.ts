@@ -1,0 +1,8 @@
+import { type Id, newId } from '@aura/shared';
+export type ContractAmendmentStatus = 'draft'|'review'|'approved'|'signed'|'returned'|'rejected';
+export interface ContractAmendment { id:Id; tenantId:Id; contractId:Id; baseRevisionId:Id; amendmentNumber:number; title:string; content:string; sourceVariationId:Id|null; status:ContractAmendmentStatus; createdBy:Id|null; createdAt:string; approvedBy:Id|null; approvedAt:string|null; signedBy:Id|null; signedAt:string|null; }
+export interface NewContractAmendment { tenantId:Id; contractId:Id; baseRevisionId:Id; amendmentNumber?:number; title:string; content:string; sourceVariationId?:Id|null; createdBy?:Id|null; }
+export function makeContractAmendment(input:NewContractAmendment):ContractAmendment { const title=input.title.trim(),content=input.content.trim(); if(!title)throw new Error('amendment title is required'); if(!content)throw new Error('amendment content is required'); return {id:newId(),tenantId:input.tenantId,contractId:input.contractId,baseRevisionId:input.baseRevisionId,amendmentNumber:input.amendmentNumber??1,title,content,sourceVariationId:input.sourceVariationId??null,status:'draft',createdBy:input.createdBy??null,createdAt:new Date().toISOString(),approvedBy:null,approvedAt:null,signedBy:null,signedAt:null}; }
+const NEXT:Record<ContractAmendmentStatus,readonly ContractAmendmentStatus[]>={draft:['review'],review:['approved','returned','rejected'],approved:['signed'],returned:['draft'],rejected:[],signed:[]};
+export function assertAmendmentTransition(from:ContractAmendmentStatus,to:ContractAmendmentStatus){if(from===to)return;if(!NEXT[from].includes(to))throw new Error(`invalid amendment transition: ${from} → ${to}`);}
+

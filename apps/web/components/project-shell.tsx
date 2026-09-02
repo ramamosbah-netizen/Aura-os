@@ -38,14 +38,18 @@ const AREA_ICONS: Record<string, LucideIcon> = {
   documents: FileStack,
 };
 
-const NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = [
+const OFFICE_NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = [
   { slug: '', label: 'Command center', icon: LayoutDashboard },
   { slug: 'controls', label: 'Project controls', icon: Gauge },
-  ...PROJECT_AREAS.map((area) => ({
+];
+
+const DELIVERY_NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = PROJECT_AREAS.map((area) => ({
     slug: area.slug,
     label: area.label,
     icon: AREA_ICONS[area.slug] ?? Gauge,
-  })),
+  }));
+
+const PEOPLE_NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = [
   { slug: 'team', label: 'Project team', icon: Users },
 ];
 
@@ -100,24 +104,9 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
         </label>
 
         <nav className={styles.navigation} aria-label="Project delivery areas">
-          {NAV.map((item) => {
-            const href = item.slug ? `${base}/${item.slug}` : base;
-            const active = item.slug
-              ? pathname === href || pathname.startsWith(`${href}/`)
-              : pathname === base;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.slug || 'overview'}
-                href={scoped(href)}
-                className={active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem}
-                aria-current={active ? 'page' : undefined}
-              >
-                <Icon size={16} strokeWidth={1.8} aria-hidden />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          <NavGroup label="Project office" items={OFFICE_NAV} pathname={pathname} base={base} scoped={scoped} />
+          <NavGroup label="Delivery context" items={DELIVERY_NAV} pathname={pathname} base={base} scoped={scoped} />
+          <NavGroup label="People" items={PEOPLE_NAV} pathname={pathname} base={base} scoped={scoped} />
         </nav>
 
         <Link href="/ai" className={styles.aiLink}>
@@ -126,6 +115,44 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
         </Link>
       </aside>
       <section className={styles.content}>{children}</section>
+    </div>
+  );
+}
+
+function NavGroup({
+  label,
+  items,
+  pathname,
+  base,
+  scoped,
+}: {
+  label: string;
+  items: Array<{ slug: string; label: string; icon: LucideIcon }>;
+  pathname: string;
+  base: string;
+  scoped: (href: string) => string;
+}) {
+  return (
+    <div className={styles.navGroup}>
+      <span className={styles.navGroupLabel}>{label}</span>
+      {items.map((item) => {
+        const href = item.slug ? `${base}/${item.slug}` : base;
+        const active = item.slug
+          ? pathname === href || pathname.startsWith(`${href}/`)
+          : pathname === base;
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.slug || 'overview'}
+            href={scoped(href)}
+            className={active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem}
+            aria-current={active ? 'page' : undefined}
+          >
+            <Icon size={16} strokeWidth={1.8} aria-hidden />
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
     </div>
   );
 }

@@ -27,7 +27,7 @@ function buildService() {
 describe('Contracts create via CommandBus', () => {
   it('persists the contract and emits its event through the pipeline', async () => {
     const { service, store, events } = buildService();
-    const contract = await service.create({ tenantId: 't1', title: 'EPC Contract', createdBy: 'u1' });
+    const contract = await service.create({ tenantId: 't1', title: 'EPC Contract', value: 0, createdBy: 'u1' });
     expect(contract.title).toBe('EPC Contract');
     expect(await store.get(contract.id)).not.toBeNull();
     expect(events.appendWithClient).toHaveBeenCalledOnce();
@@ -36,13 +36,13 @@ describe('Contracts create via CommandBus', () => {
   it('runs the validation stage (rejects an empty title)', async () => {
     const { service } = buildService();
     await expect(
-      service.create({ tenantId: 't1', title: '  ' } as unknown as Parameters<typeof service.create>[0]),
+      service.create({ tenantId: 't1', title: '  ', value: 0 } as unknown as Parameters<typeof service.create>[0]),
     ).rejects.toThrow('contract title is required');
   });
 
   it('records a before→after value diff on update (audit trail P1-2)', async () => {
     const { service, events } = buildService();
-    const c = await service.create({ tenantId: 't1', title: 'EPC', createdBy: 'u1' }); // value defaults 0
+    const c = await service.create({ tenantId: 't1', title: 'EPC', value: 0, createdBy: 'u1' });
     await service.update(c.id, { value: 150000, title: 'EPC Rev A' });
     const emitted = (events.appendWithClient as any).mock.calls.flatMap((args: unknown[]) => (args[1] as unknown[]) ?? []);
     const upd = emitted.find((e: any) => e?.payload?.changes);

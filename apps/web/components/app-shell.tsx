@@ -366,6 +366,22 @@ export default function AppShell({
             )}
           </div>
 
+          {/* Keep account access discoverable when the home page intentionally hides the
+              sidebar, or when a user has collapsed it. Anonymous development mode gets an
+              explicit sign-in affordance instead of silently omitting account controls. */}
+          {(isHome || sidebarHidden || !user) && (
+            <div className="app-topbar-account" style={s.topbarAccount}>
+              {user ? (
+                <>
+                  <span style={s.topbarUserName} aria-label={`Signed in as ${user.sub}`}>{user.sub}</span>
+                  <button type="button" style={s.topbarSignout} onClick={logout}>Sign out</button>
+                </>
+              ) : (
+                <Link href="/login" style={s.topbarSignIn}>Sign in</Link>
+              )}
+            </div>
+          )}
+
           <ThemeToggle />
         </header>
         <TabBar />
@@ -515,6 +531,44 @@ const s = {
     padding: '7px 10px',
     fontSize: 13,
     cursor: 'pointer',
+  } as CSSProperties,
+  topbarAccount: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginRight: 10,
+    paddingLeft: 10,
+    borderLeft: '1px solid var(--border)',
+    minWidth: 0,
+  } as CSSProperties,
+  topbarUserName: {
+    maxWidth: 140,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    color: 'var(--text)',
+    fontSize: 13,
+    fontWeight: 600,
+  } as CSSProperties,
+  topbarSignout: {
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    color: 'var(--muted)',
+    padding: '6px 9px',
+    fontSize: 12,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  topbarSignIn: {
+    color: 'var(--accent)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '6px 10px',
+    fontSize: 12,
+    fontWeight: 600,
+    textDecoration: 'none',
+    whiteSpace: 'nowrap',
   } as CSSProperties,
 
   // ── Company Context Switcher ──────────────────────────────────────────────

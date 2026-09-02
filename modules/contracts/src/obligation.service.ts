@@ -11,6 +11,7 @@ import {
   isOverdue,
 } from './domain/contract-obligation';
 import { OBLIGATION_STORE, type ObligationFilter, type ObligationStore } from './obligation-store';
+import { ContractService } from './contract.service';
 
 /** Contract obligation tracking — deliverables/milestones/compliance with due-date reminders. */
 @Injectable()
@@ -20,12 +21,14 @@ export class ObligationService {
   constructor(
     @Inject(OBLIGATION_STORE) private readonly store: ObligationStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Optional() @Inject(ContractService) private readonly contracts: ContractService | null = null,
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewContractObligation): Promise<ContractObligation> {
+    await this.assertContractOwner(input.contractId, input.tenantId);
     const o = makeContractObligation(input);
     await this.store.save(o);
     await this.events.append([
@@ -38,6 +41,13 @@ export class ObligationService {
     ]);
     this.logger.log(`Obligation created: ${o.title} due ${o.dueDate} (contract ${o.contractId})`);
     return o;
+  }
+
+  private async assertContractOwner(contractId: Id, tenantId: Id): Promise<void> {
+    if (!this.contracts) return;
+    const contract = await this.contracts.get(contractId);
+    if (!contract) throw new Error(`contract ${contractId} not found`);
+    if (contract.tenantId !== tenantId) throw new Error(`contract ${contractId} belongs to another tenant`);
   }
 
   async changeStatus(id: Id, status: ObligationStatus, on?: string): Promise<ContractObligation> {

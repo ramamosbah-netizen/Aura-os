@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CONTRACT_EVENT, makeContract } from './contract';
+import { assertContractTransition, CONTRACT_EVENT, makeContract } from './contract';
 
 describe('contracts contract model', () => {
   it('creates a contract with sane defaults and trimmed fields', () => {
-    const c = makeContract({ tenantId: 't1', title: '  Tower CCTV Delivery  ' });
+    const c = makeContract({ tenantId: 't1', title: '  Tower CCTV Delivery  ', value: 0 });
     expect(c.title).toBe('Tower CCTV Delivery');
     expect(c.status).toBe('draft');
     expect(c.value).toBe(0);
@@ -35,12 +35,22 @@ describe('contracts contract model', () => {
     expect(c.value).toBe(1250000);
   });
 
-  it('coerces a missing/garbage value to 0', () => {
-    expect(makeContract({ tenantId: 't1', title: 'X' }).value).toBe(0);
-    expect(makeContract({ tenantId: 't1', title: 'X', value: Number.NaN }).value).toBe(0);
+  it('rejects missing/garbage values instead of fabricating zero', () => {
+    expect(() => makeContract({ tenantId: 't1', title: 'X' })).toThrow(/finite non-negative/);
+    expect(() => makeContract({ tenantId: 't1', title: 'X', value: Number.NaN })).toThrow(/finite non-negative/);
+    expect(() => makeContract({ tenantId: 't1', title: 'X', value: -1 })).toThrow(/finite non-negative/);
+    expect(makeContract({ tenantId: 't1', title: 'X', value: 0 }).value).toBe(0);
   });
 
   it('exposes the spine event type', () => {
     expect(CONTRACT_EVENT.created).toBe('contracts.contract.created');
+  });
+
+  it('enforces the governed lifecycle and allows same-state replay', () => {
+    expect(() => assertContractTransition('draft', 'active')).not.toThrow();
+    expect(() => assertContractTransition('active', 'completed')).not.toThrow();
+    expect(() => assertContractTransition('draft', 'draft')).not.toThrow();
+    expect(() => assertContractTransition('draft', 'completed')).toThrow(/invalid contract transition/);
+    expect(() => assertContractTransition('completed', 'active')).toThrow(/invalid contract transition/);
   });
 });

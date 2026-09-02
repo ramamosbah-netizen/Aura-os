@@ -19,7 +19,7 @@ export function ContractEdit({ contract }: { contract: { id: string; title: stri
       initialValues={{
         title: contract.title,
         reference: contract.reference ?? '',
-        value: contract.value ? String(contract.value) : '',
+        value: Number.isFinite(contract.value) ? String(contract.value) : '',
       }}
       fields={[
         { name: 'title', label: 'Contract title', kind: 'text', required: true, span: 2 },
@@ -49,13 +49,13 @@ export default function ContractCreate({ tenders }: { tenders: TenderLite[] }) {
           options: tenders.map((t) => ({
             value: t.id,
             label: t.title,
-            fills: { title: t.title, value: t.value ? String(t.value) : '' },
+            fills: { title: t.title, value: Number.isFinite(t.value) ? String(t.value) : '' },
             extra: { accountId: t.accountId, accountName: t.accountName },
           })),
         },
         { name: 'title', label: 'Contract title', kind: 'text', required: true, placeholder: 'e.g. Marina Tower — ELV works', span: 2 },
         { name: 'reference', label: 'Reference', kind: 'text', placeholder: 'e.g. CTR-2026-001' },
-        { name: 'value', label: 'Value (AED)', kind: 'number', placeholder: '0' },
+        { name: 'value', label: 'Value (AED)', kind: 'number', required: true, placeholder: 'Enter approved amount' },
         {
           name: 'status',
           label: 'Status',

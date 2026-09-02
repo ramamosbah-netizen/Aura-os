@@ -11,6 +11,7 @@ import {
   makeContractBond,
 } from './domain/contract-bond';
 import { CONTRACT_BOND_STORE, type BondFilter, type BondStore } from './bond-store';
+import { ContractService } from './contract.service';
 
 /**
  * Bond/guarantee service — the bank instruments securing each contract
@@ -25,12 +26,14 @@ export class BondService {
   constructor(
     @Inject(CONTRACT_BOND_STORE) private readonly store: BondStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    @Optional() @Inject(ContractService) private readonly contracts: ContractService | null = null,
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async create(input: NewContractBond): Promise<ContractBond> {
+    await this.assertContractOwner(input.contractId, input.tenantId);
     const bond = makeContractBond(input);
     await this.store.save(bond);
     await this.events.append([
@@ -46,6 +49,13 @@ export class BondService {
     ]);
     this.logger.log(`Bond added: ${bond.kind} ${bond.reference} (AED ${bond.amount}) on contract ${bond.contractId}`);
     return bond;
+  }
+
+  private async assertContractOwner(contractId: Id, tenantId: Id): Promise<void> {
+    if (!this.contracts) return;
+    const contract = await this.contracts.get(contractId);
+    if (!contract) throw new Error(`contract ${contractId} not found`);
+    if (contract.tenantId !== tenantId) throw new Error(`contract ${contractId} belongs to another tenant`);
   }
 
   /** Tenant-scoped read (N-08): never hand back another tenant's record. */

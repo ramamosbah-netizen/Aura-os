@@ -60,8 +60,12 @@ export class PaymentCertificateService {
   /** Add a valuation line to a draft IPC — a BOQ item's certified quantity × rate. On certification
    *  the Quantity Ledger accrues these as the items' INVOICED position. */
   async addLine(input: { certificateId: Id; projectId: Id; boqItemId: Id; description: string; quantity: number; unit?: string | null; rate?: number }): Promise<IpcLine> {
-    const cert = await this.store.get(input.certificateId);
-    if (!cert) throw new Error(`payment certificate ${input.certificateId} not found`);
+    const cert = assertSameTenant(
+      await this.store.get(input.certificateId),
+      this.tenant?.boundTenantId(),
+      'payment certificate',
+      input.certificateId,
+    );
     if (!input.unit?.trim()) throw new Error('unit is required; certification unit evidence cannot be inferred');
     const line = makeIpcLine({
       tenantId: cert.tenantId,
@@ -93,6 +97,9 @@ export class PaymentCertificateService {
 
     const contract = await this.contracts.get(input.contractId);
     if (!contract) throw new Error(`contract ${input.contractId} not found`);
+    if (contract.tenantId !== input.tenantId) {
+      throw new Error(`contract ${input.contractId} belongs to another tenant`);
+    }
 
     // Sequence + paid-to-date baseline are derived from this contract's existing certificates.
     const existing = await this.store.list({ tenantId: input.tenantId, contractId: input.contractId, limit: 500 });

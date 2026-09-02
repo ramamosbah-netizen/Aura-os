@@ -7,6 +7,25 @@ import { type Id, newId } from '@aura/shared';
 
 export type ContractStatus = 'draft' | 'active' | 'completed' | 'cancelled';
 
+/**
+ * Governed Contract lifecycle. Metadata updates are deliberately separate from
+ * this transition boundary. Repeating the current state is an idempotent no-op;
+ * terminal states cannot be rewritten.
+ */
+const CONTRACT_TRANSITIONS: Record<ContractStatus, readonly ContractStatus[]> = {
+  draft: ['active', 'cancelled'],
+  active: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
+export function assertContractTransition(from: ContractStatus, to: ContractStatus): void {
+  if (from === to) return;
+  if (!CONTRACT_TRANSITIONS[from].includes(to)) {
+    throw new Error(`invalid contract transition: ${from} → ${to}`);
+  }
+}
+
 export interface Contract {
   id: Id;
   tenantId: Id;
@@ -66,6 +85,9 @@ export interface NewContract {
 }
 
 export function makeContract(input: NewContract): Contract {
+  if (input.value === undefined || !Number.isFinite(input.value) || input.value < 0) {
+    throw new Error('contract value must be a finite non-negative number; unavailable value must be rejected rather than defaulted to zero');
+  }
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -77,7 +99,7 @@ export function makeContract(input: NewContract): Contract {
     accountId: input.accountId ?? null,
     accountName: input.accountName ?? null,
     status: input.status ?? 'draft',
-    value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    value: Number(input.value),
     sourceOpportunityId: input.sourceOpportunityId ?? null,
     currency: input.currency?.trim().toUpperCase() || null,
     commercialScopeRevisionId: input.commercialScopeRevisionId ?? null,

@@ -122,6 +122,15 @@ describe('PaymentCertificateService — only one certificate open at a time', ()
     const retry = await raise(svc, contract.id, 500_000);
     expect(retry.netThisCertificate).toBe(450_000); // full amount — nothing was certified before it
   });
+
+  it('rejects a certificate raised with a tenant different from the contract owner', async () => {
+    const { svc, contract } = await harness();
+    await expect(svc.create({
+      tenantId: 'tenant-b',
+      contractId: contract.id,
+      cumulativeWorkDone: 100,
+    })).rejects.toThrow(/belongs to another tenant/);
+  });
 });
 
 describe('PaymentCertificateService — certified event line identity', () => {

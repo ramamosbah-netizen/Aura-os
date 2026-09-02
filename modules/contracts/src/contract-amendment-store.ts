@@ -1,0 +1,2 @@
+import type { Id } from '@aura/shared'; import type { ContractAmendment } from './domain/contract-amendment';
+export const CONTRACT_AMENDMENT_STORE=Symbol('CONTRACT_AMENDMENT_STORE'); export interface ContractAmendmentStore{create(a:ContractAmendment):Promise<void>;get(id:Id):Promise<ContractAmendment|null>;list(tenantId:Id,contractId:Id):Promise<ContractAmendment[]>;update(a:ContractAmendment):Promise<void>;}

@@ -60,7 +60,10 @@ const SUITE_ICON: Record<string, LucideIcon> = {
 const TONES: HomeWorkspace['tone'][] = ['teal', 'blue', 'amber', 'green', 'violet', 'slate'];
 const SECTION_EYEBROW: Record<string, string> = { work: 'Work center', control: 'Control center', business: 'Business suite', system: 'System' };
 
-const WORKSPACES: HomeWorkspace[] = AURA_SUITES.map((suite, i) => ({
+// The launcher follows the same primary-discovery policy as the sidebar. Compatibility suites
+// (for example the legacy Pre-Award and Commercial records) stay routable but must not reappear as
+// competing top-level workspaces after Sales & Commercial has consolidated their journeys.
+const WORKSPACES: HomeWorkspace[] = AURA_SUITES.filter((suite) => !suite.hiddenFromPrimary).map((suite, i) => ({
   id: suite.id,
   number: String(i + 1).padStart(2, '0'),
   eyebrow: SECTION_EYEBROW[suite.section] ?? 'Workspace',

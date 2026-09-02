@@ -25,10 +25,8 @@ test('an open drawer survives a late overrides response, keeping what was typed'
 
   // Hold every Form Designer lookup open. The drawer renders immediately; the response — and the
   // remount decision that used to follow it — lands only after we have typed into the form.
-  let release: (() => void) | null = null;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
   await page.route('**/api/forms/**/overrides', async (route) => {
     await held;
     // 404 is the ordinary "this tenant has customised nothing" answer.
@@ -45,7 +43,7 @@ test('an open drawer survives a late overrides response, keeping what was typed'
   await drawer.getByTestId('field-title').fill(title);
 
   // Now let the overrides land. Under either old version this is where the drawer was torn down.
-  release?.();
+  release();
 
   // Still open, and still holding the typed value.
   await expect(drawer).toBeVisible();

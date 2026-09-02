@@ -96,7 +96,7 @@ const EOT_COLUMNS: AuraColumn<EotClaim>[] = [
   { key: 'createdAt', label: 'Raised', priority: 'muted', sortable: true, render: (row) => fmt(row.createdAt) },
 ];
 
-export default function Project360Client({ project }: { project: Project360Project }) {
+export default function Project360Client({ project, initialTab }: { project: Project360Project; initialTab?: string }) {
   const router = useRouter();
   const [variations, setVariations] = useState<Variation[]>([]);
   const [impact, setImpact] = useState<VariationImpact | null>(null);
@@ -110,7 +110,8 @@ export default function Project360Client({ project }: { project: Project360Proje
   const [maps, setMaps] = useState<DeliveryMap[]>([]);
   const [quantities, setQuantities] = useState<QuantityTxn[]>([]);
   const [costs, setCosts] = useState<CostTxn[]>([]);
-  const [tab, setTab] = useState<Tab>('variations');
+  const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'variations';
+  const [tab, setTab] = useState<Tab>(validInitialTab);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);

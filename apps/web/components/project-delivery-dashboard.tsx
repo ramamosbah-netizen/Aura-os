@@ -1,15 +1,12 @@
 import {
   Boxes,
   CheckCircle2,
-  ClipboardCheck,
   FolderKanban,
   GaugeCircle,
-  HardHat,
   LayoutDashboard,
-  PackageCheck,
-  PencilRuler,
-  ShieldCheck,
-  Wrench,
+  ListChecks,
+  GitBranch,
+  CalendarRange,
 } from 'lucide-react';
 import SuiteDashboardShell, {
   type SuiteAttentionItem,
@@ -52,14 +49,12 @@ export interface DeliveryApproval {
 }
 
 const SHORTCUTS: SuiteShortcut[] = [
-  { label: 'Projects', description: 'Delivery & execution register', href: '/projects/projects', icon: FolderKanban, tone: 'teal' },
-  { label: 'Engineering', description: 'Drawings, RFIs & submittals', href: '/engineering', icon: PencilRuler, tone: 'violet' },
-  { label: 'Site', description: 'Diaries, delays & consumption', href: '/site/control', icon: HardHat, tone: 'amber' },
-  { label: 'Quality', description: 'NCRs, inspections & snags', href: '/quality/control', icon: ClipboardCheck, tone: 'cyan' },
-  { label: 'HSE', description: 'Incidents, permits & CAPA', href: '/hse/control', icon: ShieldCheck, tone: 'green' },
-  { label: 'Commissioning', description: 'Test, witness & handover readiness', href: '/commissioning', icon: Wrench, tone: 'teal' },
-  { label: 'Handover', description: 'Acceptance package & client sign-off', href: '/handover', icon: PackageCheck, tone: 'blue' },
-  { label: 'Schedule', description: 'Gantt — planned vs baseline vs actual', href: '/projects/schedule', icon: GaugeCircle, tone: 'slate' },
+  { label: 'Projects', description: 'Official project register and Project 360', href: '/projects/projects', icon: FolderKanban, tone: 'teal' },
+  { label: 'Plan & schedule', description: 'Gantt — planned vs baseline vs actual', href: '/projects/schedule', icon: CalendarRange, tone: 'slate' },
+  { label: 'Project controls', description: 'WBS, CBS, quantities and cost control', href: '/projects/dashboard', icon: GaugeCircle, tone: 'violet' },
+  { label: 'Changes', description: 'Governed variations and change context', href: '/projects/variations', icon: GitBranch, tone: 'amber' },
+  { label: 'Approvals & actions', description: 'Decisions requiring project action', href: '/my-work/approvals', icon: ListChecks, tone: 'blue' },
+  { label: 'Project closeout', description: 'Handover readiness and closeout workflow', href: '/projects/closeout', icon: CheckCircle2, tone: 'green' },
 ];
 
 const aed = (n: number): string => 'AED ' + Math.round(n).toLocaleString('en-AE');
@@ -130,21 +125,21 @@ export default function ProjectDeliveryDashboard({
   return (
     <SuiteDashboardShell
       testId="project-delivery-dashboard"
-      anchor={{ href: '/projects/dashboard', title: 'Project Delivery', type: 'Delivery' }}
+      anchor={{ href: '/projects/dashboard', title: 'Projects', type: 'Projects' }}
       hero={{
-        eyebrow: 'AURA OS / PROJECT DELIVERY',
-        title: <>Project <span>Delivery</span></>,
+        eyebrow: 'AURA OS / PROJECTS',
+        title: <>Project <span>Management</span></>,
         lede: projects === null
-          ? 'Portfolio execution health across engineering, site, quality, HSE and commissioning.'
+          ? 'Portfolio health for planning, coordination, controls, decisions and closeout.'
           : `${active.length} active project${active.length === 1 ? '' : 's'} · portfolio SPI ${spiText} · ${atRisk.length} need attention.`,
       }}
-      askAura={{ tabType: 'Delivery' }}
+      askAura={{ tabType: 'Projects' }}
       metrics={metrics}
       continueWorking={<ContinueWorking match={['/project']} />}
       attention={{
         kicker: 'Earned-value engine · deepest gap first',
         title: 'Projects needing attention',
-        headerLink: { href: '/projects/dashboard', label: 'Open portfolio', tabTitle: 'Project Delivery', tabType: 'Delivery' },
+        headerLink: { href: '/projects/dashboard', label: 'Open portfolio', tabTitle: 'Projects', tabType: 'Projects' },
         items: attentionItems,
         unavailableLabel: 'Portfolio data is unavailable. Open Projects to check the source workspace.',
         emptyLabel: 'No projects flagged at risk — schedule and cost are on track.',
@@ -159,15 +154,15 @@ export default function ProjectDeliveryDashboard({
         kicker: 'Live delivery signals',
         title: 'AURA brief',
         body: briefBody,
-        cta: { href: '/ai', label: 'Continue with AURA', tabTitle: 'AURA AI', tabType: 'Delivery' },
+        cta: { href: '/ai', label: 'Continue with AURA', tabTitle: 'AURA AI', tabType: 'Projects' },
       }}
       shortcuts={{
-        kicker: 'Delivery workspace',
-        title: 'Project Delivery',
+        kicker: 'Projects workspace',
+        title: 'Projects',
         itemTestId: 'delivery-shortcut',
         items: SHORTCUTS,
       }}
-      ownership={<><Boxes aria-hidden /><span><strong>Delivery owns execution.</strong> Every figure is read live from the portfolio’s earned-value health.</span></>}
+      ownership={<><Boxes aria-hidden /><span><strong>Projects owns management.</strong> Delivery Operations owns discipline execution; this view composes portfolio health and decisions.</span></>}
     />
   );
 }

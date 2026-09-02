@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getJson } from '@/lib/api';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { filterAreaRows, PROJECT_AREAS } from '@/lib/project-areas';
 import { computeDigest, type Tone } from '@/lib/project-digest';
 import { ELV_DISCIPLINES } from '@/lib/project-scope';
@@ -85,6 +86,18 @@ export default async function ProjectOverviewPage({
     })),
   );
   const bySlug: Record<string, Row[]> = Object.fromEntries(areaData.map((data) => [data.area.slug, data.rows]));
+
+  // Read-only activity composition from records owned by the delivery domains. No duplicate
+  // ProjectNotes or project-history writer is introduced here.
+  const activity = areaData
+    .flatMap(({ area, rows }) => rows.map((row) => ({
+      area,
+      label: String(row.title ?? row.name ?? row.reference ?? row.code ?? row.ncrNumber ?? row.documentNumber ?? area.entity),
+      timestamp: String(row.createdAt ?? row.updatedAt ?? row.date ?? ''),
+    })))
+    .filter((item) => Number.isFinite(Date.parse(item.timestamp)))
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+    .slice(0, 8);
 
   const digest = computeDigest({
     drawings: bySlug.engineering ?? [],
@@ -230,7 +243,7 @@ export default async function ProjectOverviewPage({
       </section>
 
       <div className={styles.commandGrid}>
-        <section className={styles.attentionPanel}>
+        <section id="needs-attention" className={styles.attentionPanel}>
           <div className={styles.sectionHeading}>
             <div>
               <span className={styles.sectionKicker}>Decision queue</span>
@@ -314,6 +327,37 @@ export default async function ProjectOverviewPage({
             );
           })}
         </div>
+      </section>
+
+      <section id="activity-history" className={styles.deliverySection} aria-label="Project activity and history">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.sectionKicker}>Activity &amp; history</span>
+            <h2>Recent project activity</h2>
+          </div>
+          <span className={styles.actionHint}>Read-only context from the owning delivery records.</span>
+        </div>
+        {activity.length === 0 ? (
+          <div className={styles.clearState}>
+            <div>
+              <strong>No recorded activity yet</strong>
+              <span>New schedule, site, engineering, quality, HSE and document records will appear here when available.</span>
+            </div>
+          </div>
+        ) : (
+          <ol className={styles.activityList}>
+            {activity.map((item, index) => (
+              <li key={`${item.area.slug}-${item.timestamp}-${index}`} className={styles.activityItem}>
+                <span className={styles.activityDot} aria-hidden />
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>{item.area.label} · {new Date(item.timestamp).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+                <Link href={`/project/${projectId}/${item.area.slug}${scopeQuery}`}>Open context →</Link>
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
     </main>
   );

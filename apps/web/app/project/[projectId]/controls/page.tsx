@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
  * Canonical commercial/control view inside Project 360. Domain APIs remain owned
  * by Projects, Contracts and Finance; this page only composes their project context.
  */
-export default async function ProjectControlsPage({ params }: { params: Promise<{ projectId: string }> }) {
-  const { projectId } = await params;
+export default async function ProjectControlsPage({ params, searchParams }: { params: Promise<{ projectId: string }>; searchParams: Promise<{ tab?: string }> }) {
+  const [{ projectId }, query] = await Promise.all([params, searchParams]);
   const result = await fetchJson<Project360Project>(`/api/projects/projects/${projectId}`);
   if (!result.ok) {
     if (result.error.kind === 'not-found') notFound();
@@ -21,7 +21,7 @@ export default async function ProjectControlsPage({ params }: { params: Promise<
   return (
     <main data-testid="project-controls" style={{ maxWidth: 1320, margin: '0 auto' }}>
       <RecordChrome type="Project" title={result.data.title} />
-      <Project360Client project={result.data} />
+      <Project360Client project={result.data} initialTab={query.tab} />
     </main>
   );
 }

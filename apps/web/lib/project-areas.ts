@@ -1,4 +1,4 @@
-// Project Delivery Workspace — the delivery areas that make up one project's workspace (slice P3).
+// Project 360 context — delivery records remain owned by Delivery Operations and are linked here.
 // A single config drives both the shell nav and the generic area register, so adding an area is a
 // one-object change. Every listed endpoint returns records that carry a `projectId`, which is how
 // the workspace scopes each list to the project it belongs to.

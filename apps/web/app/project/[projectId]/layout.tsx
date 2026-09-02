@@ -15,7 +15,7 @@ interface ProjectHead {
 }
 
 /**
- * Project Delivery Workspace (slice P3) — the shell every `/project/[id]/…` page renders inside.
+ * Project 360 workspace (slice P3) — the project-management shell every `/project/[id]/…` page renders inside.
  * Loads the project once and frames it; the child page provides the area content.
  */
 export default async function ProjectLayout({

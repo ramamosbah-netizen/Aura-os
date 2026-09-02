@@ -128,6 +128,21 @@
   text-transform: uppercase;
 }
 
+.navHint {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 10px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.navHint a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.navHint a:hover { text-decoration: underline; }
+
 .navItem {
   position: relative;
   gap: 10px;
@@ -208,6 +223,7 @@
     scrollbar-width: thin;
   }
   .navGroup { flex-direction: row; gap: 4px; align-items: center; }
+  .navHint { display: none; }
   .navGroupLabel { display: none; }
   .navItem { flex-shrink: 0; min-height: 36px; white-space: nowrap; }
   .navItemActive::before {

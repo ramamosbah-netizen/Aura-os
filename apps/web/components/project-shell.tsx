@@ -10,15 +10,10 @@ import {
   ClipboardCheck,
   FileStack,
   Gauge,
-  HardHat,
   LayoutDashboard,
-  RadioTower,
-  ShieldCheck,
   Users,
-  Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import { PROJECT_AREAS } from '@/lib/project-areas';
 import { useProjectContext } from '@/lib/project-context';
 import { ELV_DISCIPLINES } from '@/lib/project-scope';
 import styles from './project-shell.module.css';
@@ -30,25 +25,12 @@ interface ProjectHead {
   status: string;
 }
 
-const AREA_ICONS: Record<string, LucideIcon> = {
-  engineering: RadioTower,
-  site: HardHat,
-  quality: ClipboardCheck,
-  hse: ShieldCheck,
-  commissioning: Wrench,
-  documents: FileStack,
-};
-
-const DELIVERY_NAV: Array<{ key: string; slug: string; label: string; icon: LucideIcon }> = PROJECT_AREAS.map((area) => ({
-    slug: area.slug,
-    key: area.slug,
-    label: area.label,
-    icon: AREA_ICONS[area.slug] ?? Gauge,
-  }));
-
 const PEOPLE_NAV: Array<{ key: string; slug: string; label: string; icon: LucideIcon }> = [
   { slug: 'team', key: 'team', label: 'Project team', icon: Users },
 ];
+
+// Delivery records remain available as project-scoped context links, but are not repeated as a
+// second module navigation. Their canonical workspace is Delivery Operations.
 
 export default function ProjectShell({ project, children }: { project: ProjectHead; children: ReactNode }) {
   const pathname = usePathname();
@@ -56,14 +38,24 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   const { disciplineId, setDiscipline } = useProjectContext();
   const base = `/project/${project.id}`;
   const query = searchParams.toString();
-  const scoped = (href: string): string => (query && !href.includes('?') ? `${href}?${query}` : href);
+  const scoped = (href: string): string => {
+    if (!query || href.includes('?')) return href;
+    const hashIndex = href.indexOf('#');
+    if (hashIndex === -1) return `${href}?${query}`;
+    return `${href.slice(0, hashIndex)}?${query}${href.slice(hashIndex)}`;
+  };
   const officeNav: NavItem[] = [
     { key: 'overview', label: 'Overview', icon: LayoutDashboard, href: base, active: pathname === base },
     { key: 'schedule', label: 'Plan & schedule', icon: CalendarRange, href: `/projects/schedule?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/projects/schedule' },
-    { key: 'progress', label: 'Progress & execution', icon: HardHat, href: `${base}/site`, active: pathname.startsWith(`${base}/site`) },
+    { key: 'progress', label: 'Progress & execution', icon: Gauge, href: `${base}/site`, active: pathname.startsWith(`${base}/site`) },
     { key: 'controls', label: 'Commercial & cost', icon: Gauge, href: `${base}/controls`, active: pathname.startsWith(`${base}/controls`) },
+    { key: 'risks', label: 'Risks & issues', icon: Gauge, href: `${base}#needs-attention`, active: false },
+    { key: 'changes', label: 'Changes', icon: Gauge, href: `${base}/controls?tab=variations`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'variations' },
+    { key: 'approvals', label: 'Approvals & actions', icon: ClipboardCheck, href: `/my-work/approvals?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/my-work/approvals') },
     { key: 'evidence', label: 'Evidence & documents', icon: FileStack, href: `${base}/documents`, active: pathname.startsWith(`${base}/documents`) },
     { key: 'team', label: 'Team & ownership', icon: Users, href: `${base}/team`, active: pathname.startsWith(`${base}/team`) },
+    { key: 'activity', label: 'Activity & history', icon: Gauge, href: `${base}#activity-history`, active: false },
+    { key: 'closeout', label: 'Handover & closeout', icon: ClipboardCheck, href: `${base}/controls?tab=closeout`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'closeout' },
   ];
   const statusClass =
     project.status === 'active' ? 'badge badge-good'
@@ -110,7 +102,10 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
 
         <nav className={styles.navigation} aria-label="Project delivery areas">
           <NavGroup label="Project office" items={officeNav} pathname={pathname} base={base} scoped={scoped} />
-          <NavGroup label="Delivery records" items={DELIVERY_NAV} pathname={pathname} base={base} scoped={scoped} />
+          <div className={styles.navHint}>
+            <span>Specialist execution records stay owned by Delivery Operations.</span>
+            <Link href="/operations/overview">Open Delivery Operations →</Link>
+          </div>
           <NavGroup label="People" items={PEOPLE_NAV} pathname={pathname} base={base} scoped={scoped} />
         </nav>
 

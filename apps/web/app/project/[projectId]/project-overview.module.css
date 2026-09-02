@@ -198,6 +198,16 @@
 .statusChips b { color: var(--text); }
 .areaArrow { align-self: center; color: var(--muted); opacity: .55; }
 
+.activityList { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--panel); }
+.activityItem { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px 15px; border-bottom: 1px solid var(--border); }
+.activityItem:last-child { border-bottom: 0; }
+.activityItem strong, .activityItem span { display: block; }
+.activityItem strong { font-size: 12.5px; }
+.activityItem div span { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.activityItem a { color: var(--accent); font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.activityItem a:hover { text-decoration: underline; }
+.activityDot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); }
+
 @media (max-width: 1120px) {
   .kpiGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .statusBand { grid-template-columns: minmax(200px, 1.2fr) repeat(3, minmax(90px, .6fr)); }
@@ -223,4 +233,6 @@
   .actionGrid { grid-template-columns: 1fr; }
   .areaCard { grid-template-columns: 24px 34px minmax(0, 1fr); }
   .areaArrow { display: none; }
+  .activityItem { grid-template-columns: 12px minmax(0, 1fr); }
+  .activityItem a { grid-column: 2; }
 }

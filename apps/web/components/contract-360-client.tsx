@@ -611,7 +611,7 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
         )}
 
         {tab === 'variations' && (
-          <div style={{ padding: 16 }}><p style={st.muted}>Variation authority remains in Project Delivery / C6.</p><p style={st.notes}>This Contract view intentionally does not create or approve variations. Open the canonical workspace to review pending, approved and rejected changes.</p></div>
+              <div style={{ padding: 16 }}><p style={st.muted}>Variation authority remains in Projects / C6.</p><p style={st.notes}>This Contract view intentionally does not create or approve variations. Open the canonical Projects workspace to review pending, approved and rejected changes.</p></div>
         )}
 
         {tab === 'history' && (

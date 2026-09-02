@@ -6,7 +6,7 @@ import ProjectDeliveryDashboard, {
 
 export const dynamic = 'force-dynamic';
 
-// Project Delivery — the suite front door, on the shared SuiteDashboardShell (My Work parity).
+// Projects — the project-management suite front door, on the shared SuiteDashboardShell.
 // Content is project-specific and every figure is READ from live endpoints:
 //   • `/api/projects/projects/portfolio` — active/at-risk counts + earned-value health (SPI/CPI).
 //   • `/api/inbox` — the universal decision queue, filtered to the delivery-touching modules, for

@@ -14,22 +14,27 @@ interface ProjectSchedule {
 }
 interface Project { id: string; title: string }
 
-export default async function SchedulePage() {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  const { projectId } = await searchParams;
   const [schedules, projects] = await Promise.all([
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
   ]);
+  const scopedSchedules = projectId ? (schedules ?? []).filter((schedule) => schedule.projectId === projectId) : schedules;
+  const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
+  const projectName = scopedProjects?.[0]?.title ?? scopedSchedules?.[0]?.projectName;
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Projects · Schedule (Gantt)</h1>
+      <h1 style={st.h1}>{projectName ? `${projectName} · Plan & schedule` : 'Projects · Schedule (Gantt)'}</h1>
       <p style={st.sub}>
         Planned vs baseline vs actual per task, with duration-weighted % complete and finish
-        variance. Add tasks, then set a baseline to freeze the plan and track slippage.
+        variance. Add activities, then set a baseline to freeze the plan and track slippage.
+        {projectName ? ' This view is scoped to the selected project.' : ''}
       </p>
       {schedules === null ? (
         <p style={st.muted}>API offline.</p>
       ) : (
-        <GanttClient schedules={schedules} projects={projects ?? []} />
+        <GanttClient schedules={scopedSchedules ?? []} projects={scopedProjects ?? []} selectedProjectId={projectId} />
       )}
     </div>
   );

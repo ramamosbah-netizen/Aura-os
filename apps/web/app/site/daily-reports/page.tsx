@@ -4,11 +4,14 @@ import DailyReportClient, { type DailyReport, type LabourAllocation } from '../.
 
 export const dynamic = 'force-dynamic';
 
-export default async function DailyReportsPage() {
+export default async function DailyReportsPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  const { projectId } = await searchParams;
   const [reports, labour] = await Promise.all([
     getJson<DailyReport[]>('/api/site/daily-reports'),
     getJson<LabourAllocation[]>('/api/site/labour'),
   ]);
+  const scopedReports = projectId ? (reports ?? []).filter((report) => report.projectId === projectId) : reports;
+  const scopedLabour = projectId ? (labour ?? []).filter((entry) => entry.projectId === projectId) : labour;
 
   return (
     <div style={st.page}>
@@ -19,7 +22,7 @@ export default async function DailyReportsPage() {
         man-hours roll up for productivity and payment.
       </p>
       <section style={{ marginTop: 10 }}>
-        {reports === null ? <p style={st.muted}>API offline.</p> : <DailyReportClient reports={reports ?? []} labour={labour ?? []} />}
+        {reports === null ? <p style={st.muted}>API offline.</p> : <DailyReportClient reports={scopedReports ?? []} labour={scopedLabour ?? []} initialProjectId={projectId} />}
       </section>
     </div>
   );

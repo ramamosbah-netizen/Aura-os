@@ -4,8 +4,12 @@ import NcrClient, { type Ncr } from '../../../components/ncr-client';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NcrPage() {
-  const ncrs = await getJson<Ncr[]>('/api/quality/ncrs');
+export default async function NcrPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  const [{ projectId }, ncrs] = await Promise.all([
+    searchParams,
+    getJson<Ncr[]>('/api/quality/ncrs'),
+  ]);
+  const rows = projectId ? (ncrs ?? []).filter((ncr) => ncr.projectId === projectId) : ncrs;
 
   return (
     <div style={st.page}>
@@ -16,7 +20,7 @@ export default async function NcrPage() {
         flagged until the correction is verified and the report is closed.
       </p>
       <section style={{ marginTop: 10 }}>
-        {ncrs === null ? <p style={st.muted}>API offline.</p> : <NcrClient initial={ncrs ?? []} />}
+        {ncrs === null ? <p style={st.muted}>API offline.</p> : <NcrClient initial={rows ?? []} initialProjectId={projectId} />}
       </section>
     </div>
   );

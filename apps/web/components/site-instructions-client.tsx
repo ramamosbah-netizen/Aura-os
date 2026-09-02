@@ -21,9 +21,9 @@ interface SiteInstruction {
 const statusColor: Record<string, string> = { open: 'var(--warn)', acknowledged: 'var(--accent)', closed: 'var(--good)' };
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function SiteInstructionsClient({ initialInstructions }: { initialInstructions: SiteInstruction[] }) {
+export default function SiteInstructionsClient({ initialInstructions, initialProjectId = '' }: { initialInstructions: SiteInstruction[]; initialProjectId?: string }) {
   const [items, setItems] = useState(initialInstructions);
-  const [projectId, setProjectId] = useState('');
+  const [projectId, setProjectId] = useState(initialProjectId);
   const [reference, setReference] = useState('');
   const [issuedBy, setIssuedBy] = useState('');
   const [date, setDate] = useState(today());

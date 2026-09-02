@@ -36,15 +36,15 @@ export interface LabourAllocation {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function DailyReportClient({ reports, labour }: { reports: DailyReport[]; labour: LabourAllocation[] }) {
+export default function DailyReportClient({ reports, labour, initialProjectId = '' }: { reports: DailyReport[]; labour: LabourAllocation[]; initialProjectId?: string }) {
   const [rows, setRows] = useState(reports);
   const [lab, setLab] = useState(labour);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [dr, setDr] = useState({ projectId: '', date: today(), workDescription: '', manpowerCount: '', equipmentCount: '' });
+  const [dr, setDr] = useState({ projectId: initialProjectId, date: today(), workDescription: '', manpowerCount: '', equipmentCount: '' });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
-  const [lr, setLr] = useState({ projectId: '', date: today(), trade: '', headcount: '', hours: '', subcontractorName: '' });
+  const [lr, setLr] = useState({ projectId: initialProjectId, date: today(), trade: '', headcount: '', hours: '', subcontractorName: '' });
 
   const kpi = useMemo(() => ({
     draft: rows.filter((r) => r.status === 'draft').length,

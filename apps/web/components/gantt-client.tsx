@@ -30,12 +30,12 @@ function span(tasks: ScheduleTask[]): { min: number; total: number } {
 interface NewTask { name: string; plannedStart: string; plannedEnd: string; percentComplete: string }
 const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', percentComplete: '0' });
 
-export default function GanttClient({ schedules, projects = [] }: { schedules: ProjectSchedule[]; projects?: Project[] }) {
+export default function GanttClient({ schedules, projects = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; selectedProjectId?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addTask, setAddTask] = useState<Record<string, NewTask>>({});
-  const [newProjectId, setNewProjectId] = useState('');
+  const [newProjectId, setNewProjectId] = useState(selectedProjectId ?? '');
   const [newTask, setNewTask] = useState<NewTask>(emptyTask());
 
   const scheduledProjectIds = new Set(schedules.map((s) => s.projectId));

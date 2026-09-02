@@ -17,8 +17,12 @@ interface SiteInstruction {
   status: string;
 }
 
-export default async function SiteInstructionsPage() {
-  const instructions = await getJson<SiteInstruction[]>('/api/site/instructions');
+export default async function SiteInstructionsPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  const [{ projectId }, instructions] = await Promise.all([
+    searchParams,
+    getJson<SiteInstruction[]>('/api/site/instructions'),
+  ]);
+  const rows = projectId ? (instructions ?? []).filter((item) => item.projectId === projectId) : instructions;
 
   return (
     <div style={st.page}>
@@ -28,7 +32,7 @@ export default async function SiteInstructionsPage() {
         closed. Flag cost and/or time implications so they can be escalated to a variation or EOT claim.
       </p>
       <section style={{ marginTop: 10 }}>
-        {instructions === null ? <p style={st.muted}>API offline.</p> : <SiteInstructionsClient initialInstructions={instructions ?? []} />}
+        {instructions === null ? <p style={st.muted}>API offline.</p> : <SiteInstructionsClient initialInstructions={rows ?? []} initialProjectId={projectId} />}
       </section>
     </div>
   );

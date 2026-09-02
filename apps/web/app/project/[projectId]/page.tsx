@@ -2,9 +2,13 @@ import Link from 'next/link';
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarRange,
+  Camera,
   CheckCircle2,
   ClipboardCheck,
+  ClipboardList,
   FileStack,
+  FilePlus2,
   Gauge,
   HardHat,
   RadioTower,
@@ -153,6 +157,42 @@ export default async function ProjectOverviewPage({
           <Link href={`/project/${projectId}/controls`} className={styles.actionCard}>
             <strong>Plan &amp; control</strong>
             <span>WBS, CBS, quantities, cost, changes and closeout</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/projects/schedule?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
+            <CalendarRange size={16} aria-hidden />
+            <strong>Plan &amp; schedule</strong>
+            <span>Create the project Gantt, add activities and set the governed baseline.</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/site/instructions?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
+            <ClipboardList size={16} aria-hidden />
+            <strong>Work instruction</strong>
+            <span>Issue and track a formal site instruction in the owning Site workflow.</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/site/daily-reports?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
+            <Camera size={16} aria-hidden />
+            <strong>Daily report &amp; photos</strong>
+            <span>Record work, manpower, equipment and progress-photo evidence.</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/engineering/drawings?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
+            <RadioTower size={16} aria-hidden />
+            <strong>Engineering evidence</strong>
+            <span>Open drawings and controlled engineering information for this project.</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/quality/ncrs?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
+            <ClipboardCheck size={16} aria-hidden />
+            <strong>Quality action</strong>
+            <span>Raise and follow an NCR through the canonical Quality workflow.</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/project/${projectId}/documents${scopeQuery}`} className={styles.actionCard}>
+            <FilePlus2 size={16} aria-hidden />
+            <strong>Upload evidence</strong>
+            <span>Open the project document context and use the controlled DMS path.</span>
             <ArrowRight size={15} aria-hidden />
           </Link>
           <Link href={`/project/${projectId}/site${scopeQuery}`} className={styles.actionCard}>

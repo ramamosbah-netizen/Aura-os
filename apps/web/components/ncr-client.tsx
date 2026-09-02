@@ -26,9 +26,9 @@ export interface Ncr {
 const statusColor: Record<string, string> = { raised: 'var(--bad)', action_planned: 'var(--warn)', corrected: 'var(--warn)', closed: 'var(--good)' };
 const sevColor: Record<string, string> = { minor: 'var(--muted)', major: 'var(--bad)' };
 
-export default function NcrClient({ initial }: { initial: Ncr[] }) {
+export default function NcrClient({ initial, initialProjectId = '' }: { initial: Ncr[]; initialProjectId?: string }) {
   const [rows, setRows] = useState(initial);
-  const [f, setF] = useState({ projectId: '', ncrNumber: '', description: '', severity: 'minor', assignedTo: '', rootCause: '', proposedCorrection: '' });
+  const [f, setF] = useState({ projectId: initialProjectId, ncrNumber: '', description: '', severity: 'minor', assignedTo: '', rootCause: '', proposedCorrection: '' });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
   const [error, setError] = useState('');

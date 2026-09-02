@@ -9,8 +9,8 @@ const WORKSPACES = {
   'business-command-center': '/command-center',
   communication: '/my-work/communication',
   sales: '/crm/overview',
-  'pre-award': '/tendering',
   'project-delivery': '/projects/dashboard',
+  'delivery-operations': '/operations/overview',
   finance: '/finance',
   'administration-governance': '/admin',
 } as const;

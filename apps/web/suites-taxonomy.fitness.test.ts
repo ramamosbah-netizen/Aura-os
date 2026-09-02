@@ -31,6 +31,7 @@ describe('AURA suite taxonomy', () => {
     expect(activeSuite('/tendering/tenders/123/pricing')?.id).toBe('sales');
     expect(activeSuite('/crm/opportunities/abc')?.id).toBe('sales');
     expect(activeSuite('/project/xyz/quality')?.id).toBe('project-delivery');
+    expect(activeSuite('/quality/control')?.id).toBe('delivery-operations');
   });
 
   it('routes variations to Sales & Commercial, not Project Delivery', () => {
@@ -65,7 +66,7 @@ describe('AURA suite taxonomy', () => {
     expect(sections.map((s) => s.section)).toEqual(['work', 'control', 'business', 'system']);
     expect(sections.find((s) => s.section === 'control')?.suites.map((s) => s.id)).toEqual(['business-command-center']);
     expect(sections.find((s) => s.section === 'business')?.suites.map((s) => s.id)).toEqual([
-      'sales', 'project-delivery', 'supply-chain', 'finance', 'assets-service', 'people', 'intelligence',
+      'sales', 'project-delivery', 'delivery-operations', 'supply-chain', 'finance', 'assets-service', 'people', 'intelligence',
     ]);
     expect(sections.find((s) => s.section === 'business')?.suites.some((s) => s.id === 'pre-award')).toBe(false);
     expect(sections.find((s) => s.section === 'business')?.suites.some((s) => s.id === 'commercial')).toBe(false);

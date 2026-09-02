@@ -9,15 +9,15 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(page.getByRole('heading', { name: /Where would you like to work/ })).toBeVisible();
   // The launcher is derived from AURA_SUITES; assert a representative set of suite cards (Sales
   // included) and their Home destinations.
-  for (const section of ['My Work', 'Communication', 'Business Command Center', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
+  for (const section of ['My Work', 'Communication', 'Business Command Center', 'Sales & Commercial', 'Projects', 'Delivery Operations', 'Admin Center']) {
     await expect(page.getByText(section, { exact: true })).toBeVisible();
   }
   const workspaceDestinations = {
     'my-work': '/my-work',
     'business-command-center': '/command-center',
     sales: '/crm/overview',
-    'pre-award': '/tendering',
     'project-delivery': '/projects/dashboard',
+    'delivery-operations': '/operations/overview',
     finance: '/finance',
     'administration-governance': '/admin',
   } as const;
@@ -39,7 +39,7 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   // pre-IA topbar. d80d40ad rewrote the first half of this spec for the new taxonomy and left this
   // half describing the old one, which is why it has failed on every run since 2026-08-22.
   // One label from each of the four sections, so a dropped section fails here.
-  for (const label of ['My Work', 'Communication', 'Business Command Center', 'Sales', 'Pre-Award', 'Project Delivery', 'Admin Center']) {
+  for (const label of ['My Work', 'Communication', 'Business Command Center', 'Sales & Commercial', 'Projects', 'Delivery Operations', 'Admin Center']) {
     await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
   for (const retired of ['Inbox', 'Search', 'AI Workspace', 'Notifications', 'Saved Views']) {
@@ -80,18 +80,18 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
 
   await page.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suites-page')).toBeVisible();
-  // Thirteen: every suite in lib/suites.ts, because this actor is an admin and only `adminOnly` and
+  // Twelve: every visible suite in lib/suites.ts, because this actor is an admin and only `adminOnly` and
   // ungranted `gate`s remove one. Deliberately a literal — the count is the point, so adding or
   // dropping a suite has to be acknowledged here rather than absorbed by deriving it from the source.
-  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(13);
-  // Scoped to the launcher: the sidebar carries a 'Project Delivery' suite link too, so an
+  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
+  // Scoped to the launcher: the sidebar carries a 'Projects' suite link too, so an
   // unscoped name match is ambiguous and fails on strict mode rather than on the behaviour.
-  const delivery = page.getByTestId('suite-launcher').getByRole('link', { name: /Project Delivery/ });
+  const delivery = page.getByTestId('suite-launcher').getByRole('link', { name: /^Projects$/ });
   await expect(delivery).not.toHaveAttribute('target', '_blank');
   await delivery.click();
   await expect(page).toHaveURL('/suites/project-delivery');
   await expect(page.getByTestId('suite-home')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Project Delivery' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByText('Capability truth')).toBeVisible();
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('link', { name: 'Open suite' })).toHaveAttribute('href', '/projects/dashboard');
@@ -124,8 +124,8 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await page.goto('/projects/projects', { waitUntil: 'domcontentloaded' });
   // The sidebar is present on a deep page and still navigates by suite. It has no 'Suites' entry
   // any more — the taxonomy replaced that hub link — so reaching the launcher is a URL, not a click.
-  await expect(navigation.getByRole('link', { name: 'Sales', exact: true })).toBeVisible();
-  await navigation.getByRole('link', { name: 'Sales', exact: true }).click();
+  await expect(navigation.getByRole('link', { name: 'Sales & Commercial', exact: true })).toBeVisible();
+  await navigation.getByRole('link', { name: 'Sales & Commercial', exact: true }).click();
   await expect(page).toHaveURL('/crm/overview');
   await page.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suite-launcher')).toBeVisible();

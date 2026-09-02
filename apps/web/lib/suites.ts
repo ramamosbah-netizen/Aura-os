@@ -89,11 +89,18 @@ export const AURA_SUITES: AuraSuite[] = [
     owns: () => false,
   },
   {
-    id: 'project-delivery', name: 'Project Delivery', shortName: 'Delivery', glyph: '▥', section: 'business',
-    description: 'Execute and hand over won projects: Project 360, Engineering, Site, Quality, HSE, Commissioning, Handover.',
+    id: 'project-delivery', name: 'Projects', shortName: 'Projects', glyph: '▥', section: 'business',
+    description: 'Manage the project: portfolio, planning, coordination, controls, decisions and closeout through Project 360.',
     entryHref: '/projects/dashboard', gate: 'suite.dealChain',
-    capabilities: [{ label: 'Portfolio & Project 360', status: 'IMPLEMENTED' }, { label: 'Engineering & Site', status: 'IMPLEMENTED' }, { label: 'Quality & HSE', status: 'IMPLEMENTED' }, { label: 'Commissioning & Handover', status: 'IMPLEMENTED' }],
-    owns: (href) => starts('/projects', '/project', '/engineering', '/site', '/quality', '/hse', '/commissioning', '/handover', '/compliance', '/doccontrol')(href) && !starts('/projects/variations')(href),
+    capabilities: [{ label: 'Portfolio & Project 360', status: 'IMPLEMENTED' }, { label: 'Planning & Schedule', status: 'IMPLEMENTED' }, { label: 'Project controls & changes', status: 'IMPLEMENTED' }, { label: 'Approvals & closeout', status: 'IMPLEMENTED' }],
+    owns: (href) => starts('/projects', '/project')(href) && !starts('/projects/variations')(href),
+  },
+  {
+    id: 'delivery-operations', name: 'Delivery Operations', shortName: 'Delivery Ops', glyph: '⚙', section: 'business',
+    description: 'Run discipline work across projects: Engineering, Site, Quality, HSE, Commissioning and Handover.',
+    entryHref: '/operations/overview', gate: 'suite.dealChain',
+    capabilities: [{ label: 'Cross-project delivery overview', status: 'IMPLEMENTED' }, { label: 'Engineering workspace', status: 'IMPLEMENTED' }, { label: 'Site operations', status: 'IMPLEMENTED' }, { label: 'Quality, HSE, commissioning & handover', status: 'IMPLEMENTED' }],
+    owns: starts('/operations', '/engineering', '/site', '/quality', '/hse', '/commissioning', '/handover', '/compliance', '/doccontrol'),
   },
   {
     id: 'commercial', name: 'Commercial', shortName: 'Commercial', glyph: '§', section: 'business',

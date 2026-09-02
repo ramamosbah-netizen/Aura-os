@@ -166,6 +166,33 @@ The canonical runtime was rebuilt from `main` and browser-checked on `http://loc
 Project 360 showed the contextual actions above, while the primary launcher continued to omit the
 hidden legacy Pre-Award suite.
 
+## Full Projects + Delivery Operations IA application (2026-09-03)
+
+The approved suite boundary is now represented in the primary navigation:
+
+```text
+Projects
+  Portfolio · Projects · Planning & Schedule · Changes · Approvals & Actions · Closeout
+
+Delivery Operations
+  Overview · Engineering · Site · Quality · HSE · Testing & Commissioning · Handover
+```
+
+`Projects` owns the project-centric management experience and Project 360. `Delivery
+Operations` owns cross-project discipline execution. Specialist records remain linked to their
+canonical routes and are not copied into Project 360 as duplicate writers.
+
+`/operations/overview` is now the Delivery Operations command center. It reads live project,
+engineering, site, quality, HSE and commissioning endpoints and presents cross-project
+attention, discipline workspaces and the plan-to-field readiness flow. Unavailable sources are
+shown as `Unavailable`; no readiness table or ProjectNotes authority was introduced. Project
+360 remains the project-specific context and deep-links into these owning workspaces.
+
+Verification: web typecheck PASS; focused navigation/Project 360 suites PASS (17 tests); web
+production build PASS; authenticated browser snapshot confirmed the project-centric Project 360
+rail and Delivery Operations workspace. No Sales, PD-5, C4/C5/C6 or Procurement authority was
+changed.
+
 ## Project-centric navigation correction (2026-09-02)
 
 The Project 360 rail now leads with project questions rather than a second suite menu:

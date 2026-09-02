@@ -44,8 +44,12 @@ function statusStyle(status: string): CSSProperties {
   return { ...base, ...(map[status] ?? map.draft) };
 }
 
-export default async function DrawingRegisterPage() {
-  const drawings = (await getJson<Drawing[]>('/api/engineering/drawings')) ?? [];
+export default async function DrawingRegisterPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  const [{ projectId }, data] = await Promise.all([
+    searchParams,
+    getJson<Drawing[]>('/api/engineering/drawings'),
+  ]);
+  const drawings = projectId ? (data ?? []).filter((drawing) => drawing.projectId === projectId) : (data ?? []);
   // Register view: the live drawings first, superseded revisions sink to the bottom.
   const rank = (s: string): number => (s === 'superseded' ? 1 : s === 'closed' ? 0.5 : 0);
   const rows = [...drawings].sort((a, b) => rank(a.status) - rank(b.status) || a.code.localeCompare(b.code));

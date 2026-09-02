@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Bot,
+  CalendarRange,
   ClipboardCheck,
   FileStack,
   Gauge,
@@ -38,19 +39,15 @@ const AREA_ICONS: Record<string, LucideIcon> = {
   documents: FileStack,
 };
 
-const OFFICE_NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = [
-  { slug: '', label: 'Command center', icon: LayoutDashboard },
-  { slug: 'controls', label: 'Project controls', icon: Gauge },
-];
-
-const DELIVERY_NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = PROJECT_AREAS.map((area) => ({
+const DELIVERY_NAV: Array<{ key: string; slug: string; label: string; icon: LucideIcon }> = PROJECT_AREAS.map((area) => ({
     slug: area.slug,
+    key: area.slug,
     label: area.label,
     icon: AREA_ICONS[area.slug] ?? Gauge,
   }));
 
-const PEOPLE_NAV: Array<{ slug: string; label: string; icon: LucideIcon }> = [
-  { slug: 'team', label: 'Project team', icon: Users },
+const PEOPLE_NAV: Array<{ key: string; slug: string; label: string; icon: LucideIcon }> = [
+  { slug: 'team', key: 'team', label: 'Project team', icon: Users },
 ];
 
 export default function ProjectShell({ project, children }: { project: ProjectHead; children: ReactNode }) {
@@ -59,7 +56,15 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   const { disciplineId, setDiscipline } = useProjectContext();
   const base = `/project/${project.id}`;
   const query = searchParams.toString();
-  const scoped = (href: string): string => (query ? `${href}?${query}` : href);
+  const scoped = (href: string): string => (query && !href.includes('?') ? `${href}?${query}` : href);
+  const officeNav: NavItem[] = [
+    { key: 'overview', label: 'Overview', icon: LayoutDashboard, href: base, active: pathname === base },
+    { key: 'schedule', label: 'Plan & schedule', icon: CalendarRange, href: `/projects/schedule?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/projects/schedule' },
+    { key: 'progress', label: 'Progress & execution', icon: HardHat, href: `${base}/site`, active: pathname.startsWith(`${base}/site`) },
+    { key: 'controls', label: 'Commercial & cost', icon: Gauge, href: `${base}/controls`, active: pathname.startsWith(`${base}/controls`) },
+    { key: 'evidence', label: 'Evidence & documents', icon: FileStack, href: `${base}/documents`, active: pathname.startsWith(`${base}/documents`) },
+    { key: 'team', label: 'Team & ownership', icon: Users, href: `${base}/team`, active: pathname.startsWith(`${base}/team`) },
+  ];
   const statusClass =
     project.status === 'active' ? 'badge badge-good'
       : project.status === 'completed' ? 'badge badge-accent'
@@ -104,8 +109,8 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
         </label>
 
         <nav className={styles.navigation} aria-label="Project delivery areas">
-          <NavGroup label="Project office" items={OFFICE_NAV} pathname={pathname} base={base} scoped={scoped} />
-          <NavGroup label="Delivery context" items={DELIVERY_NAV} pathname={pathname} base={base} scoped={scoped} />
+          <NavGroup label="Project office" items={officeNav} pathname={pathname} base={base} scoped={scoped} />
+          <NavGroup label="Delivery records" items={DELIVERY_NAV} pathname={pathname} base={base} scoped={scoped} />
           <NavGroup label="People" items={PEOPLE_NAV} pathname={pathname} base={base} scoped={scoped} />
         </nav>
 
@@ -119,6 +124,15 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   );
 }
 
+interface NavItem {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  href?: string;
+  active?: boolean;
+  slug?: string;
+}
+
 function NavGroup({
   label,
   items,
@@ -127,7 +141,7 @@ function NavGroup({
   scoped,
 }: {
   label: string;
-  items: Array<{ slug: string; label: string; icon: LucideIcon }>;
+  items: NavItem[];
   pathname: string;
   base: string;
   scoped: (href: string) => string;
@@ -136,14 +150,14 @@ function NavGroup({
     <div className={styles.navGroup}>
       <span className={styles.navGroupLabel}>{label}</span>
       {items.map((item) => {
-        const href = item.slug ? `${base}/${item.slug}` : base;
-        const active = item.slug
+        const href = item.href ?? (item.slug ? `${base}/${item.slug}` : base);
+        const active = item.active ?? (item.slug
           ? pathname === href || pathname.startsWith(`${href}/`)
-          : pathname === base;
+          : pathname === base);
         const Icon = item.icon;
         return (
           <Link
-            key={item.slug || 'overview'}
+            key={item.key}
             href={scoped(href)}
             className={active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem}
             aria-current={active ? 'page' : undefined}

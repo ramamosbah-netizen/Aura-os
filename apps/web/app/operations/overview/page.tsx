@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, ClipboardCheck, FileCheck2, HardHat, PencilRuler, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, ClipboardCheck, FileCheck2, HardHat, PencilRuler, Radio, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
 import { getJson } from '@/lib/api';
 import styles from './delivery-operations-overview.module.css';
 
@@ -40,6 +40,18 @@ export default async function DeliveryOperationsOverviewPage() {
   const activePermits = countOpen(permits, ['closed', 'expired']);
   const commissioningOpen = countOpen(commissioning, ['commissioned', 'failed']);
 
+  const operationalSources = [
+    { label: 'Projects', rows: projects },
+    { label: 'Engineering', rows: drawings },
+    { label: 'Site reports', rows: reports },
+    { label: 'Instructions', rows: instructions },
+    { label: 'Quality', rows: ncrs },
+    { label: 'HSE permits', rows: permits },
+    { label: 'Commissioning', rows: commissioning },
+  ];
+  const connectedSources = operationalSources.filter((source) => source.rows !== null).length;
+  const allSourcesConnected = connectedSources === operationalSources.length;
+
   const attention = [
     openRfis && openRfis > 0 ? { label: 'RFIs awaiting response', detail: 'Engineering review queue', value: openRfis, href: '/engineering' } : null,
     openNcrs && openNcrs > 0 ? { label: 'NCRs requiring action', detail: 'Quality corrective-action queue', value: openNcrs, href: '/quality/ncrs' } : null,
@@ -69,6 +81,25 @@ export default async function DeliveryOperationsOverviewPage() {
           <Link href="/projects/projects" className={styles.primary}>Open project register <ArrowRight size={14} aria-hidden /></Link>
         </div>
       </header>
+
+      <section className={styles.pulse} aria-labelledby="operations-pulse-heading">
+        <div className={styles.pulseLead}>
+          <div className={styles.pulseIcon}><Activity size={20} aria-hidden /></div>
+          <div>
+            <div className={styles.kicker}>Live operating signal</div>
+            <h2 id="operations-pulse-heading">{allSourcesConnected ? 'All operating feeds are connected' : 'Some operating feeds need attention'}</h2>
+            <p>This is the cross-project control room. It composes live signals from each discipline while the source workspaces remain authoritative.</p>
+          </div>
+        </div>
+        <div className={styles.pulseRail}>
+          <div className={styles.pulseStat}><span>Source coverage</span><strong>{connectedSources}/{operationalSources.length}</strong><small>{allSourcesConnected ? 'connected' : 'available now'}</small></div>
+          <div className={styles.pulseStat}><span>Operating model</span><strong>Live</strong><small>cross-project read</small></div>
+          <Link href="/my-work" className={styles.pulseLink}>Open My Work <ArrowUpRight size={14} aria-hidden /></Link>
+        </div>
+        <div className={styles.sourceList} aria-label="Operations source health">
+          {operationalSources.map((source) => <span key={source.label} className={source.rows === null ? styles.sourceUnavailable : styles.sourceConnected}><Radio size={11} aria-hidden />{source.label}<b>{source.rows === null ? 'Unavailable' : 'Connected'}</b></span>)}
+        </div>
+      </section>
 
       <section className={styles.metrics} aria-label="Delivery operations summary">
         <Metric label="Active projects" value={displayCount(activeProjects?.length ?? null)} sub="across delivery" />

@@ -211,9 +211,34 @@ under a clearly labelled `Delivery records` group. They are contextual links to 
 Delivery Operations records, not duplicate Project-owned writers. This preserves the gate's
 ownership rule while removing the previous ERP-inside-Project-360 impression.
 
+## Delivery Operations workspace completion (2026-09-03)
+
+The specialist workspaces now share one Delivery Operations navigation and expose their
+canonical operational controls rather than acting as link-only placeholders:
+
+```text
+Overview → Pre-execution → Engineering → Site → Quality → HSE
+         → Testing & Commissioning → Handover → Reports
+```
+
+Engineering exposes drawings, RFIs, submittals and technical actions; Site includes Work
+Instructions alongside daily reports, delays, material consumption, labour and progress;
+Quality, HSE, Testing & Commissioning and Handover retain their governed forms and actions.
+Handover additionally shows an evidence-gate readiness projection derived from the canonical
+package checklist. No Delivery Operations record writer or readiness table was added.
+Unestablished source evidence remains `UNKNOWN`/`Not established` rather than a fabricated zero.
+
+Verification: authenticated local browser navigation confirmed all nine workspace routes,
+Site Work Instructions (including Issue SI and empty state), and Handover readiness gates.
+Web typecheck, production build, root typecheck, migration policy, Delivery Operations domain
+suites (Site 35, Engineering 48, Quality 29, HSE 34, Commissioning 23) and web regression
+(176 tests) pass. The full API suite remains green except the pre-existing error-taxonomy
+fitness failure; no Delivery Operations failure was introduced. Changes are recorded in
+`c3d28f48` on `main`.
+
 ## Gate disposition
 
-The bounded Project 360 IA correction is implemented and verified at source, typecheck, build
-and focused-test level. Browser proof remains **NOT PROVEN** until the disposable API rate limit
-window is clear and the same targeted smoke can create its isolated project fixture. This does
-not authorize Procurement or any new Project/Delivery domain writer.
+The bounded Project 360 IA correction and Delivery Operations workspace completion are
+implemented and verified at source, typecheck, build, focused-test and authenticated-browser
+level. This does not authorize Procurement or any new Project/Delivery domain writer; material
+readiness remains an evidence projection until the Supply Chain authority is completed.

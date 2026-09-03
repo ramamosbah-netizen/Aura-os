@@ -242,3 +242,23 @@ The bounded Project 360 IA correction and Delivery Operations workspace completi
 implemented and verified at source, typecheck, build, focused-test and authenticated-browser
 level. This does not authorize Procurement or any new Project/Delivery domain writer; material
 readiness remains an evidence projection until the Supply Chain authority is completed.
+
+## Delivery Operations command-center simplification (2026-09-03)
+
+The Overview was intentionally reduced to a daily execution command center rather than a
+second reporting suite. It now answers three questions: what is active, what is blocked, and
+what needs attention. The surface contains four portfolio metrics (`Active work`, `Blocked`,
+`Needs action`, `Handover`), Project/Discipline/Search filters, a single grouped `Delivery
+Action` menu, and three concise work sections: `Needs your attention`, `Active execution`, and
+`Upcoming / pre-execution`.
+
+Detailed drawings, RFIs, inspections, NCRs, permits, reports, commissioning records and
+handover evidence remain in their canonical specialist workspaces. The Overview only links to
+those authorities. Readiness is deliberately summarized as `READY`, `BLOCKED` or `UNKNOWN`;
+the detailed evidence and reasons remain in Pre-execution. No placeholder progress or
+fabricated financial/readiness values are introduced.
+
+Verification: authenticated local browser snapshot confirmed the four-metric layout, grouped
+action menu and honest empty states; query filters preserve the Overview route and no-match
+states are readable. Web typecheck and production build pass. Procurement and protected
+Projects/Delivery authorities were not changed.

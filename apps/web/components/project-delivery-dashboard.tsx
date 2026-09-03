@@ -16,8 +16,6 @@ import SuiteDashboardShell, {
 } from './suite-dashboard-shell';
 import ContinueWorking from './continue-working';
 import type { DeliveryVariation } from './project-change-control-band';
-import { ProjectsSuiteNav } from './projects-suite-chrome';
-import projectsSuiteStyles from './projects-suite-chrome.module.css';
 
 /** Live earned-value health per project, from `/api/projects/projects/portfolio`. */
 export interface DeliveryEvm {
@@ -160,7 +158,7 @@ export default function ProjectDeliveryDashboard({
       }}
       askAura={{ tabType: 'Projects' }}
       metrics={metrics}
-      band={<><nav className={projectsSuiteStyles.nav} aria-label="Projects suite navigation"><ProjectsSuiteNav active="overview" /></nav><ProjectJourney nodes={journey} /></>}
+      band={<ProjectJourney nodes={journey} />}
       continueWorking={<ContinueWorking match={['/project']} />}
       attention={{
         kicker: 'Earned-value engine · deepest gap first',

@@ -13,6 +13,7 @@ import {
   HardHat,
   RadioTower,
   ShieldCheck,
+  ShoppingCart,
   Users,
   Wrench,
   type LucideIcon,
@@ -219,6 +220,12 @@ export default async function ProjectOverviewPage({
                   ? 'Create and manage packages for this project.'
                   : `${openSubcontracts ?? scopedSubcontracts.length} open package${(openSubcontracts ?? scopedSubcontracts.length) === 1 ? '' : 's'}.`}
             </span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/procurement/purchase-requests?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
+            <ShoppingCart size={16} aria-hidden />
+            <strong>Procurement &amp; materials</strong>
+            <span>Open project-scoped purchase requests and committed purchase orders in Supply Chain.</span>
             <ArrowRight size={15} aria-hidden />
           </Link>
           <Link href={`/project/${projectId}/documents${scopeQuery}`} className={styles.actionCard}>

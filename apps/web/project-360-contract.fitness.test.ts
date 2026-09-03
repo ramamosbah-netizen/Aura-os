@@ -48,7 +48,9 @@ describe('Project 360 canonical delivery contract', () => {
       '/engineering/drawings?projectId=',
       '/quality/ncrs?projectId=',
       '/subcontracts/subcontracts?projectId=',
+      '/procurement/purchase-requests?projectId=',
       'Subcontract packages',
+      'Procurement &amp; materials',
       'Upload evidence',
     ]) {
       expect(overview).toContain(marker);
@@ -60,8 +62,20 @@ describe('Project 360 canonical delivery contract', () => {
     expect(schedule).toContain('selectedProjectId={projectId}');
     expect(schedule).toContain('scopedSchedules');
     const shell = readFileSync(SHELL, 'utf8');
-    for (const label of ['Overview', 'Plan & schedule', 'Progress & execution', 'Commercial & cost', 'Subcontracts', 'Evidence & documents', 'Team & ownership', 'Delivery records']) {
+    for (const label of ['Overview', 'Plan & schedule', 'Progress & execution', 'Commercial & cost', 'Subcontracts', 'Procurement', 'Evidence & documents', 'Team & ownership', 'Delivery records']) {
       expect(shell).toContain(label);
     }
+  });
+
+  it('keeps Supply Chain canonical while composing project context', () => {
+    const prs = readFileSync(resolve(__dirname, 'app/procurement/purchase-requests/page.tsx'), 'utf8');
+    const pos = readFileSync(resolve(__dirname, 'app/procurement/purchase-orders/page.tsx'), 'utf8');
+    expect(prs).toContain('projectId?: string');
+    expect(prs).toContain('Showing purchase requests linked to this project.');
+    expect(prs).toContain('initialProjectId={project ? scopedProjectId : \'\'}');
+    expect(pos).toContain('Showing purchase orders linked to this project.');
+    expect(pos).toContain('initialProjectId={project ? scopedProjectId : \'\'}');
+    expect(readFileSync(resolve(__dirname, 'components/pr-list.tsx'), 'utf8')).toContain('initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}');
+    expect(readFileSync(resolve(__dirname, 'components/po-create.tsx'), 'utf8')).toContain('initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}');
   });
 });

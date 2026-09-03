@@ -33,10 +33,12 @@ export default function PrList({
   initialPrs,
   projects,
   focusedId = '',
+  initialProjectId = '',
 }: {
   initialPrs: PurchaseRequest[];
   projects: Project[];
   focusedId?: string;
+  initialProjectId?: string;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export default function PrList({
           entity="Purchase Request"
           subtitle="A procurement request. Approving it drafts the purchase order automatically."
           endpoint="/api/procurement/purchase-requests"
+          initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}
           fields={[
             { name: 'title', label: 'Request title', kind: 'text', required: true, placeholder: 'e.g. Concrete supplier for Site B', span: 2 },
             { name: 'reference', label: 'Reference / memo', kind: 'text', placeholder: 'e.g. PR-2026-98' },

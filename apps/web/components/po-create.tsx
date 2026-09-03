@@ -29,12 +29,13 @@ export function PoEdit({ po }: { po: { id: string; title: string; reference?: st
 
 /** "+ New Purchase Order" — commits spend, optionally against a delivery project
  *  (committed cost lands on the project ledger via the spine). */
-export default function PoCreate({ projects }: { projects: ProjectLite[] }) {
+export default function PoCreate({ projects, initialProjectId = '' }: { projects: ProjectLite[]; initialProjectId?: string }) {
   return (
     <CreateDrawer
       entity="Purchase Order"
       subtitle="Committed procurement spend. Linking a project posts the committed cost to its ledger."
       endpoint="/api/procurement/purchase-orders"
+      initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}
       fields={[
         { name: 'title', label: 'PO title', kind: 'text', required: true, placeholder: 'e.g. CCTV cameras & NVRs — main supply', span: 2 },
         { name: 'reference', label: 'Reference', kind: 'text', placeholder: 'e.g. PO-2026-001' },

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { fetchJson, getJson } from '@/lib/api';
 import DataStateNotice from '@/components/ui/data-state';
 import ProjectCreate, { ProjectEdit } from '../../../components/project-create';
+import ProjectsSuiteChrome from '../../../components/projects-suite-chrome';
 import styles from './projects-register.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -80,6 +81,7 @@ export default async function ProjectsPage({
   const registerCountLabel = projectsResult.ok ? `${visibleProjects.length} shown` : 'Unavailable';
 
   return (
+    <ProjectsSuiteChrome active="register" title="Projects" description="The governed delivery register — choose a project to open its complete Project 360 workspace.">
     <div className={styles.page}>
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
@@ -164,5 +166,6 @@ export default async function ProjectsPage({
         <Link href="/operations/overview">Open Delivery Operations <ChevronRight size={14} aria-hidden /></Link>
       </aside>
     </div>
+    </ProjectsSuiteChrome>
   );
 }

@@ -23,6 +23,8 @@ export interface ProjectArea {
   columns: AreaColumn[];
   /** When set, each row links to `${rowHref}/${id}` (an existing 360). Omitted where no per-record page exists. */
   rowHref?: string;
+  description: string;
+  actions: Array<{ label: string; href: string; description: string }>;
 }
 
 type ProjectAreaRow = Record<string, unknown>;
@@ -60,6 +62,12 @@ export const PROJECT_AREAS: ProjectArea[] = [
     entity: 'drawing',
     statusKey: 'status',
     rowHref: '/engineering/drawings',
+    description: 'Controlled technical information, approvals and engineering decisions for this project.',
+    actions: [
+      { label: 'Drawings', href: '/engineering/drawings', description: 'Review controlled drawings and revisions' },
+      { label: 'RFIs', href: '/engineering/rfis', description: 'Track technical questions and responses' },
+      { label: 'Submittals', href: '/engineering/submittals', description: 'Manage technical submissions' },
+    ],
     columns: [
       { key: 'code', label: 'Code', kind: 'code' },
       { key: 'title', label: 'Title' },
@@ -76,6 +84,12 @@ export const PROJECT_AREAS: ProjectArea[] = [
     entity: 'daily report',
     statusKey: 'status',
     rowHref: '/site/execution',
+    description: 'Field work, daily reporting and installed progress in the project context.',
+    actions: [
+      { label: 'Work instructions', href: '/site/instructions', description: 'Issue and track site instructions' },
+      { label: 'Daily reports', href: '/site/daily-reports', description: 'Record work, manpower and evidence' },
+      { label: 'Progress', href: '/site/execution', description: 'Review active work and quantities' },
+    ],
     columns: [
       { key: 'date', label: 'Date', kind: 'date' },
       { key: 'workDescription', label: 'Work' },
@@ -91,6 +105,12 @@ export const PROJECT_AREAS: ProjectArea[] = [
     entity: 'NCR',
     statusKey: 'status',
     rowHref: '/quality/ncrs',
+    description: 'Inspections, NCRs and acceptance records owned by the canonical Quality authority.',
+    actions: [
+      { label: 'Inspections', href: '/quality/inspection-requests', description: 'Review inspection requests' },
+      { label: 'NCRs', href: '/quality/ncrs', description: 'Resolve non-conformance records' },
+      { label: 'Snags & ITP', href: '/quality/snags', description: 'Track punch items and test points' },
+    ],
     columns: [
       { key: 'ncrNumber', label: 'NCR', kind: 'code' },
       { key: 'description', label: 'Description' },
@@ -105,6 +125,12 @@ export const PROJECT_AREAS: ProjectArea[] = [
     endpoint: '/api/hse/ptws',
     entity: 'permit',
     statusKey: 'status',
+    description: 'Permits, observations and safe-work controls for the project site.',
+    actions: [
+      { label: 'Permits', href: '/hse/permits', description: 'Review active permits to work' },
+      { label: 'Risk assessments', href: '/hse/risk-assessments', description: 'Review approved risk controls' },
+      { label: 'Toolbox talks', href: '/hse/toolbox-talks', description: 'Track site safety briefings' },
+    ],
     columns: [
       { key: 'permitType', label: 'Type' },
       { key: 'validFrom', label: 'Valid from', kind: 'date' },
@@ -120,6 +146,11 @@ export const PROJECT_AREAS: ProjectArea[] = [
     entity: 'system',
     statusKey: 'status',
     rowHref: '/commissioning',
+    description: 'System testing, failed/retest actions and commissioning readiness.',
+    actions: [
+      { label: 'Systems & tests', href: '/commissioning', description: 'Open commissioning records' },
+      { label: 'Handover', href: '/handover', description: 'Review acceptance and closeout readiness' },
+    ],
     columns: [
       { key: 'code', label: 'Code', kind: 'code' },
       { key: 'system', label: 'System' },
@@ -133,6 +164,11 @@ export const PROJECT_AREAS: ProjectArea[] = [
     endpoint: '/api/doccontrol/register',
     entity: 'document',
     statusKey: 'status',
+    description: 'Controlled project evidence with revision and document-control context.',
+    actions: [
+      { label: 'Document register', href: '/doccontrol/register', description: 'Open the controlled register' },
+      { label: 'Documents', href: '/documents', description: 'View and download project evidence' },
+    ],
     columns: [
       { key: 'documentNumber', label: 'Doc No', kind: 'code' },
       { key: 'title', label: 'Title' },

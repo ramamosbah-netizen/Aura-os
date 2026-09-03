@@ -2,6 +2,7 @@ import { getJson } from '@/lib/api';
 import AuraTabAnchor from '@/components/aura-tab-anchor';
 import ProjectApprovalsWorkspace from '@/components/project-approvals-workspace';
 import type { ApiDecisionItem, SharedDecisionDocument } from '@/lib/decision-assignments';
+import ProjectsSuiteChrome from '@/components/projects-suite-chrome';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,9 +25,11 @@ export default async function ProjectApprovalsPage() {
   ]);
 
   return (
+    <ProjectsSuiteChrome active="approvals" title="Approvals & actions" description="See project decisions that need attention, with the source record and next valid action always visible.">
     <main data-testid="project-approvals-page">
       <AuraTabAnchor href="/projects/approvals" title="Project approvals" type="Projects" />
       <ProjectApprovalsWorkspace decisions={decisions} sharedDocuments={sharedDocuments} notifications={notifications} />
     </main>
+    </ProjectsSuiteChrome>
   );
 }

@@ -2,6 +2,7 @@ import { CalendarRange, CheckCircle2, Clock3, Layers3, ListChecks } from 'lucide
 import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
+import ProjectsSuiteChrome from '../../../components/projects-suite-chrome';
 import styles from './projects-schedule.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const unavailable = schedules === null;
 
   return (
+    <ProjectsSuiteChrome active="schedule" title="Plan & schedule" description="Build the delivery plan, compare baseline to actual, and keep every project activity accountable.">
     <main className={styles.page}>
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
@@ -92,5 +94,6 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         )}
       </section>
     </main>
+    </ProjectsSuiteChrome>
   );
 }

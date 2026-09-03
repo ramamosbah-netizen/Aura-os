@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import VariationsClient from '../../../components/variations-client';
+import ProjectsSuiteChrome from '../../../components/projects-suite-chrome';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,8 @@ export default async function VariationsPage({ searchParams }: { searchParams: P
     : 'all';
 
   return (
-    <VariationsClient projects={projects ?? []} initialVariations={variations ?? []} initialFilter={initialFilter} />
+    <ProjectsSuiteChrome active="changes" title="Changes & variations" description="Control project change from first draft through review, approval and commercial readback.">
+      <VariationsClient projects={projects ?? []} initialVariations={variations ?? []} initialFilter={initialFilter} />
+    </ProjectsSuiteChrome>
   );
 }

@@ -1,0 +1,33 @@
+.page { max-width: 1180px; margin: 0 auto; }
+.hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 22px; }
+.eyebrow, .kicker { color: var(--accent); font-size: 9.5px; font-weight: 850; letter-spacing: .16em; }
+.eyebrow { margin-bottom: 8px; }
+.hero h1 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.045em; }
+.hero h1 span { font-size: .72em; }
+.hero p { max-width: 660px; margin: 8px 0 0; color: var(--muted); line-height: 1.55; }
+.heroActions { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-top: 22px; white-space: nowrap; }
+.contextBadge { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; font-weight: 800; }
+.contextValue { color: var(--text); font-size: 14px; font-weight: 750; }
+.metricGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.metric { display: flex; flex-direction: column; gap: 4px; min-height: 94px; padding: 15px 16px; border: 1px solid var(--border); border-radius: 13px; background: var(--panel); }
+.metric span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; font-weight: 800; }
+.metric strong { font-size: 26px; letter-spacing: -.03em; }
+.metric small { color: var(--muted); font-size: 11px; }
+.actionPanel { margin-bottom: 18px; padding: 17px 18px; border: 1px solid var(--border); border-radius: 15px; background: linear-gradient(125deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 60%); }
+.sectionHeading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 13px; }
+.sectionHeading h2 { margin: 5px 0 0; font-size: 20px; letter-spacing: -.03em; }
+.hint { color: var(--muted); font-size: 11px; text-align: right; }
+.actionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.actionCard { position: relative; display: flex; flex-direction: column; gap: 5px; min-height: 82px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); text-decoration: none; }
+.actionCard:hover { border-color: var(--accent); transform: translateY(-1px); }
+.actionCard strong { font-size: 13px; }
+.actionCard span { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.actionCard .arrow { margin-top: auto; color: var(--accent); font-size: 16px; }
+.scopeNote { margin: 0 0 14px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 12px; }
+@media (max-width: 700px) {
+  .hero { flex-direction: column; gap: 12px; }
+  .heroActions { align-items: flex-start; padding-top: 0; }
+  .metricGrid { grid-template-columns: 1fr; }
+  .sectionHeading { flex-direction: column; }
+  .hint { text-align: left; }
+}

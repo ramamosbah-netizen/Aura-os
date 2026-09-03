@@ -30,11 +30,16 @@
 .titleLine h2 { margin: 0; color: var(--text); font-size: 21px; letter-spacing: -.03em; }
 .countPill { display: inline-flex; align-items: center; min-height: 23px; padding: 0 8px; border: 1px solid var(--border); border-radius: 99px; color: var(--muted); background: var(--panel-2); font-size: 10px; font-weight: 750; }
 .registerDescription { max-width: 520px; margin: 8px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
-.filters { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.filters { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; flex-wrap: wrap; }
 .searchBox, .selectBox { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); background: var(--panel-2); }
 .searchBox { width: 218px; }
 .searchBox input, .selectBox select { width: 100%; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; font-size: 11.5px; }
-.selectBox select { min-width: 112px; cursor: pointer; }
+.selectBox { min-width: 148px; }
+.selectBox select { min-width: 116px; cursor: pointer; }
+.viewToggle { display:flex; align-items:center; gap:2px; padding:3px; border:1px solid var(--border); border-radius:9px; background:var(--panel-2); }
+.viewButton, .viewActive { display:grid; place-items:center; width:32px; height:30px; border-radius:6px; color:var(--muted); text-decoration:none; }
+.viewButton:hover { color:var(--text); background:var(--panel); }
+.viewActive { color:var(--text); background:color-mix(in srgb,var(--accent) 18%,var(--panel)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent); }
 .filterButton, .resetButton { min-height: 38px; padding: 0 12px; border: 1px solid transparent; border-radius: 9px; color: var(--accent-ink); background: var(--accent-grad); font-size: 11px; font-weight: 800; cursor: pointer; }
 .resetLink { color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: none; }
 .resetLink:hover { color: var(--accent); }
@@ -42,6 +47,13 @@
 .projectCard { position: relative; display: flex; min-height: 228px; flex-direction: column; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
 .projectCard:hover { border-color: color-mix(in srgb, var(--accent) 65%, var(--border)); transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0, 0, 0, .12); }
 .projectCardFeatured { border-color: color-mix(in srgb, var(--accent) 34%, var(--border)); background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 6%, var(--panel)), var(--panel) 57%); }
+.projectGridList { grid-template-columns: 1fr; }
+.projectCardList { min-height:0; display:grid; grid-template-columns:minmax(220px,1.35fr) minmax(170px,1fr) minmax(150px,.8fr) auto; align-items:center; gap:14px; padding:14px 16px; }
+.projectCardList .cardTopline { grid-column:1; grid-row:1; margin:0; }
+.projectCardList .projectTitle { grid-column:1; grid-row:2; }
+.projectCardList .projectOrigin { grid-column:2; grid-row:1 / span 2; margin:0; }
+.projectCardList .cardMetrics { grid-column:3; grid-row:1 / span 2; margin:0; padding:0; border:0; }
+.projectCardList .cardFooter { grid-column:4; grid-row:1 / span 2; margin:0; padding:0; border:0; align-self:center; flex-direction:column; align-items:flex-end; }
 .cardTopline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .status { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); font-size: 9px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
 .statusActive { color: var(--good); }.statusCompleted { color: #5b95e8; }.statusCancelled { color: var(--bad); }.statusPlanned { color: #d99a42; }
@@ -60,4 +72,4 @@
 .emptyState { display: grid; justify-items: center; padding: 58px 24px; text-align: center; }.emptyIcon { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 13px; border-radius: 14px; color: var(--accent); background: var(--accent-soft); }.emptyState h3 { margin: 0; color: var(--text); font-size: 17px; }.emptyState p { max-width: 380px; margin: 8px 0 17px; color: var(--muted); font-size: 12px; line-height: 1.55; }.resetButton { display: inline-flex; align-items: center; text-decoration: none; }
 .guidance { display: flex; align-items: center; gap: 13px; margin-top: 13px; padding: 14px 17px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--panel)); }.guidanceIcon { width: 31px; height: 31px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 9px; color: var(--accent); background: var(--accent-soft); }.guidance div:nth-child(2) { flex: 1; min-width: 0; }.guidance strong { color: var(--text); font-size: 12px; }.guidance p { margin: 3px 0 0; color: var(--muted); font-size: 10.5px; line-height: 1.4; }.guidance a { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; color: var(--accent); font-size: 10.5px; font-weight: 800; text-decoration: none; }
 @media (max-width: 980px) { .hero { align-items: flex-start; flex-direction: column; }.heroActions { width: 100%; }.signalGrid { grid-template-columns: repeat(2, 1fr); }.registerHeader { align-items: flex-start; flex-direction: column; }.filters { width: 100%; }.searchBox { flex: 1; width: auto; } }
-@media (max-width: 650px) { .page { padding: 24px 14px 70px; }.hero h1 { font-size: 42px; }.heroActions { flex-wrap: wrap; }.createAction { flex: 1; }.createAction :global(button) { width: 100%; justify-content: center; }.signalGrid { gap: 7px; padding-bottom: 20px; }.signalCard { min-height: 82px; padding: 12px; }.signalIcon { width: 32px; height: 32px; }.signalCard strong { font-size: 20px; }.signalCard span:last-child { font-size: 9px; }.registerHeader { padding: 18px 16px; }.filters { flex-wrap: wrap; }.searchBox { min-width: 100%; }.selectBox { flex: 1; }.projectGrid { grid-template-columns: 1fr; padding: 9px; }.projectCard { min-height: 214px; }.guidance { align-items: flex-start; flex-wrap: wrap; }.guidance a { margin-left: 44px; } }
+@media (max-width: 650px) { .page { padding: 24px 14px 70px; }.hero h1 { font-size: 42px; }.heroActions { flex-wrap: wrap; }.createAction { flex: 1; }.createAction :global(button) { width: 100%; justify-content: center; }.signalGrid { gap: 7px; padding-bottom: 20px; }.signalCard { min-height: 82px; padding: 12px; }.signalIcon { width: 32px; height: 32px; }.signalCard strong { font-size: 20px; }.signalCard span:last-child { font-size: 9px; }.registerHeader { padding: 18px 16px; }.filters { flex-wrap: wrap; }.searchBox { min-width: 100%; }.selectBox { flex: 1; }.projectGrid { grid-template-columns: 1fr; padding: 9px; }.projectCard { min-height: 214px; }.projectCardList { display:flex; flex-direction:column; align-items:stretch; gap:9px; }.projectCardList .cardFooter { align-items:flex-start; flex-direction:row; }.guidance { align-items: flex-start; flex-wrap: wrap; }.guidance a { margin-left: 44px; } }

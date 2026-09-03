@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronRight, CircleDot, Clock3, FolderKanban, Search, SlidersHorizontal, Sparkles, WalletCards } from 'lucide-react';
+import { CalendarDays, ChevronRight, CircleDot, Clock3, FolderKanban, LayoutGrid, List, Search, SlidersHorizontal, Sparkles, WalletCards } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchJson, getJson } from '@/lib/api';
@@ -52,11 +52,12 @@ function statusClass(status: string): string {
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ projectId?: string; q?: string; status?: string }>;
+  searchParams: Promise<{ projectId?: string; q?: string; status?: string; view?: string }>;
 }) {
-  const { projectId, q: rawQuery, status: rawStatus } = await searchParams;
+  const { projectId, q: rawQuery, status: rawStatus, view: rawView } = await searchParams;
   const query = (rawQuery ?? '').trim();
   const status = rawStatus ?? 'all';
+  const view = rawView === 'list' ? 'list' : 'cards';
 
   const [projectsResult, activeContracts] = await Promise.all([
     fetchJson<Project[]>('/api/projects/projects'),
@@ -79,6 +80,14 @@ export default async function ProjectsPage({
   const completedCount = projects.filter((project) => project.status === 'completed').length;
   const portfolioValue = projects.reduce((sum, project) => sum + (project.value || 0), 0);
   const registerCountLabel = projectsResult.ok ? `${visibleProjects.length} shown` : 'Unavailable';
+  const viewHref = (nextView: 'cards' | 'list'): string => {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (status !== 'all') params.set('status', status);
+    if (nextView === 'list') params.set('view', 'list');
+    const search = params.toString();
+    return `/projects/projects${search ? `?${search}` : ''}`;
+  };
 
   return (
     <ProjectsSuiteChrome active="register" title="Projects" description="The governed delivery register — choose a project to open its complete Project 360 workspace.">
@@ -133,6 +142,10 @@ export default async function ProjectsPage({
             <label className={styles.selectBox}><SlidersHorizontal size={14} aria-hidden /><span className="sr-only">Status</span><select name="status" defaultValue={status}><option value="all">All statuses</option><option value="active">Active</option><option value="planned">Planned</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
             <button type="submit" className={styles.filterButton}>Apply</button>
             {query || status !== 'all' ? <Link href="/projects/projects" className={styles.resetLink}>Reset</Link> : null}
+            <div className={styles.viewToggle} role="group" aria-label="Project display mode">
+              <Link href={viewHref('cards')} className={view === 'cards' ? styles.viewActive : styles.viewButton} aria-current={view === 'cards' ? 'page' : undefined}><LayoutGrid size={14} aria-hidden /><span className="sr-only">Cards</span></Link>
+              <Link href={viewHref('list')} className={view === 'list' ? styles.viewActive : styles.viewButton} aria-current={view === 'list' ? 'page' : undefined}><List size={14} aria-hidden /><span className="sr-only">List</span></Link>
+            </div>
           </form>
         </div>
 
@@ -143,9 +156,9 @@ export default async function ProjectsPage({
         ) : visibleProjects.length === 0 ? (
           <div className={styles.emptyState}><span className={styles.emptyIcon}><Search size={20} aria-hidden /></span><h3>No matching projects</h3><p>Try a different search or clear the filters to see the full portfolio.</p><Link href="/projects/projects" className={styles.resetButton}>Clear filters</Link></div>
         ) : (
-          <div className={styles.projectGrid}>
+          <div className={view === 'list' ? `${styles.projectGrid} ${styles.projectGridList}` : styles.projectGrid}>
             {visibleProjects.map((project, index) => (
-              <article key={project.id} className={`${styles.projectCard} ${index === 0 ? styles.projectCardFeatured : ''}`}>
+              <article key={project.id} className={`${styles.projectCard} ${index === 0 ? styles.projectCardFeatured : ''} ${view === 'list' ? styles.projectCardList : ''}`}>
                 <div className={styles.cardTopline}><span className={`${styles.status} ${statusClass(project.status)}`}><i />{STATUS_LABELS[project.status] ?? project.status}</span><span className={styles.cardDate}>Added {dateLabel(project.createdAt)}</span></div>
                 <Link href={`/project/${project.id}`} className={styles.projectTitle}>{project.title}<ChevronRight size={16} aria-hidden /></Link>
                 <div className={styles.projectOrigin}><span>{project.accountName ?? 'Account not established'}</span><b>·</b><span>{project.contractTitle ?? 'No contract linked'}</span></div>

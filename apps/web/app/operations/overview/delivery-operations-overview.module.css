@@ -59,16 +59,28 @@
 .risk { color:var(--bad); font-size:10px; font-weight:800; text-transform:uppercase; }
 .onTrack { color:var(--good); font-size:10px; font-weight:800; text-transform:uppercase; }
 .areaGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
-.areaCard { display:flex; flex-direction:column; gap:12px; min-height:142px; padding:15px; border:1px solid var(--border); border-radius:12px; background:var(--panel); color:var(--text); text-decoration:none; transition:border-color .16s ease,transform .16s ease; }
+.areaCard { display:flex; flex-direction:column; gap:12px; min-height:184px; padding:15px; border:1px solid var(--border); border-radius:12px; background:linear-gradient(145deg,var(--panel),color-mix(in srgb,var(--panel-2) 48%,var(--panel))); color:var(--text); text-decoration:none; transition:border-color .16s ease,transform .16s ease,box-shadow .16s ease; }
 .areaCard:hover { border-color:var(--accent); transform:translateY(-1px); }
-.areaTop { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.areaCard:hover { box-shadow:0 12px 28px color-mix(in srgb,var(--accent) 9%,transparent); }
+.areaTop { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:8px; }
 .areaIcon { width:32px; height:32px; display:grid; place-items:center; border-radius:9px; background:var(--panel-2); color:var(--accent); }
 .areaTop svg:last-child { color:var(--muted); }
-.areaCard h3 { margin:0; font-size:13px; }
+.areaState { justify-self:start; padding:3px 6px; border-radius:999px; font-size:8px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
+.areaStateClear { background:var(--good-soft); color:var(--good); }
+.areaStateAttention { background:var(--warn-soft); color:var(--warn); }
+.areaStateUnavailable { background:var(--panel-2); color:var(--muted); }
+.areaIdentity { min-width:0; }
+.areaCode { margin-bottom:5px; color:var(--muted); font-size:8.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+.areaCard h3 { margin:0; font-size:14px; letter-spacing:-.015em; }
 .areaCard p { margin:4px 0 0; color:var(--muted); font-size:10.5px; line-height:1.4; }
-.areaFoot { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:auto; }
-.areaFoot strong { font-size:18px; letter-spacing:-.03em; }
-.areaFoot span { color:var(--muted); font-size:10px; }
+.areaStats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:auto; padding-top:10px; border-top:1px solid var(--border); }
+.areaStats > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.areaStats strong { overflow:hidden; font-size:18px; line-height:1; letter-spacing:-.03em; text-overflow:ellipsis; white-space:nowrap; }
+.areaStats span { overflow:hidden; color:var(--muted); font-size:9.5px; text-overflow:ellipsis; white-space:nowrap; }
+.areaScope { align-items:flex-end; text-align:right; }
+.areaScope strong { color:var(--muted); font-size:10px; letter-spacing:0; }
+.areaAction { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:9px; color:var(--accent); font-size:10px; font-weight:800; }
+.areaAction svg { flex-shrink:0; }
 .flow { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:0; padding:16px; border:1px solid var(--border); border-radius:13px; background:var(--panel); }
 .flowStep { position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
 .flowStep:not(:last-child)::after { content:''; position:absolute; top:12px; left:calc(50% + 13px); right:calc(-50% + 13px); height:1px; background:var(--border-strong); }

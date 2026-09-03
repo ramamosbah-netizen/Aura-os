@@ -16,7 +16,7 @@ const countOpen = <T extends { status?: string }>(rows: Source<T>, closed: strin
 };
 const displayCount = (value: number | null): string => value === null ? 'Unavailable' : String(value);
 
-interface Area { label: string; description: string; href: string; icon: LucideIcon; count: number | null; countLabel: string }
+interface Area { label: string; description: string; href: string; icon: LucideIcon; count: number | null; countLabel: string; secondaryCount?: number | null; secondaryLabel?: string; action: string; owner: string }
 
 export default async function DeliveryOperationsOverviewPage() {
   const [projects, drawings, rfis, reports, instructions, ncrs, permits, commissioning] = await Promise.all([
@@ -60,12 +60,12 @@ export default async function DeliveryOperationsOverviewPage() {
   ].filter(Boolean) as Array<{ label: string; detail: string; value: number; href: string }>;
 
   const areas: Area[] = [
-    { label: 'Engineering', description: 'Drawings, RFIs, submittals and technical actions across projects.', href: '/engineering', icon: PencilRuler, count: openDrawings, countLabel: 'open drawings' },
-    { label: 'Site', description: 'Work instructions, daily reports, progress and site evidence.', href: '/site/control', icon: HardHat, count: openReports, countLabel: 'reports in progress' },
-    { label: 'Quality', description: 'Inspections, NCRs, snags and corrective actions.', href: '/quality/control', icon: ClipboardCheck, count: openNcrs, countLabel: 'open NCRs' },
-    { label: 'HSE', description: 'Permits, incidents, observations and CAPA.', href: '/hse/control', icon: ShieldCheck, count: activePermits, countLabel: 'active permits' },
-    { label: 'Testing & Commissioning', description: 'Tests, witnessed sign-off and system readiness.', href: '/commissioning', icon: Wrench, count: commissioningOpen, countLabel: 'records in progress' },
-    { label: 'Handover', description: 'Acceptance packages and client sign-off across projects.', href: '/handover', icon: FileCheck2, count: null, countLabel: 'open the register' },
+    { label: 'Engineering', description: 'Drawings, RFIs, submittals and technical actions across projects.', href: '/engineering', icon: PencilRuler, count: openDrawings, countLabel: 'open drawings', secondaryCount: openRfis, secondaryLabel: 'RFIs', action: 'Review technical queue', owner: 'Engineering authority' },
+    { label: 'Site', description: 'Work instructions, daily reports, progress and site evidence.', href: '/site/control', icon: HardHat, count: openReports, countLabel: 'reports in progress', secondaryCount: openInstructions, secondaryLabel: 'instructions', action: 'Open field control', owner: 'Site authority' },
+    { label: 'Quality', description: 'Inspections, NCRs, snags and corrective actions.', href: '/quality/control', icon: ClipboardCheck, count: openNcrs, countLabel: 'open NCRs', action: 'Open quality queue', owner: 'Quality authority' },
+    { label: 'HSE', description: 'Permits, incidents, observations and CAPA.', href: '/hse/control', icon: ShieldCheck, count: activePermits, countLabel: 'active permits', action: 'Review safety controls', owner: 'HSE authority' },
+    { label: 'Testing & Commissioning', description: 'Tests, witnessed sign-off and system readiness.', href: '/commissioning', icon: Wrench, count: commissioningOpen, countLabel: 'records in progress', action: 'Open readiness queue', owner: 'Commissioning authority' },
+    { label: 'Handover', description: 'Acceptance packages and client sign-off across projects.', href: '/handover', icon: FileCheck2, count: null, countLabel: 'open the register', action: 'Open acceptance register', owner: 'Handover authority' },
   ];
 
   return (
@@ -125,7 +125,7 @@ export default async function DeliveryOperationsOverviewPage() {
 
       <section className={styles.section} aria-labelledby="areas-heading">
         <div className={styles.sectionHead}><div><div className={styles.kicker}>Discipline workspaces</div><h2 id="areas-heading">Operate across projects</h2><p>Each area remains the canonical owner of its records and actions.</p></div></div>
-        <div className={styles.areaGrid}>{areas.map((area) => { const Icon = area.icon; return <Link key={area.label} href={area.href} className={styles.areaCard}><div className={styles.areaTop}><span className={styles.areaIcon}><Icon size={17} aria-hidden /></span><ArrowRight size={15} aria-hidden /></div><div><h3>{area.label}</h3><p>{area.description}</p></div><div className={styles.areaFoot}><strong>{displayCount(area.count)}</strong><span>{area.countLabel}</span></div></Link>; })}</div>
+        <div className={styles.areaGrid}>{areas.map((area) => { const Icon = area.icon; const state = area.count === null ? 'Unavailable' : area.count > 0 ? 'Attention' : 'Clear'; const stateClass = area.count === null ? styles.areaStateUnavailable : area.count > 0 ? styles.areaStateAttention : styles.areaStateClear; return <Link key={area.label} href={area.href} className={styles.areaCard}><div className={styles.areaTop}><span className={styles.areaIcon}><Icon size={17} aria-hidden /></span><span className={`${styles.areaState} ${stateClass}`}>{state}</span><ArrowRight size={15} aria-hidden /></div><div className={styles.areaIdentity}><div className={styles.areaCode}>{area.owner}</div><h3>{area.label}</h3><p>{area.description}</p></div><div className={styles.areaStats}><div><strong>{displayCount(area.count)}</strong><span>{area.countLabel}</span></div>{area.secondaryLabel ? <div><strong>{displayCount(area.secondaryCount ?? null)}</strong><span>{area.secondaryLabel}</span></div> : <div className={styles.areaScope}><span>Scope</span><strong>Cross-project</strong></div>}</div><div className={styles.areaAction}><span>{area.action}</span><ArrowUpRight size={14} aria-hidden /></div></Link>; })}</div>
       </section>
 
       <section className={styles.section} aria-labelledby="flow-heading">

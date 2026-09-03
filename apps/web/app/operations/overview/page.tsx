@@ -84,6 +84,8 @@ export default async function DeliveryOperationsOverviewPage() {
     { label: 'Inspection / NCR', description: 'Start a quality inspection or corrective action.', owner: 'Quality authority', href: '/quality/control', icon: ClipboardCheck },
     { label: 'Permit to work', description: 'Open the HSE permit and risk workflow.', owner: 'HSE authority', href: '/hse/control', icon: ShieldCheck },
     { label: 'Evidence document', description: 'Open the canonical document register.', owner: 'Documents authority', href: '/documents', icon: FileCheck2 },
+    { label: 'Test / commissioning', description: 'Record testing and system readiness.', owner: 'Commissioning authority', href: '/commissioning', icon: Wrench },
+    { label: 'Handover action', description: 'Open acceptance and closeout evidence.', owner: 'Handover authority', href: '/handover', icon: FileCheck2 },
   ];
 
   const attention = [
@@ -111,6 +113,8 @@ export default async function DeliveryOperationsOverviewPage() {
           <p>Run the discipline work across every permitted project. Projects owns the plan; these workspaces own execution records.</p>
         </div>
         <div className={styles.heroActions}>
+          <Link href="/operations/pre-execution" className={styles.secondary}>Pre-execution <ArrowRight size={14} aria-hidden /></Link>
+          <Link href="/operations/reports" className={styles.secondary}>Reports <ArrowRight size={14} aria-hidden /></Link>
           <Link href="/projects/dashboard" className={styles.secondary}>Projects <ArrowRight size={14} aria-hidden /></Link>
           <Link href="/projects/projects" className={styles.primary}>Open project register <ArrowRight size={14} aria-hidden /></Link>
         </div>

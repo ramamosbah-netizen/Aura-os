@@ -12,6 +12,7 @@ reports are additive and do not replace the Master Task 2 audit pack.
 - [A1.5 CLM Completion Evidence](./a1.5-clm-completion.md)
 - [A1.6 Final Closure Evidence](./a1.6-clm-closure.md)
 - [Pre-Award Cross-Domain Architecture](./pre-award-cross-domain-architecture.md)
+- [Project 360 Post-Award Experience & Ownership Gate](./project-360-post-award-boundary.md)
 
 Wave A1.1 CLM authority is approved. The additive implementation evidence is
 recorded in `a1.1-clm-design-gate.md`; the repository currently contains the
@@ -28,3 +29,8 @@ full evidence exists.
 A1.5 records additive CLM parent-integrity hardening and local PostgreSQL/RLS
 runtime evidence. A1.6 records the final closure audit and any remaining
 evidence/product gaps; no later Wave is implied by an unproven capability.
+
+The Project 360 post-award boundary gate records the adopted IA distinction between
+My Work (personal attention), Sales & Commercial (win the work), Projects/Project 360
+(deliver the work) and specialist authorities. It also records the Subcontract package
+boundary and route dispositions without retiring or duplicating any existing authority.

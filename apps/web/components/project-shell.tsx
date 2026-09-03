@@ -51,6 +51,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
     { key: 'controls', label: 'Commercial & cost', icon: Gauge, href: `${base}/controls`, active: pathname.startsWith(`${base}/controls`) },
     { key: 'risks', label: 'Risks & issues', icon: Gauge, href: `${base}#needs-attention`, active: false },
     { key: 'changes', label: 'Changes', icon: Gauge, href: `${base}/controls?tab=variations`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'variations' },
+    { key: 'subcontracts', label: 'Subcontracts', icon: FileStack, href: `/subcontracts/subcontracts?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/subcontracts/subcontracts' && searchParams.get('projectId') === project.id },
     { key: 'approvals', label: 'Approvals & actions', icon: ClipboardCheck, href: `/my-work/approvals?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/my-work/approvals') },
     { key: 'evidence', label: 'Evidence & documents', icon: FileStack, href: `${base}/documents`, active: pathname.startsWith(`${base}/documents`) },
     { key: 'team', label: 'Team & ownership', icon: Users, href: `${base}/team`, active: pathname.startsWith(`${base}/team`) },

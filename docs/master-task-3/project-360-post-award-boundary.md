@@ -89,3 +89,26 @@ classify each capability as **REUSE / EXTEND / COMPOSE / GAP**. The next impleme
 be UI/IA composition only unless the inspection proves a missing canonical capability. It must
 include authenticated browser proof and preserve Sales, Project, C4/C5/C6, Documents, Finance,
 Approvals and Subcontracts authorities.
+
+## Discovery result (bounded composition gate)
+
+The repository inspection confirms that the first safe implementation is composition, not a
+new delivery domain:
+
+| Capability | Existing authority/surface | Decision | A1 composition |
+|---|---|---|---|
+| Project delivery overview, attention and activity | Project 360 read model + owning APIs | **COMPOSE** | Keep one project context and link back to canonical records. |
+| Engineering, Site, Quality, HSE, Testing & Commissioning, Documents | Existing specialist routes and APIs | **REUSE + EMBED CONTEXT** | Project-scoped links preserve `projectId`; specialist routes remain cross-project views. |
+| Planning, WBS/CBS, cost and C6 changes | Project controls, schedule, Cost Ledger and Variation authorities | **REUSE** | Project 360 is an entry point; no duplicate writer is introduced. |
+| Subcontract register and claims | `/api/subcontracts?projectId=…` and Subcontracts authority | **REUSE + EXTEND CONTEXT** | Project 360 now opens a project-scoped Subcontracts workspace and preserves context in the create flow. |
+| Subcontract package, bidder RFQ, clarification/RFI, technical/commercial evaluation | No complete canonical lifecycle found in the current Subcontracts authority | **GAP** | Deferred to a dedicated bounded gate; no speculative tables or writer are created here. |
+| Readiness | Existing planning/engineering/supply-chain/quality/HSE evidence | **COMPOSE** | Readiness remains a projection (`READY`/`BLOCKED`/`UNKNOWN`), never a manual checklist. |
+| My Work and specialist portfolio views | My Work and Delivery Operations | **KEEP SPECIALIST** | They remain cross-authority/personal views and do not replace Project 360. |
+
+### Implemented composition proof
+
+Project 360's action center includes a **Subcontract packages** entry with the current project's
+scoped API readback. It opens `/subcontracts/subcontracts?projectId=<project>`; the destination
+shows the selected project context and pre-fills that project in the canonical create form. A
+standalone Subcontracts visit remains available for portfolio work. No migration, API owner,
+binary store or Delivery Operations route was removed.

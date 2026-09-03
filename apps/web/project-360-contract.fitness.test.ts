@@ -47,15 +47,20 @@ describe('Project 360 canonical delivery contract', () => {
       '/site/daily-reports?projectId=',
       '/engineering/drawings?projectId=',
       '/quality/ncrs?projectId=',
+      '/subcontracts/subcontracts?projectId=',
+      'Subcontract packages',
       'Upload evidence',
     ]) {
       expect(overview).toContain(marker);
     }
+    const subcontracts = readFileSync(resolve(__dirname, 'app/subcontracts/subcontracts/page.tsx'), 'utf8');
+    expect(subcontracts).toContain('projectId ? `/api/subcontracts?projectId=');
+    expect(subcontracts).toContain('initialProjectId={projectId || undefined}');
     const schedule = readFileSync(SCHEDULE, 'utf8');
     expect(schedule).toContain('selectedProjectId={projectId}');
     expect(schedule).toContain('scopedSchedules');
     const shell = readFileSync(SHELL, 'utf8');
-    for (const label of ['Overview', 'Plan & schedule', 'Progress & execution', 'Commercial & cost', 'Evidence & documents', 'Team & ownership', 'Delivery records']) {
+    for (const label of ['Overview', 'Plan & schedule', 'Progress & execution', 'Commercial & cost', 'Subcontracts', 'Evidence & documents', 'Team & ownership', 'Delivery records']) {
       expect(shell).toContain(label);
     }
   });

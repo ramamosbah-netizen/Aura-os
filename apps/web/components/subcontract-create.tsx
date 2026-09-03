@@ -7,6 +7,20 @@
 import { EntityForm } from './form-engine';
 import type { ProjectOption } from '../lib/form-schemas/subcontract';
 
-export default function SubcontractCreate({ projects }: { projects: ProjectOption[] }) {
-  return <EntityForm id="subcontracts.subcontract" ctx={{ projects }} />;
+export default function SubcontractCreate({
+  projects,
+  initialProjectId,
+}: {
+  projects: ProjectOption[];
+  initialProjectId?: string;
+}) {
+  const hasContext = Boolean(initialProjectId && projects.some((project) => project.id === initialProjectId));
+
+  return (
+    <EntityForm
+      id="subcontracts.subcontract"
+      ctx={{ projects }}
+      initialValues={hasContext ? { projectId: initialProjectId! } : undefined}
+    />
+  );
 }

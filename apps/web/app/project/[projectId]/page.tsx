@@ -37,6 +37,8 @@ const AREA_ICONS: Record<string, LucideIcon> = {
   documents: FileStack,
 };
 
+const SUBCONTRACT_OPEN_STATUSES = new Set(['draft', 'active', 'submitted', 'in_progress', 'pending']);
+
 const AREA_DESCRIPTIONS: Record<string, string> = {
   engineering: 'Design intent and approved information',
   site: 'Daily execution and installed progress',
@@ -79,13 +81,18 @@ export default async function ProjectOverviewPage({
   const discipline = ELV_DISCIPLINES.find((item) => item.id === disciplineId);
   const scopeQuery = disciplineId ? `?discipline=${encodeURIComponent(disciplineId)}` : '';
 
-  const areaData = await Promise.all(
-    PROJECT_AREAS.map(async (area) => ({
-      area,
-      rows: await areaRows(area.endpoint, projectId, disciplineId),
-    })),
-  );
+  const [areaData, subcontractRows] = await Promise.all([
+    Promise.all(
+      PROJECT_AREAS.map(async (area) => ({
+        area,
+        rows: await areaRows(area.endpoint, projectId, disciplineId),
+      })),
+    ),
+    getJson<Row[]>(`/api/subcontracts?projectId=${encodeURIComponent(projectId)}`),
+  ]);
   const bySlug: Record<string, Row[]> = Object.fromEntries(areaData.map((data) => [data.area.slug, data.rows]));
+  const scopedSubcontracts = Array.isArray(subcontractRows) ? subcontractRows : null;
+  const openSubcontracts = scopedSubcontracts?.filter((row) => SUBCONTRACT_OPEN_STATUSES.has(String(row.status ?? '').toLowerCase())).length ?? null;
 
   // Read-only activity composition from records owned by the delivery domains. No duplicate
   // ProjectNotes or project-history writer is introduced here.
@@ -200,6 +207,18 @@ export default async function ProjectOverviewPage({
             <ClipboardCheck size={16} aria-hidden />
             <strong>Quality action</strong>
             <span>Raise and follow an NCR through the canonical Quality workflow.</span>
+            <ArrowRight size={15} aria-hidden />
+          </Link>
+          <Link href={`/subcontracts/subcontracts?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
+            <FileStack size={16} aria-hidden />
+            <strong>Subcontract packages</strong>
+            <span>
+              {scopedSubcontracts === null
+                ? 'Project subcontract source unavailable.'
+                : scopedSubcontracts.length === 0
+                  ? 'Create and manage packages for this project.'
+                  : `${openSubcontracts ?? scopedSubcontracts.length} open package${(openSubcontracts ?? scopedSubcontracts.length) === 1 ? '' : 's'}.`}
+            </span>
             <ArrowRight size={15} aria-hidden />
           </Link>
           <Link href={`/project/${projectId}/documents${scopeQuery}`} className={styles.actionCard}>

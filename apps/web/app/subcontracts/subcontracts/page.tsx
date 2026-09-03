@@ -37,14 +37,21 @@ interface Claim {
   createdAt: string;
 }
 
-export default async function SubcontractsPage() {
+export default async function SubcontractsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ projectId?: string }>;
+}) {
+  const query = (await searchParams) ?? {};
+  const projectId = query.projectId?.trim() || '';
   const [subcontracts, projects, claims] = await Promise.all([
-    getJson<Subcontract[]>('/api/subcontracts'),
+    getJson<Subcontract[]>(projectId ? `/api/subcontracts?projectId=${encodeURIComponent(projectId)}` : '/api/subcontracts'),
     getJson<Project[]>('/api/projects/projects'),
     getJson<Claim[]>('/api/subcontracts/claims'),
   ]);
 
   const online = subcontracts !== null && projects !== null && claims !== null;
+  const project = projectId ? (projects ?? []).find((item) => item.id === projectId) : null;
 
   return (
     <div style={st.page}>
@@ -53,6 +60,19 @@ export default async function SubcontractsPage() {
         Manage subcontractor trade agreements, track progressive valuations, and calculate 
         retaining balances (Interim Payment Certificates) connected with Delivery.
       </p>
+
+      {projectId && (
+        <section style={st.contextPanel} aria-label="Project context">
+          <div>
+            <span style={st.contextKicker}>Project context</span>
+            <strong>{project?.title ?? 'Selected project'}</strong>
+            <span style={st.contextHint}>
+              {project ? 'Showing subcontract records scoped to this project.' : 'The selected project could not be resolved.'}
+            </span>
+          </div>
+          <a href="/subcontracts/subcontracts" style={st.clearContext}>View all subcontracts</a>
+        </section>
+      )}
 
       {!online ? (
         <section style={st.panelOffline}>
@@ -63,7 +83,7 @@ export default async function SubcontractsPage() {
         </section>
       ) : (
         <>
-          <SubcontractCreate projects={projects || []} />
+          <SubcontractCreate projects={projects || []} initialProjectId={projectId || undefined} />
           <SubcontractsList subcontracts={subcontracts || []} claims={claims || []} />
         </>
       )}
@@ -81,4 +101,18 @@ const st = {
     borderRadius: 14,
     padding: '20px 24px',
   } as CSSProperties,
+  contextPanel: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    margin: '0 0 18px',
+    padding: '12px 16px',
+    borderRadius: 12,
+    border: '1px solid color-mix(in srgb, var(--accent) 35%, var(--border))',
+    background: 'color-mix(in srgb, var(--accent) 8%, var(--panel))',
+  } as CSSProperties,
+  contextKicker: { display: 'block', color: 'var(--accent)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 } as CSSProperties,
+  contextHint: { display: 'block', color: 'var(--muted)', fontSize: 12, marginTop: 3 } as CSSProperties,
+  clearContext: { color: 'var(--accent)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' } as CSSProperties,
 };

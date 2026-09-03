@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,7 +19,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import { getJson } from '@/lib/api';
+import { currentUser, getJson } from '@/lib/api';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { filterAreaRows, PROJECT_AREAS } from '@/lib/project-areas';
 import { computeDigest, type Tone } from '@/lib/project-digest';
@@ -28,6 +29,13 @@ import styles from './project-overview.module.css';
 export const dynamic = 'force-dynamic';
 
 type Row = Record<string, unknown> & { projectId?: string };
+
+interface ProjectHead {
+  id: string;
+  title: string;
+  reference: string | null;
+  status: string;
+}
 
 const AREA_ICONS: Record<string, LucideIcon> = {
   engineering: RadioTower,
@@ -78,6 +86,10 @@ export default async function ProjectOverviewPage({
   searchParams: Promise<{ discipline?: string }>;
 }) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
+  const [user, project] = await Promise.all([
+    currentUser(),
+    getJson<ProjectHead>(`/api/projects/projects/${encodeURIComponent(projectId)}`),
+  ]);
   const disciplineId = query.discipline;
   const discipline = ELV_DISCIPLINES.find((item) => item.id === disciplineId);
   const scopeQuery = disciplineId ? `?discipline=${encodeURIComponent(disciplineId)}` : '';
@@ -116,6 +128,9 @@ export default async function ProjectOverviewPage({
     documents: bySlug.documents ?? [],
   });
   const highCount = digest.blockers.filter((blocker) => blocker.severity === 'high').length;
+  const rawName = user?.sub?.replace(/^u-/, '').replace(/[-_.]+/g, ' ').trim();
+  const userName = rawName ? rawName.replace(/\b\w/g, (character) => character.toUpperCase()) : 'AURA User';
+  const projectTitle = project?.title ?? 'Project 360';
 
   return (
     <main className={styles.page} data-testid="project-command-center">
@@ -125,9 +140,9 @@ export default async function ProjectOverviewPage({
             <span className={styles.liveDot} aria-hidden />
             Project office
           </div>
-          <h1>Delivery pulse</h1>
+          <h1>Good {greeting()}, <span>{userName}</span></h1>
           <p>
-            One project context for planning, coordination, delivery decisions and closeout.
+            {projectTitle} · one project context for planning, coordination, delivery decisions and closeout.
             {discipline ? ` Currently focused on ${discipline.label}.` : ''}
           </p>
         </div>
@@ -140,6 +155,8 @@ export default async function ProjectOverviewPage({
           </Link>
         </div>
       </header>
+
+      <ProjectWorkspaceJourney projectId={projectId} status={project?.status ?? null} recordCount={digest.totalRecords} />
 
       <section className={styles.statusBand} aria-label="Project status summary">
         <div className={styles.statusLead}>
@@ -388,3 +405,58 @@ export default async function ProjectOverviewPage({
     </main>
   );
 }
+
+function greeting(): string {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Dubai' }).format(new Date()));
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
+}
+
+function ProjectWorkspaceJourney({ projectId, status, recordCount }: { projectId: string; status: string | null; recordCount: number }) {
+  const nodes = [
+    { label: 'Setup', meta: 'project context', href: `/project/${projectId}` },
+    { label: 'Plan', meta: 'schedule · WBS', href: `/projects/schedule?projectId=${encodeURIComponent(projectId)}` },
+    { label: 'Deliver', meta: `${recordCount} connected record${recordCount === 1 ? '' : 's'}`, href: `/project/${projectId}/site` },
+    { label: 'Control', meta: 'cost · changes', href: `/project/${projectId}/controls` },
+    { label: 'Closeout', meta: status === 'completed' ? 'completed' : 'governed action', href: `/project/${projectId}/controls?tab=closeout` },
+  ];
+  return (
+    <section style={workspaceJourneySt.section} aria-label="Project workspace journey">
+      <div style={workspaceJourneySt.header}>
+        <div>
+          <p style={workspaceJourneySt.kicker}>PROJECT WORKSPACE</p>
+          <h2 style={workspaceJourneySt.title}>From plan to closeout</h2>
+          <p style={workspaceJourneySt.copy}>Open the next project-management step while every specialist record stays with its canonical owner.</p>
+        </div>
+        <Link href={`/project/${projectId}/controls`} style={workspaceJourneySt.link}>Open controls <span>↗</span></Link>
+      </div>
+      <div style={workspaceJourneySt.nodes}>
+        {nodes.map((node, index) => (
+          <span key={node.label} style={workspaceJourneySt.nodeWrap}>
+            <Link href={node.href} style={workspaceJourneySt.node}>
+              <span style={workspaceJourneySt.nodeLabel}>{node.label}</span>
+              <span style={workspaceJourneySt.nodeMeta}>{node.meta}</span>
+            </Link>
+            {index < nodes.length - 1 && <span style={workspaceJourneySt.arrow} aria-hidden>›</span>}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const workspaceJourneySt: Record<string, CSSProperties> = {
+  section: { margin: '0 0 18px', padding: '18px 20px', border: '1px solid var(--border)', borderRadius: 16, background: 'linear-gradient(125deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 52%)' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 16 },
+  kicker: { margin: '0 0 6px', color: 'var(--accent)', fontSize: 9.5, fontWeight: 850, letterSpacing: '.16em' },
+  title: { margin: 0, fontSize: 20, letterSpacing: '-.03em' },
+  copy: { margin: '6px 0 0', color: 'var(--muted)', fontSize: 12, lineHeight: 1.45 },
+  link: { display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' },
+  nodes: { display: 'flex', alignItems: 'stretch', gap: 4, overflowX: 'auto', paddingBottom: 2 },
+  nodeWrap: { display: 'inline-flex', alignItems: 'center', gap: 4, flex: '1 0 112px' },
+  node: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, width: '100%', padding: '10px 11px', border: '1px solid var(--border)', borderRadius: 11, background: 'var(--panel)', color: 'var(--text)', textDecoration: 'none' },
+  nodeLabel: { fontSize: 12.5, fontWeight: 800 },
+  nodeMeta: { color: 'var(--muted)', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  arrow: { color: 'var(--accent)', fontSize: 18, lineHeight: 1 },
+};

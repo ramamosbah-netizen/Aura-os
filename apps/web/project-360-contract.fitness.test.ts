@@ -78,4 +78,11 @@ describe('Project 360 canonical delivery contract', () => {
     expect(readFileSync(resolve(__dirname, 'components/pr-list.tsx'), 'utf8')).toContain('initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}');
     expect(readFileSync(resolve(__dirname, 'components/po-create.tsx'), 'utf8')).toContain('initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}');
   });
+
+  it('presents Project 360 as a guided management cockpit', () => {
+    const overview = readFileSync(OVERVIEW, 'utf8');
+    for (const marker of ['Good {greeting()},', 'PROJECT WORKSPACE', 'From plan to closeout', 'ProjectWorkspaceJourney', 'canonical owner']) {
+      expect(overview).toContain(marker);
+    }
+  });
 });

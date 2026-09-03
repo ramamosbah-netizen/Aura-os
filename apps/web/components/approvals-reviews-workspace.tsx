@@ -53,8 +53,7 @@ function formatWeekRange(key: string): string {
   const start = new Date(`${key}T00:00:00Z`);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 6);
-  const options: Intl.DateTimeFormatOptions = { timeZone: 'UTC', day: '2-digit', month: 'short' };
-  return `${start.toLocaleDateString(DISPLAY_LOCALE, options)} – ${end.toLocaleDateString(DISPLAY_LOCALE, options)}`;
+  return `${start.toLocaleDateString(DISPLAY_LOCALE, { timeZone: 'UTC', day: '2-digit', month: 'short' })} – ${end.toLocaleDateString(DISPLAY_LOCALE, { timeZone: 'UTC', day: '2-digit', month: 'short' })}`;
 }
 
 function countForView(items: DecisionAssignment[], view: View): number {

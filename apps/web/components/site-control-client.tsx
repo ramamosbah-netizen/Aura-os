@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
+import SiteInstructionsClient from './site-instructions-client';
 
 interface Project {
   id: string;
@@ -109,6 +110,19 @@ interface Props {
   initialLabourAllocations: LabourAllocation[];
   schedules: ProjectSchedule[];
   projects: Project[];
+  initialInstructions: Array<{
+    id: string;
+    projectId: string;
+    projectName: string | null;
+    reference: string;
+    issuedBy: string;
+    date: string;
+    instruction: string;
+    costImplication: boolean;
+    timeImplication: boolean;
+    status: string;
+  }>;
+  instructionsUnavailable?: boolean;
 }
 
 export default function SiteControlClient({
@@ -118,9 +132,11 @@ export default function SiteControlClient({
   initialLabourAllocations,
   schedules,
   projects,
+  initialInstructions,
+  instructionsUnavailable = false,
 }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'daily-reports' | 'delay-logs' | 'material-consumption' | 'labour-allocations' | 'progress-mapping'>('daily-reports');
+  const [activeTab, setActiveTab] = useState<'instructions' | 'daily-reports' | 'delay-logs' | 'material-consumption' | 'labour-allocations' | 'progress-mapping'>('instructions');
   const dailyReports = initialDailyReports;
   const delayLogs = initialDelayLogs;
   const materialConsumption = initialMaterialConsumption;
@@ -163,6 +179,12 @@ export default function SiteControlClient({
       {/* Tabs */}
       <div style={st.tabs}>
         <button
+          onClick={() => setActiveTab('instructions')}
+          style={activeTab === 'instructions' ? st.activeTabBtn : st.tabBtn}
+        >
+          Work Instructions
+        </button>
+        <button
           onClick={() => setActiveTab('daily-reports')}
           style={activeTab === 'daily-reports' ? st.activeTabBtn : st.tabBtn}
         >
@@ -195,6 +217,20 @@ export default function SiteControlClient({
       </div>
 
       {/* Tab Contents */}
+      {activeTab === 'instructions' && (
+        <div>
+          {instructionsUnavailable ? (
+            <EmptyState
+              compact
+              title="Work instructions unavailable"
+              description="The Site authority did not return evidence. Retry when the source service is available."
+            />
+          ) : (
+            <SiteInstructionsClient initialInstructions={initialInstructions} />
+          )}
+        </div>
+      )}
+
       {activeTab === 'daily-reports' && (
         <div>
           <div style={st.tabHeader}>

@@ -22,6 +22,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from './variations-client.module.css';
 
 interface Project {
@@ -72,7 +73,7 @@ function money(n: number): string {
 
 function shortDate(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 }
 
 function safeStatus(status: string): { label: string; hint: string; tone: string } {

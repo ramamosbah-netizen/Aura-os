@@ -116,6 +116,14 @@ export default function HandoverClient({
   const statusStyle = (s: HandoverPackage['status']): CSSProperties =>
     s === 'accepted' ? st.tagGood : s === 'rejected' ? st.tagBad : s === 'submitted' ? st.tagInfo : st.tagPending;
   const coreReady = (c: Checklist) => c.omManuals && c.asBuilts && c.testCertificates;
+  const readinessSummary = CHECK_ITEMS.map((item) => ({
+    ...item,
+    state: packages.length === 0
+      ? 'Not established'
+      : packages.every((p) => p.checklist[item.key])
+        ? 'Ready'
+        : 'Open',
+  }));
 
   return (
     <div>
@@ -141,6 +149,22 @@ export default function HandoverClient({
           />
         </div>
       </div>
+
+      <section style={st.readinessPanel} aria-labelledby="handover-readiness-heading">
+        <div style={st.readinessCopy}>
+          <div style={st.readinessEyebrow}>HANDOVER READINESS</div>
+          <h3 id="handover-readiness-heading" style={st.readinessTitle}>Evidence gates for acceptance</h3>
+          <p style={st.readinessDescription}>Readiness is projected from the canonical handover package checklist. It is not a separate readiness record and cannot be marked ready manually.</p>
+        </div>
+        <div style={st.readinessGrid}>
+          {readinessSummary.map((item) => (
+            <div key={item.key} style={st.readinessItem}>
+              <span style={st.readinessLabel}>{item.label}{item.core ? ' *' : ''}</span>
+              <strong style={item.state === 'Ready' ? st.readinessGood : item.state === 'Open' ? st.readinessOpen : st.readinessUnknown}>{item.state}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div style={{ marginBottom: 20 }}>
         <NextBestActionBanner
@@ -267,6 +291,17 @@ const st = {
   kpiCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
   kpiNum: { fontSize: 26, fontWeight: 800, color: 'var(--text)', lineHeight: 1 } as CSSProperties,
   kpiLabel: { fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 } as CSSProperties,
+  readinessPanel: { display: 'grid', gridTemplateColumns: 'minmax(230px, 0.8fr) minmax(0, 1.6fr)', gap: 18, alignItems: 'center', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 18px', marginBottom: 20 } as CSSProperties,
+  readinessCopy: { minWidth: 0 } as CSSProperties,
+  readinessEyebrow: { color: 'var(--accent)', fontSize: 10.5, fontWeight: 800, letterSpacing: 1.1, marginBottom: 5 } as CSSProperties,
+  readinessTitle: { margin: 0, fontSize: 15, color: 'var(--text)' } as CSSProperties,
+  readinessDescription: { margin: '6px 0 0', color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.45 } as CSSProperties,
+  readinessGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 } as CSSProperties,
+  readinessItem: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', minWidth: 0 } as CSSProperties,
+  readinessLabel: { display: 'block', color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.3, minHeight: 29 } as CSSProperties,
+  readinessGood: { display: 'block', color: 'var(--good)', fontSize: 12, marginTop: 4 } as CSSProperties,
+  readinessOpen: { display: 'block', color: 'var(--warn)', fontSize: 12, marginTop: 4 } as CSSProperties,
+  readinessUnknown: { display: 'block', color: 'var(--muted)', fontSize: 12, marginTop: 4 } as CSSProperties,
   formCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 18, marginBottom: 24 } as CSSProperties,
   formTitle: { fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text)' } as CSSProperties,
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 14 } as CSSProperties,

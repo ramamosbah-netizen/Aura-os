@@ -26,6 +26,19 @@ interface DailyReport {
   updatedAt: string;
 }
 
+interface SiteInstruction {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  reference: string;
+  issuedBy: string;
+  date: string;
+  instruction: string;
+  costImplication: boolean;
+  timeImplication: boolean;
+  status: string;
+}
+
 interface DelayLog {
   id: string;
   tenantId: string;
@@ -102,13 +115,14 @@ interface ProjectSchedule {
 }
 
 export default async function SiteControlPage() {
-  const [dailyReports, delayLogs, materialConsumption, labourAllocations, schedules, projects] = await Promise.all([
+  const [dailyReports, delayLogs, materialConsumption, labourAllocations, schedules, projects, instructions] = await Promise.all([
     getJson<DailyReport[]>('/api/site/daily-reports'),
     getJson<DelayLog[]>('/api/site/delay-logs'),
     getJson<MaterialConsumption[]>('/api/site/material-consumption'),
     getJson<LabourAllocation[]>('/api/site/labour'),
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
+    getJson<SiteInstruction[]>('/api/site/instructions'),
   ]);
 
   return (
@@ -122,6 +136,8 @@ export default async function SiteControlPage() {
         initialLabourAllocations={labourAllocations ?? []}
         schedules={schedules ?? []}
         projects={projects ?? []}
+        initialInstructions={instructions ?? []}
+        instructionsUnavailable={instructions === null}
       />
     </div>
   );

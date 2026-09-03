@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CalendarPlus, Layers3, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import EmptyState from './ui/empty-state';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from './gantt-client.module.css';
 
 interface ScheduleTask {
@@ -154,7 +155,7 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
                 {busy === sch.projectId ? '…' : 'Set baseline'}
               </button>
             </div>
-            <div className={styles.timeline} aria-hidden="true"><span /> <div className={styles.timelineScale}><span>{new Date(min).toLocaleDateString('en-AE', { day: '2-digit', month: 'short' })}</span><span>Today</span><span>{new Date(min + total * 86_400_000).toLocaleDateString('en-AE', { day: '2-digit', month: 'short' })}</span></div><span /><span /></div>
+            <div className={styles.timeline} aria-hidden="true"><span /> <div className={styles.timelineScale}><span>{new Date(min).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span><span>Today</span><span>{new Date(min + total * 86_400_000).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span></div><span /><span /></div>
             <div className={styles.rows}>
               {sch.tasks.map((t, idx) => (
                 <div key={`${t.name}-${idx}`} className={styles.row}>

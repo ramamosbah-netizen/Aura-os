@@ -93,12 +93,14 @@ export const NAV: NavGroup[] = [
     glyph: '⚙',
     items: [
       { label: 'Overview', href: '/operations/overview', glyph: '◎', desc: 'Cross-project operational command center' },
+      { label: 'Pre-Execution', href: '/operations/pre-execution', glyph: '◌', desc: 'Evidence-based readiness before work starts on site' },
       { label: 'Engineering', href: '/engineering', glyph: '⚙', desc: 'Drawings, RFIs, submittals and engineering actions across projects' },
       { label: 'Site', href: '/site/control', glyph: '▤', desc: 'Instructions, daily reports, progress, labour and site evidence' },
       { label: 'Quality', href: '/quality/control', glyph: '✓', desc: 'Inspections, NCRs, snags and corrective actions across projects' },
       { label: 'HSE', href: '/hse/control', glyph: '🛡', desc: 'Permits, incidents, observations and CAPA across projects' },
       { label: 'Testing & Commissioning', href: '/commissioning', glyph: '✓', desc: 'Tests, witnessed sign-off and system readiness' },
       { label: 'Handover', href: '/handover', glyph: '⇥', desc: 'Acceptance packages and client sign-off across projects' },
+      { label: 'Reports', href: '/operations/reports', glyph: '▤', desc: 'Cross-project operational reports from canonical sources' },
     ],
   },
   {

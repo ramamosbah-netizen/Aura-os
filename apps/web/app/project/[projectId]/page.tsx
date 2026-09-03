@@ -1,28 +1,12 @@
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
 import {
-  AlertTriangle,
   ArrowRight,
-  CalendarRange,
-  Camera,
-  CheckCircle2,
-  ClipboardCheck,
-  ClipboardList,
-  FileStack,
-  FilePlus2,
-  Gauge,
-  HardHat,
-  RadioTower,
-  ShieldCheck,
-  ShoppingCart,
-  Users,
   Wrench,
-  type LucideIcon,
 } from 'lucide-react';
-import { currentUser, getJson } from '@/lib/api';
+import { getJson } from '@/lib/api';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { filterAreaRows, PROJECT_AREAS } from '@/lib/project-areas';
-import { computeDigest, type Tone } from '@/lib/project-digest';
+import { computeDigest } from '@/lib/project-digest';
 import { ELV_DISCIPLINES } from '@/lib/project-scope';
 import styles from './project-overview.module.css';
 
@@ -34,49 +18,33 @@ interface ProjectHead {
   id: string;
   title: string;
   reference: string | null;
+  contractId: string | null;
+  contractTitle: string | null;
+  accountName: string | null;
   status: string;
+  value: number;
+  createdAt: string;
 }
 
-const AREA_ICONS: Record<string, LucideIcon> = {
-  engineering: RadioTower,
-  site: HardHat,
-  quality: ClipboardCheck,
-  hse: ShieldCheck,
-  commissioning: Wrench,
-  documents: FileStack,
-};
+interface VariationSummary {
+  impact?: { originalValue: number; approvedAdditions: number; approvedOmissions: number; revisedValue: number; approvedCount: number; pendingCount: number };
+}
+
+interface ScheduleSummary { projectId: string; tasks?: Array<{ percentComplete?: number }>; baselineSetAt?: string | null; }
+interface EvmSummary { budgetAtCompletion: number | null; earnedValue: number | null; actualCost: number | null; cpi: number | null; spi: number | null; plannedValueStatus?: 'available' | 'unavailable'; }
+interface CertificateSummary { summary?: { grossCertifiedToDate: number; percentComplete: number } | null; }
+interface CloseoutLite { id: string; status: string; items: Array<{ done: boolean }>; }
+
+const aed = (value: number): string => Math.round(value).toLocaleString('en-AE');
+const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short', year: 'numeric' });
 
 const SUBCONTRACT_OPEN_STATUSES = new Set(['draft', 'active', 'submitted', 'in_progress', 'pending']);
-
-const AREA_DESCRIPTIONS: Record<string, string> = {
-  engineering: 'Design intent and approved information',
-  site: 'Daily execution and installed progress',
-  quality: 'Inspections, NCRs and acceptance',
-  hse: 'Permits and safe-work controls',
-  commissioning: 'Testing, proof and system readiness',
-  documents: 'Controlled delivery record',
-};
 
 async function areaRows(endpoint: string, projectId: string, disciplineId?: string): Promise<Row[]> {
   const data = await getJson<Row[]>(endpoint);
   const scoped = (Array.isArray(data) ? data : []).filter((row) => row.projectId === projectId);
   return filterAreaRows(scoped, disciplineId);
 }
-
-function summarise(rows: Row[], key: string): Array<[string, number]> {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    const value = String(row[key] ?? 'unknown');
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-}
-
-const toneClass = (tone: Tone): string =>
-  tone === 'bad' ? styles.toneBad
-    : tone === 'good' ? styles.toneGood
-      : tone === 'accent' ? styles.toneAccent
-        : styles.toneMuted;
 
 export default async function ProjectOverviewPage({
   params,
@@ -86,15 +54,12 @@ export default async function ProjectOverviewPage({
   searchParams: Promise<{ discipline?: string }>;
 }) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
-  const [user, project] = await Promise.all([
-    currentUser(),
-    getJson<ProjectHead>(`/api/projects/projects/${encodeURIComponent(projectId)}`),
-  ]);
+  const project = await getJson<ProjectHead>(`/api/projects/projects/${encodeURIComponent(projectId)}`);
   const disciplineId = query.discipline;
   const discipline = ELV_DISCIPLINES.find((item) => item.id === disciplineId);
   const scopeQuery = disciplineId ? `?discipline=${encodeURIComponent(disciplineId)}` : '';
 
-  const [areaData, subcontractRows] = await Promise.all([
+  const [areaData, subcontractRows, scheduleRows, variationSummary, evm, certificateSummary, closeoutRows] = await Promise.all([
     Promise.all(
       PROJECT_AREAS.map(async (area) => ({
         area,
@@ -102,6 +67,11 @@ export default async function ProjectOverviewPage({
       })),
     ),
     getJson<Row[]>(`/api/subcontracts?projectId=${encodeURIComponent(projectId)}`),
+    getJson<ScheduleSummary[]>(`/api/projects/schedules?projectId=${encodeURIComponent(projectId)}`),
+    getJson<VariationSummary>(`/api/projects/variations/summary/${encodeURIComponent(projectId)}`),
+    getJson<EvmSummary>(`/api/projects/projects/${encodeURIComponent(projectId)}/evm`),
+    project?.contractId ? getJson<CertificateSummary>(`/api/contracts/certificates/summary/${encodeURIComponent(project.contractId)}`) : Promise.resolve(null),
+    getJson<CloseoutLite[]>(`/api/projects/closeouts?projectId=${encodeURIComponent(projectId)}`),
   ]);
   const bySlug: Record<string, Row[]> = Object.fromEntries(areaData.map((data) => [data.area.slug, data.rows]));
   const scopedSubcontracts = Array.isArray(subcontractRows) ? subcontractRows : null;
@@ -127,336 +97,101 @@ export default async function ProjectOverviewPage({
     commissioning: bySlug.commissioning ?? [],
     documents: bySlug.documents ?? [],
   });
-  const highCount = digest.blockers.filter((blocker) => blocker.severity === 'high').length;
-  const rawName = user?.sub?.replace(/^u-/, '').replace(/[-_.]+/g, ' ').trim();
-  const userName = rawName ? rawName.replace(/\b\w/g, (character) => character.toUpperCase()) : 'AURA User';
   const projectTitle = project?.title ?? 'Project 360';
+  const schedule = Array.isArray(scheduleRows) ? scheduleRows[0] : null;
+  const scheduleProgress = schedule?.tasks?.length ? Math.round(schedule.tasks.reduce((sum, task) => sum + (Number(task.percentComplete) || 0), 0) / schedule.tasks.length) : null;
+  const approvedChanges = variationSummary?.impact ? variationSummary.impact.approvedAdditions - variationSummary.impact.approvedOmissions : null;
+  const currentValue = variationSummary?.impact?.revisedValue ?? null;
+  const closeout = Array.isArray(closeoutRows) ? closeoutRows[0] ?? null : null;
+  const closeoutDone = closeout ? closeout.items.filter((item) => item.done).length : 0;
+
+  const projectBase = `/project/${encodeURIComponent(projectId)}`;
+  const healthProgress = scheduleProgress === null ? 'Not established' : `${scheduleProgress}%`;
+  const scheduleHealth = evm?.plannedValueStatus === 'unavailable' || evm?.spi === null || evm?.spi === undefined ? 'Unavailable' : evm.spi >= 1 ? 'On track' : 'Behind schedule';
+  const costValue = evm?.actualCost == null || evm?.budgetAtCompletion == null ? 'Not established' : `AED ${aed(evm.actualCost)} / AED ${aed(evm.budgetAtCompletion)}`;
+  const completionValue = closeout ? `${closeoutDone}/${closeout.items.length} items` : 'Not established';
+  const deliveryRows = [
+    ...areaData.map(({ area, rows }) => ({ label: area.label, status: rows.length ? `${rows.length} connected` : 'Not established', href: `${projectBase}/${area.slug}${scopeQuery}` })),
+    { label: 'Procurement', status: 'Not established', href: `/procurement/purchase-requests?projectId=${encodeURIComponent(projectId)}` },
+    { label: 'Subcontracts', status: scopedSubcontracts === null ? 'Unavailable' : scopedSubcontracts.length ? `${openSubcontracts ?? scopedSubcontracts.length} open` : 'Not established', href: `/subcontracts/subcontracts?projectId=${encodeURIComponent(projectId)}` },
+  ];
+  const phases = [
+    { label: 'Mobilization', state: 'Project linked' },
+    { label: 'Engineering', state: bySlug.engineering?.length ? 'Evidence linked' : 'Not established' },
+    { label: 'Procurement', state: 'Not established' },
+    { label: 'Execution', state: bySlug.site?.length ? 'Evidence linked' : 'Not established' },
+    { label: 'T&C', state: bySlug.commissioning?.length ? 'Evidence linked' : 'Not established' },
+    { label: 'Handover', state: closeout ? 'Checklist linked' : 'Not established' },
+  ];
 
   return (
     <main className={styles.page} data-testid="project-command-center">
-      <header className={styles.hero}>
-        <div>
-          <div className={styles.eyebrow}>
-            <span className={styles.liveDot} aria-hidden />
-            Project office
+      <header id="project-setup" className={styles.projectHeader}>
+        <div className={styles.projectHeaderCopy}>
+          <Link href="/projects/projects" className={styles.backLink}><ArrowRight size={14} aria-hidden /> All projects</Link>
+          <div className={styles.eyebrow}>Project 360 / Overview</div>
+          <div className={styles.titleRow}><h1>{projectTitle}</h1><span className={styles.projectStatus}>{project?.status ?? 'Unknown'}</span></div>
+          <div className={styles.projectMetaLine}>
+            {project?.reference ? <code>{project.reference}</code> : <span>Reference not established</span>}
+            <span>{project?.accountName ?? 'Client not established'}</span>
+            <span>{project?.contractTitle ?? 'Contract not linked'}</span>
+            <span>Created {project?.createdAt ? fmt(project.createdAt) : 'not established'}</span>
           </div>
-          <h1>Good {greeting()}, <span>{userName}</span></h1>
-          <p>
-            {projectTitle} · one project context for planning, coordination, delivery decisions and closeout.
-            {discipline ? ` Currently focused on ${discipline.label}.` : ''}
-          </p>
         </div>
-        <div className={styles.heroActions}>
-          <Link href={`/project/${projectId}/controls`} className={styles.secondaryAction}>
-            Project controls
-          </Link>
-          <Link href={`/project/${projectId}/team${scopeQuery}`} className={styles.primaryAction}>
-            <Users size={15} aria-hidden /> Project team
-          </Link>
-        </div>
+        <details className={styles.actionMenu}>
+          <summary><Wrench size={15} aria-hidden /> Project Action <span>⌄</span></summary>
+          <div className={styles.actionMenuPanel}>
+            <div className={styles.actionMenuIntro}><strong>Open a governed project action</strong><span>Each link opens the canonical owner with this project context.</span></div>
+            <div className={styles.actionMenuGrid}>
+              <ActionGroup title="Plan & control" links={[['Add task / milestone', `/projects/schedule?projectId=${projectId}`], ['Project controls', `${projectBase}/controls`], ['Record risk', `${projectBase}#needs-attention`]]} />
+              <ActionGroup title="Engineering" links={[['Drawing / technical action', `/engineering?projectId=${projectId}`], ['RFI / submittal', `/engineering/drawings?projectId=${projectId}`]]} />
+              <ActionGroup title="Procurement & subcontracts" links={[['Material requirement', `/procurement/purchase-requests?projectId=${projectId}`], ['New package / RFQ', `/subcontracts/subcontracts?projectId=${projectId}`]]} />
+              <ActionGroup title="Site & quality" links={[['Work instruction', `/site/instructions?projectId=${projectId}`], ['Daily report / evidence', `/site/daily-reports?projectId=${projectId}`], ['Inspection / NCR', `/quality/ncrs?projectId=${projectId}`]]} />
+              <ActionGroup title="Commercial & evidence" links={[['Variation', `${projectBase}/controls?tab=variations`], ['Documents', `${projectBase}/documents`], ['Team & ownership', `${projectBase}/team`]]} />
+            </div>
+          </div>
+        </details>
       </header>
 
-      <ProjectWorkspaceJourney projectId={projectId} status={project?.status ?? null} recordCount={digest.totalRecords} />
-
-      <section className={styles.statusBand} aria-label="Project status summary">
-        <div className={styles.statusLead}>
-          <Gauge size={20} aria-hidden />
-          <div>
-            <span>Live delivery record</span>
-            <strong>{digest.totalRecords} connected records</strong>
-          </div>
-        </div>
-        <div className={styles.statusDivider} />
-        <div className={styles.statusFact}>
-          <span>Attention queue</span>
-          <strong className={digest.blockers.length ? styles.toneBad : styles.toneGood}>
-            {digest.blockers.length} items
-          </strong>
-        </div>
-        <div className={styles.statusFact}>
-          <span>Critical blockers</span>
-          <strong className={highCount ? styles.toneBad : styles.toneGood}>{highCount}</strong>
-        </div>
-        <div className={styles.statusFact}>
-          <span>Connected delivery areas</span>
-          <strong>{PROJECT_AREAS.length}</strong>
+      <section className={styles.healthSection} aria-label="Project health">
+        <div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Project health</span><h2>The few signals that matter now</h2></div><span className={styles.actionHint}>{discipline ? `Lens: ${discipline.label}` : 'Read from connected authorities'}</span></div>
+        <div className={styles.healthGrid}>
+          <HealthCard label="Progress" value={healthProgress} hint="From schedule activities" tone={scheduleProgress === null ? 'muted' : 'good'} />
+          <HealthCard label="Schedule" value={scheduleHealth} hint={evm?.plannedValueStatus === 'unavailable' || evm?.spi == null ? 'No trusted SPI available' : `SPI ${evm.spi.toFixed(2)}`} tone={scheduleHealth === 'Behind schedule' ? 'bad' : scheduleHealth === 'Unavailable' ? 'muted' : 'good'} />
+          <HealthCard label="Cost" value={costValue} hint="Cost Ledger / BAC" tone={costValue === 'Not established' ? 'muted' : 'accent'} />
+          <HealthCard label="Completion" value={completionValue} hint="Closeout evidence" tone={completionValue === 'Not established' ? 'muted' : 'accent'} />
         </div>
       </section>
 
-      <section className={styles.actionPanel} aria-label="Project actions">
-        <div className={styles.sectionHeading}>
-          <div>
-            <span className={styles.sectionKicker}>Project action center</span>
-            <h2>Move the project forward</h2>
-          </div>
-          <span className={styles.actionHint}>Actions open the owning domain; Project 360 keeps the context.</span>
-        </div>
-        <div className={styles.actionGrid}>
-          <Link href={`/project/${projectId}/controls`} className={styles.actionCard}>
-            <strong>Plan &amp; control</strong>
-            <span>WBS, CBS, quantities, cost, changes and closeout</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/projects/schedule?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
-            <CalendarRange size={16} aria-hidden />
-            <strong>Plan &amp; schedule</strong>
-            <span>Create the project Gantt, add activities and set the governed baseline.</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/site/instructions?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
-            <ClipboardList size={16} aria-hidden />
-            <strong>Work instruction</strong>
-            <span>Issue and track a formal site instruction in the owning Site workflow.</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/site/daily-reports?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
-            <Camera size={16} aria-hidden />
-            <strong>Daily report &amp; photos</strong>
-            <span>Record work, manpower, equipment and progress-photo evidence.</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/engineering/drawings?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
-            <RadioTower size={16} aria-hidden />
-            <strong>Engineering evidence</strong>
-            <span>Open drawings and controlled engineering information for this project.</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/quality/ncrs?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
-            <ClipboardCheck size={16} aria-hidden />
-            <strong>Quality action</strong>
-            <span>Raise and follow an NCR through the canonical Quality workflow.</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/subcontracts/subcontracts?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
-            <FileStack size={16} aria-hidden />
-            <strong>Subcontract packages</strong>
-            <span>
-              {scopedSubcontracts === null
-                ? 'Project subcontract source unavailable.'
-                : scopedSubcontracts.length === 0
-                  ? 'Create and manage packages for this project.'
-                  : `${openSubcontracts ?? scopedSubcontracts.length} open package${(openSubcontracts ?? scopedSubcontracts.length) === 1 ? '' : 's'}.`}
-            </span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/procurement/purchase-requests?projectId=${encodeURIComponent(projectId)}`} className={styles.actionCard}>
-            <ShoppingCart size={16} aria-hidden />
-            <strong>Procurement &amp; materials</strong>
-            <span>Open project-scoped purchase requests and committed purchase orders in Supply Chain.</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/project/${projectId}/documents${scopeQuery}`} className={styles.actionCard}>
-            <FilePlus2 size={16} aria-hidden />
-            <strong>Upload evidence</strong>
-            <span>Open the project document context and use the controlled DMS path.</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/project/${projectId}/site${scopeQuery}`} className={styles.actionCard}>
-            <strong>Progress &amp; execution</strong>
-            <span>Open the project-scoped Site delivery context</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/project/${projectId}/documents${scopeQuery}`} className={styles.actionCard}>
-            <strong>Evidence &amp; documents</strong>
-            <span>Open the controlled project record and its evidence</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link href={`/project/${projectId}/team${scopeQuery}`} className={styles.actionCard}>
-            <strong>Team &amp; ownership</strong>
-            <span>Review project roles and delivery responsibility</span>
-            <ArrowRight size={15} aria-hidden />
-          </Link>
-        </div>
+      <section id="needs-attention" className={styles.attentionSection} aria-label="Project attention">
+        <div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Needs your attention</span><h2>Needs attention</h2></div><Link href={`${projectBase}/controls`} className={styles.sectionLink}>View all <ArrowRight size={14} aria-hidden /></Link></div>
+        {digest.blockers.length === 0 ? <div className={styles.honestEmpty}><span className={styles.emptyMark}>i</span><div><strong>{digest.totalRecords ? 'No verified exceptions in connected records' : 'Attention is not established yet'}</strong><span>{digest.totalRecords ? 'The connected authorities do not currently expose an exception.' : 'No delivery records are connected yet, so the system cannot claim that the project has no blockers.'}</span></div></div> : <ul className={styles.attentionList}>{digest.blockers.slice(0, 5).map((blocker, index) => <li key={`${blocker.text}-${index}`}>{blocker.href ? <Link href={blocker.href}><span className={blocker.severity === 'high' ? styles.severityHigh : styles.severityMedium}>{blocker.severity === 'high' ? 'Blocked' : 'Review'}</span><span className={styles.blockerText}>{blocker.text}</span><ArrowRight size={14} aria-hidden /></Link> : <div><span className={blocker.severity === 'high' ? styles.severityHigh : styles.severityMedium}>Review</span><span className={styles.blockerText}>{blocker.text}</span></div>}</li>)}</ul>}
       </section>
 
-      <section className={styles.kpiGrid} aria-label="Delivery indicators">
-        {digest.kpis.map((kpi) => {
-          const Icon = AREA_ICONS[kpi.area] ?? Gauge;
-          return (
-            <Link key={kpi.area} href={`/project/${projectId}/${kpi.area}${scopeQuery}`} className={styles.kpiCard}>
-              <div className={styles.kpiHeader}>
-                <span className={styles.iconBox}><Icon size={17} aria-hidden /></span>
-                <span>{kpi.label}</span>
-                <ArrowRight size={14} className={styles.cardArrow} aria-hidden />
-              </div>
-              <strong className={toneClass(kpi.tone)}>{kpi.value}</strong>
-            </Link>
-          );
-        })}
-      </section>
-
-      <div className={styles.commandGrid}>
-        <section id="needs-attention" className={styles.attentionPanel}>
-          <div className={styles.sectionHeading}>
-            <div>
-              <span className={styles.sectionKicker}>Decision queue</span>
-              <h2>Needs attention</h2>
-            </div>
-            <span className={styles.countBadge}>{digest.blockers.length}</span>
-          </div>
-
-          {digest.blockers.length === 0 ? (
-            <div className={styles.clearState}>
-              <CheckCircle2 size={20} aria-hidden />
-              <div>
-                <strong>No active delivery blockers</strong>
-                <span>The connected records do not currently surface an exception.</span>
-              </div>
-            </div>
-          ) : (
-            <ul className={styles.attentionList}>
-              {digest.blockers.slice(0, 10).map((blocker, index) => {
-                const content = (
-                  <>
-                    <span className={blocker.severity === 'high' ? styles.severityHigh : styles.severityMedium}>
-                      {blocker.severity === 'high' ? 'Critical' : 'Review'}
-                    </span>
-                    <span className={styles.blockerText}>{blocker.text}</span>
-                    {blocker.href ? <ArrowRight size={15} aria-hidden /> : null}
-                  </>
-                );
-                return (
-                  <li key={`${blocker.text}-${index}`}>
-                    {blocker.href ? <Link href={blocker.href}>{content}</Link> : <div>{content}</div>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+      <div className={styles.cockpitGrid}>
+        <section className={styles.timelineSection} aria-label="Project timeline">
+          <div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Project timeline</span><h2>Where the work is now</h2></div></div>
+          <div className={styles.phaseTrack}>{phases.map((phase, index) => <div key={phase.label} className={styles.phase}><span className={phase.state === 'Not established' ? styles.phaseDotMuted : styles.phaseDot} aria-hidden /><strong>{phase.label}</strong><small>{phase.state}</small>{index < phases.length - 1 ? <i aria-hidden /> : null}</div>)}</div>
+          <div className={styles.nextBlock}><span className={styles.sectionKicker}>Next evidenced activity</span>{activity.slice(0, 3).map((item) => <Link key={`${item.area.slug}-${item.timestamp}`} href={`${projectBase}/${item.area.slug}${scopeQuery}`} className={styles.nextItem}><time>{new Date(item.timestamp).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</time><span>{item.label}</span><ArrowRight size={13} aria-hidden /></Link>)}{activity.length === 0 ? <p>Upcoming dates are not established from the connected authorities.</p> : null}</div>
         </section>
-
-        <aside className={styles.contextPanel}>
-          <span className={styles.sectionKicker}>Current context</span>
-          <h2>{discipline?.label ?? 'All systems'}</h2>
-          <p>The same project and system lens is preserved as you move between delivery areas.</p>
-          <div className={styles.contextRule}>
-            <AlertTriangle size={16} aria-hidden />
-            <span>Each area remains the owner of its records. This workspace only connects and presents them.</span>
-          </div>
-        </aside>
+        <aside className={styles.deliveryStatusSection} aria-label="Delivery status"><div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Delivery status</span><h2>Connected workstreams</h2></div><Link href={`${projectBase}/site`} className={styles.sectionLink}>View delivery <ArrowRight size={14} aria-hidden /></Link></div><div className={styles.deliveryStatusList}>{deliveryRows.map((row) => <Link key={row.label} href={row.href} className={styles.deliveryStatusRow}><span>{row.label}</span><strong className={row.status === 'Not established' ? styles.toneMuted : undefined}>{row.status}</strong><ArrowRight size={13} aria-hidden /></Link>)}</div></aside>
       </div>
 
-      <section className={styles.deliverySection}>
-        <div className={styles.sectionHeading}>
-          <div>
-            <span className={styles.sectionKicker}>Connected delivery context</span>
-            <h2>Project signals by owning domain</h2>
-          </div>
-        </div>
-        <div className={styles.areaGrid}>
-          {areaData.map(({ area, rows }, index) => {
-            const Icon = AREA_ICONS[area.slug] ?? Gauge;
-            const breakdown = summarise(rows, area.statusKey);
-            return (
-              <Link key={area.slug} href={`/project/${projectId}/${area.slug}${scopeQuery}`} className={styles.areaCard}>
-                <div className={styles.areaSequence}>{String(index + 1).padStart(2, '0')}</div>
-                <div className={styles.areaIcon}><Icon size={19} aria-hidden /></div>
-                <div className={styles.areaMain}>
-                  <div className={styles.areaTitleRow}>
-                    <h3>{area.label}</h3>
-                    <strong>{rows.length}</strong>
-                  </div>
-                  <p>{AREA_DESCRIPTIONS[area.slug]}</p>
-                  <div className={styles.statusChips}>
-                    {rows.length === 0 ? (
-                      <span>No connected records</span>
-                    ) : breakdown.slice(0, 3).map(([status, count]) => (
-                      <span key={status}>{status.replace(/_/g, ' ')} <b>{count}</b></span>
-                    ))}
-                  </div>
-                </div>
-                <ArrowRight size={16} className={styles.areaArrow} aria-hidden />
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+      <section className={styles.commercialSection} aria-label="Commercial and control summary"><div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Commercial &amp; control</span><h2>Authoritative value context</h2></div><Link href={`${projectBase}/controls?tab=cost`} className={styles.sectionLink}>View details <ArrowRight size={14} aria-hidden /></Link></div><div className={styles.commercialGrid}><Metric label="Original contract" value={project?.value && project.value > 0 ? `AED ${aed(project.value)}` : 'Not established'} /><Metric label="Approved changes" value={approvedChanges == null ? 'Not established' : `AED ${aed(approvedChanges)}`} /><Metric label="Current contract" value={currentValue == null ? 'Not established' : `AED ${aed(currentValue)}`} /><Metric label="Actual cost" value={evm?.actualCost == null ? 'Not established' : `AED ${aed(evm.actualCost)}`} /><Metric label="Certified" value={certificateSummary?.summary?.grossCertifiedToDate == null ? 'Not established' : `AED ${aed(certificateSummary.summary.grossCertifiedToDate)}`} /><Metric label="Open changes" value={variationSummary?.impact?.pendingCount == null ? 'Not established' : String(variationSummary.impact.pendingCount)} /></div></section>
 
-      <section id="activity-history" className={styles.deliverySection} aria-label="Project activity and history">
-        <div className={styles.sectionHeading}>
-          <div>
-            <span className={styles.sectionKicker}>Activity &amp; history</span>
-            <h2>Recent project activity</h2>
-          </div>
-          <span className={styles.actionHint}>Read-only context from the owning delivery records.</span>
-        </div>
-        {activity.length === 0 ? (
-          <div className={styles.clearState}>
-            <div>
-              <strong>No recorded activity yet</strong>
-              <span>New schedule, site, engineering, quality, HSE and document records will appear here when available.</span>
-            </div>
-          </div>
-        ) : (
-          <ol className={styles.activityList}>
-            {activity.map((item, index) => (
-              <li key={`${item.area.slug}-${item.timestamp}-${index}`} className={styles.activityItem}>
-                <span className={styles.activityDot} aria-hidden />
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.area.label} · {new Date(item.timestamp).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, dateStyle: 'medium', timeStyle: 'short' })}</span>
-                </div>
-                <Link href={`/project/${projectId}/${item.area.slug}${scopeQuery}`}>Open context →</Link>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+      <section id="activity-history" className={styles.activitySection} aria-label="Recent project activity"><div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Recent activity</span><h2>What changed recently</h2></div><Link href={`${projectBase}#activity-history`} className={styles.sectionLink}>View history <ArrowRight size={14} aria-hidden /></Link></div>{activity.length === 0 ? <div className={styles.honestEmpty}><span className={styles.emptyMark}>i</span><div><strong>No activity is established yet</strong><span>New records from the owning domains will appear here when available.</span></div></div> : <ol className={styles.activityList}>{activity.slice(0, 5).map((item, index) => <li key={`${item.area.slug}-${item.timestamp}-${index}`} className={styles.activityItem}><span className={styles.activityDot} aria-hidden /><div><strong>{item.label}</strong><span>{item.area.label} · {new Date(item.timestamp).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, dateStyle: 'medium', timeStyle: 'short' })}</span></div><Link href={`${projectBase}/${item.area.slug}${scopeQuery}`}>Open →</Link></li>)}</ol>}</section>
     </main>
   );
 }
 
-function greeting(): string {
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Dubai' }).format(new Date()));
-  if (hour < 12) return 'morning';
-  if (hour < 18) return 'afternoon';
-  return 'evening';
+function HealthCard({ label, value, hint, tone }: { label: string; value: string; hint: string; tone: 'good' | 'bad' | 'accent' | 'muted' }) {
+  return <article className={styles.healthCard}><span>{label}</span><strong className={tone === 'good' ? styles.toneGood : tone === 'bad' ? styles.toneBad : tone === 'accent' ? styles.toneAccent : styles.toneMuted}>{value}</strong><small>{hint}</small></article>;
 }
 
-function ProjectWorkspaceJourney({ projectId, status, recordCount }: { projectId: string; status: string | null; recordCount: number }) {
-  const nodes = [
-    { label: 'Setup', meta: 'project context', href: `/project/${projectId}` },
-    { label: 'Plan', meta: 'schedule · WBS', href: `/projects/schedule?projectId=${encodeURIComponent(projectId)}` },
-    { label: 'Deliver', meta: `${recordCount} connected record${recordCount === 1 ? '' : 's'}`, href: `/project/${projectId}/site` },
-    { label: 'Control', meta: 'cost · changes', href: `/project/${projectId}/controls` },
-    { label: 'Closeout', meta: status === 'completed' ? 'completed' : 'governed action', href: `/project/${projectId}/controls?tab=closeout` },
-  ];
-  return (
-    <section style={workspaceJourneySt.section} aria-label="Project workspace journey">
-      <div style={workspaceJourneySt.header}>
-        <div>
-          <p style={workspaceJourneySt.kicker}>PROJECT WORKSPACE</p>
-          <h2 style={workspaceJourneySt.title}>From plan to closeout</h2>
-          <p style={workspaceJourneySt.copy}>Open the next project-management step while every specialist record stays with its canonical owner.</p>
-        </div>
-        <Link href={`/project/${projectId}/controls`} style={workspaceJourneySt.link}>Open controls <span>↗</span></Link>
-      </div>
-      <div style={workspaceJourneySt.nodes}>
-        {nodes.map((node, index) => (
-          <span key={node.label} style={workspaceJourneySt.nodeWrap}>
-            <Link href={node.href} style={workspaceJourneySt.node}>
-              <span style={workspaceJourneySt.nodeLabel}>{node.label}</span>
-              <span style={workspaceJourneySt.nodeMeta}>{node.meta}</span>
-            </Link>
-            {index < nodes.length - 1 && <span style={workspaceJourneySt.arrow} aria-hidden>›</span>}
-          </span>
-        ))}
-      </div>
-    </section>
-  );
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className={styles.metric}><span>{label}</span><strong className={value === 'Not established' ? styles.toneMuted : undefined}>{value}</strong></div>;
 }
 
-const workspaceJourneySt: Record<string, CSSProperties> = {
-  section: { margin: '0 0 18px', padding: '18px 20px', border: '1px solid var(--border)', borderRadius: 16, background: 'linear-gradient(125deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 52%)' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 16 },
-  kicker: { margin: '0 0 6px', color: 'var(--accent)', fontSize: 9.5, fontWeight: 850, letterSpacing: '.16em' },
-  title: { margin: 0, fontSize: 20, letterSpacing: '-.03em' },
-  copy: { margin: '6px 0 0', color: 'var(--muted)', fontSize: 12, lineHeight: 1.45 },
-  link: { display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' },
-  nodes: { display: 'flex', alignItems: 'stretch', gap: 4, overflowX: 'auto', paddingBottom: 2 },
-  nodeWrap: { display: 'inline-flex', alignItems: 'center', gap: 4, flex: '1 0 112px' },
-  node: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, width: '100%', padding: '10px 11px', border: '1px solid var(--border)', borderRadius: 11, background: 'var(--panel)', color: 'var(--text)', textDecoration: 'none' },
-  nodeLabel: { fontSize: 12.5, fontWeight: 800 },
-  nodeMeta: { color: 'var(--muted)', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  arrow: { color: 'var(--accent)', fontSize: 18, lineHeight: 1 },
-};
+function ActionGroup({ title, links }: { title: string; links: Array<[string, string]> }) {
+  return <div className={styles.actionGroup}><strong>{title}</strong>{links.map(([label, href]) => <Link key={label} href={href}>{label}<ArrowRight size={13} aria-hidden /></Link>)}</div>;
+}

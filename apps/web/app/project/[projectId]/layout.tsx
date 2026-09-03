@@ -11,6 +11,7 @@ interface ProjectHead {
   id: string;
   title: string;
   reference: string | null;
+  contractId?: string | null;
   status: string;
 }
 

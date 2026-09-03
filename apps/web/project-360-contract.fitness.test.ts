@@ -49,9 +49,9 @@ describe('Project 360 canonical delivery contract', () => {
       '/quality/ncrs?projectId=',
       '/subcontracts/subcontracts?projectId=',
       '/procurement/purchase-requests?projectId=',
-      'Subcontract packages',
-      'Procurement &amp; materials',
-      'Upload evidence',
+      'Procurement & subcontracts',
+      'Commercial & evidence',
+      'Project Action',
     ]) {
       expect(overview).toContain(marker);
     }
@@ -62,7 +62,7 @@ describe('Project 360 canonical delivery contract', () => {
     expect(schedule).toContain('selectedProjectId={projectId}');
     expect(schedule).toContain('scopedSchedules');
     const shell = readFileSync(SHELL, 'utf8');
-    for (const label of ['Overview', 'Plan & schedule', 'Progress & execution', 'Commercial & cost', 'Subcontracts', 'Procurement', 'Evidence & documents', 'Team & ownership', 'Delivery records']) {
+    for (const label of ['Overview', 'Plan & schedule', 'WBS & progress', 'Project controls', 'Subcontracts', 'Procurement', 'Documents', 'Team & resources', 'Testing & commissioning']) {
       expect(shell).toContain(label);
     }
   });
@@ -81,18 +81,18 @@ describe('Project 360 canonical delivery contract', () => {
 
   it('presents Project 360 as a guided management cockpit', () => {
     const overview = readFileSync(OVERVIEW, 'utf8');
-    for (const marker of ['Good {greeting()},', 'PROJECT WORKSPACE', 'From plan to closeout', 'ProjectWorkspaceJourney', 'canonical owner']) {
+    for (const marker of ['Project 360 / Overview', 'Project health', 'Needs attention', 'Project timeline', 'Delivery status', 'Commercial &amp; control', 'Recent activity', 'Project Action', 'canonical owner']) {
       expect(overview).toContain(marker);
     }
   });
 
-  it('uses one contextual project bar instead of a nested sidebar', () => {
+  it('uses a grouped Project 360 rail for project-level navigation', () => {
     const shell = readFileSync(SHELL, 'utf8');
     const css = readFileSync(resolve(__dirname, 'components/project-shell.module.css'), 'utf8');
-    expect(shell).toContain('<header className={styles.contextBar}');
-    expect(shell).not.toContain('<aside className={styles.rail}');
-    expect(css).toContain('.contextBar');
-    expect(css).toContain('flex-wrap: wrap;');
-    expect(css).toContain('min-width: 0;');
+    expect(shell).toContain('<aside className={styles.projectRail}');
+    expect(shell).toContain('navGroup');
+    expect(css).toContain('.projectRail');
+    expect(css).toContain('.navGroup');
+    expect(css).toContain('.navGroup[open]');
   });
 });

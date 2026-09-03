@@ -62,7 +62,7 @@ describe('Project 360 canonical delivery contract', () => {
     expect(schedule).toContain('selectedProjectId={projectId}');
     expect(schedule).toContain('scopedSchedules');
     const shell = readFileSync(SHELL, 'utf8');
-    for (const label of ['Overview', 'Plan & schedule', 'WBS & progress', 'Project controls', 'Subcontracts', 'Procurement', 'Documents', 'Team & resources', 'Testing & commissioning']) {
+    for (const label of ['Overview', 'Project', 'Plan & Control', 'Engineering', 'Procurement', 'Subcontracts', 'Site', 'Quality', 'HSE', 'Commercial', 'Documents', 'Approvals & Actions', 'Testing & Commissioning', 'Handover & Closeout', 'Activity & History']) {
       expect(shell).toContain(label);
     }
   });
@@ -86,13 +86,13 @@ describe('Project 360 canonical delivery contract', () => {
     }
   });
 
-  it('uses a grouped Project 360 rail for project-level navigation', () => {
+  it('uses a direct Project 360 rail for project-level shortcuts', () => {
     const shell = readFileSync(SHELL, 'utf8');
     const css = readFileSync(resolve(__dirname, 'components/project-shell.module.css'), 'utf8');
     expect(shell).toContain('<aside className={styles.projectRail}');
-    expect(shell).toContain('navGroup');
+    expect(shell).toContain('Project 360 navigation');
+    expect(shell).toContain('navItems.map');
     expect(css).toContain('.projectRail');
-    expect(css).toContain('.navGroup');
-    expect(css).toContain('.navGroup[open]');
+    expect(css).toContain('.navItemActive');
   });
 });

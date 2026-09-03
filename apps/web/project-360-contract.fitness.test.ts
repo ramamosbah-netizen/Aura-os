@@ -85,4 +85,14 @@ describe('Project 360 canonical delivery contract', () => {
       expect(overview).toContain(marker);
     }
   });
+
+  it('uses one contextual project bar instead of a nested sidebar', () => {
+    const shell = readFileSync(SHELL, 'utf8');
+    const css = readFileSync(resolve(__dirname, 'components/project-shell.module.css'), 'utf8');
+    expect(shell).toContain('<header className={styles.contextBar}');
+    expect(shell).not.toContain('<aside className={styles.rail}');
+    expect(css).toContain('.contextBar');
+    expect(css).toContain('flex-wrap: wrap;');
+    expect(css).toContain('min-width: 0;');
+  });
 });

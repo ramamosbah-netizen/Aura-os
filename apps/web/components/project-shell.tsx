@@ -52,6 +52,8 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
     { key: 'controls', label: 'Commercial & cost', icon: Gauge, href: `${base}/controls`, active: pathname.startsWith(`${base}/controls`) },
     { key: 'risks', label: 'Risks & issues', icon: Gauge, href: `${base}#needs-attention`, active: false },
     { key: 'changes', label: 'Changes', icon: Gauge, href: `${base}/controls?tab=variations`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'variations' },
+  ];
+  const deliveryNav: NavItem[] = [
     { key: 'subcontracts', label: 'Subcontracts', icon: FileStack, href: `/subcontracts/subcontracts?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/subcontracts/subcontracts' && searchParams.get('projectId') === project.id },
     { key: 'procurement', label: 'Procurement', icon: ShoppingCart, href: `/procurement/purchase-requests?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/procurement/purchase-requests') || pathname.startsWith('/procurement/purchase-orders') },
     { key: 'approvals', label: 'Approvals & actions', icon: ClipboardCheck, href: `/my-work/approvals?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/my-work/approvals') },
@@ -68,55 +70,53 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
 
   return (
     <div className={styles.workspace}>
-      <aside className={styles.rail} aria-label="Project workspace">
-        <Link href="/projects/projects" className={styles.backLink}>
-          <ArrowLeft size={14} aria-hidden />
-          All projects
-        </Link>
-
-        <div className={styles.projectIdentity}>
-          <div className={styles.identityMark} aria-hidden>
-            {project.reference?.slice(0, 2).toUpperCase() || 'PX'}
+      <header className={styles.contextBar} aria-label="Project workspace">
+        <div className={styles.contextTop}>
+          <Link href="/projects/projects" className={styles.backLink}>
+            <ArrowLeft size={14} aria-hidden />
+            All projects
+          </Link>
+          <div className={styles.projectIdentity}>
+            <div className={styles.identityMark} aria-hidden>
+              {project.reference?.slice(0, 2).toUpperCase() || 'PX'}
+            </div>
+            <div className={styles.identityCopy}>
+              <span className={styles.eyebrow}>Project context</span>
+              <strong className={styles.projectName}>{project.title}</strong>
+            </div>
           </div>
-          <div className={styles.identityCopy}>
-            <span className={styles.eyebrow}>Project context</span>
-            <strong className={styles.projectName}>{project.title}</strong>
+          <div className={styles.projectMeta}>
+            <span className={statusClass}>{project.status}</span>
+            {project.reference ? <code className={styles.reference}>{project.reference}</code> : null}
           </div>
+          <label className={styles.lens}>
+            <span>System / discipline lens</span>
+            <select
+              aria-label="System or discipline lens"
+              value={disciplineId ?? ''}
+              onChange={(event) => setDiscipline(event.target.value || null)}
+            >
+              <option value="">All systems</option>
+              {ELV_DISCIPLINES.map((discipline) => (
+                <option key={discipline.id} value={discipline.id}>{discipline.label}</option>
+              ))}
+            </select>
+          </label>
+          <Link href="/ai" className={styles.aiLink}>
+            <Bot size={16} aria-hidden />
+            AI workspace
+          </Link>
         </div>
-
-        <div className={styles.projectMeta}>
-          <span className={statusClass}>{project.status}</span>
-          {project.reference ? <code className={styles.reference}>{project.reference}</code> : null}
-        </div>
-
-        <label className={styles.lens}>
-          <span>System / discipline lens</span>
-          <select
-            aria-label="System or discipline lens"
-            value={disciplineId ?? ''}
-            onChange={(event) => setDiscipline(event.target.value || null)}
-          >
-            <option value="">All systems</option>
-            {ELV_DISCIPLINES.map((discipline) => (
-              <option key={discipline.id} value={discipline.id}>{discipline.label}</option>
-            ))}
-          </select>
-        </label>
-
         <nav className={styles.navigation} aria-label="Project delivery areas">
           <NavGroup label="Project office" items={officeNav} pathname={pathname} base={base} scoped={scoped} />
-          <div className={styles.navHint}>
-            <span>Specialist execution records stay owned by Delivery Operations.</span>
-            <Link href="/operations/overview">Open Delivery Operations →</Link>
-          </div>
+          <NavGroup label="Delivery" items={deliveryNav} pathname={pathname} base={base} scoped={scoped} />
           <NavGroup label="People" items={PEOPLE_NAV} pathname={pathname} base={base} scoped={scoped} />
         </nav>
-
-        <Link href="/ai" className={styles.aiLink}>
-          <Bot size={16} aria-hidden />
-          Open AI workspace
-        </Link>
-      </aside>
+        <div className={styles.navHint}>
+          <span>Project 360 connects the work; specialist domains remain the canonical owners.</span>
+          <Link href="/operations/overview">Open specialist views →</Link>
+        </div>
+      </header>
       <section className={styles.content}>{children}</section>
     </div>
   );

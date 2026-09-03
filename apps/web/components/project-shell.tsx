@@ -105,6 +105,14 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
             AI workspace
           </Link>
         </div>
+        <div className={styles.workspaceTitle}>
+          <div>
+            <span>PROJECT 360 WORKSPACE</span>
+            <h2>Project 360</h2>
+            <p>Open the project management workspace you need.</p>
+          </div>
+          <strong>{navItems.length} shortcuts</strong>
+        </div>
         <nav className={styles.navigation} aria-label="Project 360 navigation">
           {navItems.map((item) => {
             const Icon = item.icon;

@@ -15,8 +15,7 @@ import SuiteDashboardShell, {
   type SuiteShortcut,
 } from './suite-dashboard-shell';
 import ContinueWorking from './continue-working';
-import ProjectChangeControlBand, { type DeliveryVariation } from './project-change-control-band';
-import ProjectApprovalBand from './project-approval-band';
+import type { DeliveryVariation } from './project-change-control-band';
 import { ProjectsSuiteNav } from './projects-suite-chrome';
 import projectsSuiteStyles from './projects-suite-chrome.module.css';
 
@@ -161,7 +160,7 @@ export default function ProjectDeliveryDashboard({
       }}
       askAura={{ tabType: 'Projects' }}
       metrics={metrics}
-      band={<><nav className={projectsSuiteStyles.nav} aria-label="Projects suite navigation"><ProjectsSuiteNav active="overview" /></nav><ProjectJourney nodes={journey} /><ProjectChangeControlBand variations={variations} /><ProjectApprovalBand projects={projects} variations={variations} totalApprovals={approvals === null ? null : approvals.length} /></>}
+      band={<><nav className={projectsSuiteStyles.nav} aria-label="Projects suite navigation"><ProjectsSuiteNav active="overview" /></nav><ProjectJourney nodes={journey} /></>}
       continueWorking={<ContinueWorking match={['/project']} />}
       attention={{
         kicker: 'Earned-value engine · deepest gap first',

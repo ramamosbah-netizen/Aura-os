@@ -8,6 +8,7 @@ import {
   GitBranch,
   CalendarRange,
 } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import SuiteDashboardShell, {
   type SuiteAttentionItem,
   type SuiteMetric,
@@ -70,10 +71,12 @@ function riskReason(project: DeliveryProject): string {
 }
 
 export default function ProjectDeliveryDashboard({
+  userName,
   projects,
   approvals,
   variations,
 }: {
+  userName: string;
   projects: DeliveryProject[] | null;
   approvals: DeliveryApproval[] | null;
   variations: DeliveryVariation[] | null;
@@ -83,6 +86,8 @@ export default function ProjectDeliveryDashboard({
   const atRisk = rows.filter((project) => project.atRisk);
   const behindSchedule = active.filter((project) => project.evm.spi !== null && project.evm.spi < 1);
   const pendingApprovals = approvals?.length ?? 0;
+  const planned = rows.filter((project) => project.status === 'planned').length;
+  const completed = rows.filter((project) => project.status === 'completed').length;
 
   const bac = rows.reduce((sum, project) => sum + (project.evm.budgetAtCompletion ?? 0), 0);
   const ev = rows.reduce((sum, project) => sum + (project.evm.earnedValue ?? 0), 0);
@@ -133,20 +138,28 @@ export default function ProjectDeliveryDashboard({
       }
     : shortcut);
 
+  const journey = [
+    { label: 'Project setup', meta: projects ? `${rows.length} records` : '—', href: '/projects/projects' },
+    { label: 'Plan & schedule', meta: projects ? `${planned} planned` : '—', href: '/projects/schedule' },
+    { label: 'Execute', meta: projects ? `${active.length} active` : '—', href: '/projects/projects?status=active' },
+    { label: 'Control', meta: 'WBS · cost · changes', href: '/projects/controls' },
+    { label: 'Closeout', meta: projects ? `${completed} completed` : '—', href: '/projects/closeout' },
+  ];
+
   return (
     <SuiteDashboardShell
       testId="project-delivery-dashboard"
       anchor={{ href: '/projects/dashboard', title: 'Projects', type: 'Projects' }}
       hero={{
         eyebrow: 'AURA OS / PROJECTS',
-        title: <>Project <span>Management</span></>,
+        title: <>Good {greeting()}, <span>{userName}</span></>,
         lede: projects === null
           ? 'Portfolio health for planning, coordination, controls, decisions and closeout.'
           : `${active.length} active project${active.length === 1 ? '' : 's'} · portfolio SPI ${spiText} · ${atRisk.length} need attention.`,
       }}
       askAura={{ tabType: 'Projects' }}
       metrics={metrics}
-      band={<><ProjectChangeControlBand variations={variations} /><ProjectApprovalBand projects={projects} variations={variations} totalApprovals={approvals === null ? null : approvals.length} /></>}
+      band={<><ProjectJourney nodes={journey} /><ProjectChangeControlBand variations={variations} /><ProjectApprovalBand projects={projects} variations={variations} totalApprovals={approvals === null ? null : approvals.length} /></>}
       continueWorking={<ContinueWorking match={['/project']} />}
       attention={{
         kicker: 'Earned-value engine · deepest gap first',
@@ -178,3 +191,51 @@ export default function ProjectDeliveryDashboard({
     />
   );
 }
+
+function greeting(): string {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Dubai' }).format(new Date()));
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
+}
+
+function ProjectJourney({ nodes }: { nodes: Array<{ label: string; meta: string; href: string }> }) {
+  return (
+    <section style={journeySt.section} aria-label="Project delivery journey">
+      <div style={journeySt.header}>
+        <div>
+          <p style={journeySt.kicker}>PROJECT DELIVERY JOURNEY</p>
+          <h2 style={journeySt.title}>From setup to closeout</h2>
+          <p style={journeySt.copy}>One management cockpit for the project lifecycle. Open a step in its canonical workspace.</p>
+        </div>
+        <a href="/projects/projects" style={journeySt.link}>Open project register <span>↗</span></a>
+      </div>
+      <div style={journeySt.nodes}>
+        {nodes.map((node, index) => (
+          <span key={node.label} style={journeySt.nodeWrap}>
+            <a href={node.href} style={journeySt.node}>
+              <span style={journeySt.nodeLabel}>{node.label}</span>
+              <span style={journeySt.nodeMeta}>{node.meta}</span>
+            </a>
+            {index < nodes.length - 1 && <span style={journeySt.arrow} aria-hidden>›</span>}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const journeySt: Record<string, CSSProperties> = {
+  section: { margin: '0 0 12px', padding: '18px 20px', border: '1px solid var(--border)', borderRadius: 16, background: 'linear-gradient(125deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 52%)' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 16 },
+  kicker: { margin: '0 0 6px', color: 'var(--accent)', fontSize: 9.5, fontWeight: 850, letterSpacing: '.16em' },
+  title: { margin: 0, fontSize: 20, letterSpacing: '-.03em' },
+  copy: { margin: '6px 0 0', color: 'var(--muted)', fontSize: 12, lineHeight: 1.45 },
+  link: { display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' },
+  nodes: { display: 'flex', alignItems: 'stretch', gap: 4, overflowX: 'auto', paddingBottom: 2 },
+  nodeWrap: { display: 'inline-flex', alignItems: 'center', gap: 4, flex: '1 0 112px' },
+  node: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, width: '100%', padding: '10px 11px', border: '1px solid var(--border)', borderRadius: 11, background: 'var(--panel)', color: 'var(--text)', textDecoration: 'none' },
+  nodeLabel: { fontSize: 12.5, fontWeight: 800 },
+  nodeMeta: { color: 'var(--muted)', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  arrow: { color: 'var(--accent)', fontSize: 18, lineHeight: 1 },
+};

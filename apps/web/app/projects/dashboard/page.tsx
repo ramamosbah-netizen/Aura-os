@@ -1,4 +1,4 @@
-import { getJson } from '@/lib/api';
+import { currentUser, getJson } from '@/lib/api';
 import ProjectDeliveryDashboard, {
   type DeliveryApproval,
   type DeliveryProject,
@@ -23,7 +23,8 @@ interface InboxItem { id: string; module: string; kind: string; title: string; a
 const DELIVERY_MODULES = new Set(['Projects', 'Quality']);
 
 export default async function ProjectsDashboardPage() {
-  const [portfolio, inbox, variations] = await Promise.all([
+  const [user, portfolio, inbox, variations] = await Promise.all([
+    currentUser(),
     getJson<DeliveryProject[]>('/api/projects/projects/portfolio'),
     getJson<InboxItem[]>('/api/inbox'),
     getJson<DeliveryVariation[]>('/api/projects/variations'),
@@ -35,5 +36,8 @@ export default async function ProjectsDashboardPage() {
         .filter((item) => DELIVERY_MODULES.has(item.module))
         .map((item) => ({ id: item.id, module: item.module, kind: item.kind, title: item.title, action: item.action, href: item.href }));
 
-  return <ProjectDeliveryDashboard projects={portfolio} approvals={approvals} variations={variations} />;
+  const rawName = user?.sub?.replace(/^u-/, '').replace(/[-_.]+/g, ' ').trim();
+  const userName = rawName ? rawName.replace(/\b\w/g, (character) => character.toUpperCase()) : 'AURA User';
+
+  return <ProjectDeliveryDashboard userName={userName} projects={portfolio} approvals={approvals} variations={variations} />;
 }

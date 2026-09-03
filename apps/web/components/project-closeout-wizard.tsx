@@ -1,10 +1,12 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
-import EmptyState from './ui/empty-state';
+import { ArrowLeft, CheckCircle2, ClipboardCheck, FolderKanban, ShieldCheck, TriangleAlert } from 'lucide-react';
+import AuraTabLink from './aura-tab-link';
 import NextBestActionBanner from './ui/next-best-action-banner';
 import ProjectPicker from './ui/project-picker';
 import SignatureCanvas from './ui/signature-canvas';
+import styles from './project-closeout-wizard.module.css';
 
 export interface ProjectCloseoutData {
   id: string;
@@ -47,6 +49,9 @@ export default function ProjectCloseoutWizard({ projects = [] }: { projects: Pro
   const [completed, setCompleted] = useState(false);
 
   const activeProject = projects.find((p) => p.id === selectedProjectId);
+  const activeProjects = projects.filter((project) => project.status === 'active');
+  const openDefects = projects.reduce((sum, project) => sum + project.openSnagCount + project.majorNcrCount, 0);
+  const clearanceSignals = projects.filter((project) => project.commissioningCount > 0 && project.commissionedCount >= project.commissioningCount && project.openSnagCount === 0 && project.majorNcrCount === 0).length;
 
   const toggleCheck = (k: keyof CloseoutChecklist) => {
     setChecklist((prev) => ({ ...prev, [k]: !prev[k] }));
@@ -95,15 +100,21 @@ export default function ProjectCloseoutWizard({ projects = [] }: { projects: Pro
 
   if (projects.length === 0) {
     return (
-      <EmptyState
-        title="No active projects for closeout"
-        description="Select or create an active project to initiate the 4-step closeout and handover wizard."
-      />
+      <div className={styles.page}>
+        <CloseoutHeader projects={projects} activeProjects={activeProjects} openDefects={openDefects} clearanceSignals={clearanceSignals} />
+        <section className={styles.emptyPanel} aria-label="Closeout project scope">
+          <div className={styles.emptyIcon}><FolderKanban aria-hidden /></div>
+          <div><span className={styles.eyebrow}>NO SOURCE RECORDS</span><h2>No project is available for closeout</h2><p>The closeout workspace is ready. It will show commissioning, defects, deliverables and client handover when a project enters the connected project source.</p><AuraTabLink href="/projects/projects" tabTitle="Projects" tabType="Projects" className={styles.primaryLink}>Open Projects register <ArrowLeft aria-hidden /></AuraTabLink></div>
+        </section>
+        <p className={styles.truthNote}><ShieldCheck aria-hidden /><span><strong>Nothing is being inferred.</strong> No project, checklist, readiness percentage or sign-off state is created without an authoritative source record.</span></p>
+      </div>
     );
   }
 
   return (
-    <div style={st.container}>
+    <div className={styles.page}>
+      <CloseoutHeader projects={projects} activeProjects={activeProjects} openDefects={openDefects} clearanceSignals={clearanceSignals} />
+      <div style={st.container}>
       <div style={st.headCard}>
         <div style={st.headRow}>
           <div>
@@ -214,7 +225,7 @@ export default function ProjectCloseoutWizard({ projects = [] }: { projects: Pro
                   </div>
                   <div style={st.statBox}>
                     <span style={{ ...st.statVal, color: 'var(--accent)' }}>
-                      {activeProject?.commissioningCount ? Math.round(((activeProject.commissionedCount || 0) / activeProject.commissioningCount) * 100) : 100}%
+                      {activeProject?.commissioningCount ? `${Math.round(((activeProject.commissionedCount ?? 0) / activeProject.commissioningCount) * 100)}%` : 'Unavailable'}
                     </span>
                     <span style={st.statLabel}>System Pass Rate</span>
                   </div>
@@ -368,8 +379,29 @@ export default function ProjectCloseoutWizard({ projects = [] }: { projects: Pro
           </>
         )}
       </div>
+      </div>
     </div>
   );
+}
+
+function CloseoutHeader({ projects, activeProjects, openDefects, clearanceSignals }: { projects: ProjectCloseoutData[]; activeProjects: ProjectCloseoutData[]; openDefects: number; clearanceSignals: number }) {
+  return <>
+    <header className={styles.hero}>
+      <div><span className={styles.eyebrow}>AURA OS / PROJECTS / CLOSEOUT</span><h1>Closeout command center</h1><p>Move a project from delivery evidence to a controlled handover. Readiness is composed from authoritative commissioning, defect, document and acceptance signals.</p></div>
+      <AuraTabLink href="/projects/dashboard" tabTitle="Projects" tabType="Projects" className={styles.backLink}><ArrowLeft aria-hidden />Projects dashboard</AuraTabLink>
+    </header>
+    <section className={styles.summary} aria-label="Closeout portfolio summary">
+      <SummaryMetric icon={FolderKanban} value={String(projects.length)} label="Projects in scope" detail="source records" />
+      <SummaryMetric icon={ClipboardCheck} value={String(activeProjects.length)} label="In delivery" detail="active project records" />
+      <SummaryMetric icon={TriangleAlert} value={String(openDefects)} label="Open defect signals" detail="snags + major NCRs" tone={openDefects ? 'warn' : 'good'} />
+      <SummaryMetric icon={CheckCircle2} value={String(clearanceSignals)} label="Clearance signals" detail="commissioning + defects" tone="good" />
+    </section>
+    <div className={styles.boundary}><ShieldCheck aria-hidden /><span><strong>Readiness, not a shortcut.</strong> Final client acceptance remains a governed handover action; this page surfaces the evidence needed before it.</span></div>
+  </>;
+}
+
+function SummaryMetric({ icon: Icon, value, label, detail, tone = 'default' }: { icon: typeof FolderKanban; value: string; label: string; detail: string; tone?: 'default' | 'warn' | 'good' }) {
+  return <article className={`${styles.metric} ${styles[`metric_${tone}`]}`}><Icon aria-hidden /><span><strong>{value}</strong><b>{label}</b><small>{detail}</small></span></article>;
 }
 
 function coreReadyDeliverables(c: CloseoutChecklist) {

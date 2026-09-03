@@ -1,4 +1,4 @@
-.page { max-width: 1180px; margin:0 auto; }
+.page { width:calc(100% + 4vw); max-width:none; margin:0 0 0 -2vw; }
 .projectHeader { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:4px 0 22px; border-bottom:1px solid var(--border); }
 .projectHeaderCopy { min-width:0; }
 .backLink { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; font-weight:700; text-decoration:none; margin-bottom:16px; }
@@ -6,7 +6,7 @@
 .backLink:hover,.sectionLink:hover,.nextItem:hover { color:var(--text); }
 .eyebrow,.sectionKicker { color:var(--accent); font-size:9px; font-weight:850; letter-spacing:.15em; text-transform:uppercase; }
 .titleRow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:6px; }
-.titleRow h1 { margin:0; color:var(--text); font-size:clamp(28px,4vw,44px); line-height:1; letter-spacing:-.05em; }
+.titleRow h1 { margin:0; color:var(--text); font-size:clamp(40px,4vw,52px); line-height:1; letter-spacing:-.05em; }
 .projectStatus { padding:5px 9px; border:1px solid color-mix(in srgb,var(--accent) 55%,var(--border)); border-radius:999px; color:var(--accent); font-size:10px; font-weight:800; text-transform:uppercase; }
 .projectMetaLine { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin-top:10px; color:var(--muted); font-size:11.5px; }
 .projectMetaLine span + span::before,.projectMetaLine code + span::before { content:'·'; margin-right:9px; color:var(--border-strong); }
@@ -49,4 +49,5 @@
 .activityList { list-style:none; margin:0; padding:0; }.activityItem { display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:11px; padding:11px 0; border-top:1px solid var(--border); }.activityItem:first-child { border-top:0; }.activityDot { width:8px; height:8px; border-radius:50%; background:var(--accent); }.activityItem div { display:grid; gap:3px; }.activityItem strong { font-size:12px; }.activityItem span { color:var(--muted); font-size:10.5px; }.activityItem a { color:var(--accent); font-size:10.5px; font-weight:750; text-decoration:none; }
 @media (max-width:900px) { .workspace { grid-template-columns:230px minmax(0,1fr); }.healthGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }.commercialGrid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:720px) { .projectHeader { align-items:flex-start; flex-direction:column; }.actionMenu,.actionMenu summary { width:100%; }.actionMenu summary { justify-content:center; }.actionMenuPanel { left:0; right:auto; }.cockpitGrid { grid-template-columns:1fr; } }
+@media (max-width:760px) { .page { width:100%; margin:0; } }
 @media (max-width:520px) { .healthGrid,.commercialGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }.healthCard strong { font-size:16px; }.commercialGrid .metric:last-child { grid-column:1 / -1; }.activityItem { grid-template-columns:10px minmax(0,1fr); }.activityItem a { grid-column:2; }.projectMetaLine span + span::before,.projectMetaLine code + span::before { margin-right:6px; } }

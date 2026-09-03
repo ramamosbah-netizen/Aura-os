@@ -174,7 +174,8 @@ export default function EngineeringClient({
   const [bimModels, setBimModels] = useState<BimModel[]>(initialBimModels);
 
   // Form states
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
+  // Project context is an explicit decision, never silently inferred from the first record.
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [drawingCode, setDrawingCode] = useState('');
   const [drawingTitle, setDrawingTitle] = useState('');
   const [drawingRev, setDrawingRev] = useState('0');
@@ -237,9 +238,11 @@ export default function EngineeringClient({
 
   // Helper
   const selectedProjName = projects.find((p) => p.id === selectedProjectId)?.title || null;
+  const hasProject = selectedProjectId.trim().length > 0;
 
   const handleCreateDrawing = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasProject) { setError('Select a project before registering a drawing.'); return; }
     if (!drawingCode.trim() || !drawingTitle.trim()) return;
 
     setError(null);
@@ -268,6 +271,7 @@ export default function EngineeringClient({
 
   const handleCreateRfi = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasProject) { setError('Select a project before raising an RFI.'); return; }
     if (!rfiCode.trim() || !rfiTitle.trim() || !rfiQuestion.trim()) return;
 
     setError(null);
@@ -316,6 +320,7 @@ export default function EngineeringClient({
 
   const handleCreateTq = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasProject) { setError('Select a project before raising a technical query.'); return; }
     if (!tqCode.trim() || !tqTitle.trim() || !tqQuery.trim()) return;
 
     setError(null);
@@ -372,6 +377,7 @@ export default function EngineeringClient({
 
   const handleRegisterBim = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasProject) { setError('Select a project before registering a BIM model.'); return; }
     if (!bmCode.trim() || !bmName.trim()) return;
 
     setError(null);
@@ -427,6 +433,7 @@ export default function EngineeringClient({
 
   const handleCreateSubmittal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasProject) { setError('Select a project before creating a submittal.'); return; }
     if (!subCode.trim() || !subTitle.trim()) return;
 
     setError(null);
@@ -470,6 +477,7 @@ export default function EngineeringClient({
 
   const handleCreateDesignChange = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasProject) { setError('Select a project before raising a design change.'); return; }
     if (!dcCode.trim() || !dcTitle.trim()) return;
     setError(null);
     try {
@@ -510,6 +518,7 @@ export default function EngineeringClient({
 
   const handleCreateDocument = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasProject) { setError('Select a project before creating an engineering document.'); return; }
     if (!docCode.trim() || !docTitle.trim()) return;
     setError(null);
     try {
@@ -625,6 +634,11 @@ export default function EngineeringClient({
         </button>
       </div>
 
+      {!hasProject && <div role="status" style={st.projectGate}>
+        <strong>Choose a project to work in context.</strong>
+        <span>Engineering records are never created without a project. Select one in the form before registering a drawing, raising a query, or creating a controlled document.</span>
+      </div>}
+
       {/* Tab Contents */}
       {activeTab === 'overview' && (
         <div>
@@ -691,6 +705,7 @@ export default function EngineeringClient({
                   onChange={(e) => setSelectedProjectId(e.target.value)}
                   style={st.select}
                 >
+                  <option value="">Select a project first…</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
@@ -731,7 +746,7 @@ export default function EngineeringClient({
                 />
               </div>
             </div>
-            <button type="submit" style={st.btn}>Register Drawing</button>
+            <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} disabled={!hasProject}>Register Drawing</button>
           </form>
 
           {/* List panel */}
@@ -791,6 +806,7 @@ export default function EngineeringClient({
                   onChange={(e) => setSelectedProjectId(e.target.value)}
                   style={st.select}
                 >
+                  <option value="">Select a project first…</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
@@ -832,7 +848,7 @@ export default function EngineeringClient({
                 required
               />
             </div>
-            <button type="submit" style={st.btn} className="mt-3">Raise RFI</button>
+            <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} className="mt-3" disabled={!hasProject}>Raise RFI</button>
           </form>
 
           {/* List panel */}
@@ -904,6 +920,7 @@ export default function EngineeringClient({
                   onChange={(e) => setSelectedProjectId(e.target.value)}
                   style={st.select}
                 >
+                  <option value="">Select a project first…</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
@@ -999,7 +1016,7 @@ export default function EngineeringClient({
                 Potential time impact
               </label>
             </div>
-            <button type="submit" style={st.btn} className="mt-3">Raise TQ</button>
+            <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} className="mt-3" disabled={!hasProject}>Raise TQ</button>
           </form>
 
           {/* List panel */}
@@ -1081,6 +1098,7 @@ export default function EngineeringClient({
                   onChange={(e) => setSelectedProjectId(e.target.value)}
                   style={st.select}
                 >
+                  <option value="">Select a project first…</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
@@ -1124,7 +1142,7 @@ export default function EngineeringClient({
                 </select>
               </div>
             </div>
-            <button type="submit" style={st.btn}>Submit Technical Submittal</button>
+            <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} disabled={!hasProject}>Submit Technical Submittal</button>
           </form>
 
           {/* List panel */}
@@ -1204,6 +1222,7 @@ export default function EngineeringClient({
               <div style={st.field}>
                 <label style={st.label}>Project</label>
                 <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} style={st.select}>
+                  <option value="">Select a project first…</option>
                   {projects.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
                 </select>
               </div>
@@ -1240,7 +1259,7 @@ export default function EngineeringClient({
                 </label>
               </div>
             </div>
-            <button type="submit" style={st.btn}>Raise Design Change</button>
+            <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} disabled={!hasProject}>Raise Design Change</button>
           </form>
 
           <section style={st.panel}>
@@ -1302,6 +1321,7 @@ export default function EngineeringClient({
               <div style={st.field}>
                 <label style={st.label}>Project</label>
                 <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} style={st.select}>
+                  <option value="">Select a project first…</option>
                   {projects.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
                 </select>
               </div>
@@ -1328,7 +1348,7 @@ export default function EngineeringClient({
             </div>
             <p style={st.formHint}>{docTypeLabel(docType)} fields (type-specific — driven by its form schema):</p>
             <DocTypeFields key={`${docType}-${docNonce}`} docType={docType} onValues={setDocFields} />
-            <button type="submit" style={st.btn}>Create Document</button>
+            <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} disabled={!hasProject}>Create Document</button>
           </form>
 
           <section style={st.panel}>
@@ -1391,6 +1411,7 @@ export default function EngineeringClient({
                   onChange={(e) => setSelectedProjectId(e.target.value)}
                   style={st.select}
                 >
+                  <option value="">Select a project first…</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
@@ -1493,7 +1514,7 @@ export default function EngineeringClient({
                 style={st.input}
               />
             </div>
-            <button type="submit" style={st.btn} className="mt-3">Register Model</button>
+            <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} className="mt-3" disabled={!hasProject}>Register Model</button>
           </form>
 
           {/* List panel */}
@@ -1807,6 +1828,12 @@ const st = {
     padding: '10px 14px',
     margin: '0 0 16px',
     fontSize: 13.5,
+  } as CSSProperties,
+  projectGate: {
+    display: 'flex', flexDirection: 'column', gap: 4,
+    margin: '0 0 20px', padding: '12px 14px', borderRadius: 10,
+    color: 'var(--warn)', background: 'color-mix(in srgb, var(--warn) 9%, transparent)',
+    border: '1px solid color-mix(in srgb, var(--warn) 25%, transparent)', fontSize: 13,
   } as CSSProperties,
   rfiList: { display: 'flex', flexDirection: 'column', gap: 16 } as CSSProperties,
   rfiCard: {

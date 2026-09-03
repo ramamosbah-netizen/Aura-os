@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import HseControlClient from '../../../components/hse-control-client';
+import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,10 +100,7 @@ export default async function HseControlPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>HSE Control</h1>
-      <p style={st.sub}>
-        Health, Safety, and Environment monitoring. Track incidents, Permits to Work (PTW), Corrective and Preventive Actions (CAPA), and Safety Training Matrix.
-      </p>
+      <DeliveryOperationsWorkspaceHeader active="hse" title="HSE control workspace" owner="HSE" description="Keep field activities safe through permits, risk controls, incidents, observations, training and corrective actions." />
 
       <HseControlClient
         initialIncidents={incidents ?? []}

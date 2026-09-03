@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import QualityControlClient from '../../../components/quality-control-client';
+import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,10 +97,7 @@ export default async function QualityControlPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Quality Control (QA/QC)</h1>
-      <p style={st.sub}>
-        Quality Assurance & Quality Control panel. Log and correct Non-Conformance Reports (NCR), request formal field inspections (IR), and manage snags.
-      </p>
+      <DeliveryOperationsWorkspaceHeader active="quality" title="Quality control workspace" owner="Quality" description="Plan inspections, manage NCRs and snags, and close corrective actions with auditable evidence across projects." />
 
       <QualityControlClient
         initialNcrs={ncrs ?? []}

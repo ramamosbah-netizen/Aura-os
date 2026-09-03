@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import CommissioningClient from '../../components/commissioning-client';
+import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,12 +37,7 @@ export default async function CommissioningPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Commissioning</h1>
-      <p style={st.sub}>
-        Test &amp; Commissioning (T&amp;C) — the ELV deliverable that turns installed systems into
-        accepted ones. Register each system, record its test-point pass rate, then commission it
-        with a witnessed sign-off. Commissioned systems are the prerequisite for project handover.
-      </p>
+      <DeliveryOperationsWorkspaceHeader active="commissioning" title="Testing & commissioning workspace" owner="Commissioning" description="Turn installed systems into accepted systems through test plans, point results, witnessed sign-off and commissioning evidence." />
       <CommissioningClient initialRecords={records ?? []} projects={projects ?? []} />
     </div>
   );

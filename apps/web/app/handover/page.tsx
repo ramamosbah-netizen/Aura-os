@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import HandoverClient from '../../components/handover-client';
+import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,13 +36,7 @@ export default async function HandoverPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Handover</h1>
-      <p style={st.sub}>
-        The project acceptance package that closes ELV delivery: compile the close-out
-        deliverables (O&amp;M manuals, as-builts, test certificates, warranty, training, spares),
-        submit to the client, and record acceptance — which starts the warranty / DLP clock and
-        is the trigger for AMC. Each package shows its project&apos;s live commissioning status.
-      </p>
+      <DeliveryOperationsWorkspaceHeader active="handover" title="Handover workspace" owner="Handover" description="Assemble the acceptance package, track outstanding deliverables and record the governed client handover that closes delivery." />
       <HandoverClient initialPackages={packages ?? []} projects={projects ?? []} />
     </div>
   );

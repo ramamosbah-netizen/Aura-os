@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import SiteControlClient from '../../../components/site-control-client';
+import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,10 +113,7 @@ export default async function SiteControlPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Site Control</h1>
-      <p style={st.sub}>
-        Operational site journals, diary entries, delay management, material consumption, and labour allocations.
-      </p>
+      <DeliveryOperationsWorkspaceHeader active="site" title="Site execution workspace" owner="Site" description="Coordinate field work through controlled instructions, daily reports, progress, delays, labour, equipment and site evidence." />
 
       <SiteControlClient
         initialDailyReports={dailyReports ?? []}

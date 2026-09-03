@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import EngineeringClient from '../../components/engineering-client';
+import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,12 +130,7 @@ export default async function EngineeringPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Engineering Management</h1>
-      <p style={st.sub}>
-        The engineering lifecycle in one place: shop drawings, RFIs and submittals, engineering
-        design changes (which raise commercial variations on approval), and controlled documents
-        (method statements, risk assessments, specs) — every record tagged by discipline.
-      </p>
+      <DeliveryOperationsWorkspaceHeader active="engineering" title="Engineering workspace" owner="Engineering" description="Prepare and release the technical information that enables field work: drawings, RFIs, submittals, design changes and controlled deliverables." />
 
       <EngineeringClient
         initialDrawings={drawings ?? []}

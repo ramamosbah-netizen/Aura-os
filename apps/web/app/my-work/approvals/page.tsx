@@ -5,16 +5,17 @@ import type { ApiDecisionItem, SharedDecisionDocument } from '@/lib/decision-ass
 
 export const dynamic = 'force-dynamic';
 
-export default async function MyApprovalsPage() {
+export default async function MyApprovalsPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
   const [decisions, sharedDocuments] = await Promise.all([
     getJson<ApiDecisionItem[]>('/api/inbox'),
     getJson<SharedDecisionDocument[]>('/api/documents/shared-with-me'),
   ]);
+  const scope = (await searchParams).scope === 'projects' ? 'projects' : 'all';
 
   return (
     <main data-testid="my-approvals-page">
       <AuraTabAnchor href="/my-work/approvals" title="Approvals" type="My Work" />
-      <ApprovalsReviewsWorkspace decisions={decisions} sharedDocuments={sharedDocuments} />
+      <ApprovalsReviewsWorkspace decisions={decisions} sharedDocuments={sharedDocuments} scope={scope} />
     </main>
   );
 }

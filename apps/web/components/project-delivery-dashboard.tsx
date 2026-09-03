@@ -55,7 +55,7 @@ const SHORTCUTS: SuiteShortcut[] = [
   { label: 'Plan & schedule', description: 'Gantt — planned vs baseline vs actual', href: '/projects/schedule', icon: CalendarRange, tone: 'slate' },
   { label: 'Project controls', description: 'Technical KPI, WBS, CBS, quantities and cost control', href: '/projects/controls', icon: GaugeCircle, tone: 'violet' },
   { label: 'Changes', description: 'Governed variations and change context', href: '/projects/variations', icon: GitBranch, tone: 'amber' },
-  { label: 'Approvals & actions', description: 'Project decisions grouped by project', href: '/projects/dashboard#project-approvals', icon: ListChecks, tone: 'blue' },
+  { label: 'Approvals & actions', description: 'Latest project decisions by week', href: '/my-work/approvals?scope=projects', icon: ListChecks, tone: 'blue' },
   { label: 'Project closeout', description: 'Handover readiness and closeout workflow', href: '/projects/closeout', icon: CheckCircle2, tone: 'green' },
 ];
 
@@ -128,7 +128,7 @@ export default function ProjectDeliveryDashboard({
   const shortcutItems: SuiteShortcut[] = SHORTCUTS.map((shortcut) => shortcut.label === 'Approvals & actions'
     ? {
         ...shortcut,
-        description: approvals === null ? 'Project decision feed unavailable' : `${pendingApprovals} project decision${pendingApprovals === 1 ? '' : 's'} waiting · grouped below by project`,
+        description: approvals === null ? 'Project decision feed unavailable' : `${pendingApprovals} live project decision${pendingApprovals === 1 ? '' : 's'} · open weekly view`,
         count: approvals === null ? null : pendingApprovals,
       }
     : shortcut);

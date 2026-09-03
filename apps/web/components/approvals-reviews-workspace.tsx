@@ -33,6 +33,30 @@ function formatMoney(value: number | null): string {
   return new Intl.NumberFormat(DISPLAY_LOCALE, { style: 'currency', currency: 'AED', maximumFractionDigits: 0 }).format(value);
 }
 
+function isProjectDecision(item: DecisionAssignment): boolean {
+  return item.domain === 'Projects' || /\bproject\s*:/i.test(item.detail);
+}
+
+function weekStart(iso: string | null): string | null {
+  if (!iso) return null;
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instant);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, Number(part.value)]));
+  const date = new Date(Date.UTC(values.year, values.month - 1, values.day));
+  const day = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - day);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatWeekRange(key: string): string {
+  const start = new Date(`${key}T00:00:00Z`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 6);
+  const options: Intl.DateTimeFormatOptions = { timeZone: 'UTC', day: '2-digit', month: 'short' };
+  return `${start.toLocaleDateString(DISPLAY_LOCALE, options)} – ${end.toLocaleDateString(DISPLAY_LOCALE, options)}`;
+}
+
 function countForView(items: DecisionAssignment[], view: View): number {
   if (view === 'INBOX') return items.length;
   if (view === 'SIGN_OFF') return items.filter((item) => item.actionRequired === 'SIGN_OFF' || item.actionRequired === 'DECISION').length;
@@ -42,8 +66,9 @@ function countForView(items: DecisionAssignment[], view: View): number {
   return items.filter((item) => item.actionRequired === view).length;
 }
 
-export default function ApprovalsReviewsWorkspace({ decisions, sharedDocuments }: { decisions: ApiDecisionItem[] | null; sharedDocuments: SharedDecisionDocument[] | null }) {
+export default function ApprovalsReviewsWorkspace({ decisions, sharedDocuments, scope = 'all' }: { decisions: ApiDecisionItem[] | null; sharedDocuments: SharedDecisionDocument[] | null; scope?: 'all' | 'projects' }) {
   const allItems = useMemo(() => composeDecisionQueue(decisions, sharedDocuments), [decisions, sharedDocuments]);
+  const scopedItems = useMemo(() => scope === 'projects' ? allItems.filter(isProjectDecision) : allItems, [allItems, scope]);
   const unavailableSources = [decisions === null ? 'domain decisions' : null, sharedDocuments === null ? 'document access' : null].filter((value): value is string => value !== null);
   const [view, setView] = useState<View>('INBOX');
   const [query, setQuery] = useState('');
@@ -51,15 +76,15 @@ export default function ApprovalsReviewsWorkspace({ decisions, sharedDocuments }
   const [kind, setKind] = useState('ALL');
   const [source, setSource] = useState('ALL');
 
-  const domains = useMemo(() => [...new Set(allItems.map((item) => item.domain))].sort(), [allItems]);
-  const kinds = useMemo(() => [...new Set(allItems.map((item) => item.kind))].sort(), [allItems]);
-  const formal = allItems.filter((item) => item.isFormalAssignment);
+  const domains = useMemo(() => [...new Set(scopedItems.map((item) => item.domain))].sort(), [scopedItems]);
+  const kinds = useMemo(() => [...new Set(scopedItems.map((item) => item.kind))].sort(), [scopedItems]);
+  const formal = scopedItems.filter((item) => item.isFormalAssignment);
   const reviewCount = formal.filter((item) => item.actionRequired === 'REVIEW').length;
   const approvalCount = formal.filter((item) => item.actionRequired === 'APPROVAL').length;
   const decisionCount = formal.filter((item) => item.actionRequired === 'SIGN_OFF' || item.actionRequired === 'DECISION').length;
-  const workflowLinkedCount = allItems.filter((item) => item.workflow !== null).length;
+  const workflowLinkedCount = scopedItems.filter((item) => item.workflow !== null).length;
 
-  const visible = allItems.filter((item) => {
+  const visible = scopedItems.filter((item) => {
     if (view === 'REVIEW' && item.actionRequired !== 'REVIEW') return false;
     if (view === 'APPROVAL' && item.actionRequired !== 'APPROVAL') return false;
     if (view === 'SIGN_OFF' && item.actionRequired !== 'SIGN_OFF' && item.actionRequired !== 'DECISION') return false;
@@ -81,7 +106,7 @@ export default function ApprovalsReviewsWorkspace({ decisions, sharedDocuments }
   return (
     <div className={styles.workspace}>
       <section className={styles.hero}>
-        <div><span className={styles.eyebrow}>MY WORK · DECIDE</span><h1>Approvals &amp; Reviews</h1><p>Your universal decision queue. Original records and final authority remain in their source workspace.</p></div>
+        <div><span className={styles.eyebrow}>{scope === 'projects' ? 'PROJECTS · DECIDE' : 'MY WORK · DECIDE'}</span><h1>{scope === 'projects' ? 'Project approvals' : 'Approvals &amp; Reviews'}</h1><p>{scope === 'projects' ? 'Latest project-linked decisions, grouped by week. Original records and final authority remain in their source workspace.' : 'Your universal decision queue. Original records and final authority remain in their source workspace.'}</p></div>
         <div className={styles.heroSignal}><ShieldCheck aria-hidden /><span><b>Decision-safe</b><small>No record copies. No unverified approval actions.</small></span></div>
       </section>
 
@@ -103,12 +128,14 @@ export default function ApprovalsReviewsWorkspace({ decisions, sharedDocuments }
         </section>
       )}
 
+      {scope === 'projects' && <ProjectApprovalRange items={scopedItems} unavailable={unavailableSources.length > 0} />}
+
       <div className={styles.layout}>
         <aside className={styles.rail} aria-label="Approval views">
           <p>DECISION VIEWS</p>
           {viewMeta.map(({ key, label, icon: Icon }) => (
-            <button key={key} type="button" className={view === key ? styles.viewActive : styles.viewButton} onClick={() => setView(key)}>
-              <Icon aria-hidden /><span>{label}</span><b>{countForView(allItems, key)}</b>
+              <button key={key} type="button" className={view === key ? styles.viewActive : styles.viewButton} onClick={() => setView(key)}>
+                <Icon aria-hidden /><span>{label}</span><b>{countForView(scopedItems, key)}</b>
             </button>
           ))}
           <div className={styles.railNote}><AlertTriangle aria-hidden /><p><b>Coverage truth</b>Verified workflow state and history are linked where an exact record mapping exists. Returned, waiting and due dates still require a real assignment model.</p></div>
@@ -140,6 +167,28 @@ export default function ApprovalsReviewsWorkspace({ decisions, sharedDocuments }
         {firstFormal && <AuraTabLink href={firstFormal.href} tabTitle={firstFormal.title} tabType={firstFormal.kind} className={styles.aiAction}>Open source record <ArrowRight aria-hidden /></AuraTabLink>}
       </section>
     </div>
+  );
+}
+
+function ProjectApprovalRange({ items, unavailable }: { items: DecisionAssignment[]; unavailable: boolean }) {
+  const groups = new Map<string, DecisionAssignment[]>();
+  for (const item of items) {
+    const key = weekStart(item.createdAt) ?? 'undated';
+    const bucket = groups.get(key) ?? [];
+    bucket.push(item);
+    groups.set(key, bucket);
+  }
+  const ordered = [...groups.entries()].sort((a, b) => {
+    if (a[0] === 'undated') return 1;
+    if (b[0] === 'undated') return -1;
+    return b[0].localeCompare(a[0]);
+  }).slice(0, 6);
+
+  return (
+    <section className={styles.projectScope} aria-label="Project approval range">
+      <div className={styles.scopeHeading}><div><span className={styles.eyebrow}>PROJECT APPROVAL RANGE</span><h2>Latest approvals by week</h2><p>Only real decisions accessible in the current user scope are shown. Personal assignment is not inferred.</p></div><span className={styles.scopeBadge}>{unavailable ? '—' : `${items.length} source item${items.length === 1 ? '' : 's'}`}</span></div>
+      {ordered.length ? <div className={styles.weekGrid}>{ordered.map(([key, weekItems]) => <article key={key} className={styles.weekCard}><header><strong>{key === 'undated' ? 'Date not supplied' : formatWeekRange(key)}</strong><b>{weekItems.length}</b></header><small>{weekItems.map((item) => item.displayAction).join(' · ')}</small><div>{weekItems.slice(0, 3).map((item) => <AuraTabLink key={item.key} href={item.href} tabTitle={item.title} tabType={item.kind} className={styles.weekItem}><span>{item.title}</span><ArrowRight aria-hidden /></AuraTabLink>)}</div></article>)}</div> : <div className={styles.scopeEmpty}><Clock3 aria-hidden /><span>{unavailable ? 'Project decision sources are unavailable.' : 'No project approvals are available in the current user scope.'}</span></div>}
+    </section>
   );
 }
 

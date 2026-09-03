@@ -51,7 +51,7 @@ export interface DeliveryApproval {
 const SHORTCUTS: SuiteShortcut[] = [
   { label: 'Projects', description: 'Official project register and Project 360', href: '/projects/projects', icon: FolderKanban, tone: 'teal' },
   { label: 'Plan & schedule', description: 'Gantt — planned vs baseline vs actual', href: '/projects/schedule', icon: CalendarRange, tone: 'slate' },
-  { label: 'Project controls', description: 'WBS, CBS, quantities and cost control', href: '/projects/dashboard', icon: GaugeCircle, tone: 'violet' },
+  { label: 'Project controls', description: 'Technical KPI, WBS, CBS, quantities and cost control', href: '/projects/controls', icon: GaugeCircle, tone: 'violet' },
   { label: 'Changes', description: 'Governed variations and change context', href: '/projects/variations', icon: GitBranch, tone: 'amber' },
   { label: 'Approvals & actions', description: 'Decisions requiring project action', href: '/my-work/approvals', icon: ListChecks, tone: 'blue' },
   { label: 'Project closeout', description: 'Handover readiness and closeout workflow', href: '/projects/closeout', icon: CheckCircle2, tone: 'green' },

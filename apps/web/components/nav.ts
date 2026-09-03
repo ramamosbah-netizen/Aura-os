@@ -81,6 +81,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'Portfolio', href: '/projects/dashboard', glyph: '◎', desc: 'PMO view — portfolio health, at-risk projects and decisions' },
       { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Official project register and Project 360 entry' },
+      { label: 'Project Controls', href: '/projects/controls', glyph: '◉', desc: 'Technical control tower — WBS, CBS, schedule, cost and readiness by project' },
       { label: 'Planning & Schedule', href: '/projects/schedule', glyph: '▤', desc: 'Gantt — planned vs baseline vs actual %' },
       { label: 'Changes', href: '/projects/variations', glyph: '◷', desc: 'Governed variations and revised contract value' },
       { label: 'Approvals & Actions', href: '/my-work/approvals', glyph: '✓', desc: 'Cross-suite decisions requiring project action' },

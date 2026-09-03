@@ -11,6 +11,7 @@ reports are additive and do not replace the Master Task 2 audit pack.
 - [A1.4 CLM Completion Evidence](./a1.4-clm-completion.md)
 - [A1.5 CLM Completion Evidence](./a1.5-clm-completion.md)
 - [A1.6 Final Closure Evidence](./a1.6-clm-closure.md)
+- [Pre-Award Cross-Domain Architecture](./pre-award-cross-domain-architecture.md)
 
 Wave A1.1 CLM authority is approved. The additive implementation evidence is
 recorded in `a1.1-clm-design-gate.md`; the repository currently contains the

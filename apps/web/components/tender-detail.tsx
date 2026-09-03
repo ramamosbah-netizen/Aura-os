@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { computeBidScore, recommendationFor, DEFAULT_BID_CRITERIA, type BidCriterion, type BidRecommendation } from '@aura/shared';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import TenderAwardDialog from './tender-award-dialog';
+import Tender360Context from './tender-360-context';
 
 interface Tender {
   id: string;
@@ -399,11 +400,13 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
       {err && <div style={s.errorBar}>{err}</div>}
       {importNote && <div style={{ ...s.errorBar, borderColor: 'var(--good, #10b981)', color: 'var(--good, #10b981)' }}>{importNote}</div>}
 
+      <Tender360Context tender={tender} />
+
       {/* GO / NO-GO QUALIFICATION (T-A) — the bid/no-bid gate, before any estimating */}
-      <QualificationPanel tenderId={tender.id} />
+      <div id="qualification"><QualificationPanel tenderId={tender.id} /></div>
 
       {/* BOQ SECTION */}
-      <section style={s.boqSection}>
+      <section id="boq" style={s.boqSection}>
         <div style={s.sectionHeader}>
           <h2 style={s.sectionTitle}>Bill of Quantities (BOQ) & Pricing Breakdown</h2>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -639,7 +642,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
       </section>
 
       {/* CLARIFICATIONS & ADDENDA (T4) */}
-      <ClarificationsPanel tenderId={tender.id} onDeadlineMoved={() => router.refresh()} />
+      <div id="clarifications"><ClarificationsPanel tenderId={tender.id} onDeadlineMoved={() => router.refresh()} /></div>
 
       {/* AI IMPORT DIALOG MODAL */}
       {showImportModal && (

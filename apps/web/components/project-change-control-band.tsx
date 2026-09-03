@@ -7,6 +7,8 @@ import styles from './suite-dashboard-shell.module.css';
 
 export interface DeliveryVariation {
   id: string;
+  projectId: string;
+  projectTitle?: string | null;
   type: 'addition' | 'omission' | string;
   amount: number;
   signedAmount: number;

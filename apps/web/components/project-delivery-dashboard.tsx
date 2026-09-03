@@ -15,6 +15,7 @@ import SuiteDashboardShell, {
 } from './suite-dashboard-shell';
 import ContinueWorking from './continue-working';
 import ProjectChangeControlBand, { type DeliveryVariation } from './project-change-control-band';
+import ProjectApprovalBand from './project-approval-band';
 
 /** Live earned-value health per project, from `/api/projects/projects/portfolio`. */
 export interface DeliveryEvm {
@@ -54,7 +55,7 @@ const SHORTCUTS: SuiteShortcut[] = [
   { label: 'Plan & schedule', description: 'Gantt — planned vs baseline vs actual', href: '/projects/schedule', icon: CalendarRange, tone: 'slate' },
   { label: 'Project controls', description: 'Technical KPI, WBS, CBS, quantities and cost control', href: '/projects/controls', icon: GaugeCircle, tone: 'violet' },
   { label: 'Changes', description: 'Governed variations and change context', href: '/projects/variations', icon: GitBranch, tone: 'amber' },
-  { label: 'Approvals & actions', description: 'Decisions requiring project action', href: '/my-work/approvals', icon: ListChecks, tone: 'blue' },
+  { label: 'Approvals & actions', description: 'Project decisions grouped by project', href: '/projects/dashboard#project-approvals', icon: ListChecks, tone: 'blue' },
   { label: 'Project closeout', description: 'Handover readiness and closeout workflow', href: '/projects/closeout', icon: CheckCircle2, tone: 'green' },
 ];
 
@@ -124,6 +125,13 @@ export default function ProjectDeliveryDashboard({
         : `${active.length} active project${active.length === 1 ? '' : 's'} and none flagged at risk. Portfolio SPI ${spiText}, CPI ${cpiText}${pendingApprovals > 0 ? `, with ${pendingApprovals} approval${pendingApprovals === 1 ? '' : 's'} waiting.` : '.'}`;
 
   const topApproval = approvals && approvals.length > 0 ? approvals[0]! : null;
+  const shortcutItems: SuiteShortcut[] = SHORTCUTS.map((shortcut) => shortcut.label === 'Approvals & actions'
+    ? {
+        ...shortcut,
+        description: approvals === null ? 'Project decision feed unavailable' : `${pendingApprovals} project decision${pendingApprovals === 1 ? '' : 's'} waiting · grouped below by project`,
+        count: approvals === null ? null : pendingApprovals,
+      }
+    : shortcut);
 
   return (
     <SuiteDashboardShell
@@ -138,7 +146,7 @@ export default function ProjectDeliveryDashboard({
       }}
       askAura={{ tabType: 'Projects' }}
       metrics={metrics}
-      band={<ProjectChangeControlBand variations={variations} />}
+      band={<><ProjectChangeControlBand variations={variations} /><ProjectApprovalBand projects={projects} variations={variations} totalApprovals={approvals === null ? null : approvals.length} /></>}
       continueWorking={<ContinueWorking match={['/project']} />}
       attention={{
         kicker: 'Earned-value engine · deepest gap first',
@@ -164,7 +172,7 @@ export default function ProjectDeliveryDashboard({
         kicker: 'Projects workspace',
         title: 'Projects',
         itemTestId: 'delivery-shortcut',
-        items: SHORTCUTS,
+        items: shortcutItems,
       }}
       ownership={<><Boxes aria-hidden /><span><strong>Projects owns management.</strong> Delivery Operations owns discipline execution; this view composes portfolio health and decisions.</span></>}
     />

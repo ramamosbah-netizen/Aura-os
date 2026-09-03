@@ -4,11 +4,19 @@ import DailyReportClient, { type DailyReport, type LabourAllocation } from '../.
 
 export const dynamic = 'force-dynamic';
 
+interface Project {
+  id: string;
+  title: string;
+  reference?: string | null;
+  status?: string | null;
+}
+
 export default async function DailyReportsPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const { projectId } = await searchParams;
-  const [reports, labour] = await Promise.all([
+  const [reports, labour, projects] = await Promise.all([
     getJson<DailyReport[]>('/api/site/daily-reports'),
     getJson<LabourAllocation[]>('/api/site/labour'),
+    getJson<Project[]>('/api/projects/projects'),
   ]);
   const scopedReports = projectId ? (reports ?? []).filter((report) => report.projectId === projectId) : reports;
   const scopedLabour = projectId ? (labour ?? []).filter((entry) => entry.projectId === projectId) : labour;
@@ -22,7 +30,7 @@ export default async function DailyReportsPage({ searchParams }: { searchParams:
         man-hours roll up for productivity and payment.
       </p>
       <section style={{ marginTop: 10 }}>
-        {reports === null ? <p style={st.muted}>API offline.</p> : <DailyReportClient reports={scopedReports ?? []} labour={scopedLabour ?? []} initialProjectId={projectId} />}
+        {reports === null ? <p style={st.muted}>Daily reports could not be loaded. Retry when the Site service is available.</p> : <DailyReportClient reports={scopedReports ?? []} labour={scopedLabour ?? []} initialProjectId={projectId} projects={projects ?? []} projectsUnavailable={projects === null} />}
       </section>
     </div>
   );

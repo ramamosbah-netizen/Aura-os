@@ -10,8 +10,11 @@ export async function POST(request: Request): Promise<Response> {
     equipmentCount?: number;
   };
 
-  if (!body.projectId || !body.date || !body.workDescription) {
-    return Response.json({ error: 'projectId, date and workDescription required' }, { status: 400 });
+  if (typeof body.projectId !== 'string' || !body.projectId.trim()) {
+    return Response.json({ error: 'projectId is required', message: 'Select a project before creating a daily report.' }, { status: 400 });
+  }
+  if (!body.date || !body.workDescription) {
+    return Response.json({ error: 'date and workDescription required' }, { status: 400 });
   }
 
   try {

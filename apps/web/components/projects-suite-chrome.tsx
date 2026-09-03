@@ -51,9 +51,6 @@ export default function ProjectsSuiteChrome({
         </div>
         <Link href="/projects/projects" className={styles.openRegister}>Open project register <span>↗</span></Link>
       </header>
-      <nav className={styles.nav} aria-label="Projects suite navigation">
-        <ProjectsSuiteNav active={active} />
-      </nav>
       <div className={styles.content}>{children}</div>
     </div>
   );

@@ -106,7 +106,7 @@ export default function ApprovalsReviewsWorkspace({ decisions, sharedDocuments, 
   return (
     <div className={styles.workspace}>
       <section className={styles.hero}>
-        <div><span className={styles.eyebrow}>{scope === 'projects' ? 'PROJECTS · DECIDE' : 'MY WORK · DECIDE'}</span><h1>{scope === 'projects' ? 'Project approvals' : 'Approvals &amp; Reviews'}</h1><p>{scope === 'projects' ? 'Latest project-linked decisions, grouped by week. Original records and final authority remain in their source workspace.' : 'Your universal decision queue. Original records and final authority remain in their source workspace.'}</p></div>
+        <div><span className={styles.eyebrow}>{scope === 'projects' ? 'PROJECTS · DECIDE' : 'MY WORK · DECIDE'}</span><h1>{scope === 'projects' ? 'Project approvals' : 'Approvals & Reviews'}</h1><p>{scope === 'projects' ? 'Latest project-linked decisions, grouped by week. Original records and final authority remain in their source workspace.' : 'Your universal decision queue. Original records and final authority remain in their source workspace.'}</p></div>
         <div className={styles.heroSignal}><ShieldCheck aria-hidden /><span><b>Decision-safe</b><small>No record copies. No unverified approval actions.</small></span></div>
       </section>
 

@@ -101,6 +101,7 @@ new delivery domain:
 | Engineering, Site, Quality, HSE, Testing & Commissioning, Documents | Existing specialist routes and APIs | **REUSE + EMBED CONTEXT** | Project-scoped links preserve `projectId`; specialist routes remain cross-project views. |
 | Planning, WBS/CBS, cost and C6 changes | Project controls, schedule, Cost Ledger and Variation authorities | **REUSE** | Project 360 is an entry point; no duplicate writer is introduced. |
 | Subcontract register and claims | `/api/subcontracts?projectId=…` and Subcontracts authority | **REUSE + EXTEND CONTEXT** | Project 360 now opens a project-scoped Subcontracts workspace and preserves context in the create flow. |
+| Purchase requests and purchase orders | `/api/procurement/purchase-requests?projectId=…` and `/api/procurement/purchase-orders?projectId=…` | **REUSE + EXTEND CONTEXT** | Project 360 now opens Supply Chain views scoped to the project; PR/PO creation keeps the selected project without creating a Procurement writer. |
 | Subcontract package, bidder RFQ, clarification/RFI, technical/commercial evaluation | No complete canonical lifecycle found in the current Subcontracts authority | **GAP** | Deferred to a dedicated bounded gate; no speculative tables or writer are created here. |
 | Readiness | Existing planning/engineering/supply-chain/quality/HSE evidence | **COMPOSE** | Readiness remains a projection (`READY`/`BLOCKED`/`UNKNOWN`), never a manual checklist. |
 | My Work and specialist portfolio views | My Work and Delivery Operations | **KEEP SPECIALIST** | They remain cross-authority/personal views and do not replace Project 360. |
@@ -112,3 +113,10 @@ scoped API readback. It opens `/subcontracts/subcontracts?projectId=<project>`; 
 shows the selected project context and pre-fills that project in the canonical create form. A
 standalone Subcontracts visit remains available for portfolio work. No migration, API owner,
 binary store or Delivery Operations route was removed.
+
+The same composition now exists for Supply Chain: the Project 360 navigation and action center
+open project-scoped Purchase Requests, which link to project-scoped Purchase Orders. Both pages
+read the existing `projectId` filters from the canonical Procurement API, show an honest project
+context/empty state, and pre-fill the selected project in their existing create drawers. Full
+Procurement lifecycle completion and the separate Subcontract Tender lifecycle remain outside
+this bounded composition change.

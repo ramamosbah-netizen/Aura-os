@@ -17,6 +17,7 @@ import {
   ShoppingCart,
   ShieldCheck,
   Wrench,
+  ArrowUpRight,
   type LucideIcon,
 } from 'lucide-react';
 import { useProjectContext } from '@/lib/project-context';
@@ -47,30 +48,32 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
     return `${href.slice(0, hashIndex)}?${query}${href.slice(hashIndex)}`;
   };
   const navItems: NavItem[] = [
-    { key: 'overview', label: 'Overview', icon: LayoutDashboard, href: base, active: pathname === base },
-    { key: 'project', label: 'Project', icon: ClipboardList, href: `${base}#project-setup`, active: false },
-    { key: 'plan', label: 'Plan & Control', icon: CalendarRange, href: `/projects/schedule?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/projects/schedule' || pathname.startsWith(`${base}/controls`) && !['variations', 'cost', 'closeout'].includes(searchParams.get('tab') ?? '') },
-    { key: 'engineering', label: 'Engineering', icon: Wrench, href: `${base}/engineering`, active: pathname === `${base}/engineering` },
-    { key: 'procurement', label: 'Procurement', icon: ShoppingCart, href: `/procurement/purchase-requests?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/procurement/purchase-requests') || pathname.startsWith('/procurement/purchase-orders') },
-    { key: 'subcontracts', label: 'Subcontracts', icon: FileStack, href: `/subcontracts/subcontracts?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/subcontracts/subcontracts' && searchParams.get('projectId') === project.id },
-    { key: 'site', label: 'Site', icon: HardHat, href: `${base}/site`, active: pathname.startsWith(`${base}/site`) },
-    { key: 'quality', label: 'Quality', icon: ClipboardCheck, href: `${base}/quality`, active: pathname === `${base}/quality` },
-    { key: 'hse', label: 'HSE', icon: ShieldCheck, href: `${base}/hse`, active: pathname === `${base}/hse` },
-    { key: 'commercial', label: 'Commercial', icon: CircleDollarSign, href: `${base}/controls?tab=cost`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'cost' },
-    { key: 'documents', label: 'Documents', icon: FileStack, href: `${base}/documents`, active: pathname.startsWith(`${base}/documents`) },
-    { key: 'approvals', label: 'Approvals & Actions', icon: ListChecks, href: `/my-work/approvals?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/my-work/approvals') },
-    { key: 'testing', label: 'Testing & Commissioning', icon: Wrench, href: `/commissioning?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/commissioning') },
-    { key: 'handover', label: 'Handover & Closeout', icon: ClipboardCheck, href: `${base}/controls?tab=closeout`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'closeout' },
-    { key: 'activity', label: 'Activity & History', icon: History, href: `${base}#activity-history`, active: false },
+    { key: 'overview', group: 'Project', label: 'Overview', description: 'Project cockpit and live health', icon: LayoutDashboard, href: base, active: pathname === base },
+    { key: 'project', group: 'Project', label: 'Project', description: 'Setup, scope and ownership', icon: ClipboardList, href: `${base}#project-setup`, active: false },
+    { key: 'plan', group: 'Plan & Control', label: 'Plan & Control', description: 'Schedule, WBS and project controls', icon: CalendarRange, href: `/projects/schedule?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/projects/schedule' || pathname.startsWith(`${base}/controls`) && !['variations', 'cost', 'closeout'].includes(searchParams.get('tab') ?? '') },
+    { key: 'engineering', group: 'Delivery', label: 'Engineering', description: 'Drawings, RFIs and technical records', icon: Wrench, href: `${base}/engineering`, active: pathname === `${base}/engineering` },
+    { key: 'procurement', group: 'Delivery', label: 'Procurement', description: 'Material requirements and buying', icon: ShoppingCart, href: `/procurement/purchase-requests?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/procurement/purchase-requests') || pathname.startsWith('/procurement/purchase-orders') },
+    { key: 'subcontracts', group: 'Delivery', label: 'Subcontracts', description: 'Packages, tenders and awards', icon: FileStack, href: `/subcontracts/subcontracts?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/subcontracts/subcontracts' && searchParams.get('projectId') === project.id },
+    { key: 'site', group: 'Delivery', label: 'Site', description: 'Work instructions, reports and progress', icon: HardHat, href: `${base}/site`, active: pathname.startsWith(`${base}/site`) },
+    { key: 'quality', group: 'Delivery', label: 'Quality', description: 'Inspections, NCRs and corrective actions', icon: ClipboardCheck, href: `${base}/quality`, active: pathname === `${base}/quality` },
+    { key: 'hse', group: 'Delivery', label: 'HSE', description: 'Permits, observations and safety actions', icon: ShieldCheck, href: `${base}/hse`, active: pathname === `${base}/hse` },
+    { key: 'commercial', group: 'Commercial', label: 'Commercial', description: 'Contract value, cost and changes', icon: CircleDollarSign, href: `${base}/controls?tab=cost`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'cost' },
+    { key: 'documents', group: 'Information', label: 'Documents', description: 'Controlled project information', icon: FileStack, href: `${base}/documents`, active: pathname.startsWith(`${base}/documents`) },
+    { key: 'approvals', group: 'Information', label: 'Approvals & Actions', description: 'Decisions and project actions', icon: ListChecks, href: `/my-work/approvals?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/my-work/approvals') },
+    { key: 'testing', group: 'Completion', label: 'Testing & Commissioning', description: 'Test plans, records and commissioning', icon: Wrench, href: `/commissioning?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/commissioning') },
+    { key: 'handover', group: 'Completion', label: 'Handover & Closeout', description: 'Readiness, closeout and acceptance', icon: ClipboardCheck, href: `${base}/controls?tab=closeout`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'closeout' },
+    { key: 'activity', group: 'Information', label: 'Activity & History', description: 'Timeline and audit history', icon: History, href: `${base}#activity-history`, active: false },
   ];
+  const navGroups = ['Project', 'Plan & Control', 'Delivery', 'Commercial', 'Information', 'Completion']
+    .map((group) => ({ group, items: navItems.filter((item) => item.group === group) }))
+    .filter((group) => group.items.length > 0);
   const statusClass =
     project.status === 'active' ? 'badge badge-good'
       : project.status === 'completed' ? 'badge badge-accent'
         : project.status === 'cancelled' ? 'badge badge-bad'
           : 'badge';
 
-  return (
-    <div className={styles.workspace}>
+  const workspaceNavigation = (
       <aside className={styles.projectRail} aria-label="Project workspace">
         <div className={styles.contextTop}>
           <span className={styles.contextLabel}>PROJECT 360</span>
@@ -114,24 +117,44 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
           <strong>{navItems.length} shortcuts</strong>
         </div>
         <nav className={styles.navigation} aria-label="Project 360 navigation">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return <Link key={item.key} href={scoped(item.href ?? base)} className={item.active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem} aria-current={item.active ? 'page' : undefined}><Icon size={16} strokeWidth={1.8} aria-hidden /><span>{item.label}</span></Link>;
-          })}
+          {navGroups.map(({ group, items }) => <section key={group} className={styles.navGroup} aria-labelledby={`project-nav-${group.replace(/\s+/g, '-').toLowerCase()}`}>
+            <div className={styles.navGroupHeader}>
+              <span id={`project-nav-${group.replace(/\s+/g, '-').toLowerCase()}`}>{group}</span>
+              <i aria-hidden />
+            </div>
+            <div className={styles.navGroupGrid}>
+              {items.map((item) => {
+                const Icon = item.icon;
+                return <Link key={item.key} href={scoped(item.href ?? base)} className={item.active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem} aria-current={item.active ? 'page' : undefined}><span className={styles.navItemTop}><Icon size={16} strokeWidth={1.8} aria-hidden /><ArrowUpRight size={14} aria-hidden /></span><span className={styles.navItemCopy}><strong>{item.label}</strong><small>{item.description}</small></span></Link>;
+              })}
+            </div>
+          </section>)}
         </nav>
         <div className={styles.navHint}>
           <span>Project 360 connects the work; specialist domains remain the canonical owners.</span>
           <Link href="/operations/overview">Open specialist views →</Link>
         </div>
       </aside>
-      <section className={styles.content}>{children}</section>
+  );
+
+  return (
+    <div className={pathname === base ? `${styles.workspace} ${styles.overviewWorkspace}` : styles.workspace}>
+      {pathname === base ? <>
+        <section className={styles.content}>{children}</section>
+        {workspaceNavigation}
+      </> : <>
+        {workspaceNavigation}
+        <section className={styles.content}>{children}</section>
+      </>}
     </div>
   );
 }
 
 interface NavItem {
   key: string;
+  group: string;
   label: string;
+  description: string;
   icon: LucideIcon;
   href?: string;
   active?: boolean;

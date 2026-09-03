@@ -91,7 +91,7 @@ describe('Project 360 canonical delivery contract', () => {
     const css = readFileSync(resolve(__dirname, 'components/project-shell.module.css'), 'utf8');
     expect(shell).toContain('<aside className={styles.projectRail}');
     expect(shell).toContain('Project 360 navigation');
-    expect(shell).toContain('navItems.map');
+    expect(shell).toContain('navGroups.map');
     expect(css).toContain('.projectRail');
     expect(css).toContain('.navItemActive');
   });

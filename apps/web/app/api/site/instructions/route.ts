@@ -11,6 +11,9 @@ export async function GET(): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
+  if (!body || typeof body.projectId !== 'string' || !body.projectId.trim()) {
+    return Response.json({ error: 'projectId is required', message: 'Select a project before issuing a site instruction.' }, { status: 400 });
+  }
   try {
     const res = await apiFetch(`${apiBase()}/api/v1/site/instructions`, {
       method: 'POST',

@@ -17,10 +17,18 @@ interface SiteInstruction {
   status: string;
 }
 
+interface Project {
+  id: string;
+  title: string;
+  reference?: string | null;
+  status?: string | null;
+}
+
 export default async function SiteInstructionsPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
-  const [{ projectId }, instructions] = await Promise.all([
+  const [{ projectId }, instructions, projects] = await Promise.all([
     searchParams,
     getJson<SiteInstruction[]>('/api/site/instructions'),
+    getJson<Project[]>('/api/projects/projects'),
   ]);
   const rows = projectId ? (instructions ?? []).filter((item) => item.projectId === projectId) : instructions;
 
@@ -32,7 +40,7 @@ export default async function SiteInstructionsPage({ searchParams }: { searchPar
         closed. Flag cost and/or time implications so they can be escalated to a variation or EOT claim.
       </p>
       <section style={{ marginTop: 10 }}>
-        {instructions === null ? <p style={st.muted}>API offline.</p> : <SiteInstructionsClient initialInstructions={rows ?? []} initialProjectId={projectId} />}
+        {instructions === null ? <p style={st.muted}>Site instructions could not be loaded. Retry when the Site service is available.</p> : <SiteInstructionsClient initialInstructions={rows ?? []} initialProjectId={projectId} projects={projects ?? []} projectsUnavailable={projects === null} />}
       </section>
     </div>
   );

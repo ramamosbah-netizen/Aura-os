@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import TenderCreate, { TenderEdit } from './tender-create';
 import TenderAwardDialog from './tender-award-dialog';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import registerStyles from '../app/tendering/tenders/tenders-register.module.css';
 
 // Tendering · Tenders — the bid register. Every tender shows its urgency
 // (submission deadline), its provenance (source opportunity), its internal
@@ -113,6 +114,31 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
 
   return (
     <>
+      <section className={registerStyles.hero} aria-labelledby="tender-register-title">
+        <div>
+          <span className={registerStyles.eyebrow}>SALES &amp; COMMERCIAL / PRE-AWARD</span>
+          <h1 id="tender-register-title">Tender register</h1>
+          <p>One operating view for qualification, scope, estimation and submission. Open any record for its Tender 360 context; specialist teams continue to work in their canonical domains.</p>
+        </div>
+        <div className={registerStyles.heroMeta}>
+          <span className={registerStyles.heroCount}>{tenders.length}</span>
+          <span className={registerStyles.heroLabel}>live records in view</span>
+          <a href="/tendering/outcomes" className={registerStyles.heroLink}>View outcomes &amp; reports ↗</a>
+        </div>
+      </section>
+
+      <nav className={registerStyles.rail} aria-label="Pre-award workflow">
+        <div className={registerStyles.railLead}><strong>Pre-award flow</strong><span>Move the bid forward with clear ownership</span></div>
+        <a className={registerStyles.railStep} href="/tendering/tenders"><b>01</b><span>Qualify</span><small>Bid / no-bid</small></a>
+        <a className={registerStyles.railStep} href="/tendering/tenders"><b>02</b><span>Scope &amp; BOQ</span><small>Define the work</small></a>
+        <a className={registerStyles.railStep} href="/tendering/pricing"><b>03</b><span>Estimate</span><small>Cost and margin</small></a>
+        <a className={registerStyles.railStep} href="/tendering/tenders"><b>04</b><span>Submit</span><small>Governed bid</small></a>
+        <a className={registerStyles.railStep} href="/tendering/outcomes"><b>05</b><span>Award</span><small>→ Project 360</small></a>
+      </nav>
+
+      <div className={registerStyles.sectionHeading}>
+        <div><h2>Active tender work</h2><p>Filter by source or status, then open a record to work in Tender 360.</p></div>
+      </div>
       <div style={st.cards}>
         <Kpi label="In preparation" value={money(kpi.activeValue)} />
         <Kpi label="Submitted (awaiting)" value={money(kpi.submittedValue)} accent />
@@ -140,7 +166,7 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
       </div>
 
       <div style={st.toolbar}>
-        <TenderCreate accounts={accounts} />
+        <div id="new-tender"><TenderCreate accounts={accounts} /></div>
         <input style={st.search} placeholder="Search title, ref, account…" value={query} onChange={(e) => setQuery(e.target.value)} />
         <select style={st.search} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">All statuses</option>
@@ -152,7 +178,16 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
 
       <section className="panel">
         {filtered.length === 0 ? (
-          <p style={st.muted}>{tenders.length === 0 ? 'No tenders yet — register the first bid.' : 'Nothing matches the filter.'}</p>
+          <div className={registerStyles.empty}>
+            <div className={registerStyles.emptyMark} aria-hidden>◎</div>
+            <h2>{tenders.length === 0 ? 'No tenders in this workspace' : 'No tenders match these filters'}</h2>
+            <p>{tenders.length === 0 ? 'Start the first bid from the New Tender action above. Once created, this register will show its qualification state, source, value, deadline and next governed step.' : 'Try clearing the search or resetting the source and status filters. No placeholder records are shown.'}</p>
+            <div className={registerStyles.emptyLinks}>
+              {tenders.length === 0 ? <a href="#new-tender">Use New Tender above</a> : <button type="button" style={st.resetBtn} onClick={() => { setQuery(''); setStatusFilter(''); setSourceFilter(''); }}>Reset filters</button>}
+              <a href="/tendering/pricing">Open pricing workspace</a>
+              <a href="/crm/overview">Open Sales cockpit</a>
+            </div>
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table" style={{ minWidth: 1100 }}>
@@ -257,6 +292,7 @@ const st = {
   linkBtn: { border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none' } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
+  resetBtn: { padding: '7px 12px', border: '1px solid var(--border-strong)', borderRadius: 8, background: 'transparent', color: 'var(--text)', fontSize: 11.5, fontWeight: 750, cursor: 'pointer' } as CSSProperties,
   link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
   ref: { fontSize: 11, color: 'var(--muted)', fontFamily: 'ui-monospace, monospace', marginTop: 2 } as CSSProperties,
   chip: { display: 'inline-block', fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px', color: 'var(--muted)', textDecoration: 'none', whiteSpace: 'nowrap' } as CSSProperties,

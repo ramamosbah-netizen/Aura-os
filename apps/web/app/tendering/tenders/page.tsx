@@ -34,12 +34,6 @@ export default async function TendersPage() {
 
   return (
     <div style={st.page}>
-      <h1 style={st.h1}>Tendering · Tenders</h1>
-      <p style={st.sub}>
-        The bid register — every tender shows its deadline, its source, its internal pricing
-        progress, and where it went next (quotation → contract). Winning a tender continues the
-        deal chain automatically.
-      </p>
       <TendersClient
         tenders={tenders ?? []}
         accounts={(accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
@@ -53,6 +47,4 @@ export default async function TendersPage() {
 
 const st = {
   page: { maxWidth: 1200, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
-  h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
-  sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 740, lineHeight: 1.5 } as CSSProperties,
 };

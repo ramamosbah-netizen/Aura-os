@@ -33,10 +33,10 @@ export default function ProjectApprovalBand({ projects, variations, totalApprova
           <p className={shellStyles.sectionKicker}><ClipboardCheck size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} /> Approvals &amp; actions</p>
           <h2>Project decisions, grouped by project</h2>
         </div>
-        <AuraTabLink href="/my-work/approvals?scope=projects" tabTitle="Approvals & actions" tabType="Projects">Open decision queue <ArrowRight aria-hidden /></AuraTabLink>
+        <AuraTabLink href="/projects/approvals" tabTitle="Project approvals" tabType="Projects">Open project approvals <ArrowRight aria-hidden /></AuraTabLink>
       </div>
       <div className={shellStyles.bandStages} style={{ '--stage-count': 3 } as CSSProperties}>
-        <AuraTabLink href="/my-work/approvals?scope=projects" tabTitle="Project approvals" tabType="Projects" className={shellStyles.bandStage}><small>All project actions</small><b>{totalApprovals === null ? '—' : totalApprovals}</b><span>{totalApprovals === null ? 'data unavailable' : totalApprovals === 1 ? 'decision waiting' : 'decisions waiting'}</span><i /></AuraTabLink>
+        <AuraTabLink href="/projects/approvals" tabTitle="Project approvals" tabType="Projects" className={shellStyles.bandStage}><small>All project actions</small><b>{totalApprovals === null ? '—' : totalApprovals}</b><span>{totalApprovals === null ? 'data unavailable' : totalApprovals === 1 ? 'decision waiting' : 'decisions waiting'}</span><i /></AuraTabLink>
         <AuraTabLink href="/projects/variations?status=submitted" tabTitle="Pending variations" tabType="Projects" className={shellStyles.bandStage}><small>C6 variation approvals</small><b>{variations === null ? '—' : pending.length}</b><span>{variations === null ? 'data unavailable' : pending.length === 1 ? 'submitted variation' : 'submitted variations'}</span><i /></AuraTabLink>
         <AuraTabLink href="/projects/variations?status=submitted" tabTitle="Projects requiring action" tabType="Projects" className={shellStyles.bandStage}><small>Projects requiring action</small><b>{variations === null ? '—' : projectCount}</b><span>{variations === null ? 'data unavailable' : projectCount === 1 ? 'open project context' : 'open project contexts'}</span><i /></AuraTabLink>
       </div>

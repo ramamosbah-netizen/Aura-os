@@ -262,3 +262,20 @@ Verification: authenticated local browser snapshot confirmed the four-metric lay
 action menu and honest empty states; query filters preserve the Overview route and no-match
 states are readable. Web typecheck and production build pass. Procurement and protected
 Projects/Delivery authorities were not changed.
+
+## Delivery Operations workspace IA refinement (2026-09-03)
+
+The specialist workspaces now open with a compact, source-backed operating picture before
+their record-level tabs. Engineering, Site, Quality, HSE, Testing & Commissioning and Handover
+each expose four contextual metrics plus a small exception lane; zero records are labelled
+`No records` and unavailable sources remain `Unavailable`. Actions continue to route to the
+canonical Engineering/Site/Quality/HSE/Commissioning/Handover writers.
+
+`Pre-execution` remains a drill-down at `/operations/pre-execution` and is no longer presented
+as a top-level item in the Delivery Operations workspace navigation. Engineering explicitly
+identifies Tender 360 as the owner of pre-award technical creation while keeping current
+project-linked API commands context-bound. This is a UI/UX composition change only: no new
+readiness table, duplicate writer, migration or domain authority was introduced.
+
+Verification: local authenticated browser checks confirmed the shared navigation and operating
+picture on all six specialist workspace routes; Web typecheck and production build pass.

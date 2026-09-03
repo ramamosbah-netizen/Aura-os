@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import SiteControlClient from '../../../components/site-control-client';
 import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
+import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,9 +126,25 @@ export default async function SiteControlPage() {
     getJson<SiteInstruction[]>('/api/site/instructions'),
   ]);
 
+  const open = <T extends { status?: string }>(rows: T[] | null, closed: string[]) => rows === null ? null : rows.filter((row) => !closed.includes((row.status ?? '').toLowerCase())).length;
+  const activeWork = schedules === null ? null : schedules.reduce((total, schedule) => total + schedule.tasks.filter((task) => task.percentComplete > 0 && task.percentComplete < 100).length, 0);
+  const metrics: WorkspaceMetric[] = [
+    { label: 'Active work', value: activeWork, hint: 'Schedule activities in progress', tone: 'accent' },
+    { label: 'Instructions', value: open(instructions, ['closed', 'acknowledged']), hint: 'Field directions awaiting action', tone: 'warning' },
+    { label: 'Reports due', value: open(dailyReports, ['submitted']), hint: 'Draft site diaries', tone: 'warning' },
+    { label: 'Blocked', value: open(delayLogs, ['resolved']), hint: 'Unresolved delay logs', tone: 'critical' },
+  ];
+  const attention: WorkspaceAttention[] | null = [instructions, dailyReports, delayLogs].some((rows) => rows === null) ? null : [
+    ...(delayLogs ?? []).filter((row) => row.status !== 'resolved').slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · delay`, detail: row.description, href: '/site/control', tone: 'critical' as const })),
+    ...(dailyReports ?? []).filter((row) => row.status !== 'submitted').slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · daily report`, detail: `${row.date} · draft not submitted`, href: '/site/daily-reports', tone: 'warning' as const })),
+    ...(instructions ?? []).filter((row) => !['closed', 'acknowledged'].includes(row.status.toLowerCase())).slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · ${row.reference}`, detail: 'Acknowledgement pending', href: '/site/instructions', tone: 'warning' as const })),
+  ];
+
   return (
     <div style={st.page}>
       <DeliveryOperationsWorkspaceHeader active="site" title="Site execution workspace" owner="Site" description="Coordinate field work through controlled instructions, daily reports, progress, delays, labour, equipment and site evidence." />
+
+      <DeliveryWorkspaceSummary eyebrow="FIELD OPERATIONS" title="Today's operating picture" description="Keep the field moving with clear work, exception and evidence signals. Actions remain owned by Site." metrics={metrics} attention={attention} emptyMessage="No site exceptions are open for the available records." />
 
       <SiteControlClient
         initialDailyReports={dailyReports ?? []}

@@ -11,6 +11,13 @@ interface Project {
   title: string;
 }
 
+interface TenderContext {
+  id: string;
+  title: string;
+  reference?: string | null;
+  status?: string | null;
+}
+
 interface Drawing {
   id: string;
   projectId: string;
@@ -151,6 +158,11 @@ interface Props {
   initialBimModels: BimModel[];
   docTypes: DocTypeMeta[];
   projects: Project[];
+  tenders: TenderContext[];
+}
+
+function attentionCount(...counts: number[]) {
+  return counts.reduce((sum, count) => sum + count, 0);
 }
 
 export default function EngineeringClient({
@@ -163,6 +175,7 @@ export default function EngineeringClient({
   initialBimModels,
   docTypes,
   projects,
+  tenders,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [drawings, setDrawings] = useState<Drawing[]>(initialDrawings);
@@ -551,14 +564,10 @@ export default function EngineeringClient({
   const tqsOpen = technicalQueries.filter((t) => t.status === 'open').length;
   const bimWip = bimModels.filter((m) => m.status === 'wip').length;
 
-  const stats: { label: string; total: number; pending: number; tab: Tab }[] = [
-    { label: 'Shop Drawings', total: drawings.length, pending: drawingsPending, tab: 'drawings' },
-    { label: 'RFIs', total: rfis.length, pending: rfisOpen, tab: 'rfis' },
-    { label: 'Submittals', total: submittals.length, pending: submittalsPending, tab: 'submittals' },
-    { label: 'Technical Queries', total: technicalQueries.length, pending: tqsOpen, tab: 'technical-queries' },
-    { label: 'Design Changes', total: designChanges.length, pending: dcAwaiting, tab: 'design-changes' },
-    { label: 'Documents', total: documents.length, pending: docsPending, tab: 'documents' },
-    { label: 'BIM Models', total: bimModels.length, pending: bimWip, tab: 'bim-models' },
+  const stats: { label: string; value: number; detail: string; tab: Tab }[] = [
+    { label: 'Needs action', value: attentionCount(drawingsPending, rfisOpen, submittalsPending, tqsOpen, dcAwaiting, docsPending, bimWip), detail: 'Open technical decisions', tab: 'rfis' },
+    { label: 'Due soon', value: drawingsPending + submittalsPending, detail: 'Drawings and submittals in review', tab: 'drawings' },
+    { label: 'Blocking work', value: designChanges.filter((d) => d.costImpact).filter((d) => d.status !== 'approved' && d.status !== 'rejected').length, detail: 'Changes with cost impact', tab: 'design-changes' },
   ];
 
   const attention: { label: string; count: number; tab: Tab }[] = ([
@@ -635,8 +644,8 @@ export default function EngineeringClient({
       </div>
 
       {!hasProject && <div role="status" style={st.projectGate}>
-        <strong>Choose a project to work in context.</strong>
-        <span>Engineering records are never created without a project. Select one in the form before registering a drawing, raising a query, or creating a controlled document.</span>
+        <strong>Select a project for project-linked engineering actions.</strong>
+        <span>Pre-award technical work remains owned by Tender 360. This workspace shows project engineering and keeps creation explicitly tied to the selected project.</span>
       </div>}
 
       {/* Tab Contents */}
@@ -645,11 +654,9 @@ export default function EngineeringClient({
           <div style={st.statGrid}>
             {stats.map((s) => (
               <button key={s.label} onClick={() => setActiveTab(s.tab)} style={st.statCard}>
-                <span style={st.statNum}>{s.total}</span>
+                <span style={st.statNum}>{s.value === 0 ? 'No records' : s.value}</span>
                 <span style={st.statLabel}>{s.label}</span>
-                <span style={s.pending > 0 ? st.statPending : st.statClear}>
-                  {s.pending > 0 ? `${s.pending} need action` : 'all clear'}
-                </span>
+                <span style={s.value > 0 ? st.statPending : st.statClear}>{s.detail}</span>
               </button>
             ))}
           </div>
@@ -658,7 +665,7 @@ export default function EngineeringClient({
             <section style={st.panel}>
               <h3 style={st.panelTitle}>Needs your attention</h3>
               {attention.length === 0 ? (
-                <p style={st.muted}>Nothing outstanding — every engineering item is decided.</p>
+                <p style={st.muted}>No technical exceptions are open for the available records.</p>
               ) : (
                 <ul style={st.attnList}>
                   {attention.map((a) => (
@@ -689,6 +696,12 @@ export default function EngineeringClient({
               )}
             </section>
           </div>
+
+          <section style={{ ...st.panel, marginTop: 16 }}>
+            <h3 style={st.panelTitle}>Pre-award technical context</h3>
+            <p style={st.muted}>Tender-owned engineering remains in Tender 360. This read-only context keeps the same technical work discoverable without creating a project or a duplicate writer.</p>
+            {tenders.length === 0 ? <p style={st.muted}>No tender contexts are available for this tenant.</p> : <div style={st.contextList}>{tenders.slice(0, 6).map((tender) => <a key={tender.id} href={`/tendering/tenders/${tender.id}`} style={st.contextRow}><span><strong>{tender.title}</strong><small>{tender.reference ?? 'Tender'} · {tender.status ?? 'status unavailable'}</small></span><span style={st.contextLink}>Open Tender 360 ↗</span></a>)}</div>}
+          </section>
         </div>
       )}
 
@@ -1806,6 +1819,9 @@ const st = {
   statPending: { fontSize: 11.5, color: '#fbbf24', fontWeight: 600 } as CSSProperties,
   statClear: { fontSize: 11.5, color: '#34d399', fontWeight: 600 } as CSSProperties,
   overviewCols: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 } as CSSProperties,
+  contextList: { display: 'flex', flexDirection: 'column', gap: 7 } as CSSProperties,
+  contextRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', textDecoration: 'none', background: 'var(--panel-2)' } as CSSProperties,
+  contextLink: { color: 'var(--accent)', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' } as CSSProperties,
   attnList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 } as CSSProperties,
   attnRow: { margin: 0 } as CSSProperties,
   attnLink: {

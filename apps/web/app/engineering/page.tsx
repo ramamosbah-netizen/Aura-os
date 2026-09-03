@@ -10,6 +10,13 @@ interface Project {
   title: string;
 }
 
+interface TenderContext {
+  id: string;
+  title: string;
+  reference?: string | null;
+  status?: string | null;
+}
+
 interface Drawing {
   id: string;
   projectId: string;
@@ -116,7 +123,7 @@ interface BimModel {
 }
 
 export default async function EngineeringPage() {
-  const [drawings, rfis, submittals, designChanges, documents, technicalQueries, bimModels, docTypes, projects] = await Promise.all([
+  const [drawings, rfis, submittals, designChanges, documents, technicalQueries, bimModels, docTypes, projects, tenders] = await Promise.all([
     getJson<Drawing[]>('/api/engineering/drawings'),
     getJson<Rfi[]>('/api/engineering/rfis'),
     getJson<Submittal[]>('/api/engineering/submittals'),
@@ -126,6 +133,7 @@ export default async function EngineeringPage() {
     getJson<BimModel[]>('/api/engineering/bim-models'),
     getJson<DocTypeMeta[]>('/api/engineering/document-types'),
     getJson<Project[]>('/api/projects/projects'),
+    getJson<TenderContext[]>('/api/tendering/tenders'),
   ]);
 
   return (
@@ -142,6 +150,7 @@ export default async function EngineeringPage() {
         initialBimModels={bimModels ?? []}
         docTypes={docTypes ?? []}
         projects={projects ?? []}
+        tenders={tenders ?? []}
       />
     </div>
   );

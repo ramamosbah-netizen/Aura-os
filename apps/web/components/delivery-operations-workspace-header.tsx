@@ -1,12 +1,11 @@
 import Link from 'next/link';
-import { ArrowRight, BarChart3, ClipboardCheck, FileCheck2, HardHat, LayoutDashboard, PencilRuler, ShieldAlert, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BarChart3, ClipboardCheck, FileCheck2, HardHat, LayoutDashboard, PencilRuler, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
 import styles from './delivery-operations-workspace-header.module.css';
 
 type WorkspaceKey = 'overview' | 'pre-execution' | 'engineering' | 'site' | 'quality' | 'hse' | 'commissioning' | 'handover' | 'reports';
 
 const WORKSPACES: Array<{ key: WorkspaceKey; label: string; href: string; icon: LucideIcon }> = [
   { key: 'overview', label: 'Operations overview', href: '/operations/overview', icon: LayoutDashboard },
-  { key: 'pre-execution', label: 'Pre-execution', href: '/operations/pre-execution', icon: ShieldAlert },
   { key: 'engineering', label: 'Engineering', href: '/engineering', icon: PencilRuler },
   { key: 'site', label: 'Site', href: '/site/control', icon: HardHat },
   { key: 'quality', label: 'Quality', href: '/quality/control', icon: ClipboardCheck },

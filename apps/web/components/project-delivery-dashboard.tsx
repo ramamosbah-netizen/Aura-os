@@ -14,6 +14,7 @@ import SuiteDashboardShell, {
   type SuiteShortcut,
 } from './suite-dashboard-shell';
 import ContinueWorking from './continue-working';
+import ProjectChangeControlBand, { type DeliveryVariation } from './project-change-control-band';
 
 /** Live earned-value health per project, from `/api/projects/projects/portfolio`. */
 export interface DeliveryEvm {
@@ -70,9 +71,11 @@ function riskReason(project: DeliveryProject): string {
 export default function ProjectDeliveryDashboard({
   projects,
   approvals,
+  variations,
 }: {
   projects: DeliveryProject[] | null;
   approvals: DeliveryApproval[] | null;
+  variations: DeliveryVariation[] | null;
 }) {
   const rows = projects ?? [];
   const active = rows.filter((project) => project.status === 'active');
@@ -135,6 +138,7 @@ export default function ProjectDeliveryDashboard({
       }}
       askAura={{ tabType: 'Projects' }}
       metrics={metrics}
+      band={<ProjectChangeControlBand variations={variations} />}
       continueWorking={<ContinueWorking match={['/project']} />}
       attention={{
         kicker: 'Earned-value engine · deepest gap first',

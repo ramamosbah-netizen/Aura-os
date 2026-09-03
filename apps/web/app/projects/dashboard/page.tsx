@@ -3,6 +3,7 @@ import ProjectDeliveryDashboard, {
   type DeliveryApproval,
   type DeliveryProject,
 } from '@/components/project-delivery-dashboard';
+import type { DeliveryVariation } from '@/components/project-change-control-band';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,9 +23,10 @@ interface InboxItem { id: string; module: string; kind: string; title: string; a
 const DELIVERY_MODULES = new Set(['Projects', 'Quality']);
 
 export default async function ProjectsDashboardPage() {
-  const [portfolio, inbox] = await Promise.all([
+  const [portfolio, inbox, variations] = await Promise.all([
     getJson<DeliveryProject[]>('/api/projects/projects/portfolio'),
     getJson<InboxItem[]>('/api/inbox'),
+    getJson<DeliveryVariation[]>('/api/projects/variations'),
   ]);
 
   const approvals: DeliveryApproval[] | null = inbox === null
@@ -33,5 +35,5 @@ export default async function ProjectsDashboardPage() {
         .filter((item) => DELIVERY_MODULES.has(item.module))
         .map((item) => ({ id: item.id, module: item.module, kind: item.kind, title: item.title, action: item.action, href: item.href }));
 
-  return <ProjectDeliveryDashboard projects={portfolio} approvals={approvals} />;
+  return <ProjectDeliveryDashboard projects={portfolio} approvals={approvals} variations={variations} />;
 }

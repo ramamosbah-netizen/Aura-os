@@ -21,13 +21,18 @@ interface Variation {
   createdAt: string;
 }
 
-export default async function VariationsPage() {
+export default async function VariationsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const [projects, variations] = await Promise.all([
     getJson<Project[]>('/api/projects/projects'),
     getJson<Variation[]>('/api/projects/variations'),
   ]);
 
+  const requestedStatus = (await searchParams).status;
+  const initialFilter = requestedStatus === 'draft' || requestedStatus === 'submitted' || requestedStatus === 'approved' || requestedStatus === 'rejected'
+    ? requestedStatus
+    : 'all';
+
   return (
-    <VariationsClient projects={projects ?? []} initialVariations={variations ?? []} />
+    <VariationsClient projects={projects ?? []} initialVariations={variations ?? []} initialFilter={initialFilter} />
   );
 }

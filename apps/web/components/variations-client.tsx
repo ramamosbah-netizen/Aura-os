@@ -79,7 +79,7 @@ function safeStatus(status: string): { label: string; hint: string; tone: string
   return statusMeta[status] ?? { label: status, hint: 'Recorded state', tone: 'draft' };
 }
 
-export default function VariationsClient({ projects, initialVariations }: { projects: Project[]; initialVariations: Variation[] }) {
+export default function VariationsClient({ projects, initialVariations, initialFilter = 'all' }: { projects: Project[]; initialVariations: Variation[]; initialFilter?: StatusFilter }) {
   const [variations, setVariations] = useState<Variation[]>(initialVariations);
   const [projectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');
@@ -89,7 +89,7 @@ export default function VariationsClient({ projects, initialVariations }: { proj
   const [amount, setAmount] = useState('');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<StatusFilter>('all');
+  const [filter, setFilter] = useState<StatusFilter>(initialFilter);
   const [err, setErr] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);

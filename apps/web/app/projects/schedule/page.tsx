@@ -1,6 +1,8 @@
-import type { CSSProperties } from 'react';
+import { CalendarRange, CheckCircle2, Clock3, Layers3, ListChecks } from 'lucide-react';
+import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
+import styles from './projects-schedule.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,26 +25,72 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const scopedSchedules = projectId ? (schedules ?? []).filter((schedule) => schedule.projectId === projectId) : schedules;
   const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
   const projectName = scopedProjects?.[0]?.title ?? scopedSchedules?.[0]?.projectName;
+  const rows = scopedSchedules ?? [];
+  const taskCount = rows.reduce((total, schedule) => total + schedule.tasks.length, 0);
+  const completeCount = rows.reduce((total, schedule) => total + schedule.tasks.reduce((sum, task) => sum + task.percentComplete, 0), 0);
+  const averageProgress = taskCount ? Math.round(completeCount / taskCount) : null;
+  const baselinedCount = rows.filter((schedule) => Boolean(schedule.baselineSetAt)).length;
+  const unavailable = schedules === null;
+
   return (
-    <div style={st.page}>
-      <h1 style={st.h1}>{projectName ? `${projectName} · Plan & schedule` : 'Projects · Schedule (Gantt)'}</h1>
-      <p style={st.sub}>
-        Planned vs baseline vs actual per task, with duration-weighted % complete and finish
-        variance. Add activities, then set a baseline to freeze the plan and track slippage.
-        {projectName ? ' This view is scoped to the selected project.' : ''}
-      </p>
-      {schedules === null ? (
-        <p style={st.muted}>API offline.</p>
-      ) : (
-        <GanttClient schedules={scopedSchedules ?? []} projects={scopedProjects ?? []} selectedProjectId={projectId} />
-      )}
-    </div>
+    <main className={styles.page}>
+      <header className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <div className={styles.eyebrow}>
+            <span>Projects / Plan &amp; schedule</span>
+            <span className={styles.live}><i />Live planning view</span>
+          </div>
+          <h1>{projectName ? <>Plan <em>{projectName}</em> with confidence.</> : <>Plan the work. <em>See it move.</em></>}</h1>
+          <p>Shape the delivery plan, lock a baseline, and keep every activity aligned with the work happening on site.</p>
+        </div>
+        <div className={styles.heroActions}>
+          <Link className={styles.secondaryAction} href={projectId ? `/project/${projectId}` : '/projects/projects'}>
+            <Layers3 size={16} /> {projectId ? 'Project 360' : 'Projects register'}
+          </Link>
+        </div>
+      </header>
+
+      <section className={styles.metricGrid} aria-label="Schedule summary">
+        <div className={styles.metricCard}>
+          <span className={styles.metricIcon}><CalendarRange size={17} /></span>
+          <div><span className={styles.metricLabel}>Scheduled projects</span><strong>{unavailable ? '—' : rows.length}</strong><small>{unavailable ? 'Data unavailable' : rows.length === 1 ? 'Active plan' : 'Plans in this view'}</small></div>
+        </div>
+        <div className={styles.metricCard}>
+          <span className={`${styles.metricIcon} ${styles.green}`}><ListChecks size={17} /></span>
+          <div><span className={styles.metricLabel}>Planned activities</span><strong>{unavailable ? '—' : taskCount}</strong><small>{unavailable ? 'Data unavailable' : 'Tasks across the timeline'}</small></div>
+        </div>
+        <div className={styles.metricCard}>
+          <span className={`${styles.metricIcon} ${styles.blue}`}><CheckCircle2 size={17} /></span>
+          <div><span className={styles.metricLabel}>Average completion</span><strong>{unavailable || averageProgress === null ? '—' : `${averageProgress}%`}</strong><small>{unavailable ? 'Data unavailable' : 'Duration-weighted progress'}</small></div>
+        </div>
+          <div className={styles.metricCard}>
+          <span className={`${styles.metricIcon} ${styles.violet}`}><Clock3 size={17} /></span>
+          <div><span className={styles.metricLabel}>Baseline coverage</span><strong>{unavailable || rows.length === 0 ? '—' : `${baselinedCount}/${rows.length}`}</strong><small>{unavailable ? 'Data unavailable' : rows.length === 0 ? 'No plans started yet' : 'Plans with a locked baseline'}</small></div>
+        </div>
+      </section>
+
+      <section className={styles.workspace}>
+        <div className={styles.workspaceHead}>
+          <div>
+            <span className={styles.sectionKicker}>Planning desk</span>
+            <h2>{projectName ? 'Project schedule' : 'Portfolio schedules'}</h2>
+            <p>Compare the plan with its baseline, then update progress as delivery moves forward.</p>
+          </div>
+          <div className={styles.legend} aria-label="Chart legend">
+            <span><i className={styles.plannedSwatch} /> Planned</span>
+            <span><i className={styles.progressSwatch} /> Progress</span>
+            <span><i className={styles.baselineSwatch} /> Baseline</span>
+          </div>
+        </div>
+        {unavailable ? (
+          <div className={styles.unavailable} role="status">
+            <CalendarRange size={22} />
+            <div><strong>Schedule data is unavailable</strong><p>We could not reach the project service. Try again in a moment.</p></div>
+          </div>
+        ) : (
+          <GanttClient schedules={rows} projects={scopedProjects ?? []} selectedProjectId={projectId} />
+        )}
+      </section>
+    </main>
   );
 }
-
-const st = {
-  page: { maxWidth: 1080, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
-  h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
-  sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 700, lineHeight: 1.5 } as CSSProperties,
-  muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
-};

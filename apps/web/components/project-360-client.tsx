@@ -7,6 +7,7 @@ import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import AuraDataTable, { type AuraColumn } from './ui/aura-data-table';
 import { DataDegradedNotice } from './ui/data-state';
 import { RecordTabs, type TabDef } from './ui/record';
+import clientStyles from './project-360-client.module.css';
 
 // Project 360 — delivery + commercial control in one place. The project
 // INHERITS its commercial context from the chain (contract value → budget),
@@ -184,7 +185,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   };
 
   return (
-    <div data-testid="project-controls-client">
+    <div data-testid="project-controls-client" className={clientStyles.root}>
       {err && <div role="alert" style={st.err}>{err}</div>}
       {msg && <div role="status" style={st.ok}>{msg}</div>}
       {loadFailures > 0 ? <DataDegradedNotice message={`${loadFailures} project-control data source${loadFailures === 1 ? ' is' : 's are'} unavailable. Available sections remain live.`} /> : null}
@@ -397,6 +398,20 @@ function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Proje
   };
   return (
     <div style={{ display: 'grid', gap: 18 }} data-testid="project-delivery-panel">
+      <section className={clientStyles.wbsHero} aria-labelledby="wbs-workspace-title">
+        <div>
+          <span className={clientStyles.kicker}>PLAN &amp; CONTROL / WBS + CBS</span>
+          <h2 id="wbs-workspace-title">Build the delivery control structure</h2>
+          <p>Keep work packages, cost codes and handover mapping aligned. Projects remains the canonical writer for every change.</p>
+        </div>
+        <span className={clientStyles.authorityBadge}>Projects authority</span>
+      </section>
+      <section className={clientStyles.wbsSummary} aria-label="WBS and CBS summary">
+        <div><span>WBS nodes</span><strong>{wbs.length || '—'}</strong><small>{wbs.length ? 'work packages connected' : 'Not established'}</small></div>
+        <div><span>CBS nodes</span><strong>{cbs.length || '—'}</strong><small>{cbs.length ? 'cost codes connected' : 'Not established'}</small></div>
+        <div><span>Mapped items</span><strong>{maps.length || '—'}</strong><small>{maps.length ? 'frozen handover links' : 'Not established'}</small></div>
+        <div><span>Schedule health</span><strong className={clientStyles.muted}>Unavailable</strong><small>No trusted SPI or time-phased baseline</small></div>
+      </section>
       <div>
         <h2 style={panelTitle}>Commercial handover</h2>
         <div style={detailGrid}>

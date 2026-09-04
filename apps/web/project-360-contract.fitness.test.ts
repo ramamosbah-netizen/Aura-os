@@ -7,6 +7,7 @@ const REGISTER = resolve(__dirname, 'app/projects/projects/page.tsx');
 const OVERVIEW = resolve(__dirname, 'app/project/[projectId]/page.tsx');
 const SCHEDULE = resolve(__dirname, 'app/projects/schedule/page.tsx');
 const GANTT = resolve(__dirname, 'components/gantt-client.tsx');
+const LEGACY_CONTROLS = resolve(__dirname, 'app/controls/page.tsx');
 const SHELL = resolve(__dirname, 'components/project-shell.tsx');
 const WORKSPACE = resolve(__dirname, 'app/project/[projectId]/workspace/[section]/page.tsx');
 
@@ -83,6 +84,12 @@ describe('Project 360 canonical delivery contract', () => {
     expect(pos).toContain('initialProjectId={project ? scopedProjectId : \'\'}');
     expect(readFileSync(resolve(__dirname, 'components/pr-list.tsx'), 'utf8')).toContain('initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}');
     expect(readFileSync(resolve(__dirname, 'components/po-create.tsx'), 'utf8')).toContain('initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}');
+  });
+
+  it('keeps legacy WBS control links on the canonical Project 360 control workspace', () => {
+    const legacy = readFileSync(LEGACY_CONTROLS, 'utf8');
+    expect(legacy).toContain("tab === 'wbs' ? 'delivery' : tab");
+    expect(legacy).toContain('/project/${encodeURIComponent(projectId)}/controls');
   });
 
   it('presents Project 360 as a guided management cockpit', () => {

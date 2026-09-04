@@ -13,5 +13,29 @@
 .wbsSummary strong { color: var(--text); font-size: 21px; line-height: 1; letter-spacing: -.03em; }
 .wbsSummary small { color: var(--muted); font-size: 10px; line-height: 1.25; }
 .muted { color: var(--muted) !important; font-size: 16px !important; }
+.controlsOverview { display: grid; gap: 16px; }
+.controlsHero { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--accent) 12%, transparent), transparent 34%), linear-gradient(140deg, var(--control-panel), var(--panel)); }
+.controlsHero h2 { margin: 6px 0 4px; color: var(--text); font-size: 21px; letter-spacing: -.035em; }
+.controlsHero p { max-width: 720px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.controlSummary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.controlSummary > div { display: flex; min-height: 86px; flex-direction: column; justify-content: center; gap: 4px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--control-panel); }
+.controlSummary span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.controlSummary strong { color: var(--text); font-size: 19px; line-height: 1; letter-spacing: -.03em; }
+.controlSummary small { color: var(--muted); font-size: 10px; line-height: 1.25; }
+.controlAreas { display: grid; gap: 12px; padding: 18px 20px 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--control-panel); }
+.sectionHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.sectionHeading h2 { margin: 5px 0 0; color: var(--text); font-size: 18px; letter-spacing: -.03em; }
+.sectionHint { color: var(--muted); font-size: 10px; }
+.controlAreaGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.controlArea { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 11px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; background: color-mix(in srgb, var(--panel) 78%, transparent); }
+.controlAreaIcon { display: grid; place-items: center; width: 31px; height: 31px; border-radius: 9px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.controlArea h3 { margin: 0; color: var(--text); font-size: 13px; }
+.controlArea p { margin: 3px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.controlAreaLinks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; padding-top: 8px; border-top: 1px solid var(--border); }
+.controlAreaLinks a { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 10px; font-weight: 750; text-decoration: none; }
+.controlAreaLinks a:hover { text-decoration: underline; }
+.controlTruth { display: flex; align-items: center; gap: 8px; padding: 11px 13px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.controlTruth svg { flex: 0 0 auto; color: var(--accent); }
 @media (max-width: 850px) { .wbsSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .wbsHero { flex-direction: column; }.wbsSummary { grid-template-columns: 1fr 1fr; }.wbsSummary > div { min-height: 76px; } }
+@media (max-width: 850px) { .controlSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }.controlAreaGrid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .wbsHero, .controlsHero { flex-direction: column; }.wbsSummary, .controlSummary { grid-template-columns: 1fr 1fr; }.wbsSummary > div, .controlSummary > div { min-height: 76px; }.controlAreas { padding: 16px 14px; }.sectionHeading { align-items: flex-start; flex-direction: column; } }

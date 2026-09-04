@@ -90,6 +90,10 @@ describe('Project 360 canonical delivery contract', () => {
     const legacy = readFileSync(LEGACY_CONTROLS, 'utf8');
     expect(legacy).toContain("tab === 'wbs' ? 'delivery' : tab");
     expect(legacy).toContain('/project/${encodeURIComponent(projectId)}/controls');
+    const client = readFileSync(resolve(__dirname, 'components/project-360-client.tsx'), 'utf8');
+    for (const marker of ['project-controls-overview', 'CONTROL AREAS', 'The signals that keep delivery governed', 'Open WBS & CBS', 'Open Gantt schedule']) {
+      expect(client).toContain(marker);
+    }
   });
 
   it('presents Project 360 as a guided management cockpit', () => {

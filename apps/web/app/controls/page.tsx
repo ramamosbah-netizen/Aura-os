@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function LegacyControlsPage({ searchParams }: { searchParams: Promise<{ projectId?: string; tab?: string }> }) {
   const { projectId, tab } = await searchParams;
-  const canonicalTab = tab === 'wbs' ? 'delivery' : tab;
+  const canonicalTab = tab === 'wbs' ? 'delivery' : tab ?? 'overview';
   const query = new URLSearchParams();
   if (canonicalTab) query.set('tab', canonicalTab);
   if (projectId) {

@@ -2,12 +2,14 @@
 
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowRight, CalendarRange, CircleDollarSign, FileCheck2, Gauge, GitBranch, ShieldAlert } from 'lucide-react';
 import ProjectTeam from './project-team';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import AuraDataTable, { type AuraColumn } from './ui/aura-data-table';
 import { DataDegradedNotice } from './ui/data-state';
 import { RecordTabs, type TabDef } from './ui/record';
 import clientStyles from './project-360-client.module.css';
+import AuraTabLink from './aura-tab-link';
 
 // Project 360 — delivery + commercial control in one place. The project
 // INHERITS its commercial context from the chain (contract value → budget),
@@ -65,12 +67,13 @@ interface DeliveryMap { id: string; projectId: string; handoverId: string; froze
 interface QuantityTxn { id: string; boqItemId: string; type: string; quantity: number; unit: string | null; source: string; sourceRef: string | null; semantic: string | null; occurredAt: string; dedupeKey: string | null; }
 interface CostTxn { id: string; cbsNodeId: string | null; wbsNodeId: string | null; type: 'budget' | 'committed' | 'actual'; amount: number; baseAmount?: number | null; baseCurrency?: string | null; source: string; sourceRef: string | null; occurredAt: string; dedupeKey: string | null; }
 
-type Tab = 'variations' | 'delivery' | 'quantities' | 'cost' | 'eot' | 'closeout' | 'team';
+type Tab = 'overview' | 'variations' | 'delivery' | 'quantities' | 'cost' | 'eot' | 'closeout' | 'team';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
 const CONTROL_TABS: TabDef[] = [
+  { id: 'overview', label: 'Overview' },
   { id: 'variations', label: 'Variations' },
   { id: 'delivery', label: 'WBS / CBS' },
   { id: 'quantities', label: 'Quantities' },
@@ -111,7 +114,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   const [maps, setMaps] = useState<DeliveryMap[]>([]);
   const [quantities, setQuantities] = useState<QuantityTxn[]>([]);
   const [costs, setCosts] = useState<CostTxn[]>([]);
-  const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'variations';
+  const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'overview';
   const [tab, setTab] = useState<Tab>(validInitialTab);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
@@ -283,6 +286,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       </div>
 
       <section id="project-controls-panel" role="tabpanel" aria-labelledby={`project-controls-tab-${tab}`} tabIndex={0} className="panel">
+        {tab === 'overview' && <ControlsOverviewPanel project={project} wbs={wbs} cbs={cbs} maps={maps} variations={variations} impact={impact} evm={evm} closeout={closeout} closeoutDone={closeoutDone} />}
         {tab === 'delivery' && <DeliveryPanel project={project} wbs={wbs} cbs={cbs} maps={maps} busy={busy} call={call} />}
 
         {tab === 'quantities' && <QuantityPanel quantities={quantities} maps={maps} />}
@@ -359,6 +363,45 @@ function Status({ value }: { value: string }) {
 }
 
 type Action = (url: string, method: string, body?: unknown, note?: string) => Promise<boolean>;
+
+function ControlsOverviewPanel({ project, wbs, cbs, maps, variations, impact, evm, closeout, closeoutDone }: { project: Project360Project; wbs: WbsNode[]; cbs: CbsNode[]; maps: DeliveryMap[]; variations: Variation[]; impact: VariationImpact | null; evm: Evm | null; closeout: Closeout | null; closeoutDone: number }) {
+  const base = `/project/${encodeURIComponent(project.id)}/controls`;
+  const pendingChanges = impact ? `AED ${aed(impact.pendingValue)}` : variations.length ? `${variations.length} records` : 'Not established';
+  const closeoutValue = closeout ? `${closeoutDone}/${closeout.items.length}` : 'Not established';
+  return (
+    <div className={clientStyles.controlsOverview} data-testid="project-controls-overview">
+      <section className={clientStyles.controlsHero}>
+        <div><span className={clientStyles.kicker}>PROJECT CONTROLS / OVERVIEW</span><h2>The signals that keep delivery governed</h2><p>One concise control view for structure, schedule, cost, change and closeout. Open a domain workspace to author the next decision.</p></div>
+        <span className={clientStyles.authorityBadge}>Projects authority</span>
+      </section>
+
+      <section className={clientStyles.controlSummary} aria-label="Project control health">
+        <div><span>WBS / CBS</span><strong>{wbs.length || '—'}</strong><small>{wbs.length ? `${wbs.length} WBS · ${cbs.length} CBS nodes` : 'Not established'}</small></div>
+        <div><span>Schedule health</span><strong className={clientStyles.muted}>Unavailable</strong><small>No trusted SPI or time-phased baseline</small></div>
+        <div><span>Pending change</span><strong>{pendingChanges}</strong><small>{impact ? 'Awaiting governed decision' : 'No impact projection'}</small></div>
+        <div><span>Closeout</span><strong>{closeoutValue}</strong><small>{closeout ? closeout.status.replace(/_/g, ' ') : 'Not started'}</small></div>
+      </section>
+
+      <section className={clientStyles.controlAreas} aria-labelledby="control-areas-title">
+        <div className={clientStyles.sectionHeading}><div><span className={clientStyles.kicker}>CONTROL AREAS</span><h2 id="control-areas-title">Open the source workspace</h2></div><span className={clientStyles.sectionHint}>Each area remains owned by its canonical authority.</span></div>
+        <div className={clientStyles.controlAreaGrid}>
+          <ControlArea icon={GitBranch} title="WBS / CBS" detail={wbs.length ? `${wbs.length} WBS nodes · ${cbs.length} CBS nodes` : 'Structure not established'} links={[['Open WBS & CBS', `${base}?tab=delivery`, 'WBS / CBS'], ['Open schedule', `/projects/schedule?projectId=${project.id}`, 'Plan & schedule']]} />
+          <ControlArea icon={CalendarRange} title="Plan & schedule" detail="Gantt, baseline and progress evidence" links={[["Open Gantt schedule", `/projects/schedule?projectId=${project.id}`, 'Plan & schedule']]} />
+          <ControlArea icon={GitBranch} title="Changes & claims" detail={variations.length ? `${variations.length} variation record${variations.length === 1 ? '' : 's'}` : 'No change records established'} links={[["Review variations", `${base}?tab=variations`, 'Variations'], ["Open delays & EOT", `${base}?tab=eot`, 'Delays & EOT']]} />
+          <ControlArea icon={CircleDollarSign} title="Cost & EVM" detail={evm?.actualCost == null ? 'Cost ledger not established' : `Actual AED ${aed(evm.actualCost)}`} links={[["Open cost ledger", `${base}?tab=cost`, 'Cost / EVM']]} />
+          <ControlArea icon={FileCheck2} title="Quantities & certification" detail="Trace executed quantities to source records" links={[["Open quantity ledger", `${base}?tab=quantities`, 'Quantities']]} />
+          <ControlArea icon={ShieldAlert} title="Closeout & decisions" detail={closeout ? `${closeoutDone}/${closeout.items.length} checklist items complete` : 'Closeout not started'} links={[["Open closeout", `${base}?tab=closeout`, 'Closeout'], ["Open approvals", `${base}?tab=team`, 'Approvals']]} />
+        </div>
+      </section>
+
+      <div className={clientStyles.controlTruth}><Gauge size={16} aria-hidden /><span>Health signals are projections from connected authorities. Unavailable means the source cannot prove a schedule or cost status.</span></div>
+    </div>
+  );
+}
+
+function ControlArea({ icon: Icon, title, detail, links }: { icon: typeof GitBranch; title: string; detail: string; links: Array<[string, string, string]> }) {
+  return <article className={clientStyles.controlArea}><span className={clientStyles.controlAreaIcon}><Icon size={16} /></span><div><h3>{title}</h3><p>{detail}</p></div><div className={clientStyles.controlAreaLinks}>{links.map(([label, href, tabTitle]) => <AuraTabLink key={label} href={href} tabTitle={tabTitle} tabType="Project Controls">{label}<ArrowRight size={13} /></AuraTabLink>)}</div></article>;
+}
 
 function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Project360Project; wbs: WbsNode[]; cbs: CbsNode[]; maps: DeliveryMap[]; busy: boolean; call: Action }) {
   const snapshot = project.handoverSnapshot;

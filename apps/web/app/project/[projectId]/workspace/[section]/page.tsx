@@ -1,8 +1,11 @@
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, CircleAlert, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleAlert, ExternalLink, FileText, Layers3, Users } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { fetchJson, getJson } from '@/lib/api';
+import { ProjectEdit } from '@/components/project-create';
 import styles from './project-section-dashboard.module.css';
+import setupStyles from './project-setup.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -212,6 +215,7 @@ export default async function ProjectSectionDashboardPage({ params }: { params: 
   if (!definition) notFound();
   const section: Section = { slug, sources: definition.sources ?? [], capabilities: definition.capabilities ?? [], actions: definition.actions ?? [], ...definition };
   const project = await getJson<Row>(`/api/projects/projects/${encodeURIComponent(projectId)}`);
+  if (slug === 'project') return <ProjectSetupWorkspace projectId={projectId} project={project} />;
   const sourceResults = await Promise.all(section.sources.map(async (source) => {
     const endpoint = source.endpoint === 'project'
       ? `/api/projects/projects/${encodeURIComponent(projectId)}`
@@ -274,4 +278,125 @@ export default async function ProjectSectionDashboardPage({ params }: { params: 
       <footer className={styles.footerNote}><span>Project 360 composes this view; canonical records, permissions and audit events remain with {section.owner}.</span><Link href={`/project/${encodeURIComponent(projectId)}`}>Back to overview <ArrowRight size={13} aria-hidden /></Link></footer>
     </main>
   );
+}
+
+type SetupState = 'complete' | 'not-linked' | 'not-established' | 'unknown';
+
+function setupStateLabel(state: SetupState): string {
+  return state === 'complete' ? 'Complete' : state === 'not-linked' ? 'Not linked' : state === 'unknown' ? 'Unknown' : 'Not established';
+}
+
+function setupStateClass(state: SetupState): string {
+  return state === 'complete' ? setupStyles.stateComplete : state === 'not-linked' ? setupStyles.stateLinked : state === 'unknown' ? setupStyles.stateUnknown : setupStyles.stateMissing;
+}
+
+function setupValue(value: unknown, fallback = 'Not established'): string {
+  return typeof value === 'string' && value.trim() ? value : value === 0 ? 'AED 0' : fallback;
+}
+
+async function ProjectSetupWorkspace({ projectId, project }: { projectId: string; project: Row | null }) {
+  const [membersResult, wbsResult] = await Promise.all([
+    fetchJson<Row[]>(`/api/projects/${encodeURIComponent(projectId)}/members`),
+    fetchJson<Row[]>(`/api/projects/wbs?projectId=${encodeURIComponent(projectId)}`),
+  ]);
+  const members = membersResult.ok && Array.isArray(membersResult.data) ? membersResult.data : [];
+  const wbs = wbsResult.ok && Array.isArray(wbsResult.data) ? wbsResult.data : [];
+  const identityState: SetupState = project?.title && project?.reference ? 'complete' : 'not-established';
+  const contractState: SetupState = project?.contractId || project?.contractTitle ? 'complete' : 'not-linked';
+  const scopeState: SetupState = wbsResult.ok ? (wbs.length ? 'complete' : 'not-established') : 'unknown';
+  const teamState: SetupState = membersResult.ok ? (members.length ? 'complete' : 'not-established') : 'unknown';
+  const systemsState: SetupState = 'not-established';
+  const datesState: SetupState = 'not-established';
+  const progressItems = [
+    ['Identity', identityState], ['Contract', contractState], ['Scope', scopeState], ['Team', teamState], ['Systems', systemsState], ['Dates', datesState],
+  ] as Array<[string, SetupState]>;
+  const projectBase = `/project/${encodeURIComponent(projectId)}`;
+  const title = String(project?.title ?? 'Project Setup');
+  const projectEdit = project ? <ProjectEdit buttonLabel="Edit project" project={{ id: projectId, title, reference: String(project.reference ?? ''), status: String(project.status ?? 'planned'), value: Number(project.value ?? 0) }} /> : null;
+
+  return (
+    <main className={setupStyles.page} data-testid="project-setup-workspace">
+      <header className={setupStyles.hero}>
+        <div className={setupStyles.heroCopy}>
+          <span className={setupStyles.eyebrow}>PROJECT 360 / PROJECT SETUP</span>
+          <h1>{title}</h1>
+          <p>Project identity, scope, contract and ownership — configured before delivery starts.</p>
+          <div className={setupStyles.metaLine}><code>{setupValue(project?.reference, 'Reference not established')}</code><span>{setupValue(project?.accountName, 'Client not established')}</span><span>{setupValue(project?.contractTitle, 'Contract not linked')}</span></div>
+        </div>
+        <div className={setupStyles.heroActions}>
+          {projectEdit}
+          <details className={setupStyles.actionMenu}>
+            <summary>Project actions <span>⌄</span></summary>
+            <div className={setupStyles.actionMenuPanel}>
+              <LinkAction href={`${projectBase}/workspace/plan`} label="Open plan & control" />
+              <LinkAction href={`${projectBase}/workspace/engineering`} label="Open engineering" />
+              <LinkAction href={`${projectBase}/workspace/site`} label="Open site delivery" />
+              <LinkAction href={`${projectBase}/team`} label="Open team" />
+            </div>
+          </details>
+        </div>
+      </header>
+
+      <section className={setupStyles.progressPanel} aria-labelledby="setup-progress-title">
+        <div className={setupStyles.sectionHeading}><div><span className={setupStyles.kicker}>SETUP PROGRESS</span><h2 id="setup-progress-title">Configure the project once, then deliver with confidence.</h2></div><span className={setupStyles.sectionHint}>Derived from Projects authority</span></div>
+        <div className={setupStyles.progressGrid}>{progressItems.map(([label, state]) => <div key={label} className={setupStyles.progressItem}><span className={`${setupStyles.progressIcon} ${setupStateClass(state)}`}>{state === 'complete' ? <Check size={14} aria-hidden /> : '?'}</span><div><strong>{label}</strong><small className={setupStateClass(state)}>{setupStateLabel(state)}</small></div></div>)}</div>
+      </section>
+
+      <div className={setupStyles.primaryGrid}>
+        <section className={setupStyles.panel} aria-labelledby="project-details-title">
+          <div className={setupStyles.sectionHeading}><div><span className={setupStyles.kicker}>PROJECT DETAILS</span><h2 id="project-details-title">Identity and ownership</h2></div></div>
+          <div className={setupStyles.detailGrid}>
+            <Detail label="Project name" value={title} />
+            <Detail label="Reference" value={setupValue(project?.reference)} mono />
+            <Detail label="Client" value={setupValue(project?.accountName, 'Client not established')} />
+            <Detail label="Contract" value={setupValue(project?.contractTitle, 'Not linked')} />
+            <Detail label="Project manager" value="Not established" />
+            <Detail label="Status" value={setupValue(project?.status, 'Unknown')} badge />
+            <Detail label="Start date" value="Not established" icon={<CalendarDays size={14} aria-hidden />} />
+            <Detail label="Target date" value="Not established" icon={<CalendarDays size={14} aria-hidden />} />
+          </div>
+        </section>
+
+        <aside className={setupStyles.readinessPanel} aria-labelledby="setup-readiness-title">
+          <div className={setupStyles.sectionHeading}><div><span className={setupStyles.kicker}>SETUP READINESS</span><h2 id="setup-readiness-title">What is ready to use</h2></div></div>
+          <ReadinessRow label="Identity" state={identityState} />
+          <ReadinessRow label="Contract" state={contractState} />
+          <ReadinessRow label="Scope" state={scopeState} />
+          <ReadinessRow label="Team" state={teamState} />
+          <ReadinessRow label="Systems" state={systemsState} />
+          <p className={setupStyles.truthNote}>A setup item only becomes complete when its canonical evidence is available. No manual READY flags are stored here.</p>
+        </aside>
+      </div>
+
+      <section className={setupStyles.panel} aria-labelledby="scope-contract-title">
+        <div className={setupStyles.sectionHeading}><div><span className={setupStyles.kicker}>SCOPE &amp; CONTRACT</span><h2 id="scope-contract-title">The delivery basis</h2></div><span className={setupStyles.sectionHint}>Owned by Projects and linked authorities</span></div>
+        <div className={setupStyles.basisGrid}>
+          <article className={setupStyles.basisCard}><span className={setupStyles.basisIcon}><Layers3 size={16} aria-hidden /></span><div><strong>Scope / WBS</strong><span className={setupStateClass(scopeState)}>{wbsResult.ok && wbs.length ? `${wbs.length} WBS record${wbs.length === 1 ? '' : 's'} connected` : setupStateLabel(scopeState)}</span><small>{wbsResult.ok ? 'Planning evidence will appear here when authored.' : 'Planning authority could not be reached.'}</small></div><LinkAction href={`${projectBase}/workspace/plan`} label="Open plan" /></article>
+          <article className={setupStyles.basisCard}><span className={setupStyles.basisIcon}><FileText size={16} aria-hidden /></span><div><strong>Contract</strong><span className={setupStateClass(contractState)}>{contractState === 'complete' ? setupValue(project?.contractTitle) : 'Not linked'}</span><small>{project?.contractId ? 'Awarded contract linked to this project.' : 'No awarded contract is linked to this project.'}</small></div><LinkAction href="/contracts/contracts" label="Open contracts" /></article>
+          <article className={setupStyles.basisCard}><span className={setupStyles.basisIcon}><FileText size={16} aria-hidden /></span><div><strong>Commercial handover</strong><span className={setupStyles.stateMissing}>Not established</span><small>Accepted scope, assumptions and exclusions are not recorded yet.</small></div><LinkAction href={`${projectBase}/workspace/commercial`} label="Review commercial" /></article>
+        </div>
+      </section>
+
+      <div className={setupStyles.secondaryGrid}>
+        <section className={setupStyles.panel} aria-labelledby="team-title"><div className={setupStyles.sectionHeading}><div><span className={setupStyles.kicker}>TEAM &amp; OWNERSHIP</span><h2 id="team-title">People who can deliver</h2></div><LinkAction href={`${projectBase}/team`} label="Manage team" /></div><div className={setupStyles.teamSummary}><Users size={18} aria-hidden /><div><strong>{members.length ? `${members.length} project member${members.length === 1 ? '' : 's'}` : teamState === 'unknown' ? 'Team is unknown' : 'Team not established'}</strong><span>{members.length ? members.map((member) => String(member.displayName ?? member.roleName ?? member.userId ?? 'Member')).join(' · ') : 'Assign a Project Manager and delivery roles when ownership is known.'}</span></div></div></section>
+        <section className={setupStyles.panel} aria-labelledby="systems-title"><div className={setupStyles.sectionHeading}><div><span className={setupStyles.kicker}>SYSTEMS / DISCIPLINES</span><h2 id="systems-title">Delivery lens</h2></div><span className={setupStyles.sectionHint}>Project scope only</span></div><div className={setupStyles.systemsEmpty}><Layers3 size={18} aria-hidden /><div><strong>Systems are not established</strong><span>No project disciplines have been linked by the Projects authority yet. The global lens remains available for read-only context.</span></div></div></section>
+      </div>
+
+      <section className={setupStyles.panel} aria-labelledby="setup-activity-title"><div className={setupStyles.sectionHeading}><div><span className={setupStyles.kicker}>RECENT SETUP ACTIVITY</span><h2 id="setup-activity-title">What changed in setup</h2></div><LinkAction href={`${projectBase}/workspace/activity`} label="View history" /></div><div className={setupStyles.activityRow}><span className={setupStyles.activityDot} /><div><strong>Project record created</strong><span>{project?.createdAt ? new Date(String(project.createdAt)).toLocaleString('en-AE', { dateStyle: 'medium', timeStyle: 'short' }) : 'Date not established'} · Projects authority</span></div></div></section>
+
+      <footer className={setupStyles.footerNote}><span>Project Setup writes only through the canonical Projects authority. Linked domains remain owners of their records.</span><LinkAction href={projectBase} label="Back to Project 360" /></footer>
+    </main>
+  );
+}
+
+function Detail({ label, value, mono, badge, icon }: { label: string; value: string; mono?: boolean; badge?: boolean; icon?: ReactNode }) {
+  return <div className={setupStyles.detail}><span>{icon}{label}</span><strong className={`${mono ? setupStyles.mono : ''} ${badge ? setupStyles.detailBadge : ''}`}>{value}</strong></div>;
+}
+
+function ReadinessRow({ label, state }: { label: string; state: SetupState }) {
+  return <div className={setupStyles.readinessRow}><span>{label}</span><strong className={setupStateClass(state)}>{setupStateLabel(state)}</strong><span aria-hidden>{state === 'complete' ? '✓' : '·'}</span></div>;
+}
+
+function LinkAction({ href, label }: { href: string; label: string }) {
+  return <Link href={href} className={setupStyles.inlineAction}>{label}<ArrowRight size={13} aria-hidden /></Link>;
 }

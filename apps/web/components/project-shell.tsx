@@ -180,14 +180,16 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   );
 
   const isOverview = pathname === base;
+  const isSetup = pathname === workspace('project');
+  const showFullLauncher = isOverview || isSetup;
 
   return (
     <div className={styles.workspace}>
       <section className={styles.content}>
-        {!isOverview ? compactContext : null}
+        {!showFullLauncher ? compactContext : null}
         {children}
       </section>
-      {isOverview ? workspaceNavigation : null}
+      {showFullLauncher ? workspaceNavigation : null}
     </div>
   );
 }

@@ -9,10 +9,11 @@ interface ContractLite {
 }
 
 /** Row-level "Edit" — opens the drawer prefilled, PATCHes the project. */
-export function ProjectEdit({ project }: { project: { id: string; title: string; reference?: string | null; status: string; value: number } }) {
+export function ProjectEdit({ project, buttonLabel }: { project: { id: string; title: string; reference?: string | null; status: string; value: number }; buttonLabel?: string }) {
   return (
     <CreateDrawer
       mode="edit"
+      buttonLabel={buttonLabel}
       entity="Project"
       subtitle="Update the project's details and status."
       endpoint={`/api/projects/projects/${project.id}`}

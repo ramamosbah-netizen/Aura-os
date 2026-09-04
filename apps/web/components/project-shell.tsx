@@ -138,11 +138,10 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
       </section>
   );
 
-  // Inner Project 360 pages keep a light, compact switcher so the full launcher
-  // does not repeat below every record workspace. The Overview owns the full
-  // grouped launcher, just like the Sales suite owns its Workspaces panel.
-  const compactContext = (
-    <>
+  // Inner Project 360 pages keep only the project context header. Navigation is
+  // intentionally not repeated here; Overview and Setup own the grouped launcher
+  // below their content, matching the Sales suite's shortcut pattern.
+  const contextHeader = (
       <section className={styles.contextBar} aria-label="Project context">
         <Link href="/projects/projects" className={styles.contextBack}>← All projects</Link>
         <div className={styles.contextBarIdentity}>
@@ -168,15 +167,6 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
         </label>
         <Link href="/ai" className={styles.aiLink}><Bot size={15} aria-hidden /> AI workspace</Link>
       </section>
-      <nav className={styles.compactNavigation} aria-label="Project 360 shortcuts">
-        {navGroups.map(({ group, items }) => (
-          <div key={group} className={styles.compactGroup}>
-            <span>{group}</span>
-            {items.map((item) => <Link key={item.key} href={scoped(item.href ?? base)} className={item.active ? styles.compactActive : undefined} aria-current={item.active ? 'page' : undefined}>{item.label}</Link>)}
-          </div>
-        ))}
-      </nav>
-    </>
   );
 
   const isOverview = pathname === base;
@@ -186,7 +176,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   return (
     <div className={styles.workspace}>
       <section className={styles.content}>
-        {!showFullLauncher ? compactContext : null}
+        {!showFullLauncher ? contextHeader : null}
         {children}
       </section>
       {showFullLauncher ? workspaceNavigation : null}

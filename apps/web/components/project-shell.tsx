@@ -47,22 +47,23 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
     if (hashIndex === -1) return `${href}?${query}`;
     return `${href.slice(0, hashIndex)}?${query}${href.slice(hashIndex)}`;
   };
+  const workspace = (section: string): string => `${base}/workspace/${section}`;
   const navItems: NavItem[] = [
     { key: 'overview', group: 'Project', label: 'Overview', description: 'Project cockpit and live health', icon: LayoutDashboard, href: base, active: pathname === base },
-    { key: 'project', group: 'Project', label: 'Project', description: 'Setup, scope and ownership', icon: ClipboardList, href: `${base}#project-setup`, active: false },
-    { key: 'plan', group: 'Plan & Control', label: 'Plan & Control', description: 'Schedule, WBS and project controls', icon: CalendarRange, href: `/projects/schedule?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/projects/schedule' || pathname.startsWith(`${base}/controls`) && !['variations', 'cost', 'closeout'].includes(searchParams.get('tab') ?? '') },
-    { key: 'engineering', group: 'Delivery', label: 'Engineering', description: 'Drawings, RFIs and technical records', icon: Wrench, href: `${base}/engineering`, active: pathname === `${base}/engineering` },
-    { key: 'procurement', group: 'Delivery', label: 'Procurement', description: 'Material requirements and buying', icon: ShoppingCart, href: `/procurement/purchase-requests?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/procurement/purchase-requests') || pathname.startsWith('/procurement/purchase-orders') },
-    { key: 'subcontracts', group: 'Delivery', label: 'Subcontracts', description: 'Packages, tenders and awards', icon: FileStack, href: `/subcontracts/subcontracts?projectId=${encodeURIComponent(project.id)}`, active: pathname === '/subcontracts/subcontracts' && searchParams.get('projectId') === project.id },
-    { key: 'site', group: 'Delivery', label: 'Site', description: 'Work instructions, reports and progress', icon: HardHat, href: `${base}/site`, active: pathname.startsWith(`${base}/site`) },
-    { key: 'quality', group: 'Delivery', label: 'Quality', description: 'Inspections, NCRs and corrective actions', icon: ClipboardCheck, href: `${base}/quality`, active: pathname === `${base}/quality` },
-    { key: 'hse', group: 'Delivery', label: 'HSE', description: 'Permits, observations and safety actions', icon: ShieldCheck, href: `${base}/hse`, active: pathname === `${base}/hse` },
-    { key: 'commercial', group: 'Commercial', label: 'Commercial', description: 'Contract value, cost and changes', icon: CircleDollarSign, href: `${base}/controls?tab=cost`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'cost' },
-    { key: 'documents', group: 'Information', label: 'Documents', description: 'Controlled project information', icon: FileStack, href: `${base}/documents`, active: pathname.startsWith(`${base}/documents`) },
-    { key: 'approvals', group: 'Information', label: 'Approvals & Actions', description: 'Decisions and project actions', icon: ListChecks, href: `/my-work/approvals?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/my-work/approvals') },
-    { key: 'testing', group: 'Completion', label: 'Testing & Commissioning', description: 'Test plans, records and commissioning', icon: Wrench, href: `/commissioning?projectId=${encodeURIComponent(project.id)}`, active: pathname.startsWith('/commissioning') },
-    { key: 'handover', group: 'Completion', label: 'Handover & Closeout', description: 'Readiness, closeout and acceptance', icon: ClipboardCheck, href: `${base}/controls?tab=closeout`, active: pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'closeout' },
-    { key: 'activity', group: 'Information', label: 'Activity & History', description: 'Timeline and audit history', icon: History, href: `${base}#activity-history`, active: false },
+    { key: 'project', group: 'Project', label: 'Project', description: 'Setup, scope and ownership', icon: ClipboardList, href: workspace('project'), active: pathname === workspace('project') },
+    { key: 'plan', group: 'Plan & Control', label: 'Plan & Control', description: 'Schedule, WBS and project controls', icon: CalendarRange, href: workspace('plan'), active: pathname === workspace('plan') || pathname.startsWith(`${base}/controls`) && !['cost', 'closeout'].includes(searchParams.get('tab') ?? '') },
+    { key: 'engineering', group: 'Delivery', label: 'Engineering', description: 'Drawings, RFIs and technical records', icon: Wrench, href: workspace('engineering'), active: pathname === workspace('engineering') || pathname === `${base}/engineering` },
+    { key: 'procurement', group: 'Delivery', label: 'Procurement', description: 'Material requirements and buying', icon: ShoppingCart, href: workspace('procurement'), active: pathname === workspace('procurement') || pathname.startsWith('/procurement/') },
+    { key: 'subcontracts', group: 'Delivery', label: 'Subcontracts', description: 'Packages, tenders and awards', icon: FileStack, href: workspace('subcontracts'), active: pathname === workspace('subcontracts') || pathname.startsWith('/subcontracts/') },
+    { key: 'site', group: 'Delivery', label: 'Site', description: 'Work instructions, reports and progress', icon: HardHat, href: workspace('site'), active: pathname === workspace('site') || pathname.startsWith(`${base}/site`) },
+    { key: 'quality', group: 'Delivery', label: 'Quality', description: 'Inspections, NCRs and corrective actions', icon: ClipboardCheck, href: workspace('quality'), active: pathname === workspace('quality') || pathname === `${base}/quality` },
+    { key: 'hse', group: 'Delivery', label: 'HSE', description: 'Permits, observations and safety actions', icon: ShieldCheck, href: workspace('hse'), active: pathname === workspace('hse') || pathname.startsWith('/hse/') },
+    { key: 'commercial', group: 'Commercial', label: 'Commercial', description: 'Contract value, cost and changes', icon: CircleDollarSign, href: workspace('commercial'), active: pathname === workspace('commercial') || pathname.startsWith(`${base}/controls`) && searchParams.get('tab') === 'cost' },
+    { key: 'documents', group: 'Information', label: 'Documents', description: 'Controlled project information', icon: FileStack, href: workspace('documents'), active: pathname === workspace('documents') || pathname.startsWith(`${base}/documents`) },
+    { key: 'approvals', group: 'Information', label: 'Approvals & Actions', description: 'Decisions and project actions', icon: ListChecks, href: workspace('approvals'), active: pathname === workspace('approvals') || pathname.startsWith('/my-work/approvals') },
+    { key: 'testing', group: 'Completion', label: 'Testing & Commissioning', description: 'Test plans, records and commissioning', icon: Wrench, href: workspace('testing'), active: pathname === workspace('testing') || pathname.startsWith('/commissioning') },
+    { key: 'handover', group: 'Completion', label: 'Handover & Closeout', description: 'Readiness, closeout and acceptance', icon: ClipboardCheck, href: workspace('handover'), active: pathname === workspace('handover') || pathname.startsWith('/handover') },
+    { key: 'activity', group: 'Information', label: 'Activity & History', description: 'Timeline and audit history', icon: History, href: workspace('activity'), active: pathname === workspace('activity') },
   ];
   const navGroups = ['Project', 'Plan & Control', 'Delivery', 'Commercial', 'Information', 'Completion']
     .map((group) => ({ group, items: navItems.filter((item) => item.group === group) }))
@@ -74,7 +75,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
           : 'badge';
 
   const workspaceNavigation = (
-      <aside className={styles.projectRail} aria-label="Project workspace">
+      <section className={styles.projectRail} aria-label="Project workspace">
         <div className={styles.contextTop}>
           <span className={styles.contextLabel}>PROJECT 360</span>
           <div className={styles.projectIdentity}>
@@ -134,18 +135,13 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
           <span>Project 360 connects the work; specialist domains remain the canonical owners.</span>
           <Link href="/operations/overview">Open specialist views →</Link>
         </div>
-      </aside>
+      </section>
   );
 
   return (
-    <div className={pathname === base ? `${styles.workspace} ${styles.overviewWorkspace}` : styles.workspace}>
-      {pathname === base ? <>
-        <section className={styles.content}>{children}</section>
-        {workspaceNavigation}
-      </> : <>
-        {workspaceNavigation}
-        <section className={styles.content}>{children}</section>
-      </>}
+    <div className={styles.workspace}>
+      <section className={styles.content}>{children}</section>
+      {workspaceNavigation}
     </div>
   );
 }

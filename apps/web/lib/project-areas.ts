@@ -65,8 +65,8 @@ export const PROJECT_AREAS: ProjectArea[] = [
     description: 'Controlled technical information, approvals and engineering decisions for this project.',
     actions: [
       { label: 'Drawings', href: '/engineering/drawings', description: 'Review controlled drawings and revisions' },
-      { label: 'RFIs', href: '/engineering/rfis', description: 'Track technical questions and responses' },
-      { label: 'Submittals', href: '/engineering/submittals', description: 'Manage technical submissions' },
+      { label: 'RFIs', href: '/engineering', description: 'Track technical questions and responses' },
+      { label: 'Submittals', href: '/engineering', description: 'Manage technical submissions' },
     ],
     columns: [
       { key: 'code', label: 'Code', kind: 'code' },

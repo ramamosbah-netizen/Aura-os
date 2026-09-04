@@ -7,6 +7,7 @@ const REGISTER = resolve(__dirname, 'app/projects/projects/page.tsx');
 const OVERVIEW = resolve(__dirname, 'app/project/[projectId]/page.tsx');
 const SCHEDULE = resolve(__dirname, 'app/projects/schedule/page.tsx');
 const SHELL = resolve(__dirname, 'components/project-shell.tsx');
+const WORKSPACE = resolve(__dirname, 'app/project/[projectId]/workspace/[section]/page.tsx');
 
 describe('Project 360 canonical delivery contract', () => {
   it('exposes delivery evidence in the canonical controls workspace', () => {
@@ -89,10 +90,23 @@ describe('Project 360 canonical delivery contract', () => {
   it('uses a direct Project 360 rail for project-level shortcuts', () => {
     const shell = readFileSync(SHELL, 'utf8');
     const css = readFileSync(resolve(__dirname, 'components/project-shell.module.css'), 'utf8');
-    expect(shell).toContain('<aside className={styles.projectRail}');
+    expect(shell).toContain('<section className={styles.projectRail}');
     expect(shell).toContain('Project 360 navigation');
     expect(shell).toContain('navGroups.map');
     expect(css).toContain('.projectRail');
     expect(css).toContain('.navItemActive');
+  });
+
+  it('keeps every approved Project 360 parent available as a contextual shortcut', () => {
+    const shell = readFileSync(SHELL, 'utf8');
+    const workspace = readFileSync(WORKSPACE, 'utf8');
+    for (const label of ['Overview', 'Project', 'Plan & Control', 'Engineering', 'Procurement', 'Subcontracts', 'Site', 'Quality', 'HSE', 'Commercial', 'Documents', 'Approvals & Actions', 'Testing & Commissioning', 'Handover & Closeout', 'Activity & History']) {
+      expect(shell).toContain(`label: '${label}'`);
+    }
+    for (const section of ['project', 'plan', 'engineering', 'procurement', 'subcontracts', 'site', 'quality', 'hse', 'commercial', 'documents', 'approvals', 'testing', 'handover', 'activity']) {
+      expect(workspace).toContain(`${section}:`);
+    }
+    expect(workspace).toContain('Project context preserved');
+    expect(workspace).toContain('function contextHref');
   });
 });

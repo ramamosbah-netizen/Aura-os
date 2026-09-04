@@ -19,7 +19,7 @@ type Section = {
 
 const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities' | 'actions'> & Partial<Pick<Section, 'sources' | 'capabilities' | 'actions'>>> = {
   project: {
-    label: 'Project', owner: 'Projects', description: 'Set up the awarded project, its scope, people and operating context.',
+    label: 'Project Setup', owner: 'Projects', description: 'Set up the awarded project, its scope, people and operating context.',
     sources: [{ label: 'Project record', endpoint: 'project' }],
     capabilities: [
       { label: 'Setup & scope', description: 'Project identity, scope and contract context', href: '#project-setup' },

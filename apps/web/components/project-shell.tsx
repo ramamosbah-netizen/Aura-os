@@ -138,10 +138,56 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
       </section>
   );
 
+  // Inner Project 360 pages keep a light, compact switcher so the full launcher
+  // does not repeat below every record workspace. The Overview owns the full
+  // grouped launcher, just like the Sales suite owns its Workspaces panel.
+  const compactContext = (
+    <>
+      <section className={styles.contextBar} aria-label="Project context">
+        <Link href="/projects/projects" className={styles.contextBack}>← All projects</Link>
+        <div className={styles.contextBarIdentity}>
+          <div className={styles.identityMark} aria-hidden>{project.reference?.slice(0, 2).toUpperCase() || 'PX'}</div>
+          <div className={styles.identityCopy}>
+            <span className={styles.eyebrow}>Project 360</span>
+            <strong className={styles.projectName}>{project.title}</strong>
+            <span className={styles.contextBarMeta}>{project.reference || 'Reference not established'} · {project.status}</span>
+          </div>
+        </div>
+        <label className={styles.lens}>
+          <span>System / discipline lens</span>
+          <select
+            aria-label="System or discipline lens"
+            value={disciplineId ?? ''}
+            onChange={(event) => setDiscipline(event.target.value || null)}
+          >
+            <option value="">All systems</option>
+            {ELV_DISCIPLINES.map((discipline) => (
+              <option key={discipline.id} value={discipline.id}>{discipline.label}</option>
+            ))}
+          </select>
+        </label>
+        <Link href="/ai" className={styles.aiLink}><Bot size={15} aria-hidden /> AI workspace</Link>
+      </section>
+      <nav className={styles.compactNavigation} aria-label="Project 360 shortcuts">
+        {navGroups.map(({ group, items }) => (
+          <div key={group} className={styles.compactGroup}>
+            <span>{group}</span>
+            {items.map((item) => <Link key={item.key} href={scoped(item.href ?? base)} className={item.active ? styles.compactActive : undefined} aria-current={item.active ? 'page' : undefined}>{item.label}</Link>)}
+          </div>
+        ))}
+      </nav>
+    </>
+  );
+
+  const isOverview = pathname === base;
+
   return (
     <div className={styles.workspace}>
-      <section className={styles.content}>{children}</section>
-      {workspaceNavigation}
+      <section className={styles.content}>
+        {!isOverview ? compactContext : null}
+        {children}
+      </section>
+      {isOverview ? workspaceNavigation : null}
     </div>
   );
 }

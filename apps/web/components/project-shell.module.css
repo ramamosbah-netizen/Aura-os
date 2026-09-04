@@ -1,4 +1,19 @@
 .workspace { min-height:calc(100vh - 142px); background:transparent; }
+.contextBar { display:flex; align-items:center; gap:16px; margin:0 0 22px; padding:12px 16px; border:1px solid var(--border); border-radius:12px; background:color-mix(in srgb,var(--panel) 96%,transparent); }
+.contextBack { flex:none; color:var(--muted); font-size:11px; font-weight:750; text-decoration:none; }
+.contextBack:hover { color:var(--text); }
+.contextBarIdentity { display:flex; align-items:center; gap:9px; min-width:0; }
+.contextBarIdentity .identityMark { width:32px; height:32px; border-radius:9px; }
+.contextBarIdentity .identityCopy { gap:2px; }
+.contextBarMeta { color:var(--muted); font-size:10px; text-transform:capitalize; }
+.contextBar .lens { margin-left:auto; }
+.compactNavigation { display:flex; align-items:center; gap:6px; overflow-x:auto; margin:0 0 24px; padding:4px 0 10px; border-bottom:1px solid var(--border); scrollbar-width:thin; }
+.compactGroup { display:flex; align-items:center; gap:4px; flex:none; padding-right:8px; border-right:1px solid var(--border); }
+.compactGroup:last-child { border-right:0; }
+.compactGroup > span { margin:0 4px 0 2px; color:var(--muted); font-size:8px; font-weight:850; letter-spacing:.12em; text-transform:uppercase; }
+.compactGroup a { display:inline-flex; align-items:center; min-height:27px; padding:5px 8px; border:1px solid transparent; border-radius:7px; color:var(--muted); font-size:10.5px; font-weight:700; text-decoration:none; white-space:nowrap; }
+.compactGroup a:hover { color:var(--text); background:var(--panel-2); border-color:var(--border); }
+.compactGroup a.compactActive { color:var(--accent-ink); background:var(--accent); border-color:var(--accent); }
 .projectRail { max-width:1320px; margin:18px 2vw 0; overflow:hidden; border:1px solid var(--border); border-radius:16px; background:color-mix(in srgb,var(--panel) 97%,transparent); }
 .contextTop { display:flex; align-items:center; gap:18px; padding:14px clamp(18px,3vw,42px); border-bottom:1px solid var(--border); }
 .contextLabel { color:var(--accent); font-size:9px; font-weight:850; letter-spacing:.14em; text-transform:uppercase; }
@@ -47,3 +62,4 @@
 .overviewWorkspace .projectRail { margin-top:0; margin-bottom:38px; }
 @media (max-width:900px) { .navigation { grid-template-columns:1fr; }.navGroup:nth-child(n) { grid-column:auto; }.navGroupGrid,.navGroup:nth-child(3) .navGroupGrid,.navGroup:nth-child(5) .navGroupGrid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:760px) { .projectRail { margin:12px 12px 0; } .contextTop { align-items:flex-start; flex-wrap:wrap; padding:14px 16px; } .projectIdentity { min-width:0; flex:1 1 220px; } .lens { margin-left:0; flex:1 1 220px; } .lens select { flex:1; width:auto; } .workspaceTitle { align-items:flex-start; flex-direction:column; padding:14px 16px 4px; } .navigation { display:grid; gap:13px; overflow:visible; padding:10px 12px; } .navGroupGrid,.navGroup:nth-child(3) .navGroupGrid,.navGroup:nth-child(5) .navGroupGrid { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; } .navItem { min-width:180px; min-height:84px; flex:0 0 180px; } .navHint { display:none; } .content { padding:20px 14px 56px; } }
+@media (max-width:760px) { .contextBar { align-items:flex-start; flex-wrap:wrap; padding:12px; } .contextBarIdentity { flex:1 1 210px; } .contextBar .lens { flex:1 1 210px; margin-left:0; } .contextBar .lens select { width:100%; } .contextBar .aiLink { margin-left:auto; } .compactNavigation { margin-bottom:18px; } }

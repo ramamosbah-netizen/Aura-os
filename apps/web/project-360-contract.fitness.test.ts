@@ -109,4 +109,13 @@ describe('Project 360 canonical delivery contract', () => {
     expect(workspace).toContain('Project context preserved');
     expect(workspace).toContain('function contextHref');
   });
+
+  it('treats Project Setup as a focused configuration workspace', () => {
+    const workspace = readFileSync(WORKSPACE, 'utf8');
+    for (const marker of ['Project Setup', 'SETUP PROGRESS', 'PROJECT DETAILS', 'SCOPE &amp; CONTRACT', 'TEAM &amp; OWNERSHIP', 'SYSTEMS / DISCIPLINES', 'RECENT SETUP ACTIVITY']) {
+      expect(workspace).toContain(marker);
+    }
+    expect(workspace).toContain('No manual READY flags are stored here.');
+    expect(workspace).toContain('fetchJson<Row[]>(`/api/projects/${encodeURIComponent(projectId)}/members`');
+  });
 });

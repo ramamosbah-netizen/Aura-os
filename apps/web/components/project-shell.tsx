@@ -1,6 +1,6 @@
 'use client';
 
-import type { MouseEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -104,7 +104,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
               ))}
             </select>
           </label>
-          <Link href="/ai" target="_blank" rel="noopener noreferrer" className={styles.aiLink}>
+          <Link href="/ai" className={styles.aiLink}>
             <Bot size={16} aria-hidden />
             AI workspace
           </Link>
@@ -126,14 +126,14 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
             <div className={styles.navGroupGrid}>
               {items.map((item) => {
                 const Icon = item.icon;
-                return <Link key={item.key} href={scoped(item.href ?? base)} target="_blank" rel="noopener noreferrer" className={item.active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem} aria-current={item.active ? 'page' : undefined}><span className={styles.navItemTop}><Icon size={16} strokeWidth={1.8} aria-hidden /><ArrowUpRight size={14} aria-hidden /></span><span className={styles.navItemCopy}><strong>{item.label}</strong><small>{item.description}</small></span></Link>;
+                return <Link key={item.key} href={scoped(item.href ?? base)} className={item.active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem} aria-current={item.active ? 'page' : undefined}><span className={styles.navItemTop}><Icon size={16} strokeWidth={1.8} aria-hidden /><ArrowUpRight size={14} aria-hidden /></span><span className={styles.navItemCopy}><strong>{item.label}</strong><small>{item.description}</small></span></Link>;
               })}
             </div>
           </section>)}
         </nav>
         <div className={styles.navHint}>
           <span>Project 360 connects the work; specialist domains remain the canonical owners.</span>
-          <Link href="/operations/overview" target="_blank" rel="noopener noreferrer">Open specialist views →</Link>
+          <Link href="/operations/overview">Open specialist views →</Link>
         </div>
       </section>
   );
@@ -143,7 +143,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   // below their content, matching the Sales suite's shortcut pattern.
   const contextHeader = (
       <section className={styles.contextBar} aria-label="Project context">
-        <Link href="/projects/projects" target="_blank" rel="noopener noreferrer" className={styles.contextBack}>← All projects</Link>
+        <Link href="/projects/projects" className={styles.contextBack}>← All projects</Link>
         <div className={styles.contextBarIdentity}>
           <div className={styles.identityMark} aria-hidden>{project.reference?.slice(0, 2).toUpperCase() || 'PX'}</div>
           <div className={styles.identityCopy}>
@@ -165,23 +165,15 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
             ))}
           </select>
         </label>
-        <Link href="/ai" target="_blank" rel="noopener noreferrer" className={styles.aiLink}><Bot size={15} aria-hidden /> AI workspace</Link>
+        <Link href="/ai" className={styles.aiLink}><Bot size={15} aria-hidden /> AI workspace</Link>
       </section>
   );
 
   const isOverview = pathname === base;
   const isSetup = pathname === workspace('project');
   const showFullLauncher = isOverview || isSetup;
-  const openProjectLink = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const anchor = (event.target as HTMLElement).closest('a');
-    if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
-    event.preventDefault();
-    window.open(anchor.href, '_blank', 'noopener,noreferrer');
-  };
-
   return (
-    <div className={styles.workspace} onClickCapture={openProjectLink}>
+    <div className={styles.workspace}>
       <section className={styles.content}>
         {!showFullLauncher ? contextHeader : null}
         {children}

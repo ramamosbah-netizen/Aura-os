@@ -135,6 +135,17 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
         </form>
       )}
 
+      {schedules.length === 0 && (
+        <section className={styles.emptyChart} aria-label="Gantt chart awaiting activities">
+          <div className={styles.emptyChartHead}>
+            <div><strong>Gantt timeline</strong><span>Awaiting first dated activity</span></div>
+            <span className={styles.emptyChartBadge}>Not established</span>
+          </div>
+          <div className={styles.emptyChartAxis} aria-hidden="true"><span>Start</span><i /><span>Today</span><i /><span>Target</span></div>
+          <p>Add a task with planned start and finish dates to populate the chart. No schedule bars are shown until canonical planning evidence exists.</p>
+        </section>
+      )}
+
       {schedules.length === 0 && unscheduled.length === 0 && (
         <EmptyState title="No schedules yet" description="Create a project first; then start a schedule here and add tasks to build the Gantt." />
       )}

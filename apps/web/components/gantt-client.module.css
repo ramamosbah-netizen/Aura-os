@@ -1,4 +1,13 @@
 .ganttStack { display: flex; flex-direction: column; gap: 18px; padding: 20px 22px 22px; }
+.emptyChart { overflow: hidden; border: 1px dashed var(--border-strong); border-radius: 14px; background: linear-gradient(145deg, color-mix(in srgb, var(--panel-2) 92%, transparent), var(--panel)); }
+.emptyChartHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.emptyChartHead div { display: flex; align-items: baseline; gap: 10px; }
+.emptyChartHead strong { color: var(--text); font-size: 12px; }
+.emptyChartHead span { color: var(--muted); font-size: 10px; }
+.emptyChartBadge { padding: 4px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted) !important; font-size: 9px !important; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.emptyChartAxis { display: flex; align-items: center; gap: 10px; padding: 16px 16px 0; color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.emptyChartAxis i { height: 1px; flex: 1; background: repeating-linear-gradient(90deg, var(--border) 0 4px, transparent 4px 8px); }
+.emptyChart p { margin: 14px 16px 18px; padding: 14px; border-radius: 9px; color: var(--muted); background: color-mix(in srgb, var(--panel) 82%, transparent); font-size: 11px; line-height: 1.5; }
 .error { display: flex; align-items: center; gap: 9px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--bad) 50%, transparent); border-radius: 10px; color: var(--bad); background: color-mix(in srgb, var(--bad) 9%, transparent); font-size: 13px; }
 .startCard { position: relative; overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border)); border-radius: 13px; padding: 15px 16px; display: flex; flex-direction: column; gap: 11px; }
 .startCard::before { content: ''; position: absolute; width: 120px; height: 120px; right: -34px; top: -70px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent); }

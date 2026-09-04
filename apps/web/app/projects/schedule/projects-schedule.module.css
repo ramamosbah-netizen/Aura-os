@@ -24,6 +24,20 @@
 .metricLabel { color: var(--muted); font-size: 11px; font-weight: 700; }
 .metricCard strong { margin: 5px 0 2px; color: var(--text); font-size: 25px; line-height: 1; letter-spacing: -.03em; }
 .metricCard small { color: var(--muted); font-size: 10px; }
+.healthSummary { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(190px, .8fr) minmax(280px, 1fr); gap: 18px; align-items: center; margin: 0 0 18px; padding: 20px 22px; border: 1px solid var(--border); border-radius: 16px; background: radial-gradient(circle at 0 0, color-mix(in srgb, var(--accent) 10%, transparent), transparent 38%), linear-gradient(135deg, color-mix(in srgb, var(--panel) 96%, transparent), var(--panel-2)); }
+.healthLead { display: flex; align-items: flex-start; gap: 13px; min-width: 0; }
+.healthIcon { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border)); border-radius: 10px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.healthLead h2 { margin: 5px 0 4px; color: var(--text); font-size: 19px; letter-spacing: -.03em; }
+.healthLead p { max-width: 520px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.healthSignal { display: flex; flex-direction: column; gap: 4px; padding-left: 18px; border-left: 1px solid var(--border); }
+.healthSignal span, .healthFacts span { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.healthSignal strong { font-size: 21px; letter-spacing: -.03em; }
+.healthSignal small { color: var(--muted); font-size: 10px; line-height: 1.35; }
+.muted { color: var(--muted); }
+.healthFacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.healthFacts > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--panel) 82%, transparent); }
+.healthFacts strong { color: var(--text); font-size: 18px; line-height: 1; }
+.healthFacts small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace { overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); box-shadow: 0 18px 46px rgba(0,0,0,.12); }
 .workspaceHead { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; padding: 21px 22px 17px; border-bottom: 1px solid var(--border); background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--panel)); }
 .sectionKicker { color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
@@ -39,5 +53,6 @@
 .unavailable svg { color: var(--accent); }
 .unavailable strong { color: var(--text); font-size: 13px; }
 .unavailable p { margin: 4px 0 0; font-size: 12px; }
+@media (max-width: 1050px) { .healthSummary { grid-template-columns: 1fr 1fr; }.healthLead { grid-column: 1 / -1; }.healthSignal { padding-left: 0; border-left: 0; } }
 @media (max-width: 900px) { .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero { align-items: flex-start; flex-direction: column; } }
-@media (max-width: 620px) { .page { padding: 20px 16px 50px; } .metricGrid { grid-template-columns: 1fr; } .workspaceHead { align-items: flex-start; flex-direction: column; } .legend { justify-content: flex-start; } .eyebrow { align-items: flex-start; flex-direction: column; gap: 7px; } }
+@media (max-width: 620px) { .page { padding: 20px 16px 50px; } .metricGrid { grid-template-columns: 1fr; } .healthSummary { grid-template-columns: 1fr; padding: 17px; }.healthLead { grid-column: auto; }.healthSignal { padding-top: 12px; border-top: 1px solid var(--border); }.healthFacts { grid-template-columns: repeat(3, minmax(0, 1fr)); }.workspaceHead { align-items: flex-start; flex-direction: column; } .legend { justify-content: flex-start; } .eyebrow { align-items: flex-start; flex-direction: column; gap: 7px; } }

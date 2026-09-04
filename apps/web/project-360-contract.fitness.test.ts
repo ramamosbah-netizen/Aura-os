@@ -6,6 +6,7 @@ const CLIENT = resolve(__dirname, 'components/project-360-client.tsx');
 const REGISTER = resolve(__dirname, 'app/projects/projects/page.tsx');
 const OVERVIEW = resolve(__dirname, 'app/project/[projectId]/page.tsx');
 const SCHEDULE = resolve(__dirname, 'app/projects/schedule/page.tsx');
+const GANTT = resolve(__dirname, 'components/gantt-client.tsx');
 const SHELL = resolve(__dirname, 'components/project-shell.tsx');
 const WORKSPACE = resolve(__dirname, 'app/project/[projectId]/workspace/[section]/page.tsx');
 
@@ -62,6 +63,10 @@ describe('Project 360 canonical delivery contract', () => {
     const schedule = readFileSync(SCHEDULE, 'utf8');
     expect(schedule).toContain('selectedProjectId={projectId}');
     expect(schedule).toContain('scopedSchedules');
+    for (const marker of ['Plan &amp; schedule health', 'Gantt chart', 'Read from authoritative planning evidence']) {
+      expect(schedule).toContain(marker);
+    }
+    expect(readFileSync(GANTT, 'utf8')).toContain('Gantt timeline');
     const shell = readFileSync(SHELL, 'utf8');
     for (const label of ['Overview', 'Project', 'Plan & Control', 'Engineering', 'Procurement', 'Subcontracts', 'Site', 'Quality', 'HSE', 'Commercial', 'Documents', 'Approvals & Actions', 'Testing & Commissioning', 'Handover & Closeout', 'Activity & History']) {
       expect(shell).toContain(label);

@@ -139,8 +139,8 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   );
 
   // Inner Project 360 pages keep only the project context header. Navigation is
-  // intentionally not repeated here; Overview and Setup own the grouped launcher
-  // below their content, matching the Sales suite's shortcut pattern.
+  // intentionally not repeated here; the Overview owns the grouped launcher,
+  // matching the Sales suite's shortcut pattern.
   const contextHeader = (
       <section className={styles.contextBar} aria-label="Project context">
         <AuraTabLink href="/projects/projects" tabTitle="Projects" tabType="Project 360" className={styles.contextBack}>← All projects</AuraTabLink>
@@ -170,8 +170,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   );
 
   const isOverview = pathname === base;
-  const isSetup = pathname === workspace('project');
-  const showFullLauncher = isOverview || isSetup;
+  const showFullLauncher = isOverview;
   return (
     <div className={styles.workspace}>
       <section className={styles.content}>

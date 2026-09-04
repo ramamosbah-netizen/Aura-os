@@ -1,13 +1,21 @@
-import Link from 'next/link';
+import NextLink from 'next/link';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleAlert, ExternalLink, FileText, Layers3, Users } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { fetchJson, getJson } from '@/lib/api';
 import { ProjectEdit } from '@/components/project-create';
 import styles from './project-section-dashboard.module.css';
 import setupStyles from './project-setup.module.css';
+import AuraTabLink from '@/components/aura-tab-link';
 
 export const dynamic = 'force-dynamic';
+
+type ProjectLinkProps = Omit<ComponentProps<typeof NextLink>, 'href'> & { href: string };
+
+function Link({ href, children, ...props }: ProjectLinkProps) {
+  const tabTitle = typeof children === 'string' ? children.replace(/[↗→]/g, '').trim() : 'Project 360';
+  return <AuraTabLink href={href} tabTitle={tabTitle || 'Project 360'} tabType="Project 360" {...props}>{children}</AuraTabLink>;
+}
 
 type Row = Record<string, unknown> & { id?: string; projectId?: string };
 type Section = {

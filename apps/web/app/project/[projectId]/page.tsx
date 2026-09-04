@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import NextLink from 'next/link';
+import type { ComponentProps } from 'react';
 import {
   ArrowRight,
   Wrench,
@@ -8,9 +9,17 @@ import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import { filterAreaRows, PROJECT_AREAS } from '@/lib/project-areas';
 import { computeDigest } from '@/lib/project-digest';
 import { ELV_DISCIPLINES } from '@/lib/project-scope';
+import AuraTabLink from '@/components/aura-tab-link';
 import styles from './project-overview.module.css';
 
 export const dynamic = 'force-dynamic';
+
+type ProjectLinkProps = Omit<ComponentProps<typeof NextLink>, 'href'> & { href: string };
+
+function Link({ href, children, ...props }: ProjectLinkProps) {
+  const tabTitle = typeof children === 'string' ? children.replace(/[↗→]/g, '').trim() : 'Project 360';
+  return <AuraTabLink href={href} tabTitle={tabTitle || 'Project 360'} tabType="Project 360" {...props}>{children}</AuraTabLink>;
+}
 
 type Row = Record<string, unknown> & { projectId?: string };
 

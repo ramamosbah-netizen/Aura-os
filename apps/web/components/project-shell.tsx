@@ -1,7 +1,6 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   Bot,
@@ -22,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useProjectContext } from '@/lib/project-context';
 import { ELV_DISCIPLINES } from '@/lib/project-scope';
+import AuraTabLink from './aura-tab-link';
 import styles from './project-shell.module.css';
 
 interface ProjectHead {
@@ -104,10 +104,10 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
               ))}
             </select>
           </label>
-          <Link href="/ai" className={styles.aiLink}>
+          <AuraTabLink href="/ai" tabTitle="AURA AI" tabType="Project 360" className={styles.aiLink}>
             <Bot size={16} aria-hidden />
             AI workspace
-          </Link>
+          </AuraTabLink>
         </div>
         <div className={styles.workspaceTitle}>
           <div>
@@ -126,14 +126,14 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
             <div className={styles.navGroupGrid}>
               {items.map((item) => {
                 const Icon = item.icon;
-                return <Link key={item.key} href={scoped(item.href ?? base)} className={item.active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem} aria-current={item.active ? 'page' : undefined}><span className={styles.navItemTop}><Icon size={16} strokeWidth={1.8} aria-hidden /><ArrowUpRight size={14} aria-hidden /></span><span className={styles.navItemCopy}><strong>{item.label}</strong><small>{item.description}</small></span></Link>;
+                return <AuraTabLink key={item.key} href={scoped(item.href ?? base)} tabTitle={item.label} tabType="Project 360" className={item.active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem} aria-current={item.active ? 'page' : undefined}><span className={styles.navItemTop}><Icon size={16} strokeWidth={1.8} aria-hidden /><ArrowUpRight size={14} aria-hidden /></span><span className={styles.navItemCopy}><strong>{item.label}</strong><small>{item.description}</small></span></AuraTabLink>;
               })}
             </div>
           </section>)}
         </nav>
         <div className={styles.navHint}>
           <span>Project 360 connects the work; specialist domains remain the canonical owners.</span>
-          <Link href="/operations/overview">Open specialist views →</Link>
+          <AuraTabLink href="/operations/overview" tabTitle="Specialist Views" tabType="Project 360">Open specialist views →</AuraTabLink>
         </div>
       </section>
   );
@@ -143,7 +143,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   // below their content, matching the Sales suite's shortcut pattern.
   const contextHeader = (
       <section className={styles.contextBar} aria-label="Project context">
-        <Link href="/projects/projects" className={styles.contextBack}>← All projects</Link>
+        <AuraTabLink href="/projects/projects" tabTitle="Projects" tabType="Project 360" className={styles.contextBack}>← All projects</AuraTabLink>
         <div className={styles.contextBarIdentity}>
           <div className={styles.identityMark} aria-hidden>{project.reference?.slice(0, 2).toUpperCase() || 'PX'}</div>
           <div className={styles.identityCopy}>
@@ -165,7 +165,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
             ))}
           </select>
         </label>
-        <Link href="/ai" className={styles.aiLink}><Bot size={15} aria-hidden /> AI workspace</Link>
+        <AuraTabLink href="/ai" tabTitle="AURA AI" tabType="Project 360" className={styles.aiLink}><Bot size={15} aria-hidden /> AI workspace</AuraTabLink>
       </section>
   );
 

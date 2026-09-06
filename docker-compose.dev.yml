@@ -1,0 +1,39 @@
+# AURA OS — Wave 0 disposable local development database (AURA-ENV-001).
+#
+# Purpose: give local development and the browser suite a throwaway PostgreSQL so that
+#   * no local run can reach the shared remote Supabase project, and
+#   * migrations, RLS and browser journeys can be proven from zero on demand.
+#
+# This file starts ONLY the database. The API and web app keep running from your shell
+# (`pnpm --filter @aura/api start:dev`, `pnpm --filter @aura/web dev`) — the full
+# api+web+migrate stack lives in docker-compose.yml and is a different use case.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   node apps/api/scripts/provision-local-db.mjs            # role + disposable marker + migrations
+#   docker compose -f docker-compose.dev.yml down -v   # destroy it; that is the point
+#
+# Port 55432 deliberately avoids 5432/54322 so it can never collide with an existing
+# PostgreSQL or a Supabase CLI stack on this machine.
+
+name: aura-os-dev
+
+services:
+  postgres:
+    # pgvector build — migration 0019 runs `create extension vector`.
+    image: pgvector/pgvector:pg16
+    container_name: aura-dev-postgres
+    environment:
+      POSTGRES_USER: aura
+      POSTGRES_PASSWORD: aura
+      POSTGRES_DB: aura
+    ports:
+      - '55432:5432'
+    # No named volume: the database is disposable by construction. `down` forgets everything,
+    # which is the property that makes it safe to run a destructive browser suite against.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aura -d aura']
+      interval: 5s
+      timeout: 3s
+      retries: 20

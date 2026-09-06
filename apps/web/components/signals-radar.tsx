@@ -288,6 +288,29 @@ export default function SignalsRadar({ data, owners = [], initialQuery = {} }: {
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
   };
 
+  /**
+   * The promote review, shared by BOTH views.
+   *
+   * It used to live only inside the card branch, while the list view rendered its own "Lead"
+   * button calling the same `reviewPromotion`. So in list view the click set `promoteId`, nothing
+   * was rendered against it, and the button did nothing at all — the promotion flow was reachable
+   * from cards only, with no sign that list view was a dead end.
+   */
+  const reviewPanel = (s: { id: string }) => (
+    <div style={st.reviewBox} onClick={(e) => e.stopPropagation()}>
+      <div style={st.detailTitle}>Review Lead before creation</div>
+      {preview ? <>
+        <p style={st.detailText}><b>{preview.lead.name}</b>{preview.lead.companyName ? ` · ${preview.lead.companyName}` : ''}</p>
+        <p style={st.detailText}>Source: {preview.lead.source ?? '—'} · Owner: {preview.lead.assignedTo ?? 'Unassigned'}</p>
+        {preview.lead.requirement && <p style={{ ...st.detailText, color: 'var(--muted)' }}>Requirement: {preview.lead.requirement}</p>}
+        <div style={st.cardActions}>
+          <button style={st.primaryBtn} disabled={busy === s.id} onClick={() => void promote(s.id)}>Confirm &amp; create Lead</button>
+          <button style={st.linkBtn} onClick={() => setPromoteId(null)}>Cancel</button>
+        </div>
+      </> : <p style={st.detailText}>Preparing a validated Lead preview…</p>}
+    </div>
+  );
+
   return (
     <div>
       {/* ── Radar summary strip ── */}
@@ -380,7 +403,7 @@ export default function SignalsRadar({ data, owners = [], initialQuery = {} }: {
         <p style={st.empty}>{hasFilters ? 'No signals match these filters. Clear or adjust the filters to continue.' : 'No open signals — the radar is clear. New business events (renewals due, expansions, tenders detected) land here automatically.'}</p>
       ) : (
         <>
-        {view === 'list' ? <div style={st.tableWrap}><table style={st.table}><thead><tr><th style={st.th}>Signal</th><th style={st.th}>Account</th><th style={st.th}>Type</th><th style={st.th}>Source</th><th style={st.th}>Status</th><th style={st.th}>Confidence</th><th style={st.th}>Detected</th><th style={st.th}>Actions</th></tr></thead><tbody>{signals.map((s) => <tr key={s.id} onClick={() => setOpenId(openId === s.id ? null : s.id)} style={{ cursor: 'pointer' }}><td style={st.td}><b>{TYPE_ICON[s.type] ?? '•'} {s.title}</b></td><td style={st.td}>{s.accountName ?? '—'}</td><td style={st.td}>{label(s.type)}</td><td style={st.td}>{label(s.source)}</td><td style={st.td}>{label(s.status)}</td><td style={st.td}><span style={{ color: band(s.confidence).color, fontWeight: 700 }}>{s.confidence}</span></td><td style={st.td}>{new Date(s.detectedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</td><td style={st.td} onClick={(e) => e.stopPropagation()}><button style={st.linkBtn} onClick={() => void reviewPromotion(s.id)}>Lead</button>{s.status === 'NEW' && <button style={st.linkBtn} onClick={() => void advance(s.id, 'REVIEWING')}>Review</button>}{s.status === 'REVIEWING' && <button style={st.linkBtn} onClick={() => void advance(s.id, 'RESEARCHING')}>Research</button>}<button style={st.linkBtn} onClick={() => void dismiss(s.id)}>Dismiss</button></td></tr>)}</tbody></table></div> : <div style={st.grid}>{signals.map((s) => {
+        {view === 'list' ? <>{promoteId ? reviewPanel({ id: promoteId }) : null}<div style={st.tableWrap}><table style={st.table}><thead><tr><th style={st.th}>Signal</th><th style={st.th}>Account</th><th style={st.th}>Type</th><th style={st.th}>Source</th><th style={st.th}>Status</th><th style={st.th}>Confidence</th><th style={st.th}>Detected</th><th style={st.th}>Actions</th></tr></thead><tbody>{signals.map((s) => <tr key={s.id} onClick={() => setOpenId(openId === s.id ? null : s.id)} style={{ cursor: 'pointer' }}><td style={st.td}><b>{TYPE_ICON[s.type] ?? '•'} {s.title}</b></td><td style={st.td}>{s.accountName ?? '—'}</td><td style={st.td}>{label(s.type)}</td><td style={st.td}>{label(s.source)}</td><td style={st.td}>{label(s.status)}</td><td style={st.td}><span style={{ color: band(s.confidence).color, fontWeight: 700 }}>{s.confidence}</span></td><td style={st.td}>{new Date(s.detectedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</td><td style={st.td} onClick={(e) => e.stopPropagation()}><button style={st.linkBtn} onClick={() => void reviewPromotion(s.id)}>Lead</button>{s.status === 'NEW' && <button style={st.linkBtn} onClick={() => void advance(s.id, 'REVIEWING')}>Review</button>}{s.status === 'REVIEWING' && <button style={st.linkBtn} onClick={() => void advance(s.id, 'RESEARCHING')}>Research</button>}<button style={st.linkBtn} onClick={() => void dismiss(s.id)}>Dismiss</button></td></tr>)}</tbody></table></div></> : <div style={st.grid}>{signals.map((s) => {
             const ai = analyzeSignal(s);
             const age = daysSince(s.detectedAt);
             return (

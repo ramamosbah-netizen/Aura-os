@@ -608,7 +608,7 @@ export default function QualityControlClient({
                   </thead>
                   <tbody>
                     {audits.map((a) => (
-                      <tr key={a.id} style={{ background: selectedAuditId === a.id ? 'rgba(255, 255, 255, 0.03)' : 'transparent' }}>
+                      <tr key={a.id} style={{ background: selectedAuditId === a.id ? 'var(--panel-2)' : 'transparent' }}>
                         <td style={st.tdCode}>{a.auditNumber}</td>
                         <td style={st.tdBold}>{a.auditType}</td>
                         <td style={st.tdMuted}>{a.projectName || '—'}</td>
@@ -681,7 +681,7 @@ export default function QualityControlClient({
                             <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>
                               {item.standard}
                             </span>
-                            <span style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>
+                            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>
                               {item.question}
                             </span>
                           </div>
@@ -695,8 +695,8 @@ export default function QualityControlClient({
                                   padding: '4px 8px',
                                   borderRadius: 6,
                                   border: item.status === s ? '1px solid var(--accent)' : '1px solid var(--border)',
-                                  background: item.status === s ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
-                                  color: item.status === s ? '#38bdf8' : 'var(--muted)',
+                                  background: item.status === s ? 'var(--info-soft)' : 'transparent',
+                                  color: item.status === s ? 'var(--info)' : 'var(--muted)',
                                   fontSize: 12,
                                   fontWeight: 500,
                                   cursor: 'pointer',
@@ -773,8 +773,8 @@ const st = {
     padding: '8px 16px',
     borderRadius: 8,
     border: '1px solid var(--accent)',
-    background: 'rgba(255, 255, 255, 0.05)',
-    color: '#fff',
+    background: 'var(--border)',
+    color: 'var(--text)',
     cursor: 'pointer',
     fontWeight: 600,
     fontSize: 14,
@@ -785,7 +785,7 @@ const st = {
     borderRadius: 8,
     border: '1px solid var(--border)',
     background: 'var(--panel-2)',
-    color: '#fff',
+    color: 'var(--text)',
     fontSize: 13.5,
   } as CSSProperties,
   smallInput: {
@@ -793,15 +793,15 @@ const st = {
     borderRadius: 6,
     border: '1px solid var(--border)',
     background: 'var(--panel-2)',
-    color: '#fff',
+    color: 'var(--text)',
     fontSize: 12.5,
   } as CSSProperties,
   btnApprove: {
     padding: '4px 10px',
     borderRadius: 6,
-    background: 'rgba(52, 211, 153, 0.1)',
-    color: '#34d399',
-    border: '1px solid rgba(52, 211, 153, 0.2)',
+    background: 'var(--good-soft)',
+    color: 'var(--good)',
+    border: '1px solid var(--good-soft)',
     fontWeight: 600,
     fontSize: 12,
     cursor: 'pointer',
@@ -809,9 +809,9 @@ const st = {
   btnAction: {
     padding: '4px 10px',
     borderRadius: 6,
-    background: 'rgba(56, 189, 248, 0.1)',
-    color: '#38bdf8',
-    border: '1px solid rgba(56, 189, 248, 0.2)',
+    background: 'var(--info-soft)',
+    color: 'var(--info)',
+    border: '1px solid var(--info-soft)',
     fontWeight: 600,
     fontSize: 12,
     cursor: 'pointer',
@@ -819,9 +819,9 @@ const st = {
   btnReject: {
     padding: '4px 10px',
     borderRadius: 6,
-    background: 'rgba(248, 113, 113, 0.1)',
-    color: '#f87171',
-    border: '1px solid rgba(248, 113, 113, 0.2)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     fontWeight: 600,
     fontSize: 12,
     cursor: 'pointer',
@@ -851,9 +851,9 @@ const st = {
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
   tagApproved: {
     fontSize: 11,
-    background: 'rgba(52, 211, 153, 0.1)',
-    color: '#34d399',
-    border: '1px solid rgba(52, 211, 153, 0.2)',
+    background: 'var(--good-soft)',
+    color: 'var(--good)',
+    border: '1px solid var(--good-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
@@ -861,9 +861,9 @@ const st = {
   } as CSSProperties,
   tagActive: {
     fontSize: 11,
-    background: 'rgba(56, 189, 248, 0.1)',
-    color: '#38bdf8',
-    border: '1px solid rgba(56, 189, 248, 0.2)',
+    background: 'var(--info-soft)',
+    color: 'var(--info)',
+    border: '1px solid var(--info-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
@@ -871,9 +871,9 @@ const st = {
   } as CSSProperties,
   tagPending: {
     fontSize: 11,
-    background: 'rgba(251, 191, 36, 0.1)',
-    color: '#fbbf24',
-    border: '1px solid rgba(251, 191, 36, 0.2)',
+    background: 'var(--warn-soft)',
+    color: 'var(--warn)',
+    border: '1px solid var(--warn-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
@@ -881,9 +881,9 @@ const st = {
   } as CSSProperties,
   tagInbound: {
     fontSize: 11,
-    background: 'rgba(56, 189, 248, 0.1)',
-    color: '#38bdf8',
-    border: '1px solid rgba(56, 189, 248, 0.2)',
+    background: 'var(--info-soft)',
+    color: 'var(--info)',
+    border: '1px solid var(--info-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
@@ -891,18 +891,18 @@ const st = {
   } as CSSProperties,
   tagOutbound: {
     fontSize: 11,
-    background: 'rgba(168, 85, 247, 0.1)',
-    color: '#a855f7',
-    border: '1px solid rgba(168, 85, 247, 0.2)',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    border: '1px solid var(--accent-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
     textTransform: 'capitalize',
   } as CSSProperties,
   errorPanel: {
-    background: 'rgba(248, 113, 113, 0.1)',
-    color: '#f87171',
-    border: '1px solid rgba(248, 113, 113, 0.2)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     borderRadius: 8,
     padding: '10px 14px',
     margin: '0 0 16px',

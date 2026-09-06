@@ -445,11 +445,11 @@ export default function FleetControlClient({
             </p>
             <button
               onClick={handleCheckExpirations}
-              style={{ ...st.btn, marginTop: 12, background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}
+              style={{ ...st.btn, marginTop: 12, background: 'var(--info-soft)', color: 'var(--info)', border: '1px solid var(--info-soft)' }}
             >
               Scan & Trigger Renewal Tasks
             </button>
-            {scanResult && <div style={{ marginTop: 12, fontSize: 13, color: '#34d399' }}>{scanResult}</div>}
+            {scanResult && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--good)' }}>{scanResult}</div>}
           </div>
 
           {/* Webhook simulator */}
@@ -562,9 +562,9 @@ const st = {
   errorPanel: {
     padding: '12px 16px',
     borderRadius: 8,
-    background: 'rgba(248, 113, 113, 0.1)',
-    color: '#f87171',
-    border: '1px solid rgba(248, 113, 113, 0.2)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     fontSize: 13.5,
     margin: '0 0 20px',
   } as CSSProperties,
@@ -585,8 +585,8 @@ const st = {
     padding: '8px 16px',
     borderRadius: 8,
     border: '1px solid var(--accent)',
-    background: 'rgba(255, 255, 255, 0.05)',
-    color: '#fff',
+    background: 'var(--border)',
+    color: 'var(--text)',
     cursor: 'pointer',
     fontWeight: 600,
     fontSize: 14,
@@ -607,7 +607,7 @@ const st = {
     borderRadius: 8,
     border: '1px solid var(--border)',
     background: 'var(--panel-2)',
-    color: '#fff',
+    color: 'var(--text)',
     fontSize: 13.5,
   } as CSSProperties,
   select: {
@@ -615,15 +615,15 @@ const st = {
     borderRadius: 8,
     border: '1px solid var(--border)',
     background: 'var(--panel-2)',
-    color: '#fff',
+    color: 'var(--text)',
     fontSize: 13.5,
     cursor: 'pointer',
   } as CSSProperties,
   btn: {
     padding: '9px 16px',
     borderRadius: 8,
-    background: '#fff',
-    color: '#000',
+    background: 'var(--panel)',
+    color: 'var(--text)',
     border: 'none',
     fontWeight: 600,
     fontSize: 13.5,
@@ -658,9 +658,9 @@ const st = {
   btnApprove: {
     padding: '6px 12px',
     borderRadius: 6,
-    background: 'rgba(52, 211, 153, 0.1)',
-    color: '#34d399',
-    border: '1px solid rgba(52, 211, 153, 0.2)',
+    background: 'var(--good-soft)',
+    color: 'var(--good)',
+    border: '1px solid var(--good-soft)',
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
@@ -668,9 +668,9 @@ const st = {
   btnReject: {
     padding: '6px 12px',
     borderRadius: 6,
-    background: 'rgba(248, 113, 113, 0.1)',
-    color: '#f87171',
-    border: '1px solid rgba(248, 113, 113, 0.2)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
@@ -678,36 +678,36 @@ const st = {
   tagApproved: {
     padding: '3px 8px',
     borderRadius: 6,
-    background: 'rgba(52, 211, 153, 0.1)',
-    color: '#34d399',
-    border: '1px solid rgba(52, 211, 153, 0.15)',
+    background: 'var(--good-soft)',
+    color: 'var(--good)',
+    border: '1px solid var(--good-soft)',
     fontSize: 11.5,
     fontWeight: 500,
   } as CSSProperties,
   tagPending: {
     padding: '3px 8px',
     borderRadius: 6,
-    background: 'rgba(251, 191, 36, 0.1)',
-    color: '#fbbf24',
-    border: '1px solid rgba(251, 191, 36, 0.15)',
+    background: 'var(--warn-soft)',
+    color: 'var(--warn)',
+    border: '1px solid var(--warn-soft)',
     fontSize: 11.5,
     fontWeight: 500,
   } as CSSProperties,
   tagOutbound: {
     padding: '3px 8px',
     borderRadius: 6,
-    background: 'rgba(248, 113, 113, 0.1)',
-    color: '#f87171',
-    border: '1px solid rgba(248, 113, 113, 0.15)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     fontSize: 11.5,
     fontWeight: 500,
   } as CSSProperties,
   tagMuted: {
     padding: '3px 8px',
     borderRadius: 6,
-    background: 'rgba(255, 255, 255, 0.05)',
+    background: 'var(--border)',
     color: 'var(--muted)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    border: '1px solid var(--border)',
     fontSize: 11.5,
     fontWeight: 500,
   } as CSSProperties,

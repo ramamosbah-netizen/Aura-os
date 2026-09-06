@@ -577,12 +577,12 @@ export default function SiteControlClient({
                               {hasBaseline ? (
                                 <>
                                   <div style={st.barLabel}>Planned Baseline:</div>
-                                  <div style={{ ...st.progressBarOuter, background: 'rgba(255, 255, 255, 0.05)' }}>
+                                  <div style={{ ...st.progressBarOuter, background: 'var(--border)' }}>
                                     <div
                                       style={{
                                         ...st.progressBarInner,
                                         width: '100%',
-                                        background: 'rgba(255, 255, 255, 0.15)',
+                                        background: 'var(--border)',
                                       }}
                                     />
                                     <span style={st.progressBarText}>Baseline Target (100%)</span>
@@ -600,7 +600,7 @@ export default function SiteControlClient({
                                 </div>
                               )}
                               {slippage < 0 && (
-                                <div style={{ ...st.slippageTag, background: 'rgba(52, 211, 153, 0.1)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.2)' }}>
+                                <div style={{ ...st.slippageTag, background: 'var(--good-soft)', color: 'var(--good)', border: '1px solid var(--good-soft)' }}>
                                   🚀 Ahead: {Math.abs(slippage)} days earlier than baseline
                                 </div>
                               )}
@@ -637,8 +637,8 @@ const st = {
     padding: '8px 16px',
     borderRadius: 8,
     border: '1px solid var(--accent)',
-    background: 'rgba(255, 255, 255, 0.05)',
-    color: '#fff',
+    background: 'var(--border)',
+    color: 'var(--text)',
     cursor: 'pointer',
     fontWeight: 600,
     fontSize: 14,
@@ -647,9 +647,9 @@ const st = {
   btnApprove: {
     padding: '4px 10px',
     borderRadius: 6,
-    background: 'rgba(52, 211, 153, 0.1)',
-    color: '#34d399',
-    border: '1px solid rgba(52, 211, 153, 0.2)',
+    background: 'var(--good-soft)',
+    color: 'var(--good)',
+    border: '1px solid var(--good-soft)',
     fontWeight: 600,
     fontSize: 12,
     cursor: 'pointer',
@@ -678,9 +678,9 @@ const st = {
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
   tagApproved: {
     fontSize: 11,
-    background: 'rgba(52, 211, 153, 0.1)',
-    color: '#34d399',
-    border: '1px solid rgba(52, 211, 153, 0.2)',
+    background: 'var(--good-soft)',
+    color: 'var(--good)',
+    border: '1px solid var(--good-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
@@ -688,9 +688,9 @@ const st = {
   } as CSSProperties,
   tagPending: {
     fontSize: 11,
-    background: 'rgba(251, 191, 36, 0.1)',
-    color: '#fbbf24',
-    border: '1px solid rgba(251, 191, 36, 0.2)',
+    background: 'var(--warn-soft)',
+    color: 'var(--warn)',
+    border: '1px solid var(--warn-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
@@ -698,9 +698,9 @@ const st = {
   } as CSSProperties,
   tagInbound: {
     fontSize: 11,
-    background: 'rgba(56, 189, 248, 0.1)',
-    color: '#38bdf8',
-    border: '1px solid rgba(56, 189, 248, 0.2)',
+    background: 'var(--info-soft)',
+    color: 'var(--info)',
+    border: '1px solid var(--info-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
@@ -708,18 +708,18 @@ const st = {
   } as CSSProperties,
   tagOutbound: {
     fontSize: 11,
-    background: 'rgba(168, 85, 247, 0.1)',
-    color: '#a855f7',
-    border: '1px solid rgba(168, 85, 247, 0.2)',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    border: '1px solid var(--accent-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     fontWeight: 600,
     textTransform: 'capitalize',
   } as CSSProperties,
   errorPanel: {
-    background: 'rgba(248, 113, 113, 0.1)',
-    color: '#f87171',
-    border: '1px solid rgba(248, 113, 113, 0.2)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     borderRadius: 8,
     padding: '10px 14px',
     margin: '0 0 16px',
@@ -758,7 +758,7 @@ const st = {
     alignItems: 'flex-start',
     gap: 20,
     padding: '10px 0',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
+    borderBottom: '1px solid var(--panel-2)',
   } as CSSProperties,
   taskInfo: {
     flex: '1 1 40%',
@@ -789,7 +789,7 @@ const st = {
   progressBarOuter: {
     position: 'relative',
     height: 20,
-    background: 'rgba(255, 255, 255, 0.03)',
+    background: 'var(--panel-2)',
     border: '1px solid var(--border)',
     borderRadius: 6,
     overflow: 'hidden',
@@ -807,7 +807,7 @@ const st = {
     transform: 'translate(-50%, -50%)',
     fontSize: 11,
     fontWeight: 600,
-    color: '#fff',
+    color: 'var(--text)',
     pointerEvents: 'none',
   } as CSSProperties,
   slippageTag: {
@@ -815,9 +815,9 @@ const st = {
     fontSize: 11,
     padding: '3px 8px',
     borderRadius: 6,
-    background: 'rgba(239, 68, 68, 0.1)',
-    color: '#f87171',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     fontWeight: 600,
     marginTop: 4,
   } as CSSProperties,

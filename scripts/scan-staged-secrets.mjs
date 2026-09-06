@@ -30,6 +30,29 @@ const PLACEHOLDER =
 
 const isPlaceholder = (v) => PLACEHOLDER.test(v) || /^\$[A-Z_]+$/.test(v) || v.includes('***');
 
+/**
+ * The repository's own disposable database credentials — but only ever at a LOOPBACK host.
+ *
+ * Wave 0's local verification environment has to document the credentials a developer actually
+ * types (`docker-compose.dev.yml` creates the role, the runbook and provisioner tell you to use
+ * it), so masking them to `user:***@host` would make the runbook not work. They are throwaway by
+ * construction: the container stores its data in tmpfs and `down` destroys it.
+ *
+ * BOTH halves are required, and that is the whole design. `aura` is also the production migration
+ * role NAME, so exempting the user alone would wave through
+ * `postgres://aura:<a real password>@prod-host/db`. Pinning the exemption to a known disposable
+ * PASSWORD *and* a loopback host is what keeps it impossible to satisfy by accident with a real
+ * secret: a genuine credential would have to literally be `aura_app_local` on localhost.
+ *
+ *   aura            docker-compose.dev.yml — the tmpfs container's owner role
+ *   aura_app_local  provision-local-db.mjs — default for the disposable runtime role
+ *   aura_app_ci     CI's service container (also listed in PLACEHOLDER, which predates this)
+ */
+const DISPOSABLE_PASSWORD = /^(?:aura|aura_app_local|aura_app_ci)$/;
+const LOOPBACK_HOST = /@(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?[/?]/;
+const isDisposableLocalDb = (line, password) =>
+  DISPOSABLE_PASSWORD.test(password) && LOOPBACK_HOST.test(line);
+
 function stagedDiff() {
   try {
     return execFileSync('git', ['diff', '--cached', '-U0'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -54,7 +77,12 @@ for (const line of stagedDiff().split('\n')) {
     const m = re.exec(body);
     if (!m) continue;
     // Connection strings carry their own user/password captures; judge those.
-    if (m[1] !== undefined && m[2] !== undefined && (isPlaceholder(m[1]) || isPlaceholder(m[2]))) continue;
+    if (
+      m[1] !== undefined &&
+      m[2] !== undefined &&
+      (isPlaceholder(m[1]) || isPlaceholder(m[2]) || isDisposableLocalDb(body, m[2]))
+    )
+      continue;
     // Opaque tokens have no captures — a line that is clearly illustrative still gets a pass.
     if (m[1] === undefined && isPlaceholder(m[0])) continue;
     findings.push({ file, name, snippet: body.trim().slice(0, 120) });

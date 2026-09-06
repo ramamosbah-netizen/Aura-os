@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   Bot,
@@ -39,6 +39,22 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { disciplineId, setDiscipline } = useProjectContext();
+  /**
+   * The lens must not accept a choice it would then drop.
+   *
+   * `setDiscipline` does not set state — it navigates (project-context.tsx: router.replace). So the
+   * ONLY thing that carries the user's selection anywhere is the onChange handler. This shell is
+   * server-rendered, and until React attaches that handler the select is a live, enabled control
+   * with no listener: the value changes, nothing navigates, and because `value` is bound to the URL
+   * React later reconciles it straight back to what it was. The selection is lost silently and the
+   * control briefly shows a state that was never true.
+   *
+   * Disabled until mounted, then. The displayed value still comes from the URL and stays honest the
+   * whole time — what is withheld is the ability to make a change that would go nowhere. Same
+   * contract the favourites button already keeps with its `loading` state.
+   */
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const base = `/project/${project.id}`;
   const query = searchParams.toString();
   const scoped = (href: string): string => {
@@ -96,6 +112,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
             <select
               aria-label="System or discipline lens"
               value={disciplineId ?? ''}
+              disabled={!hydrated}
               onChange={(event) => setDiscipline(event.target.value || null)}
             >
               <option value="">All systems</option>
@@ -157,6 +174,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
           <select
             aria-label="System or discipline lens"
             value={disciplineId ?? ''}
+            disabled={!hydrated}
             onChange={(event) => setDiscipline(event.target.value || null)}
           >
             <option value="">All systems</option>

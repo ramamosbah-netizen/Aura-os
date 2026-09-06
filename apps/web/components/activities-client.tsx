@@ -43,6 +43,15 @@ const TYPE_GLYPH: Record<string, string> = {
 /** G10 — the full activity vocabulary (WhatsApp and site visits are how ELV deals actually move). */
 const ALL_TYPES = ['call', 'email', 'meeting', 'note', 'task', 'follow_up', 'whatsapp', 'site_visit', 'technical_discovery', 'demo', 'presentation', 'reminder'];
 const REGISTER_LOG_TYPES = ['call', 'note', 'site_visit', 'technical_discovery', 'demo', 'presentation'];
+/**
+ * Executable work — `isPersonalWork` in crm/activity.service.ts, the types that become items in
+ * My Work. Offered ONLY when the drawer opens against a related record, because that is the path
+ * the 360 pages label "log the next step →", and a next step is precisely one of these. Without
+ * them that link opened a drawer that could only record what had already happened, while the
+ * unscoped drawer correctly sends personal tasks to My Work — the exclusion was right in general
+ * and wrong in context.
+ */
+const NEXT_STEP_TYPES = ['task', 'follow_up', 'reminder'];
 /** G11 — open reads "planned"; in-progress work is still LIVE work. */
 const isLive = (s: string): boolean => s === 'open' || s === 'in_progress';
 const RELATED_HREF: Record<string, (id: string) => string> = {
@@ -204,12 +213,13 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
       <div style={st.toolbar}>
         <CreateDrawer
           entity="Activity"
-          subtitle={initialRelatedId ? `Log a commercial interaction for this ${initialRelatedType}. The related record is locked to preserve context.` : "Log a commercial interaction and attach it to the account, contact or deal it's about. Personal tasks are created and worked in My Work."}
+          subtitle={initialRelatedId ? `Log what happened on this ${initialRelatedType}, or plan the next step — a task, follow-up or reminder appears in My Work. The related record is locked to preserve context.` : "Log a commercial interaction and attach it to the account, contact or deal it's about. Personal tasks are created and worked in My Work."}
           endpoint="/api/crm/activities"
           fields={[
             {
               name: 'type', label: 'Type', kind: 'select', defaultValue: 'call',
-              options: REGISTER_LOG_TYPES.map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
+              options: (initialRelatedId ? [...REGISTER_LOG_TYPES, ...NEXT_STEP_TYPES] : REGISTER_LOG_TYPES)
+                .map((t) => ({ value: t, label: `${TYPE_GLYPH[t]} ${t.replace(/_/g, ' ')}` })),
             },
             { name: 'subject', label: 'Subject', kind: 'text', required: true, placeholder: 'e.g. Follow up on QT-2026-001', span: 2 },
             {

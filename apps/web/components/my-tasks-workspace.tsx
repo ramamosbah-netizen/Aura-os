@@ -166,6 +166,11 @@ export default function MyTasksWorkspace({ initial }: { initial: WorkItemsPayloa
   const [query, setQuery] = useState(''); const [module, setModule] = useState('all'); const [project, setProject] = useState('all'); const [priority, setPriority] = useState('all'); const [status, setStatus] = useState('all'); const [sort, setSort] = useState<'due' | 'priority' | 'updated'>('due');
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1)); const [focusDate, setFocusDate] = useState(() => new Date()); const [calendarMode, setCalendarMode] = useState<CalendarMode>('month'); const [dragging, setDragging] = useState<WorkItem | null>(null); const [editor, setEditor] = useState<TaskEditorState | null>(null); const [rescheduling, setRescheduling] = useState<{ item: WorkItem; dueAt?: string } | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null); const [showFilters, setShowFilters] = useState(false); const [recentlyDeleted, setRecentlyDeleted] = useState<WorkItem | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Which `?task=` we have already focused. The focus effect below depends on `items`, and every
+  // lifecycle action replaces that array — so without this it re-ran on each Start/Complete and
+  // re-opened the editor over the list the user had just dismissed. Focusing is a one-time
+  // response to arriving at a task, not something to redo whenever the list refreshes underneath.
+  const focusedOnce = useRef<string | null>(null);
   useEffect(() => { void fetch('/api/work-items/reminders', { method: 'POST' }).catch(() => undefined); }, []);
   useEffect(() => {
     const refresh = async () => {
@@ -180,8 +185,10 @@ export default function MyTasksWorkspace({ initial }: { initial: WorkItemsPayloa
   }, []);
   useEffect(() => {
     if (pathname !== '/my-work/tasks' || !focusedTaskId) return;
+    if (focusedOnce.current === focusedTaskId) return;
     const item = items.find((candidate) => candidate.sourceId === focusedTaskId);
     if (!item) return;
+    focusedOnce.current = focusedTaskId;
     setDisplay('list'); setView('all'); setQuery(''); setModule('all'); setProject('all'); setPriority('all'); setStatus('all');
     if (item.editable) setEditor({ mode: 'edit', item });
     else window.setTimeout(() => document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(focusedTaskId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);

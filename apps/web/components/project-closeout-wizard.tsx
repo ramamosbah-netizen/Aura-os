@@ -465,7 +465,7 @@ const st = {
   btnPrimary: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   btnSecondary: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 16px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   btnDisabled: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', padding: '8px 16px', fontSize: 13, cursor: 'not-allowed' } as CSSProperties,
-  btnAccent: { background: 'var(--good)', border: 'none', borderRadius: 8, color: '#04140b', padding: '9px 18px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
+  btnAccent: { background: 'var(--good)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '9px 18px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   checkListGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 } as CSSProperties,
   checkLabel: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   formRow: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 } as CSSProperties,

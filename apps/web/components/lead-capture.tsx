@@ -138,8 +138,8 @@ function Field({ label, span2, required, children }: { label: string; span2?: bo
 }
 
 const st: Record<string, CSSProperties> = {
-  newBtn: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: UI_Z_INDEX.drawer, display: 'flex', justifyContent: 'flex-end' },
+  newBtn: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  overlay: { position: 'fixed', inset: 0, background: 'var(--overlay)', zIndex: UI_Z_INDEX.drawer, display: 'flex', justifyContent: 'flex-end' },
   drawer: { width: 'min(460px, 100%)', height: '100%', overflowY: 'auto', background: 'var(--panel)', borderLeft: '1px solid var(--border)', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 },
   drawerHead: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   drawerTitle: { margin: 0, fontSize: 18 },
@@ -149,8 +149,8 @@ const st: Record<string, CSSProperties> = {
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
   fieldLabel: { fontSize: 11, color: 'var(--muted)', fontWeight: 600 },
   input: { background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' },
-  dupBox: { border: '1px solid #d99a42', borderRadius: 10, background: 'color-mix(in srgb, #d99a42 8%, var(--panel))', padding: 12 },
-  dupTitle: { fontSize: 12.5, fontWeight: 800, color: '#d99a42', marginBottom: 8 },
+  dupBox: { border: '1px solid var(--warn)', borderRadius: 10, background: 'color-mix(in srgb, var(--warn) 8%, var(--panel))', padding: 12 },
+  dupTitle: { fontSize: 12.5, fontWeight: 800, color: 'var(--warn)', marginBottom: 8 },
   dupRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '5px 0', fontSize: 12.5, borderTop: '1px solid var(--border)' },
   dupType: { fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 6px' },
   dupReason: { color: 'var(--muted)' },
@@ -159,5 +159,5 @@ const st: Record<string, CSSProperties> = {
   err: { border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 8, padding: '8px 10px', fontSize: 12.5 },
   actions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 'auto', paddingTop: 8 },
   ghost: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', padding: '8px 14px', fontSize: 13, cursor: 'pointer' },
-  save: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  save: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
 };

@@ -985,7 +985,7 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 {['Title', 'Account', 'Value', 'Stage', 'Win %', 'Close', 'Path', 'Owner', 'Next action', ''].map((h) => <th key={h} style={s.th}>{h}</th>)}
               </tr></thead><tbody>
                 {opps.map((o) => (
-                  <tr key={o.id} style={o.stage === 'won' ? { background: 'rgba(40,167,69,0.04)' } : o.stage === 'lost' ? { background: 'rgba(220,53,69,0.04)' } : undefined}>
+                  <tr key={o.id} style={o.stage === 'won' ? { background: 'var(--good-soft)' } : o.stage === 'lost' ? { background: 'var(--bad-soft)' } : undefined}>
                     <td style={s.td}><a href={`/crm/opportunities/${o.id}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 700 }}>{o.title}</a></td>
                     <td style={s.tdM}>{o.accountName ?? '—'}</td>
                     <td style={s.td}>{money(o.value)}</td>
@@ -1065,11 +1065,11 @@ function CmdKpi({ label, value, accent, good, bad }: { label: string; value: str
 }
 
 function statusColor(status: string): CSSProperties {
-  const colors: Record<string, string> = { new: '#3b82f6', contacted: '#f59e0b', qualified: '#10b981', nurturing: '#8b5cf6', disqualified: '#ef4444' };
-  return { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 6, background: (colors[status] ?? '#666') + '18', color: colors[status] ?? '#666', border: `1px solid ${(colors[status] ?? '#666')}33` };
+  const colors: Record<string, string> = { new: 'var(--info)', contacted: 'var(--warn)', qualified: 'var(--good)', nurturing: 'var(--accent)', disqualified: 'var(--bad)' };
+  return { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 6, background: (colors[status] ?? 'var(--muted)') + '18', color: colors[status] ?? 'var(--muted)', border: `1px solid ${(colors[status] ?? 'var(--muted)')}33` };
 }
 function stageColor(stage: string): CSSProperties {
-  const colors: Record<string, string> = { qualification: '#3b82f6', proposal: '#f59e0b', negotiation: '#8b5cf6', won: '#10b981', lost: '#ef4444' };
+  const colors: Record<string, string> = { qualification: 'var(--info)', proposal: 'var(--warn)', negotiation: 'var(--accent)', won: 'var(--good)', lost: 'var(--bad)' };
   return { color: colors[stage] ?? 'inherit', fontWeight: 600 };
 }
 
@@ -1113,8 +1113,8 @@ const s = {
   srcTag: { fontSize: 11, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 6px', textTransform: 'capitalize' } as CSSProperties,
   probBar: { width: '100%', height: 5, background: 'var(--panel-2)', borderRadius: 3, overflow: 'hidden', margin: '6px 0' } as CSSProperties,
   probFill: { height: '100%', borderRadius: 3 } as CSSProperties,
-  forecastBubble: { marginTop: 4, fontSize: 11, color: 'var(--accent)', background: 'rgba(255,193,7,0.06)', border: '1px solid rgba(255,193,7,0.15)', borderRadius: 6, padding: '4px 8px' } as CSSProperties,
-  errorBar: { background: 'rgba(220,53,69,0.1)', border: '1px solid rgba(220,53,69,0.2)', color: '#dc3545', padding: '10px 14px', borderRadius: 10, fontSize: 13 } as CSSProperties,
+  forecastBubble: { marginTop: 4, fontSize: 11, color: 'var(--accent)', background: 'var(--warn-soft)', border: '1px solid var(--warn-soft)', borderRadius: 6, padding: '4px 8px' } as CSSProperties,
+  errorBar: { background: 'var(--bad-soft)', border: '1px solid var(--bad-soft)', color: 'var(--bad)', padding: '10px 14px', borderRadius: 10, fontSize: 13 } as CSSProperties,
   okBar: { border: '1px solid var(--good)', color: 'var(--good)', padding: '10px 14px', borderRadius: 10, fontSize: 13 } as CSSProperties,
   board: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(190px, 1fr))', gap: 10, overflowX: 'auto' } as CSSProperties,
   col: { background: 'var(--panel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border)', borderRadius: 12, padding: 8, minWidth: 190, display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'start' } as CSSProperties,
@@ -1126,7 +1126,7 @@ const s = {
   cardGrab: { cursor: 'grab' } as CSSProperties,
   cardDragging: { opacity: 0.45, cursor: 'grabbing' } as CSSProperties,
   colDroppable: { borderStyle: 'dashed', borderColor: 'var(--accent)' } as CSSProperties,
-  colHover: { background: 'rgba(255,193,7,0.06)', borderColor: 'var(--accent)' } as CSSProperties,
+  colHover: { background: 'var(--warn-soft)', borderColor: 'var(--accent)' } as CSSProperties,
   cardWon: { borderColor: 'var(--good)' } as CSSProperties,
   cardLost: { opacity: 0.65 } as CSSProperties,
   cardTitle: { fontWeight: 700, fontSize: 12.5, lineHeight: 1.3 } as CSSProperties,
@@ -1135,6 +1135,6 @@ const s = {
   cardActions: { display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' } as CSSProperties,
   cardBtn: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', fontSize: 11.5, padding: '3px 8px', cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   pathTag: { background: 'transparent', border: '1px dashed var(--border)', borderRadius: 999, fontSize: 10.5, padding: '2px 8px', cursor: 'pointer', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 } as CSSProperties,
-  nextAction: { fontSize: 11.5, color: 'var(--accent)', background: 'rgba(255,193,7,0.05)', border: '1px dashed rgba(255,193,7,0.25)', borderRadius: 6, padding: '3px 7px' } as CSSProperties,
-  attnBadge: { fontSize: 11, fontWeight: 600, color: 'var(--bad)', background: 'rgba(220,53,69,0.08)', border: '1px solid rgba(220,53,69,0.3)', borderRadius: 6, padding: '3px 7px', marginTop: 4 } as CSSProperties,
+  nextAction: { fontSize: 11.5, color: 'var(--accent)', background: 'var(--warn-soft)', border: '1px dashed var(--warn-soft)', borderRadius: 6, padding: '3px 7px' } as CSSProperties,
+  attnBadge: { fontSize: 11, fontWeight: 600, color: 'var(--bad)', background: 'var(--bad-soft)', border: '1px solid var(--bad-soft)', borderRadius: 6, padding: '3px 7px', marginTop: 4 } as CSSProperties,
 };

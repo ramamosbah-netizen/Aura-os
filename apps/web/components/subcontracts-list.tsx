@@ -355,7 +355,7 @@ export default function SubcontractsList({
                                         {c.isRetentionRelease ? `RET-${c.claimNumber}` : `IPC-${c.claimNumber}`}
                                       </strong>
                                       {c.isRetentionRelease && (
-                                        <span style={{ fontSize: 10.5, color: 'var(--accent)', marginLeft: 8, background: 'rgba(255,193,7,0.1)', padding: '2px 4px', borderRadius: 4 }}>
+                                        <span style={{ fontSize: 10.5, color: 'var(--accent)', marginLeft: 8, background: 'var(--warn-soft)', padding: '2px 4px', borderRadius: 4 }}>
                                           Retention Release
                                         </span>
                                       )}
@@ -439,7 +439,7 @@ const s = {
   td: { padding: '11px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
   row: { borderBottom: '1px solid var(--border)' } as CSSProperties,
-  rowSelected: { background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  rowSelected: { background: 'var(--panel-2)', borderBottom: '1px solid var(--border)' } as CSSProperties,
   expandBtn: {
     background: 'none',
     border: 'none',
@@ -454,7 +454,7 @@ const s = {
   actions: { display: 'flex', gap: 8, alignItems: 'center' } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -473,8 +473,8 @@ const s = {
   } as CSSProperties,
   btnDanger: {
     background: 'none',
-    border: '1px solid rgba(220,53,69,0.3)',
-    color: '#dc3545',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     borderRadius: 8,
     padding: '6px 12px',
     fontSize: 12.5,
@@ -482,7 +482,7 @@ const s = {
   } as CSSProperties,
   btnGood: {
     background: 'var(--good)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -496,12 +496,12 @@ const s = {
     let background = 'var(--panel-2)';
     if (status === 'active' || status === 'certified') {
       color = 'var(--good)';
-      border = '1px solid rgba(40,167,69,0.2)';
-      background = 'rgba(40,167,69,0.05)';
+      border = '1px solid var(--good-soft)';
+      background = 'var(--good-soft)';
     } else if (status === 'paid') {
       color = 'var(--accent)';
-      border = '1px solid rgba(255,193,7,0.2)';
-      background = 'rgba(255,193,7,0.05)';
+      border = '1px solid var(--warn-soft)';
+      background = 'var(--warn-soft)';
     } else if (status === 'closed') {
       color = 'var(--muted)';
     }
@@ -518,14 +518,14 @@ const s = {
     };
   },
   errorBar: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,
   } as CSSProperties,
-  expandedBg: { background: 'rgba(0,0,0,0.12)' } as CSSProperties,
+  expandedBg: { background: 'var(--overlay)' } as CSSProperties,
   expandedCell: { padding: '16px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   claimFormCell: { padding: '14px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   claimFormContainer: {
@@ -558,8 +558,8 @@ const s = {
     fontWeight: 500,
     padding: '8px 10px',
     borderBottom: '1px solid var(--border)',
-    background: 'rgba(255,255,255,0.01)',
+    background: 'var(--panel-2)',
   } as CSSProperties,
   tdClaims: { padding: '10px 10px', borderBottom: '1px solid var(--border)' } as CSSProperties,
-  claimRow: { borderBottom: '1px solid rgba(255,255,255,0.02)' } as CSSProperties,
+  claimRow: { borderBottom: '1px solid var(--panel-2)' } as CSSProperties,
 };

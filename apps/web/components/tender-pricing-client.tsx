@@ -561,7 +561,7 @@ function SheetEditor({
 
 const st = {
   // Same lock bar as the quotation sheet — one governance state should read the same everywhere.
-  lockBar: { display: 'block', fontSize: 12.5, lineHeight: 1.5, color: 'var(--text)', background: 'rgba(255,193,7,0.07)', border: '1px solid rgba(255,193,7,0.35)', borderRadius: 10, padding: '10px 13px', marginBottom: 12 } as CSSProperties,
+  lockBar: { display: 'block', fontSize: 12.5, lineHeight: 1.5, color: 'var(--text)', background: 'var(--warn-soft)', border: '1px solid var(--warn-soft)', borderRadius: 10, padding: '10px 13px', marginBottom: 12 } as CSSProperties,
   lockLink: { color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   err: { padding: '10px 12px', border: '1px solid var(--bad)', borderRadius: 10, color: 'var(--bad)', marginBottom: 14, fontSize: 13 } as CSSProperties,
   ok: { padding: '10px 12px', border: '1px solid var(--good)', borderRadius: 10, color: 'var(--good)', marginBottom: 14, fontSize: 13 } as CSSProperties,

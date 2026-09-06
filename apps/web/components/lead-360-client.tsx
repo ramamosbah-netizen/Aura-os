@@ -602,7 +602,7 @@ const s: Record<string, CSSProperties> = {
   inlineBtn: { marginLeft: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' },
   readyBox: { border: '1px solid var(--border)', borderRadius: 10, padding: '4px 12px 8px', background: 'var(--panel-2, var(--panel))' },
   readyTitle: { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', fontWeight: 800, padding: '8px 0 4px' },
-  dupBox: { marginTop: 12, border: '1px solid #d99a42', borderRadius: 10, background: 'color-mix(in srgb, #d99a42 8%, var(--panel))', padding: 12 },
+  dupBox: { marginTop: 12, border: '1px solid var(--warn)', borderRadius: 10, background: 'color-mix(in srgb, var(--warn) 8%, var(--panel))', padding: 12 },
   dupRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '5px 0', fontSize: 12.5, borderTop: '1px solid var(--border)' },
   dupType: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '0 6px' },
   pathNote: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.55 },

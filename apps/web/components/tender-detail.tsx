@@ -382,7 +382,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
             <button
               disabled={tender.status === 'lost' || statusBusy}
               onClick={() => updateStatus('lost')}
-              style={{ ...s.btnStatus, background: '#ef4444', color: '#fff' }}
+              style={{ ...s.btnStatus, background: 'var(--bad)', color: 'var(--accent-ink)' }}
             >
               Mark Lost
             </button>
@@ -575,7 +575,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
                               <button
                                 type="button"
                                 onClick={() => handleSaveEdit(item.id)}
-                                style={{ ...s.btnTableAction, background: 'var(--good)', color: '#0b0e14' }}
+                                style={{ ...s.btnTableAction, background: 'var(--good)', color: 'var(--accent-ink)' }}
                               >
                                 Save
                               </button>
@@ -624,7 +624,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
                               <button
                                 type="button"
                                 onClick={() => handleDeleteItem(item.id)}
-                                style={{ ...s.btnTableAction, color: '#ef4444' }}
+                                style={{ ...s.btnTableAction, color: 'var(--bad)' }}
                               >
                                 Delete
                               </button>
@@ -679,7 +679,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
                     padding: '24px 20px',
                     textAlign: 'center',
                     marginBottom: 20,
-                    background: 'rgba(255, 255, 255, 0.02)',
+                    background: 'var(--panel-2)',
                   }}>
                     <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>Direct Excel Ingestion</p>
                     <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--muted)' }}>
@@ -780,9 +780,9 @@ const s = {
   refTag: {
     fontSize: 11,
     fontWeight: 600,
-    background: 'rgba(255, 193, 7, 0.1)',
+    background: 'var(--warn-soft)',
     color: 'var(--accent)',
-    border: '1px solid rgba(255, 193, 7, 0.2)',
+    border: '1px solid var(--warn-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     letterSpacing: 0.5,
@@ -853,7 +853,7 @@ const s = {
   } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -862,15 +862,15 @@ const s = {
     cursor: 'pointer',
   } as CSSProperties,
   btnAI: {
-    background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
-    color: '#fff',
+    background: 'var(--accent-grad)',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
     padding: '7px 14px',
     fontSize: 12.5,
     cursor: 'pointer',
-    boxShadow: '0 0 12px rgba(99, 102, 241, 0.3)',
+    boxShadow: '0 0 12px var(--accent-soft)',
   } as CSSProperties,
   boqSection: {
     background: 'var(--panel)',
@@ -1001,7 +1001,7 @@ const s = {
     textAlign: 'right',
   } as CSSProperties,
   tableInput: {
-    background: 'rgba(0,0,0,0.2)',
+    background: 'var(--overlay)',
     border: '1px solid var(--border)',
     borderRadius: 5,
     color: 'var(--text)',
@@ -1020,7 +1020,7 @@ const s = {
   } as CSSProperties,
   row: (depth: number): CSSProperties => ({
     borderBottom: '1px solid var(--border)',
-    background: depth === 0 ? 'rgba(255,255,255,0.02)' : 'none',
+    background: depth === 0 ? 'var(--panel-2)' : 'none',
   }),
   itemCodeTag: (depth: number): CSSProperties => ({
     fontFamily: 'ui-monospace, monospace',
@@ -1036,9 +1036,9 @@ const s = {
   }),
   bimTag: {
     fontSize: 11,
-    background: 'rgba(59, 130, 246, 0.1)',
-    color: '#60a5fa',
-    border: '1px solid rgba(59, 130, 246, 0.2)',
+    background: 'var(--info-soft)',
+    color: 'var(--info)',
+    border: '1px solid var(--info-soft)',
     borderRadius: 5,
     padding: '2px 6px',
     cursor: 'help',
@@ -1048,17 +1048,17 @@ const s = {
     let color = 'var(--text)';
     let border = '1px solid var(--border)';
     if (status === 'won') {
-      background = 'rgba(16, 185, 129, 0.1)';
-      color = '#34d399';
-      border = '1px solid rgba(16, 185, 129, 0.2)';
+      background = 'var(--good-soft)';
+      color = 'var(--good)';
+      border = '1px solid var(--good-soft)';
     } else if (status === 'lost') {
-      background = 'rgba(239, 68, 68, 0.1)';
-      color = '#f87171';
-      border = '1px solid rgba(239, 68, 68, 0.2)';
+      background = 'var(--bad-soft)';
+      color = 'var(--bad)';
+      border = '1px solid var(--bad-soft)';
     } else if (status === 'submitted') {
-      background = 'rgba(99, 102, 241, 0.1)';
-      color = '#818cf8';
-      border = '1px solid rgba(99, 102, 241, 0.2)';
+      background = 'var(--accent-soft)';
+      color = 'var(--accent)';
+      border = '1px solid var(--accent-soft)';
     }
     return {
       fontSize: 12,
@@ -1072,9 +1072,9 @@ const s = {
     };
   },
   errorBar: {
-    background: 'rgba(239, 68, 68, 0.1)',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
-    color: '#f87171',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '12px 16px',
     borderRadius: 12,
     fontSize: 13,
@@ -1087,7 +1087,7 @@ const s = {
     left: 0,
     width: '100vw',
     height: '100vh',
-    background: 'rgba(0,0,0,0.6)',
+    background: 'var(--overlay)',
     backdropFilter: 'blur(8px)',
     display: 'flex',
     justifyContent: 'center',
@@ -1100,7 +1100,7 @@ const s = {
     borderRadius: 20,
     width: '600px',
     maxWidth: '90vw',
-    boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+    boxShadow: '0 20px 40px var(--overlay)',
   } as CSSProperties,
   modalHeader: {
     display: 'flex',
@@ -1147,7 +1147,7 @@ const s = {
   spinnerSmall: {
     width: '16px',
     height: '16px',
-    border: '2px solid rgba(255,255,255,0.1)',
+    border: '2px solid var(--border)',
     borderTopColor: 'var(--accent)',
     borderRadius: '50%',
     animation: 'spin 0.6s linear infinite',
@@ -1155,7 +1155,7 @@ const s = {
   spinnerLarge: {
     width: '36px',
     height: '36px',
-    border: '3px solid rgba(255,255,255,0.1)',
+    border: '3px solid var(--border)',
     borderTopColor: 'var(--accent)',
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
@@ -1173,9 +1173,9 @@ interface BidScore {
 }
 
 const REC: Record<BidRecommendation, { label: string; color: string; bg: string }> = {
-  go: { label: 'GO', color: '#34d399', bg: 'rgba(16, 185, 129, 0.12)' },
-  conditional: { label: 'CONDITIONAL', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.12)' },
-  no_go: { label: 'NO-GO', color: '#f87171', bg: 'rgba(239, 68, 68, 0.12)' },
+  go: { label: 'GO', color: 'var(--good)', bg: 'var(--good-soft)' },
+  conditional: { label: 'CONDITIONAL', color: 'var(--warn)', bg: 'var(--warn-soft)' },
+  no_go: { label: 'NO-GO', color: 'var(--bad)', bg: 'var(--bad-soft)' },
 };
 
 /**
@@ -1278,7 +1278,7 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
             <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 0.5, color: REC[liveRec].color, background: REC[liveRec].bg, border: `1px solid ${REC[liveRec].color}`, borderRadius: 7, padding: '4px 10px' }}>
               → {REC[liveRec].label}
             </span>
-            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: '#0b0e14', marginLeft: 'auto' }} disabled={busy} onClick={() => void save()}>
+            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: 'var(--accent-ink)', marginLeft: 'auto' }} disabled={busy} onClick={() => void save()}>
               {busy ? 'Recording…' : 'Record decision'}
             </button>
           </div>
@@ -1408,7 +1408,7 @@ function ClarificationsPanel({ tenderId, onDeadlineMoved }: { tenderId: string; 
                 <input type="date" style={input} value={deadlineExtendedTo} onChange={(e) => setDeadlineExtendedTo(e.target.value)} />
               </label>
             )}
-            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: '#fff' }} disabled={busy || !title.trim()} onClick={() => void add()}>
+            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: 'var(--accent-ink)' }} disabled={busy || !title.trim()} onClick={() => void add()}>
               Record {kind}
             </button>
           </div>

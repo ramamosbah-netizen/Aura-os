@@ -507,7 +507,7 @@ function Res({ label, v, strong, accent, pct }: { label: string; v: number; stro
 const st = {
   pane: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 12 } as CSSProperties,
   paneHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, fontSize: 13.5 } as CSSProperties,
-  addBtn: { background: 'var(--accent)', border: 'none', borderRadius: 7, color: '#0b1020', padding: '4px 11px', fontSize: 12, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
+  addBtn: { background: 'var(--accent)', border: 'none', borderRadius: 7, color: 'var(--accent-ink)', padding: '4px 11px', fontSize: 12, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   itemList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
   item: { width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 3, background: 'var(--panel-2, var(--panel))', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', color: 'var(--text, var(--text))' } as CSSProperties,
   itemOn: { borderColor: 'var(--accent)' } as CSSProperties,
@@ -540,7 +540,7 @@ const st = {
   flags: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 } as CSSProperties,
   flag: { fontSize: 12, lineHeight: 1.5 } as CSSProperties,
   foot: { display: 'flex', gap: 14, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' } as CSSProperties,
-  save: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#0b1020', padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
+  save: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   rm: { background: 'transparent', border: 'none', color: 'var(--bad)', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   lockedWrap: { border: '1px solid var(--border)', borderRadius: 12, padding: 16, background: 'var(--panel)' } as CSSProperties,
   viewTabs: { display: 'flex', gap: 4, marginBottom: 14, borderBottom: '1px solid var(--border)' } as CSSProperties,

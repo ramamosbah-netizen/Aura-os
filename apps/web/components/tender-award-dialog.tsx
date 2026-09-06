@@ -154,8 +154,8 @@ export default function TenderAwardDialog({ tenderId, tenderTitle, disabled, com
 const styles = {
   button: { color: 'var(--good)', whiteSpace: 'nowrap' } as CSSProperties,
   compactButton: { color: 'var(--good)', padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap' } as CSSProperties,
-  overlay: { position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(5, 9, 18, 0.68)', display: 'grid', placeItems: 'center', padding: 20 } as CSSProperties,
-  dialog: { width: 'min(560px, 100%)', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: '0 24px 80px rgba(0,0,0,.35)', padding: 22 } as CSSProperties,
+  overlay: { position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--overlay)', display: 'grid', placeItems: 'center', padding: 20 } as CSSProperties,
+  dialog: { width: 'min(560px, 100%)', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: '0 24px 80px var(--overlay)', padding: 22 } as CSSProperties,
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 } as CSSProperties,
   eyebrow: { color: 'var(--accent)', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' } as CSSProperties,
   title: { margin: '5px 0 0', fontSize: 20 } as CSSProperties,

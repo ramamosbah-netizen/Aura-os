@@ -1660,7 +1660,7 @@ const s = {
   td: { padding: '10px 12px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' } as CSSProperties,
   tdMuted: { padding: '10px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontSize: 12.5 } as CSSProperties,
   rowLeaf: { borderBottom: '1px solid var(--border)' } as CSSProperties,
-  rowParent: { borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)' } as CSSProperties,
+  rowParent: { borderBottom: '1px solid var(--border)', background: 'var(--panel-2)' } as CSSProperties,
   codeBadge: {
     fontFamily: 'ui-monospace, monospace',
     fontSize: 11.5,
@@ -1690,16 +1690,16 @@ const s = {
     const s = status.toLowerCase();
     if (s === 'completed' || s === 'approved' || s === 'certified') {
       color = 'var(--good)';
-      border = '1px solid rgba(40,167,69,0.2)';
-      background = 'rgba(40,167,69,0.05)';
+      border = '1px solid var(--good-soft)';
+      background = 'var(--good-soft)';
     } else if (s === 'in_progress' || s === 'submitted' || s === 'logged') {
       color = 'var(--accent)';
-      border = '1px solid rgba(255,193,7,0.2)';
-      background = 'rgba(255,193,7,0.05)';
+      border = '1px solid var(--warn-soft)';
+      background = 'var(--warn-soft)';
     } else if (s === 'disputed' || s === 'rejected') {
       color = 'var(--bad)';
-      border = '1px solid rgba(220,53,69,0.2)';
-      background = 'rgba(220,53,69,0.05)';
+      border = '1px solid var(--bad-soft)';
+      background = 'var(--bad-soft)';
     }
     return {
       fontSize: 10.5,
@@ -1713,20 +1713,20 @@ const s = {
     };
   },
   categoryTag: (cat: string): CSSProperties => {
-    let background = 'rgba(255,255,255,0.05)';
+    let background = 'var(--border)';
     let color = 'var(--text)';
     if (cat === 'direct') {
-      background = 'rgba(0,123,255,0.1)';
-      color = '#007bff';
+      background = 'var(--info-soft)';
+      color = 'var(--info)';
     } else if (cat === 'indirect') {
-      background = 'rgba(108,117,125,0.1)';
-      color = '#6c757d';
+      background = 'var(--panel-2)';
+      color = 'var(--muted)';
     } else if (cat === 'overhead') {
-      background = 'rgba(23,162,184,0.1)';
-      color = '#17a2b8';
+      background = 'var(--info-soft)';
+      color = 'var(--info)';
     } else if (cat === 'contingency') {
-      background = 'rgba(111,66,193,0.1)';
-      color = '#6f42c1';
+      background = 'var(--accent-soft)';
+      color = 'var(--accent)';
     }
     return {
       fontSize: 10.5,
@@ -1741,7 +1741,7 @@ const s = {
   actions: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -1768,8 +1768,8 @@ const s = {
     cursor: 'pointer',
   } as CSSProperties,
   btnGoodSmall: {
-    background: 'rgba(40,167,69,0.1)',
-    border: '1px solid rgba(40,167,69,0.2)',
+    background: 'var(--good-soft)',
+    border: '1px solid var(--good-soft)',
     color: 'var(--good)',
     borderRadius: 6,
     padding: '3px 8px',
@@ -1778,8 +1778,8 @@ const s = {
     fontWeight: 600,
   } as CSSProperties,
   btnDangerSmall: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
     color: 'var(--bad)',
     borderRadius: 6,
     padding: '3px 8px',
@@ -1788,7 +1788,7 @@ const s = {
     fontWeight: 600,
   } as CSSProperties,
   parentLabel: { fontSize: 11, color: 'var(--muted)', background: 'var(--panel-2)', borderRadius: 5, padding: '2px 5px', textTransform: 'uppercase' } as CSSProperties,
-  addTaskRow: { background: 'rgba(0,0,0,0.1)' } as CSSProperties,
+  addTaskRow: { background: 'var(--overlay)' } as CSSProperties,
   addTaskFormInline: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',
@@ -1888,9 +1888,9 @@ const s = {
   inputPv: { ...field, width: 120 } as CSSProperties,
   select: { ...field, minWidth: 100 } as CSSProperties,
   errorBar: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,

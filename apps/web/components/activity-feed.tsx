@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import type { DomainEvent } from '@aura/shared';
 import { areaLabel, humanizeEventType } from '@/lib/event-labels';
 
@@ -16,8 +16,21 @@ const GLYPH: Record<string, string> = {
   site: '▤', doccontrol: '▤', documents: '▤', intelligence: '✶', workflow: '⚡',
 };
 
-function timeAgo(iso: string): string {
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+/**
+ * `now` is supplied by the caller, and is null until the component has mounted.
+ *
+ * This is a 'use client' component that is still server-rendered, so calling `Date.now()` during
+ * render meant the server and the client each computed their own. Cross a minute boundary between
+ * the two and the same event rendered "1m ago" on the server and "2m ago" in the browser — React
+ * reported `Hydration failed` and regenerated the whole Command Center tree on the client.
+ *
+ * Returning a fixed, locale-free UTC clock time while `now` is null makes the server render and
+ * the first client render identical by construction, so hydration matches. The relative label
+ * appears once the effect below has run, which only ever happens in the browser.
+ */
+function timeAgo(iso: string, now: number | null): string {
+  if (now === null) return iso.slice(11, 16);
+  const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
   if (s < 60) return `${Math.floor(s)}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
@@ -38,6 +51,10 @@ const PERIODS: { key: string; label: string; ms: number | null }[] = [
 export default function ActivityFeed({ events }: { events: DomainEvent[] }) {
   const [module, setModule] = useState<string>('all');
   const [period, setPeriod] = useState<string>('all');
+  // Null until mounted — see timeAgo. Reading the clock during render is what broke hydration
+  // here, so the clock is read once, in an effect, which never runs on the server.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
 
   const modules = useMemo(() => {
     const set = new Map<string, number>();
@@ -50,12 +67,15 @@ export default function ActivityFeed({ events }: { events: DomainEvent[] }) {
 
   const filtered = useMemo(() => {
     const cutoff = PERIODS.find((p) => p.key === period)?.ms ?? null;
-    const minTime = cutoff ? Date.now() - cutoff : 0;
+    // Same hazard as timeAgo: this read the clock during render, so a period filter could keep a
+    // different set of events on the server than in the browser. Before mount the window filter is
+    // inert and every event shows, which is what the server can honestly render.
+    const minTime = cutoff && now !== null ? now - cutoff : 0;
     return events
       .filter((e) => (module === 'all' ? true : moduleOf(e.type) === module))
-      .filter((e) => (cutoff ? new Date(e.occurredAt).getTime() >= minTime : true))
+      .filter((e) => (cutoff && now !== null ? new Date(e.occurredAt).getTime() >= minTime : true))
       .slice(0, 40);
-  }, [events, module, period]);
+  }, [events, module, now, period]);
 
   return (
     <div style={s.panel}>
@@ -97,7 +117,7 @@ export default function ActivityFeed({ events }: { events: DomainEvent[] }) {
               <span style={s.glyph}>{GLYPH[moduleOf(e.type)] ?? '•'}</span>
               <span style={s.label}>{humanizeEventType(e.type).label}</span>
               <span style={s.mod}>{areaLabel(moduleOf(e.type))}</span>
-              <span style={s.time}>{timeAgo(e.occurredAt)}</span>
+              <time dateTime={e.occurredAt} style={s.time}>{timeAgo(e.occurredAt, now)}</time>
             </li>
           ))}
         </ul>

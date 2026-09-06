@@ -33,7 +33,11 @@ test('an open drawer survives a late overrides response, keeping what was typed'
     await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
   });
 
-  await page.goto('/crm/leads', { waitUntil: 'domcontentloaded' });
+  // /crm/pipeline, not /crm/leads. `d80d40ad` split Sales into separate pages: /crm/leads became a
+  // leads-only workspace and the opportunity create drawer moved to the pipeline. spine-journey.spec
+  // was corrected for this and left a note; this spec carried the same stale path and had been
+  // waiting out a full timeout for a `create-opportunity` button that is on another page.
+  await page.goto('/crm/pipeline', { waitUntil: 'domcontentloaded' });
 
   const title = `E2E drawer survives ${RUN}`;
   await page.getByTestId('create-opportunity').click();

@@ -20,7 +20,11 @@ test('Home is a responsive suite launcher with working destinations (incl. Sales
   await expect(page.getByTestId('aura-home-board')).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Primary' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /Where would you like to work/ })).toBeVisible();
-  await expect(page.getByLabel(/Signed in as/)).toBeVisible();
+  // Scoped to the board this test is about. Two elements carry a "Signed in as …" label on this
+  // page — the shell topbar (app-shell.tsx:376) and the home session card (aura-home-grid.tsx:130)
+  // — so an unscoped match dies in strict mode. Worth knowing that they also disagree on the name:
+  // the topbar shows the subject id (`u-admin`) and the card a display name (`Admin`).
+  await expect(page.getByTestId('aura-home-board').getByLabel(/Signed in as/)).toBeVisible();
   await expect(page.getByTestId('home-communication-unread')).toHaveAttribute('href', '/my-work/communication?view=unread');
 
   for (const [workspace, destination] of Object.entries(WORKSPACES)) {

@@ -21,7 +21,14 @@ test.describe('favourite the current page', () => {
     const button = page.getByTestId('favorite-page');
     if (await button.count()) {
       await expect(button).toBeEnabled();
-      if ((await button.textContent())?.includes('Remove')) await button.click();
+      if ((await button.textContent())?.includes('Remove')) {
+        await button.click();
+        // Confirm the removal LANDED. The click fires a request and returns; ending the hook here
+        // tears the context down with it still in flight, the favourite survives, and the next run
+        // opens on an already-favourited page — which is exactly how this spec failed while the
+        // button itself behaved correctly throughout.
+        await expect(button).toHaveText(/Add to Favorites/);
+      }
     }
   });
 

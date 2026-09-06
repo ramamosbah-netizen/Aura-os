@@ -70,12 +70,22 @@ test('project and operations share one usable delivery context', async ({ page, 
 
   await page.goto(`/project/${project.id}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('project-command-center')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Delivery pulse' })).toBeVisible();
-  await expect(page.getByText('Project delivery spine')).toBeVisible();
+  // The overview's section headings after the September rebuild. "Delivery pulse" and "Project
+  // delivery spine" are both gone from the source entirely — they survived only in this spec.
+  await expect(page.getByRole('heading', { name: 'Where the work is now' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible();
 
-  const projectNav = page.getByRole('navigation', { name: 'Project delivery areas' });
-  await projectNav.getByRole('link', { name: 'Project controls' }).click();
-  await expect(page).toHaveURL(`/project/${project.id}/controls`);
+  // The launcher is named "Project 360 navigation" now, and Project controls was folded into
+  // "Plan & Control" at /workspace/plan — see project-shell.tsx:54, which still treats the older
+  // /controls path as making that item active.
+  const projectNav = page.getByRole('navigation', { name: 'Project 360 navigation' });
+  await projectNav.getByRole('link', { name: /^Plan & Control/ }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/project/${project.id}/workspace/plan`));
+  // Plan & Control is a HUB, not the controls workspace itself — it lists WBS & progress, Project
+  // controls, Risks & issues and Changes & claims, each one hop further. The rebuild put this
+  // landing page between the launcher and the controls surface this test is about.
+  await page.getByRole('link', { name: /^Project controls/ }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/project/${project.id}/controls`));
   await expect(page.getByTestId('project-controls')).toBeVisible();
   await expect(page.getByRole('heading', { name: PROJECT_TITLE })).toBeVisible();
   const variationsTab = page.getByRole('tab', { name: /Variations/ });
@@ -90,9 +100,19 @@ test('project and operations share one usable delivery context', async ({ page, 
   await expect(page.getByLabel('System or discipline lens')).toHaveValue('cctv');
 
   await page.goto(`/project/${project.id}`, { waitUntil: 'domcontentloaded' });
+  // No retry, deliberately. The lens is disabled until the shell hydrates (project-shell.tsx), so
+  // `selectOption` waits for enabled through Playwright's own actionability check and the choice
+  // cannot land on a control with no listener. A retry loop here would pass either way and would
+  // hide a returning defect — the product now says when it is ready, so the test can simply believe
+  // it. If this line starts failing again, the readiness signal is what broke.
   await page.getByLabel('System or discipline lens').selectOption('cctv');
   await expect(page).toHaveURL(/discipline=cctv/);
-  await page.getByRole('link', { name: 'Site', exact: true }).click();
+  // Opened by URL, not through the shell. The Project 360 launcher links "Site" to
+  // /workspace/site, which does not read `?discipline=` — only the `[area]` route below
+  // implements the lens (filterAreaRows). Nothing in the navigation reaches it any more, so
+  // driving it through the shell here would assert a path that no longer exists. The lens
+  // register itself still works, and this keeps it covered while that remains true.
+  await page.goto(`/project/${project.id}/site?discipline=cctv`, { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(new RegExp(`/project/${project.id}/site\\?discipline=cctv`));
   const register = page.getByRole('table', { name: 'Site project register' });
   await expect(register).toBeVisible();
@@ -139,8 +159,16 @@ test('project and operations share one usable delivery context', async ({ page, 
   ).toBe(true);
 
   await page.goto('/operations/overview', { waitUntil: 'domcontentloaded' });
-  const operations = page.getByTestId('operations-command-center');
+  // Renamed to `delivery-operations-overview` — `operations-command-center` exists nowhere in the
+  // source any more, only here.
+  const operations = page.getByTestId('delivery-operations-overview');
   await expect(operations).toBeVisible();
   await expect(operations).toContainText(PROJECT_TITLE);
-  await expect(operations.getByRole('link', { name: new RegExp(PROJECT_TITLE) })).toHaveAttribute('href', `/project/${project.id}`);
+  // The overview surfaces the project in several panels — one links to the project root, another
+  // deep-links to /site — so ordering is the wrong way to pick. Select by the href being asserted:
+  // the command centre must offer a way back to the project it is reporting on.
+  // Prefix, not exact: the command centre deep-links into the project's Site area rather than its
+  // root, which is the more useful destination from a delivery view. What has to hold is that the
+  // link goes to THIS project — the id is the assertion, the landing section is a product choice.
+  await expect(operations.locator(`a[href^="/project/${project.id}"]`).first()).toBeVisible();
 });

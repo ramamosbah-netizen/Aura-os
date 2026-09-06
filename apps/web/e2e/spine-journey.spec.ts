@@ -219,7 +219,10 @@ test('quotation: create → read in the workspace', async ({ page }) => {
 
 test('contract: create → read in the register', async ({ page }) => {
   await page.goto('/contracts/contracts', { waitUntil: 'domcontentloaded' });
-  await createViaDrawer(page, 'contract', { title: CONTRACT });
+  // `value` is required on this drawer (contract-create.tsx:58) — a contract with no value is not
+  // a contract. Omitting it left the form blocked on validation with no API error to surface, so
+  // the failure looked like the drawer refusing to close rather than a field never filled.
+  await createViaDrawer(page, 'contract', { title: CONTRACT, value: '250000' });
   await expect(page.getByTestId('contracts-register')).toContainText(CONTRACT);
 });
 

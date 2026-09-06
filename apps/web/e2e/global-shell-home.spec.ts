@@ -86,7 +86,11 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
   // Scoped to the launcher: the sidebar carries a 'Projects' suite link too, so an
   // unscoped name match is ambiguous and fails on strict mode rather than on the behaviour.
-  const delivery = page.getByTestId('suite-launcher').getByRole('link', { name: /^Projects$/ });
+  // Anchored at the START only. Each card wraps its title, description and function count in one
+  // anchor, so the accessible name is the three concatenated — "Projects Manage the project: …
+  // 19 available functions" — and an end-anchored `/^Projects$/` matches nothing at all. Keeping
+  // the start anchor still rules out any other suite whose name merely contains "Projects".
+  const delivery = page.getByTestId('suite-launcher').getByRole('link', { name: /^Projects\b/ });
   await expect(delivery).not.toHaveAttribute('target', '_blank');
   await delivery.click();
   await expect(page).toHaveURL('/suites/project-delivery');
@@ -129,7 +133,11 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   await expect(page).toHaveURL('/crm/overview');
   await page.goto('/suites', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('suite-launcher')).toBeVisible();
-  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(13);
+  // 12, not 13, and acknowledged rather than absorbed: `visibleSuites` drops every
+  // `hiddenFromPrimary` suite, and that flag is set on exactly the two that own no routes at all —
+  // Pre-Award and Commercial, whose entry points are Sales-owned paths. 14 declared − 2 hidden = 12,
+  // the same count the Home launcher asserts earlier in this test.
+  await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
 
   const restricted = await browser.newContext({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, height: 900 } });
   const login = await restricted.request.post('/api/auth/login', {

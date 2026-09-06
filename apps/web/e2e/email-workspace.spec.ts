@@ -186,11 +186,14 @@ test('the workspace is usable on a phone', async ({ page }) => {
 // When Contacts ships, add it here — deliberately, with the section it renders.
 test('Communication has six sections, with History folded into Overview', async ({ page }) => {
   await page.goto('/my-work/communication', { waitUntil: 'domcontentloaded' });
-  for (const section of ['overview', 'email', 'chat', 'meetings', 'whatsapp', 'files']) {
-    await expect(page.getByTestId(`comm-section-${section}`)).toBeVisible();
+  // The six destinations in the rail, asserted by the href each one navigates to — `comm-section-*`
+  // test ids exist nowhere in the source and never did. `overview` is not among them by design: it
+  // is the page you are already on, not somewhere to go, and `unread` took its slot in VIEW_GROUPS.
+  for (const section of ['unread', 'files', 'chat', 'meetings', 'whatsapp', 'email']) {
+    await expect(page.locator(`a[href*="view=${section}"]`).first()).toBeVisible();
   }
   // History stopped being a destination: it would answer the same question as Overview, and the
   // two would drift apart.
-  await expect(page.getByTestId('comm-section-history')).toHaveCount(0);
+  await expect(page.locator('a[href*="view=history"]')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Communication timeline' })).toBeVisible();
 });

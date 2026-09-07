@@ -24,11 +24,12 @@ import type { HealthDomain, HealthSignal, HealthUnknownCause } from '@aura/share
  *   Procurement is the same shape. A `submitted` PR is awaiting approval, which is normal until it
  *   isn't, and nothing declares the threshold.
  *
- *   HSE does have a severity scale (`near_miss | minor | major | fatal`) — but severity is not the
- *   question. `major` + still investigating, `major` + closed, `near_miss` + open, `minor` with an
- *   overdue corrective action: those are HSE health semantics and HSE owns them. `fatal` reads
- *   obvious to a human, and that is precisely the temptation to refuse — allowing Projects one
- *   "obvious" exception is how it ends up deciding what a rejected submittal means tomorrow.
+ *   HSE has now declared its own, in `hse.service.ts`: a fatal or major incident still open is
+ *   critical, an overdue corrective action is at risk, anything else open is worth watching. It sat
+ *   undeclared here for a while precisely BECAUSE `fatal` reads obvious to a human — and that
+ *   obviousness is the temptation. One "obvious" exception taken by Projects is how it ends up
+ *   deciding what a rejected submittal means next week. The rules live where the people who own
+ *   them can change them.
  *
  * The rule that produced this list, stated once: PROJECTS DOES NOT DECIDE WHAT ANOTHER DOMAIN'S
  * VOCABULARY MEANS. A domain with facts but no declared semantics is not a domain Projects may
@@ -77,19 +78,12 @@ export const HEALTH_SIGNALS: readonly HealthSignalDeclaration[] = [
   { id: 'cost-performance', domain: 'cost', providerExpected: true },
   { id: 'commercial-exposure', domain: 'commercial', providerExpected: true },
 
-  // ── Owned elsewhere, and answerable: these domains declare a severity of their own. ─────────
+  // ── Owned elsewhere, and answerable: these domains have declared their own semantics. ───────
   { id: 'quality-ncr', domain: 'quality', providerExpected: true },
   { id: 'commissioning-readiness', domain: 'commissioning', providerExpected: true },
+  { id: 'hse-exposure', domain: 'hse', providerExpected: true },
 
   // ── Owned elsewhere, and NOT yet answerable. Visible as partial coverage, never as clear. ───
-  {
-    id: 'hse-exposure',
-    domain: 'hse',
-    providerExpected: false,
-    undeclaredReason:
-      'HSE records incidents with a severity, but has not declared what they mean for project health. '
-      + 'Whether an open major incident or an overdue corrective action is a project condition is HSE\'s to define.',
-  },
   {
     id: 'engineering-blockers',
     domain: 'engineering',

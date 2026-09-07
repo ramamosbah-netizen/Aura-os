@@ -2,8 +2,9 @@ import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { CommissioningModule, CommissioningService } from '@aura/commissioning';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
+import { HseModule, HseService } from '@aura/hse';
 import { QUALITY_GATE } from '@aura/procurement';
-import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH } from '@aura/projects';
+import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH } from '@aura/projects';
 
 /**
  * App-layer wiring for cross-module gates (ADR-0004: modules don't import each other; the
@@ -29,7 +30,7 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
  */
 @Global()
 @Module({
-  imports: [QualityModule, CommissioningModule, DocControlModule],
+  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule],
   providers: [
     { provide: QUALITY_GATE, useExisting: QualityService },
     { provide: ITP_GATE, useExisting: QualityService },
@@ -56,7 +57,8 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // letting a project read as clear on evidence nobody supplied.
     { provide: QUALITY_HEALTH, useExisting: QualityService },
     { provide: COMMISSIONING_HEALTH, useExisting: CommissioningService },
+    { provide: HSE_HEALTH, useExisting: HseService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH],
 })
 export class GatesModule {}

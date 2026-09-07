@@ -27,13 +27,20 @@ export interface CommissioningHealthPort {
   readProjectCommissioningHealth(tenantId: Id, projectId: Id): Promise<HealthSignal>;
 }
 
+/** What HSE reports, judged by HSE — see `readProjectHseHealth` for the thresholds and their reasons. */
+export interface HseHealthPort {
+  readProjectHseHealth(tenantId: Id, projectId: Id): Promise<HealthSignal>;
+}
+
 export const QUALITY_HEALTH = Symbol('QUALITY_HEALTH');
 export const COMMISSIONING_HEALTH = Symbol('COMMISSIONING_HEALTH');
+export const HSE_HEALTH = Symbol('HSE_HEALTH');
 
 /** Every signal a provider is expected for, and the token that must be bound to answer it. */
 export const EXPECTED_HEALTH_PROVIDERS: ReadonlyArray<{ signalId: string; token: symbol }> = [
   { signalId: 'quality-ncr', token: QUALITY_HEALTH },
   { signalId: 'commissioning-readiness', token: COMMISSIONING_HEALTH },
+  { signalId: 'hse-exposure', token: HSE_HEALTH },
 ];
 
 const decl = (id: string): HealthSignalDeclaration =>
@@ -55,6 +62,7 @@ export class ProjectHealthService {
     // looks exactly like a domain that has not declared its semantics.
     @Optional() @Inject(QUALITY_HEALTH) private readonly quality: QualityHealthPort | null = null,
     @Optional() @Inject(COMMISSIONING_HEALTH) private readonly commissioning: CommissioningHealthPort | null = null,
+    @Optional() @Inject(HSE_HEALTH) private readonly hse: HseHealthPort | null = null,
   ) {}
 
   /**
@@ -65,13 +73,16 @@ export class ProjectHealthService {
    * module could start lying again.
    */
   async assess(tenantId: Id, projectId: Id): Promise<ProjectHealth> {
-    const [owned, quality, commissioning] = await Promise.all([
+    const [owned, quality, commissioning, hse] = await Promise.all([
       this.ownSignals(tenantId, projectId),
       this.fromProvider(decl('quality-ncr'), this.quality
         ? () => (this.quality as QualityHealthPort).readProjectQualityHealth(tenantId, projectId)
         : null),
       this.fromProvider(decl('commissioning-readiness'), this.commissioning
         ? () => (this.commissioning as CommissioningHealthPort).readProjectCommissioningHealth(tenantId, projectId)
+        : null),
+      this.fromProvider(decl('hse-exposure'), this.hse
+        ? () => (this.hse as HseHealthPort).readProjectHseHealth(tenantId, projectId)
         : null),
     ]);
 
@@ -81,7 +92,7 @@ export class ProjectHealthService {
       .filter((s) => !s.providerExpected)
       .map((s) => unknownSignal(s, 'SEMANTICS_UNDECLARED'));
 
-    return assessProjectHealth([...owned, quality, commissioning, ...undeclared]);
+    return assessProjectHealth([...owned, quality, commissioning, hse, ...undeclared]);
   }
 
   /**

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
+import { type AccessTarget, type HealthSignal, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
@@ -502,6 +502,77 @@ export class HseService {
 
   listCapas(tenantId: Id): Promise<CapaAction[]> {
     return this.capaStore.findAll(tenantId);
+  }
+
+  /**
+   * HSE's own verdict on a project's health — §24.
+   *
+   * Project 360 aggregates this; it does not compute it. Only HSE can say what its records MEAN,
+   * and the distinction matters more here than anywhere: `fatal` looks obvious to any reader, and
+   * that obviousness is exactly the trap. Once Projects is allowed one "obvious" reading of another
+   * domain's vocabulary, it acquires a second interpretation of every domain, and the two drift.
+   *
+   * THE RULES, AND WHY EACH ONE
+   *
+   * A `fatal` or `major` incident that is not closed is CRITICAL. This domain's own closure gate
+   * makes no distinction between the two — both need a root cause and no open corrective actions
+   * before they can be closed — so both are treated as the highest condition HSE has while open.
+   *
+   * An OVERDUE corrective action is AT_RISK, whatever the incident that produced it. CAPA is the
+   * control that stops the same accident happening twice, and `closeIncident` refuses while any
+   * remains open. An overdue one is that control having lapsed, in the open, with a date on it.
+   *
+   * Anything else still open — a minor or near-miss under investigation, or a corrective action
+   * inside its due date — is WATCH. Worth knowing; not yet a call to act.
+   *
+   * NO INCIDENTS IS `CLEAR`, NOT `NOT_APPLICABLE`. Commissioning may legitimately not apply to a
+   * project that has nothing to commission. HSE always applies wherever people work, so an empty
+   * register is a result, not an absence — and reporting it as inapplicable would quietly excuse
+   * a project from the one domain nobody may be excused from.
+   *
+   * These thresholds are HSE's, and HSE changes them here. Projects will report whatever this
+   * returns without reinterpreting it.
+   */
+  async readProjectHseHealth(tenantId: Id, projectId: Id, today = new Date().toISOString().slice(0, 10)): Promise<HealthSignal> {
+    const href = `/project/${encodeURIComponent(projectId)}/workspace/hse`;
+    const [incidents, capas] = await Promise.all([this.listIncidents(tenantId), this.listCapas(tenantId)]);
+
+    const mine = incidents.filter((i) => i.projectId === projectId);
+    const open = mine.filter((i) => i.status !== 'closed');
+    const serious = open.filter((i) => i.severity === 'fatal' || i.severity === 'major');
+
+    const myCapas = capas.filter((c) => c.projectId === projectId);
+    const openCapas = myCapas.filter((c) => c.status !== 'completed');
+    const overdueCapas = openCapas.filter((c) => c.dueDate < today);
+
+    if (serious.length > 0) {
+      const fatal = serious.filter((i) => i.severity === 'fatal').length;
+      const detail = fatal > 0
+        ? `${fatal} fatal incident${fatal === 1 ? '' : 's'} under investigation`
+        : `${serious.length} major incident${serious.length === 1 ? '' : 's'} under investigation`;
+      return { id: 'hse-exposure', domain: 'hse', state: 'CRITICAL', reason: `${detail}.`, href, measure: { value: serious.length } };
+    }
+
+    if (overdueCapas.length > 0) {
+      return {
+        id: 'hse-exposure',
+        domain: 'hse',
+        state: 'AT_RISK',
+        reason: `${overdueCapas.length} corrective action${overdueCapas.length === 1 ? '' : 's'} overdue — the control that prevents recurrence has lapsed.`,
+        href,
+        measure: { value: overdueCapas.length },
+      };
+    }
+
+    if (open.length > 0 || openCapas.length > 0) {
+      const parts = [
+        ...(open.length > 0 ? [`${open.length} incident${open.length === 1 ? '' : 's'} under investigation`] : []),
+        ...(openCapas.length > 0 ? [`${openCapas.length} corrective action${openCapas.length === 1 ? '' : 's'} open`] : []),
+      ];
+      return { id: 'hse-exposure', domain: 'hse', state: 'WATCH', reason: `${parts.join(', ')}.`, href, measure: { value: open.length + openCapas.length } };
+    }
+
+    return { id: 'hse-exposure', domain: 'hse', state: 'CLEAR' };
   }
 
   // ── Risk assessments (JSA) ──────────────────────────────────────────────────

@@ -7,8 +7,10 @@ import { HEALTH_SIGNALS } from './domain/health-signals';
  * §24 assembly — what the service reports once every domain has answered, or failed to.
  *
  * The rules have their own exhaustive invariants. These prove the SHAPE OF REALITY the rules will
- * actually be handed: six signals that can be judged today, three whose owning domains have not
- * declared what their facts mean, and every way a provider can fail to answer.
+ * actually be handed: the signals that can be judged today, those whose owning domains have not yet
+ * declared what their facts mean, and every way a provider can fail to answer. The split moves as
+ * domains declare themselves — HSE has, Engineering and Procurement have not — which is why the
+ * counts below are asserted rather than described.
  *
  * The point being defended throughout: a project may not read as clear on evidence nobody supplied.
  */
@@ -25,6 +27,7 @@ function build(over: {
   eots?: { status: string }[];
   quality?: HealthSignal | Error | null;
   commissioning?: HealthSignal | Error | null;
+  hse?: HealthSignal | Error | null;
   wbsThrows?: boolean;
 } = {}) {
   const answer = (v: HealthSignal | Error | null | undefined, fallback: HealthSignal) =>
@@ -32,6 +35,7 @@ function build(over: {
 
   const q = answer(over.quality, { id: 'quality-ncr', domain: 'quality', state: 'CLEAR' });
   const c = answer(over.commissioning, { id: 'commissioning-readiness', domain: 'commissioning', state: 'CLEAR' });
+  const h = answer(over.hse, { id: 'hse-exposure', domain: 'hse', state: 'CLEAR' });
 
   return new ProjectHealthService(
     {
@@ -45,23 +49,24 @@ function build(over: {
     { list: async () => (over.eots ?? []) as never } as never,
     q ? ({ readProjectQualityHealth: q.read } as never) : null,
     c ? ({ readProjectCommissioningHealth: c.read } as never) : null,
+    h ? ({ readProjectHseHealth: h.read } as never) : null,
   );
 }
 
 const byId = (v: { signals: HealthSignal[] }, id: string) => v.signals.find((s) => s.id === id);
 
 describe('project health assembly', () => {
-  it('1. six readable and clear, three undeclared → CLEAR · PARTIAL, and not reassuring', async () => {
+  it('1. seven readable and clear, two undeclared → CLEAR · PARTIAL, and not reassuring', async () => {
     // The state the two axes were designed for. Nothing is wrong in anything we could judge, and
-    // three domains have not said what their facts mean — so the project is NOT given a clean bill
-    // of health it has not earned.
+    // two domains have not said what their facts mean — so the project is NOT given a clean bill of
+    // health it has not earned.
     const v = await build().assess(tenantId, projectId);
 
     expect(v.severity).toBe('CLEAR');
     expect(v.coverage).toBe('PARTIAL');
     expect(v.reassuring).toBe(false);
 
-    expect(v.unknown.map((s) => s.domain).sort()).toEqual(['engineering', 'hse', 'procurement']);
+    expect(v.unknown.map((s) => s.domain).sort()).toEqual(['engineering', 'procurement']);
     // And each says WHY, in terms of the owning domain — not "no data".
     for (const s of v.unknown) {
       expect(s.cause, s.domain).toBe('SEMANTICS_UNDECLARED');
@@ -69,7 +74,7 @@ describe('project health assembly', () => {
     }
   });
 
-  it('2. a major Quality condition + three undeclared → Quality severity · PARTIAL', async () => {
+  it('2. a major Quality condition + two undeclared → Quality severity · PARTIAL', async () => {
     const v = await build({
       quality: { id: 'quality-ncr', domain: 'quality', state: 'CRITICAL', reason: '2 major non-conformances still open.', href: '/project/p1/workspace/quality' },
     }).assess(tenantId, projectId);
@@ -78,11 +83,11 @@ describe('project health assembly', () => {
     expect(v.severity).toBe('CRITICAL');
     expect(v.coverage).toBe('PARTIAL');
     expect(v.concerns[0]).toMatchObject({ domain: 'quality', reason: '2 major non-conformances still open.' });
-    // The known critical does not erase the three unknowns.
-    expect(v.unknown).toHaveLength(3);
+    // The known critical does not erase the remaining unknowns.
+    expect(v.unknown).toHaveLength(2);
   });
 
-  it('3. a Commissioning critical + Quality clear + three undeclared → CRITICAL · PARTIAL', async () => {
+  it('3. a Commissioning critical + Quality clear + two undeclared → CRITICAL · PARTIAL', async () => {
     const v = await build({
       quality: { id: 'quality-ncr', domain: 'quality', state: 'CLEAR' },
       commissioning: { id: 'commissioning-readiness', domain: 'commissioning', state: 'CRITICAL', reason: '1 system failed testing.', href: '/project/p1/workspace/testing' },
@@ -91,7 +96,7 @@ describe('project health assembly', () => {
     expect(v.severity).toBe('CRITICAL');
     expect(v.coverage).toBe('PARTIAL');
     expect(v.concerns.map((c) => c.domain)).toEqual(['commissioning']);
-    expect(v.unknown).toHaveLength(3);
+    expect(v.unknown).toHaveLength(2);
   });
 
   it('4. a provider that fails at runtime keeps the severity already known and degrades coverage', async () => {
@@ -104,12 +109,25 @@ describe('project health assembly', () => {
 
     expect(v.severity).toBe('CRITICAL');
     expect(v.coverage).toBe('PARTIAL');
-    // Four unknowns now: the three undeclared plus the one that broke — and they are
+    // Three unknowns now: the two undeclared plus the one that broke — and they are
     // DISTINGUISHABLE, because a failed provider is an incident and an undeclared domain is a
     // conversation.
-    expect(v.unknown).toHaveLength(4);
+    expect(v.unknown).toHaveLength(3);
     expect(byId(v, 'commissioning-readiness')).toMatchObject({ state: 'UNKNOWN', cause: 'PROVIDER_UNAVAILABLE' });
     expect(byId(v, 'commissioning-readiness')?.reason).toMatch(/commissioning database unreachable/);
+  });
+
+  it('5. HSE reports its own condition, in its own words and at its own severity', async () => {
+    // The signal that was UNKNOWN until HSE declared what its records mean. Projects passes the
+    // verdict through: it does not know that a fatal incident outranks an overdue corrective
+    // action, and it must not learn.
+    const v = await build({
+      hse: { id: 'hse-exposure', domain: 'hse', state: 'CRITICAL', reason: '1 fatal incident under investigation.', href: '/project/p1/workspace/hse' },
+    }).assess(tenantId, projectId);
+
+    expect(v.severity).toBe('CRITICAL');
+    expect(v.concerns.find((c) => c.domain === 'hse')?.reason).toBe('1 fatal incident under investigation.');
+    expect(v.unknown.map((s) => s.domain).sort()).toEqual(['engineering', 'procurement']);
   });
 });
 

@@ -64,6 +64,8 @@ interface Evm {
   plannedValueStatus: 'available' | 'unavailable';
 }
 interface CertSummary { grossCertifiedToDate: number; retentionHeld: number; percentComplete: number; }
+/** One lifecycle move as the server judges it — the shape `GET /projects/:id/transitions` returns. */
+interface Transition { from: string; to: string; allowed: boolean; gaps: string[] }
 
 /**
  * The schedule. It existed behind /api/projects/schedules and no project surface read it, so the
@@ -122,6 +124,33 @@ const CONTROL_TABS: TabDef[] = [
   { id: 'closeout', label: 'Closeout' },
 ];
 
+/**
+ * The lifecycle states in the words a project manager uses.
+ *
+ * The stored values are the machine's; these are the reader's. Kept as a lookup with a fallback to
+ * the raw value so a state added on the server still renders — as itself rather than as nothing.
+ */
+const STATE_LABEL: Record<string, string> = {
+  planned: 'Planned',
+  planning: 'Planning',
+  active: 'In execution',
+  testing: 'Testing & commissioning',
+  handover: 'Handover',
+  closeout: 'Closeout',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+/** What pressing the button DOES, phrased as the act rather than as the destination. */
+const MOVE_LABEL: Record<string, string> = {
+  planning: 'Begin planning',
+  active: 'Start execution',
+  testing: 'Enter testing',
+  handover: 'Begin handover',
+  closeout: 'Start closeout',
+  completed: 'Complete project',
+};
+
 const VARIATION_COLUMNS: AuraColumn<Variation>[] = [
   { key: 'reference', label: 'Ref', priority: 'primary', sortable: true, render: (row) => <span style={{ fontFamily: 'ui-monospace, monospace' }}>{row.reference ?? '—'}</span> },
   { key: 'title', label: 'Title', sortable: true },
@@ -148,6 +177,18 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   const [costs, setCosts] = useState<CostTxn[]>([]);
   const [schedule, setSchedule] = useState<ProjectSchedule | null>(null);
   const [readiness, setReadiness] = useState<CloseoutReadiness | null>(null);
+  /**
+   * The moves this project can make, each with the server's verdict.
+   *
+   * Read, never computed. This page used to derive the lifecycle from `facts` it had loaded
+   * itself, which meant two implementations of the same rules — and they had already diverged:
+   * "Start execution" was offered unconditionally on a `planned` project, and the API then refused
+   * it for having no scope and no baseline. A button that fails when pressed is worse than no
+   * button, because the person has already decided to act.
+   */
+  const [transitions, setTransitions] = useState<Transition[]>([]);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
   const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'overview';
   const [tab, setTab] = useState<Tab>(validInitialTab);
   const [err, setErr] = useState('');
@@ -164,7 +205,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         return (await r.json()) as T;
       } catch { failures += 1; return fallback; }
     };
-    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, mapData, quantityData, costData, scheduleData, readinessData] = await Promise.all([
+    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, transitionData, mapData, quantityData, costData, scheduleData, readinessData] = await Promise.all([
       j<Variation[]>(`/api/projects/variations?projectId=${project.id}`, []),
       j<{ impact: VariationImpact } | null>(`/api/projects/variations/summary/${project.id}`, null),
       j<EotClaim[]>(`/api/projects/eot-claims?projectId=${project.id}`, []),
@@ -174,6 +215,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       project.contractId ? j<{ summary: CertSummary } | null>(`/api/contracts/certificates/summary/${project.contractId}`, null) : Promise.resolve(null),
       j<WbsNode[]>(`/api/projects/wbs?projectId=${project.id}`, []),
       j<CbsNode[]>(`/api/projects/cbs?projectId=${project.id}`, []),
+      j<Transition[]>(`/api/projects/projects/${project.id}/transitions`, []),
       j<DeliveryMap[]>(`/api/projects/delivery-item-maps?projectId=${project.id}`, []),
       j<QuantityTxn[]>(`/api/projects/quantity-ledger?projectId=${project.id}&limit=500`, []),
       j<CostTxn[]>(`/api/projects/cost-ledger?projectId=${project.id}&limit=500`, []),
@@ -203,6 +245,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     setCerts(certSummary?.summary ?? null);
     setWbs(Array.isArray(wbsData) ? wbsData : []);
     setCbs(Array.isArray(cbsData) ? cbsData : []);
+    setTransitions(Array.isArray(transitionData) ? transitionData : []);
     setMaps(Array.isArray(mapData) ? mapData : []);
     setQuantities(Array.isArray(quantityData) ? quantityData : []);
     setCosts(Array.isArray(costData) ? costData : []);
@@ -230,6 +273,21 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       router.refresh();
       return true;
     } catch { setErr('API unreachable'); return false; } finally { setBusy(false); }
+  };
+
+  /**
+   * Abandon the project, on the record.
+   *
+   * A separate route because it carries separate evidence. The reason is not a confirmation
+   * prompt — it is the field that makes `cancelled` answerable afterwards, so it is required here
+   * and required again at the API. Trimmed before sending: whitespace would satisfy a `required`
+   * check and tell a later reader nothing.
+   */
+  const cancelProject = async (): Promise<void> => {
+    const reason = cancelReason.trim();
+    if (!reason) { setErr('A reason is required to cancel a project.'); return; }
+    const ok = await call(`/api/projects/projects/${project.id}/cancel`, 'PATCH', { reason }, 'Project cancelled.');
+    if (ok) { setCancelling(false); setCancelReason(''); }
   };
 
   const setStatus = (status: string): void => {
@@ -325,22 +383,24 @@ export default function Project360Client({ project, initialTab }: { project: Pro
           : String(code)
   ));
 
-  // The lifecycle gate, rendered from the same conditions the action buttons obey, so the page
-  // cannot offer a transition it then refuses.
-  const gate: WorkflowGateView | undefined =
-    project.status === 'planned' ? { nextStage: 'Active', label: 'Start execution', allowed: true, gaps: [] }
-      : project.status === 'active' ? {
-        nextStage: 'Completed',
-        label: 'Complete the project',
-        allowed: facts.closeoutExists && facts.closeoutItems > 0 && facts.closeoutDone === facts.closeoutItems,
-        gaps: [
-          ...(!facts.closeoutExists ? ['No closeout checklist has been started'] : []),
-          ...(facts.closeoutExists && facts.closeoutDone < facts.closeoutItems ? [`${facts.closeoutItems - facts.closeoutDone} closeout item(s) outstanding`] : []),
-          ...(facts.variationsPending > 0 ? [`${facts.variationsPending} variation(s) awaiting decision`] : []),
-          ...(facts.eotsAwaitingDecision > 0 ? [`${facts.eotsAwaitingDecision} EOT claim(s) awaiting decision`] : []),
-        ],
-      }
-        : undefined;
+  /**
+   * The lifecycle gate — the server's verdict, restated, never recomputed.
+   *
+   * Cancellation is excluded on purpose: it is always allowed, so showing it as the gate would
+   * make the band read "you may proceed" on a project that cannot proceed to anything. The gate
+   * answers "what is the next stage, and may this project enter it?" — abandonment is not a stage.
+   */
+  const forward = transitions.filter((t) => t.to !== 'cancelled');
+  // The BLOCKED move first, deliberately. Preferring an allowed one made the band congratulate:
+  // a planned project can always "begin planning", so the band said proceed while the move the
+  // reader actually wanted — starting execution — was refused a few pixels away with its reasons
+  // buried in a tooltip. The obstacle is the useful thing to show.
+  const nextMove = forward.find((t) => !t.allowed) ?? forward[0];
+  const gate: WorkflowGateView | undefined = nextMove
+    ? { nextStage: STATE_LABEL[nextMove.to] ?? nextMove.to, label: MOVE_LABEL[nextMove.to] ?? `Move to ${nextMove.to}`, allowed: nextMove.allowed, gaps: nextMove.gaps }
+    : undefined;
+
+  const cancellable = transitions.some((t) => t.to === 'cancelled' && t.allowed);
 
   // Delivery lives in the project shell's own workspace sections; the record links to them rather
   // than duplicating registers that already have an owner.
@@ -357,14 +417,23 @@ export default function Project360Client({ project, initialTab }: { project: Pro
 
   const actions = (
     <>
-      {project.status === 'planned' && (
-        <ActionButton onClick={() => setStatus('active')} disabled={busy}>Start execution</ActionButton>
-      )}
-      {project.status === 'active' && (
-        <ActionButton onClick={() => setStatus('completed')} disabled={busy}>Complete project</ActionButton>
-      )}
-      {(project.status === 'planned' || project.status === 'active') && (
-        <ActionButton kind="ghost" onClick={() => setStatus('cancelled')} disabled={busy}>Cancel</ActionButton>
+      {/*
+        One button per move the server offers, in the server's order. A blocked move stays VISIBLE
+        and disabled with its reason attached, rather than being hidden: hiding it answers "why
+        can't I complete this project?" with silence, and the reason is the useful part.
+      */}
+      {forward.map((t) => (
+        <ActionButton
+          key={t.to}
+          onClick={() => setStatus(t.to)}
+          disabled={busy || !t.allowed}
+          title={t.allowed ? undefined : t.gaps.join(' · ')}
+        >
+          {MOVE_LABEL[t.to] ?? `Move to ${t.to}`}
+        </ActionButton>
+      ))}
+      {cancellable && (
+        <ActionButton kind="ghost" onClick={() => setCancelling(true)} disabled={busy}>Cancel project</ActionButton>
       )}
       {tab === 'variations' && <ActionButton kind="ghost" href="/projects/variations">Variations register</ActionButton>}
       {tab === 'closeout' && !closeout && (
@@ -381,12 +450,41 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       {msg && <div role="status" style={st.ok}>{msg}</div>}
       {loadFailures > 0 ? <DataDegradedNotice message={`${loadFailures} project-control data source${loadFailures === 1 ? ' is' : 's are'} unavailable. Available sections remain live.`} /> : null}
 
+      {cancelling && (
+        <div role="dialog" aria-label="Cancel project" data-testid="project-cancel-dialog" style={{ border: '1px solid var(--border)', background: 'var(--panel-2)', borderRadius: 8, padding: 16, marginBottom: 14 }}>
+          <h2 style={{ margin: '0 0 6px', fontSize: 15 }}>Cancel this project</h2>
+          <p style={{ ...st.muted, margin: '0 0 10px' }}>
+            Cancellation is recorded against you, with the stage the project was in and the reason
+            you give. It cannot be undone from here.
+          </p>
+          <label htmlFor="cancel-reason" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>Reason</label>
+          <input
+            id="cancel-reason"
+            data-testid="cancel-reason"
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Why is this project stopping?"
+            style={{ width: '100%', maxWidth: 520, padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--panel)', color: 'var(--text)' }}
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <ActionButton onClick={() => void cancelProject()} disabled={busy || !cancelReason.trim()}>Cancel project</ActionButton>
+            <ActionButton kind="ghost" onClick={() => { setCancelling(false); setCancelReason(''); }} disabled={busy}>Keep it open</ActionButton>
+          </div>
+        </div>
+      )}
+
       <RecordShell
         header={
           <RecordHeader
             title={project.title}
-            status={project.status}
-            statusTone={project.status === 'active' ? 'good' : project.status === 'completed' ? 'accent' : project.status === 'cancelled' ? 'bad' : 'neutral'}
+            status={STATE_LABEL[project.status] ?? project.status}
+            statusTone={project.status === 'active' ? 'good'
+              : project.status === 'completed' ? 'accent'
+                : project.status === 'cancelled' ? 'bad'
+                  // Testing, handover and closeout are the stages where a project is being handed
+                  // to someone else. They are not "fine" and not "finished" — warn reads them right.
+                  : project.status === 'testing' || project.status === 'handover' || project.status === 'closeout' ? 'warn'
+                    : 'neutral'}
             meta={[
               ...(project.reference ? [{ label: 'Ref', value: <span style={{ fontFamily: 'ui-monospace, monospace' }}>{project.reference}</span> }] : []),
               ...(project.accountName ? [{ label: 'Customer', value: project.accountId ? <a href={`/crm/accounts/${project.accountId}`} style={st.link}>{project.accountName}</a> : project.accountName }] : []),
@@ -637,6 +735,38 @@ function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Proje
       </div>
       <div>
         <h2 style={panelTitle}>WBS / CBS structure</h2>
+
+        {/*
+          Approving the opening baseline — the evidence execution is gated on.
+          Until this existed the gate was a dead end: it refused to start a project without an
+          approved baseline, and nothing in the app could produce one. A rule the product cannot
+          satisfy teaches people the product is broken, which is worse than having no rule.
+        */}
+        <div data-testid="wbs-baseline-control" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', margin: '10px 0 16px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--panel-2)' }}>
+          {project.wbsBaselineSnapshot?.baselineId ? (
+            <span style={{ fontSize: 13 }}>
+              <strong>Opening baseline approved</strong>
+              {project.wbsBaselineSnapshot.approvedAt ? ` · ${fmt(project.wbsBaselineSnapshot.approvedAt)}` : ''}
+              {project.wbsBaselineSnapshot.originalBac !== undefined ? ` · BAC AED ${aed(project.wbsBaselineSnapshot.originalBac)}` : ''}
+            </span>
+          ) : (
+            <>
+              <span style={{ ...st.muted, fontSize: 13 }}>
+                {wbs.length === 0
+                  ? 'Add at least one costed work package, then approve the opening baseline — execution is measured against it.'
+                  : 'No opening baseline yet. Approving one freezes the planned value of every leaf package as the measure performance is judged against.'}
+              </span>
+              <ActionButton
+                onClick={() => void call(`/api/projects/projects/${project.id}/wbs-baseline`, 'POST', {}, 'Opening baseline approved.')}
+                disabled={busy || wbs.length === 0}
+                title={wbs.length === 0 ? 'There are no work packages to baseline yet' : undefined}
+              >
+                Approve opening baseline
+              </ActionButton>
+            </>
+          )}
+        </div>
+
         <div style={authoringGrid}>
           <form data-testid="wbs-authoring-form" onSubmit={(e) => { e.preventDefault(); void createWbs(); }} style={authoringCard}>
             <h3 style={formTitle}>Add WBS node</h3>

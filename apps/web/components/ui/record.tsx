@@ -72,11 +72,33 @@ export function RecordHeader({
 
 // ── Action buttons (shared look) ────────────────────────────────────────────────
 export function ActionButton({
-  children, onClick, kind = 'ghost', disabled, href, target, rel,
-}: { children: ReactNode; onClick?: () => void; kind?: 'primary' | 'ghost'; disabled?: boolean; href?: string; target?: string; rel?: string }) {
+  children, onClick, kind = 'ghost', disabled, href, target, rel, title,
+}: {
+  children: ReactNode; onClick?: () => void; kind?: 'primary' | 'ghost'; disabled?: boolean;
+  href?: string; target?: string; rel?: string;
+  /**
+   * Why the button is disabled, when it is.
+   *
+   * A disabled control that says nothing makes the reader guess, and the guess is usually "this is
+   * broken". Carried as `title` AND `aria-label` so it reaches a mouse and a screen reader alike —
+   * browsers do not reliably surface a tooltip on a disabled button.
+   */
+  title?: string;
+}) {
   const style = kind === 'primary' ? rs.primaryBtn : rs.ghostBtn;
-  if (href) return <a href={href} target={target} rel={rel} style={{ ...style, textDecoration: 'none' }}>{children}</a>;
-  return <button type="button" onClick={onClick} disabled={disabled} style={style}>{children}</button>;
+  if (href) return <a href={href} target={target} rel={rel} title={title} style={{ ...style, textDecoration: 'none' }}>{children}</a>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title && disabled ? `${typeof children === 'string' ? children : 'Action'} — unavailable: ${title}` : undefined}
+      style={style}
+    >
+      {children}
+    </button>
+  );
 }
 
 // ── KPI row ──────────────────────────────────────────────────────────────────────

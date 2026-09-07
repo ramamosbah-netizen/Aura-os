@@ -19,7 +19,11 @@ describe('Project 360 canonical delivery contract', () => {
     }
     expect(source).toContain('PV / SV / SPI');
     expect(source).toContain('Unavailable — no time-phased baseline');
-    expect(source).toContain('Certified %');
+    // Certification used to be a single "Certified %" column, which read the same whether a
+    // quantity had been certified by the engineer or merely billed. The ledger now states the
+    // provenance instead, and the certified position keeps its own headline figure.
+    expect(source).toContain('CERTIFIED or BILLED (see provenance)');
+    expect(source).toContain('% of contract');
   });
 
   it('exposes only governed authoring and protects ledger-owned fields', () => {
@@ -43,7 +47,12 @@ describe('Project 360 canonical delivery contract', () => {
   });
 
   it('keeps Project 360 actions contextual while preserving domain ownership', () => {
-    const overview = readFileSync(OVERVIEW, 'utf8');
+    // These assertions used to read the /project/[projectId] route file, which held a second
+    // hand-written dashboard. That route now renders the same record as /controls, deliberately —
+    // a project had TWO overviews answering the same questions from different code. The actions
+    // moved with it, so this reads the record. What is being protected is unchanged: every action
+    // opens the module that OWNS the record, carrying this project as context.
+    const overview = readFileSync(CLIENT, 'utf8');
     for (const marker of [
       '/projects/schedule?projectId=',
       '/site/instructions?projectId=',
@@ -54,10 +63,13 @@ describe('Project 360 canonical delivery contract', () => {
       '/procurement/purchase-requests?projectId=',
       'Procurement & subcontracts',
       'Commercial & evidence',
-      'Project Action',
+      'Governed actions',
     ]) {
       expect(overview).toContain(marker);
     }
+    // The ownership statement itself, not just the links — this is the sentence that stops
+    // Project 360 drifting into being a second authority for other modules' records.
+    expect(overview).toContain('it does not take ownership of it');
     const subcontracts = readFileSync(resolve(__dirname, 'app/subcontracts/subcontracts/page.tsx'), 'utf8');
     expect(subcontracts).toContain('projectId ? `/api/subcontracts?projectId=');
     expect(subcontracts).toContain('initialProjectId={projectId || undefined}');
@@ -91,16 +103,34 @@ describe('Project 360 canonical delivery contract', () => {
     expect(legacy).toContain("tab === 'wbs' ? 'delivery' : tab");
     expect(legacy).toContain('/project/${encodeURIComponent(projectId)}/controls');
     const client = readFileSync(resolve(__dirname, 'components/project-360-client.tsx'), 'utf8');
-    for (const marker of ['project-controls-overview', 'CONTROL AREAS', 'The signals that keep delivery governed', 'Open WBS & CBS', 'Open Gantt schedule']) {
+    // The overview tab reports the delivery chain as EVIDENCE ("Not established" is a real
+    // answer, distinct from "empty") rather than as a list of control areas to visit. The two
+    // shortcuts the legacy links depended on — scope structure and the schedule — are still
+    // reachable from it, which is what these links actually need.
+    for (const marker of ['project-controls-overview', 'Delivery chain', 'Not established', 'Governed actions']) {
       expect(client).toContain(marker);
     }
+    expect(client).toContain("['Allocate scope value', `${base}/controls?tab=delivery`]");
+    expect(client).toContain("['Add task or milestone', `/projects/schedule?projectId=${id}`]");
   });
 
   it('presents Project 360 as a guided management cockpit', () => {
-    const overview = readFileSync(OVERVIEW, 'utf8');
-    for (const marker of ['Project 360 / Overview', 'Project health', 'Needs attention', 'Project timeline', 'Delivery status', 'Commercial &amp; control', 'Recent activity', 'Project Action', 'canonical owner']) {
-      expect(overview).toContain(marker);
+    // The cockpit is the shared record system, not a bespoke dashboard: the same header, band,
+    // KPIs and insight rail every other 360 uses. That is the point of the rebuild — one set of
+    // components answering "what is this, how is it doing, what do I do next" the same way
+    // everywhere, so the answers cannot drift per screen.
+    const client = readFileSync(CLIENT, 'utf8');
+    for (const marker of ['RecordShell', 'RecordHeader', 'RecordSituation', 'RecordNextAction', 'RecordHealth', 'RecordMissing', 'InsightsPanel']) {
+      expect(client).toContain(marker);
     }
+
+    // The route keeps the anchor the shell and the browser suite key off — reaching a delivery
+    // area through the shell rather than by typing a URL.
+    const overview = readFileSync(OVERVIEW, 'utf8');
+    expect(overview).toContain('data-testid="project-command-center"');
+    expect(overview).toContain('<Project360Client');
+    // And it must NOT grow a second dashboard again: no health thresholds computed in the route.
+    expect(overview).not.toMatch(/atRisk|spi <|cpi </i);
   });
 
   it('uses a direct Project 360 rail for project-level shortcuts', () => {

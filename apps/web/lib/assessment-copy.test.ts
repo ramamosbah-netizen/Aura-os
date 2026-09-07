@@ -43,8 +43,23 @@ describe('describeAssessment — the wording is the contract', () => {
   });
 
   it('every check code has a label — no code can render as a raw identifier', () => {
-    const codes: AssessmentCheckCode[] = ['QUALIFICATION', 'NEXT_ACTION', 'DEAL_ATTENTION', 'CUSTOMER_AWARD_EVIDENCE', 'CONTRACT_HANDOVER', 'APPROVAL_WORKFLOW', 'VALIDITY_DATES', 'PRICING_MARGIN', 'LEAD_QUALIFICATION', 'CONTACT_CHANNEL', 'FIRST_RESPONSE_SLA'];
-    for (const c of codes) expect(CHECK_LABEL[c]).toBeTruthy();
+    // Read from CHECK_LABEL rather than a hand-kept list. The list was copied from the union at a
+    // moment in time, so every code added since — the five project checks — made this test fail
+    // while proving nothing; a test that has to be edited whenever the thing it guards grows is
+    // not guarding it. The Record type already forces one label per code; what is worth asserting
+    // is that the labels are USABLE.
+    const codes = Object.keys(CHECK_LABEL) as AssessmentCheckCode[];
+    expect(codes.length).toBeGreaterThan(0);
+
+    for (const c of codes) {
+      const label = CHECK_LABEL[c];
+      expect(label, c).toBeTruthy();
+      // The actual defect this is named for: a code leaking into a sentence as SCREAMING_SNAKE.
+      expect(label, `${c} renders as a raw identifier`).not.toMatch(/^[A-Z][A-Z0-9_]*$/);
+    }
+
+    // Two codes reading the same would make "X has not been checked" ambiguous about which check
+    // was missed — the sentence would be grammatical and useless.
     expect(new Set(Object.values(CHECK_LABEL)).size).toBe(codes.length);
   });
 });

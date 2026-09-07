@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { apiAuthHeaders } from './api-auth';
 import { createActiveProject, runId, scoped } from './fixtures';
 
-const API_BASE = process.env.AURA_API_URL ?? 'http://localhost:4000';
 
 const PROJECT_TITLE = scoped('E2E Delivery Workspace');
 
@@ -143,42 +141,41 @@ test('project and operations share one usable delivery context', async ({ page, 
 
   await page.setViewportSize({ width: 1280, height: 900 });
 
-  // The command centre shows the TOP 8 active projects — at-risk first, then by title. That is a
-  // product decision, and a spec that asserts "my project is on this page" silently depends on it.
-  // It has already gone wrong once: suite runs had accumulated 29 active projects in a shared
-  // database, this project sorted to position 9, and a page that was working perfectly failed the
-  // spec. The afternoon spent looking for the defect is why the precondition is now checked out
-  // loud, against the same endpoint and the same ordering the page uses, before the assertions
-  // that depend on it.
+  // The command centre's "Active execution" panel lists active projects and links each into its
+  // site context. It renders only the first few, so a spec that asserts "MY project is on this
+  // page" is really asserting "my project happens to sort near the front" — a fact about how many
+  // OTHER projects a run created, not about the page. That broke twice: once on a shared database
+  // holding 29 active projects, once on a clean run whose own specs made 17. The page was working
+  // perfectly both times.
   //
-  // Read it from the API directly: the portfolio is a server-component read, and the BFF has no
-  // route for it — `/api/projects/projects/[id]` would take "portfolio" for an id.
-  const portfolio = await page.request.get(`${API_BASE}/api/v1/projects/projects/portfolio`, { headers: apiAuthHeaders() });
-  expect(portfolio.ok(), `the operations command centre reads the portfolio; ${API_BASE} answered ${portfolio.status()}`).toBe(true);
-  type PortfolioRow = { id: string; title: string; status?: string; atRisk?: boolean };
-  const visible = ((await portfolio.json()) as PortfolioRow[])
-    .filter((p) => p.status === 'active')
-    .sort((a, b) => Number(b.atRisk) - Number(a.atRisk) || a.title.localeCompare(b.title));
-  const position = visible.findIndex((p) => p.id === project.id) + 1;
-  expect(
-    position > 0 && position <= 8,
-    `this project sorts to position ${position} of ${visible.length} active projects, and the ` +
-      'command centre renders only the first 8 — so the assertions below would fail for a reason ' +
-      'that has nothing to do with the page. The database is not disposable, or this run created ' +
-      'more projects than it should have.',
-  ).toBe(true);
-
+  // The previous guard modelled the page as the portfolio ranked at-risk-first then by title, top
+  // 8. It is not: the panel takes the first SIX from a plain project list, and the titles a naive
+  // `toContainText` matches come from the filter dropdown, which lists every project whether the
+  // panel shows it or not — so that assertion passed for reasons unrelated to what it claimed.
+  //
+  // So this drives the page's own filter instead. `?project=` is a real control on the screen, it
+  // narrows the panel to one project, and the result cannot be perturbed by anything else the
+  // suite creates. Same intent as the original — this project and operations share one delivery
+  // context — asserted in a way that stays true on run 2 and on run 200.
   await page.goto('/operations/overview', { waitUntil: 'domcontentloaded' });
   // Renamed to `delivery-operations-overview` — `operations-command-center` exists nowhere in the
   // source any more, only here.
   const operations = page.getByTestId('delivery-operations-overview');
   await expect(operations).toBeVisible();
-  await expect(operations).toContainText(PROJECT_TITLE);
-  // The overview surfaces the project in several panels — one links to the project root, another
-  // deep-links to /site — so ordering is the wrong way to pick. Select by the href being asserted:
-  // the command centre must offer a way back to the project it is reporting on.
-  // Prefix, not exact: the command centre deep-links into the project's Site area rather than its
-  // root, which is the more useful destination from a delivery view. What has to hold is that the
-  // link goes to THIS project — the id is the assertion, the landing section is a product choice.
-  await expect(operations.locator(`a[href^="/project/${project.id}"]`).first()).toBeVisible();
+  // Unfiltered, the panel must be doing its job for somebody: at least one project, with a way in.
+  await expect(operations.locator('a[href^="/project/"]').first()).toBeVisible();
+
+  await page.goto(`/operations/overview?project=${project.id}`, { waitUntil: 'domcontentloaded' });
+  const filtered = page.getByTestId('delivery-operations-overview');
+  await expect(filtered).toBeVisible();
+  // .first(): the filtered overview links this project from BOTH the execution panel and the
+  // pre-execution readiness panel. Two ways in is the product working, not an ambiguity to resolve.
+  await expect(filtered.getByRole('link', { name: new RegExp(PROJECT_TITLE) }).first()).toBeVisible();
+  // Prefix, not exact: the panel deep-links into the project's Site area rather than its root,
+  // which is the more useful destination from a delivery view. The id is the assertion; the
+  // landing section is a product choice.
+  await expect(
+    filtered.locator(`a[href^="/project/${project.id}"]`).first(),
+    'the command centre offers no way back into the project it is reporting on',
+  ).toBeVisible();
 });

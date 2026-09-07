@@ -166,7 +166,14 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       j<DeliveryMap[]>(`/api/projects/delivery-item-maps?projectId=${project.id}`, []),
       j<QuantityTxn[]>(`/api/projects/quantity-ledger?projectId=${project.id}&limit=500`, []),
       j<CostTxn[]>(`/api/projects/cost-ledger?projectId=${project.id}&limit=500`, []),
-      j<ProjectSchedule[]>(`/api/projects/schedules?projectId=${project.id}`, []),
+      // Absence is an answer here, not a failure: most projects have no schedule yet, and counting
+      // that as an unavailable source would make the degradation notice permanent and ignorable.
+      (async () => {
+        try {
+          const r = await fetch(`/api/projects/schedules?projectId=${project.id}`, { cache: 'no-store' });
+          return r.ok ? ((await r.json()) as ProjectSchedule[]) : [];
+        } catch { return [] as ProjectSchedule[]; }
+      })(),
     ]);
     setVariations(Array.isArray(vs) ? vs : []);
     setImpact(imp?.impact ?? null);
@@ -315,18 +322,6 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   // than duplicating registers that already have an owner.
   const related: RelatedGroup[] = [
     {
-      label: 'Delivery',
-      icon: '▥',
-      items: [
-        { code: 'Engineering', href: `/project/${project.id}/workspace/engineering`, meta: 'Drawings, RFIs, submittals' },
-        { code: 'Quality', href: `/project/${project.id}/workspace/quality`, meta: 'Inspections, NCRs, snags' },
-        { code: 'HSE', href: `/project/${project.id}/workspace/hse`, meta: 'Permits, incidents, CAPA' },
-        { code: 'Site', href: `/project/${project.id}/workspace/site`, meta: 'Instructions, daily reports, progress' },
-        { code: 'Testing & commissioning', href: `/project/${project.id}/workspace/testing`, meta: 'System readiness and sign-off' },
-        { code: 'Documents', href: `/project/${project.id}/workspace/documents`, meta: 'Controlled project information' },
-      ],
-    },
-    {
       label: 'Commercial context',
       icon: '◈',
       items: [
@@ -398,7 +393,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         activeTab={tab}
         onTab={(id) => setTab(id as Tab)}
         aside={<InsightsPanel insights={insights} assessment={assessment.coverage} context="this project" />}
-        related={{ title: 'Where the work lives', groups: related }}
+        related={related.length ? { title: 'Where this project came from', groups: related } : undefined}
       >
         {tab === 'overview' && <ControlsOverviewPanel project={project} wbs={wbs} cbs={cbs} maps={maps} variations={variations} impact={impact} evm={evm} closeout={closeout} closeoutDone={closeoutDone} />}
         {tab === 'delivery' && <DeliveryPanel project={project} wbs={wbs} cbs={cbs} maps={maps} busy={busy} call={call} />}
@@ -747,6 +742,23 @@ function ProgressPanel({
   call: Action;
 }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
+
+  /**
+   * Why a package's progress is not editable, or null when it is.
+   *
+   * These mirror `WbsService.updateProgress`, which throws on both when the authority is manual:
+   * a node carrying a DeliveryItemMap earns from the installed quantity recorded on site, and a
+   * node with children earns by roll-up. Offering an input the server will refuse is the
+   * "click and hope" failure this codebase keeps having to fix — and here it would be worse than
+   * a swallowed click, because the number typed would look authored until the save came back.
+   */
+  const parents = new Set(wbs.map((n) => n.parentId).filter((id): id is string => id !== null));
+  const mapped = new Set(maps.map((m) => m.wbsNodeId).filter((id): id is string => id !== null));
+  const governance = (node: WbsNode): string | null =>
+    mapped.has(node.id) ? 'derived from installed quantity'
+      : parents.has(node.id) ? 'rolled up from children'
+        : null;
+
   const tasks = schedule?.tasks ?? [];
   const slip = tasks.reduce((worst, t) => {
     if (!t.baselineEnd) return worst;
@@ -818,6 +830,7 @@ function ProgressPanel({
               <tbody>
                 {wbs.map((node) => {
                   const pending = draft[node.id];
+                  const governed = governance(node);
                   return (
                     <tr key={node.id}>
                       <td style={cellMono}>{node.code}</td>
@@ -825,27 +838,36 @@ function ProgressPanel({
                       <td style={{ textAlign: 'right' }}>{node.plannedValueKnown === false ? 'Unknown' : `AED ${aed(node.plannedValue)}`}</td>
                       <td style={{ textAlign: 'right' }}>AED {aed(node.earnedValue)}</td>
                       <td>
-                        <input
-                          aria-label={`${node.code} progress`}
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="1"
-                          disabled={busy}
-                          value={pending ?? String(node.progress)}
-                          onChange={(e) => setDraft((d) => ({ ...d, [node.id]: e.target.value }))}
-                          style={{ width: 80 }}
-                        />
-                        <span style={st.muted}> %</span>
+                        {governed ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+                            <strong>{node.progress}%</strong>
+                            <span style={{ ...st.muted, fontSize: 12 }}>{governed}</span>
+                          </span>
+                        ) : (
+                          <>
+                            <input
+                              aria-label={`${node.code} progress`}
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              disabled={busy}
+                              value={pending ?? String(node.progress)}
+                              onChange={(e) => setDraft((d) => ({ ...d, [node.id]: e.target.value }))}
+                              style={{ width: 80 }}
+                            />
+                            <span style={st.muted}> %</span>
+                          </>
+                        )}
                       </td>
                       <td>
-                        {pending !== undefined && pending !== String(node.progress) && (
+                        {!governed && pending !== undefined && pending !== String(node.progress) && (
                           <ActionButton
                             disabled={busy}
                             onClick={async () => {
                               const value = Number(pending);
                               if (!Number.isFinite(value) || value < 0 || value > 100) return;
-                              if (await call(`/api/projects/wbs/${node.id}/progress`, 'PUT', { progress: value }, `${node.code} progress updated.`)) {
+                              if (await call(`/api/projects/wbs/${node.id}/progress`, 'PATCH', { progress: value }, `${node.code} progress updated.`)) {
                                 setDraft((d) => { const next = { ...d }; delete next[node.id]; return next; });
                               }
                             }}
@@ -861,9 +883,15 @@ function ProgressPanel({
             </table>
           )}
           <p style={st.muted}>
-            Progress drives earned value, and earned value drives CPI and SPI. Actual cost is not
-            editable here on purpose: it is a Cost Ledger projection, and typing over a projection
-            would make the two disagree.
+            Progress drives earned value, and earned value drives CPI and SPI. Two kinds of package
+            are read-only here, and the domain refuses a manual write to either
+            (<code>wbs.service.ts</code>): one mapped to a commercial item earns from the installed
+            quantity recorded on site, and a parent earns from its children. Typing over those would
+            be authoring a number the ledger already owns.
+          </p>
+          <p style={st.muted}>
+            Actual cost is not editable at all: it is a Cost Ledger projection, and typing over a
+            projection would make the two disagree.
           </p>
         </RecordCard>
       </CardGrid>

@@ -77,11 +77,16 @@ test('project and operations share one usable delivery context', async ({ page, 
   // claims are made against the record's own structure: it composes the delivery workspaces rather
   // than duplicating their registers, and it carries the attention rail on every tab.
   //
-  // Asserted by landmark rather than by copy — heading text is the part most likely to be reworded
-  // next, and it is not what this test is about.
-  await expect(page.getByRole('heading', { name: 'Where the work lives' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /^Engineering/ }).first()).toBeVisible();
+  // Asserted by landmark rather than by copy. This block was written once against a heading the
+  // record carried for an hour: the rebuilt 360 briefly listed the six delivery workspaces itself,
+  // until a screenshot showed the project shell rendering the SAME grid directly beneath it. The
+  // links were removed as the duplication they were, and this assertion went with them — which is
+  // the argument for landmarks made twice in one afternoon.
+  //
+  // What is durable: the record's own tab panel is present, and the shell — not the record —
+  // is what offers the delivery workspaces on this route.
   await expect(page.getByTestId('project-controls-overview')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Project 360 navigation' })).toBeVisible();
 
   // The launcher is named "Project 360 navigation" now, and Project controls was folded into
   // "Plan & Control" at /workspace/plan — see project-shell.tsx:54, which still treats the older

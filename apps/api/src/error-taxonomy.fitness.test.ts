@@ -25,6 +25,15 @@ const INTERNAL_ALLOWLIST: RegExp[] = [
   /^X — the app role holds no DDL rights/, // same boot-time path: the DDL-privilege hint the gate logs, never a response
   /^pricing sheet total X does not reproduce the decided selling price X$/, // internal invariant: the two estimation engines must agree; a mismatch is a bug, not client input
   /^config: /, // boot-time configuration gate (e.g. the Slice 8 tx-posture guard) — thrown in bootstrap before any request is served, never a client response
+  // Missing collaborators, not missing data. A service whose optional port was never bound is a
+  // composition-root defect: no request body could have caused it and no caller can act on it, so
+  // 500-and-log is the honest answer. Distinct from "frozen item evidence is unavailable", which
+  // IS about this project's data and answers 409.
+  /^project store is unavailable$/,
+  /^canonical approval service unavailable$/,
+  // A row that vanished between the conflicting insert and the read-back — a storage-layer
+  // invariant nobody can satisfy by changing their request.
+  /^delivery item mapping insert was not observable after conflict$/,
 ];
 
 function tsFiles(dir: string): string[] {

@@ -27,10 +27,23 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // 404 — absent aggregates and absent prerequisite data.
   if (/not found|no longer exists|^no (payroll|schedule|.* records?|.* runs?)\b/i.test(m)) return { status: 404, code: 'NOT_FOUND' };
 
+  // 403 — authorization expressed as a role fact rather than as a grant check.
+  if (/is not an approver\b/i.test(m)) return { status: 403, code: 'FORBIDDEN' };
+
   // 409 — state-transition guards: the request is well-formed but the aggregate's current
   // state forbids it ("only a draft agreement can be activated", "is already disposed", …).
   if (
     /\balready\b|\blineage\b.*\bwithout\b|is closed|is inactive|is not (in|active|approved)|is not a locked|immutable after handover|require(?:s)? a signed contract|\bonly\b.*\bcan\b|can only\b|requires approval|approval blocked|readiness checklist|below the required|insufficient|outside its validity|belongs to another/i.test(m)
+    // Immutability and concurrency. A signed revision, an approved baseline and a certified
+    // payment certificate all refuse the same way: the record is closed to further writes, or
+    // someone else moved it first. The caller must re-read and use the governed correction path.
+    || /\bis immutable\b|changed concurrently|^conflicting\b|dedupe conflict/i.test(m)
+    // Ownership boundaries between ledgers. "CBS actual cost is Cost Ledger-owned; post a
+    // canonical CostTransaction" is not bad input — it is a write aimed at the wrong authority.
+    || /-owned;|is not allowed for\b/i.test(m)
+    // Prerequisites the aggregate needs and does not have: no frozen evidence, no FX rate, no
+    // handover, a closeout that is not ready. The request is well-formed; the state is not.
+    || /\bis unavailable\b|\bis not ready\b|\bis not prepared\b|\bapproval not submitted\b|only available\b|has no immutable\b/i.test(m)
   ) {
     return { status: 409, code: 'CONFLICT' };
   }
@@ -41,6 +54,11 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // and "not linked to a quotation yet — create the quote shell first".
   if (
     /required|requires\b|\bmust\b|invalid|cannot|expected|validation failed|exceeds\b|out of range|needs a\b|needs at least|duplicate\b|dependency cycle|would create a cycle|gate blocked|no lines?\b|missing\b|negative\b|unknown\b|nothing to \w+|not linked|no earlier version/i.test(m)
+    // References that name the wrong record, and evidence that contradicts the frozen snapshot.
+    // These are all "what you sent does not line up with what is on file" — the caller fixes the
+    // request, not the aggregate — which is what separates them from the 409s above.
+    || /does not belong to\b|does not match\b|does not resolve to\b|is not present in\b|does not reproduce\b/i.test(m)
+    || /\bis incomplete\b|\bis inconsistent\b|is not a valid\b|is not a \w+ fact\b/i.test(m)
   ) {
     return { status: 400, code: 'VALIDATION' };
   }

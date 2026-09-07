@@ -186,7 +186,7 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
                       <td>{aed(q.subtotal)}</td>
                       <td style={{ color: 'var(--muted)' }}>{aed(q.vatTotal)}</td>
                       <td style={{ fontWeight: 600 }}>{aed(q.total)}</td>
-                      <td style={{ whiteSpace: 'nowrap', color: expiredDate ? 'var(--bad)' : expiring ? 'var(--warn, var(--warn))' : 'var(--muted)' }}>
+                      <td style={{ whiteSpace: 'nowrap', color: expiredDate ? 'var(--bad)' : expiring ? 'var(--warn)' : 'var(--muted)' }}>
                         {q.validUntil ?? '—'}{expiring ? ' ⚠' : ''}{expiredDate ? ' ✗' : ''}
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>

@@ -432,7 +432,7 @@ const st = {
   input: { flex: '1 1 200px', minWidth: 140, padding: '6px 9px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12.5 } as CSSProperties,
   qtyIn: { flex: '0 1 90px', width: 90, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12 } as CSSProperties,
   btn: { fontSize: 12, padding: '5px 11px', borderRadius: 6, border: '1px solid var(--text)', background: 'var(--text)', color: 'var(--panel)', cursor: 'pointer' } as CSSProperties,
-  btnAccent: { fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--accent)', color: '#fff', cursor: 'pointer', alignSelf: 'flex-start' } as CSSProperties,
+  btnAccent: { fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--accent)', color: 'var(--accent-ink)', cursor: 'pointer', alignSelf: 'flex-start' } as CSSProperties,
   btnGhost: { fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', cursor: 'pointer' } as CSSProperties,
   // Editable draft basis (D1) + unknown-quantity surfacing (D2/D3).
   warnLine: { fontSize: 12, color: 'var(--warn)', margin: '6px 0 0' } as CSSProperties,

@@ -139,7 +139,7 @@ const s = {
   field: { display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 200 } as CSSProperties,
   label: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   input: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 14 } as CSSProperties,
-  primary: { background: 'var(--accent)', border: 'none', borderRadius: 10, color: '#fff', padding: '11px 16px', fontSize: 14.5, cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-start' } as CSSProperties,
+  primary: { background: 'var(--accent)', border: 'none', borderRadius: 10, color: 'var(--accent-ink)', padding: '11px 16px', fontSize: 14.5, cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-start' } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13.5, margin: '10px 2px' } as CSSProperties,
   result: { marginTop: 18, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 } as CSSProperties,
   amount: { fontSize: 34, fontWeight: 700, color: 'var(--good)', letterSpacing: -1 } as CSSProperties,

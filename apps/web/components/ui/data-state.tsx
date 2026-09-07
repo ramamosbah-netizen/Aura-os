@@ -158,8 +158,8 @@ const st: Record<string, CSSProperties> = {
   },
   emptyLook: { borderColor: 'var(--border)', background: 'var(--panel)' },
   // Denied is not a fault — it is the system working. Amber, not red.
-  denied: { borderColor: 'rgba(245,158,11,.4)', background: 'rgba(245,158,11,.06)' },
-  failed: { borderColor: 'rgba(239,68,68,.4)', background: 'rgba(239,68,68,.06)' },
+  denied: { borderColor: 'var(--warn-soft)', background: 'var(--warn-soft)' },
+  failed: { borderColor: 'var(--bad-soft)', background: 'var(--bad-soft)' },
   degraded: { display: 'flex', alignItems: 'center', gap: 9, border: '1px solid color-mix(in srgb, var(--warn) 42%, transparent)', borderRadius: 10, background: 'var(--warn-soft)', color: 'var(--text)', fontSize: 13 },
   icon: { fontSize: 22, lineHeight: 1 },
   title: { fontSize: 15, margin: 0, fontWeight: 700 },

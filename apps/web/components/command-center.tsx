@@ -460,7 +460,7 @@ const s = {
     height: 22,
     borderRadius: '50%',
     background: 'var(--accent)',
-    color: '#fff',
+    color: 'var(--accent-ink)',
     fontSize: 12,
     fontWeight: 700,
     display: 'grid',

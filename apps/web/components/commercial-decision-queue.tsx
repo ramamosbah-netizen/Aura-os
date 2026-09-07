@@ -221,7 +221,7 @@ const st = {
   arrow: { color: 'var(--muted)' } as CSSProperties,
   actions: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' } as CSSProperties,
   actionNote: { color: 'var(--muted)', fontSize: 11.5, flex: '1 1 220px' } as CSSProperties,
-  approve: { background: 'var(--good)', border: 'none', borderRadius: 8, color: '#04210f', padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  approve: { background: 'var(--good)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   ghost: { background: 'var(--panel-2)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text)', padding: '8px 14px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   settled: { color: 'var(--good)', fontSize: 13 } as CSSProperties,
   openLink: { color: 'var(--accent)', textDecoration: 'none', fontSize: 12.5 } as CSSProperties,

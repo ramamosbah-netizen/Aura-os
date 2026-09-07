@@ -203,8 +203,8 @@ const s = {
   healthBadge: (healthy: boolean): CSSProperties => ({
     fontSize: 11,
     fontWeight: 700,
-    color: healthy ? 'var(--good)' : '#dc3545',
-    background: healthy ? 'rgba(40,167,69,0.1)' : 'rgba(220,53,69,0.1)',
+    color: healthy ? 'var(--good)' : 'var(--bad)',
+    background: healthy ? 'var(--good-soft)' : 'var(--bad-soft)',
     borderRadius: 6,
     padding: '3px 8px',
     textTransform: 'uppercase',

@@ -82,14 +82,14 @@ export default function CommissioningActions({
 }
 
 const st = {
-  wrap: { display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, background: 'var(--surface, rgba(0,0,0,.02))' } as CSSProperties,
+  wrap: { display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, background: 'var(--surface, var(--panel-2))' } as CSSProperties,
   group: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border, #d1d5db)', fontSize: 13, background: 'var(--bg, #fff)', color: 'inherit', minWidth: 180 } as CSSProperties,
-  primary: { padding: '8px 14px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' } as CSSProperties,
-  primaryDim: { background: '#94a3b8' } as CSSProperties,
-  punchGate: { fontSize: 13, color: '#d97706', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } as CSSProperties,
+  primary: { padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--good)', color: 'var(--accent-ink)', fontWeight: 600, fontSize: 13, cursor: 'pointer' } as CSSProperties,
+  primaryDim: { background: 'var(--muted)' } as CSSProperties,
+  punchGate: { fontSize: 13, color: 'var(--warn)', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } as CSSProperties,
   closeBtn: { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border, #d1d5db)', background: 'var(--bg, #fff)', color: 'inherit', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   locked: { color: 'var(--muted)', fontSize: 13 } as CSSProperties,
   hint: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
-  error: { color: '#dc2626', fontSize: 13, fontWeight: 600 } as CSSProperties,
+  error: { color: 'var(--bad)', fontSize: 13, fontWeight: 600 } as CSSProperties,
 };

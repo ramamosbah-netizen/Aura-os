@@ -101,7 +101,7 @@ export default function SubVariationsClient({ initialVariations, subcontracts }:
                 <td style={st.td}>{subLabel(v.subcontractId)}</td>
                 <td style={st.td}>{v.type}</td>
                 <td style={{ ...st.td, color: v.type === 'omission' ? 'var(--bad)' : 'var(--good)' }}>{v.type === 'omission' ? '−' : '+'}{v.amount.toLocaleString()}</td>
-                <td style={{ ...st.td, color: statusColor[v.status] || '#000', fontWeight: 600 }}>{v.status}</td>
+                <td style={{ ...st.td, color: statusColor[v.status] || 'var(--text)', fontWeight: 600 }}>{v.status}</td>
                 <td style={st.td}>
                   {v.status === 'pending' && <button style={st.smGreen} onClick={() => act(v.id, 'approve')}>Approve</button>}
                   {v.status === 'pending' && <button style={st.smRed} onClick={() => act(v.id, 'reject')}>Reject</button>}
@@ -123,7 +123,7 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 22 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 130 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: 'var(--accent-ink)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
   smRed: { padding: '4px 10px', borderRadius: 4, background: 'var(--bad)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,

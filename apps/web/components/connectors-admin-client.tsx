@@ -146,5 +146,5 @@ const st = {
   input: { flex: 1, minWidth: 130, padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--panel-2)', color: 'inherit', fontSize: 13 } as CSSProperties,
   btn: { padding: '7px 14px', border: '1px solid var(--accent)', borderRadius: 6, background: 'var(--accent-grad)', color: 'var(--accent-ink)', fontWeight: 700, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   btnGhost: { padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'transparent', color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
-  err: { padding: '10px 12px', border: '1px solid #ef4444', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: '#ef4444', marginBottom: 16, fontSize: 13 } as CSSProperties,
+  err: { padding: '10px 12px', border: '1px solid var(--bad)', borderRadius: 8, background: 'var(--bad-soft)', color: 'var(--bad)', marginBottom: 16, fontSize: 13 } as CSSProperties,
 };

@@ -193,7 +193,7 @@ const s = {
   itemVal: { fontSize: 14, fontWeight: 700 } as CSSProperties,
   btnPay: {
     background: 'var(--good)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 6,
@@ -202,9 +202,9 @@ const s = {
     cursor: 'pointer',
   } as CSSProperties,
   error: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,

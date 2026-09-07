@@ -113,9 +113,9 @@ const st = {
   wrap: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 18 } as CSSProperties,
   group: { display: 'flex', gap: 8, alignItems: 'center' } as CSSProperties,
   input: { border: '1px solid var(--border, #d1d5db)', borderRadius: 8, padding: '8px 11px', fontSize: 13.5, minWidth: 160 } as CSSProperties,
-  primary: { background: 'var(--accent, #2563eb)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
+  primary: { background: 'var(--accent, #2563eb)', color: 'var(--text)', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' } as CSSProperties,
   ghost: { background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border, #d1d5db)', borderRadius: 8, padding: '9px 14px', fontSize: 13.5, cursor: 'pointer' } as CSSProperties,
-  danger: { background: 'transparent', color: '#dc2626', border: '1px solid rgba(239,68,68,.5)', borderRadius: 8, padding: '9px 14px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  danger: { background: 'transparent', color: 'var(--bad)', border: '1px solid var(--bad-soft)', borderRadius: 8, padding: '9px 14px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   terminal: { color: 'var(--muted)', fontSize: 13, margin: 0, width: '100%' } as CSSProperties,
-  error: { color: '#dc2626', fontSize: 13, margin: 0, width: '100%' } as CSSProperties,
+  error: { color: 'var(--bad)', fontSize: 13, margin: 0, width: '100%' } as CSSProperties,
 };

@@ -559,7 +559,7 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
                       <td style={{ color: 'var(--muted)' }}>{b.bank ?? '—'}</td>
                       <td style={{ fontWeight: 600 }}>AED {aed(b.amount)}</td>
                       <td style={{ color: 'var(--muted)' }}>{b.issueDate ?? '—'}</td>
-                      <td style={{ color: expPast ? 'var(--bad)' : expSoon ? 'var(--warn, var(--warn))' : 'var(--muted)', fontWeight: expPast || expSoon ? 700 : 400 }}>
+                      <td style={{ color: expPast ? 'var(--bad)' : expSoon ? 'var(--warn)' : 'var(--muted)', fontWeight: expPast || expSoon ? 700 : 400 }}>
                         {b.expiryDate ?? '—'}{expSoon ? ' ⚠' : ''}{expPast ? ' ✗' : ''}
                       </td>
                       <td><span className={b.status === 'active' ? 'badge badge-good' : b.status === 'called' ? 'badge badge-bad' : 'badge'}>{b.status}</span></td>

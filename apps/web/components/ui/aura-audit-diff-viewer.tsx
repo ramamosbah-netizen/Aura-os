@@ -65,10 +65,10 @@ export default function AuraAuditDiffViewer({
             <thead>
               <tr>
                 <th style={{ ...st.th, width: '25%' }}>Field Name</th>
-                <th style={{ ...st.th, width: '37.5%', background: 'var(--bad-soft, rgba(220,53,69,0.08))', color: 'var(--bad)' }}>
+                <th style={{ ...st.th, width: '37.5%', background: 'var(--bad-soft)', color: 'var(--bad)' }}>
                   🔴 Previous Value (Before)
                 </th>
-                <th style={{ ...st.th, width: '37.5%', background: 'var(--good-soft, rgba(40,167,69,0.08))', color: 'var(--good)' }}>
+                <th style={{ ...st.th, width: '37.5%', background: 'var(--good-soft)', color: 'var(--good)' }}>
                   🟢 New Value (After)
                 </th>
               </tr>
@@ -112,7 +112,7 @@ const st = {
   overlay: {
     position: 'fixed',
     top: 0, left: 0, right: 0, bottom: 0,
-    background: 'rgba(0, 0, 0, 0.65)',
+    background: 'var(--overlay)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -156,12 +156,12 @@ const st = {
   row: { borderBottom: '1px solid var(--border)' } as CSSProperties,
   td: { padding: '10px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   tdField: { padding: '10px 12px', fontWeight: 600, color: 'var(--text)' } as CSSProperties,
-  tdOld: { padding: '10px 12px', background: 'rgba(220, 53, 69, 0.03)' } as CSSProperties,
-  tdNew: { padding: '10px 12px', background: 'rgba(40, 167, 69, 0.03)' } as CSSProperties,
+  tdOld: { padding: '10px 12px', background: 'var(--bad-soft)' } as CSSProperties,
+  tdNew: { padding: '10px 12px', background: 'var(--good-soft)' } as CSSProperties,
   oldBadge: {
     color: 'var(--bad)',
     textDecoration: 'line-through',
-    background: 'var(--bad-soft, rgba(220,53,69,0.1))',
+    background: 'var(--bad-soft)',
     padding: '2px 8px',
     borderRadius: 6,
     fontSize: 12,
@@ -169,7 +169,7 @@ const st = {
   } as CSSProperties,
   newBadge: {
     color: 'var(--good)',
-    background: 'var(--good-soft, rgba(40,167,69,0.1))',
+    background: 'var(--good-soft)',
     padding: '2px 8px',
     borderRadius: 6,
     fontSize: 12,

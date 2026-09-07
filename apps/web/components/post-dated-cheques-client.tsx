@@ -21,7 +21,7 @@ interface PostDatedCheque {
 type Action = 'deposit' | 'clear' | 'bounce' | 'represent' | 'cancel';
 
 const statusColor: Record<string, string> = {
-  pending: 'var(--accent)', deposited: '#7c3aed', cleared: 'var(--good)', bounced: 'var(--bad)', cancelled: 'var(--muted)',
+  pending: 'var(--accent)', deposited: 'var(--accent)', cleared: 'var(--good)', bounced: 'var(--bad)', cancelled: 'var(--muted)',
 };
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -146,7 +146,7 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
                   <td style={{ ...st.td, color: soon ? 'var(--warn)' : undefined, fontWeight: soon ? 600 : 400 }}>
                     {c.maturityDate}{c.status === 'pending' && ` (${d}d)`}
                   </td>
-                  <td style={{ ...st.td, color: statusColor[c.status] || '#000', fontWeight: 600 }}>
+                  <td style={{ ...st.td, color: statusColor[c.status] || 'var(--text)', fontWeight: 600 }}>
                     {c.status}{c.bounceCount > 0 && <span style={st.bounce}> ×{c.bounceCount}</span>}
                   </td>
                   <td style={st.td}>
@@ -165,8 +165,8 @@ export default function PostDatedChequesClient({ initialCheques }: { initialCheq
 }
 
 function btnStyle(a: Action): CSSProperties {
-  const bg = a === 'clear' ? 'var(--good)' : a === 'bounce' ? 'var(--bad)' : a === 'deposit' ? '#7c3aed' : a === 'represent' ? 'var(--accent)' : 'var(--panel-2)';
-  const color = a === 'cancel' ? 'inherit' : '#fff';
+  const bg = a === 'clear' ? 'var(--good)' : a === 'bounce' ? 'var(--bad)' : a === 'deposit' ? 'var(--accent)' : a === 'represent' ? 'var(--accent)' : 'var(--panel-2)';
+  const color = a === 'cancel' ? 'inherit' : 'var(--accent-ink)';
   return { padding: '4px 10px', borderRadius: 4, background: bg, color, border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 };
 }
 
@@ -178,7 +178,7 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 10 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 110 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: 'var(--accent-ink)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13 } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,

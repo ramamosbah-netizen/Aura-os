@@ -156,7 +156,7 @@ const s = {
     padding: '4px 10px',
     cursor: 'pointer',
   } as CSSProperties,
-  chipActive: { background: 'var(--accent)', color: '#0b0e14', border: '1px solid var(--accent)', fontWeight: 600 } as CSSProperties,
+  chipActive: { background: 'var(--accent)', color: 'var(--accent-ink)', border: '1px solid var(--accent)', fontWeight: 600 } as CSSProperties,
   chipCount: { opacity: 0.7, fontSize: 11 } as CSSProperties,
   empty: { color: 'var(--muted)', margin: '6px 0 0', fontSize: 13 } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 340, overflowY: 'auto' } as CSSProperties,

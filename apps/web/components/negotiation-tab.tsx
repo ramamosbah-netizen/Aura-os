@@ -374,7 +374,7 @@ const st = {
   select: { background: 'var(--panel-2)', border: '1px solid var(--border-strong)', borderRadius: 7, color: 'var(--text)', padding: '6px 9px', fontSize: 12.5 } as CSSProperties,
   num: { background: 'var(--panel-2)', border: '1px solid var(--border-strong)', borderRadius: 7, color: 'var(--text)', padding: '6px 9px', fontSize: 12.5, width: 92 } as CSSProperties,
   textarea: { background: 'var(--panel-2)', border: '1px solid var(--border-strong)', borderRadius: 7, color: 'var(--text)', padding: '7px 9px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical' } as CSSProperties,
-  record: { background: 'var(--accent)', border: 'none', borderRadius: 7, color: '#08121f', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  record: { background: 'var(--accent)', border: 'none', borderRadius: 7, color: 'var(--panel)', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   log: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 7 } as CSSProperties,
   logRow: { display: 'grid', gridTemplateColumns: '18px 1fr auto', gap: 9, alignItems: 'baseline', fontSize: 12.5, lineHeight: 1.5 } as CSSProperties,
   logMove: { background: 'var(--panel-2)', borderRadius: 7, padding: '6px 8px' } as CSSProperties,

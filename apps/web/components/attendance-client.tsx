@@ -157,7 +157,7 @@ const s = {
   input: { flex: 1, minWidth: 130, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
   inputSm: { width: 130, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
   inputXs: { width: 70, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
-  primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', padding: '9px 14px', fontSize: 13.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: 'var(--accent-ink)', padding: '9px 14px', fontSize: 13.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13, margin: '4px 2px' } as CSSProperties,
   statBar: { display: 'flex', gap: 18, padding: '10px 14px', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, marginTop: 4, fontSize: 13.5 } as CSSProperties,
   stat: { color: 'var(--muted)' } as CSSProperties,

@@ -57,7 +57,7 @@ const daysSince = (iso: string): number => Math.max(0, Math.floor((Date.now() - 
 
 const band = (c: number): { name: string; color: string } =>
   c >= 70 ? { name: 'Strong', color: 'var(--good)' }
-    : c >= 40 ? { name: 'Moderate', color: 'var(--warn, var(--warn))' }
+    : c >= 40 ? { name: 'Moderate', color: 'var(--warn)' }
       : { name: 'Weak', color: 'var(--bad)' };
 
 // ── Advisory read — heuristic composition over the signal's own facts (source reliability,
@@ -85,7 +85,7 @@ function analyzeSignal(s: RadarSignal): AdvisoryRead {
     return { verdict: 'PROMOTE', tone: 'var(--good)', reasons, action: `${b.name} ${s.confidence}% confidence — promote to a lead and assign an owner.` };
   }
   if (s.confidence >= 40) {
-    return { verdict: 'INVESTIGATE', tone: 'var(--warn, var(--warn))', reasons, action: `${b.name} ${s.confidence}% confidence — advance to research and firm up the evidence.` };
+    return { verdict: 'INVESTIGATE', tone: 'var(--warn)', reasons, action: `${b.name} ${s.confidence}% confidence — advance to research and firm up the evidence.` };
   }
   return { verdict: 'VERIFY', tone: 'var(--bad)', reasons, action: `${b.name} ${s.confidence}% confidence — verify it is real or dismiss to keep the radar clean.` };
 }
@@ -121,8 +121,8 @@ function ConfidenceRing({ value, size = 52 }: { value: number; size?: number }) 
 function FunnelStrip({ counts }: { counts: RadarData['counts'] }) {
   const steps = [
     { label: 'New', n: counts.new, color: 'var(--accent)' },
-    { label: 'Reviewing', n: counts.reviewing, color: 'var(--warn, var(--warn))' },
-    { label: 'Researching', n: counts.researching, color: 'var(--warn, var(--warn))' },
+    { label: 'Reviewing', n: counts.reviewing, color: 'var(--warn)' },
+    { label: 'Researching', n: counts.researching, color: 'var(--warn)' },
     { label: 'Promoted', n: counts.promoted, color: 'var(--good)' },
     { label: 'Dismissed', n: counts.dismissed, color: 'var(--muted)' },
   ];
@@ -453,7 +453,7 @@ export default function SignalsRadar({ data, owners = [], initialQuery = {} }: {
                       <p style={st.detailText}><b>{preview.lead.name}</b>{preview.lead.companyName ? ` · ${preview.lead.companyName}` : ''}</p>
                       <p style={st.detailText}>Source: {preview.lead.source ?? '—'} · Owner: {preview.lead.assignedTo ?? 'Unassigned'}</p>
                       {preview.lead.requirement && <p style={{ ...st.detailText, color: 'var(--muted)' }}>Requirement: {preview.lead.requirement}</p>}
-                      {preview.matches.length > 0 && <p style={{ ...st.detailText, color: 'var(--warn, var(--warn))' }}>Possible matches found: {preview.matches.map((m) => `${m.kind} · ${m.label}`).join(', ')}. Review before confirming.</p>}
+                      {preview.matches.length > 0 && <p style={{ ...st.detailText, color: 'var(--warn)' }}>Possible matches found: {preview.matches.map((m) => `${m.kind} · ${m.label}`).join(', ')}. Review before confirming.</p>}
                       <div style={st.cardActions}><button style={st.primaryBtn} disabled={busy === s.id} onClick={() => void promote(s.id)}>Confirm & create Lead</button><button style={st.linkBtn} onClick={() => { setPromoteId(null); setPreview(null); }}>Cancel</button></div>
                     </> : <p style={st.detailText}>Preparing a validated Lead preview…</p>}
                   </div>
@@ -537,7 +537,7 @@ const st: Record<string, CSSProperties> = {
   filterCount: { color: 'var(--muted)', fontSize: 11.5, marginLeft: 'auto', whiteSpace: 'nowrap' },
   input: { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', color: 'var(--text)', fontSize: 12.5 },
   slider: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)' },
-  primaryBtn: { fontSize: 12.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--accent)', background: 'var(--accent)', color: '#0b1020', cursor: 'pointer' },
+  primaryBtn: { fontSize: 12.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--accent)', background: 'var(--accent)', color: 'var(--accent-ink)', cursor: 'pointer' },
   ghostBtn: { fontSize: 12.5, padding: '6px 11px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', cursor: 'pointer' },
   linkBtn: { fontSize: 12, padding: '4px 6px', border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', textDecoration: 'underline' },
   empty: { color: 'var(--muted)', fontSize: 13.5, border: '1px dashed var(--border)', borderRadius: 12, padding: '22px 18px', textAlign: 'center' },

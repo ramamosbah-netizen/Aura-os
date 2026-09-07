@@ -240,7 +240,7 @@ const s = {
   fieldXs: { display: 'flex', flexDirection: 'column', gap: 5, width: 100 } as CSSProperties,
   label: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   input: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 14 } as CSSProperties,
-  primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', padding: '9px 16px', fontSize: 14, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: 'var(--accent-ink)', padding: '9px 16px', fontSize: 14, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13, margin: '8px 2px 0' } as CSSProperties,
   summary: { display: 'flex', gap: 26, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap' } as CSSProperties,
   stat: { display: 'flex', flexDirection: 'column', gap: 3 } as CSSProperties,
@@ -260,5 +260,5 @@ const s = {
   muted: { color: 'var(--muted)', padding: '12px 10px' } as CSSProperties,
   tag: (st: string): CSSProperties => ({ fontSize: 11.5, color: tagColor(st), border: `1px solid ${tagColor(st)}`, borderRadius: 999, padding: '1px 9px', textTransform: 'capitalize' }),
   smallBtn: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '6px 11px', fontSize: 12.5, cursor: 'pointer', marginLeft: 6 } as CSSProperties,
-  approveBtn: { background: 'var(--good)', border: 'none', borderRadius: 8, color: '#04210f', padding: '6px 11px', fontSize: 12.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  approveBtn: { background: 'var(--good)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '6px 11px', fontSize: 12.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
 };

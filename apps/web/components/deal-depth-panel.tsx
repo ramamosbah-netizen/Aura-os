@@ -310,7 +310,7 @@ const st = {
   dimReason: { fontSize: 10.5, color: 'var(--muted)' } as CSSProperties,
   whyRow: { display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 } as CSSProperties,
   whyLabel: { fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.3 } as CSSProperties,
-  whyChip: { fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'var(--panel)', border: '1px solid var(--warn)55', color: '#b45309' } as CSSProperties,
+  whyChip: { fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'var(--panel)', border: '1px solid var(--warn)55', color: 'var(--warn)' } as CSSProperties,
   chips: { display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 } as CSSProperties,
   gap: { fontSize: 11, padding: '2px 7px', borderRadius: 5, background: 'var(--panel-2)', border: '1px solid var(--bad)55', color: 'var(--bad)' } as CSSProperties,
   list: { listStyle: 'none', margin: '0 0 10px', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,

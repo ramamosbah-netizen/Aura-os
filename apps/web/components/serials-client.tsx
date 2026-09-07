@@ -185,7 +185,7 @@ const st = {
   actions: { display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' } as CSSProperties,
   miniSelect: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', fontSize: 12, color: 'var(--text)', fontFamily: 'inherit', cursor: 'pointer', maxWidth: 130 } as CSSProperties,
   btnSm: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
-  btnSmGood: { background: 'var(--good)', border: '1px solid var(--good)', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: '#04140b', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
+  btnSmGood: { background: 'var(--good)', border: '1px solid var(--good)', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: 'var(--accent-ink)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
   btnSmDanger: { background: 'transparent', border: '1px solid var(--bad)', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: 'var(--bad)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
   tagGood: { fontSize: 11, background: 'var(--good-soft)', color: 'var(--good)', borderRadius: 6, padding: '2px 8px', fontWeight: 600, textTransform: 'capitalize' } as CSSProperties,
   tagBad: { fontSize: 11, background: 'var(--bad-soft)', color: 'var(--bad)', borderRadius: 6, padding: '2px 8px', fontWeight: 600, textTransform: 'capitalize' } as CSSProperties,

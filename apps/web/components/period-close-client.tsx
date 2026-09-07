@@ -135,7 +135,7 @@ const s = {
   formPanel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' } as CSSProperties,
   formRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } as CSSProperties,
   input: { ...field, flex: 1, minWidth: 140 } as CSSProperties,
-  btnAccent: { background: 'var(--accent)', color: '#0b0e14', fontWeight: 600, border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
+  btnAccent: { background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 600, border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   btnSec: { ...field, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
   panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '8px 8px' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
@@ -144,5 +144,5 @@ const s = {
   tdM: { padding: '10px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
   lock: { fontSize: 11, color: 'var(--muted)' } as CSSProperties,
-  errorBar: { background: 'rgba(220,53,69,0.1)', border: '1px solid rgba(220,53,69,0.2)', color: '#dc3545', padding: '10px 14px', borderRadius: 10, fontSize: 13 } as CSSProperties,
+  errorBar: { background: 'var(--bad-soft)', border: '1px solid var(--bad-soft)', color: 'var(--bad)', padding: '10px 14px', borderRadius: 10, fontSize: 13 } as CSSProperties,
 };

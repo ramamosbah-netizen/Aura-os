@@ -218,6 +218,6 @@ const st = {
   actionRow: { display: 'flex', gap: 6, alignItems: 'center' } as CSSProperties,
   miniInput: { flex: 1, minWidth: 0, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, color: 'var(--text)', fontFamily: 'inherit' } as CSSProperties,
   btnSm: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 11px', fontSize: 12, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
-  btnSmGood: { background: 'var(--good)', border: '1px solid var(--good)', borderRadius: 6, padding: '5px 11px', fontSize: 12, fontWeight: 600, color: '#04140b', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
+  btnSmGood: { background: 'var(--good)', border: '1px solid var(--good)', borderRadius: 6, padding: '5px 11px', fontSize: 12, fontWeight: 600, color: 'var(--accent-ink)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
   doneNote: { fontSize: 12, color: 'var(--good)', margin: 0 } as CSSProperties,
 };

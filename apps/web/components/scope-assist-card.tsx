@@ -150,6 +150,6 @@ const st = {
   assume: { fontSize: 12.5 } as CSSProperties,
   gap: { fontSize: 12.5, listStyle: 'none', marginLeft: -18 } as CSSProperties,
   actions: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 } as CSSProperties,
-  btnAccent: { fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--accent)', color: '#fff', cursor: 'pointer' } as CSSProperties,
+  btnAccent: { fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--accent)', color: 'var(--accent-ink)', cursor: 'pointer' } as CSSProperties,
   history: { fontSize: 12, color: 'var(--muted)', margin: '8px 0 0' } as CSSProperties,
 };

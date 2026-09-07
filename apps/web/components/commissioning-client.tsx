@@ -312,7 +312,7 @@ const st = {
   actionRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } as CSSProperties,
   smInput: { flex: 1, minWidth: 130, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', fontSize: 12.5, color: 'var(--text)', fontFamily: 'inherit' } as CSSProperties,
   btnSm: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
-  btnSmGood: { background: 'var(--good)', border: '1px solid var(--good)', borderRadius: 7, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, color: '#04140b', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
+  btnSmGood: { background: 'var(--good)', border: '1px solid var(--good)', borderRadius: 7, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--accent-ink)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
   btnSmDanger: { background: 'transparent', border: '1px solid var(--bad)', borderRadius: 7, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, color: 'var(--bad)', cursor: 'pointer', whiteSpace: 'nowrap' } as CSSProperties,
   remarks: { fontSize: 12, color: 'var(--muted)', margin: '2px 0 0', fontStyle: 'italic' } as CSSProperties,
   tagGood: { fontSize: 11, background: 'var(--good-soft)', color: 'var(--good)', borderRadius: 6, padding: '2px 8px', fontWeight: 600, textTransform: 'capitalize' } as CSSProperties,

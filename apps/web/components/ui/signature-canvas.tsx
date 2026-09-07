@@ -10,6 +10,15 @@ interface SignatureCanvasProps {
   height?: number;
 }
 
+/**
+ * A 2D context takes a parsed colour, not a custom-property reference: assigning `var(--accent)`
+ * to `strokeStyle` is silently ignored and the ink stays whatever it was. Resolve the token off
+ * the canvas element instead, so the signature is drawn in the accent of the theme in force.
+ */
+function inkColour(canvas: HTMLCanvasElement): string {
+  return getComputedStyle(canvas).getPropertyValue('--accent').trim() || '#f5a623';
+}
+
 export default function SignatureCanvas({
   label = 'Digital Signature',
   value,
@@ -27,7 +36,7 @@ export default function SignatureCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.strokeStyle = '#f5a623'; // Amber brand accent
+    ctx.strokeStyle = inkColour(canvas);
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -68,6 +77,7 @@ export default function SignatureCanvas({
     if (!ctx) return;
 
     const { x, y } = getCoordinates(e);
+    ctx.strokeStyle = inkColour(canvas);
     ctx.beginPath();
     ctx.moveTo(x, y);
     setIsDrawing(true);

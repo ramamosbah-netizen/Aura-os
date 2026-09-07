@@ -171,7 +171,7 @@ const st = {
   tab: { border: 'none', borderBottom: '2px solid transparent', background: 'transparent', color: 'var(--muted)', padding: '10px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   tabActive: { color: 'var(--accent)', borderBottomColor: 'var(--accent)' } as CSSProperties,
   count: { display: 'inline-flex', minWidth: 20, justifyContent: 'center', marginLeft: 5, padding: '2px 6px', borderRadius: 999, background: 'var(--panel)', fontSize: 11 } as CSSProperties,
-  countActive: { background: 'var(--accent)', color: '#fff' } as CSSProperties,
+  countActive: { background: 'var(--accent)', color: 'var(--accent-ink)' } as CSSProperties,
   mapGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 } as CSSProperties,
   mapIntro: { gridColumn: '1 / -1' } as CSSProperties,
   sectionTitle: { margin: 0, fontSize: 21 } as CSSProperties,

@@ -32,7 +32,7 @@ export interface RiskAssessment {
   createdAt: string;
 }
 
-const bandColor: Record<string, string> = { low: 'var(--good)', medium: 'var(--warn)', high: 'var(--bad)', critical: '#991b1b' };
+const bandColor: Record<string, string> = { low: 'var(--good)', medium: 'var(--warn)', high: 'var(--bad)', critical: 'var(--bad)' };
 const statusColor: Record<string, string> = { draft: 'var(--warn)', approved: 'var(--good)', expired: 'var(--muted)' };
 const emptyHazard = (): RiskLine => ({ hazard: '', likelihood: 3, severity: 3, controls: '', residualLikelihood: 1, residualSeverity: 2 });
 const SCORES = [1, 2, 3, 4, 5];
@@ -213,7 +213,7 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 14 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 120, background: 'var(--panel)', color: 'var(--text)' } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: 'var(--accent-ink)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
   smGray: { padding: '5px 12px', borderRadius: 4, background: 'var(--panel-2)', color: 'inherit', border: '1px solid var(--border)', fontSize: 13, cursor: 'pointer' } as CSSProperties,
   smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   smRed: { padding: '4px 10px', borderRadius: 4, background: 'var(--bad)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,

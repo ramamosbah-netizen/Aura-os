@@ -176,7 +176,7 @@ const st = {
   successBanner: { background: 'var(--warn-soft)', border: '1px solid var(--warn)', color: 'var(--warn)', borderRadius: 10, padding: '10px 14px', fontSize: 12, fontWeight: 600, lineHeight: 1.5 } as CSSProperties,
   notWired: { background: 'var(--warn-soft)', border: '1px solid var(--warn)', color: 'var(--warn)', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, marginTop: 10, lineHeight: 1.55 } as CSSProperties,
   warningBanner: { background: 'var(--bad-soft)', border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, fontWeight: 600, marginBottom: 8 } as CSSProperties,
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 } as CSSProperties,
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 } as CSSProperties,
   modalBox: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 22, maxWidth: 500, width: '92%', boxShadow: 'var(--shadow-lg)' } as CSSProperties,
   modalInput: { width: '100%', padding: '8px 12px', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text)', marginTop: 4, boxSizing: 'border-box' } as CSSProperties,
   label: { display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 2, marginTop: 10 } as CSSProperties,

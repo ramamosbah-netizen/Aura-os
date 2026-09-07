@@ -41,14 +41,14 @@ export default function NextBestActionBanner({
 
 const s = {
   banner: {
-    background: 'linear-gradient(135deg, rgba(245, 166, 35, 0.12) 0%, rgba(255, 107, 53, 0.08) 100%)',
+    background: 'linear-gradient(135deg, var(--accent-soft) 0%, var(--warn-soft) 100%)',
     border: '1px solid var(--accent-soft)',
     borderRadius: 12,
     padding: '12px 16px',
     display: 'flex',
     alignItems: 'center',
     gap: 14,
-    boxShadow: '0 2px 12px rgba(245, 166, 35, 0.06)',
+    boxShadow: '0 2px 12px var(--accent-soft)',
   } as CSSProperties,
   iconWrap: {
     fontSize: 20,

@@ -192,7 +192,7 @@ const st = {
   kpiValue: { fontSize: 22, fontWeight: 600, letterSpacing: -0.5 } as CSSProperties,
   form: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20, alignItems: 'center' } as CSSProperties,
   input: { padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', fontSize: 14 } as CSSProperties,
-  btn: { padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
+  btn: { padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'var(--accent-ink)', fontSize: 14, cursor: 'pointer', fontWeight: 500 } as CSSProperties,
   tableWrap: { border: '1px solid var(--border)', borderRadius: 10, overflowX: 'auto' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 } as CSSProperties,
   th: { textAlign: 'left', padding: '10px 14px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' } as CSSProperties,

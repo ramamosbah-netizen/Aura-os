@@ -107,7 +107,7 @@ export default function SiteInstructionsClient({ initialInstructions, initialPro
                 <td style={st.td}>{si.issuedBy}</td>
                 <td style={st.td}>{si.instruction}</td>
                 <td style={st.td}>{[si.costImplication && 'cost', si.timeImplication && 'time'].filter(Boolean).join(' + ') || '—'}</td>
-                <td style={{ ...st.td, color: statusColor[si.status] || '#000', fontWeight: 600 }}>{si.status}</td>
+                <td style={{ ...st.td, color: statusColor[si.status] || 'var(--text)', fontWeight: 600 }}>{si.status}</td>
                 <td style={st.td}>
                   {si.status === 'open' && <button style={st.sm} onClick={() => act(si.id, 'acknowledge')}>Acknowledge</button>}
                   {si.status !== 'closed' && <button style={st.smGreen} onClick={() => act(si.id, 'close')}>Close</button>}
@@ -137,8 +137,8 @@ const st = {
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   check: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 130 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: 'var(--accent-ink)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer', marginRight: 4 } as CSSProperties,
   smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,

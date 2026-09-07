@@ -247,7 +247,7 @@ function JourneyRail() {
 }
 
 function Kpi({ label, value, sub, accent, good, warn }: { label: string; value: string; sub?: string; accent?: boolean; good?: boolean; warn?: boolean }) {
-  const color = accent ? 'var(--accent)' : good ? 'var(--good)' : warn ? 'var(--warn, var(--warn))' : 'var(--text)';
+  const color = accent ? 'var(--accent)' : good ? 'var(--good)' : warn ? 'var(--warn)' : 'var(--text)';
   return (
     <div style={st.kpi}>
       <span style={st.kpiLabel}>{label}</span>

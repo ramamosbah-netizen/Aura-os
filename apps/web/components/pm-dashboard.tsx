@@ -233,7 +233,7 @@ const s = {
     alignItems: 'center',
     padding: '10px 12px',
     borderRadius: 8,
-    borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.02))',
+    borderBottom: '1px solid var(--border-subtle, var(--panel-2))',
   } as CSSProperties,
   wbsCode: { width: 50, fontSize: 13, fontWeight: 600, color: 'var(--muted)' } as CSSProperties,
   wbsTitle: { flex: 1, fontSize: 13, color: 'var(--text)' } as CSSProperties,

@@ -72,7 +72,7 @@ const s = {
   h2: { fontSize: 16, margin: 0 } as CSSProperties,
   btn: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 10,

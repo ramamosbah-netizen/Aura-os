@@ -108,8 +108,8 @@ export default function SubmittalsClient({ initialSubmittals }: { initialSubmitt
                 <td style={st.td}>{s.title}</td>
                 <td style={st.td}>{s.discipline}</td>
                 <td style={st.td}>{s.revision}</td>
-                <td style={{ ...st.td, color: statusColor[s.status] || '#000', fontWeight: 600 }}>{s.status}</td>
-                <td style={{ ...st.td, color: s.reviewCode ? codeColor[s.reviewCode] : '#000', fontWeight: 700 }}>{s.reviewCode || '—'}</td>
+                <td style={{ ...st.td, color: statusColor[s.status] || 'var(--text)', fontWeight: 600 }}>{s.status}</td>
+                <td style={{ ...st.td, color: s.reviewCode ? codeColor[s.reviewCode] : 'var(--text)', fontWeight: 700 }}>{s.reviewCode || '—'}</td>
                 <td style={st.td}>
                   {s.status === 'draft' && <button style={st.sm} onClick={() => submit(s.id)}>Submit</button>}
                   {s.status === 'submitted' && <button style={st.smGreen} onClick={() => returnCode(s.id)}>Return code</button>}
@@ -131,8 +131,8 @@ const st = {
   form: { display: 'flex', flexWrap: 'wrap' as const, gap: 12, alignItems: 'flex-end', marginBottom: 22 } as CSSProperties,
   label: { display: 'flex', flexDirection: 'column' as const, fontSize: 13, fontWeight: 600, gap: 4 } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border, #ccc)', fontSize: 14, minWidth: 130 } as CSSProperties,
-  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
-  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
+  btn: { padding: '8px 18px', borderRadius: 6, background: 'var(--accent)', color: 'var(--accent-ink)', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 } as CSSProperties,
+  sm: { padding: '4px 10px', borderRadius: 4, background: 'var(--accent)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   smGreen: { padding: '4px 10px', borderRadius: 4, background: 'var(--good)', color: 'var(--accent-ink)', border: 'none', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   err: { color: 'var(--bad)', margin: '6px 0 0', fontSize: 13, width: '100%' } as CSSProperties,
   h2: { fontSize: 20, margin: '18px 0 10px' } as CSSProperties,

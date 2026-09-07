@@ -188,7 +188,7 @@ export default function Contact360Client({ contactId }: { contactId: string }) {
                 </div>
               )}
               <div style={st.mapRow}>
-                <span style={{ ...st.mapTag, background: 'var(--accent)', color: '#fff' }}>This person</span>
+                <span style={{ ...st.mapTag, background: 'var(--accent)', color: 'var(--accent-ink)' }}>This person</span>
                 <b>{c.name}</b>{roleLabel && <span style={st.rolePill}>{roleLabel}</span>}
               </div>
               {reports.length > 0 && reports.map((r) => (
@@ -309,7 +309,7 @@ function Stat({ label, value, accent, tone }: { label: string; value: string; ac
   return (
     <div style={{ minWidth: 110 }}>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: tone === 'warn' ? 'var(--warn, var(--warn))' : accent ? 'var(--accent)' : 'var(--text)' }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: tone === 'warn' ? 'var(--warn)' : accent ? 'var(--accent)' : 'var(--text)' }}>{value}</div>
     </div>
   );
 }
@@ -359,7 +359,7 @@ const st = {
   tabs: { display: 'inline-flex', gap: 4, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, marginBottom: 12, flexWrap: 'wrap' } as CSSProperties,
   tab: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 } as CSSProperties,
   tabOn: { background: 'var(--accent-grad, var(--accent))', color: 'var(--accent-ink, #fff)', fontWeight: 700 } as CSSProperties,
-  tabCount: { fontSize: 10, fontWeight: 800, background: 'rgba(0,0,0,0.18)', borderRadius: 999, padding: '1px 6px' } as CSSProperties,
+  tabCount: { fontSize: 10, fontWeight: 800, background: 'var(--overlay)', borderRadius: 999, padding: '1px 6px' } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 14, padding: 18, background: 'var(--panel)' } as CSSProperties,
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 } as CSSProperties,
   block: { border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--panel-2, var(--panel))' } as CSSProperties,

@@ -2,7 +2,7 @@
 
 import { type CSSProperties } from 'react';
 
-const PALETTE = ['var(--accent)', 'var(--good)', '#d9883b', 'var(--bad)', '#7c3aed', '#0891b2', '#64748b'];
+const PALETTE = ['var(--accent)', 'var(--good)', 'var(--warn)', 'var(--bad)', 'var(--accent)', 'var(--info)', 'var(--muted)'];
 const fmt = (n: number) => n.toLocaleString('en-AE', { maximumFractionDigits: 0 });
 
 /** Simple dependency-free SVG bar chart. */

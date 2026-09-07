@@ -363,7 +363,7 @@ const st = {
   shareRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 } as CSSProperties,
   select: { background: 'var(--panel-2)', border: '1px solid var(--border-strong)', borderRadius: 7, color: 'var(--text)', padding: '6px 9px', fontSize: 12.5 } as CSSProperties,
   input: { background: 'var(--panel-2)', border: '1px solid var(--border-strong)', borderRadius: 7, color: 'var(--text)', padding: '6px 9px', fontSize: 12.5, width: 150 } as CSSProperties,
-  shareBtn: { background: 'var(--accent)', border: 'none', borderRadius: 7, color: '#08121f', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
+  shareBtn: { background: 'var(--accent)', border: 'none', borderRadius: 7, color: 'var(--panel)', padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' } as CSSProperties,
   cannot: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.6, borderTop: '1px solid var(--border)', paddingTop: 12, margin: 0 } as CSSProperties,
   empty: { color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.6, margin: 0 } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 } as CSSProperties,

@@ -67,9 +67,9 @@ export default function AuditBrowserClient() {
   const actionColor = (action: string) => {
     switch (action) {
       case 'created': return 'var(--good)';
-      case 'approved': return '#5b8cff';
+      case 'approved': return 'var(--info)';
       case 'rejected': case 'deleted': return 'var(--bad)';
-      case 'updated': return '#f0a040';
+      case 'updated': return 'var(--warn)';
       default: return 'var(--muted)';
     }
   };
@@ -168,7 +168,7 @@ const s = {
   select: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' } as CSSProperties,
   input: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', width: 130 } as CSSProperties,
   dateInput: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', width: 150 } as CSSProperties,
-  filterBtn: { background: 'var(--accent)', border: 'none', borderRadius: 8, padding: '8px 20px', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' } as CSSProperties,
+  filterBtn: { background: 'var(--accent)', border: 'none', borderRadius: 8, padding: '8px 20px', color: 'var(--accent-ink)', fontSize: 13, cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' } as CSSProperties,
   tableWrap: { overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border)' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' } as CSSProperties,
   th: { textAlign: 'left', padding: '12px 14px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', borderBottom: '1px solid var(--border)', background: 'var(--panel)' } as CSSProperties,

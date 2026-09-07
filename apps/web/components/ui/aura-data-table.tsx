@@ -507,7 +507,7 @@ const st: Record<string, CSSProperties> = {
   densityBtnActive: { width: 44, height: 40, background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--accent)', padding: '4px 9px', fontSize: 13, fontWeight: 700, cursor: 'pointer', borderRadius: 6 },
   tableContainer: { maxHeight: 'calc(100vh - 300px)', minHeight: 200, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--panel)', position: 'relative' },
   table: { width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12.5 },
-  stickyThead: { position: 'sticky', top: 0, zIndex: 10, background: 'var(--panel)', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' },
+  stickyThead: { position: 'sticky', top: 0, zIndex: 10, background: 'var(--panel)', boxShadow: '0 2px 8px var(--overlay)' },
   th: { background: 'var(--panel)', borderBottom: '2px solid var(--border)', color: 'var(--muted)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, userSelect: 'none', whiteSpace: 'nowrap' },
   sortButton: { display: 'inline-flex', alignItems: 'center', gap: 4, width: '100%', minHeight: 44, border: 0, background: 'transparent', color: 'inherit', font: 'inherit', textTransform: 'inherit', letterSpacing: 'inherit', cursor: 'pointer' },
   row: { transition: 'background-color 0.15s ease' },

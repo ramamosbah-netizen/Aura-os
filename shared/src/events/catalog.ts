@@ -68,6 +68,7 @@ export const EVENT_CATALOG: EventTypeDef[] = [
   { type: 'projects.project.updated', module: 'projects', description: 'Project updated', severity: 'INFO' },
   { type: 'projects.project.started', module: 'projects', description: 'Project kicked off', severity: 'INFO' },
   { type: 'projects.project.completed', module: 'projects', description: 'Project completed', severity: 'INFO' },
+  { type: 'projects.project.cancelled', module: 'projects', description: 'Project cancelled, with actor and reason', severity: 'INFO' },
   { type: 'projects.budget.overrun', module: 'projects', description: 'Project cost over budget', severity: 'CRITICAL' },
   { type: 'projects.cost.committed', module: 'projects', description: 'Committed cost tracked against project', severity: 'INFO' },
   { type: 'projects.cost.actual', module: 'projects', description: 'Actual cost tracked against project', severity: 'INFO' },

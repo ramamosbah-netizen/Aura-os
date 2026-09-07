@@ -37,6 +37,7 @@ import { VariationService } from './variation.service';
 import { CLOSEOUT_STORE } from './closeout-store';
 import { CloseoutReadinessService } from './closeout-readiness.service';
 import { CLOSEOUT_READINESS_GATE } from './closeout.service';
+import { CLOSEOUT_LIFECYCLE } from './project.service';
 import { InMemoryCloseoutStore } from './in-memory-closeout-store';
 import { PostgresCloseoutStore } from './postgres-closeout-store';
 import { CloseoutService } from './closeout.service';
@@ -144,6 +145,11 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
     // both inside this module — the gate is Projects governing itself. The cross-module readings it
     // assembles still arrive through ports bound in GatesModule, so the ADR-0004 boundary holds.
     { provide: CLOSEOUT_READINESS_GATE, useExisting: CloseoutReadinessService },
+    // The same verdict, feeding the lifecycle rather than the close itself. `closeout → completed`
+    // and the legacy `active → completed` both defer to §27 instead of restating its rules, and an
+    // unbound port reads as UNKNOWN — which refuses completion. That is the safe direction, but it
+    // is not a working system, so this wire is what makes a project completable at all.
+    { provide: CLOSEOUT_LIFECYCLE, useExisting: CloseoutReadinessService },
     CashflowForecastService,
     ScheduleService,
     DeliveryItemMapService,

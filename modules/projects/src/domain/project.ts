@@ -6,7 +6,38 @@ import type { HandoverSnapshot } from './handover';
 // REFERENCES the source contract AND the CRM account by id + name snapshots — the chain
 // arrives at delivery still by reference, never a DB join.
 
-export type ProjectStatus = 'planned' | 'active' | 'completed' | 'cancelled';
+/**
+ * Every state a project can be in, in lifecycle order.
+ *
+ * The list lives here rather than in `project-lifecycle.ts` so that the TYPE and the MACHINE cannot
+ * disagree: the lifecycle imports this, so a state the machine knows is a state the stored row is
+ * allowed to hold, and vice versa. Adding one in a second place is the failure this shape prevents.
+ *
+ * `planned`, `active`, `completed` and `cancelled` are the originals and keep their meanings;
+ * `planning`, `testing`, `handover` and `closeout` were previously folded into them. See
+ * `project-lifecycle.ts` for what each transition is answerable for, and for why mobilization is
+ * deliberately NOT here.
+ */
+export const PROJECT_STATES = [
+  'planned',
+  'planning',
+  'active',
+  'testing',
+  'handover',
+  'closeout',
+  'completed',
+  'cancelled',
+] as const;
+
+export type ProjectStatus = (typeof PROJECT_STATES)[number];
+
+/**
+ * The states a project may be CREATED in — before execution, where nothing has been gated yet.
+ *
+ * Reaching `active` or `completed` means passing a transition with conditions. Creation must not be
+ * the way around them, or the gate would only apply to projects that were honest about their age.
+ */
+export const CREATABLE_STATES: readonly ProjectStatus[] = ['planned', 'planning'];
 export type ProjectOrigin = 'commercial_handover' | 'internal' | 'legacy';
 
 export interface WbsBaselineAllocation {
@@ -148,6 +179,12 @@ export const PROJECT_EVENT = {
   created: 'projects.project.created',
   updated: 'projects.project.updated',
   started: 'projects.project.started',
+  /**
+   * Abandonment, with who and why attached. Separate from `updated` on purpose: a cancellation is
+   * a decision someone made, and folding it into a generic field change would lose the person and
+   * the reason — the two things anyone reading the history afterwards actually wants.
+   */
+  cancelled: 'projects.project.cancelled',
   completed: 'projects.project.completed',
   costCommitted: 'projects.cost.committed',
   costActual: 'projects.cost.actual',

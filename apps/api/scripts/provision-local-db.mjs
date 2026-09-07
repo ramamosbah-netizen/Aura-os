@@ -227,7 +227,31 @@ The seeded actors also need to be able to sign in, or the specs that use them 40
 reach anything they were written to prove:
 
   AUTH_DEV_ADMIN_USER=u-admin,u-e2e-checker,u-e2e-viewer
+  AUTH_DEV_PASSWORD=e2e-password
 
 Then restart the API. Health should report environment "e2e-disposable",
 which is what lets the browser suite run against it.
+
+Now run the suite. Copy this whole command — every variable in it is load-bearing:
+
+  cd apps/web
+  AURA_API_URL=http://localhost:4000 E2E_DISPOSABLE_DB=1 E2E_USERNAME=u-admin E2E_PASSWORD=e2e-password E2E_VIEWER_USERNAME=u-e2e-viewer E2E_ALT_USERNAME=u-e2e-checker pnpm exec playwright test
+    E2E_USERNAME=u-admin E2E_PASSWORD=e2e-password \
+    E2E_VIEWER_USERNAME=u-e2e-viewer E2E_ALT_USERNAME=u-e2e-checker \
+    pnpm exec playwright test
+
+The two actor variables are the ones worth explaining, because leaving them out does not
+produce a clean skip — it produces FAILURES THAT LOOK LIKE PRODUCT BUGS.
+
+The specs fall back to 'u-approver' when they are unset. CI's TIER-2 seeder creates that
+account, so the default is correct there. This script does not: it seeds the TIER-3 actors,
+u-e2e-viewer and u-e2e-checker. So a local run without these two variables asks a database
+that has never heard of u-approver to authenticate it, gets a 401, and reports it as
+'global shell exposes ... permission-aware suites' and 'a third party cannot read a DM'
+failing — two specs that are really asking about permissions, now answering about a missing
+fixture instead.
+
+  AURA_API_URL          global-setup refuses to run blind without it
+  E2E_DISPOSABLE_DB=1   the runner's half of the two-fact safety gate; the other half is
+                        this database's own 'e2e-disposable' marker, set in step 6
 ────────────────────────────────────────────────────────────────`);

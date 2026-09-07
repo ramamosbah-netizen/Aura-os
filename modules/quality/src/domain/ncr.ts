@@ -35,6 +35,14 @@ export interface Ncr {
   /** The planned corrective action (set at `plan`). */
   correctiveAction: string | null;
   severity: 'minor' | 'major';
+  /**
+   * The ELV system this non-conformance is against — 'cctv', 'access-control', 'fire-alarm'…
+   *
+   * Null means "not recorded", not "applies to none". The Project 360 discipline lens treats a row
+   * with no system as project-wide and keeps it under every filter, so leaving this null is the
+   * honest state for an NCR nobody has attributed yet.
+   */
+  system: string | null;
   status: NcrStatus;
   raisedBy: string | null;
   assignedTo: string | null;
@@ -61,6 +69,7 @@ export interface NewNcr {
   rootCause?: string | null;
   correctiveAction?: string | null;
   severity: Ncr['severity'];
+  system?: string | null;
   status?: Ncr['status'];
   raisedBy?: string | null;
   assignedTo?: string | null;
@@ -81,6 +90,7 @@ export function makeNcr(input: NewNcr): Ncr {
     rootCause: input.rootCause ?? null,
     correctiveAction: input.correctiveAction ?? null,
     severity: input.severity,
+    system: input.system?.trim() || null,
     status: input.status ?? 'raised',
     raisedBy: input.raisedBy ?? null,
     assignedTo: input.assignedTo ?? null,

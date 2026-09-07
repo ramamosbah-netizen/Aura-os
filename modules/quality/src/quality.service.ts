@@ -86,6 +86,8 @@ export class QualityService {
     description: string;
     rootCause?: string;
     severity: Ncr['severity'];
+    /** The ELV system the non-conformance is against; drives the Project 360 discipline lens. */
+    system?: string;
     raisedBy?: string;
     assignedTo?: string;
     sourceIrId?: string;

@@ -19,8 +19,9 @@ export class PostgresNcrStore implements NcrStore {
       `insert into public.aura_quality_ncrs (
         id, tenant_id, company_id, project_id, project_name, ncr_number, description, root_cause,
         proposed_correction, severity, status, raised_by, assigned_to, source_ir_id, source_ir_number,
-        action_planned_at, corrected_by, corrected_at, verified_by, verified_at, closed_at, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        action_planned_at, corrected_by, corrected_at, verified_by, verified_at, closed_at, created_at, updated_at,
+        system
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
       on conflict (id) do update set
         status = excluded.status,
         root_cause = excluded.root_cause,
@@ -38,6 +39,7 @@ export class PostgresNcrStore implements NcrStore {
         ncr.rootCause, ncr.correctiveAction, ncr.severity, ncr.status, ncr.raisedBy, ncr.assignedTo,
         ncr.sourceIrId, ncr.sourceIrNumber, ncr.actionPlannedAt, ncr.correctedBy, ncr.correctedAt,
         ncr.verifiedBy, ncr.verifiedAt, ncr.closedAt, ncr.createdAt, ncr.updatedAt,
+        ncr.system,
       ],
     );
   }
@@ -88,6 +90,7 @@ export class PostgresNcrStore implements NcrStore {
       rootCause: row.root_cause,
       correctiveAction: row.proposed_correction,
       severity: row.severity,
+      system: row.system ?? null,
       status: row.status,
       raisedBy: row.raised_by,
       assignedTo: row.assigned_to,

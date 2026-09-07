@@ -25,6 +25,12 @@ class RaiseNcrDto {
   @IsString() description!: string;
   @IsOptional() @IsString() rootCause?: string;
   @IsString() severity!: Ncr['severity'];
+  /**
+   * Optional on purpose. Requiring it would reject every existing client and would push people to
+   * pick a system they have not assessed; a null system reads as "not attributed", which the
+   * Project 360 lens treats as project-wide and keeps visible under every filter.
+   */
+  @IsOptional() @IsString() system?: string;
   @IsOptional() @IsString() assignedTo?: string;
   @IsOptional() @IsString() sourceIrId?: string;
   @IsOptional() @IsString() sourceIrNumber?: string;
@@ -105,6 +111,7 @@ export class QualityController {
       description: dto.description,
       rootCause: dto.rootCause,
       severity: dto.severity,
+      system: dto.system,
       assignedTo: dto.assignedTo,
       sourceIrId: dto.sourceIrId,
       sourceIrNumber: dto.sourceIrNumber,

@@ -39,6 +39,18 @@ describe('Quality Module Bounded Context', () => {
       });
       expect(ncr.severity).toBe('major');
       expect(ncr.status).toBe('raised');
+      // Not attributed to a system unless one is given. The Project 360 lens reads null as
+      // "project-wide" and keeps the row under every filter, so defaulting it to a real system
+      // would hide freshly raised NCRs from anyone who has a lens on.
+      expect(ncr.system).toBeNull();
+    });
+
+    it('records the ELV system when one is given, and treats blank as not attributed', () => {
+      expect(makeNcr({ tenantId: 't1', projectId: 'p1', ncrNumber: 'N-1', description: 'd', severity: 'minor', system: 'cctv' }).system).toBe('cctv');
+      // Whitespace is not an attribution — it would otherwise match no lens value and make the
+      // record invisible under every filter, which is the opposite of what null does.
+      expect(makeNcr({ tenantId: 't1', projectId: 'p1', ncrNumber: 'N-2', description: 'd', severity: 'minor', system: '  ' }).system).toBeNull();
+      expect(makeNcr({ tenantId: 't1', projectId: 'p1', ncrNumber: 'N-3', description: 'd', severity: 'minor', system: ' access-control ' }).system).toBe('access-control');
     });
 
     it('manages NCR tasks via the service layer', async () => {

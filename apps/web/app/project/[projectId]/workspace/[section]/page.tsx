@@ -261,7 +261,7 @@ export default async function ProjectSectionDashboardPage({
   const availableSources = sourceResults.filter(({ result }) => result?.ok).length;
   const unavailableSources = sourceResults.length - availableSources;
   const statusRows = records.filter((row) => statusOf(row));
-  const attention = statusRows.filter((row) => /open|pending|overdue|failed|rejected|blocked|draft|requested|investigating|in_progress/i.test(statusOf(row))).slice(0, 5);
+  const attention = statusRows.filter((row) => /open|pending|overdue|failed|rejected|blocked|draft|raised|requested|investigating|in_progress/i.test(statusOf(row))).slice(0, 5);
   const recent = records.filter((row) => Number.isFinite(Date.parse(timestampOf(row)))).sort((a, b) => Date.parse(timestampOf(b)) - Date.parse(timestampOf(a))).slice(0, 5);
   const sourceState = sourceResults.length === 0 ? 'Not established' : availableSources === 0 ? 'Unavailable' : unavailableSources > 0 ? 'Partial evidence' : 'Connected';
   const recordState = records.length ? `${records.length} record${records.length === 1 ? '' : 's'}` : 'No records';
@@ -306,7 +306,7 @@ export default async function ProjectSectionDashboardPage({
 
       <section className={styles.activityPanel} aria-label={`${section.label} recent activity`}>
         <div className={styles.sectionHeading}><div><span className={styles.kicker}>RECENT ACTIVITY</span><h2>What changed recently</h2></div></div>
-        {recent.length ? <ol className={styles.activityList}>{recent.map((row, index) => <li key={`${String(row.id ?? index)}-${index}`}><span className={styles.activityDot} /><div><strong>{String(row.title ?? row.name ?? row.reference ?? row.code ?? row.id ?? 'Record')}</strong><small>{new Date(timestampOf(row)).toLocaleString('en-AE', { dateStyle: 'medium', timeStyle: 'short' })}</small></div></li>)}</ol> : <div className={styles.emptyState}><CircleAlert size={17} aria-hidden /><div><strong>No activity is established yet</strong><span>New records from the owning authority will appear here when available.</span></div></div>}
+        {recent.length ? <ol className={styles.activityList}>{recent.map((row, index) => <li key={`${String(row.id ?? index)}-${index}`}><span className={styles.activityDot} /><div><strong>{String(row.title ?? row.name ?? row.reference ?? row.code ?? row.ncrNumber ?? row.id ?? 'Record')}</strong><small>{new Date(timestampOf(row)).toLocaleString('en-AE', { dateStyle: 'medium', timeStyle: 'short' })}</small></div></li>)}</ol> : <div className={styles.emptyState}><CircleAlert size={17} aria-hidden /><div><strong>No activity is established yet</strong><span>New records from the owning authority will appear here when available.</span></div></div>}
       </section>
 
       <footer className={styles.footerNote}><span>Project 360 composes this view; canonical records, permissions and audit events remain with {section.owner}.</span><Link href={`/project/${encodeURIComponent(projectId)}`}>Back to overview <ArrowRight size={13} aria-hidden /></Link></footer>

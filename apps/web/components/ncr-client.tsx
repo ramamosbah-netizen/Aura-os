@@ -3,6 +3,7 @@
 import ProjectPicker from './ui/project-picker';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import { ELV_DISCIPLINES } from '@/lib/project-scope';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
 import FileAttachmentZone, { type AttachmentItem } from './ui/file-attachment-zone';
@@ -18,6 +19,7 @@ export interface Ncr {
   rootCause: string | null;
   proposedCorrection: string | null;
   severity: 'minor' | 'major';
+  system?: string | null;
   status: 'raised' | 'action_planned' | 'corrected' | 'closed';
   assignedTo: string | null;
   createdAt: string;
@@ -28,7 +30,7 @@ const sevColor: Record<string, string> = { minor: 'var(--muted)', major: 'var(--
 
 export default function NcrClient({ initial, initialProjectId = '' }: { initial: Ncr[]; initialProjectId?: string }) {
   const [rows, setRows] = useState(initial);
-  const [f, setF] = useState({ projectId: initialProjectId, ncrNumber: '', description: '', severity: 'minor', assignedTo: '', rootCause: '', proposedCorrection: '' });
+  const [f, setF] = useState({ projectId: initialProjectId, ncrNumber: '', description: '', severity: 'minor', system: '', assignedTo: '', rootCause: '', proposedCorrection: '' });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -51,14 +53,14 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           projectId: f.projectId, ncrNumber: f.ncrNumber, description: f.description,
-          severity: f.severity, assignedTo: f.assignedTo || undefined,
+          severity: f.severity, system: f.system || undefined, assignedTo: f.assignedTo || undefined,
           rootCause: f.rootCause || undefined, proposedCorrection: f.proposedCorrection || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
       setRows((p) => [data, ...p]);
-      setF({ projectId: f.projectId, ncrNumber: '', description: '', severity: 'minor', assignedTo: '', rootCause: '', proposedCorrection: '' });
+      setF({ projectId: f.projectId, ncrNumber: '', description: '', severity: 'minor', system: '', assignedTo: '', rootCause: '', proposedCorrection: '' });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
 
@@ -92,6 +94,7 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
           <label style={st.label}>NCR number<input style={st.input} value={f.ncrNumber} onChange={(e) => set('ncrNumber', e.target.value)} placeholder="NCR-001" /></label>
           <label style={{ ...st.label, minWidth: 260 }}>Description<input style={st.input} value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Cable tray not per spec" /></label>
           <label style={st.label}>Severity<select style={st.input} value={f.severity} onChange={(e) => set('severity', e.target.value)}><option value="minor">minor</option><option value="major">major</option></select></label>
+          <label style={st.label}>System<select style={st.input} value={f.system} onChange={(e) => set('system', e.target.value)}><option value="">Not attributed</option>{ELV_DISCIPLINES.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}</select></label>
           <label style={st.label}>Assigned to<input style={st.input} value={f.assignedTo} onChange={(e) => set('assignedTo', e.target.value)} placeholder="optional" /></label>
         </div>
 
@@ -111,13 +114,14 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
         <EmptyState compact title="No NCRs raised" description="Raise a non-conformance report when work fails to meet spec, then track it through correction to close-out." />
       ) : (
         <table style={st.table}>
-          <thead><tr><th style={st.th}>NCR</th><th style={st.th}>Description</th><th style={st.th}>Severity</th><th style={st.th}>Assigned</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>
+          <thead><tr><th style={st.th}>NCR</th><th style={st.th}>Description</th><th style={st.th}>Severity</th><th style={st.th}>System</th><th style={st.th}>Assigned</th><th style={st.th}>Status</th><th style={st.th}>Actions</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
                 <td style={st.td}>{r.ncrNumber}</td>
                 <td style={st.td}>{r.description}</td>
                 <td style={{ ...st.td, color: sevColor[r.severity], fontWeight: 600 }}>{r.severity}</td>
+                <td style={st.td}>{ELV_DISCIPLINES.find((d) => d.id === r.system)?.label ?? r.system ?? '—'}</td>
                 <td style={st.td}>{r.assignedTo || '—'}</td>
                 <td style={{ ...st.td, color: statusColor[r.status] ?? 'var(--muted)', fontWeight: 600 }}>{r.status}</td>
                 <td style={st.td}>

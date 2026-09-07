@@ -9,6 +9,7 @@ export async function POST(request: Request): Promise<Response> {
     rootCause?: string;
     proposedCorrection?: string;
     severity?: string;
+    system?: string;
     assignedTo?: string;
   };
 

@@ -3,6 +3,9 @@
 **Date:** 2026-09-07 · **Method:** capability-by-capability against the domain, the BFF, the live
 database schema and the UI — not against how the screen looks.
 
+**Revision 2 (same day):** §27 moved 🟡 → ✅ after the vertical slice landed — rules, ports, service,
+endpoint, UI, enforcement inside finalization, and audit evidence. Nothing else was re-measured.
+
 > The authority is the 29-section Project 360 business model supplied in review. This document does
 > not restate it; it records, for each claim it makes, **what exists**, **where it lives**, and
 > **what is missing** — with the evidence that established it.
@@ -19,8 +22,8 @@ requires · ❌ absent.
 
 | | Sections |
 |---|---|
-| ✅ | §3 handover provenance · §4 DeliveryItemMap · §5 WBS/CBS separation · §10 execution truth · §11 progress governance · §17 certified ≠ installed · §18 cost authority + FX provenance · §19 variation lifecycle · §20 delay/EOT records |
-| 🟡 | §6 baseline · §7 system lens · §9 engineering · §12 NCR · §14 T&C · §15 punch · §16 documents · §23 overview · §24 health · §25 permissions · §26 audit · §27 closeout |
+| ✅ | §3 handover provenance · §4 DeliveryItemMap · §5 WBS/CBS separation · §10 execution truth · §11 progress governance · §17 certified ≠ installed · §18 cost authority + FX provenance · §19 variation lifecycle · §20 delay/EOT records · **§27 closeout readiness** |
+| 🟡 | §6 baseline · §7 system lens · §9 engineering · §12 NCR · §14 T&C · §15 punch · §16 documents · §23 overview · §24 health · §25 permissions · §26 audit |
 | ❌ | §2 lifecycle states · §21 risks & issues · §22 resource allocation |
 
 The spine the model calls load-bearing — commercial truth in, quantity and cost semantics, change
@@ -163,25 +166,44 @@ Real and lineage-carrying. Not verified: whether every critical writer emits one
 carries previous/new state as the model requires. `project.baseline.approved` and
 `site.installation.recorded` were not found under the projects module.
 
-### §27 — Closeout is a checklist, not a readiness gate
-
-```ts
-finalizeCloseout: if (!allCloseoutItemsDone(c)) throw
-```
-
-Eight items, all manually ticked: as-builts, O&M manuals, T&C certificates, snags cleared, authority
-NOCs, final account, retention release, handover certificate.
-
-**Nothing is verified against the domain that owns it.** "All snags cleared" is a checkbox, not a
-query against `aura_commissioning_punch_items`. "T&C certificates issued" does not read
-commissioning. So the model's blocked-closeout explanation — *"Quality: 2 critical NCRs open;
-Commissioning: Fire Alarm SAT incomplete"* — cannot be produced: the system does not know.
-
-This is the widest gap between what the model requires and what exists.
-
 ---
 
 ## ✅ Implemented and governed
+
+**§27 Closeout readiness** — **CLOSED, and the widest gap in the first pass of this audit.**
+
+The finding then: `finalizeCloseout` refused only when a box was unticked, every box was manual, and
+a blocked closeout could not explain itself because nothing had asked the domains that know.
+
+Now assembled from five domains through ports each owning domain implements, with three states
+rather than two:
+
+```
+manual checklist + quality + commissioning + documents + commercial
+                          ↓
+              PASS / BLOCKED / UNKNOWN
+                          ↓
+                     finalize()
+```
+
+**UNKNOWN is not a pass**, which is the decision the rest rests on. An unreadable domain, a project
+with zero commissioning records, a register that tracks no as-built — each refuses the close rather
+than being waved through. Optional dependency, never optional evidence.
+
+**Enforcement is in the write.** `CloseoutService.finalize` consults the same assessment the page
+renders and throws on BLOCKED or UNKNOWN; the API answers 409, because a governed refusal is a
+conflict with project state and not a server fault. The permitting verdict is stamped into the
+completion event, so "why was this allowed to close?" has an answer months later.
+
+Evidence: 148 domain tests, and 4 API/browser proofs — a blocker refuses and names itself with a
+link to the domain that owns the fix, an unproven domain refuses distinctly as *unverified*, the
+panel shows a state and a reason per domain with Finalize disabled on the server's own verdict, and
+a clean project actually closes.
+
+Two things this did NOT do, so the entry is not read as wider than it is: §12/§14/§15 still lack the
+intermediate states (`Assigned`, `Ready for Inspection`, `Rectified`, `Verified`), so the gate reads
+what those domains can currently answer rather than everything the model asks for; and the manual
+checklist is still manual — it is now one voice among five instead of the whole rule.
 
 **§3 Commercial handover provenance** — `handoverSnapshotHash`, `handoverLockedAt`,
 `handoverSnapshot.schemaVersion`, with a validity check that rejects a foreign schema version
@@ -232,10 +254,14 @@ method this document uses.
 
 ## Recommended order for Master Task 3
 
-1. **§27 closeout readiness** — the widest gap, and the one a project manager feels last and worst.
-   It also forces §12/§14/§15 to expose queryable state.
-2. **§2 lifecycle + gates** — everything else hangs off states that do not exist.
-3. **§24 cross-domain health** — needs 1 and 2 to have anything to read.
-4. **§21 risks & issues** and **§22 resource allocation** — genuinely absent capabilities, sized as
+1. ~~**§27 closeout readiness**~~ — **done**. It did what was predicted: reaching for each domain's
+   state showed exactly where those domains cannot yet answer, which is now recorded under §12,
+   §14 and §15 rather than guessed at.
+2. **§2 lifecycle + gates** — everything else hangs off states that do not exist. Next.
+3. **§24 cross-domain health** — needs 2 to have anything to read. The closeout ports are the
+   pattern it should follow: each domain answers about itself, health aggregates.
+4. **§12 / §14 / §15 intermediate states** — surfaced by §27 as the reason its checks are coarser
+   than the model wants. Smaller than they look, and they make both §24 and closeout sharper.
+5. **§21 risks & issues** and **§22 resource allocation** — genuinely absent capabilities, sized as
    new work rather than as gaps.
-5. **§7 lens on `wbs_nodes`** — small, and it makes the lens mean what the model says it means.
+6. **§7 lens on `wbs_nodes`** — small, and it makes the lens mean what the model says it means.

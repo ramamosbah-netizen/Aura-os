@@ -82,6 +82,16 @@ interface ScheduleTask {
 }
 interface ProjectSchedule { id: string; projectId: string; tasks: ScheduleTask[]; baselineSetAt: string | null; updatedAt: string }
 
+/**
+ * The closeout verdict, assembled by the domain that also enforces it at finalization.
+ *
+ * Rendered, never recomputed. A preview derived differently from the enforcement is how
+ * "but it said I could close it" happens.
+ */
+type ReadinessState = 'pass' | 'blocked' | 'unknown';
+interface ReadinessCheck { id: string; domain: string; label: string; state: ReadinessState; detail?: string; href?: string }
+interface CloseoutReadiness { ready: boolean; checks: ReadinessCheck[]; blocked: ReadinessCheck[]; unknown: ReadinessCheck[] }
+
 interface WbsNode { id: string; projectId: string; parentId: string | null; code: string; title: string; plannedValue: number; plannedValueKnown?: boolean; earnedValue: number; actualCost: number; progress: number; status: string; boqItemId: string | null; }
 interface CbsNode { id: string; projectId: string; parentId: string | null; code: string; title: string; category: string; budgetAmount: number; committedAmount: number; actualAmount: number; forecastAmount: number; currency: string; }
 interface DeliveryMap { id: string; projectId: string; handoverId: string; frozenItemKey: string; sourceKind: string; sourceId: string | null; sourceRevisionRef: string | null; sourceItemId: string | null; wbsNodeId: string | null; cbsNodeId: string | null; createdAt: string; }
@@ -137,6 +147,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   const [quantities, setQuantities] = useState<QuantityTxn[]>([]);
   const [costs, setCosts] = useState<CostTxn[]>([]);
   const [schedule, setSchedule] = useState<ProjectSchedule | null>(null);
+  const [readiness, setReadiness] = useState<CloseoutReadiness | null>(null);
   const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'overview';
   const [tab, setTab] = useState<Tab>(validInitialTab);
   const [err, setErr] = useState('');
@@ -153,7 +164,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         return (await r.json()) as T;
       } catch { failures += 1; return fallback; }
     };
-    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, mapData, quantityData, costData, scheduleData] = await Promise.all([
+    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, mapData, quantityData, costData, scheduleData, readinessData] = await Promise.all([
       j<Variation[]>(`/api/projects/variations?projectId=${project.id}`, []),
       j<{ impact: VariationImpact } | null>(`/api/projects/variations/summary/${project.id}`, null),
       j<EotClaim[]>(`/api/projects/eot-claims?projectId=${project.id}`, []),
@@ -174,6 +185,14 @@ export default function Project360Client({ project, initialTab }: { project: Pro
           return r.ok ? ((await r.json()) as ProjectSchedule[]) : [];
         } catch { return [] as ProjectSchedule[]; }
       })(),
+      // Not counted as a load failure either: a deployment without the readiness ports wired
+      // answers 503, and the panel says so in its own words rather than through a generic banner.
+      (async () => {
+        try {
+          const r = await fetch(`/api/projects/projects/${project.id}/closeout-readiness`, { cache: 'no-store' });
+          return r.ok ? ((await r.json()) as CloseoutReadiness) : null;
+        } catch { return null; }
+      })(),
     ]);
     setVariations(Array.isArray(vs) ? vs : []);
     setImpact(imp?.impact ?? null);
@@ -188,6 +207,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     setQuantities(Array.isArray(quantityData) ? quantityData : []);
     setCosts(Array.isArray(costData) ? costData : []);
     setSchedule((Array.isArray(scheduleData) ? scheduleData : [])[0] ?? null);
+    setReadiness(readinessData);
     setLoadFailures(failures);
   }, [project.id, project.contractId]);
 
@@ -232,7 +252,11 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     cbsNodes: cbs.length,
     cpi: evm?.cpi ?? null,
     spi: evm?.spi ?? null,
-    variationsPending: variations.filter((v) => v.status === 'pending' || v.status === 'submitted').length,
+    // The lifecycle is draft | submitted | approved | rejected — there is no 'pending'. Checking for
+    // one meant a variation sitting in draft counted as decided, so it passed the completion gate
+    // unseen. Caught by the compiler only when the same predicate was written in the domain, where
+    // VariationStatus is a union rather than a string off a fetch.
+    variationsPending: variations.filter((v) => v.status === 'draft' || v.status === 'submitted').length,
     delaysOpen: delays.filter((x) => x.status !== 'closed' && x.status !== 'rejected').length,
     eotsAwaitingDecision: eots.filter((e) => e.status === 'submitted').length,
     closeoutExists: closeout !== null,
@@ -420,33 +444,14 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         {tab === 'eot' && <DelayEotPanel projectId={project.id} delays={delays} eots={eots} busy={busy} call={call} />}
 
         {tab === 'closeout' && (
-          !closeout ? <p style={st.muted}>Closeout not started — start the checklist to track handover: as-builts, O&M manuals, testing & commissioning certificates, DLP…</p> : (
-            <div style={{ padding: '6px 8px' }}>
-              <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-                <span className={closeout.status === 'finalized' ? 'badge badge-good' : 'badge'}>{closeout.status}</span>
-                <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{closeoutDone}/{closeout.items.length} items done</span>
-                {closeout.handoverDate && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Handover {closeout.handoverDate}</span>}
-                {closeout.dlpEndDate && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>DLP until {closeout.dlpEndDate}</span>}
-                {closeout.status !== 'finalized' && closeoutDone === closeout.items.length && (
-                  <button className="btn btn-primary" style={st.actBtn} disabled={busy}
-                    onClick={() => void call(`/api/projects/closeouts/${closeout.id}/finalize`, 'POST', { handoverDate: new Date().toISOString().slice(0, 10) }, 'Closeout finalized — now complete the project to close the contract.')}>
-                    Finalize closeout ✓
-                  </button>
-                )}
-              </div>
-              {closeout.items.map((item, i) => (
-                <label key={i} style={st.checkRow}>
-                  <input
-                    type="checkbox"
-                    checked={item.done}
-                    disabled={busy || closeout.status === 'finalized'}
-                    onChange={(e) => void call(`/api/projects/closeouts/${closeout.id}/items/${i}`, 'PATCH', { done: e.target.checked })}
-                  />
-                  <span style={item.done ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{item.label}</span>
-                </label>
-              ))}
-            </div>
-          )
+          <ClosePanel
+            project={project}
+            closeout={closeout}
+            closeoutDone={closeoutDone}
+            readiness={readiness}
+            busy={busy}
+            call={call}
+          />
         )}
 
         {tab === 'team' && <ProjectTeam projectId={project.id} />}
@@ -730,6 +735,153 @@ function DelayEotPanel({ projectId, delays, eots, busy, call }: { projectId: str
  * — while the record's own CPI/SPI depended on it. A number the product demands and refuses to let
  * anyone enter is not a gap in a screen, it is a gap in the method.
  */
+/**
+ * Closeout — readiness first, checklist second.
+ *
+ * The checklist used to BE the gate: tick eight boxes and the project could close with open
+ * critical NCRs and an incomplete SAT, because no box was ever checked against the domain that
+ * owns it. It is now one voice among five, and the verdict comes from the same service that
+ * refuses the write, so this panel cannot promise a close that finalization would reject.
+ *
+ * Every domain gets its own line with its own reason. A single green/red badge would answer
+ * "can I close?" and not "what do I have to do", and the second question is the one being asked
+ * by anyone reading this screen.
+ */
+function ClosePanel({
+  project, closeout, closeoutDone, readiness, busy, call,
+}: {
+  project: Project360Project;
+  closeout: Closeout | null;
+  closeoutDone: number;
+  readiness: CloseoutReadiness | null;
+  busy: boolean;
+  call: Action;
+}) {
+  const TONE: Record<ReadinessState, { color: string; label: string }> = {
+    pass: { color: 'var(--good)', label: 'PASS' },
+    blocked: { color: 'var(--bad)', label: 'BLOCKED' },
+    unknown: { color: 'var(--warn)', label: 'UNVERIFIED' },
+  };
+
+  const headline = !readiness
+    ? { text: 'Readiness could not be established', tone: 'var(--warn)' }
+    : readiness.ready
+      ? { text: 'READY TO CLOSE', tone: 'var(--good)' }
+      : {
+        text: `CLOSEOUT BLOCKED — ${readiness.blocked.length} blocker${readiness.blocked.length === 1 ? '' : 's'}`
+          + (readiness.unknown.length ? ` + ${readiness.unknown.length} unverified domain${readiness.unknown.length === 1 ? '' : 's'}` : ''),
+        tone: readiness.blocked.length ? 'var(--bad)' : 'var(--warn)',
+      };
+
+  return (
+    <div data-testid="project-closeout-panel">
+      <CardGrid>
+        <RecordCard title="Closeout readiness" span={2}>
+          <div data-testid="closeout-verdict" style={{ fontSize: 15, fontWeight: 800, color: headline.tone, marginBottom: 4 }}>
+            {headline.text}
+          </div>
+          {!readiness ? (
+            <p style={st.muted}>
+              The readiness assessment is not available. It is not being treated as a pass: finalizing
+              is refused while any domain is unverified, so this must be resolved rather than worked
+              around.
+            </p>
+          ) : (
+            <>
+              <p style={st.muted}>
+                Assembled from the domains that own each record — Project 360 asks, it does not decide.
+                This is the same verdict finalization enforces, so nothing here can promise a close
+                the write would refuse.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 8 }}>
+                {readiness.checks.map((check) => (
+                  <div key={check.id} data-testid={`readiness-${check.id}`} style={{ display: 'flex', gap: 12, alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ width: 92, flexShrink: 0, fontSize: 11.5, fontWeight: 800, letterSpacing: 0.4, color: TONE[check.state].color }}>
+                      {TONE[check.state].label}
+                    </span>
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <strong style={{ fontSize: 13 }}>{check.label}</strong>
+                      {check.detail && <div style={{ ...st.muted, marginTop: 2 }}>{check.detail}</div>}
+                    </span>
+                    {check.href && check.state !== 'pass' && (
+                      <a href={check.href} style={{ ...st.link, fontSize: 12.5, flexShrink: 0 }}>Open {check.domain} →</a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </RecordCard>
+
+        <RecordCard title="Handover checklist" span={2}>
+          {!closeout ? (
+            <>
+              <p style={st.muted}>
+                Not started. The checklist records the handover pack — as-builts, O&amp;M manuals,
+                T&amp;C certificates, DLP — and is one of the readiness checks above, not the whole gate.
+              </p>
+              <ActionButton
+                disabled={busy}
+                onClick={() => void call('/api/projects/closeouts', 'POST', { projectId: project.id, projectName: project.title }, 'Closeout checklist started.')}
+              >
+                Start closeout checklist
+              </ActionButton>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                <span className={closeout.status === 'finalized' ? 'badge badge-good' : 'badge'}>{closeout.status}</span>
+                <span style={st.muted}>{closeoutDone}/{closeout.items.length} items done</span>
+                {closeout.handoverDate && <span style={st.muted}>Handover {closeout.handoverDate}</span>}
+                {closeout.dlpEndDate && <span style={st.muted}>DLP until {closeout.dlpEndDate}</span>}
+              </div>
+
+              {closeout.items.map((item, i) => (
+                <label key={i} style={st.checkRow}>
+                  <input
+                    type="checkbox"
+                    checked={item.done}
+                    disabled={busy || closeout.status === 'finalized'}
+                    onChange={(e) => void call(`/api/projects/closeouts/${closeout.id}/items/${i}`, 'PATCH', { done: e.target.checked })}
+                  />
+                  <span style={item.done ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{item.label}</span>
+                </label>
+              ))}
+
+              {closeout.status !== 'finalized' && (
+                <div style={{ marginTop: 12 }}>
+                  <ActionButton
+                    // Disabled on the SAME verdict the server enforces, so the button is not a
+                    // guess at what finalization will allow. A missing assessment disables it too:
+                    // the write refuses an unverified project, and offering the click anyway would
+                    // be the "looks usable, gets refused" failure this codebase keeps fixing.
+                    disabled={busy || !readiness?.ready}
+                    onClick={() => void call(
+                      `/api/projects/closeouts/${closeout.id}/finalize`,
+                      'POST',
+                      { handoverDate: new Date().toISOString().slice(0, 10) },
+                      'Closeout finalized — now complete the project to close the contract.',
+                    )}
+                  >
+                    Finalize closeout
+                  </ActionButton>
+                  {!readiness?.ready && (
+                    <p style={st.muted}>
+                      {readiness
+                        ? 'Clear the blockers above first. Finalization is refused while any domain blocks or cannot be read.'
+                        : 'Readiness is unavailable, and finalization is refused until it can be established.'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </RecordCard>
+      </CardGrid>
+    </div>
+  );
+}
+
 function ProgressPanel({
   projectId, schedule, wbs, quantities, maps, busy, call,
 }: {

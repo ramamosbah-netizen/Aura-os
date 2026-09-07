@@ -50,6 +50,31 @@ export class CommissioningService {
     return this.store.find(id, tenantId);
   }
 
+  /**
+   * Commissioning's answer to "may this project close?".
+   *
+   * Implements `CommissioningReadinessPort` for Projects. Note what is NOT returned: a percentage.
+   * "43% commissioned" is a number a reader has to interpret; "1 of 4 systems not commissioned" is
+   * the sentence that tells them what to do next, and only this domain can produce it honestly.
+   *
+   * Zero systems is reported as zero, not smoothed to a pass. Projects turns that into UNKNOWN,
+   * because a project that never tested anything has demonstrated nothing.
+   */
+  async readProjectCommissioningReadiness(
+    tenantId: string,
+    projectId: string,
+  ): Promise<{ systems: number; commissioned: number; openPunchItems: number; criticalOpenPunchItems: number }> {
+    const records = await this.list(tenantId, projectId);
+    const punchLists = await Promise.all(records.map((r) => this.store.listPunchItems(r.id, tenantId)));
+    const openPunch = punchLists.flat().filter((p) => p.status === 'open');
+    return {
+      systems: records.length,
+      commissioned: records.filter((r) => r.status === 'commissioned').length,
+      openPunchItems: openPunch.length,
+      criticalOpenPunchItems: openPunch.filter((p) => p.severity === 'critical').length,
+    };
+  }
+
   async list(tenantId: string, projectId?: string): Promise<CommissioningRecord[]> {
     return this.store.list(tenantId, projectId);
   }

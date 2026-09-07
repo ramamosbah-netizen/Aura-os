@@ -45,6 +45,8 @@ export * from './closeout-store';
 export * from './in-memory-closeout-store';
 export * from './postgres-closeout-store';
 export * from './closeout.service';
+export * from './domain/closeout-readiness';
+export * from './closeout-readiness.service';
 export * from './domain/cashflow-forecast';
 export * from './cashflow-forecast-store';
 export * from './in-memory-cashflow-forecast-store';

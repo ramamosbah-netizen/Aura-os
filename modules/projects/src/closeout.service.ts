@@ -10,11 +10,23 @@ import {
   finalizeCloseout,
 } from './domain/closeout';
 import { CLOSEOUT_STORE, type CloseoutFilter, type CloseoutStore } from './closeout-store';
+import type { CloseoutReadiness } from './domain/closeout-readiness';
 
 /**
  * Project Closeout service — the end-of-lifecycle handover workflow. Owns
  * `aura_projects_closeouts`, one per project, and emits `projects.closeout.*` on the spine.
  */
+/**
+ * The port through which finalization consults readiness.
+ *
+ * Declared here rather than imported so this service does not depend on the assembling service,
+ * which depends on ports of its own. Optional at construction, authoritative when present.
+ */
+export interface CloseoutReadinessGate {
+  assess(tenantId: string, projectId: string): Promise<CloseoutReadiness>;
+}
+export const CLOSEOUT_READINESS_GATE = Symbol('CLOSEOUT_READINESS_GATE');
+
 @Injectable()
 export class CloseoutService {
   private readonly logger = new Logger('Closeout');
@@ -26,6 +38,7 @@ export class CloseoutService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(CLOSEOUT_READINESS_GATE) private readonly readiness: CloseoutReadinessGate | null = null,
   ) {}
 
   async start(input: NewProjectCloseout): Promise<ProjectCloseout> {
@@ -68,9 +81,38 @@ export class CloseoutService {
     return updated;
   }
 
+  /**
+   * Finalize — the write that ends a project, and the only place the readiness gate can actually
+   * bind.
+   *
+   * Showing readiness on a screen is not a gate. Until this refused, the checklist was still the
+   * whole rule: every box ticked closed a project with open critical NCRs and an incomplete SAT,
+   * and the screen's warning was advice a caller could route around by calling the endpoint.
+   *
+   * BLOCKED and UNKNOWN are both refusals, and deliberately so. An unreadable domain is not a
+   * lenient case — it is the one where nobody can say what is being closed. Treating it as a pass
+   * would authorise exactly the close nobody verified.
+   *
+   * The permitting assessment is stamped into the completion event. The question this answers is
+   * asked months later, in a dispute: "why was this project allowed to close that day?" A verdict
+   * that lives only in the request that produced it cannot answer it.
+   */
   async finalize(tenantId: Id, id: Id, handoverDate: string, dlpMonths?: number): Promise<ProjectCloseout> {
     const c = await this.store.get(id);
     if (!c || c.tenantId !== tenantId) throw new Error(`closeout ${id} not found`);
+
+    let verdict: CloseoutReadiness | null = null;
+    if (this.readiness) {
+      verdict = await this.readiness.assess(tenantId, c.projectId);
+      if (!verdict.ready) {
+        const say = (label: string, items: { domain: string; detail?: string }[]): string[] =>
+          items.map((i) => `${label} — ${i.domain}: ${i.detail ?? 'no detail'}`);
+        throw new Error(
+          `closeout is not ready: ${[...say('blocked', verdict.blocked), ...say('unverified', verdict.unknown)].join('; ')}`,
+        );
+      }
+    }
+
     const updated = finalizeCloseout(c, handoverDate, dlpMonths);
     await this.store.update(updated);
     await this.events.append([
@@ -78,7 +120,15 @@ export class CloseoutService {
         type: CLOSEOUT_EVENT.completed,
         tenantId, companyId: c.companyId, actorId: null,
         aggregateType: 'projects.closeout', aggregateId: id,
-        payload: { projectId: c.projectId, handoverDate: updated.handoverDate, dlpEndDate: updated.dlpEndDate },
+        payload: {
+          projectId: c.projectId,
+          handoverDate: updated.handoverDate,
+          dlpEndDate: updated.dlpEndDate,
+          // The evidence that permitted this close, as it stood at the moment it was permitted.
+          readiness: verdict
+            ? { ready: verdict.ready, checks: verdict.checks.map((k) => ({ id: k.id, domain: k.domain, state: k.state, detail: k.detail })) }
+            : { ready: null, checks: [], note: 'no readiness gate was configured for this deployment' },
+        },
       }),
     ]);
     this.logger.log(`Closeout completed for project ${c.projectId} — handover ${updated.handoverDate}, DLP ends ${updated.dlpEndDate}`);

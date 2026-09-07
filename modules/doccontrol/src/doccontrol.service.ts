@@ -572,6 +572,34 @@ export class DocControlService {
     return this.registerStore.listPaged(filter, page);
   }
 
+  /**
+   * Document control's answer to "may this project close?".
+   *
+   * Implements `DocumentsReadinessPort` for Projects.
+   *
+   * `asBuiltsApproved` is TRI-STATE, and the null case is the important one. `RegisterStatus`
+   * carries an explicit `as_built`, so this domain can say yes or no — but only about drawings it
+   * holds. A project whose register contains no as-built entry at all has not failed the check; the
+   * check has not been answerable. Returning `false` there would tell a project manager to go fix
+   * something that may not be theirs to fix, and returning `true` would close a project on a
+   * document nobody ever produced.
+   *
+   * `for_review` is the pending state: a drawing sitting in review is a controlled document without
+   * an approval, which is exactly what the closeout question asks about.
+   */
+  async readProjectDocumentReadiness(
+    tenantId: Id,
+    projectId: Id,
+  ): Promise<{ pendingApprovals: number; asBuiltsApproved: boolean | null }> {
+    const register = await this.listRegisterByProject(tenantId, projectId);
+    const asBuilts = register.filter((entry) => entry.status === 'as_built');
+    return {
+      pendingApprovals: register.filter((entry) => entry.status === 'for_review').length,
+      // No as-built in the register is "not answerable", never "approved" and never "missing".
+      asBuiltsApproved: register.length === 0 ? null : asBuilts.length > 0 ? true : null,
+    };
+  }
+
   listRegisterByProject(tenantId: Id, projectId: Id): Promise<DrawingRegisterEntry[]> {
     return this.registerStore.findByProject(projectId, tenantId);
   }

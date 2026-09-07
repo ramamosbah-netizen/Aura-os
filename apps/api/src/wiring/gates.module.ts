@@ -1,7 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
+import { CommissioningModule, CommissioningService } from '@aura/commissioning';
+import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { QUALITY_GATE } from '@aura/procurement';
-import { ITP_GATE } from '@aura/projects';
+import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS } from '@aura/projects';
 
 /**
  * App-layer wiring for cross-module gates (ADR-0004: modules don't import each other; the
@@ -13,14 +15,29 @@ import { ITP_GATE } from '@aura/projects';
  * Behaviour is identical to the previous in-module wiring — the only change is *where* the wire is
  * made. Paid down the `procurement→quality` and `projects→quality` edges from the ADR-0004 debt
  * baseline (see architecture.fitness.test.ts).
+ *
+ * ── Closeout readiness (§27) ──────────────────────────────────────────────────────────────────
+ *
+ * The same shape, for the question "may this project be closed?". Projects declares three ports and
+ * each owning domain implements the one about itself. The assembly and its binding into
+ * `CloseoutService.finalize` live inside ProjectsModule, where the stores it reads are provided —
+ * only these three cross-module readings need the composition root.
+ *
+ * These bindings are what make the gate ANSWERABLE. Projects treats an absent port as UNKNOWN and
+ * refuses the close, so forgetting a wire here fails loudly and safely rather than silently
+ * approving: optional dependency, never optional evidence.
  */
 @Global()
 @Module({
-  imports: [QualityModule],
+  imports: [QualityModule, CommissioningModule, DocControlModule],
   providers: [
     { provide: QUALITY_GATE, useExisting: QualityService },
     { provide: ITP_GATE, useExisting: QualityService },
+
+    { provide: QUALITY_READINESS, useExisting: QualityService },
+    { provide: COMMISSIONING_READINESS, useExisting: CommissioningService },
+    { provide: DOCUMENTS_READINESS, useExisting: DocControlService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS],
 })
 export class GatesModule {}

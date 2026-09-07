@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -27,6 +27,8 @@ import {
   VariationService,
   type ProjectCloseout,
   CloseoutService,
+  CloseoutReadinessService,
+  type CloseoutReadiness,
   type ProjectCashflowForecast,
   type CashflowSummary,
   type NewCashflowPeriod,
@@ -126,6 +128,11 @@ export class ProjectsController {
     private readonly delayEot: DelayEotService,
     private readonly variations: VariationService,
     private readonly closeouts: CloseoutService,
+    // @Inject explicitly, for the reason CloseoutService already documents: a union-typed ctor
+    // param emits `Object` for design:paramtypes, so Nest resolves nothing and injects null in
+    // silence. The endpoint then answers 503 "not configured" on a deployment that IS configured —
+    // which is exactly what it did until this line named the token.
+    @Optional() @Inject(CloseoutReadinessService) private readonly closeoutReadiness: CloseoutReadinessService | null = null,
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
     private readonly deliveryItemMaps: DeliveryItemMapService,
@@ -633,6 +640,22 @@ export class ProjectsController {
     return this.closeouts.list({ tenantId: ctx.tenantId, projectId, status, limit: 200 });
   }
 
+  /**
+   * The closeout verdict for one project, with a reason for every domain.
+   *
+   * A READ of the same assessment `finalize` enforces — deliberately the same service, so the page
+   * can never show a verdict the write would disagree with. That symmetry is the point: a preview
+   * that is computed differently from the enforcement is how "it said I could close it" happens.
+   */
+  @Get('projects/:id/closeout-readiness')
+  async closeoutReadinessFor(@Param('id') id: string): Promise<CloseoutReadiness> {
+    const ctx = this.tenant.get();
+    if (!this.closeoutReadiness) {
+      throw new ServiceUnavailableException('closeout readiness is not configured in this deployment');
+    }
+    return this.closeoutReadiness.assess(ctx.tenantId, id);
+  }
+
   @Get('closeouts/paged')
   pagedCloseouts(
     @Query('projectId') projectId?: string,
@@ -654,7 +677,19 @@ export class ProjectsController {
   @Post('closeouts/:id/finalize')
   async finalizeCloseout(@Param('id') id: string, @Body() dto: { handoverDate: string; dlpMonths?: number }): Promise<ProjectCloseout> {
     if (!dto?.handoverDate) throw new BadRequestException('handoverDate is required');
-    return await this.closeouts.finalize(this.tenant.get().tenantId, id, dto.handoverDate, dto.dlpMonths);
+    try {
+      return await this.closeouts.finalize(this.tenant.get().tenantId, id, dto.handoverDate, dto.dlpMonths);
+    } catch (error) {
+      // A governed refusal is a CONFLICT with the project's current state, not a server fault. The
+      // distinction is load-bearing for the caller: a 500 says "try again / raise a ticket", while
+      // a 409 carrying the blockers says "this is the work, go and do it". Answering 500 would also
+      // hide a real fault among ordinary refusals in every dashboard that counts them.
+      const message = error instanceof Error ? error.message : String(error);
+      if (/not ready|checklist items are not done|already completed/.test(message)) {
+        throw new ConflictException(message);
+      }
+      throw error;
+    }
   }
 
   // ── Cash-flow forecast ───────────────────────────────────────────────────────

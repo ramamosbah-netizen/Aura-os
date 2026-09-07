@@ -410,6 +410,31 @@ export class QualityService {
     return snag;
   }
 
+  /**
+   * Quality's answer to "may this project close?".
+   *
+   * Implements `QualityReadinessPort` for Projects. Quality stays the authority for what an open
+   * NCR is; Projects only asks. Deliberately a COUNT and not a list — the closeout gate needs to
+   * know whether anything blocks, and handing over records would invite the caller to re-decide
+   * what counts as open, which is precisely the drift this port exists to prevent.
+   *
+   * `major` is this domain's highest NCR severity, so it is what "critical" means here. Reading it
+   * from Quality rather than restating a threshold in Projects is the point of the port.
+   */
+  async readProjectQualityReadiness(
+    tenantId: Id,
+    projectId: Id,
+  ): Promise<{ openNcrs: number; criticalOpenNcrs: number; openSnags: number }> {
+    const [ncrs, snags] = await Promise.all([this.listNcrs(tenantId), this.listSnags(tenantId)]);
+    const projectNcrs = ncrs.filter((n) => n.projectId === projectId && n.status !== 'closed');
+    const projectSnags = snags.filter((sn) => sn.projectId === projectId && sn.status === 'open');
+    return {
+      openNcrs: projectNcrs.length,
+      criticalOpenNcrs: projectNcrs.filter((n) => n.severity === 'major').length,
+      openSnags: projectSnags.length,
+    };
+  }
+
   listSnags(tenantId: Id): Promise<Snag[]> {
     return this.snagStore.findAll(tenantId);
   }
